@@ -106,6 +106,23 @@ export default function TwofaSettings() {
     }
   }
 
+  // A file the user can drop somewhere safe — clipboard alone is unavailable in non-secure
+  // contexts and pastes get lost; these codes are unrecoverable once this view unmounts.
+  const downloadCodes = () => {
+    const blob = new Blob(
+      [
+        `Token Circles recovery codes\nEach code signs you in once.\n\n${recoveryCodes().join('\n')}\n`,
+      ],
+      { type: 'text/plain' }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'token-circles-recovery-codes.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const confirmDisable = async () => {
     const value = code().trim()
     if (!value) {
@@ -203,6 +220,25 @@ export default function TwofaSettings() {
           {status()!.recoveryCodesLeft === 1 ? ' code remains' : ' codes remain'}. To get a fresh
           set, disable and re-enable.
         </p>
+        <Show when={status()!.recoveryCodesLeft <= 3}>
+          {/* The codes are the only way in after a lost authenticator; at zero the account is
+              unrecoverable, so the countdown must get loud well before that. */}
+          <p
+            data-test-id="twofa-codes-low"
+            style={{
+              margin: '0 0 10px',
+              padding: '8px 10px',
+              'border-radius': '8px',
+              border: '1px solid color-mix(in oklab, var(--danger, #ef4444) 45%, transparent)',
+              background: 'color-mix(in oklab, var(--danger, #ef4444) 10%, transparent)',
+              'font-size': '13px',
+            }}
+          >
+            {status()!.recoveryCodesLeft === 0
+              ? 'No recovery codes left — if you lose the authenticator now, this account cannot be recovered. Disable and re-enable two-factor to get a fresh set while you still can.'
+              : 'Recovery codes are running low. Disable and re-enable two-factor to get a fresh set before they run out.'}
+          </p>
+        </Show>
         <button
           data-test-id="twofa-disable-btn"
           class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
@@ -321,6 +357,13 @@ export default function TwofaSettings() {
               onClick={() => void copyCodes()}
             >
               Copy codes
+            </button>
+            <button
+              data-test-id="twofa-download-codes"
+              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+              onClick={downloadCodes}
+            >
+              Download codes
             </button>
             <button
               data-test-id="twofa-codes-done"

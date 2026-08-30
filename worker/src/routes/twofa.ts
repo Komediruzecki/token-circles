@@ -70,6 +70,17 @@ twofaRoutes.post('/api/auth/2fa/enable', requireAuth, async (c) => {
   await markTotpStepUsed(c.env, userId, matched);
   const recoveryCodes = generateRecoveryCodes();
   await storeRecoveryCodes(c.env, userId, recoveryCodes);
+  // Every session that predates enrollment got in on one factor; an intruder the user is
+  // enrolling AGAINST would otherwise keep their foothold. Only the enrolling session survives.
+  const sessionId = c.get('sessionId');
+  await (
+    sessionId
+      ? c.env.DB.prepare('DELETE FROM auth_sessions WHERE user_id = ? AND id != ?').bind(
+          userId,
+          sessionId
+        )
+      : c.env.DB.prepare('DELETE FROM auth_sessions WHERE user_id = ?').bind(userId)
+  ).run();
   logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'enabled', userId });
   // The only time the raw codes ever exist outside the user's copy — they are stored hashed.
   return c.json({ recoveryCodes });
@@ -103,11 +114,20 @@ twofaRoutes.post('/api/auth/2fa/disable', requireAuth, async (c) => {
   if (!(await totpStatus(c.env, userId)).enabled) {
     return c.json({ error: 'Two-factor authentication is not enabled' }, 400);
   }
+  // Same bucket as /2fa/verify: this route accepts the same factors, so an attacker must not
+  // get a fresh guessing budget just by attacking the disable path instead of the challenge.
+  const bucket = `2fa:${userId}`;
+  const rl = await enforce(c, bucket, VERIFY_LIMIT, VERIFY_WINDOW_SEC);
+  if (rl) {
+    logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'rate_limited', userId });
+    return rl;
+  }
   const { code } = (await c.req.json().catch(() => ({}))) as { code?: string };
   if (!(await verifySecondFactor(c, userId, code ?? ''))) {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'disable_bad_code', userId });
     return c.json({ error: 'That code did not match' }, 401);
   }
+  await clearRateLimit(c.env, bucket);
   await disableTotp(c.env, userId);
   logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'disabled', userId });
   return c.json({ ok: true });

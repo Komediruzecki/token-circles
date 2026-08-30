@@ -93,8 +93,16 @@ export default function LoginModal(props: LoginModalProps) {
           // (the account exists; they can sign in whenever) instead of
           // reloading the page out from under them.
           if (dismissed) return
-          await api.loginWithPassword(em, pw, token)
+          const handoff = await api.loginWithPassword(em, pw, token)
           if (dismissed) return
+          if (handoff?.twofaRequired) {
+            // "Register" with an existing 2FA-protected account: password matched, the server
+            // answered with a challenge — show the code step instead of a dead reload.
+            setStage('twofa')
+            setLoading(false)
+            clearCaptcha()
+            return
+          }
           // Cookie is set; reload so the app re-checks /auth/me.
           window.location.reload()
           return

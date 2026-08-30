@@ -114,4 +114,51 @@ describe('recovery fallback', () => {
       expect(reloads).toBe(1)
     })
   })
+
+  it('the recovery and back controls are real buttons, reachable by keyboard', async () => {
+    // The recovery path is the only way in for someone whose phone is gone; an onClick-only
+    // <a> with no href is invisible to the tab order and to assistive tech.
+    const onBack = vi.fn()
+    vi.resetModules()
+    vi.doMock('../../core/apiFetch', () => ({ apiFetch: () => verifyResponse() }))
+    const { default: TwofaChallenge } = await import('../TwofaChallenge')
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <TwofaChallenge onBack={onBack} />, host)
+    await flush()
+
+    const recovery = host.querySelector<HTMLElement>('[data-test-id="twofa-use-recovery"]')!
+    const back = host.querySelector<HTMLElement>('[data-test-id="twofa-back"]')!
+    expect(recovery.tagName).toBe('BUTTON')
+    expect(back.tagName).toBe('BUTTON')
+    recovery.focus()
+    expect(document.activeElement).toBe(recovery)
+  })
+})
+
+describe('backing out', () => {
+  it('strips the ?twofa=1 marker so a reload does not reopen a dead challenge', async () => {
+    const replaced: string[] = []
+    vi.stubGlobal('location', {
+      reload: () => (reloads += 1),
+      href: 'https://app.example.com/?twofa=1',
+    } as unknown as Location)
+    vi.stubGlobal('history', {
+      replaceState: (_s: unknown, _t: string, url: string) => replaced.push(url),
+    } as unknown as History)
+
+    const onBack = vi.fn()
+    vi.resetModules()
+    vi.doMock('../../core/apiFetch', () => ({ apiFetch: () => verifyResponse() }))
+    const { default: TwofaChallenge } = await import('../TwofaChallenge')
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <TwofaChallenge onBack={onBack} />, host)
+    await flush()
+
+    host.querySelector<HTMLElement>('[data-test-id="twofa-back"]')!.click()
+    await flush()
+    expect(onBack).toHaveBeenCalled()
+    expect(replaced.some((u) => !u.includes('twofa'))).toBe(true)
+  })
 })

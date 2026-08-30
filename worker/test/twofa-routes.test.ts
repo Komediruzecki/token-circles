@@ -208,3 +208,66 @@ describe('disable', () => {
     expect((await post('/api/auth/2fa/disable', session, { code: '000000' })).status).toBe(401);
   });
 });
+
+describe('hardening', () => {
+  it('rate limits repeated wrong codes on disable, same budget as verify', async () => {
+    const session = await freshSession();
+    await enable2fa(session);
+    for (let i = 0; i < 10; i++) {
+      expect((await post('/api/auth/2fa/disable', session, { code: '000000' })).status).toBe(401);
+    }
+    // The guessing budget is spent: even more wrong codes now bounce off the limiter.
+    expect((await post('/api/auth/2fa/disable', session, { code: '000000' })).status).toBe(429);
+  });
+
+  it('a successful disable clears the shared attempt budget', async () => {
+    const session = await freshSession();
+    const { secret } = await enable2fa(session);
+    for (let i = 0; i < 9; i++) {
+      await post('/api/auth/2fa/disable', session, { code: '000000' });
+    }
+    const ok = await post('/api/auth/2fa/disable', session, {
+      code: await totpCode(secret, currentStep() + 1),
+    });
+    expect(ok.status).toBe(200);
+    // Re-enabling and verifying must start from a clean budget, like verify's own clear.
+    const { secret: secret2 } = await enable2fa(session);
+    const challenged = await login();
+    const twofaCookie = cookieValue(challenged, 'fm_2fa');
+    const verified = await post('/api/auth/2fa/verify', twofaCookie, {
+      code: await totpCode(secret2, currentStep() + 1),
+    });
+    expect(verified.status).toBe(200);
+  });
+
+  it('enabling 2FA signs out every other session', async () => {
+    const other = await freshSession();
+    const current = await freshSession();
+    await enable2fa(current);
+
+    const otherMe = await SELF.fetch(`${BASE}/api/auth/me`, { headers: { Cookie: other } });
+    expect(otherMe.status).toBe(401);
+    // The session that performed the enrollment keeps working.
+    const currentMe = await SELF.fetch(`${BASE}/api/auth/me`, { headers: { Cookie: current } });
+    expect(currentMe.status).toBe(200);
+  });
+
+  it('deleting the account removes the TOTP credential and recovery codes', async () => {
+    const session = await freshSession();
+    await enable2fa(session);
+    const del = await SELF.fetch(`${BASE}/api/account`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Cookie: session },
+      body: JSON.stringify({ confirm: 'delete' }),
+    });
+    expect(del.status).toBe(200);
+    const totp = await env.DB.prepare('SELECT COUNT(*) AS n FROM totp_credentials').first<{
+      n: number;
+    }>();
+    const codes = await env.DB.prepare('SELECT COUNT(*) AS n FROM recovery_codes').first<{
+      n: number;
+    }>();
+    expect(totp?.n).toBe(0);
+    expect(codes?.n).toBe(0);
+  });
+});

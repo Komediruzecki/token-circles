@@ -7,6 +7,23 @@ import layoutStyles from './Layout.module.css'
  * short-lived challenge cookie; posting a valid authenticator or recovery code trades it for the
  * real session, then a reload lets the app re-check /auth/me exactly like every other login path.
  */
+/**
+ * Drop the ?twofa=1 marker the Google callback appends — on success AND on backing out.
+ * A saved or reloaded URL that still carries it would reopen the code screen for a
+ * challenge cookie that expired long ago, an unwinnable dead end.
+ */
+function stripTwofaMarker(): void {
+  try {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('twofa')) {
+      url.searchParams.delete('twofa')
+      window.history.replaceState(null, '', url.toString())
+    }
+  } catch {
+    // Nothing to clean when the URL isn't available (tests stub location).
+  }
+}
+
 export default function TwofaChallenge(props: { onBack?: () => void }) {
   const [mode, setMode] = createSignal<'totp' | 'recovery'>('totp')
   const [code, setCode] = createSignal('')
@@ -29,17 +46,7 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
         body: JSON.stringify({ code: value }),
       })
       if (res.ok) {
-        // Drop the ?twofa=1 marker the Google callback appends, so a later visit to the saved
-        // URL doesn't open the code screen for a session that no longer has a challenge.
-        try {
-          const url = new URL(window.location.href)
-          if (url.searchParams.has('twofa')) {
-            url.searchParams.delete('twofa')
-            window.history.replaceState(null, '', url.toString())
-          }
-        } catch {
-          // Nothing to clean when the URL isn't available (tests stub location).
-        }
+        stripTwofaMarker()
         window.location.reload()
         return
       }
@@ -57,6 +64,17 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
     setCode('')
     setError('')
   }
+
+  const linkButtonStyle = (color: string) => ({
+    background: 'none',
+    border: 'none',
+    padding: '0',
+    cursor: 'pointer',
+    color,
+    'font-size': 'inherit',
+    'font-weight': 600,
+    'text-align': 'left' as const,
+  })
 
   return (
     <form onSubmit={submit}>
@@ -113,41 +131,49 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
       >
         {loading() ? 'Checking…' : 'Verify'}
       </button>
+      {/* Buttons, not onClick-only anchors: the recovery path is the only way in for someone
+          whose phone is gone, so it must be in the tab order and visible to assistive tech. */}
       <p style={{ margin: '12px 0 0', 'font-size': '13px', color: 'var(--text-secondary)' }}>
         <Show
           when={mode() === 'totp'}
           fallback={
-            <a
+            <button
+              type="button"
               data-test-id="twofa-use-totp"
               onClick={() => {
                 switchMode('totp')
               }}
-              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              style={linkButtonStyle('var(--primary)')}
             >
               Use an authenticator code instead
-            </a>
+            </button>
           }
         >
-          <a
+          <button
+            type="button"
             data-test-id="twofa-use-recovery"
             onClick={() => {
               switchMode('recovery')
             }}
-            style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+            style={linkButtonStyle('var(--primary)')}
           >
             Lost your device? Use a recovery code
-          </a>
+          </button>
         </Show>
       </p>
       <Show when={props.onBack}>
         <p style={{ margin: '8px 0 0', 'font-size': '13px' }}>
-          <a
+          <button
+            type="button"
             data-test-id="twofa-back"
-            onClick={() => props.onBack?.()}
-            style={{ cursor: 'pointer', color: 'var(--text-secondary)' }}
+            onClick={() => {
+              stripTwofaMarker()
+              props.onBack?.()
+            }}
+            style={linkButtonStyle('var(--text-secondary)')}
           >
             Back to sign in
-          </a>
+          </button>
         </p>
       </Show>
     </form>

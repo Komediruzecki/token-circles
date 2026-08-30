@@ -122,6 +122,17 @@ test('enroll, challenge on sign-in, recovery code, disable', async ({ page, cont
   // Success reloads into the signed-in app.
   await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
 
+  // ── "Create account" with this existing 2FA-protected email also lands on the challenge ────
+  await context.clearCookies()
+  await page.goto(`${E2E_BASE}/`)
+  await page.getByText('Create one').click()
+  await page.locator('#login-email').fill(EMAIL)
+  await page.locator('#login-password').fill(PASSWORD)
+  await page.locator('button[type="submit"]').click()
+  await expect(getByTestId(page, 'twofa-code')).toBeVisible()
+  await getByTestId(page, 'twofa-back').click()
+  await expect(page.locator('#login-email')).toBeVisible()
+
   // ── A recovery code also gets in — once ────────────────────────────────────────────────────
   await context.clearCookies()
   await uiLogin(page)

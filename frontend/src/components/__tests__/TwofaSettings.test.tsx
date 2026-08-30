@@ -102,6 +102,33 @@ describe('enrollment', () => {
     expect(qr!.querySelector('svg')).not.toBeNull()
   })
 
+  it('offers the codes as a downloadable file, not only the clipboard', async () => {
+    const blobs: Blob[] = []
+    // Patch only the two static methods — replacing the URL global breaks `new URL(...)`.
+    const saved = { create: URL.createObjectURL?.bind(URL), revoke: URL.revokeObjectURL?.bind(URL) }
+    URL.createObjectURL = ((b: Blob) => {
+      blobs.push(b)
+      return 'blob:fake'
+    }) as typeof URL.createObjectURL
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL
+    try {
+      await mount()
+      host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
+      await flush()
+      type('[data-test-id="twofa-enroll-code"]', '123456')
+      host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enroll-confirm"]')!.click()
+      await flush()
+
+      host.querySelector<HTMLButtonElement>('[data-test-id="twofa-download-codes"]')!.click()
+      await flush()
+      expect(blobs).toHaveLength(1)
+      expect(await blobs[0].text()).toContain(CODES[0])
+    } finally {
+      URL.createObjectURL = saved.create
+      URL.revokeObjectURL = saved.revoke
+    }
+  })
+
   it('confirming a code stores it and shows the ten recovery codes once', async () => {
     await mount()
     host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
@@ -141,6 +168,15 @@ describe('enabled state and disable', () => {
     await mount()
     expect(host.querySelector('[data-test-id="twofa-enabled-badge"]')).not.toBeNull()
     expect(host.textContent).toContain('7')
+    expect(host.querySelector('[data-test-id="twofa-codes-low"]')).toBeNull()
+  })
+
+  it('warns when recovery codes are running low', async () => {
+    // The codes are the only path back in after a lost authenticator; a user who silently
+    // burns down to zero is permanently locked out, so the drop must be loud before that.
+    statusResponse = () => Promise.resolve(json({ enabled: true, recoveryCodesLeft: 2 }))
+    await mount()
+    expect(host.querySelector('[data-test-id="twofa-codes-low"]')).not.toBeNull()
   })
 
   it('disable demands a code, posts it, and returns to the disabled state', async () => {
