@@ -1,4 +1,5 @@
 import { createSignal, For, onMount, Show } from 'solid-js'
+import { renderSVG } from 'uqr'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import layoutStyles from './Layout.module.css'
@@ -218,8 +219,23 @@ export default function TwofaSettings() {
       {/* ── Enroll: secret + confirm ── */}
       <Show when={view() === 'enroll'}>
         <div style={{ margin: '8px 0 0', 'font-size': '13px', color: 'var(--text-secondary)' }}>
-          <p style={{ margin: '0 0 8px' }}>
-            1. Add Token Circles to your authenticator app — on this device,{' '}
+          <p style={{ margin: '0 0 8px' }}>1. Scan this with your authenticator app:</p>
+          {/* Rendered locally by uqr — the shared secret must never leave the page, so no
+              external QR image service is an option here. White backing keeps it scannable
+              in dark mode. */}
+          <div
+            data-test-id="twofa-qr"
+            style={{
+              width: '176px',
+              padding: '8px',
+              'border-radius': '8px',
+              background: '#ffffff',
+              'line-height': 0,
+            }}
+            innerHTML={renderSVG(otpauth(), { border: 0, pixelSize: 4 })}
+          />
+          <p style={{ margin: '10px 0 8px' }}>
+            On this device,{' '}
             <a
               data-test-id="twofa-otpauth"
               href={otpauth()}

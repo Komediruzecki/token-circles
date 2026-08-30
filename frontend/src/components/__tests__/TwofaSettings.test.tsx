@@ -91,6 +91,17 @@ describe('enrollment', () => {
     ).toBe('otpauth://x')
   })
 
+  it('renders the otpauth URI as an inline SVG QR code', async () => {
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
+    await flush()
+
+    const qr = host.querySelector('[data-test-id="twofa-qr"]')
+    expect(qr).not.toBeNull()
+    // Rendered locally — the secret must never travel to a QR image service.
+    expect(qr!.querySelector('svg')).not.toBeNull()
+  })
+
   it('confirming a code stores it and shows the ten recovery codes once', async () => {
     await mount()
     host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
