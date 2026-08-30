@@ -122,8 +122,16 @@ export default function LoginScreen() {
         clearCaptcha()
         try {
           const token = await waitForTurnstileToken(turnstileToken, 20000)
-          await api.loginWithPassword(em, pw, token)
-          // A brand-new account has no 2FA, so this is always a full session.
+          const handoff = await api.loginWithPassword(em, pw, token)
+          if (handoff?.twofaRequired) {
+            // "Register" with an existing 2FA-protected account: the password matched, so the
+            // server answered with a challenge, not a session. Show the code step — reloading
+            // here would land back on an empty form with no explanation.
+            setStage('twofa')
+            setLoading(false)
+            clearCaptcha()
+            return
+          }
           // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
           markPasskeyNudgeAfterLogin()
           window.location.reload()

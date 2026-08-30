@@ -1,8 +1,14 @@
-import { createSignal, Show } from 'solid-js'
+import { createEffect, createSignal, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
 import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
-import Turnstile, { resetTurnstile, turnstileEnabled } from './Turnstile'
+import Turnstile, {
+  captchaIsStuck,
+  captchaStatusMessage,
+  resetTurnstile,
+  turnstileEnabled,
+} from './Turnstile'
+import type { TurnstileStatus } from './Turnstile'
 
 /**
  * Passwordless sign-in: ask the worker to mail a 6-digit code, then trade it for a session.
@@ -21,6 +27,16 @@ export default function EmailCodeLogin(props: {
   const [error, setError] = createSignal('')
   const [loading, setLoading] = createSignal(false)
   const [turnstileToken, setTurnstileToken] = createSignal('')
+  const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
+    turnstileEnabled ? 'loading' : 'disabled'
+  )
+
+  // The verify form replaces the request form wholesale, dropping focus on <body>; put it on
+  // the code field the user is about to type into.
+  let codeInput: HTMLInputElement | undefined
+  createEffect(() => {
+    if (step() === 'verify') codeInput?.focus()
+  })
 
   const inputStyle = {
     width: '100%',
@@ -134,7 +150,24 @@ export default function EmailCodeLogin(props: {
               {error()}
             </div>
           </Show>
-          <Turnstile onToken={setTurnstileToken} />
+          <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+          {/* The ordinary "not solved yet" hint under a captcha-disabled button (LoginScreen's
+              rule); Turnstile draws its own panel for the states the user must fix. */}
+          <Show
+            when={
+              turnstileEnabled &&
+              !turnstileToken() &&
+              !loading() &&
+              !captchaIsStuck(captchaStatus())
+            }
+          >
+            <div
+              data-test-id="captcha-hint"
+              style={{ color: 'var(--text-secondary)', 'font-size': '12px', margin: '2px 0 10px' }}
+            >
+              {captchaStatusMessage(captchaStatus())}
+            </div>
+          </Show>
           <button
             type="submit"
             data-test-id="emailcode-send"
@@ -171,6 +204,7 @@ export default function EmailCodeLogin(props: {
           6-digit code is on its way. Enter it below — it expires in 10 minutes.
         </p>
         <input
+          ref={codeInput}
           type="text"
           data-test-id="emailcode-code"
           placeholder="123456"
