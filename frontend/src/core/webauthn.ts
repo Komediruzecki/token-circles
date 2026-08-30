@@ -59,7 +59,21 @@ function isAbort(err: unknown): boolean {
   )
 }
 
-export type WebauthnResult = { ok: true } | { ok: false; error: string; aborted?: boolean }
+export type WebauthnResult =
+  { ok: true } | { ok: false; error: string; aborted?: boolean; reauth?: boolean }
+
+/** Whether the browser can surface passkeys in the username field's autofill (conditional UI). */
+export async function conditionalMediationAvailable(): Promise<boolean> {
+  if (!passkeysSupported()) return false
+  const pkc = window.PublicKeyCredential as unknown as {
+    isConditionalMediationAvailable?: () => Promise<boolean>
+  }
+  try {
+    return (await pkc.isConditionalMediationAvailable?.()) ?? false
+  } catch {
+    return false
+  }
+}
 
 /**
  * One-shot flag bridging a login's reload to the "add a passkey?" nudge on the other side.
@@ -85,9 +99,22 @@ export function consumePasskeyNudge(): boolean {
   }
 }
 
-export async function registerPasskey(name?: string): Promise<WebauthnResult> {
-  const { ok, data } = await postJson('/api/auth/passkeys/register/options')
-  if (!ok) return { ok: false, error: errorOf(data, 'Could not start passkey setup') }
+export async function registerPasskey(
+  name?: string,
+  opts?: { reauth?: string }
+): Promise<WebauthnResult> {
+  const { ok, data } = await postJson(
+    '/api/auth/passkeys/register/options',
+    opts?.reauth ? { reauth: opts.reauth } : undefined
+  )
+  if (!ok) {
+    return {
+      ok: false,
+      error: errorOf(data, 'Could not start passkey setup'),
+      // A stale session: the server wants the password or a 2FA code before minting options.
+      reauth: (data as { reauth?: boolean })?.reauth === true,
+    }
+  }
   const options = data as ServerOptions
   const publicKey = {
     ...options,
@@ -106,6 +133,9 @@ export async function registerPasskey(name?: string): Promise<WebauthnResult> {
     if (!created) return { ok: false, error: 'The browser returned no passkey' }
     credential = created as PublicKeyCredential
   } catch (err) {
+    // Browsers blur cancel/no-credential/config-mismatch into NotAllowedError on purpose;
+    // the raw error in the console is the only diagnostic a misconfigured deployment gets.
+    console.warn('[webauthn] create failed:', err)
     if (isAbort(err)) return { ok: false, error: 'Passkey setup was cancelled', aborted: true }
     return { ok: false, error: 'This device could not create a passkey' }
   }
@@ -131,7 +161,11 @@ export async function registerPasskey(name?: string): Promise<WebauthnResult> {
   return { ok: true }
 }
 
-export async function signInWithPasskey(): Promise<WebauthnResult> {
+export async function signInWithPasskey(opts?: {
+  /** Run as a background autofill request (the username field's passkey suggestions). */
+  conditional?: boolean
+  signal?: AbortSignal
+}): Promise<WebauthnResult> {
   const { ok, data } = await postJson('/api/auth/passkeys/login/options')
   if (!ok) return { ok: false, error: errorOf(data, 'Could not start passkey sign-in') }
   const options = data as ServerOptions
@@ -145,10 +179,16 @@ export async function signInWithPasskey(): Promise<WebauthnResult> {
 
   let credential: PublicKeyCredential
   try {
-    const got = await window.navigator.credentials.get({ publicKey })
+    const got = await window.navigator.credentials.get({
+      publicKey,
+      ...(opts?.conditional ? { mediation: 'conditional' as CredentialMediationRequirement } : {}),
+      ...(opts?.signal ? { signal: opts.signal } : {}),
+    })
     if (!got) return { ok: false, error: 'The browser returned no passkey' }
     credential = got as PublicKeyCredential
   } catch (err) {
+    // See registerPasskey: the console line is the only diagnostic NotAllowedError leaves.
+    if (!opts?.conditional || !isAbort(err)) console.warn('[webauthn] get failed:', err)
     if (isAbort(err)) return { ok: false, error: 'Passkey sign-in was cancelled', aborted: true }
     return { ok: false, error: 'This device could not use a passkey' }
   }

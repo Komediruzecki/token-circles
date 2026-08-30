@@ -360,6 +360,8 @@ export default function LoginModal(props: LoginModalProps) {
             <button
               class={styles.btnSubmit}
               onClick={() => {
+                // Survives the OAuth round-trip in this tab; see LoginScreen's Google button.
+                markPasskeyNudgeAfterLogin()
                 api.loginWithGoogle()
               }}
               type="button"

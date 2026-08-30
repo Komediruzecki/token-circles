@@ -69,7 +69,8 @@ export interface SoftwareAuthenticator {
   register(
     challengeB64url: string,
     origin: string,
-    rpId: string
+    rpId: string,
+    opts?: { userVerified?: boolean }
   ): Promise<RegistrationResponseJSONish>;
   authenticate(
     challengeB64url: string,
@@ -132,9 +133,13 @@ export async function createAuthenticator(): Promise<SoftwareAuthenticator> {
     return concat(head, new Uint8Array(16), credLen, credentialId, coseKey); // AAGUID = zeros
   };
 
+  // A real authenticator's signature counter climbs on every use; tracking it here means a
+  // test can sign in repeatedly without tripping the library's clone detection.
+  let signCount = 0;
+
   return {
     credentialId,
-    async register(challengeB64url, origin, rpId) {
+    async register(challengeB64url, origin, rpId, opts = {}) {
       const clientData = enc.encode(
         JSON.stringify({
           type: 'webauthn.create',
@@ -143,8 +148,9 @@ export async function createAuthenticator(): Promise<SoftwareAuthenticator> {
           crossOrigin: false,
         })
       );
-      // UP | UV | AT
-      const authData = await authDataFor(rpId, 0x45, 0, true);
+      // UP | AT, plus UV unless the test wants a verification-less authenticator.
+      const flags = 0x41 | (opts.userVerified === false ? 0 : 0x04);
+      const authData = await authDataFor(rpId, flags, 0, true);
       const attestationObject = cbor(
         new Map<string, CborValue>([
           ['fmt', 'none'],
@@ -174,7 +180,7 @@ export async function createAuthenticator(): Promise<SoftwareAuthenticator> {
         })
       );
       const flags = 0x01 | (opts.userVerified === false ? 0 : 0x04); // UP, UV unless disabled
-      const authData = await authDataFor(rpId, flags, opts.counter ?? 1, false);
+      const authData = await authDataFor(rpId, flags, opts.counter ?? ++signCount, false);
       const toSign = concat(authData, await sha256(clientData));
       const rawSig = new Uint8Array(
         await crypto.subtle.sign(

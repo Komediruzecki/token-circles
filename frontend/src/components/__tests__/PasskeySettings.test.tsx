@@ -12,6 +12,8 @@ const toasts: { message: string; type: string }[] = []
 let listResponse: () => Promise<Response> = () => Promise.resolve(json({ passkeys: [] }))
 const optionsResponse: () => Promise<Response> = () =>
   Promise.resolve(json({ challenge: 'Y2hhbGxlbmdl', rp: { id: 'localhost' }, user: { id: 'MQ' } }))
+/** When set, register/options is answered by this, with the parsed request body. */
+let optionsResponseOverride: ((body?: { reauth?: string }) => Promise<Response>) | null = null
 const verifyResponse: () => Promise<Response> = () =>
   Promise.resolve(json({ ok: true, id: 'cred-1', name: 'This device' }))
 let confirmAnswer = true
@@ -60,13 +62,14 @@ async function mount(webauthnPresent = true) {
   vi.doMock('../../core/apiFetch', () => ({
     apiFetch: (url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET'
-      requests.push({
-        url,
-        method,
-        body: init?.body ? JSON.parse(init.body as string) : undefined,
-      })
+      const body = init?.body ? (JSON.parse(init.body as string) as unknown) : undefined
+      requests.push({ url, method, body })
       if (url === '/api/auth/passkeys' && method === 'GET') return listResponse()
-      if (url === '/api/auth/passkeys/register/options') return optionsResponse()
+      if (url === '/api/auth/passkeys/register/options') {
+        return optionsResponseOverride
+          ? optionsResponseOverride(body as { reauth?: string } | undefined)
+          : optionsResponse()
+      }
       if (url === '/api/auth/passkeys/register/verify') return verifyResponse()
       if (method === 'DELETE') return Promise.resolve(json({ ok: true }))
       return Promise.resolve(json({ error: 'unexpected' }, 500))
@@ -92,6 +95,7 @@ beforeEach(() => {
   toasts.length = 0
   createdCalls.length = 0
   confirmAnswer = true
+  optionsResponseOverride = null
   listResponse = () => Promise.resolve(json({ passkeys: [] }))
 })
 
@@ -138,6 +142,47 @@ describe('adding', () => {
     // ArrayBuffers from the authenticator arrive base64url-encoded at the API.
     expect(sent.response.rawId).toBe('cmF3LWNyZWRlbnRpYWwtaWQ')
     expect(sent.response.type).toBe('public-key')
+    await vi.waitFor(() => {
+      expect(toasts.some((t) => t.type === 'success')).toBe(true)
+    })
+  })
+})
+
+describe('re-authentication', () => {
+  it('a stale session gets an inline confirm field, and the retry carries the proof', async () => {
+    let optionsCalls = 0
+    optionsResponseOverride = (body?: { reauth?: string }) => {
+      optionsCalls += 1
+      if (!body?.reauth) {
+        return Promise.resolve(
+          json(
+            { error: 'Confirm your password (or a 2FA code) to add a passkey', reauth: true },
+            401
+          )
+        )
+      }
+      return Promise.resolve(
+        json({ challenge: 'Y2hhbGxlbmdl', rp: { id: 'localhost' }, user: { id: 'MQ' } })
+      )
+    }
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="passkey-add"]')!.click()
+    await flush()
+
+    // No browser ceremony yet — the server asked for proof first.
+    expect(createdCalls).toHaveLength(0)
+    const input = host.querySelector<HTMLInputElement>('[data-test-id="passkey-reauth-input"]')!
+    expect(input).not.toBeNull()
+    input.focus()
+    input.value = 'hunter2-password'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    host.querySelector<HTMLButtonElement>('[data-test-id="passkey-reauth-confirm"]')!.click()
+    await flush()
+
+    expect(optionsCalls).toBe(2)
+    const retry = requests.filter((r) => r.url === '/api/auth/passkeys/register/options').pop()!
+    expect((retry.body as { reauth?: string }).reauth).toBe('hunter2-password')
+    expect(createdCalls).toHaveLength(1)
     await vi.waitFor(() => {
       expect(toasts.some((t) => t.type === 'success')).toBe(true)
     })

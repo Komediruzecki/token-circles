@@ -11,6 +11,7 @@
  * the domain the user sees. They do not transfer across preview domains.
  */
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -27,7 +28,9 @@ import {
   issueSessionCookie,
   readCookies,
   requireAuth,
+  verifyPassword,
 } from '../auth';
+import { verifySecondFactor } from './twofa';
 import { logAuthEvent } from '../authlog';
 import { clientIp, enforce } from '../ratelimit';
 
@@ -35,12 +38,19 @@ const RP_NAME = 'Token Circles';
 export const WEBAUTHN_COOKIE = 'fm_webauthn';
 const CHALLENGE_TTL_SECONDS = 300;
 
-/** The user-facing origin the passkey is bound to (never the API host). */
-function rpOrigin(env: Env, requestUrl: string): string {
-  return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || new URL(requestUrl).origin;
-}
-function rpId(env: Env, requestUrl: string): string {
-  return new URL(rpOrigin(env, requestUrl)).hostname;
+/**
+ * The user-facing origin the passkey is bound to — never the API host. No configured origin
+ * means no passkeys: falling back to the request URL would mint credentials bound to
+ * api.<domain>, which every login from the app origin would then fail against, silently.
+ */
+function rpConfig(env: Env): { origin: string; id: string } | null {
+  const origin = env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0];
+  if (!origin) return null;
+  try {
+    return { origin, id: new URL(origin).hostname };
+  } catch {
+    return null;
+  }
 }
 
 // ── Signed ceremony-state cookie (same construction as the 2FA challenge) ────
@@ -104,8 +114,54 @@ interface CredentialRow {
 
 export const passkeyRoutes = new Hono<AppEnv>();
 
+/** How recently a session must have been minted to add a passkey without re-proving identity. */
+const FRESH_SESSION_MINUTES = 10;
+const MAX_PASSKEYS_PER_USER = 10;
+
+/**
+ * Adding a passkey mints a credential that skips the TOTP challenge and survives password
+ * resets and "sign out everywhere" — stronger than anything a bare session cookie proves. A
+ * session fresh off a login (the post-login nudge) may add one directly; anything older must
+ * re-present the password or a 2FA code, GitHub's sudo-mode rule.
+ */
+async function registrationAllowed(
+  c: Context<AppEnv>,
+  userId: number,
+  reauth: string | undefined
+): Promise<boolean> {
+  const sessionId = c.get('sessionId');
+  if (sessionId) {
+    const fresh = await c.env.DB.prepare(
+      `SELECT 1 AS ok FROM auth_sessions
+       WHERE id = ? AND user_id = ? AND created_at > datetime('now', '-${FRESH_SESSION_MINUTES} minutes')`
+    )
+      .bind(sessionId, userId)
+      .first<{ ok: number }>();
+    if (fresh) return true;
+  }
+  if (!reauth) return false;
+  const user = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(userId)
+    .first<{ password_hash: string | null }>();
+  if (user?.password_hash && (await verifyPassword(reauth, user.password_hash))) return true;
+  // Google-only accounts have no password; a TOTP or recovery code proves the same thing.
+  return verifySecondFactor(c, userId, reauth);
+}
+
 passkeyRoutes.post('/api/auth/passkeys/register/options', requireAuth, async (c) => {
   const userId = c.get('userId');
+  const rp = rpConfig(c.env);
+  if (!rp) return c.json({ error: 'Auth not configured' }, 500);
+  const rl = await enforce(c, `passkey-reg:${userId}`, 20, 3600);
+  if (rl) return rl;
+  const body = (await c.req.json().catch(() => ({}))) as { reauth?: string };
+  if (!(await registrationAllowed(c, userId, body.reauth?.trim() || undefined))) {
+    logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'passkey_reg_reauth', userId });
+    return c.json(
+      { error: 'Confirm your password (or a 2FA code) to add a passkey', reauth: true },
+      401
+    );
+  }
   const user = await c.env.DB.prepare('SELECT email, username FROM users WHERE id = ?')
     .bind(userId)
     .first<{ email: string | null; username: string | null }>();
@@ -114,9 +170,14 @@ passkeyRoutes.post('/api/auth/passkeys/register/options', requireAuth, async (c)
   )
     .bind(userId)
     .all<{ id: string; transports: string | null }>();
+  if (existing.results.length >= MAX_PASSKEYS_PER_USER) {
+    // Unbounded rows would eventually overflow authenticators' excludeCredentials limits and
+    // break the legitimate owner's own "add" button.
+    return c.json({ error: 'Passkey limit reached — remove one you no longer use first' }, 400);
+  }
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
-    rpID: rpId(c.env, c.req.url),
+    rpID: rp.id,
     // The copy pins the generic to Uint8Array<ArrayBuffer>, which simplewebauthn requires.
     userID: new Uint8Array(new TextEncoder().encode(String(userId))),
     userName: user?.email || user?.username || `user-${userId}`,
@@ -126,9 +187,10 @@ passkeyRoutes.post('/api/auth/passkeys/register/options', requireAuth, async (c)
       transports: row.transports ? (JSON.parse(row.transports) as never) : undefined,
     })),
     authenticatorSelection: {
-      // Discoverable, so the login button works with no username typed first.
+      // Discoverable, so the login button works with no username typed first. UV required to
+      // MATCH login: a verification-less credential would register fine and then never sign in.
       residentKey: 'required',
-      userVerification: 'preferred',
+      userVerification: 'required',
     },
   });
   c.header(
@@ -149,14 +211,17 @@ passkeyRoutes.post('/api/auth/passkeys/register/verify', requireAuth, async (c) 
     name?: string;
   };
   if (!body.response) return c.json({ error: 'Missing response' }, 400);
+  const rp = rpConfig(c.env);
+  if (!rp) return c.json({ error: 'Auth not configured' }, 500);
   let verification;
   try {
     verification = await verifyRegistrationResponse({
       response: body.response,
       expectedChallenge: ceremony.challenge,
-      expectedOrigin: rpOrigin(c.env, c.req.url),
-      expectedRPID: rpId(c.env, c.req.url),
-      requireUserVerification: false,
+      expectedOrigin: rp.origin,
+      expectedRPID: rp.id,
+      // Mirrors login: a credential registered without user verification could never sign in.
+      requireUserVerification: true,
     });
   } catch {
     verification = null;
@@ -166,20 +231,29 @@ passkeyRoutes.post('/api/auth/passkeys/register/verify', requireAuth, async (c) 
   }
   const { credential, credentialBackedUp } = verification.registrationInfo;
   const name = (body.name ?? '').trim().slice(0, 60) || null;
-  await c.env.DB.prepare(
-    `INSERT INTO webauthn_credentials (id, user_id, public_key, counter, transports, device_name, backed_up)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  )
-    .bind(
-      credential.id,
-      userId,
-      b64urlEncode(credential.publicKey),
-      credential.counter,
-      credential.transports ? JSON.stringify(credential.transports) : null,
-      name,
-      credentialBackedUp ? 1 : 0
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO webauthn_credentials (id, user_id, public_key, counter, transports, device_name, backed_up)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     )
-    .run();
+      .bind(
+        credential.id,
+        userId,
+        b64urlEncode(credential.publicKey),
+        credential.counter,
+        credential.transports ? JSON.stringify(credential.transports) : null,
+        name,
+        credentialBackedUp ? 1 : 0
+      )
+      .run();
+  } catch (err) {
+    // The ceremony cookie lives 300s and a browser can double-submit; the credential id is the
+    // primary key, so the second write must answer cleanly rather than leak a D1 error string.
+    if (String(err).includes('UNIQUE')) {
+      return c.json({ error: 'That passkey is already registered' }, 409);
+    }
+    throw err;
+  }
   c.header('Set-Cookie', cookie(WEBAUTHN_COOKIE, '', 0, c.env));
   return c.json({ ok: true, id: credential.id, name });
 });
@@ -207,11 +281,15 @@ passkeyRoutes.delete('/api/auth/passkeys/:id', requireAuth, async (c) => {
 // ── Login (no session yet) ────────────────────────────────────────────────────
 
 passkeyRoutes.post('/api/auth/passkeys/login/options', async (c) => {
-  const rl = await enforce(c, `passkey-options-ip:${clientIp(c)}`, 30, 900);
+  // Roomier than the verify bucket: conditional UI fires one options call per login-screen
+  // load, so an office behind one IP burns these without anyone clicking anything.
+  const rl = await enforce(c, `passkey-options-ip:${clientIp(c)}`, 60, 900);
   if (rl) return rl;
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
+  const rp = rpConfig(c.env);
+  if (!rp) return c.json({ error: 'Auth not configured' }, 500);
   const options = await generateAuthenticationOptions({
-    rpID: rpId(c.env, c.req.url),
+    rpID: rp.id,
     // Required, not preferred: UV is what lets a passkey stand in for password + TOTP.
     userVerification: 'required',
   });
@@ -241,13 +319,16 @@ passkeyRoutes.post('/api/auth/passkeys/login/verify', async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'passkey_unknown' });
     return c.json({ error: 'That passkey is not registered here' }, 401);
   }
+  const rp = rpConfig(c.env);
+  if (!rp) return c.json({ error: 'Auth not configured' }, 500);
   let verification;
+  let counterRegressed = false;
   try {
     verification = await verifyAuthenticationResponse({
       response: body.response,
       expectedChallenge: ceremony.challenge,
-      expectedOrigin: rpOrigin(c.env, c.req.url),
-      expectedRPID: rpId(c.env, c.req.url),
+      expectedOrigin: rp.origin,
+      expectedRPID: rp.id,
       credential: {
         id: row.id,
         publicKey: new Uint8Array(b64urlDecode(row.public_key)),
@@ -256,14 +337,17 @@ passkeyRoutes.post('/api/auth/passkeys/login/verify', async (c) => {
       },
       requireUserVerification: true,
     });
-  } catch {
+  } catch (err) {
+    // A signature counter that runs backwards is the one signal that a credential may have
+    // been CLONED — it must be distinguishable in auth_logs from an ordinary bad signature.
+    counterRegressed = String(err).toLowerCase().includes('counter');
     verification = null;
   }
   if (!verification?.verified) {
     logAuthEvent(c, {
       event: 'login',
       outcome: 'denied',
-      reason: 'passkey_failed',
+      reason: counterRegressed ? 'passkey_counter_regression' : 'passkey_failed',
       userId: row.user_id,
     });
     return c.json({ error: 'That passkey could not be verified' }, 401);

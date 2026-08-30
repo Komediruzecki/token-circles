@@ -20,6 +20,9 @@ interface PasskeyRow {
 export default function PasskeySettings() {
   const [passkeys, setPasskeys] = createSignal<PasskeyRow[] | null>(null)
   const [busy, setBusy] = createSignal(false)
+  // Stale session: the server wants the password (or a 2FA code) before minting options.
+  const [reauthNeeded, setReauthNeeded] = createSignal(false)
+  const [reauthValue, setReauthValue] = createSignal('')
 
   if (!passkeysSupported()) return null
 
@@ -35,13 +38,19 @@ export default function PasskeySettings() {
     void load()
   })
 
-  const add = async () => {
+  const add = async (reauth?: string) => {
     setBusy(true)
     try {
-      const result = await registerPasskey('This device')
+      const result = await registerPasskey('This device', reauth ? { reauth } : undefined)
       if (result.ok) {
         toast('Passkey added — you can now sign in with it', 'success')
+        setReauthNeeded(false)
+        setReauthValue('')
         void load()
+      } else if (result.reauth) {
+        setReauthNeeded(true)
+        // Only nag when a proof was actually offered and bounced.
+        if (reauth) toast(result.error, 'error')
       } else if (!result.aborted) {
         toast(result.error, 'error')
       }
@@ -119,6 +128,41 @@ export default function PasskeySettings() {
       >
         {busy() ? 'Waiting for the device…' : 'Add a passkey'}
       </button>
+      <Show when={reauthNeeded()}>
+        <div style={{ margin: '10px 0 0' }}>
+          <p style={{ margin: '0 0 6px', 'font-size': '13px', color: 'var(--text-secondary)' }}>
+            It has been a while since you signed in — confirm your password (or a 2FA code) to add a
+            passkey.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
+            <input
+              type="password"
+              data-test-id="passkey-reauth-input"
+              placeholder="Password or 2FA code"
+              value={reauthValue()}
+              onInput={(e) => setReauthValue(e.currentTarget.value)}
+              autocomplete="current-password"
+              style={{
+                padding: '8px 10px',
+                'border-radius': '8px',
+                border: '1px solid var(--border, rgba(255,255,255,0.12))',
+                background: 'var(--bg, #0b0e14)',
+                color: 'var(--text, #e6e8eb)',
+                'font-size': '14px',
+                width: '200px',
+              }}
+            />
+            <button
+              data-test-id="passkey-reauth-confirm"
+              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
+              disabled={busy() || !reauthValue().trim()}
+              onClick={() => void add(reauthValue().trim())}
+            >
+              Confirm
+            </button>
+          </div>
+        </div>
+      </Show>
     </div>
   )
 }
