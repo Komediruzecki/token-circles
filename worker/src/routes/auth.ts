@@ -24,6 +24,7 @@ import {
   renderWelcome,
 } from '../emailTemplates';
 import { clearRateLimit, enforce, clientIp } from '../ratelimit';
+import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 
@@ -169,6 +170,20 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
       }
     );
   }
+  // Second factor: same rule as password login. The redirect carries ?twofa=1 so the SPA knows
+  // to show the code screen instead of treating the return as signed-in.
+  if (await getTotpForLogin(c.env, userId)) {
+    logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'challenge_issued', userId });
+    const dest = new URL(state.returnTo);
+    dest.searchParams.set('twofa', '1');
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: dest.toString(),
+        'Set-Cookie': await issueTwofaChallengeCookie(userId, 'google', c.env),
+      },
+    });
+  }
   const sessionCookie = await issueSessionCookie(userId, 'google', c.env, sessionOrigin(c));
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
@@ -312,6 +327,19 @@ authRoutes.post('/api/auth/login', async (c) => {
   // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
   // password. Failures still accumulate exactly as before.
   await Promise.all([clearRateLimit(c.env, ipBucket), clearRateLimit(c.env, emailBucket)]);
+  // Second factor: the password alone must not buy a session for a 2FA account. The browser
+  // gets a short-lived challenge cookie instead; /api/auth/2fa/verify trades it for the session.
+  if (await getTotpForLogin(c.env, user.id)) {
+    logAuthEvent(c, {
+      event: 'twofa',
+      outcome: 'ok',
+      reason: 'challenge_issued',
+      userId: user.id,
+      email,
+    });
+    c.header('Set-Cookie', await issueTwofaChallengeCookie(user.id, 'password', c.env));
+    return c.json({ twofaRequired: true });
+  }
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
   c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env, sessionOrigin(c)));
   return c.json({ id: user.id, email });

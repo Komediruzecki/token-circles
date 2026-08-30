@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js'
+import { createSignal, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
@@ -13,6 +13,7 @@ import Turnstile, {
   turnstileEnabled,
   waitForTurnstileToken,
 } from './Turnstile'
+import TwofaChallenge from './TwofaChallenge'
 import type { TurnstileStatus } from './Turnstile'
 
 /**
@@ -34,8 +35,14 @@ export default function LoginScreen() {
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
   // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs.
-  const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
+  // register → auto-sign-in handoff runs; 'twofa' is the second factor's code step.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa'>('form')
+
+  // The Google callback can't stop for a code mid-redirect, so the worker parks the challenge
+  // cookie and sends the browser back with ?twofa=1 — land straight on the code step.
+  onMount(() => {
+    if (new URLSearchParams(window.location.search).get('twofa') === '1') setStage('twofa')
+  })
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -114,6 +121,7 @@ export default function LoginScreen() {
         try {
           const token = await waitForTurnstileToken(turnstileToken, 20000)
           await api.loginWithPassword(em, pw, token)
+          // A brand-new account has no 2FA, so this is always a full session.
           // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
           window.location.reload()
           return
@@ -129,7 +137,14 @@ export default function LoginScreen() {
           return
         }
       }
-      await api.loginWithPassword(em, pw, turnstileToken())
+      const login = await api.loginWithPassword(em, pw, turnstileToken())
+      if (login?.twofaRequired) {
+        // Password verified; the session waits behind the authenticator code.
+        setStage('twofa')
+        setLoading(false)
+        clearCaptcha()
+        return
+      }
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
       window.location.reload()
     } catch (err) {
@@ -191,30 +206,41 @@ export default function LoginScreen() {
         <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'signing-in'
             ? 'Welcome aboard.'
-            : mode() === 'register'
-              ? 'Create your account.'
-              : mode() === 'forgot'
-                ? 'Reset your password.'
-                : 'Sign in to access your finances.'}
+            : stage() === 'twofa'
+              ? 'Two-factor authentication'
+              : mode() === 'register'
+                ? 'Create your account.'
+                : mode() === 'forgot'
+                  ? 'Reset your password.'
+                  : 'Sign in to access your finances.'}
         </p>
 
         <Show
           when={stage() === 'form'}
           fallback={
-            <div
-              style={{
-                display: 'flex',
-                'flex-direction': 'column',
-                'align-items': 'center',
-                padding: '22px 0 14px',
-              }}
-            >
-              <OrbitSpinner size={72} label="Account created — signing you in…" />
-              {/* The form's widget unmounted with the form; this fresh instance
-                  issues the sign-in token (and stays visible in case Cloudflare
-                  wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            </div>
+            stage() === 'twofa' ? (
+              <TwofaChallenge
+                onBack={() => {
+                  setStage('form')
+                  setPassword('')
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  'align-items': 'center',
+                  padding: '22px 0 14px',
+                }}
+              >
+                <OrbitSpinner size={72} label="Account created — signing you in…" />
+                {/* The form's widget unmounted with the form; this fresh instance
+                    issues the sign-in token (and stays visible in case Cloudflare
+                    wants an interactive check). */}
+                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+              </div>
+            )
           }
         >
           <Show when={notice()}>

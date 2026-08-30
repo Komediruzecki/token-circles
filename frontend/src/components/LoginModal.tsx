@@ -9,6 +9,7 @@ import Turnstile, {
   turnstileEnabled,
   waitForTurnstileToken,
 } from './Turnstile'
+import TwofaChallenge from './TwofaChallenge'
 import type { TurnstileStatus } from './Turnstile'
 
 export interface LoginModalProps {
@@ -26,8 +27,8 @@ export default function LoginModal(props: LoginModalProps) {
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
   // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs (mirrors LoginScreen).
-  const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
+  // register → auto-sign-in handoff runs (mirrors LoginScreen); 'twofa' is the code step.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa'>('form')
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -110,7 +111,14 @@ export default function LoginModal(props: LoginModalProps) {
           return
         }
       }
-      await api.loginWithPassword(em, pw, turnstileToken())
+      const login = await api.loginWithPassword(em, pw, turnstileToken())
+      if (login?.twofaRequired) {
+        // Password verified; the session waits behind the authenticator code.
+        setStage('twofa')
+        setLoading(false)
+        clearCaptcha()
+        return
+      }
       // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
       window.location.reload()
     } catch (err) {
@@ -144,26 +152,37 @@ export default function LoginModal(props: LoginModalProps) {
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'signing-in'
             ? 'Welcome aboard.'
-            : 'Sign in to sync your data across devices.'}
+            : stage() === 'twofa'
+              ? 'Two-factor authentication'
+              : 'Sign in to sync your data across devices.'}
         </p>
 
         <Show
           when={stage() === 'form'}
           fallback={
-            <div
-              style={{
-                display: 'flex',
-                'flex-direction': 'column',
-                'align-items': 'center',
-                padding: '18px 0 12px',
-              }}
-            >
-              <OrbitSpinner size={64} label="Account created — signing you in…" />
-              {/* The form's widget unmounted with the form; this fresh instance
-                  issues the sign-in token (and stays visible in case Cloudflare
-                  wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            </div>
+            stage() === 'twofa' ? (
+              <TwofaChallenge
+                onBack={() => {
+                  setStage('form')
+                  setPassword('')
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  'align-items': 'center',
+                  padding: '18px 0 12px',
+                }}
+              >
+                <OrbitSpinner size={64} label="Account created — signing you in…" />
+                {/* The form's widget unmounted with the form; this fresh instance
+                    issues the sign-in token (and stays visible in case Cloudflare
+                    wants an interactive check). */}
+                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+              </div>
+            )
           }
         >
           <Show when={notice()}>

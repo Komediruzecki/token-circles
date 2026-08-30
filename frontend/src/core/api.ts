@@ -178,13 +178,19 @@ export class ApiClient {
   }
 
   /**
-   * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success.
+   * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success —
+   * unless the account has 2FA, in which case the worker parks a challenge cookie instead and
+   * answers `{ twofaRequired: true }`; the caller then shows the code step (TwofaChallenge).
    */
-  async loginWithPassword(email: string, password: string, turnstileToken?: string): Promise<void> {
-    await this.request('/auth/login', undefined, {
+  async loginWithPassword(
+    email: string,
+    password: string,
+    turnstileToken?: string
+  ): Promise<{ twofaRequired?: boolean }> {
+    return (await this.request('/auth/login', undefined, {
       method: 'POST',
       body: { email, password, turnstileToken },
-    })
+    })) as { twofaRequired?: boolean }
   }
 
   /**
