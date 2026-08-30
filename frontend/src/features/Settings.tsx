@@ -39,6 +39,7 @@ import SignedInDevices from '../components/SignedInDevices'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
+import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
@@ -1871,6 +1872,7 @@ export default function Settings() {
                   )}
                 </p>
                 <Show when={accountInfo()?.email || accountInfo()?.username}>
+                  <TwofaSettings />
                   <SignedInDevices />
                 </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">

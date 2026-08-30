@@ -14,7 +14,7 @@
 import type { Context } from 'hono';
 import type { AppEnv, Env } from './index';
 
-export type AuthEvent = 'login' | 'register' | 'logout' | 'session';
+export type AuthEvent = 'login' | 'register' | 'logout' | 'session' | 'twofa';
 
 export interface AuthLogEntry {
   event: AuthEvent;
