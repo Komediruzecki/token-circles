@@ -104,7 +104,48 @@ describe('requesting', () => {
   })
 })
 
+describe('requesting with the captcha enabled', () => {
+  it('explains the disabled button with the captcha hint', async () => {
+    vi.resetModules()
+    vi.doMock('../../core/apiFetch', () => ({
+      apiFetch: () => requestResponse(),
+    }))
+    vi.doMock('../Turnstile', () => ({
+      default: (props: { onStatus?: (s: string) => void }) => {
+        props.onStatus?.('ready')
+        return null
+      },
+      turnstileEnabled: true,
+      resetTurnstile: () => undefined,
+      captchaIsStuck: () => false,
+      captchaStatusMessage: () => 'Complete the check below to continue.',
+    }))
+    const { default: EmailCodeLogin } = await import('../EmailCodeLogin')
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => <EmailCodeLogin onBack={() => undefined} onTwofa={() => undefined} />,
+      host
+    )
+    await flush()
+
+    // Same rule as the password form: a submit button disabled by an unsolved captcha must
+    // say why, or the user stares at a dead button.
+    const send = host.querySelector<HTMLButtonElement>('[data-test-id="emailcode-send"]')!
+    expect(send.disabled).toBe(true)
+    expect(host.querySelector('[data-test-id="captcha-hint"]')).not.toBeNull()
+  })
+})
+
 describe('verifying', () => {
+  it('focuses the code field as soon as the send succeeds', async () => {
+    await mount()
+    await requestCode()
+    expect(document.activeElement).toBe(
+      host.querySelector<HTMLInputElement>('[data-test-id="emailcode-code"]')
+    )
+  })
+
   it('posts email + code and reloads on success', async () => {
     await mount()
     await requestCode()

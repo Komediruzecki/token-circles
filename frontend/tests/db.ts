@@ -18,22 +18,45 @@ function wranglerBin(): { wrangler: string; workerDir: string } {
   return { wrangler: resolve(workerDir, 'node_modules', '.bin', 'wrangler'), workerDir }
 }
 
-export function sql(command: string): void {
+const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+/**
+ * Specs run in parallel and the dev Worker holds the same file, so a concurrent statement can
+ * land on SQLITE_BUSY. That's contention, not failure — retry briefly before giving up.
+ */
+function execWithRetry(args: string[]): string {
   const { wrangler, workerDir } = wranglerBin()
-  execFileSync(wrangler, ['d1', 'execute', 'finance-manager', '--local', '--command', command], {
-    cwd: workerDir,
-    stdio: 'pipe',
-  })
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      return execFileSync(wrangler, args, { cwd: workerDir, stdio: 'pipe' }).toString()
+    } catch (err) {
+      lastErr = err
+      const text = String((err as { stderr?: Buffer; stdout?: Buffer }).stderr ?? '').concat(
+        String((err as { stdout?: Buffer }).stdout ?? '')
+      )
+      if (!text.includes('SQLITE_BUSY') && !text.includes('database is locked')) throw err
+      sleepSync(250 * (attempt + 1))
+    }
+  }
+  throw lastErr
+}
+
+export function sql(command: string): void {
+  execWithRetry(['d1', 'execute', 'finance-manager', '--local', '--command', command])
 }
 
 /** Run a SELECT and return its rows. */
 export function sqlRows<T>(command: string): T[] {
-  const { wrangler, workerDir } = wranglerBin()
-  const out = execFileSync(
-    wrangler,
-    ['d1', 'execute', 'finance-manager', '--local', '--json', '--command', command],
-    { cwd: workerDir, stdio: 'pipe' }
-  ).toString()
+  const out = execWithRetry([
+    'd1',
+    'execute',
+    'finance-manager',
+    '--local',
+    '--json',
+    '--command',
+    command,
+  ])
   const parsed = JSON.parse(out) as { results: T[] }[]
   return parsed[0]?.results ?? []
 }
