@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
 import EmailCodeLogin from './EmailCodeLogin'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -105,6 +106,7 @@ export default function LoginModal(props: LoginModalProps) {
             return
           }
           // Cookie is set; reload so the app re-checks /auth/me.
+          markPasskeyNudgeAfterLogin()
           window.location.reload()
           return
         } catch {
@@ -129,6 +131,7 @@ export default function LoginModal(props: LoginModalProps) {
         return
       }
       // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -357,6 +360,8 @@ export default function LoginModal(props: LoginModalProps) {
             <button
               class={styles.btnSubmit}
               onClick={() => {
+                // Survives the OAuth round-trip in this tab; see LoginScreen's Google button.
+                markPasskeyNudgeAfterLogin()
                 api.loginWithGoogle()
               }}
               type="button"
@@ -376,6 +381,22 @@ export default function LoginModal(props: LoginModalProps) {
             >
               Email me a sign-in code
             </a>
+            <Show when={passkeysSupported()}>
+              {' · '}
+              <a
+                data-test-id="passkey-signin"
+                onClick={() => {
+                  setError('')
+                  void signInWithPasskey().then((result) => {
+                    if (result.ok) window.location.reload()
+                    else if (!result.aborted) setError(result.error)
+                  })
+                }}
+                style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              >
+                Use a passkey
+              </a>
+            </Show>
           </p>
         </Show>
       </div>

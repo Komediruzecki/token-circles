@@ -1,7 +1,13 @@
-import { createSignal, onMount, Show } from 'solid-js'
+import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
+import {
+  conditionalMediationAvailable,
+  markPasskeyNudgeAfterLogin,
+  passkeysSupported,
+  signInWithPasskey,
+} from '../core/webauthn'
 import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
@@ -44,6 +50,29 @@ export default function LoginScreen() {
   onMount(() => {
     if (new URLSearchParams(window.location.search).get('twofa') === '1') setStage('twofa')
   })
+
+  // Conditional UI: on capable browsers a background WebAuthn request lets the email field's
+  // autofill offer saved passkeys — one tap, no button. It must be aborted before the explicit
+  // passkey button runs (the spec allows one pending request) and when the screen unmounts.
+  let conditionalAbort: AbortController | undefined
+  const stopConditional = () => {
+    conditionalAbort?.abort()
+    conditionalAbort = undefined
+  }
+  onMount(() => {
+    void conditionalMediationAvailable().then((available) => {
+      if (!available) return
+      conditionalAbort = new AbortController()
+      void signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
+        (result) => {
+          if (result.ok) window.location.reload()
+          // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
+          // the explicit button is the path that reports errors.
+        }
+      )
+    })
+  })
+  onCleanup(stopConditional)
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -132,6 +161,7 @@ export default function LoginScreen() {
             return
           }
           // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
+          markPasskeyNudgeAfterLogin()
           window.location.reload()
           return
         } catch {
@@ -155,6 +185,7 @@ export default function LoginScreen() {
         return
       }
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -307,7 +338,9 @@ export default function LoginScreen() {
               aria-invalid={emailInvalid()}
               // `username` (not `email`) is the token password managers pair with the password
               // field; combined with name/id it's what Android Chrome autofill keys off of.
-              autocomplete="username"
+              // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
+              // the conditional request from onMount is pending.
+              autocomplete="username webauthn"
               style={{
                 ...inputStyle,
                 'margin-bottom': emailInvalid() ? '2px' : inputStyle['margin-bottom'],
@@ -464,6 +497,10 @@ export default function LoginScreen() {
               class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
               style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
               onClick={() => {
+                // sessionStorage survives the OAuth round-trip in this tab, so the post-login
+                // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
+                // flag harmlessly — the nudge only renders for an authenticated session.
+                markPasskeyNudgeAfterLogin()
                 api.loginWithGoogle()
               }}
               type="button"
@@ -483,6 +520,24 @@ export default function LoginScreen() {
             >
               Email me a sign-in code
             </button>
+            <Show when={passkeysSupported()}>
+              <button
+                data-test-id="passkey-signin"
+                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+                style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+                onClick={() => {
+                  setError('')
+                  stopConditional()
+                  void signInWithPasskey().then((result) => {
+                    if (result.ok) window.location.reload()
+                    else if (!result.aborted) setError(result.error)
+                  })
+                }}
+                type="button"
+              >
+                Sign in with a passkey
+              </button>
+            </Show>
             <button
               onClick={tryDemo}
               type="button"

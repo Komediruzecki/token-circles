@@ -90,8 +90,10 @@ twofaRoutes.post('/api/auth/2fa/enable', requireAuth, async (c) => {
  * Accepts either factor-proof a signed-in user can present: the current TOTP code, or one
  * recovery code (spent by the check even when used here — a code shown to a shoulder-surfer
  * during a disable attempt must not remain valid for a login).
+ *
+ * Exported for the passkey routes: adding a passkey from a stale session demands the same proof.
  */
-async function verifySecondFactor(
+export async function verifySecondFactor(
   c: Context<AppEnv>,
   userId: number,
   code: string

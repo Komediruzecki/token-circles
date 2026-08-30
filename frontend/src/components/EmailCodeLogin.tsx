@@ -1,5 +1,6 @@
 import { createEffect, createSignal, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
+import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
 import Turnstile, {
   captchaIsStuck,
@@ -109,6 +110,7 @@ export default function EmailCodeLogin(props: {
         props.onTwofa()
         return
       }
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch {
       setError('Network problem — try again')

@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
+import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
 
 /**
@@ -47,6 +48,7 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
       })
       if (res.ok) {
         stripTwofaMarker()
+        markPasskeyNudgeAfterLogin()
         window.location.reload()
         return
       }
