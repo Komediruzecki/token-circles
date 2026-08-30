@@ -22,7 +22,10 @@ test.use({ storageState: { cookies: [], origins: [] } })
 
 const sha256Hex = (s: string) => createHash('sha256').update(s).digest('hex')
 
-test('request a code, wrong guess rejected, known code signs in', async ({ page, context }) => {
+test('request a code, wrong guess rejected, known code signs in @smoke', async ({
+  page,
+  context,
+}) => {
   test.setTimeout(120_000)
 
   // A registered account whose profile id the app can boot from after the reload.
@@ -66,5 +69,7 @@ test('request a code, wrong guess rejected, known code signs in', async ({ page,
   // ── Right code: signed in ──────────────────────────────────────────────────────────────────
   await getByTestId(page, 'emailcode-code').fill(KNOWN_CODE)
   await getByTestId(page, 'emailcode-verify').click()
-  await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
+  // Positive proof of the signed-in app: #login-email is hidden during the code step too, so
+  // its absence proves nothing (and lets the next action race the Set-Cookie + reload).
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 })

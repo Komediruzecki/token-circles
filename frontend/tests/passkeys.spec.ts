@@ -24,7 +24,7 @@ const PASSWORD = 'passkey-spec-password-1'
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
-test('add a passkey in Settings, sign out, sign in with it', async ({ page, context }) => {
+test('add a passkey in Settings, sign out, sign in with it @smoke', async ({ page, context }) => {
   test.setTimeout(120_000)
 
   const api = await request.newContext({ baseURL: LOCALHOST_BASE })
@@ -46,6 +46,14 @@ test('add a passkey in Settings, sign out, sign in with it', async ({ page, cont
     localStorage.setItem('currentProfileId', pid)
     localStorage.setItem('darkMode', 'false')
     localStorage.setItem('finance_onboarding', 'skipped')
+    // The virtual authenticator auto-fulfills conditional-mediation (autofill) requests, which
+    // signs the page in and reloads it out from under the explicit button click this spec is
+    // about. Turn the autofill path off so the button path is deterministic; conditional UI has
+    // its own unit coverage in src/core/__tests__/webauthn.test.ts.
+    Object.defineProperty(window.PublicKeyCredential, 'isConditionalMediationAvailable', {
+      configurable: true,
+      value: () => Promise.resolve(false),
+    })
   }, String(profileId))
 
   // A CTAP2 platform authenticator that auto-confirms user verification — the "screen lock".
@@ -73,5 +81,6 @@ test('add a passkey in Settings, sign out, sign in with it', async ({ page, cont
   await page.goto(`${LOCALHOST_BASE}/`)
   await expect(page.locator('#login-email')).toBeVisible()
   await getByTestId(page, 'passkey-signin').click()
-  await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
+  // Positive signed-in proof — hidden-ness of #login-email also holds mid-ceremony.
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 })

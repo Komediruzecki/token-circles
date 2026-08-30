@@ -61,7 +61,7 @@ async function uiLogin(page: import('@playwright/test').Page, password = PASSWOR
   await page.locator('button[type="submit"]').click()
 }
 
-test('enroll, challenge on sign-in, recovery code, disable', async ({ page, context }) => {
+test('enroll, challenge on sign-in, recovery code, disable @smoke', async ({ page, context }) => {
   test.setTimeout(180_000)
 
   // ── Arrange: a dedicated user with a clean 2FA slate, signed in via the API ────────────────
@@ -119,8 +119,11 @@ test('enroll, challenge on sign-in, recovery code, disable', async ({ page, cont
 
   await getByTestId(page, 'twofa-code').fill(nextStepCode(secret))
   await getByTestId(page, 'twofa-submit').click()
-  // Success reloads into the signed-in app.
-  await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
+  // Success reloads into the signed-in app. The proof must be POSITIVE (the Logout button):
+  // #login-email is already hidden while the challenge is showing, so asserting hidden-ness
+  // passes instantly and the next clearCookies races the verify response's Set-Cookie —
+  // which then re-authenticates the browser (exactly what CI's slower runners hit).
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 
   // ── "Create account" with this existing 2FA-protected email also lands on the challenge ────
   await context.clearCookies()
@@ -140,7 +143,7 @@ test('enroll, challenge on sign-in, recovery code, disable', async ({ page, cont
   await getByTestId(page, 'twofa-use-recovery').click()
   await getByTestId(page, 'twofa-code').fill(recoveryCodes[0])
   await getByTestId(page, 'twofa-submit').click()
-  await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 
   // ── Disable demands a factor; a recovery code counts (a fresh TOTP step may not exist yet —
   // the challenge sign-in above just consumed one inside the same 30s window) ─────────────────
@@ -154,5 +157,5 @@ test('enroll, challenge on sign-in, recovery code, disable', async ({ page, cont
   // Password sign-in is challenge-free again.
   await context.clearCookies()
   await uiLogin(page)
-  await expect(page.locator('#login-email')).toBeHidden({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 })
