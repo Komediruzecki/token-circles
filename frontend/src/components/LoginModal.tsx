@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import EmailCodeLogin from './EmailCodeLogin'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
 import Turnstile, {
@@ -26,9 +27,9 @@ export default function LoginModal(props: LoginModalProps) {
   const [error, setError] = createSignal('')
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
-  // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs (mirrors LoginScreen); 'twofa' is the code step.
-  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa'>('form')
+  // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
+  // handoff runs (mirrors LoginScreen); 'twofa' and 'email-code' are the extra sign-in steps.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -154,7 +155,9 @@ export default function LoginModal(props: LoginModalProps) {
             ? 'Welcome aboard.'
             : stage() === 'twofa'
               ? 'Two-factor authentication'
-              : 'Sign in to sync your data across devices.'}
+              : stage() === 'email-code'
+                ? 'Sign in by email'
+                : 'Sign in to sync your data across devices.'}
         </p>
 
         <Show
@@ -166,6 +169,12 @@ export default function LoginModal(props: LoginModalProps) {
                   setStage('form')
                   setPassword('')
                 }}
+              />
+            ) : stage() === 'email-code' ? (
+              <EmailCodeLogin
+                email={email()}
+                onBack={() => setStage('form')}
+                onTwofa={() => setStage('twofa')}
               />
             ) : (
               <div
@@ -347,6 +356,19 @@ export default function LoginModal(props: LoginModalProps) {
               Continue with Google
             </button>
           </div>
+          <p style={{ margin: '10px 0 0', 'text-align': 'center', 'font-size': '13px' }}>
+            <a
+              data-test-id="emailcode-open"
+              onClick={() => {
+                setError('')
+                setNotice('')
+                setStage('email-code')
+              }}
+              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+            >
+              Email me a sign-in code
+            </a>
+          </p>
         </Show>
       </div>
     </div>
