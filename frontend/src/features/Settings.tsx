@@ -34,6 +34,7 @@ import DangerZone from '../components/DangerZone'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
+import PasskeySettings from '../components/PasskeySettings'
 import { ResendVerification } from '../components/ResendVerification'
 import SignedInDevices from '../components/SignedInDevices'
 import SupportContact from '../components/SupportContact'
@@ -1873,6 +1874,7 @@ export default function Settings() {
                 </p>
                 <Show when={accountInfo()?.email || accountInfo()?.username}>
                   <TwofaSettings />
+                  <PasskeySettings />
                   <SignedInDevices />
                 </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">

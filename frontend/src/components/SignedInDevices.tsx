@@ -196,7 +196,9 @@ export const SignedInDevices: Component = () => {
                             ? 'Google account'
                             : device.provider === 'email'
                               ? 'Email code'
-                              : null,
+                              : device.provider === 'passkey'
+                                ? 'Passkey'
+                                : null,
                           device.ip,
                           `last active ${timeAgo(device.last_seen_at)}`,
                         ]

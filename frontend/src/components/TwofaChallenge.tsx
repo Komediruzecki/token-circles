@@ -1,5 +1,6 @@
 import { createSignal, Show } from 'solid-js'
 import { apiFetch } from '../core/apiFetch'
+import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
 
 /**
@@ -40,6 +41,7 @@ export default function TwofaChallenge(props: { onBack?: () => void }) {
         } catch {
           // Nothing to clean when the URL isn't available (tests stub location).
         }
+        markPasskeyNudgeAfterLogin()
         window.location.reload()
         return
       }

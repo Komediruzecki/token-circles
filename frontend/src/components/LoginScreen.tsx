@@ -2,6 +2,7 @@ import { createSignal, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
+import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
 import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
@@ -124,6 +125,7 @@ export default function LoginScreen() {
           await api.loginWithPassword(em, pw, token)
           // A brand-new account has no 2FA, so this is always a full session.
           // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
+          markPasskeyNudgeAfterLogin()
           window.location.reload()
           return
         } catch {
@@ -147,6 +149,7 @@ export default function LoginScreen() {
         return
       }
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -475,6 +478,23 @@ export default function LoginScreen() {
             >
               Email me a sign-in code
             </button>
+            <Show when={passkeysSupported()}>
+              <button
+                data-test-id="passkey-signin"
+                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+                style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+                onClick={() => {
+                  setError('')
+                  void signInWithPasskey().then((result) => {
+                    if (result.ok) window.location.reload()
+                    else if (!result.aborted) setError(result.error)
+                  })
+                }}
+                type="button"
+              >
+                Sign in with a passkey
+              </button>
+            </Show>
             <button
               onClick={tryDemo}
               type="button"

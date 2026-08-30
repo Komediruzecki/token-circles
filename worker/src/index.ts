@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { authRoutes } from './routes/auth';
 import { twofaRoutes } from './routes/twofa';
 import { emailCodeRoutes } from './routes/email-code';
+import { passkeyRoutes } from './routes/passkeys';
 import { profilesRoutes } from './routes/profiles';
 import { accountRoutes } from './routes/account';
 import { accountsRoutes } from './routes/accounts';
@@ -130,6 +131,7 @@ app.get('/api/health', (c) =>
 app.route('/', authRoutes);
 app.route('/', twofaRoutes);
 app.route('/', emailCodeRoutes);
+app.route('/', passkeyRoutes);
 
 // ── Data route modules (each applies requireAuth + profile scoping) ───────────
 // Ported from backend/routes/*.js. The remaining 501 stubs (see the modules) only
