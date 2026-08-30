@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { authRoutes } from './routes/auth';
 import { twofaRoutes } from './routes/twofa';
+import { emailCodeRoutes } from './routes/email-code';
 import { profilesRoutes } from './routes/profiles';
 import { accountRoutes } from './routes/account';
 import { accountsRoutes } from './routes/accounts';
@@ -128,6 +129,7 @@ app.get('/api/health', (c) =>
 // Auth: Google Sign-In + session endpoints. start/callback are public; me/logout self-gate.
 app.route('/', authRoutes);
 app.route('/', twofaRoutes);
+app.route('/', emailCodeRoutes);
 
 // ── Data route modules (each applies requireAuth + profile scoping) ───────────
 // Ported from backend/routes/*.js. The remaining 501 stubs (see the modules) only

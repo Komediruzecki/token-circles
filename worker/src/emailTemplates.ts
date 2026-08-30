@@ -314,6 +314,34 @@ export function renderPasswordReset(opts: {
   };
 }
 
+export function renderLoginCode(opts: {
+  code: string;
+  ttlMinutes: number;
+  assetOrigin?: string;
+}): RenderedEmail {
+  const subject = `${opts.code} is your ${BRAND} sign-in code`;
+  const body = `
+    ${h1('Your sign-in code')}
+    ${p(`Enter this code on the ${BRAND} sign-in screen. It expires in ${opts.ttlMinutes} minutes and works once.`)}
+    <div style="padding:8px 0 12px;text-align:center">
+      <span style="display:inline-block;padding:12px 22px;border-radius:12px;background:${C.panel};border:1px solid ${C.border};font-family:'Courier New',monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:${C.text}">${escapeHtml(opts.code)}</span>
+    </div>
+    ${p(`If you didn't try to sign in, ignore this email — nobody gets in without it.`, `font-size:12.5px;color:${C.faint}`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: `Your code expires in ${opts.ttlMinutes} minutes.`,
+      body,
+      footerReason: 'Sent because a sign-in code was requested for this address.',
+      orbit: false,
+      assetOrigin: opts.assetOrigin,
+    }),
+    text: `Your ${BRAND} sign-in code: ${opts.code}\n\nEnter it on the sign-in screen. It expires in ${opts.ttlMinutes} minutes and works once.\n\nIf you didn't try to sign in, ignore this email — nobody gets in without it.${textFooter('Sent because a sign-in code was requested for this address.')}`,
+  };
+}
+
 // ── Billing mails (Stripe webhooks) ──────────────────────────────────────────
 //
 // Stripe can send its own versions of these, and it says less than we can: it knows the invoice

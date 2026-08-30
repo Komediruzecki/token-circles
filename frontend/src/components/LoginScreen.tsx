@@ -2,6 +2,7 @@ import { createSignal, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
+import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -34,9 +35,9 @@ export default function LoginScreen() {
   const [error, setError] = createSignal('')
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
-  // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs; 'twofa' is the second factor's code step.
-  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa'>('form')
+  // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
+  // handoff runs; 'twofa' is the second factor's code step; 'email-code' is passwordless sign-in.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
 
   // The Google callback can't stop for a code mid-redirect, so the worker parks the challenge
   // cookie and sends the browser back with ?twofa=1 — land straight on the code step.
@@ -216,11 +217,13 @@ export default function LoginScreen() {
             ? 'Welcome aboard.'
             : stage() === 'twofa'
               ? 'Two-factor authentication'
-              : mode() === 'register'
-                ? 'Create your account.'
-                : mode() === 'forgot'
-                  ? 'Reset your password.'
-                  : 'Sign in to access your finances.'}
+              : stage() === 'email-code'
+                ? 'Sign in by email'
+                : mode() === 'register'
+                  ? 'Create your account.'
+                  : mode() === 'forgot'
+                    ? 'Reset your password.'
+                    : 'Sign in to access your finances.'}
         </p>
 
         <Show
@@ -232,6 +235,12 @@ export default function LoginScreen() {
                   setStage('form')
                   setPassword('')
                 }}
+              />
+            ) : stage() === 'email-code' ? (
+              <EmailCodeLogin
+                email={email()}
+                onBack={() => setStage('form')}
+                onTwofa={() => setStage('twofa')}
               />
             ) : (
               <div
@@ -460,6 +469,19 @@ export default function LoginScreen() {
               type="button"
             >
               Continue with Google
+            </button>
+            <button
+              data-test-id="emailcode-open"
+              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+              style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+              onClick={() => {
+                setError('')
+                setNotice('')
+                setStage('email-code')
+              }}
+              type="button"
+            >
+              Email me a sign-in code
             </button>
             <button
               onClick={tryDemo}
