@@ -1,20 +1,20 @@
 /**
- * SubscriptionCard — Beautiful branded card for subscription items.
+ * SubscriptionCard — compact, single-row subscription card.
  *
- * Follows the Categories page card pattern:
- * - Brand-colored icon box (40x40, rounded)
- * - Name + amount row
- * - Due countdown with contextual styling
- * - Category pill badge
- * - Hover-revealed action buttons
+ * Brand icon · name + category/frequency line · amount with due countdown, then exactly two
+ * controls: one primary action (Mark paid — absent once paid this period, because a second
+ * mark-paid can only 409) and a "…" menu holding Pause/Resume, Edit and Delete. Delete confirms
+ * through the app's danger dialog; nothing on the card is destructive in one tap.
  */
 
 /** @jsxImportSource solid-js */
 import { Show } from 'solid-js'
 import { formatCurrency } from '../core/api'
+import { showConfirm } from '../core/confirmStore'
 import { frequencySuffix } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
-import ConfirmButton from './ConfirmButton'
+import { subscriptionCategoryLabel } from '../features/subscriptionFilters'
+import OverflowMenu from './OverflowMenu'
 import styles from './SubscriptionCard.module.css'
 
 export interface SubscriptionCardBill {
@@ -34,6 +34,7 @@ export interface SubscriptionCardBill {
 interface SubscriptionCardProps {
   subscription: SubscriptionCardBill
   onMarkPaid: (id: number) => void
+  /** Toggles paused state: pauses an active subscription, resumes a paused one. */
   onPause: (id: number) => void
   onDelete: (id: number) => void
   onEdit: (id: number) => void
@@ -77,127 +78,188 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
   const brand = () => matchBrand(sub().name, sub().category_color)
   const isActive = () => sub().is_active !== 0
   const isPaying = () => props.markingPaid().has(sub().id)
-  const categoryLabel = () => sub().category_name || sub().category || brand().defaultCategory
+
+  const confirmDelete = async () => {
+    const ok = await showConfirm('Delete this subscription? This can’t be undone.', {
+      danger: true,
+      confirmText: 'Delete',
+    })
+    if (ok) props.onDelete(sub().id)
+  }
 
   return (
-    <div class={`${styles.card} ${!isActive() ? styles.paused : ''}`}>
-      {/* Top accent border color */}
-      <div class={styles.accent} style={{ 'background-color': brand().color }} />
-
-      {/* Header: icon + info */}
-      <div class={styles.header}>
-        <div
-          class={styles.iconBox}
-          style={{
-            'background-color': brand().bgColor,
-            color: brand().color,
-          }}
-        >
-          {brand().icon()}
-        </div>
-        <div class={styles.info}>
-          <h4 class={styles.name}>{brand().displayName || sub().name}</h4>
-          <p class={styles.meta}>
-            {sub().name !== brand().displayName && brand().displayName ? sub().name : ''}
-          </p>
-        </div>
-        <div class={styles.amount}>
-          <span class={styles.amountValue}>{formatCurrency(sub().amount)}</span>
-          <span class={styles.frequency}>/{frequencySuffix(sub().frequency)}</span>
-        </div>
+    <div class={`${styles.card} ${!isActive() ? styles.paused : ''}`} data-test-id="sub-card">
+      <div
+        class={styles.iconBox}
+        style={{
+          'background-color': brand().bgColor,
+          color: brand().color,
+        }}
+      >
+        {brand().icon()}
       </div>
 
-      {/* Meta row: due date + category */}
-      <div class={styles.metaRow}>
-        <span class={`${styles.due} ${dueClass(sub().due_date)}`}>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-            <line x1="16" y1="2" x2="16" y2="6" />
-            <line x1="8" y1="2" x2="8" y2="6" />
-            <line x1="3" y1="10" x2="21" y2="10" />
-          </svg>
-          {dueText(sub().due_date)}
+      <div class={styles.info}>
+        <h4 class={styles.name} title={sub().name}>
+          {brand().displayName || sub().name}
+        </h4>
+        <p class={styles.meta}>
+          {subscriptionCategoryLabel(sub())}
           {' · '}
-          {formatDate(sub().due_date)}
-        </span>
-        <span
-          class={styles.categoryPill}
-          style={{ 'background-color': brand().bgColor, color: brand().color }}
-        >
-          {categoryLabel()}
-        </span>
+          <span title={sub().due_date}>{formatDate(sub().due_date)}</span>
+        </p>
       </div>
 
-      {/* Status badge */}
-      <div class={styles.statusRow}>
-        <Show when={sub().paid}>
-          <span class={styles.paidBadge}>Paid</span>
-        </Show>
-        <Show when={!isActive()}>
-          <span class={styles.pausedBadge}>Paused</span>
-        </Show>
-      </div>
-
-      {/* Hover-revealed actions */}
-      <div class={styles.actions}>
-        <button
-          class={`${styles.actionBtn} ${styles.actionPrimary}`}
-          onClick={() => {
-            props.onMarkPaid(sub().id)
-          }}
-          disabled={isPaying()}
-        >
-          {isPaying() ? 'Paying...' : 'Mark Paid'}
-        </button>
-        <Show
-          when={isActive()}
-          fallback={
-            <button
-              class={`${styles.actionBtn} ${styles.actionPrimary}`}
-              onClick={() => {
-                props.onPause(sub().id)
-              }}
-              title="Resume subscription"
-            >
-              Resume
-            </button>
-          }
-        >
-          <button
-            class={`${styles.actionBtn} ${styles.actionGhost}`}
-            onClick={() => {
-              props.onPause(sub().id)
-            }}
-            title="Pause subscription"
+      <div class={styles.trail}>
+        <div class={styles.amountCol}>
+          <span class={styles.amountValue}>
+            {formatCurrency(sub().amount)}
+            <span class={styles.frequency}>/{frequencySuffix(sub().frequency)}</span>
+          </span>
+          <Show
+            when={isActive()}
+            fallback={<span class={styles.pausedBadge}>Paused</span>}
           >
-            Pause
-          </button>
-        </Show>
-        <button
-          class={`${styles.actionBtn} ${styles.actionGhost}`}
-          onClick={() => {
-            props.onEdit(sub().id)
-          }}
-          title="Edit subscription"
-        >
-          Edit
-        </button>
-        <ConfirmButton
-          class={`${styles.actionBtn} ${styles.actionGhost}`}
-          onConfirm={() => {
-            props.onDelete(sub().id)
-          }}
-          message="Delete this subscription? This can’t be undone."
-          aria-label="Delete subscription"
-          label="Delete"
-        />
+            <span class={`${styles.due} ${dueClass(sub().due_date)}`}>
+              {dueText(sub().due_date)}
+            </span>
+          </Show>
+        </div>
+
+        <div class={styles.actions}>
+          <Show
+            when={!sub().paid}
+            fallback={<span class={styles.paidBadge}>Paid</span>}
+          >
+            <button
+              class={styles.payBtn}
+              type="button"
+              data-test-id="sub-mark-paid"
+              aria-label={`Mark ${sub().name} paid`}
+              title="Mark paid"
+              disabled={isPaying()}
+              onClick={() => {
+                props.onMarkPaid(sub().id)
+              }}
+            >
+              <Show
+                when={!isPaying()}
+                fallback={
+                  <svg
+                    class={styles.spin}
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3a9 9 0 1 0 9 9" stroke-linecap="round" />
+                  </svg>
+                }
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m8.5 12.2 2.4 2.4 4.6-4.9" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </Show>
+            </button>
+          </Show>
+
+          <OverflowMenu
+            label={`More actions for ${sub().name}`}
+            items={[
+              {
+                label: isActive() ? 'Pause' : 'Resume',
+                icon: () =>
+                  isActive() ? (
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M9 5v14M15 5v14" stroke-linecap="round" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <path d="M7 5.5v13l11-6.5z" stroke-linejoin="round" />
+                    </svg>
+                  ),
+                onSelect: () => {
+                  props.onPause(sub().id)
+                },
+              },
+              {
+                label: 'Edit',
+                icon: () => (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M16.5 4.5l3 3L8 19l-4 1 1-4z"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                ),
+                onSelect: () => {
+                  props.onEdit(sub().id)
+                },
+              },
+              {
+                label: 'Delete',
+                danger: true,
+                icon: () => (
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M4 7h16M9 7V5h6v2m-8 0 1 13h8l1-13"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                ),
+                onSelect: () => {
+                  void confirmDelete()
+                },
+              },
+            ]}
+          />
+        </div>
       </div>
     </div>
   )

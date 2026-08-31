@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
+import { configuredBaseCurrency } from '../base-currency';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
@@ -473,10 +474,16 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
 
   const stmts: D1PreparedStatement[] = [];
 
+  // A bill has no currency field — its amount is in the profile's base currency by construction.
+  // Say so on the transaction (currency = base, amount_local = amount), or the schema's
+  // DEFAULT 'USD' stamps it as dollars and the app shows a converted-from-USD estimate on a
+  // bill the user entered in their own currency. Same source + default as the recurring cron.
+  const baseCurrency = (await configuredBaseCurrency(c.env.DB, pid)) ?? 'EUR';
+
   stmts.push(
     c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes)
-       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9 WHERE ${guard}`
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, currency, amount_local)
+       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9, ?10, ?6 WHERE ${guard}`
     ).bind(
       id,
       pid,
@@ -486,7 +493,8 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
       bill.amount,
       bill.category_id,
       bill.account_id ?? null,
-      bill.notes || ''
+      bill.notes || '',
+      baseCurrency
     )
   );
 

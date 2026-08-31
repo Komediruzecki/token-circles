@@ -8,10 +8,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The Subscriptions view has been redesigned.** Category pills above the list filter it in one tap ("All" by default, Paused behind its own pill), and each subscription is a compact card: brand icon, price, next due date, a mark-paid button and a "…" menu holding Pause, Edit and Delete.
+
 ### Fixed
 
 - **The app no longer shows "App Crashed" when it cannot reach the server.** Opening the sign-in screen while offline — or anywhere the API is unreachable — crashed the whole app instead of showing the login form you could still use.
 - **A failed Auto sync now says so.** When a saved Google Sheet import was rejected by the server, the button just stopped spinning with no message — it now shows the error.
+- **Marking a subscription paid records the payment in your own currency.** The transaction was stamped as US dollars regardless of your settings, so it showed up with a "converted from USD" estimate on it.
+- **A subscription you have paid this period no longer offers "Mark Paid" again** — pressing it a second time could only ever fail.
 
 ## [5.13.0] — 2026-08-31
 

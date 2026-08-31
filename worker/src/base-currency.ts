@@ -2,7 +2,10 @@ import { normalizeCurrencyCode } from './currency';
 import * as db from './db';
 import { HttpError } from './http';
 
-async function configuredBaseCurrency(DB: D1Database, profileId: number): Promise<string | null> {
+export async function configuredBaseCurrency(
+  DB: D1Database,
+  profileId: number
+): Promise<string | null> {
   const row = await db.first<{ value: string }>(
     DB,
     "SELECT value FROM settings WHERE profile_id = ? AND key = 'currency'",
