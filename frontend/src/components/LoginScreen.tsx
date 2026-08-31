@@ -60,17 +60,23 @@ export default function LoginScreen() {
     conditionalAbort = undefined
   }
   onMount(() => {
-    void conditionalMediationAvailable().then((available) => {
-      if (!available) return
-      conditionalAbort = new AbortController()
-      void signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
-        (result) => {
-          if (result.ok) window.location.reload()
-          // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
-          // the explicit button is the path that reports errors.
-        }
-      )
-    })
+    // Nothing awaits this chain, so an unhandled rejection anywhere in it reaches the global
+    // handler and paints "App Crashed" over a login screen that still works. Both links catch.
+    void conditionalMediationAvailable()
+      .then((available) => {
+        if (!available) return
+        conditionalAbort = new AbortController()
+        return signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
+          (result) => {
+            if (result.ok) window.location.reload()
+            // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
+            // the explicit button is the path that reports errors.
+          }
+        )
+      })
+      .catch(() => {
+        // Autofill is a convenience; failing to offer it is never worth surfacing.
+      })
   })
   onCleanup(stopConditional)
   const [turnstileToken, setTurnstileToken] = createSignal('')

@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The app no longer shows "App Crashed" when it cannot reach the server.** Opening the sign-in screen while offline — or anywhere the API is unreachable — crashed the whole app instead of showing the login form you could still use.
+
 ## [5.13.0] — 2026-08-31
 
 ### Added
