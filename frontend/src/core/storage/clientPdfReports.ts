@@ -792,7 +792,6 @@ export async function generateAnnualPdf(year: number, dark: boolean): Promise<Bl
     doc.addImage(lineUrl, 'PNG', 15, posY, lineDisplayW, lineDisplayH)
     URL.revokeObjectURL(lineUrl)
     addChartCaption(doc, ctx, 'Cumulative Cash Flow', pageW / 2, posY + lineDisplayH + 12)
-    posY += lineDisplayH + 22
   }
 
   addFooter(doc, ctx)
@@ -900,7 +899,7 @@ export async function generateTaxSummaryPdf(year: number, dark: boolean): Promis
       addBrandPage(doc, theme)
       posY = 25
     }
-    posY = addSectionTable(
+    addSectionTable(
       doc,
       ctx,
       'Non-Deductible Expenses',
@@ -1033,7 +1032,7 @@ export async function generatePlSummaryPdf(year: number, dark: boolean): Promise
       addBrandPage(doc, theme)
       posY = 25
     }
-    posY = addSectionTable(
+    addSectionTable(
       doc,
       ctx,
       'Expenses',

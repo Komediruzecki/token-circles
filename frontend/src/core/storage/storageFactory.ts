@@ -54,7 +54,7 @@ let memoryMode: StorageMode | null = null
  */
 export function getStorageMode(): StorageMode {
   // User preference from localStorage always takes priority
-  let stored: string | null = null
+  let stored: string | null
   try {
     stored = localStorage.getItem('finance_storage_mode')
   } catch {
