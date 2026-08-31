@@ -18,7 +18,7 @@ export default function Pagination(props: PaginationProps) {
 
   const pages = Array.from({ length: props.totalPages }, (_, i) => i + 1)
   const maxVisible = 5
-  let visiblePages: number[] = []
+  let visiblePages: number[]
 
   if (props.totalPages <= maxVisible) {
     visiblePages = pages
