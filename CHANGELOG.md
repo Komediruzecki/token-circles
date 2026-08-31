@@ -11,6 +11,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **The app no longer shows "App Crashed" when it cannot reach the server.** Opening the sign-in screen while offline — or anywhere the API is unreachable — crashed the whole app instead of showing the login form you could still use.
+- **A failed Auto sync now says so.** When a saved Google Sheet import was rejected by the server, the button just stopped spinning with no message — it now shows the error.
 
 ## [5.13.0] — 2026-08-31
 
