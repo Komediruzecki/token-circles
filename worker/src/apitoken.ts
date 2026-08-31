@@ -29,6 +29,21 @@ export async function hashToken(secret: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Inverse of the JSON.stringify in mintApiToken. One tolerance rule for stored scopes,
+ * shared by the auth path and the listing: a row that does not hold an array of strings
+ * degrades to no scopes rather than throwing.
+ */
+export function parseScopes(raw: string): Scope[] {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((s): s is Scope => typeof s === 'string');
+  } catch {
+    /* fall through */
+  }
+  return [];
+}
+
 export async function mintApiToken(
   DB: D1Database,
   userId: number,
@@ -92,13 +107,7 @@ export async function verifyApiToken(DB: D1Database, raw: string): Promise<Token
     )
     .catch(() => undefined);
 
-  let scopes: Scope[] = [];
-  try {
-    const parsed: unknown = JSON.parse(row.scopes);
-    if (Array.isArray(parsed)) scopes = parsed.filter((s): s is Scope => typeof s === 'string');
-  } catch {
-    scopes = [];
-  }
+  const scopes = parseScopes(row.scopes);
   return {
     tokenId: row.id,
     userId: row.user_id,

@@ -51,13 +51,19 @@ import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
 import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
-import { setSettingsTab, settingsTab } from '../core/settingsStore'
+import { isTabVisible, setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
-import { getStorageAdapter, migrateData, setStorageMode } from '../core/storage/storageFactory'
+import {
+  getStorageAdapter,
+  getStorageMode,
+  migrateData,
+  setStorageMode,
+} from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { toYYYYMM } from '../utils/period'
+import ApiAccess from './ApiAccess'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
 import type { SettingsTab } from '../core/settingsStore'
@@ -250,6 +256,11 @@ const IconBilling = () => (
     <path d="M3 10h18" />
   </Svg>
 )
+const IconApi = () => (
+  <Svg>
+    <path d="M8 4l-4 8 4 8M16 4l4 8-4 8" />
+  </Svg>
+)
 const IconAbout = () => (
   <Svg>
     <circle cx="12" cy="12" r="9" />
@@ -389,18 +400,24 @@ export default function Settings() {
   const tabs: Array<{ id: SettingsTab; label: string; icon: () => JSX.Element }> = [
     { id: 'general', label: 'General', icon: IconGeneral },
     { id: 'exports', label: 'Exports', icon: IconExports },
+    { id: 'api', label: 'API access', icon: IconApi },
     { id: 'billing', label: 'Billing', icon: IconBilling },
     { id: 'about', label: 'About', icon: IconAbout },
   ]
-  const visibleTabs = (): typeof tabs =>
-    tabs.filter((t) => t.id !== 'billing' || storageMode() === 'self-hosted')
+  // getStorageMode(), not the local storageMode() signal: that one is the dropdown's DRAFT and
+  // flips before Apply, while apiFetch keeps routing by the committed mode. Showing the tab on
+  // the draft would offer token creation that still answers from IndexedDB. Applying reloads
+  // the page, so reading this non-reactively is enough.
+  const visibleTabs = (): typeof tabs => tabs.filter((t) => isTabVisible(t.id, getStorageMode()))
 
   // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
   // then consume it so re-entering Settings later does not force the tab again.
   createEffect(() => {
     const requested = settingsTab()
     if (requested) {
-      setActiveTab(requested)
+      // Honor it only if the tab is actually available in this storage mode — otherwise the
+      // user lands on a tab that is not in the rail, with no obvious way back.
+      if (isTabVisible(requested, getStorageMode())) setActiveTab(requested)
       setSettingsTab(null)
     }
   })
@@ -1462,7 +1479,18 @@ export default function Settings() {
               </Show>
             </Show>
 
-            {/* ─────────────── EXPORTS ─────────────── */}
+            {/* ─────────────── API ACCESS (server mode only) ─────────────── */}
+            <Show when={activeTab() === 'api' && isTabVisible('api', getStorageMode())}>
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconApi />}
+                  title="Personal access tokens"
+                  desc="Connect Claude or another MCP client to this account."
+                />
+                <ApiAccess />
+              </div>
+            </Show>
+
             <Show when={activeTab() === 'exports'}>
               <div class={styles.card}>
                 <CardHead

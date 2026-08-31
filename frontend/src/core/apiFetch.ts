@@ -20,7 +20,9 @@ async function getLocalRouter(): Promise<(url: string, init?: RequestInit) => Pr
 // ABSOLUTE request URLs. Interception must recognize those too — matching only relative
 // `/api/*` made serverless/demo mode silently bypass IndexedDB on deployed builds and hit
 // the real API with no session (401s, and the local DB never initialized).
-const API_ORIGIN = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
+// Exported: the API access panel has to tell the user which URL to point an MCP client at,
+// and that is this origin, not the SPA's own.
+export const API_ORIGIN = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '')
 
 /**
  * Return the app-API path (`/api/...`, incl. query) when `url` targets our API — either a

@@ -1,0 +1,249 @@
+/* API access panel — lives inside a Settings card, so it inherits that card's padding and
+   background and only styles what is its own. Tokens follow the app's theme variables. */
+
+.intro {
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 18px;
+}
+
+.createForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.input {
+  max-width: 380px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: var(--input-bg, var(--card-bg));
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.scope {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+
+.scope span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.primaryBtn {
+  align-self: flex-start;
+  padding: 9px 16px;
+  border: none;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--primary);
+  color: var(--on-primary, #fff);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── token list ─────────────────────────────────────────────────────────── */
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row,
+.rowRevoked {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in oklab, var(--card-bg) 60%, transparent);
+}
+
+/* Revoked tokens stay listed — they are soft-deleted so the history survives — but must not
+   read as active at a glance. */
+.rowRevoked {
+  opacity: 0.55;
+}
+
+.rowMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rowName {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.hintCode {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.rowScopes {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 16%, transparent);
+  color: var(--primary);
+}
+
+.badgeRevoked {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--danger, #ef4444) 16%, transparent);
+  color: var(--danger, #ef4444);
+}
+
+.rowMeta {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.neverUsed {
+  color: var(--warning, #f59e0b);
+}
+
+.revokeBtn {
+  grid-row: 1;
+  grid-column: 2;
+  align-self: start;
+  padding: 5px 12px;
+  border: 1px solid color-mix(in oklab, var(--danger, #ef4444) 40%, var(--border));
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--danger, #ef4444);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* ── reveal dialog ──────────────────────────────────────────────────────── */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 55%);
+}
+
+.dialog {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text-primary);
+}
+
+.dialogBody {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.secret,
+.config {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  color: var(--text-primary);
+  /* The secret has no spaces, so it must be allowed to break mid-string or it overflows. */
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.copyBtn {
+  align-self: flex-start;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}

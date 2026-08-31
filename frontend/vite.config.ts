@@ -221,6 +221,13 @@ export default defineConfig(({ command, mode }) => {
           target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8787',
           changeOrigin: true,
         },
+        // Settings → API access prints this origin's /mcp as the endpoint to paste into an MCP
+        // client. Without the proxy that URL answers with the SPA's index.html, and the client
+        // fails its handshake on unparseable JSON rather than on anything diagnosable.
+        '/mcp': {
+          target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8787',
+          changeOrigin: true,
+        },
       },
     },
   }
