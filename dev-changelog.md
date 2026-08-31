@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.13.0] — 2026-08-31
+
 ### Added
 
 - **Remote MCP server at `POST /mcp`, plus a bearer-authed account API.** Stateless streamable
@@ -33,6 +35,29 @@ All notable changes to Token Circles are documented here. The format is based on
   `?bank=` forces an adapter, `?account=` names the target account, and the response and import
   log both record which parser ran.
 
+- **Passkeys (WebAuthn), and they replace the 2FA prompt rather than adding to it.** Migration
+  0030, `@simplewebauthn/server`, `worker/src/routes/passkeys.ts`. A passkey proves possession
+  and user verification in one gesture, so a successful assertion mints a full session with no
+  TOTP step — the point of the feature for anyone who never enabled 2FA. Registration is
+  sudo-gated the way GitHub does it: a session younger than 10 minutes passes, otherwise the
+  password or a 2FA code is re-presented (`registrationAllowed`), or a stolen cookie could
+  silently add a permanent second credential. `userVerification: 'required'` on both ceremonies,
+  a UNIQUE credential id (409 on replay), counter regression logged distinctly from a failed
+  assertion, and 10 passkeys per account. The RP id comes from `CORS_ORIGIN` and fails closed —
+  never from the request URL, which an attacker controls. Conditional mediation puts passkeys in
+  the email field's autofill; the explicit button aborts that pending request first.
+- **TOTP two-factor with recovery codes.** Migration 0028, `worker/src/totp.ts` (RFC 6238,
+  HMAC-SHA1, ±1 step drift) plus a per-user high-water mark so a code cannot be replayed inside
+  its own window. The QR is rendered in-page with `uqr`: the secret must never reach a third
+  party, which rules out every hosted chart API. Ten single-use recovery codes, stored hashed.
+  Enabling deletes every OTHER session, and disabling is rate-limited — it is a credential
+  check, and without a budget it is an offline-grade oracle reachable online.
+- **Email-code sign-in, bound to the browser that asked for it.** Migration 0029 plus a signed
+  httpOnly ceremony cookie (`fm_logincode`) carrying the code id and address. That binding is
+  what makes the rest safe: brute force cannot be spread across addresses, the per-address
+  verify bucket (a trivial lockout DoS) is gone entirely, and codes burn after 5 attempts with
+  at most 3 live per account. The send goes through `waitUntil`, so response time does not
+  reveal whether the address exists, and an unknown address does the same hashing work.
 - **Settings → API access: create, inspect and revoke personal access tokens.** The MCP server
   above landed with no way to mint a token except a hand-written `fetch` from the browser
   console. `frontend/src/features/ApiAccess.tsx` drives the three cookie-authed endpoints.

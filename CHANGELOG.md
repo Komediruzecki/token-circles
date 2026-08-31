@@ -8,8 +8,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.13.0] — 2026-08-31
+
 ### Added
 
+- **Sign in with your device instead of a password.** Add a passkey under Settings → About and your fingerprint, face or screen lock signs you in — nothing to type, nothing to phish, and it counts as two-factor on its own, so there is no code to enter afterwards. Your browser can also offer it straight from the email field.
+- **Two-factor authentication with an authenticator app.** Turn it on under Settings → About: scan the QR code with Google Authenticator, Aegis or any other app, and sign-in asks for a six-digit code from then on. You get ten recovery codes to download and keep somewhere safe, for the day the phone is not to hand.
+- **Sign in with a code sent to your email**, if you would rather not type a password. Enter the address, we mail a six-digit code, and it signs you in — on the same browser that asked for it, and still behind your second factor if you have one.
 - **You can now connect Claude, or any other MCP client, to your account.** Create a personal access token under Settings → API access, choose what it is allowed to do, and revoke it whenever you like.
 - **Bank statements can be imported over the API**, in the same formats the Bank Imports tab already understands. Re-importing a statement you have already imported adds nothing.
 
