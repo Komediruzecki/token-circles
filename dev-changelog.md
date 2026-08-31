@@ -9,6 +9,28 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **An unreachable API crashed the app at the login screen** (`core/webauthn.ts`,
+  `components/LoginScreen.tsx`). `postJson` awaited `apiFetch` bare, so a network-layer failure
+  (offline, DNS, a CORS preflight the browser blocks) rejected with `TypeError: Failed to fetch`
+  instead of returning a Response. `LoginScreen`'s `onMount` fires the conditional-mediation
+  passkey autofill as `void signInWithPasskey({ conditional: true }).then(...)` — a `.then` with
+  no `.catch` — so that rejection went unhandled, reached the global handler and painted "App
+  Crashed" over a login screen that was otherwise fine. Regression from the passkeys work in
+  5.13.0: before it, nothing called the API from `onMount` at the login screen.
+
+  Fixed at the source (every passkey call now reports a network failure as `ok: false` with
+  "Could not reach the server") and hardened at the call site (the floating chain has a
+  `.catch`). Covered by `core/__tests__/webauthnNetworkFailure.test.ts`.
+
+  This is why PR preview deployments showed "App Crashed": preview frontends are built with
+  `build:dev` (`VITE_API_URL=https://api.dev.tokencircles.com`) and served from a unique
+  `<version>-finance-manager-preview.<account>.workers.dev` origin, which the dev Worker's
+  fixed `CORS_ORIGIN` (`https://dev.tokencircles.com`) does not allow — so every preview's first
+  API call fails the preflight. Previews are still API-less by design (use serverless/local
+  mode there); they now land on a working login screen instead of a crash page.
+
 ## [5.13.0] — 2026-08-31
 
 ### Added

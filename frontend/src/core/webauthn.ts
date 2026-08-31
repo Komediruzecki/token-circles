@@ -42,11 +42,21 @@ interface ServerOptions {
 }
 
 async function postJson(url: string, body?: unknown): Promise<{ ok: boolean; data: unknown }> {
-  const res = await apiFetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body ?? {}),
-  })
+  // A network-layer failure (offline, DNS, a blocked CORS preflight) rejects rather than
+  // returning a Response. Every caller reads `ok`, and the login screen's conditional-mediation
+  // autofill runs as a floating `.then()` with nothing to catch a rejection — so letting one
+  // escape here crashed the whole app behind a login screen that still worked. Report it as a
+  // failed call instead.
+  let res: Response
+  try {
+    res = await apiFetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    })
+  } catch {
+    return { ok: false, data: { error: 'Could not reach the server' } }
+  }
   return { ok: res.ok, data: (await res.json().catch(() => ({}))) as unknown }
 }
 
