@@ -9,10 +9,12 @@
  * shown again, so the reveal is a modal you have to acknowledge rather than a line in the table
  * that a stray refresh would take away.
  */
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, onMount, Show, untrack } from 'solid-js'
+import { Portal } from 'solid-js/web'
 import { toast } from '../core/api'
 import { API_ORIGIN, apiFetch } from '../core/apiFetch'
 import { activeProfileId } from '../core/apiProfileScope'
+import { getProfileVersion } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import styles from './ApiAccess.module.css'
 
@@ -55,10 +57,22 @@ function shortDate(value: string | null): string {
   return isNaN(d.getTime()) ? value : d.toLocaleDateString()
 }
 
+function ListLoadFailed(props: { onRetry: () => void }) {
+  return (
+    <p class={styles.empty} data-test-id="api-token-list-error">
+      Could not load your tokens.{' '}
+      <button type="button" class={styles.copyBtn} onClick={props.onRetry}>
+        Try again
+      </button>
+    </p>
+  )
+}
+
 export default function ApiAccess() {
   const [tokens, setTokens] = createSignal<ApiToken[]>([])
   const [profiles, setProfiles] = createSignal<Profile[]>([])
   const [loading, setLoading] = createSignal(true)
+  const [loadFailed, setLoadFailed] = createSignal(false)
   const [creating, setCreating] = createSignal(false)
 
   const [name, setName] = createSignal('')
@@ -79,22 +93,42 @@ export default function ApiAccess() {
     setTokens(body.tokens ?? [])
   }
 
+  /** Re-seed the pin from the profile the app is actually on. */
+  const seedProfilePin = (rows: Profile[]): void => {
+    const active = activeProfileId()
+    setProfileId(rows.some((p) => p.id === active) ? active : null)
+  }
+
+  async function loadProfiles(): Promise<void> {
+    const res = await apiFetch('/api/profiles', { credentials: 'include' })
+    // A non-ok response is not a thrown error: without this the pin would silently fall back
+    // to "no default", and the token would act on whichever profile sorts first.
+    if (!res.ok) throw new Error('Could not load profiles')
+    const rows = (await res.json()) as Profile[]
+    setProfiles(rows)
+    seedProfilePin(rows)
+  }
+
+  const refresh = async (): Promise<void> => {
+    try {
+      await Promise.all([loadProfiles(), loadTokens()])
+      setLoadFailed(false)
+    } catch {
+      setLoadFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   onMount(() => {
-    void (async () => {
-      try {
-        const profilesRes = await apiFetch('/api/profiles', { credentials: 'include' })
-        if (profilesRes.ok) {
-          const rows = (await profilesRes.json()) as Profile[]
-          setProfiles(rows)
-          setProfileId(rows.some((p) => p.id === activeProfileId()) ? activeProfileId() : null)
-        }
-        await loadTokens()
-      } catch {
-        toast('Could not load API tokens', 'error')
-      } finally {
-        setLoading(false)
-      }
-    })()
+    void refresh()
+  })
+
+  // Pages stay mounted, so a profile switch while this panel is open would otherwise leave the
+  // pin on the previous profile — the one thing this control exists to prevent.
+  createEffect(() => {
+    getProfileVersion()
+    if (!untrack(loading)) seedProfilePin(untrack(profiles))
   })
 
   const canCreate = (): boolean => name().trim().length > 0 && scopes().length > 0 && !creating()
@@ -129,18 +163,23 @@ export default function ApiAccess() {
       setCopied(false)
       setName('')
       setScopes(['read'])
-      await loadTokens()
     } catch {
       toast('Could not create the token', 'error')
+      return
     } finally {
       setCreating(false)
     }
+    // The token exists and its secret is on screen exactly once. A failure of the refresh
+    // below is not a failure of the create, and must never be reported as one — the user
+    // would discard an unrecoverable working secret.
+    await loadTokens().catch(() => setLoadFailed(true))
   }
 
   async function revokeToken(token: ApiToken): Promise<void> {
     // Named, not just confirmed: the rows differ only by an eight-character hint.
     const ok = await showConfirm(
-      `Revoke "${token.name}"? Anything still using this token stops working immediately.`
+      `Revoke "${token.name}"? Anything still using this token stops working immediately.`,
+      { confirmText: 'Revoke', danger: true }
     )
     if (!ok) return
     try {
@@ -152,11 +191,14 @@ export default function ApiAccess() {
         toast('Could not revoke the token', 'error')
         return
       }
-      await loadTokens()
-      toast(`"${token.name}" revoked`, 'success')
     } catch {
       toast('Could not revoke the token', 'error')
+      return
     }
+    // Revoked. As with create, a failed refresh afterwards must not read as a failed revoke —
+    // that sends the user retrying against a token that is already dead.
+    toast(`"${token.name}" revoked`, 'success')
+    await loadTokens().catch(() => setLoadFailed(true))
   }
 
   /** Where an MCP client connects. VITE_API_URL is the API origin; same-origin builds leave it
@@ -261,7 +303,16 @@ export default function ApiAccess() {
       </div>
 
       <Show when={!loading()} fallback={<p class={styles.empty}>Loading…</p>}>
-        <Show when={tokens().length > 0} fallback={<p class={styles.empty}>No tokens yet.</p>}>
+        <Show
+          when={tokens().length > 0}
+          fallback={
+            // "No tokens yet." to someone who came here to revoke a leaked token would be a
+            // lie with consequences, so a failed load says so and offers a retry instead.
+            <Show when={!loadFailed()} fallback={<ListLoadFailed onRetry={() => void refresh()} />}>
+              <p class={styles.empty}>No tokens yet.</p>
+            </Show>
+          }
+        >
           <ul class={styles.list} data-test-id="api-token-list">
             <For each={tokens()}>
               {(token) => (
@@ -310,44 +361,57 @@ export default function ApiAccess() {
 
       <Show when={minted()}>
         {(token) => (
-          <div class={styles.overlay} data-test-id="api-token-reveal">
-            {/* No overlay click-to-close and no escape hatch: closing without saving the secret
-                loses it for good, so the acknowledgement is the only way out. */}
-            <div class={styles.dialog} role="alertdialog" aria-modal="true">
-              <h3 class={styles.dialogTitle}>Copy your token now</h3>
-              <p class={styles.dialogBody}>
-                This is the only time it can be shown. We store only a hash of it, so if you lose it
-                you will need to revoke this token and create another.
-              </p>
-              <code class={styles.secret}>{token().secret}</code>
-              <button
-                type="button"
-                class={styles.copyBtn}
-                onClick={() => {
-                  void copySecret()
-                }}
-              >
-                {copied() ? 'Copied' : 'Copy token'}
-              </button>
+          // Portalled to <body>: this panel sits inside a Settings card whose backdrop-filter
+          // makes it the containing block for fixed positioning, which would trap the overlay
+          // inside the card and leave the rest of the page uncovered and clickable.
+          <Portal>
+            <div class={styles.overlay} data-test-id="api-token-reveal">
+              {/* No overlay click-to-close and no escape hatch: closing without saving the secret
+                loses it for good, so the acknowledgement is the only way out. Focus moves to the
+                acknowledge button, or a keyboard user is left tabbing through covered controls. */}
+              <div class={styles.dialog} role="alertdialog" aria-modal="true">
+                <h3 class={styles.dialogTitle}>Copy your token now</h3>
+                <p class={styles.dialogBody}>
+                  This is the only time it can be shown. We store only a hash of it, so if you lose
+                  it you will need to revoke this token and create another.
+                </p>
+                <code class={styles.secret}>{token().secret}</code>
+                <button
+                  type="button"
+                  class={styles.copyBtn}
+                  onClick={() => {
+                    void copySecret()
+                  }}
+                >
+                  {copied() ? 'Copied' : 'Copy token'}
+                </button>
 
-              <p class={styles.dialogBody}>Point an MCP client at:</p>
-              <code class={styles.config}>
-                {mcpUrl()}
-                {'\n'}Authorization: Bearer {token().secret}
-              </code>
+                <p class={styles.dialogBody}>Point an MCP client at:</p>
+                <code class={styles.config}>
+                  {mcpUrl()}
+                  {'\n'}Authorization: Bearer {token().secret}
+                </code>
 
-              <button
-                type="button"
-                class={styles.primaryBtn}
-                data-test-id="api-token-ack"
-                onClick={() => {
-                  setMinted(null)
-                }}
-              >
-                I&rsquo;ve saved it
-              </button>
+                <button
+                  type="button"
+                  class={styles.primaryBtn}
+                  data-test-id="api-token-ack"
+                  ref={(el) => {
+                    // The Create button that had focus is disabled the moment the create lands,
+                    // which drops focus to <body> — outside a dialog that has no other way out.
+                    queueMicrotask(() => {
+                      el.focus()
+                    })
+                  }}
+                  onClick={() => {
+                    setMinted(null)
+                  }}
+                >
+                  I&rsquo;ve saved it
+                </button>
+              </div>
             </div>
-          </div>
+          </Portal>
         )}
       </Show>
     </div>

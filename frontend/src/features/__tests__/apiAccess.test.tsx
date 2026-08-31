@@ -25,6 +25,8 @@ const token = (over: Partial<Record<string, unknown>> = {}) => ({
 })
 
 let serverTokens: Record<string, unknown>[] = []
+/** Make the GET listing fail, to separate a mutation's outcome from its follow-up refresh. */
+let listShouldFail = false
 const profiles = [
   { id: 7, name: 'Personal' },
   { id: 8, name: 'Business' },
@@ -34,6 +36,7 @@ const apiFetch = vi.fn(async (url: string, init?: RequestInit) => {
   const method = init?.method ?? 'GET'
   if (url === '/api/profiles') return new Response(JSON.stringify(profiles), { status: 200 })
   if (url === '/api/account/api-tokens' && method === 'GET') {
+    if (listShouldFail) return new Response('{"error":"boom"}', { status: 500 })
     return new Response(JSON.stringify({ tokens: serverTokens }), { status: 200 })
   }
   if (url === '/api/account/api-tokens' && method === 'POST') {
@@ -60,9 +63,12 @@ vi.mock('../../core/apiFetch', () => ({
 }))
 vi.mock('../../core/api', () => ({ toast: (...a: unknown[]) => toast(...a) }))
 vi.mock('../../core/apiProfileScope', () => ({ activeProfileId: () => 7 }))
+// Declared out here so tests can assert on it — a spy created inside the factory is
+// unreachable, and the revoke confirmation is the only guard before an irreversible action.
+const showConfirmSpy = vi.fn<typeof ShowConfirm>(() => Promise.resolve(true))
 vi.mock('../../core/confirmStore', async (importOriginal) => ({
   ...(await importOriginal<{ showConfirm: typeof ShowConfirm }>()),
-  showConfirm: vi.fn(async () => true),
+  showConfirm: (...args: Parameters<typeof ShowConfirm>) => showConfirmSpy(...args),
 }))
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -72,8 +78,11 @@ let dispose: (() => void) | undefined
 
 beforeEach(() => {
   serverTokens = []
+  listShouldFail = false
   apiFetch.mockClear()
   toast.mockClear()
+  showConfirmSpy.mockClear()
+  showConfirmSpy.mockResolvedValue(true)
   host = document.createElement('div')
   document.body.appendChild(host)
 })
@@ -96,8 +105,10 @@ const byText = (root: HTMLElement, text: string) =>
 
 const nameInput = (root: HTMLElement) => root.querySelector<HTMLInputElement>('#api-token-name')
 // Keyed by test id, not text: the label carries a typographic apostrophe.
-const ackButton = (root: HTMLElement) =>
-  root.querySelector<HTMLButtonElement>('[data-test-id="api-token-ack"]')
+// The reveal is portalled to <body>, not rendered inside the panel — the Settings card it
+// lives in has a backdrop-filter, which would trap a position:fixed overlay inside the card.
+const reveal = () => document.querySelector('[data-test-id="api-token-reveal"]')
+const ackButton = () => document.querySelector<HTMLButtonElement>('[data-test-id="api-token-ack"]')
 const checkboxes = (root: HTMLElement) => [
   ...root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
 ]
@@ -153,7 +164,7 @@ describe('the secret reveal', () => {
     byText(root, 'Create token')!.click()
     await flush()
 
-    const dialog = root.querySelector('[data-test-id="api-token-reveal"]')
+    const dialog = reveal()
     expect(dialog, 'reveal should be open').not.toBeNull()
     expect(dialog!.textContent).toContain('tc_pat_SECRETVALUE')
 
@@ -161,14 +172,11 @@ describe('the secret reveal', () => {
     // outside would cost the user the token.
     ;(dialog as HTMLElement).click()
     await flush()
-    expect(
-      root.querySelector('[data-test-id="api-token-reveal"]'),
-      'backdrop click should not dismiss'
-    ).not.toBeNull()
+    expect(reveal(), 'backdrop click should not dismiss').not.toBeNull()
 
-    ackButton(root)!.click()
+    ackButton()!.click()
     await flush()
-    expect(root.querySelector('[data-test-id="api-token-reveal"]')).toBeNull()
+    expect(reveal()).toBeNull()
     // And it is gone for good — the list never carries the secret.
     expect(root.textContent).not.toContain('tc_pat_SECRETVALUE')
   })
@@ -181,7 +189,7 @@ describe('the secret reveal', () => {
     byText(root, 'Create token')!.click()
     await flush()
 
-    const dialog = root.querySelector('[data-test-id="api-token-reveal"]')!
+    const dialog = reveal()!
     expect(dialog.textContent).toContain('https://api.example.test/mcp')
     expect(dialog.textContent).toContain('Authorization: Bearer tc_pat_SECRETVALUE')
   })
@@ -191,9 +199,48 @@ describe('the secret reveal', () => {
     await fillName(root, 'My token')
     byText(root, 'Create token')!.click()
     await flush()
-    ackButton(root)!.click()
+    ackButton()!.click()
     await flush()
     expect(nameInput(root)!.value).toBe('')
+  })
+})
+
+describe('failures after the secret exists', () => {
+  it('keeps the reveal and does not claim failure when the list refresh dies', async () => {
+    // The mint succeeded and the secret is on screen exactly once. Reporting the refresh's
+    // failure as the create's would make the user discard an unrecoverable working token.
+    const root = await mount()
+    await fillName(root, 'My token')
+    listShouldFail = true
+    byText(root, 'Create token')!.click()
+    await flush()
+    await flush()
+
+    expect(reveal()).not.toBeNull()
+    expect(reveal()!.textContent).toContain('tc_pat_SECRETVALUE')
+    expect(toast.mock.calls.filter(([, kind]) => kind === 'error')).toHaveLength(0)
+  })
+
+  it('reports a revoke that succeeded, even if the refresh behind it fails', async () => {
+    serverTokens = [token({ id: 'tok-a', name: 'Drop' })]
+    const root = await mount()
+    listShouldFail = true
+    root.querySelector<HTMLButtonElement>('[data-test-id="api-token-list"] li button')!.click()
+    await flush()
+    await flush()
+
+    expect(
+      toast.mock.calls.some(([msg, kind]) => kind === 'success' && String(msg).includes('Drop'))
+    ).toBe(true)
+    expect(toast.mock.calls.filter(([, kind]) => kind === 'error')).toHaveLength(0)
+  })
+
+  it('says the list could not be loaded rather than asserting there are none', async () => {
+    // "No tokens yet." to someone who came to revoke a leaked token is a lie with consequences.
+    listShouldFail = true
+    const root = await mount()
+    expect(root.textContent).not.toContain('No tokens yet.')
+    expect(root.textContent).toContain('Could not load your tokens')
   })
 })
 
@@ -232,6 +279,18 @@ describe('the token list', () => {
     expect(revoked.textContent, 'revoked tokens stay listed, badged').toContain('Revoked')
     // No revoke button on an already-revoked token.
     expect(revoked.querySelector('button')).toBeNull()
+  })
+
+  it('asks for a danger-styled confirmation first, and does nothing when refused', async () => {
+    serverTokens = [token({ id: 'tok-a', name: 'Drop' })]
+    showConfirmSpy.mockResolvedValue(false)
+    const root = await mount()
+    root.querySelector<HTMLButtonElement>('[data-test-id="api-token-list"] li button')!.click()
+    await flush()
+
+    expect(showConfirmSpy).toHaveBeenCalledTimes(1)
+    expect(showConfirmSpy.mock.calls[0]![1]).toMatchObject({ danger: true })
+    expect(apiFetch.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false)
   })
 
   it('says so when there are no tokens instead of rendering an empty list', async () => {

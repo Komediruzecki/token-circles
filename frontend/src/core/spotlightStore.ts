@@ -479,13 +479,13 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'settings-header',
         'settings',
         'Settings',
-        'Preferences, theme, currency, storage mode, exports, and billing.'
+        'Preferences, theme, currency, storage mode, exports, API access, and billing.'
       ),
       step(
         'settings-tabs',
         'settings',
         'Settings tabs',
-        'General is shown here; Exports holds CSV and PDF reports; Billing appears when you run in self-hosted mode.'
+        'General is shown here; Exports holds CSV and PDF reports; API access mints tokens for Claude and other MCP clients; API access and Billing appear when you run against a backend.'
       ),
       step(
         'settings-currency',

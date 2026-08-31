@@ -33,12 +33,9 @@ All notable changes to Token Circles are documented here. The format is based on
   `?bank=` forces an adapter, `?account=` names the target account, and the response and import
   log both record which parser ran.
 
-### Added
-
-- **Settings → API access: create, inspect and revoke personal access tokens.** Until now a
-  token could only be minted with curl, which is why the feature shipped without a user-facing
-  changelog line. `frontend/src/features/ApiAccess.tsx` drives the three cookie-authed endpoints
-  added in #497.
+- **Settings → API access: create, inspect and revoke personal access tokens.** The MCP server
+  above landed with no way to mint a token except a hand-written `fetch` from the browser
+  console. `frontend/src/features/ApiAccess.tsx` drives the three cookie-authed endpoints.
   - **The reveal is a modal that only an acknowledgement closes.** The worker returns the secret
     exactly once and keeps only a SHA-256 hash, so a value shown in a table row would be lost to
     a stray refresh. A backdrop click deliberately does not dismiss it; a test pins that.
@@ -51,7 +48,29 @@ All notable changes to Token Circles are documented here. The format is based on
   - `GET /api/account/api-tokens` now returns `scopes` as an array. They are stored stringified,
     and passing that through made every client `JSON.parse` a field of an already-parsed
     response; a row that does not hold an array degrades to no scopes rather than failing the
-    whole listing.
+    whole listing. `parseScopes` in `apitoken.ts` is that one tolerance rule, shared with the
+    bearer-auth path so the two can never disagree about what a token may do.
+  - **A failed refresh is never reported as a failed mutation.** Both handlers used to await the
+    list reload inside the mutation's `try`, so a 500 on the reload toasted "Could not create the
+    token" over a modal displaying a live, unrecoverable secret — and made a successful revoke
+    look like a failure, sending the user to retry against a token that was already dead. Revoke
+    is now idempotent server-side (`COALESCE(revoked_at, …)`) for the same reason.
+  - **The reveal is portalled to `<body>`.** It sits in a Settings card whose `backdrop-filter`
+    makes the card a containing block for `position: fixed`, which trapped the overlay inside
+    the card and left the rest of the page uncovered and clickable. Focus now moves to the
+    acknowledge button, which is the dialog's only exit.
+  - **The profile pin re-seeds on a profile switch.** Pages stay mounted, so an open panel kept
+    the previous profile's id and minted tokens against it — the exact accident the control
+    exists to prevent. A `/api/profiles` failure now surfaces instead of silently unpinning.
+  - **A failed listing says so.** It used to render "No tokens yet.", which to someone who came
+    to revoke a leaked token is a lie with consequences.
+  - Minting is rate-limited (20/hour) like every other credential-issuing route — an API token
+    deliberately survives sign-out-everywhere, so a burst mint from a stolen cookie cannot be
+    undone by revoking the session. `expiresAt` must now parse and be in the future: it was
+    passed through on `typeof === 'string'`, and `verifyApiToken`'s `getTime() <= now` is false
+    for `NaN`, so `"30d"` minted a token that showed an expiry and never expired.
+  - Account deletion deletes `api_tokens` explicitly. D1's cascade does fire, but `account.ts`
+    states it does not rely on cascade, and every other user-scoped table is listed there.
 
 ### Changed
 

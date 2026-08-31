@@ -6,7 +6,16 @@ account that minted the token.
 
 ## Mint a token
 
-Signed in to the app, from the browser console on the app origin:
+**Settings → API access.** Name the token, tick the scopes it needs, optionally pin the profile
+it acts on, and press Create. The panel then shows the secret, and the URL to point an MCP client
+at, exactly once.
+
+The secret cannot be recovered afterwards — the worker keeps only a SHA-256 hash. Store it in a
+password manager before dismissing the dialog; if you lose it, revoke the token and create
+another.
+
+The same three endpoints are available directly (cookie-authenticated), e.g. from the browser
+console on the app origin:
 
 ```js
 await fetch('/api/account/api-tokens', {
@@ -17,7 +26,8 @@ await fetch('/api/account/api-tokens', {
 }).then((r) => r.json());
 ```
 
-The `secret` is shown once. Store it in a password manager; it cannot be recovered.
+`GET /api/account/api-tokens` lists them, with `scopes` as an array and the secret never
+included. An optional `expiresAt` on create must be a valid date in the future.
 
 Scopes: `read` (all reads and snapshot download), `write` (create transactions and accounts,
 categorize, tag rules, budgets), `import` (upload statements, list and undo import batches).

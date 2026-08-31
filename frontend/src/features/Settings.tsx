@@ -53,7 +53,12 @@ import { startOnboarding } from '../core/onboardingStore'
 import { period } from '../core/periodStore'
 import { isTabVisible, setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
-import { getStorageAdapter, migrateData, setStorageMode } from '../core/storage/storageFactory'
+import {
+  getStorageAdapter,
+  getStorageMode,
+  migrateData,
+  setStorageMode,
+} from '../core/storage/storageFactory'
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
@@ -399,14 +404,20 @@ export default function Settings() {
     { id: 'billing', label: 'Billing', icon: IconBilling },
     { id: 'about', label: 'About', icon: IconAbout },
   ]
-  const visibleTabs = (): typeof tabs => tabs.filter((t) => isTabVisible(t.id, storageMode()))
+  // getStorageMode(), not the local storageMode() signal: that one is the dropdown's DRAFT and
+  // flips before Apply, while apiFetch keeps routing by the committed mode. Showing the tab on
+  // the draft would offer token creation that still answers from IndexedDB. Applying reloads
+  // the page, so reading this non-reactively is enough.
+  const visibleTabs = (): typeof tabs => tabs.filter((t) => isTabVisible(t.id, getStorageMode()))
 
   // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
   // then consume it so re-entering Settings later does not force the tab again.
   createEffect(() => {
     const requested = settingsTab()
     if (requested) {
-      setActiveTab(requested)
+      // Honor it only if the tab is actually available in this storage mode — otherwise the
+      // user lands on a tab that is not in the rail, with no obvious way back.
+      if (isTabVisible(requested, getStorageMode())) setActiveTab(requested)
       setSettingsTab(null)
     }
   })
@@ -1468,8 +1479,8 @@ export default function Settings() {
               </Show>
             </Show>
 
-            {/* ─────────────── EXPORTS ─────────────── */}
-            <Show when={activeTab() === 'api'}>
+            {/* ─────────────── API ACCESS (server mode only) ─────────────── */}
+            <Show when={activeTab() === 'api' && isTabVisible('api', getStorageMode())}>
               <div class={styles.card}>
                 <CardHead
                   icon={<IconApi />}
