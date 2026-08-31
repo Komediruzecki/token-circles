@@ -72,8 +72,9 @@ import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
 import { buildBillMutationPayload } from './billForm'
 import styles from './BillsPage.module.css'
-import { matchBrand } from './subscriptionBrands'
+import { filterSubscriptions, subscriptionGroupCounts } from './subscriptionFilters'
 import type { SubscriptionCardBill } from '../components/SubscriptionCard'
+import type { SubscriptionFilter } from './subscriptionFilters'
 
 const FREQUENCY_LABELS: Record<string, string> = {
   monthly: 'Monthly',
@@ -169,29 +170,38 @@ export default function Bills() {
     activeSubscriptions().reduce((sum, b) => sum + monthlyEquivalent(b.amount, b.frequency), 0)
   )
 
-  // Group active subscriptions by category
-  const subscriptionGroups = createMemo(() => {
-    const groups = new Map<string, Bill[]>()
-    for (const sub of activeSubscriptions()) {
-      const brand = matchBrand(sub.name, sub.category_color)
-      const cat = brand.defaultCategory
-      if (!groups.has(cat)) groups.set(cat, [])
-      groups.get(cat)!.push(sub)
-    }
-    return [...groups.entries()]
+  // Filter pills above the gallery: All (default) · one per category · Paused.
+  const [subFilter, setSubFilter] = createSignal<SubscriptionFilter>('all')
+  const subGroupPills = createMemo(() => subscriptionGroupCounts(subscriptions()))
+  const pausedSubscriptions = createMemo(() => subscriptions().filter((b) => b.is_active === 0))
+  const visibleSubscriptions = createMemo(() => {
+    const filter = subFilter()
+    // A stale selection (last card of a category deleted, last paused sub resumed) falls
+    // back to All instead of showing an inexplicable empty gallery.
+    const gone =
+      typeof filter === 'object'
+        ? !subGroupPills().some((g) => g.label === filter.category)
+        : filter === 'paused' && pausedSubscriptions().length === 0
+    return filterSubscriptions(subscriptions(), gone ? 'all' : filter) as Bill[]
   })
 
-  const pausedSubscriptions = createMemo(() => subscriptions().filter((b) => b.is_active === 0))
-
-  // Pause a subscription
-  const pauseSubscription = async (id: number) => {
+  // One toggle for the card menu's Pause/Resume: pauses an active sub, resumes a paused one.
+  const togglePause = async (id: number) => {
     const sub = bills().find((b) => b.id === id)
     if (!sub) return
+    const next = sub.is_active === 0 ? 1 : 0
     try {
-      await apiPut(`/api/bills/${id}`, { ...sub, is_active: 0, type: sub.type })
+      // Send ONLY the mutation. Echoing the whole GET row back (the old `{ ...sub }`) failed
+      // serverless validation on seeded rows (`recurring: 1` vs the boolean schema) and
+      // re-submitted computed fields (`paid`, category joins) the update never meant to touch.
+      // Both backends treat PUT as partial: the worker falls back `?? existing` per field.
+      await apiPut(`/api/bills/${id}`, { is_active: next })
       await refetchBills()
     } catch {
-      showToast('Failed to pause subscription', 'error')
+      showToast(
+        next === 0 ? 'Failed to pause subscription' : 'Failed to resume subscription',
+        'error'
+      )
     }
   }
   const unpaidBills = createMemo(() =>
@@ -500,62 +510,63 @@ export default function Bills() {
               </div>
               <div class={styles.subSummaryCard}>
                 <span class={styles.subSummaryLabel}>Categories</span>
-                <span class={styles.subSummaryValue}>{subscriptionGroups().length}</span>
+                <span class={styles.subSummaryValue}>{subGroupPills().length}</span>
               </div>
             </div>
           </div>
 
-          {/* Category Groups — Gallery Grid */}
-          {activeSubscriptions().length > 0 && (
-            <For each={subscriptionGroups()}>
-              {([category, subs]) => (
-                <div class={styles.categoryGroup}>
-                  <h3 class={styles.categoryGroupTitle}>
-                    {category}
-                    <span class={styles.categoryGroupCount}>{subs.length}</span>
-                  </h3>
-                  <div class={styles.subscriptionGallery}>
-                    <For each={subs}>
-                      {(sub) => (
-                        <SubscriptionCard
-                          subscription={sub as SubscriptionCardBill}
-                          onMarkPaid={markPaid}
-                          onPause={pauseSubscription}
-                          onDelete={deleteBill}
-                          onEdit={openEditModal}
-                          markingPaid={markingPaid}
-                        />
-                      )}
-                    </For>
-                  </div>
-                </div>
-              )}
-            </For>
-          )}
+          {/* Filter pills + one flat gallery, instead of per-category sections */}
+          {subscriptions().length > 0 && (
+            <>
+              <div class={styles.subFilterRow} data-test-id="sub-filter-row">
+                <button
+                  class={`${styles.filterPill} ${subFilter() === 'all' ? styles.filterPillActive : ''}`}
+                  type="button"
+                  aria-pressed={subFilter() === 'all'}
+                  onClick={() => setSubFilter('all')}
+                >
+                  All
+                  <span class={styles.filterPillCount}>{activeSubscriptions().length}</span>
+                </button>
+                <For each={subGroupPills()}>
+                  {(group) => {
+                    const active = () => {
+                      const f = subFilter()
+                      return typeof f === 'object' && f.category === group.label
+                    }
+                    return (
+                      <button
+                        class={`${styles.filterPill} ${active() ? styles.filterPillActive : ''}`}
+                        type="button"
+                        aria-pressed={active()}
+                        onClick={() => setSubFilter({ category: group.label })}
+                      >
+                        {group.label}
+                        <span class={styles.filterPillCount}>{group.count}</span>
+                      </button>
+                    )
+                  }}
+                </For>
+                <Show when={pausedSubscriptions().length > 0}>
+                  <button
+                    class={`${styles.filterPill} ${subFilter() === 'paused' ? styles.filterPillActive : ''}`}
+                    type="button"
+                    aria-pressed={subFilter() === 'paused'}
+                    onClick={() => setSubFilter('paused')}
+                  >
+                    Paused
+                    <span class={styles.filterPillCount}>{pausedSubscriptions().length}</span>
+                  </button>
+                </Show>
+              </div>
 
-          {/* Paused Subscriptions */}
-          {pausedSubscriptions().length > 0 && (
-            <div class={styles.categoryGroup}>
-              <h3 class={styles.categoryGroupTitle}>
-                Paused
-                <span class={styles.categoryGroupCount}>{pausedSubscriptions().length}</span>
-              </h3>
               <div class={styles.subscriptionGallery}>
-                <For each={pausedSubscriptions()}>
+                <For each={visibleSubscriptions()}>
                   {(sub) => (
                     <SubscriptionCard
                       subscription={sub as SubscriptionCardBill}
                       onMarkPaid={markPaid}
-                      onPause={async (id) => {
-                        const s = bills().find((b) => b.id === id)
-                        if (!s) return
-                        await apiPut(`/api/bills/${id}`, {
-                          ...s,
-                          is_active: 1,
-                          type: s.type,
-                        })
-                        await refetchBills()
-                      }}
+                      onPause={togglePause}
                       onDelete={deleteBill}
                       onEdit={openEditModal}
                       markingPaid={markingPaid}
@@ -563,7 +574,7 @@ export default function Bills() {
                   )}
                 </For>
               </div>
-            </div>
+            </>
           )}
 
           {subscriptions().length === 0 && (

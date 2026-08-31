@@ -525,33 +525,63 @@
   /* container for the entire subscription tab content */
 }
 
-/* Category groups */
-.categoryGroup {
-  margin-bottom: 28px;
-}
-.categoryGroupTitle {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text);
-  margin: 0 0 12px 0;
+/* Category filter pills — one row above the gallery, scrollable on small screens */
+.subFilterRow {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
 }
-.categoryGroupCount {
-  font-size: 12px;
-  font-weight: 500;
+.subFilterRow::-webkit-scrollbar {
+  display: none;
+}
+.filterPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
   color: var(--text-secondary);
-  background: var(--bg-secondary, #f1f5f9);
-  padding: 1px 8px;
-  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+.filterPill:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+.filterPillActive {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-contrast, #fff);
+}
+.filterPillActive:hover {
+  color: var(--primary-contrast, #fff);
+}
+.filterPillCount {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
 }
 
 /* Gallery grid — responsive auto-fill */
 .subscriptionGallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+  gap: 10px;
 }
 
 @media (max-width: 768px) {
@@ -571,7 +601,6 @@
 
 /* Section headings speak the display serif, matching the app. */
 .billsSection h3,
-.categoryGroup h3,
 .subscriptionSummary h3 {
   font-family: var(--font-display, inherit);
   letter-spacing: -0.01em;

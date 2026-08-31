@@ -9,6 +9,21 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Subscriptions view redesigned around filter pills and compact cards** (`Bills.tsx`,
+  `SubscriptionCard.tsx`). The per-category collapsible sections are gone; a pill row (All ·
+  one per category · Paused) filters one flat gallery, with the pure filtering/grouping logic in
+  `features/subscriptionFilters.ts` (unit-tested). One label rule everywhere:
+  `category_name || category || matchBrand(...).defaultCategory` — the old view grouped by the
+  brand default while cards showed the user's category, so a card could sit under a heading that
+  didn't match its own pill. Cards are single-row (36px brand icon · name + category/date ·
+  amount + due countdown) with exactly two controls: a mark-paid icon button and a "…" menu
+  (new reusable `components/OverflowMenu.tsx`, portalled to `<body>` because cards clip with
+  `overflow: hidden` and glass panels carry backdrop-filter; closes on select/Escape/outside
+  press/scroll). Delete moved behind the menu and confirms via `showConfirm({ danger: true })`
+  instead of `ConfirmButton`.
+
 ### Fixed
 
 - **An unreachable API crashed the app at the login screen** (`core/webauthn.ts`,
@@ -38,6 +53,21 @@ All notable changes to Token Circles are documented here. The format is based on
   `frontend/src/features/import/__tests__/connectedSources.autoSyncError.test.tsx` mounts the real
   component over a mocked `apiFetch` and asserts a failed execute produces exactly one error toast
   (and a successful one none).
+- **Mark-paid transactions were stamped USD** (`worker/src/routes/bills.ts`). The INSERT omitted
+  `currency`/`amount_local`, so the schema default (`currency TEXT DEFAULT 'USD'`,
+  0001_init.sql) applied — an EUR profile saw a converted-from-USD estimate on every bill
+  payment while the Bills page showed the same amount in EUR. Now mirrors the recurring cron:
+  `currency` = the profile's configured base (`configuredBaseCurrency`, newly exported from
+  `base-currency.ts`; EUR fallback) and `amount_local = amount`. Covered by
+  `worker/test/bills-mark-paid-currency.test.ts`.
+- **A paid subscription kept its clickable "Mark Paid" button.** GET `/api/bills` computes
+  `paid` per period, and the route 409s a second mark-paid — so after paying, the button could
+  only produce "Failed to mark bill as paid". The card now swaps the action for a Paid badge
+  (`subscriptionCard.test.tsx` pins this).
+- **Pause/Resume failed in serverless mode.** `togglePause` (formerly `pauseSubscription`)
+  echoed the whole GET row back into PUT `/api/bills/:id`; seeded rows carry `recurring: 1`
+  (number) which fails the router's `z.boolean()` validation. Both backends treat PUT as
+  partial, so it now sends only `{ is_active }`.
 
 ## [5.13.0] — 2026-08-31
 
