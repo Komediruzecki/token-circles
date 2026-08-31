@@ -30,6 +30,14 @@ All notable changes to Token Circles are documented here. The format is based on
   fixed `CORS_ORIGIN` (`https://dev.tokencircles.com`) does not allow — so every preview's first
   API call fails the preflight. Previews are still API-less by design (use serverless/local
   mode there); they now land on a working login screen instead of a crash page.
+- **Auto sync surfaces execute-step failures** (`ConnectedSources.tsx`). `importFlow.handleImport`
+  catches every error into `flow.error()` and never calls `onImported`, but `autoSync` only read
+  `flow.error()` after the _fetch_ step — a rejected `/api/import/execute` (422 validation, 500)
+  ended with the spinner stopping and no message at all. Auto sync now checks `flow.error()` after
+  `handleImport` and toasts it. Regression test:
+  `frontend/src/features/import/__tests__/connectedSources.autoSyncError.test.tsx` mounts the real
+  component over a mocked `apiFetch` and asserts a failed execute produces exactly one error toast
+  (and a successful one none).
 
 ## [5.13.0] — 2026-08-31
 

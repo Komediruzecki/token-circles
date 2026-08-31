@@ -87,6 +87,11 @@ export function ConnectedSources() {
     // 'all' → send every row; the execute-side dedup skips anything already imported, so a
     // re-sync of a growing ledger only lands genuinely new rows and never duplicates.
     await flow.handleImport('all')
+    // handleImport swallows failures into flow.error() and never calls onImported. Auto sync has
+    // no preview or result screen, so without this toast a rejected import ends in silence — the
+    // spinner stops and the button just looks like it did nothing.
+    const importError = flow.error()
+    if (importError) addToast(importError, 'error')
     setBusy(null)
   }
 
