@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@simplewebauthn/server": "^13.3.3",
-    "hono": "^4.13.3",
+    "hono": "^4.13.5",
     "pdf-lib": "^1.17.1",
     "postal-mime": "^3.0.0",
     "xlsx": "file:../vendor/xlsx-0.20.3.tgz",
@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "^5.20260822.1",
+    "@cloudflare/workers-types": "^5.20260827.1",
     "typescript": "^5.7.2",
     "vitest": "4.1.11",
     "wrangler": "4.126.0"
