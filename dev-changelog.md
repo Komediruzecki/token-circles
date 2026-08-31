@@ -26,6 +26,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **A passkey that cannot be used here failed silently** (`core/webauthn.ts`). The platform
+  reports "you cancelled", "no credential matches this site" and "the prompt timed out" as one
+  indistinguishable `NotAllowedError` — deliberately, so a site cannot probe which passkeys you
+  hold. `isAbort()` lumped it in with `AbortError`, and the callers hide `aborted` results
+  (`else if (!result.aborted) setError(...)`), so pressing "Sign in with a passkey" while only
+  another domain's passkey was saved did visibly nothing.
+
+  `isAbort()` now means only `AbortError` — a request this code called off itself (the explicit
+  button aborts the pending conditional one), where no human ever saw a prompt. `NotAllowedError`
+  is handled separately: an explicit press always returns a message naming the cause the user can
+  act on, while the background autofill request stays `aborted` so it can never paint the form on
+  page load. Registration keeps treating it as a cancel — creating a NEW credential has no
+  "belongs to another site" case. Covered by `core/__tests__/webauthnNoMatchingPasskey.test.ts`.
+
 - **An unreachable API crashed the app at the login screen** (`core/webauthn.ts`,
   `components/LoginScreen.tsx`). `postJson` awaited `apiFetch` bare, so a network-layer failure
   (offline, DNS, a CORS preflight the browser blocks) rejected with `TypeError: Failed to fetch`

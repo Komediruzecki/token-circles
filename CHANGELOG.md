@@ -16,6 +16,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **The app no longer shows "App Crashed" when it cannot reach the server.** Opening the sign-in screen while offline — or anywhere the API is unreachable — crashed the whole app instead of showing the login form you could still use.
 - **A failed Auto sync now says so.** When a saved Google Sheet import was rejected by the server, the button just stopped spinning with no message — it now shows the error.
+- **"Sign in with a passkey" now tells you when no passkey could be used.** Pressing it with only another site's passkey saved did nothing at all, with no explanation.
 - **Marking a subscription paid records the payment in your own currency.** The transaction was stamped as US dollars regardless of your settings, so it showed up with a "converted from USD" estimate on it.
 - **A subscription you have paid this period no longer offers "Mark Paid" again** — pressing it a second time could only ever fail.
 
