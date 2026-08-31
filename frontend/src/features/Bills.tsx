@@ -198,7 +198,10 @@ export default function Bills() {
       await apiPut(`/api/bills/${id}`, { is_active: next })
       await refetchBills()
     } catch {
-      showToast(next === 0 ? 'Failed to pause subscription' : 'Failed to resume subscription', 'error')
+      showToast(
+        next === 0 ? 'Failed to pause subscription' : 'Failed to resume subscription',
+        'error'
+      )
     }
   }
   const unpaidBills = createMemo(() =>

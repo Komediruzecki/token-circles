@@ -111,7 +111,9 @@ export default function OverflowMenu(props: OverflowMenuProps) {
                     item.onSelect()
                   }}
                 >
-                  <Show when={item.icon}>{(icon) => <span class={styles.icon}>{icon()()}</span>}</Show>
+                  <Show when={item.icon}>
+                    {(icon) => <span class={styles.icon}>{icon()()}</span>}
+                  </Show>
                   {item.label}
                 </button>
               )}

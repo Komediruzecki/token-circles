@@ -116,10 +116,7 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
             {formatCurrency(sub().amount)}
             <span class={styles.frequency}>/{frequencySuffix(sub().frequency)}</span>
           </span>
-          <Show
-            when={isActive()}
-            fallback={<span class={styles.pausedBadge}>Paused</span>}
-          >
+          <Show when={isActive()} fallback={<span class={styles.pausedBadge}>Paused</span>}>
             <span class={`${styles.due} ${dueClass(sub().due_date)}`}>
               {dueText(sub().due_date)}
             </span>
@@ -127,10 +124,7 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
         </div>
 
         <div class={styles.actions}>
-          <Show
-            when={!sub().paid}
-            fallback={<span class={styles.paidBadge}>Paid</span>}
-          >
+          <Show when={!sub().paid} fallback={<span class={styles.paidBadge}>Paid</span>}>
             <button
               class={styles.payBtn}
               type="button"
@@ -169,7 +163,11 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
                   aria-hidden="true"
                 >
                   <circle cx="12" cy="12" r="9" />
-                  <path d="m8.5 12.2 2.4 2.4 4.6-4.9" stroke-linecap="round" stroke-linejoin="round" />
+                  <path
+                    d="m8.5 12.2 2.4 2.4 4.6-4.9"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
                 </svg>
               </Show>
             </button>

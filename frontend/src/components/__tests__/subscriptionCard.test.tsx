@@ -75,8 +75,7 @@ async function mount(bill: SubscriptionCardBill, markingPaid: Set<number> = new 
   await flush()
 }
 
-const markPaidBtn = () =>
-  host.querySelector<HTMLButtonElement>('[data-test-id="sub-mark-paid"]')
+const markPaidBtn = () => host.querySelector<HTMLButtonElement>('[data-test-id="sub-mark-paid"]')
 const menuBtn = () => host.querySelector<HTMLButtonElement>('[data-test-id="sub-menu-btn"]')
 // The menu is portalled to <body> so card overflow/backdrop-filter cannot clip it.
 const menu = () => document.querySelector('[data-test-id="overflow-menu"]')
