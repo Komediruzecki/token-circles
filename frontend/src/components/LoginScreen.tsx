@@ -1,7 +1,14 @@
-import { createSignal, Show } from 'solid-js'
+import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
+import {
+  conditionalMediationAvailable,
+  markPasskeyNudgeAfterLogin,
+  passkeysSupported,
+  signInWithPasskey,
+} from '../core/webauthn'
+import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -13,6 +20,7 @@ import Turnstile, {
   turnstileEnabled,
   waitForTurnstileToken,
 } from './Turnstile'
+import TwofaChallenge from './TwofaChallenge'
 import type { TurnstileStatus } from './Turnstile'
 
 /**
@@ -33,9 +41,38 @@ export default function LoginScreen() {
   const [error, setError] = createSignal('')
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
-  // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs.
-  const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
+  // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
+  // handoff runs; 'twofa' is the second factor's code step; 'email-code' is passwordless sign-in.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
+
+  // The Google callback can't stop for a code mid-redirect, so the worker parks the challenge
+  // cookie and sends the browser back with ?twofa=1 — land straight on the code step.
+  onMount(() => {
+    if (new URLSearchParams(window.location.search).get('twofa') === '1') setStage('twofa')
+  })
+
+  // Conditional UI: on capable browsers a background WebAuthn request lets the email field's
+  // autofill offer saved passkeys — one tap, no button. It must be aborted before the explicit
+  // passkey button runs (the spec allows one pending request) and when the screen unmounts.
+  let conditionalAbort: AbortController | undefined
+  const stopConditional = () => {
+    conditionalAbort?.abort()
+    conditionalAbort = undefined
+  }
+  onMount(() => {
+    void conditionalMediationAvailable().then((available) => {
+      if (!available) return
+      conditionalAbort = new AbortController()
+      void signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
+        (result) => {
+          if (result.ok) window.location.reload()
+          // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
+          // the explicit button is the path that reports errors.
+        }
+      )
+    })
+  })
+  onCleanup(stopConditional)
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -113,8 +150,18 @@ export default function LoginScreen() {
         clearCaptcha()
         try {
           const token = await waitForTurnstileToken(turnstileToken, 20000)
-          await api.loginWithPassword(em, pw, token)
+          const handoff = await api.loginWithPassword(em, pw, token)
+          if (handoff?.twofaRequired) {
+            // "Register" with an existing 2FA-protected account: the password matched, so the
+            // server answered with a challenge, not a session. Show the code step — reloading
+            // here would land back on an empty form with no explanation.
+            setStage('twofa')
+            setLoading(false)
+            clearCaptcha()
+            return
+          }
           // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
+          markPasskeyNudgeAfterLogin()
           window.location.reload()
           return
         } catch {
@@ -129,8 +176,16 @@ export default function LoginScreen() {
           return
         }
       }
-      await api.loginWithPassword(em, pw, turnstileToken())
+      const login = await api.loginWithPassword(em, pw, turnstileToken())
+      if (login?.twofaRequired) {
+        // Password verified; the session waits behind the authenticator code.
+        setStage('twofa')
+        setLoading(false)
+        clearCaptcha()
+        return
+      }
       // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -191,30 +246,49 @@ export default function LoginScreen() {
         <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'signing-in'
             ? 'Welcome aboard.'
-            : mode() === 'register'
-              ? 'Create your account.'
-              : mode() === 'forgot'
-                ? 'Reset your password.'
-                : 'Sign in to access your finances.'}
+            : stage() === 'twofa'
+              ? 'Two-factor authentication'
+              : stage() === 'email-code'
+                ? 'Sign in by email'
+                : mode() === 'register'
+                  ? 'Create your account.'
+                  : mode() === 'forgot'
+                    ? 'Reset your password.'
+                    : 'Sign in to access your finances.'}
         </p>
 
         <Show
           when={stage() === 'form'}
           fallback={
-            <div
-              style={{
-                display: 'flex',
-                'flex-direction': 'column',
-                'align-items': 'center',
-                padding: '22px 0 14px',
-              }}
-            >
-              <OrbitSpinner size={72} label="Account created — signing you in…" />
-              {/* The form's widget unmounted with the form; this fresh instance
-                  issues the sign-in token (and stays visible in case Cloudflare
-                  wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            </div>
+            stage() === 'twofa' ? (
+              <TwofaChallenge
+                onBack={() => {
+                  setStage('form')
+                  setPassword('')
+                }}
+              />
+            ) : stage() === 'email-code' ? (
+              <EmailCodeLogin
+                email={email()}
+                onBack={() => setStage('form')}
+                onTwofa={() => setStage('twofa')}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  'align-items': 'center',
+                  padding: '22px 0 14px',
+                }}
+              >
+                <OrbitSpinner size={72} label="Account created — signing you in…" />
+                {/* The form's widget unmounted with the form; this fresh instance
+                    issues the sign-in token (and stays visible in case Cloudflare
+                    wants an interactive check). */}
+                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+              </div>
+            )
           }
         >
           <Show when={notice()}>
@@ -264,7 +338,9 @@ export default function LoginScreen() {
               aria-invalid={emailInvalid()}
               // `username` (not `email`) is the token password managers pair with the password
               // field; combined with name/id it's what Android Chrome autofill keys off of.
-              autocomplete="username"
+              // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
+              // the conditional request from onMount is pending.
+              autocomplete="username webauthn"
               style={{
                 ...inputStyle,
                 'margin-bottom': emailInvalid() ? '2px' : inputStyle['margin-bottom'],
@@ -421,12 +497,47 @@ export default function LoginScreen() {
               class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
               style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
               onClick={() => {
+                // sessionStorage survives the OAuth round-trip in this tab, so the post-login
+                // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
+                // flag harmlessly — the nudge only renders for an authenticated session.
+                markPasskeyNudgeAfterLogin()
                 api.loginWithGoogle()
               }}
               type="button"
             >
               Continue with Google
             </button>
+            <button
+              data-test-id="emailcode-open"
+              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+              style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+              onClick={() => {
+                setError('')
+                setNotice('')
+                setStage('email-code')
+              }}
+              type="button"
+            >
+              Email me a sign-in code
+            </button>
+            <Show when={passkeysSupported()}>
+              <button
+                data-test-id="passkey-signin"
+                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+                style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
+                onClick={() => {
+                  setError('')
+                  stopConditional()
+                  void signInWithPasskey().then((result) => {
+                    if (result.ok) window.location.reload()
+                    else if (!result.aborted) setError(result.error)
+                  })
+                }}
+                type="button"
+              >
+                Sign in with a passkey
+              </button>
+            </Show>
             <button
               onClick={tryDemo}
               type="button"

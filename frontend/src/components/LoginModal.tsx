@@ -1,5 +1,7 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
+import EmailCodeLogin from './EmailCodeLogin'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
 import Turnstile, {
@@ -9,6 +11,7 @@ import Turnstile, {
   turnstileEnabled,
   waitForTurnstileToken,
 } from './Turnstile'
+import TwofaChallenge from './TwofaChallenge'
 import type { TurnstileStatus } from './Turnstile'
 
 export interface LoginModalProps {
@@ -25,9 +28,9 @@ export default function LoginModal(props: LoginModalProps) {
   const [error, setError] = createSignal('')
   const [notice, setNotice] = createSignal('')
   const [loading, setLoading] = createSignal(false)
-  // 'signing-in' replaces the form with a branded transition while the
-  // register → auto-sign-in handoff runs (mirrors LoginScreen).
-  const [stage, setStage] = createSignal<'form' | 'signing-in'>('form')
+  // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
+  // handoff runs (mirrors LoginScreen); 'twofa' and 'email-code' are the extra sign-in steps.
+  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
   const [turnstileToken, setTurnstileToken] = createSignal('')
   const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -92,9 +95,18 @@ export default function LoginModal(props: LoginModalProps) {
           // (the account exists; they can sign in whenever) instead of
           // reloading the page out from under them.
           if (dismissed) return
-          await api.loginWithPassword(em, pw, token)
+          const handoff = await api.loginWithPassword(em, pw, token)
           if (dismissed) return
+          if (handoff?.twofaRequired) {
+            // "Register" with an existing 2FA-protected account: password matched, the server
+            // answered with a challenge — show the code step instead of a dead reload.
+            setStage('twofa')
+            setLoading(false)
+            clearCaptcha()
+            return
+          }
           // Cookie is set; reload so the app re-checks /auth/me.
+          markPasskeyNudgeAfterLogin()
           window.location.reload()
           return
         } catch {
@@ -110,8 +122,16 @@ export default function LoginModal(props: LoginModalProps) {
           return
         }
       }
-      await api.loginWithPassword(em, pw, turnstileToken())
+      const login = await api.loginWithPassword(em, pw, turnstileToken())
+      if (login?.twofaRequired) {
+        // Password verified; the session waits behind the authenticator code.
+        setStage('twofa')
+        setLoading(false)
+        clearCaptcha()
+        return
+      }
       // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
+      markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
@@ -144,26 +164,45 @@ export default function LoginModal(props: LoginModalProps) {
         <p style={{ 'margin-bottom': '16px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
           {stage() === 'signing-in'
             ? 'Welcome aboard.'
-            : 'Sign in to sync your data across devices.'}
+            : stage() === 'twofa'
+              ? 'Two-factor authentication'
+              : stage() === 'email-code'
+                ? 'Sign in by email'
+                : 'Sign in to sync your data across devices.'}
         </p>
 
         <Show
           when={stage() === 'form'}
           fallback={
-            <div
-              style={{
-                display: 'flex',
-                'flex-direction': 'column',
-                'align-items': 'center',
-                padding: '18px 0 12px',
-              }}
-            >
-              <OrbitSpinner size={64} label="Account created — signing you in…" />
-              {/* The form's widget unmounted with the form; this fresh instance
-                  issues the sign-in token (and stays visible in case Cloudflare
-                  wants an interactive check). */}
-              <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            </div>
+            stage() === 'twofa' ? (
+              <TwofaChallenge
+                onBack={() => {
+                  setStage('form')
+                  setPassword('')
+                }}
+              />
+            ) : stage() === 'email-code' ? (
+              <EmailCodeLogin
+                email={email()}
+                onBack={() => setStage('form')}
+                onTwofa={() => setStage('twofa')}
+              />
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  'align-items': 'center',
+                  padding: '18px 0 12px',
+                }}
+              >
+                <OrbitSpinner size={64} label="Account created — signing you in…" />
+                {/* The form's widget unmounted with the form; this fresh instance
+                    issues the sign-in token (and stays visible in case Cloudflare
+                    wants an interactive check). */}
+                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+              </div>
+            )
           }
         >
           <Show when={notice()}>
@@ -321,6 +360,8 @@ export default function LoginModal(props: LoginModalProps) {
             <button
               class={styles.btnSubmit}
               onClick={() => {
+                // Survives the OAuth round-trip in this tab; see LoginScreen's Google button.
+                markPasskeyNudgeAfterLogin()
                 api.loginWithGoogle()
               }}
               type="button"
@@ -328,6 +369,35 @@ export default function LoginModal(props: LoginModalProps) {
               Continue with Google
             </button>
           </div>
+          <p style={{ margin: '10px 0 0', 'text-align': 'center', 'font-size': '13px' }}>
+            <a
+              data-test-id="emailcode-open"
+              onClick={() => {
+                setError('')
+                setNotice('')
+                setStage('email-code')
+              }}
+              style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+            >
+              Email me a sign-in code
+            </a>
+            <Show when={passkeysSupported()}>
+              {' · '}
+              <a
+                data-test-id="passkey-signin"
+                onClick={() => {
+                  setError('')
+                  void signInWithPasskey().then((result) => {
+                    if (result.ok) window.location.reload()
+                    else if (!result.aborted) setError(result.error)
+                  })
+                }}
+                style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
+              >
+                Use a passkey
+              </a>
+            </Show>
+          </p>
         </Show>
       </div>
     </div>

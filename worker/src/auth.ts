@@ -132,7 +132,7 @@ export async function verifyPassword(password: string, stored: string): Promise<
 }
 
 // ── Session cookie ────────────────────────────────────────────────────────────
-function cookie(name: string, value: string, maxAgeSeconds: number, env: Env): string {
+export function cookie(name: string, value: string, maxAgeSeconds: number, env: Env): string {
   const secure = env.APP_ENV !== 'development'; // local http dev can't send Secure cookies
   const attrs = [
     `${name}=${value}`,
@@ -163,7 +163,7 @@ export function clearedSessionCookie(env: Env): string {
  * could not fix it, because the fresh cookie was appended behind the stale one. Only clearing
  * site data cleared it.
  */
-function readCookies(request: Request, name: string): string[] {
+export function readCookies(request: Request, name: string): string[] {
   const header = request.headers.get('Cookie');
   if (!header) return [];
   const values: string[] = [];

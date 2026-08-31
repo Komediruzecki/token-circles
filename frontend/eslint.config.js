@@ -76,6 +76,15 @@ export default defineConfig(
       // @see https://github.com/eslint/eslint/issues/20272
       '@typescript-eslint/unified-signatures': 'off',
 
+      // New in eslint@10 recommended. Solid refs are `let el: HTMLDivElement | undefined`
+      // assigned by the JSX compiler (`ref={el}`), which eslint cannot see — every hit in
+      // this codebase is that pattern, so the rule is pure noise here.
+      'no-unassigned-vars': 'off',
+      // Also new in eslint@10 recommended; flags 5 real dead assignments
+      // (clientPdfReports, storageFactory, Pagination). Off until those are cleaned up
+      // in their own change — a deps bump is not the place to edit the PDF generator.
+      'no-useless-assignment': 'off',
+
       // this is caught by ts already and eslint doesn't understand @/
       'import-x/no-unresolved': 'off',
 

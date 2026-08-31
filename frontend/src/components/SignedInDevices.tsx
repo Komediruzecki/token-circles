@@ -192,7 +192,13 @@ export const SignedInDevices: Component = () => {
                       </span>
                       <span class={styles.meta}>
                         {[
-                          device.provider === 'google' ? 'Google account' : null,
+                          device.provider === 'google'
+                            ? 'Google account'
+                            : device.provider === 'email'
+                              ? 'Email code'
+                              : device.provider === 'passkey'
+                                ? 'Passkey'
+                                : null,
                           device.ip,
                           `last active ${timeAgo(device.last_seen_at)}`,
                         ]

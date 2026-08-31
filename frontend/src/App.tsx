@@ -25,6 +25,7 @@ import LoginModal from './components/LoginModal'
 import LoginScreen from './components/LoginScreen'
 import { LogoMark } from './components/Logo'
 import { OrbitBootScreen } from './components/OrbitSpinner'
+import PasskeyNudge from './components/PasskeyNudge'
 import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import ResetPassword from './components/ResetPassword'
@@ -1246,6 +1247,7 @@ export function App() {
             </Show>
 
             <ToastContainer />
+            <PasskeyNudge />
             <ConfirmDialog />
           </Suspense>
         </Show>

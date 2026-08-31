@@ -90,8 +90,7 @@ async function e2eProfile(api: Awaited<ReturnType<typeof request.newContext>>): 
   const list = await api.get('/api/profiles')
   expect(list.ok(), `could not read profiles: ${list.status()}`).toBeTruthy()
   const body = (await list.json()) as
-    | { id: number; name: string }[]
-    | { profiles: { id: number; name: string }[] }
+    { id: number; name: string }[] | { profiles: { id: number; name: string }[] }
   const profiles = Array.isArray(body) ? body : body.profiles
   const existing = profiles?.find((p) => p.name === E2E_PROFILE)
   if (existing) return existing.id

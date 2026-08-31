@@ -34,11 +34,13 @@ import DangerZone from '../components/DangerZone'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
+import PasskeySettings from '../components/PasskeySettings'
 import { ResendVerification } from '../components/ResendVerification'
 import SignedInDevices from '../components/SignedInDevices'
 import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
+import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
@@ -1888,6 +1890,8 @@ export default function Settings() {
                   )}
                 </p>
                 <Show when={accountInfo()?.email || accountInfo()?.username}>
+                  <TwofaSettings />
+                  <PasskeySettings />
                   <SignedInDevices />
                 </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">
