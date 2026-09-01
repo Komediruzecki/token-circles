@@ -10,6 +10,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The sign-in screen has been reorganised.** Every field now has a label above it, "Forgot password?" sits beside the password label, and the captcha stays out of the way unless it actually needs you to click something. Creating an account and continuing without one are together on a single line under the other ways to sign in.
+
 - **The Subscriptions view has been redesigned.** Category pills above the list filter it in one tap ("All" by default, Paused behind its own pill), and each subscription is a compact card: brand icon, price, next due date, a mark-paid button and a "…" menu holding Pause, Edit and Delete.
 
 ### Fixed

@@ -1,0 +1,245 @@
+/*
+ * Sign-in gate. The form is left-aligned with a label above every field — a placeholder is not a
+ * label: it disappears the moment you type, so a half-filled form stops saying what its fields
+ * are, and screen readers get nothing to announce.
+ *
+ * Only the header is centred; everything from the first label down reads as a column.
+ */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg, #0b0e14);
+  overflow-y: auto;
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  padding: 32px;
+  border-radius: 16px;
+  background: var(--surface, #151a23);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+/* ---------- header ---------- */
+
+.header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ---------- notice ---------- */
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border-radius: 10px;
+  border: 1px solid
+    color-mix(in oklab, var(--success, #22c55e) 45%, var(--border, rgba(255, 255, 255, 0.12)));
+  background: color-mix(in oklab, var(--success, #22c55e) 12%, transparent);
+  color: var(--text, #e6e8eb);
+  font-size: 13px;
+}
+
+.noticeIcon {
+  flex: none;
+}
+
+/* ---------- form ---------- */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Holds the label and, on the password field, the forgot link on the same baseline. */
+.labelRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #e6e8eb);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--bg, #0b0e14);
+  color: var(--text, #e6e8eb);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.inputInvalid {
+  border-color: var(--danger, #ef4444);
+}
+
+.fieldError {
+  color: var(--danger, #ef4444);
+  font-size: 12.5px;
+}
+
+.formError {
+  color: var(--danger, #ef4444);
+  font-size: 13px;
+}
+
+/*
+ * Turnstile in interaction-only mode renders nothing at all when it passes silently, so this slot
+ * collapses to zero height rather than reserving a gap for a widget that usually never appears.
+ */
+.captchaSlot:empty {
+  display: none;
+}
+
+.captchaHint {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.submit {
+  width: 100%;
+  justify-content: center;
+}
+
+/* ---------- alternatives ---------- */
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border, rgba(255, 255, 255, 0.12));
+}
+
+.alts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.altBtn {
+  width: 100%;
+  justify-content: center;
+}
+
+/*
+ * One line for both ways of not having an account yet. They were two separate offers — a sentence
+ * under the form and an underlined "try the demo" at the bottom — which read as unrelated, and put
+ * the sign-up link above the alternatives it competes with.
+ */
+.accountLine {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.accountLink {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.accountLink:hover {
+  text-decoration: underline;
+}
+
+.accountSep {
+  opacity: 0.5;
+  margin: 0 6px;
+}
+
+/* ---------- footer ---------- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.version {
+  color: var(--text-secondary);
+  font-size: 11px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+
+.signingIn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 22px 0 14px;
+}
+
+@media (max-width: 420px) {
+  .card {
+    padding: 24px 20px;
+  }
+}
