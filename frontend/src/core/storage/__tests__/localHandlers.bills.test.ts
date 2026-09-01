@@ -97,6 +97,9 @@ describe('localHandlers - bills', () => {
   })
 
   it('marks a bill as paid', async () => {
+    // The due date is arbitrary and plays no part in the assertion: "paid for the current period"
+    // compares last_paid against today, never against due_date. Timezone-dependent behaviour is
+    // pinned separately in localHandlers.billsPaidDate.test.ts.
     const createRes = await billsCreate({
       name: 'Water',
       amount: 40,

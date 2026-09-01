@@ -19,6 +19,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **"Sign in with a passkey" now tells you when no passkey could be used.** Pressing it with only another site's passkey saved did nothing at all, with no explanation.
 - **Marking a subscription paid records the payment in your own currency.** The transaction was stamped as US dollars regardless of your settings, so it showed up with a "converted from USD" estimate on it.
 - **A subscription you have paid this period no longer offers "Mark Paid" again** — pressing it a second time could only ever fail.
+- **Marking a bill paid now sticks, wherever you are.** In local-only mode the bill could pop straight back to unpaid — reliably on the first of the month in the Americas, and just after midnight in Europe. Bills also land on the right day of the month calendar now.
 
 ## [5.13.0] — 2026-08-31
 

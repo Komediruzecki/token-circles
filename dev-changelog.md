@@ -26,6 +26,48 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **A bill marked paid read back as unpaid** (`core/storage/handlers/bills.ts`). The serverless
+  handlers disagreed with themselves about which calendar a stored date is in.
+  `billsPayOrMarkPaid` wrote `new Date().toISOString().substring(0, 10)` — a **UTC** date — while
+  `isBillPaidForCurrentPeriod` compared it back with `.getMonth()`, which is **local**. A bare
+  `YYYY-MM-DD` parses as UTC midnight, so west of UTC its local month is the previous one.
+
+  Two independent defects, and the write is only half of it. West of UTC the _read_ alone breaks:
+  on the 1st of any month a bill marked paid was reported unpaid the instant it was saved, so the
+  mark-paid button stayed clickable and the bill never left the list. East of UTC the _write_
+  breaks too, between local midnight and the UTC rollover — which is how it was caught, at 01:50
+  CEST on 1 September.
+
+  Both sides now use the local calendar: `isoDate()` to write, and a new `parseLocalDate()` — its
+  inverse, added beside it in `utils/period.ts` — to read. `isoDate` already carried the comment
+  "avoids the UTC off-by-one from toISOString()"; the bills handler simply never used it.
+
+  Two more instances of the same mismatch in the same file went with it: the month calendar took a
+  bill's day-of-month from `new Date(due_date).getDate()` (drawing a bill due on the 15th on the
+  14th west of UTC, and dropping one due on the 1st out of the month entirely), and `daysUntil`
+  measured from a UTC-parsed midnight against a local instant.
+
+  **The worker is not affected and is deliberately left alone.** `worker/src/routes/bills.ts` has
+  the same-shaped code, but the Cloudflare runtime is UTC, so its write and its read are on one
+  calendar. Verified rather than assumed: a probe in the workers pool reports
+  `getTimezoneOffset() === 0` and parses `2026-09-01` as month 8 even with the host at
+  `America/New_York`. It remains timezone-_blind_ — it decides "this month" in UTC rather than in
+  the user's zone — but that is a separate question needing the user's timezone, not this bug.
+
+  Regression coverage in `localHandlers.billsPaidDate.test.ts` pins both the zone
+  (`process.env.TZ`, self-verified via `getTimezoneOffset()`) and the instant (`vi.setSystemTime`,
+  faking Date only so fake-indexeddb keeps real timers). It has to pin both: the bug needs the UTC
+  date and the local date to fall in different **months**, which is why an ordinary mid-month run
+  never caught it — and why CI never did either, its runners being UTC.
+
+- **`localHandlers.recurring.test.ts` only passed on UTC runners** (test-only). It seeded
+  `next_date` from `new Date().toISOString().slice(0, 10)` while `recurringPopulate` compares
+  against `isoDate(new Date())` — the very anti-pattern that handler's own comment warns about. West
+  of UTC the test therefore seeded _tomorrow_, the idempotency guard fired, and all five balance
+  tests failed with 409. The handler was correct throughout; only the fixture was on the wrong
+  calendar. The full suite now passes under `TZ=America/New_York` and `TZ=Pacific/Auckland` as well
+  as UTC.
+
 - **Every page load replayed the whole stored error log to the console** (`core/logger.ts`).
   `flushLogs()` ended with `trimmedLogs.forEach(writeLogToConsole)` — and `trimmedLogs` is the
   buffer merged with everything already in `localStorage`, not just the new entries. `initLogging()`

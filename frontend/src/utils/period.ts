@@ -112,6 +112,22 @@ export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
+/**
+ * The inverse of `isoDate`: read a stored `YYYY-MM-DD` back as LOCAL midnight.
+ *
+ * `new Date('2026-09-01')` is specified to parse a bare date as *UTC* midnight, so west of UTC its
+ * `.getDate()`/`.getMonth()` report the day before — which is how a date written with `isoDate`
+ * comes back as a different month than it went in. Anything comparing a stored wall-clock date
+ * against `new Date()` must parse it through here, or the two sides are on different calendars.
+ *
+ * A longer ISO timestamp is accepted and truncated to its date part, so legacy rows that stored a
+ * full `toISOString()` still land on a sane day.
+ */
+export function parseLocalDate(value: string): Date {
+  const [y, m, d] = value.substring(0, 10).split('-').map(Number)
+  return new Date(y!, (m ?? 1) - 1, d ?? 1)
+}
+
 function startOfMonth(year: number, month: number): Date {
   return new Date(year, month, 1)
 }
