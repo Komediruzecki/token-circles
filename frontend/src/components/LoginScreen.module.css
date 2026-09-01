@@ -160,12 +160,33 @@
   font-size: 12px;
 }
 
+/*
+ * Branded rules rather than flat hairlines: each side fades from nothing up to the brand blue as
+ * it approaches the word, so the pair reads as one mark centred on "or" instead of two grey lines
+ * that happen to have a word between them. Same blue as the logo mark's gradient end.
+ */
 .divider::before,
 .divider::after {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 1px;
+}
+
+.divider::before {
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--primary, #3b6fe0) 60%, transparent)
+  );
+}
+
+.divider::after {
+  background: linear-gradient(
+    to left,
+    transparent,
+    color-mix(in oklab, var(--primary, #3b6fe0) 60%, transparent)
+  );
 }
 
 .alts {
@@ -214,14 +235,35 @@
 
 /* ---------- footer ---------- */
 
+/*
+ * The footer rule is the same brand mark, centred: strongest in the middle and gone by both edges,
+ * so the card closes rather than being cut off by a full-width line. Drawn as a pseudo-element
+ * because a border cannot hold a gradient.
+ */
 .footer {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 20px;
   padding-top: 14px;
-  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.footer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in oklab, var(--primary, #3b6fe0) 50%, transparent) 50%,
+    transparent
+  );
 }
 
 .version {
