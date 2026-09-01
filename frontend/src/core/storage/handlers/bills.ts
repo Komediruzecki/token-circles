@@ -1,6 +1,7 @@
 /**
  * Bills handlers — IndexedDB-backed implementations
  */
+import { isoDate, parseLocalDate } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -15,7 +16,11 @@ import {
 // Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
 function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
   if (!bill.last_paid_date && !bill.last_paid) return false
-  const lastPaid = new Date((bill.last_paid_date || bill.last_paid) as string)
+  // parseLocalDate, not `new Date(str)`: a bare `YYYY-MM-DD` parses as UTC midnight, whose local
+  // month is the previous one west of UTC. Comparing that against a LOCAL `today` below reported
+  // a bill unpaid the instant it was marked paid, every 1st of the month. The worker mirror gets
+  // away with the same code only because its runtime is UTC; a browser's is the user's own zone.
+  const lastPaid = parseLocalDate(bill.last_paid_date || bill.last_paid)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
@@ -113,7 +118,9 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
     // Occurrence day in the given month: due_date's day-of-month, else day_of_month field.
     let day = 1
     if (b.due_date) {
-      const parsed = new Date(b.due_date as string)
+      // Local parse, or the calendar shifts a day west of UTC: a bill due on the 15th would be
+      // drawn on the 14th, and one due on the 1st would fall out of the month entirely.
+      const parsed = parseLocalDate(b.due_date)
       if (!isNaN(parsed.getTime())) day = parsed.getDate()
     } else if (b.day_of_month) {
       day = Number(b.day_of_month) || 1
@@ -122,7 +129,11 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
 
     const billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     const isPaid = isBillPaidForCurrentPeriod(b, now)
-    const daysUntil = Math.ceil((new Date(billDateStr).getTime() - now.getTime()) / 86_400_000)
+    // Both sides on the local calendar: mixing a UTC-parsed midnight with a local instant put
+    // `daysUntil` off by one for part of every day.
+    const daysUntil = Math.ceil(
+      (parseLocalDate(billDateStr).getTime() - now.getTime()) / 86_400_000
+    )
     const amount = Number(b.amount) || 0
 
     days[String(day)]!.push({
@@ -270,7 +281,10 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
   const db = await getDB()
   const bill = await currentProfileRecord('bills', idParam(params))
   if (!bill) return notFound('Bill')
-  const now = new Date().toISOString().substring(0, 10)
+  // A paid date is a wall-clock date, so it must be the user's date. toISOString() gave the UTC
+  // one, which east of UTC is still yesterday for the first hours of every local day — so a bill
+  // paid at 01:00 on the 1st was stamped with last month and read back as unpaid.
+  const now = isoDate(new Date())
   bill.last_paid_date = now
   bill.last_paid = now
   await db.put('bills', bill)

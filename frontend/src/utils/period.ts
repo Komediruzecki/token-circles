@@ -112,6 +112,31 @@ export function isoDate(d: Date): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
+/**
+ * The inverse of `isoDate`: read a stored `YYYY-MM-DD` back as LOCAL midnight.
+ *
+ * `new Date('2026-09-01')` is specified to parse a bare date as *UTC* midnight, so west of UTC its
+ * `.getDate()`/`.getMonth()` report the day before — which is how a date written with `isoDate`
+ * comes back as a different month than it went in. Anything comparing a stored wall-clock date
+ * against `new Date()` must parse it through here, or the two sides are on different calendars.
+ *
+ * A longer ISO timestamp is accepted and truncated to its date part, so legacy rows that stored a
+ * full `toISOString()` still land on a sane day.
+ *
+ * Anything that is not a full `YYYY-MM-DD` yields an Invalid Date, matching what `new Date(str)`
+ * did for junk so existing `isNaN(getTime())` guards keep working.
+ *
+ * `unknown` rather than `string` because the callers are reading untyped IndexedDB rows, where a
+ * `as string` cast is a claim about the data and not a fact about it. A number or Date reaching
+ * `.substring` would throw, and the nearest `catch` returns an empty list — one unparseable row
+ * would hide every bill instead of just itself.
+ */
+export function parseLocalDate(value: unknown): Date {
+  const [y, m, d] = String(value).substring(0, 10).split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return new Date(NaN)
+  return new Date(y!, m! - 1, d!)
+}
+
 function startOfMonth(year: number, month: number): Date {
   return new Date(year, month, 1)
 }

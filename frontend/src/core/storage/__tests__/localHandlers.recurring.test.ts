@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { isoDate } from '../../../utils/period'
 import { getDB } from '../idb.js'
 import {
   accountsCreate,
@@ -10,7 +11,11 @@ import {
 // Serverless (IndexedDB) recurring populate must move account balances the same
 // way the worker/backend do: income/expense move one account, a transfer moves
 // From -> To (two-legged), and an account-less recurring is a pure reminder.
-const today = new Date().toISOString().slice(0, 10)
+//
+// The same local calendar the handler uses (recurring.ts compares against isoDate(new Date())).
+// Seeding next_date from toISOString() instead seeded the UTC date, so west of UTC these tests
+// seeded tomorrow and every populate came back 409 "already populated" — green only on UTC runners.
+const today = isoDate(new Date())
 
 describe('localHandlers - recurring balance integrity', () => {
   beforeEach(async () => {
