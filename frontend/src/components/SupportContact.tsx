@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js'
+import Turnstile, { turnstileEnabled, waitForTurnstileToken } from './Turnstile'
 
 // Hits the worker directly (not apiFetch) so it works in any storage mode and while signed out.
 const API = (import.meta.env.VITE_API_URL ?? '') as string
@@ -38,6 +39,18 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
   const [status, setStatus] = createSignal<'idle' | 'sending' | 'sent'>('idle')
   const [error, setError] = createSignal('')
   const [ticketId, setTicketId] = createSignal('')
+  const [turnstileToken, setTurnstileToken] = createSignal('')
+
+  /**
+   * The widget is invisible unless Cloudflare wants a click, so the send button is never gated on
+   * a token — it waits here instead. Normally already resolved: the challenge runs while the
+   * message is being typed.
+   */
+  const captchaToken = async (): Promise<string> => {
+    if (!turnstileEnabled) return ''
+    if (turnstileToken()) return turnstileToken()
+    return waitForTurnstileToken(turnstileToken, 20000)
+  }
 
   const send = async (e: Event) => {
     e.preventDefault()
@@ -53,7 +66,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
       const res = await fetch(`${API}/api/support/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: em, message: msg }),
+        body: JSON.stringify({ email: em, message: msg, turnstileToken: await captchaToken() }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not send your message')
@@ -203,6 +216,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                     {error()}
                   </div>
                 </Show>
+                {/* Invisible unless Cloudflare wants a click. It has to be rendered for a token to
+                    exist at all — the send button waits on one rather than being disabled by it. */}
+                <Turnstile appearance="interaction-only" onToken={setTurnstileToken} />
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"

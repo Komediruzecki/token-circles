@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { sendMail } from '../email';
 import { renderSupportAck } from '../emailTemplates';
 import { enforce, clientIp, rateLimit } from '../ratelimit';
+import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -17,8 +18,8 @@ function escapeHtml(s: string): string {
 
 // Public support contact form. Relays the user's message to the PRIVATE support inbox
 // (env.SUPPORT_EMAIL — a worker secret, never sent to the client) via Resend, with the
-// sender's address as reply-to so the team can reply directly. Rate-limited per IP;
-// Turnstile will gate this too once wired (backlog #4).
+// sender's address as reply-to so the team can reply directly. Gated by Turnstile and
+// rate-limited per IP.
 export const supportRoutes = new Hono<AppEnv>();
 
 supportRoutes.post('/api/support/contact', async (c) => {
@@ -28,7 +29,15 @@ supportRoutes.post('/api/support/contact', async (c) => {
     email?: string;
     message?: string;
     subject?: string;
+    turnstileToken?: string;
   };
+  // This endpoint is unauthenticated and sends TWO emails per accepted request — the relay, and an
+  // acknowledgement to a caller-supplied, unverified address. The per-IP cap alone does not bound
+  // that: rotating IPs walk straight past it, and the cost lands on the sending domain's
+  // reputation, which is what puts recipients on Resend's suppression list in the first place.
+  // A captcha is what makes each attempt cost something. Same gate the auth routes already use.
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim();
   const message = (body.message ?? '').trim();
   if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);

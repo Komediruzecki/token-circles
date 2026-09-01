@@ -32,7 +32,16 @@ All notable changes to Token Circles are documented here. The format is based on
     the bottom. They are now one line under the alternatives, and the demo is described as what it
     is — "Continue with no account" — since "demo" is jargon for using the app without signing up.
 
-  The footer's two stacked rows (support link, then version) are a single two-column row.
+  The footer's two stacked rows (support link, then version) are a single two-column row. Both
+  rules — the `or` separator and the footer's — are brand gradients rather than flat hairlines: the
+  `or` fades up to the logo blue from each side toward the word, and the footer's is the same blue
+  strongest at the centre and gone by both edges, drawn as a pseudo-element since a border cannot
+  hold a gradient.
+
+  The register transition no longer says "Account created". `/api/auth/register` returns the same
+  neutral response whether or not the email existed — that is the anti-enumeration guarantee — so
+  the screen cannot know which happened, and claiming creation tells an existing owner something
+  untrue. It says "Signing you in…", which is what both branches actually do.
 
   Two Turnstile details worth keeping: Cloudflare only decides an `interaction-only` widget's
   visibility on its **first** execution, so a later `reset()` can never make a hidden one appear —
@@ -57,6 +66,30 @@ All notable changes to Token Circles are documented here. The format is based on
   `overflow: hidden` and glass panels carry backdrop-filter; closes on select/Escape/outside
   press/scroll). Delete moved behind the menu and confirms via `showConfirm({ danger: true })`
   instead of `ConfirmButton`.
+
+### Security
+
+- **The support contact form was not captcha-gated** (`routes/support.ts`, `SupportContact.tsx`).
+  The route's own comment admitted it — "Turnstile will gate this too once wired (backlog #4)" —
+  leaving an unauthenticated endpoint that sends **two** emails per accepted request: the relay to
+  the private inbox, and an acknowledgement to a caller-supplied, _unverified_ address.
+
+  The only control was `enforce(support:<ip>, 5, 3600)`. A per-IP cap does not bound this: rotating
+  IPs walk straight past it, and the cost lands on the sending domain's reputation — which is
+  precisely what puts recipients on Resend's suppression list, the failure this same release is
+  cleaning up after. Content injection was already handled (the ack deliberately never echoes the
+  submitted message back, so it carries no attacker-chosen payload).
+
+  Now gated by `verifyTurnstileDetailed` + `captchaRejection`, the same pair the auth routes use,
+  checked before any work so a forged token never reaches the mail provider. The client renders the
+  widget as `interaction-only` and awaits the token on submit rather than disabling the button, so
+  in practice nothing is visible unless Cloudflare wants a click. The per-IP and per-recipient
+  limits stay as defence in depth.
+
+  `worker/test/support-captcha.test.ts` covers it — and was checked against a build with the gate
+  removed, where three of its four cases fail. The fourth (no mail on a forged token) was vacuous
+  at first: without `RESEND_API_KEY` in the test env, `sendMail` short-circuits before calling out,
+  so it passed with or without the gate. The env override sets one.
 
 ### Fixed
 

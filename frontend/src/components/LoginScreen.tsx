@@ -261,7 +261,12 @@ export default function LoginScreen() {
               />
             ) : (
               <div class={styles.signingIn}>
-                <OrbitSpinner size={72} label="Account created — signing you in…" />
+                {/* Deliberately does not say "account created". The register endpoint returns the
+                    same neutral response whether or not the email already existed — that is the
+                    anti-enumeration guarantee — so this screen cannot know which happened, and
+                    claiming creation tells an existing owner something untrue. Signing in is what
+                    is actually happening in both branches. */}
+                <OrbitSpinner size={72} label="Signing you in…" />
                 {/* The form's widget unmounted with the form; this fresh instance issues the
                     sign-in token. A new mount is also a first execution, which is the only time
                     Cloudflare decides an interaction-only widget may show itself. */}
