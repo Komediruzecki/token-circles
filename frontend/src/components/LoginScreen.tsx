@@ -10,6 +10,7 @@ import {
 } from '../core/webauthn'
 import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
+import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
 import SupportContact from './SupportContact'
@@ -92,6 +93,18 @@ export default function LoginScreen() {
     setTurnstileToken('')
     setCaptchaStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
   }
+
+  /**
+   * The widget is invisible until Cloudflare wants a click, so gating the submit button on a token
+   * would disable it with nothing on screen to say why. The button stays live and the wait happens
+   * here instead — normally already resolved, since the challenge passes long before anyone has
+   * finished typing a password.
+   */
+  const captchaToken = async (): Promise<string> => {
+    if (!turnstileEnabled) return ''
+    if (turnstileToken()) return turnstileToken()
+    return waitForTurnstileToken(turnstileToken, 20000)
+  }
   // Show the "invalid email" hint only after the user has interacted with the
   // field (on blur or first submit), so an untouched empty form isn't red.
   const [emailTouched, setEmailTouched] = createSignal(false)
@@ -120,7 +133,7 @@ export default function LoginScreen() {
       }
       setLoading(true)
       try {
-        await api.forgotPassword(em, turnstileToken())
+        await api.forgotPassword(em, await captchaToken())
         setNotice(
           'If an account exists for that email, a reset link is on its way. Check your inbox.'
         )
@@ -145,7 +158,7 @@ export default function LoginScreen() {
     setLoading(true)
     try {
       if (mode() === 'register') {
-        await api.register(em, pw, turnstileToken())
+        await api.register(em, pw, await captchaToken())
         // The register endpoint deliberately sets no session and never reveals
         // whether the email already existed (anti-enumeration), and login is not
         // gated on email verification — so sign the user straight in with the
@@ -182,7 +195,7 @@ export default function LoginScreen() {
           return
         }
       }
-      const login = await api.loginWithPassword(em, pw, turnstileToken())
+      const login = await api.loginWithPassword(em, pw, await captchaToken())
       if (login?.twofaRequired) {
         // Password verified; the session waits behind the authenticator code.
         setStage('twofa')
@@ -207,61 +220,28 @@ export default function LoginScreen() {
     window.location.reload()
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    'margin-bottom': '10px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    'box-sizing': 'border-box' as const,
-  }
-
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        display: 'flex',
-        'align-items': 'center',
-        'justify-content': 'center',
-        padding: '24px',
-        background: 'var(--bg, #0b0e14)',
-        'overflow-y': 'auto',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          'max-width': '360px',
-          padding: '32px',
-          'border-radius': '16px',
-          background: 'var(--surface, #151a23)',
-          border: '1px solid var(--border, rgba(255,255,255,0.08))',
-          'text-align': 'center',
-        }}
-      >
-        <div style={{ display: 'flex', 'justify-content': 'center', margin: '0 0 10px' }}>
-          <LogoMark size={44} />
+    <div class={styles.screen}>
+      <div class={styles.card}>
+        <div class={styles.header}>
+          <div class={styles.brand}>
+            <LogoMark size={44} />
+          </div>
+          <h1 class={styles.title}>Token Circles</h1>
+          <p class={styles.subtitle}>
+            {stage() === 'signing-in'
+              ? 'Welcome aboard.'
+              : stage() === 'twofa'
+                ? 'Two-factor authentication'
+                : stage() === 'email-code'
+                  ? 'Sign in by email'
+                  : mode() === 'register'
+                    ? 'Create your account.'
+                    : mode() === 'forgot'
+                      ? 'Reset your password.'
+                      : 'Sign in to access your finances.'}
+          </p>
         </div>
-        <h1 style={{ 'font-size': '26px', 'font-weight': 600, margin: '0 0 4px' }}>
-          Token Circles
-        </h1>
-        <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
-          {stage() === 'signing-in'
-            ? 'Welcome aboard.'
-            : stage() === 'twofa'
-              ? 'Two-factor authentication'
-              : stage() === 'email-code'
-                ? 'Sign in by email'
-                : mode() === 'register'
-                  ? 'Create your account.'
-                  : mode() === 'forgot'
-                    ? 'Reset your password.'
-                    : 'Sign in to access your finances.'}
-        </p>
 
         <Show
           when={stage() === 'form'}
@@ -280,41 +260,22 @@ export default function LoginScreen() {
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  'flex-direction': 'column',
-                  'align-items': 'center',
-                  padding: '22px 0 14px',
-                }}
-              >
+              <div class={styles.signingIn}>
                 <OrbitSpinner size={72} label="Account created — signing you in…" />
-                {/* The form's widget unmounted with the form; this fresh instance
-                    issues the sign-in token (and stays visible in case Cloudflare
-                    wants an interactive check). */}
-                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+                {/* The form's widget unmounted with the form; this fresh instance issues the
+                    sign-in token. A new mount is also a first execution, which is the only time
+                    Cloudflare decides an interaction-only widget may show itself. */}
+                <Turnstile
+                  appearance="interaction-only"
+                  onToken={setTurnstileToken}
+                  onStatus={setCaptchaStatus}
+                />
               </div>
             )
           }
         >
           <Show when={notice()}>
-            <div
-              data-test-id="auth-notice"
-              style={{
-                display: 'flex',
-                'align-items': 'center',
-                gap: '8px',
-                'text-align': 'left',
-                padding: '10px 12px',
-                margin: '0 0 14px',
-                'border-radius': '10px',
-                border:
-                  '1px solid color-mix(in oklab, var(--success, #22c55e) 45%, var(--border, rgba(255,255,255,0.12)))',
-                background: 'color-mix(in oklab, var(--success, #22c55e) 12%, transparent)',
-                color: 'var(--text, #e6e8eb)',
-                'font-size': '13px',
-              }}
-            >
+            <div data-test-id="auth-notice" class={styles.notice}>
               <svg
                 width="16"
                 height="16"
@@ -324,7 +285,7 @@ export default function LoginScreen() {
                 stroke-width="2.5"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                style={{ flex: 'none' }}
+                class={styles.noticeIcon}
               >
                 <path d="M20 6L9 17l-5-5" />
               </svg>
@@ -332,104 +293,98 @@ export default function LoginScreen() {
             </div>
           </Show>
 
-          <form onSubmit={submit}>
-            <input
-              type="email"
-              name="email"
-              id="login-email"
-              placeholder="Email"
-              value={email()}
-              onInput={(e) => setEmail(e.currentTarget.value)}
-              onBlur={() => setEmailTouched(true)}
-              aria-invalid={emailInvalid()}
-              // `username` (not `email`) is the token password managers pair with the password
-              // field; combined with name/id it's what Android Chrome autofill keys off of.
-              // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
-              // the conditional request from onMount is pending.
-              autocomplete="username webauthn"
-              style={{
-                ...inputStyle,
-                'margin-bottom': emailInvalid() ? '2px' : inputStyle['margin-bottom'],
-                border: emailInvalid() ? '1px solid var(--danger, #ef4444)' : inputStyle.border,
-              }}
-            />
-            <Show when={emailInvalid()}>
-              <div
-                style={{
-                  color: 'var(--danger, #ef4444)',
-                  'font-size': '12.5px',
-                  'text-align': 'left',
-                  margin: '0 0 10px',
-                }}
-              >
-                That doesn't look like a valid email address.
+          <form class={styles.form} onSubmit={submit}>
+            <div class={styles.field}>
+              <div class={styles.labelRow}>
+                <label class={styles.label} for="login-email">
+                  Email address
+                </label>
               </div>
-            </Show>
-            <Show when={mode() !== 'forgot'}>
               <input
-                type="password"
-                name="password"
-                id="login-password"
-                placeholder="Password"
-                value={password()}
-                onInput={(e) => setPassword(e.currentTarget.value)}
-                autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
-                style={inputStyle}
+                type="email"
+                name="email"
+                id="login-email"
+                value={email()}
+                onInput={(e) => setEmail(e.currentTarget.value)}
+                onBlur={() => setEmailTouched(true)}
+                aria-invalid={emailInvalid()}
+                // `username` (not `email`) is the token password managers pair with the password
+                // field; combined with name/id it's what Android Chrome autofill keys off of.
+                // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
+                // the conditional request from onMount is pending.
+                autocomplete="username webauthn"
+                class={`${styles.input} ${emailInvalid() ? styles.inputInvalid : ''}`}
               />
-            </Show>
-            <Show when={mode() === 'login'}>
-              <div style={{ 'text-align': 'right', margin: '-4px 0 10px' }}>
-                <a
-                  onClick={() => {
-                    setMode('forgot')
-                    setError('')
-                    setNotice('')
-                  }}
-                  style={{ cursor: 'pointer', color: 'var(--text-secondary)', 'font-size': '13px' }}
-                >
-                  Forgot password?
-                </a>
+              <Show when={emailInvalid()}>
+                <span class={styles.fieldError}>That doesn't look like a valid email address.</span>
+              </Show>
+            </div>
+
+            <Show when={mode() !== 'forgot'}>
+              <div class={styles.field}>
+                <div class={styles.labelRow}>
+                  <label class={styles.label} for="login-password">
+                    Password
+                  </label>
+                  <Show when={mode() === 'login'}>
+                    <button
+                      type="button"
+                      class={styles.accountLink}
+                      onClick={() => {
+                        setMode('forgot')
+                        setError('')
+                        setNotice('')
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                  </Show>
+                </div>
+                <input
+                  type="password"
+                  name="password"
+                  id="login-password"
+                  value={password()}
+                  onInput={(e) => setPassword(e.currentTarget.value)}
+                  autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
+                  class={styles.input}
+                />
               </div>
             </Show>
+
             <Show when={error()}>
-              <div
-                style={{
-                  color: 'var(--danger, #ef4444)',
-                  'font-size': '13px',
-                  margin: '2px 0 10px',
-                }}
-              >
-                {error()}
-              </div>
+              <div class={styles.formError}>{error()}</div>
             </Show>
-            <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            {/* Turnstile draws its own, actionable panel for the states the user has to fix
-                (blocked script, widget error). This is only the ordinary "not solved yet" hint,
-                so the two never stack up saying different things about the same widget. */}
+
+            {/* Invisible unless Cloudflare wants a click. It sits directly above the button so
+                that, on the rare occasion it does appear, it reads as part of submitting. */}
+            <div class={styles.captchaSlot}>
+              <Turnstile
+                appearance="interaction-only"
+                onToken={setTurnstileToken}
+                onStatus={setCaptchaStatus}
+              />
+            </div>
+            {/* Only while a submit is actually waiting on the token. Before that there is nothing
+                to explain — the button is live and the challenge resolves on its own. Turnstile
+                draws its own actionable panel for the states the user has to fix. */}
             <Show
               when={
                 turnstileEnabled &&
+                loading() &&
                 !turnstileToken() &&
-                !loading() &&
                 !captchaIsStuck(captchaStatus())
               }
             >
-              <div
-                data-test-id="captcha-hint"
-                style={{
-                  color: 'var(--text-secondary)',
-                  'font-size': '12px',
-                  margin: '2px 0 10px',
-                }}
-              >
+              <div data-test-id="captcha-hint" class={styles.captchaHint}>
                 {captchaStatusMessage(captchaStatus())}
               </div>
             </Show>
+
             <button
               type="submit"
-              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-              style={{ width: '100%', 'justify-content': 'center' }}
-              disabled={loading() || (turnstileEnabled && !turnstileToken())}
+              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
+              disabled={loading()}
             >
               {loading()
                 ? 'Please wait…'
@@ -441,139 +396,104 @@ export default function LoginScreen() {
             </button>
           </form>
 
-          <p style={{ margin: '12px 0 0', 'font-size': '13px', color: 'var(--text-secondary)' }}>
+          <Show when={mode() !== 'forgot'}>
+            <div class={styles.divider}>or</div>
+
+            <div class={styles.alts}>
+              <button
+                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.altBtn}`}
+                onClick={() => {
+                  // sessionStorage survives the OAuth round-trip in this tab, so the post-login
+                  // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
+                  // flag harmlessly — the nudge only renders for an authenticated session.
+                  markPasskeyNudgeAfterLogin()
+                  api.loginWithGoogle()
+                }}
+                type="button"
+              >
+                Continue with Google
+              </button>
+              <button
+                data-test-id="emailcode-open"
+                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.altBtn}`}
+                onClick={() => {
+                  setError('')
+                  setNotice('')
+                  setStage('email-code')
+                }}
+                type="button"
+              >
+                Email me a sign-in code
+              </button>
+              <Show when={passkeysSupported()}>
+                <button
+                  data-test-id="passkey-signin"
+                  class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.altBtn}`}
+                  onClick={() => {
+                    setError('')
+                    stopConditional()
+                    void signInWithPasskey().then((result) => {
+                      if (result.ok) window.location.reload()
+                      else if (!result.aborted) setError(result.error)
+                    })
+                  }}
+                  type="button"
+                >
+                  Sign in with a passkey
+                </button>
+              </Show>
+            </div>
+          </Show>
+
+          {/* Both ways of arriving without an account, on one line and below the alternatives they
+              compete with — a sign-up link above them reads as the only way in. */}
+          <p class={styles.accountLine}>
             <Show
               when={mode() !== 'forgot'}
               fallback={
-                <a
+                <button
+                  type="button"
+                  class={styles.accountLink}
                   onClick={() => {
                     setMode('login')
                     setError('')
                     setNotice('')
                   }}
-                  style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
                 >
                   Back to sign in
-                </a>
+                </button>
               }
             >
               {mode() === 'login' ? "Don't have an account? " : 'Already have an account? '}
-              <a
+              <button
+                type="button"
+                class={styles.accountLink}
                 onClick={() => {
                   setMode(mode() === 'login' ? 'register' : 'login')
                   setError('')
                   setNotice('')
                 }}
-                style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
               >
                 {mode() === 'login' ? 'Create one' : 'Sign in'}
-              </a>
+              </button>
+              <Show when={mode() === 'login'}>
+                <span class={styles.accountSep}>·</span>
+                <button
+                  data-test-id="try-no-account"
+                  type="button"
+                  class={styles.accountLink}
+                  onClick={tryDemo}
+                >
+                  Continue with no account
+                </button>
+              </Show>
             </Show>
           </p>
-
-          <Show when={mode() !== 'forgot'}>
-            <div
-              style={{
-                display: 'flex',
-                'align-items': 'center',
-                gap: '8px',
-                margin: '18px 0',
-                color: 'var(--text-secondary)',
-                'font-size': '12px',
-              }}
-            >
-              <div
-                style={{
-                  flex: 1,
-                  height: '1px',
-                  background: 'var(--border, rgba(255,255,255,0.12))',
-                }}
-              />
-              or
-              <div
-                style={{
-                  flex: 1,
-                  height: '1px',
-                  background: 'var(--border, rgba(255,255,255,0.12))',
-                }}
-              />
-            </div>
-
-            <button
-              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
-              style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
-              onClick={() => {
-                // sessionStorage survives the OAuth round-trip in this tab, so the post-login
-                // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
-                // flag harmlessly — the nudge only renders for an authenticated session.
-                markPasskeyNudgeAfterLogin()
-                api.loginWithGoogle()
-              }}
-              type="button"
-            >
-              Continue with Google
-            </button>
-            <button
-              data-test-id="emailcode-open"
-              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
-              style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
-              onClick={() => {
-                setError('')
-                setNotice('')
-                setStage('email-code')
-              }}
-              type="button"
-            >
-              Email me a sign-in code
-            </button>
-            <Show when={passkeysSupported()}>
-              <button
-                data-test-id="passkey-signin"
-                class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
-                style={{ width: '100%', 'justify-content': 'center', 'margin-bottom': '10px' }}
-                onClick={() => {
-                  setError('')
-                  stopConditional()
-                  void signInWithPasskey().then((result) => {
-                    if (result.ok) window.location.reload()
-                    else if (!result.aborted) setError(result.error)
-                  })
-                }}
-                type="button"
-              >
-                Sign in with a passkey
-              </button>
-            </Show>
-            <button
-              onClick={tryDemo}
-              type="button"
-              style={{
-                width: '100%',
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                'font-size': '13px',
-                'text-decoration': 'underline',
-              }}
-            >
-              Try the demo — no account needed
-            </button>
-          </Show>
         </Show>
 
-        <div style={{ 'margin-top': '16px', 'text-align': 'center' }}>
+        <div class={styles.footer}>
           <SupportContact />
-          <div
-            style={{
-              'margin-top': '10px',
-              color: 'var(--text-secondary)',
-              'font-size': '11px',
-              opacity: 0.7,
-            }}
-          >
-            v{displayVersion()}
-          </div>
+          <span class={styles.version}>v{displayVersion()}</span>
         </div>
       </div>
     </div>

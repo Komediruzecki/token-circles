@@ -146,6 +146,19 @@ export function captchaIsStuck(status: TurnstileStatus): boolean {
 export default function Turnstile(props: {
   onToken: (token: string) => void
   onStatus?: (status: TurnstileStatus) => void
+  /**
+   * `interaction-only` renders nothing while the challenge passes silently — which is almost
+   * always — and shows the widget only when Cloudflare actually wants a click. Use it wherever the
+   * captcha guards a form the user came to fill in; a permanent checkbox above a sign-in button
+   * asks people to prove themselves before they have done anything.
+   *
+   * Callers that use it must not gate their submit button on the token, since there may be no
+   * visible widget to explain the wait — await `waitForTurnstileToken` on submit instead.
+   *
+   * Cloudflare only decides visibility on a widget's FIRST execution, so a later `reset()` cannot
+   * make a hidden widget appear. `retry()` below removes and re-renders for that reason.
+   */
+  appearance?: 'always' | 'interaction-only'
 }) {
   let el: HTMLDivElement | undefined
   let widgetId: string | undefined
@@ -167,6 +180,7 @@ export default function Turnstile(props: {
         }
         widgetId = window.turnstile.render(el, {
           sitekey: SITE_KEY,
+          appearance: props.appearance ?? 'always',
           callback: (token: string) => {
             props.onToken(token)
             report('solved')
@@ -214,7 +228,17 @@ export default function Turnstile(props: {
 
   return (
     <Show when={SITE_KEY}>
-      <div ref={el} style="margin: 4px 0 12px; display: flex; justify-content: center;" />
+      {/* No margin in interaction-only mode: the widget is usually absent, and a fixed margin on
+          an empty box leaves a permanent gap where nothing ever appears. The parent's own gap
+          spaces it on the rare occasion Cloudflare does ask for a click. */}
+      <div
+        ref={el}
+        style={{
+          display: 'flex',
+          'justify-content': 'center',
+          margin: props.appearance === 'interaction-only' ? '0' : '4px 0 12px',
+        }}
+      />
       <Show when={captchaIsStuck(status())}>
         <div
           data-test-id="captcha-blocked"

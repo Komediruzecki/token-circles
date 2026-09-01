@@ -11,6 +11,40 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Changed
 
+- **Sign-in screen relaid out** (`LoginScreen.tsx`, new `LoginScreen.module.css`). Inline styles
+  moved to a CSS module, matching the rest of the components, and the structure changed in four
+  ways:
+
+  - **Labels above every field.** A placeholder is not a label — it disappears the moment you type,
+    so a half-filled form stops saying what its fields are, and assistive tech has nothing to
+    announce. `Forgot password?` now sits on the password label's own row rather than floating
+    under the input.
+  - **The captcha is invisible unless it wants a click.** Turnstile gained an `appearance` prop and
+    the screen passes `interaction-only`. Cloudflare then renders nothing while the challenge
+    passes silently, which is nearly always.
+  - **The submit button is no longer gated on a captcha token.** It could not stay that way: with
+    no widget on screen, a disabled button has nothing to explain it. Submit awaits the token
+    instead, via a `captchaToken()` helper wrapping the existing `waitForTurnstileToken` — normally
+    already resolved, since the challenge finishes long before a password is typed. The "checking
+    your browser" hint now shows only while a submit is genuinely parked on it.
+  - **One account line, below the alternatives.** "Don't have an account? Create one" was above the
+    Google/passkey buttons it competes with, and "Try the demo" was a separate underlined link at
+    the bottom. They are now one line under the alternatives, and the demo is described as what it
+    is — "Continue with no account" — since "demo" is jargon for using the app without signing up.
+
+  The footer's two stacked rows (support link, then version) are a single two-column row.
+
+  Two Turnstile details worth keeping: Cloudflare only decides an `interaction-only` widget's
+  visibility on its **first** execution, so a later `reset()` can never make a hidden one appear —
+  `retry()` removes and re-renders, which is why it still works. And the widget's container drops
+  its fixed margin in that mode, or an empty box would reserve a permanent gap for something that
+  usually never renders. The component's own "blocked" panel is our markup, not Cloudflare's, so it
+  still appears when the script is blocked.
+
+  Covered by `components/__tests__/loginScreen.captcha.test.tsx`: the button stays usable with no
+  token, the request still carries one (waiting if needed), the hint appears only once a submit is
+  blocked, both labels are bound to their inputs, and the account line follows the alternatives.
+
 - **Subscriptions view redesigned around filter pills and compact cards** (`Bills.tsx`,
   `SubscriptionCard.tsx`). The per-category collapsible sections are gone; a pill row (All ·
   one per category · Paused) filters one flat gallery, with the pure filtering/grouping logic in
@@ -25,6 +59,31 @@ All notable changes to Token Circles are documented here. The format is based on
   instead of `ConfirmButton`.
 
 ### Fixed
+
+- **A delivered-looking support request that was never delivered** (`email.ts`,
+  `routes/support.ts`). `sendMail` returned `{ sent: true }` for any 2xx from Resend, and
+  `support.ts` reads that as "the relay went through" — it is the condition gating the
+  acknowledgement mail to the sender. But a 2xx only means Resend **accepted** the message. A
+  recipient on the account suppression list (anything that has previously hard-bounced or drawn a
+  complaint) is accepted and then dropped at delivery, so the sender got "we received your message"
+  while the support inbox got nothing.
+
+  Nothing in the send response reveals that, and there is no synchronous way to find out — so this
+  logs what it can instead: `sendMail` now returns Resend's message `id` and logs it, and
+  `support.ts` logs it beside the ticket id. That pairing is the only handle tying a request to its
+  row in the Resend dashboard, where the real status and the suppression reason live. It does not
+  make delivery reliable; it makes a lost message findable.
+
+  **The suppression itself is account state, not code** — it is cleared from the Resend dashboard
+  (open the email, "Remove from suppression list"). Ruled out while diagnosing: `resend._domainkey`
+  is present on the root domain, `send.tokencircles.com` carries the SES return path, and DMARC is
+  `p=none`, so this was never an SPF/DKIM/DMARC failure. The domain's MX is Cloudflare Email
+  Routing, which forwards rather than hosting a mailbox, so a missing or unverified route for the
+  support address is the likeliest origin of the original bounce.
+
+  Durable delivery wants the support request persisted to D1 before the email is attempted, which
+  the route's own comment already flags as the intended direction; that needs a migration and is
+  left to its own change.
 
 - **A bill marked paid read back as unpaid** (`core/storage/handlers/bills.ts`). The serverless
   handlers disagreed with themselves about which calendar a stored date is in.
