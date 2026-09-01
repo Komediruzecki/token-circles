@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.13.1] — 2026-09-01
+
 ### Changed
 
 - **The contact-support form is now protected the same way sign-in is**, so it cannot be used to send mail on your behalf. You will not notice it unless it asks you to confirm you are human.
