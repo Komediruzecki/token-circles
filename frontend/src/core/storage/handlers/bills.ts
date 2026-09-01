@@ -20,7 +20,7 @@ function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): b
   // month is the previous one west of UTC. Comparing that against a LOCAL `today` below reported
   // a bill unpaid the instant it was marked paid, every 1st of the month. The worker mirror gets
   // away with the same code only because its runtime is UTC; a browser's is the user's own zone.
-  const lastPaid = parseLocalDate((bill.last_paid_date || bill.last_paid) as string)
+  const lastPaid = parseLocalDate(bill.last_paid_date || bill.last_paid)
   const today = new Date(now)
   today.setHours(0, 0, 0, 0)
 
@@ -120,7 +120,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
     if (b.due_date) {
       // Local parse, or the calendar shifts a day west of UTC: a bill due on the 15th would be
       // drawn on the 14th, and one due on the 1st would fall out of the month entirely.
-      const parsed = parseLocalDate(b.due_date as string)
+      const parsed = parseLocalDate(b.due_date)
       if (!isNaN(parsed.getTime())) day = parsed.getDate()
     } else if (b.day_of_month) {
       day = Number(b.day_of_month) || 1

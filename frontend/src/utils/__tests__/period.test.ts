@@ -5,6 +5,7 @@ import {
   isoDate,
   label,
   monthPeriod,
+  parseLocalDate,
   parsePeriod,
   periodPills,
   periodsEqual,
@@ -274,5 +275,32 @@ describe('the quick-period pills', () => {
     // A tab open across midnight on the 1st would otherwise keep naming the month it opened in.
     expect(periodPills(new Date(2026, 2, 1))[0]!.label).toBe('March')
     expect(periodPills(new Date(2026, 9, 1))[0]!.label).toBe('October')
+  })
+})
+
+describe('parseLocalDate', () => {
+  it('round-trips isoDate on the local calendar', () => {
+    const d = new Date(2026, 8, 1) // 1 Sep 2026, local
+    expect(parseLocalDate(isoDate(d)).getTime()).toBe(d.getTime())
+  })
+
+  it('reads a stored date as the day it says, not the day before', () => {
+    // `new Date('2026-09-01')` is UTC midnight, so west of UTC it reports 31 August.
+    const parsed = parseLocalDate('2026-09-01')
+    expect([parsed.getFullYear(), parsed.getMonth(), parsed.getDate()]).toEqual([2026, 8, 1])
+  })
+
+  it('truncates a full ISO timestamp to its date part', () => {
+    const parsed = parseLocalDate('2026-09-01T23:50:00.000Z')
+    expect([parsed.getMonth(), parsed.getDate()]).toEqual([8, 1])
+  })
+
+  it('yields an Invalid Date for anything that is not a full date', () => {
+    // Callers guard with isNaN(getTime()); an empty string must not quietly become the year 1900,
+    // and a non-string row out of IndexedDB must not throw and hide every other row with it.
+    for (const junk of ['', 'garbage', '2026-09', '2026']) {
+      expect(Number.isNaN(parseLocalDate(junk).getTime()), JSON.stringify(junk)).toBe(true)
+    }
+    expect(Number.isNaN(parseLocalDate(12345).getTime())).toBe(true)
   })
 })

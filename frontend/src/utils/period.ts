@@ -122,10 +122,19 @@ export function isoDate(d: Date): string {
  *
  * A longer ISO timestamp is accepted and truncated to its date part, so legacy rows that stored a
  * full `toISOString()` still land on a sane day.
+ *
+ * Anything that is not a full `YYYY-MM-DD` yields an Invalid Date, matching what `new Date(str)`
+ * did for junk so existing `isNaN(getTime())` guards keep working.
+ *
+ * `unknown` rather than `string` because the callers are reading untyped IndexedDB rows, where a
+ * `as string` cast is a claim about the data and not a fact about it. A number or Date reaching
+ * `.substring` would throw, and the nearest `catch` returns an empty list — one unparseable row
+ * would hide every bill instead of just itself.
  */
-export function parseLocalDate(value: string): Date {
-  const [y, m, d] = value.substring(0, 10).split('-').map(Number)
-  return new Date(y!, (m ?? 1) - 1, d ?? 1)
+export function parseLocalDate(value: unknown): Date {
+  const [y, m, d] = String(value).substring(0, 10).split('-').map(Number)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return new Date(NaN)
+  return new Date(y!, m! - 1, d!)
 }
 
 function startOfMonth(year: number, month: number): Date {
