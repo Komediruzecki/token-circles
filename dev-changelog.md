@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.13.1] — 2026-09-01
+
 ### Changed
 
 - **Sign-in screen relaid out** (`LoginScreen.tsx`, new `LoginScreen.module.css`). Inline styles
