@@ -73,31 +73,44 @@ function addLogEntry(entry: LogEntry): void {
 }
 
 /**
- * Write logs to console
+ * Whether an entry reaches the browser console.
+ *
+ * The console belongs to the person using the app, not to us, so a production build writes
+ * nothing to it — `error` used to be exempt from every gate and printed unconditionally. Stored
+ * logs are the supported way to inspect a problem: the LogViewer in Settings > About reads them,
+ * and nothing here affects what gets recorded.
+ *
+ * Development keeps the usual feedback loop for the levels worth interrupting on, and `debugMode`
+ * is the escape hatch that turns everything back on in any build — so chasing a production report
+ * is "enable debug mode, reproduce, send the log", not a special build.
+ */
+function shouldWriteToConsole(level: LogLevel): boolean {
+  if (isDebugMode()) return true
+  if (!import.meta.env.DEV) return false
+  return level === 'warn' || level === 'error'
+}
+
+/**
+ * Write a log entry to the console. Called once per entry, by log(), as it happens — never over
+ * stored history (see flushLogs).
  */
 function writeLogToConsole(entry: LogEntry): void {
+  if (!shouldWriteToConsole(entry.level)) return
+
   const { timestamp, level, message, details } = entry
   const timestampFmt = new Date(timestamp).toLocaleTimeString()
-  const debugMode = isDebugMode()
+  const line = `[${timestampFmt}] [${level.toUpperCase()}] ${message}`
 
   switch (level) {
     case 'debug':
-      if (debugMode) {
-        console.info(`[${timestampFmt}] [DEBUG] ${message}`, details ?? '')
-      }
-      break
     case 'info':
-      if (debugMode) {
-        console.info(`[${timestampFmt}] [INFO] ${message}`, details ?? '')
-      }
+      console.info(line, details ?? '')
       break
     case 'warn':
-      if (debugMode) {
-        console.warn(`[${timestampFmt}] [WARN] ${message}`, details ?? '')
-      }
+      console.warn(line, details ?? '')
       break
     case 'error':
-      console.error(`[${timestampFmt}] [ERROR] ${message}`, details ?? '')
+      console.error(line, details ?? '')
       break
   }
 }
@@ -114,7 +127,13 @@ function isDebugMode(): boolean {
 }
 
 /**
- * Flush logs to localStorage
+ * Flush logs to localStorage.
+ *
+ * Persistence only — the console is written by log(), once per entry, as it happens. This used to
+ * end with `trimmedLogs.forEach(writeLogToConsole)`, which re-emitted the ENTIRE stored history on
+ * every flush, and initLogging() flushes on boot: each reload dumped up to MAX_LOGS past errors,
+ * timestamped hours apart but arriving in one burst under the flush's own stack. That is
+ * indistinguishable from the app failing those requests right now, and reloading only reprints it.
  */
 function flushLogs(): void {
   try {
@@ -128,9 +147,6 @@ function flushLogs(): void {
     const trimmedLogs = newLogs.slice(0, MAX_LOGS)
 
     saveLogsToStorage(trimmedLogs)
-
-    // Write to console
-    trimmedLogs.forEach(writeLogToConsole)
 
     // Clear buffer
     logBuffer = []

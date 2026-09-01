@@ -64,6 +64,19 @@ vi.mock('../../../core/api', () => ({ toast: vi.fn(), getLocalCurrency: () => 'E
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
+/**
+ * Wait for a condition rather than a fixed number of macrotask turns. Counting turns ties the
+ * test to how many awaits the implementation happens to have, and on a loaded machine the work
+ * simply takes more of them — which showed up as a flake, not a real failure.
+ */
+async function waitFor(predicate: () => boolean, label: string, turns = 60): Promise<void> {
+  for (let i = 0; i < turns; i++) {
+    if (predicate()) return
+    await flush()
+  }
+  throw new Error(`timed out waiting for: ${label}`)
+}
+
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
@@ -80,20 +93,20 @@ afterEach(() => {
   host?.remove()
 })
 
+const syncButton = () =>
+  host.querySelector<HTMLButtonElement>('button[aria-label="Auto sync Main"]')
+
 async function mountAndSync() {
   const { ConnectedSources } = await import('../ConnectedSources')
   dispose = render(() => <ConnectedSources />, host)
-  await flush()
-  await flush()
-  const btn = host.querySelector<HTMLButtonElement>('button[aria-label="Auto sync Main"]')
-  expect(btn, 'the saved source should render its Auto sync button').not.toBeNull()
-  btn!.click()
-  // fetch → mapping → execute are sequential awaits; give each its microtask turn.
-  await flush()
-  await flush()
-  await flush()
-  await flush()
-  return btn!
+  await waitFor(() => syncButton() !== null, 'the saved source to render its Auto sync button')
+  const btn = syncButton()!
+  btn.click()
+  // fetch → mapping → execute are sequential awaits. Every outcome ends in exactly one toast —
+  // that is the run's real completion signal, and the only one the user gets. (Waiting on the
+  // button's busy state instead would pass instantly: the click has not disabled it yet.)
+  await waitFor(() => addToast.mock.calls.length > 0, 'the sync to report an outcome')
+  return btn
 }
 
 describe('Auto sync error surfacing', () => {

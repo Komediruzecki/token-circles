@@ -26,6 +26,55 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **Every page load replayed the whole stored error log to the console** (`core/logger.ts`).
+  `flushLogs()` ended with `trimmedLogs.forEach(writeLogToConsole)` — and `trimmedLogs` is the
+  buffer merged with everything already in `localStorage`, not just the new entries. `initLogging()`
+  flushes on boot, so each reload re-emitted up to `MAX_LOGS` (500) past errors. Errors also flush
+  immediately (`addLogEntry`), so a new one printed twice: once live from `log()`, once from the
+  flush.
+
+  The replay is convincing because it looks live: timestamps hours apart arrive in one burst, each
+  carrying the stack of the flush that reprinted it rather than of the call that failed, and
+  reloading "reproduces" it every time because the source is storage. This cost a real
+  investigation — login-screen `/profiles` and `/categories` failures with
+  `Cannot read properties of undefined (reading 'routeApiRequest')` were read as a live
+  storage-mode desync, when they had happened once, hours earlier, in a mode the app had since
+  left. An incognito window (empty `app_logs`) showed the truth: the signed-out login screen makes
+  exactly one request, `/api/auth/me`, which correctly 401s.
+
+  `flushLogs()` now only persists. The console is written solely by `log()`, once per entry, as it
+  happens.
+
+- **Production builds wrote to the user's console** (`core/logger.ts`). The level gating was
+  inverted: `debug`/`info`/`warn` were hidden behind the `debugMode` flag, but `error` had no gate
+  at all and called `console.error` in every environment. A console is the user's, not ours, and a
+  shipped app spilling internals into it is noise at best.
+
+  Console output is now decided in one place, `shouldWriteToConsole()`: production writes nothing;
+  development keeps `warn` and `error`; `debugMode` turns everything back on in any build, so a
+  production report is chased with "enable debug mode, reproduce, send the log" rather than a
+  special build. Follows the `import.meta.env.DEV || localStorage flag` pattern already used by
+  `CalcTracer.tsx`.
+
+  None of this changes what is _recorded_ — every level is still stored for the LogViewer behind
+  Settings → View Logs, which is the supported way to inspect a problem. `core/__tests__/logger.test.ts`
+  covers both halves of that split: the console stays silent in production while `getLogs()` still
+  returns the entries, and boot no longer replays history.
+
+- **A passkey that cannot be used here failed silently** (`core/webauthn.ts`). The platform
+  reports "you cancelled", "no credential matches this site" and "the prompt timed out" as one
+  indistinguishable `NotAllowedError` — deliberately, so a site cannot probe which passkeys you
+  hold. `isAbort()` lumped it in with `AbortError`, and the callers hide `aborted` results
+  (`else if (!result.aborted) setError(...)`), so pressing "Sign in with a passkey" while only
+  another domain's passkey was saved did visibly nothing.
+
+  `isAbort()` now means only `AbortError` — a request this code called off itself (the explicit
+  button aborts the pending conditional one), where no human ever saw a prompt. `NotAllowedError`
+  is handled separately: an explicit press always returns a message naming the cause the user can
+  act on, while the background autofill request stays `aborted` so it can never paint the form on
+  page load. Registration keeps treating it as a cancel — creating a NEW credential has no
+  "belongs to another site" case. Covered by `core/__tests__/webauthnNoMatchingPasskey.test.ts`.
+
 - **An unreachable API crashed the app at the login screen** (`core/webauthn.ts`,
   `components/LoginScreen.tsx`). `postJson` awaited `apiFetch` bare, so a network-layer failure
   (offline, DNS, a CORS preflight the browser blocks) rejected with `TypeError: Failed to fetch`
@@ -45,6 +94,7 @@ All notable changes to Token Circles are documented here. The format is based on
   fixed `CORS_ORIGIN` (`https://dev.tokencircles.com`) does not allow — so every preview's first
   API call fails the preflight. Previews are still API-less by design (use serverless/local
   mode there); they now land on a working login screen instead of a crash page.
+
 - **Auto sync surfaces execute-step failures** (`ConnectedSources.tsx`). `importFlow.handleImport`
   catches every error into `flow.error()` and never calls `onImported`, but `autoSync` only read
   `flow.error()` after the _fetch_ step — a rejected `/api/import/execute` (422 validation, 500)

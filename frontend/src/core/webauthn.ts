@@ -62,12 +62,27 @@ async function postJson(url: string, body?: unknown): Promise<{ ok: boolean; dat
 
 const errorOf = (data: unknown, fallback: string) => (data as { error?: string })?.error || fallback
 
-/** The user pressed Escape or the platform sheet timed out — not an error worth red text. */
+/**
+ * A request this code called off itself (the explicit button aborts the pending autofill one).
+ * Genuinely nothing to report — no human ever saw a prompt.
+ */
 function isAbort(err: unknown): boolean {
-  return (
-    err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'AbortError')
-  )
+  return err instanceof DOMException && err.name === 'AbortError'
 }
+
+/**
+ * The platform reports "you cancelled", "no credential matches this site" and "the prompt timed
+ * out" as one indistinguishable `NotAllowedError` — deliberately, so a site cannot probe which
+ * passkeys you hold. We cannot tell them apart, so we must not guess "cancelled" and stay silent:
+ * someone whose only passkey belongs to another domain then pressed the button and saw nothing
+ * happen. Name the cause they can act on, and stay true for the ones they already know about.
+ */
+function isNotAllowed(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'NotAllowedError'
+}
+
+const NO_PASSKEY_MESSAGE =
+  'No passkey was used. If yours is saved for a different site or device, it cannot be used here — try another way to sign in.'
 
 export type WebauthnResult =
   { ok: true } | { ok: false; error: string; aborted?: boolean; reauth?: boolean }
@@ -146,7 +161,11 @@ export async function registerPasskey(
     // Browsers blur cancel/no-credential/config-mismatch into NotAllowedError on purpose;
     // the raw error in the console is the only diagnostic a misconfigured deployment gets.
     console.warn('[webauthn] create failed:', err)
-    if (isAbort(err)) return { ok: false, error: 'Passkey setup was cancelled', aborted: true }
+    // Registration has no "belongs to another site" case — it is making a NEW credential — so
+    // here NotAllowedError really is the person declining the prompt, and stays quiet.
+    if (isAbort(err) || isNotAllowed(err)) {
+      return { ok: false, error: 'Passkey setup was cancelled', aborted: true }
+    }
     return { ok: false, error: 'This device could not create a passkey' }
   }
 
@@ -200,6 +219,13 @@ export async function signInWithPasskey(opts?: {
     // See registerPasskey: the console line is the only diagnostic NotAllowedError leaves.
     if (!opts?.conditional || !isAbort(err)) console.warn('[webauthn] get failed:', err)
     if (isAbort(err)) return { ok: false, error: 'Passkey sign-in was cancelled', aborted: true }
+    if (isNotAllowed(err)) {
+      // The background autofill request stays silent — nobody asked for it, and painting the
+      // form on page load would be wrong. An explicit press always gets an answer.
+      return opts?.conditional
+        ? { ok: false, error: NO_PASSKEY_MESSAGE, aborted: true }
+        : { ok: false, error: NO_PASSKEY_MESSAGE }
+    }
     return { ok: false, error: 'This device could not use a passkey' }
   }
 
