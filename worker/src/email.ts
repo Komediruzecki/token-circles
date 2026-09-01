@@ -8,7 +8,7 @@ export async function sendMail(
   subject: string,
   html: string,
   opts?: { replyTo?: string; text?: string }
-): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
+): Promise<{ sent: boolean; skipped?: boolean; error?: string; id?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
     console.log(`[email] DEV (no RESEND_API_KEY) -> to=${to} subject=${subject}`);
@@ -35,5 +35,15 @@ export async function sendMail(
     console.error(`[email] Resend ${res.status}: ${body}`);
     return { sent: false, error: `Resend ${res.status}` };
   }
-  return { sent: true };
+  // `sent` means Resend ACCEPTED the message, not that anyone received it. A recipient on the
+  // account's suppression list — anything that has hard-bounced or complained before — is accepted
+  // here with a 2xx and silently dropped at delivery, which is exactly how support requests went
+  // missing while the sender still got a "we received it" acknowledgement.
+  //
+  // Nothing in this response can tell us that, so log the id: it is the only handle that ties a
+  // request to its row in the Resend dashboard, where the real status and any suppression reason
+  // live. Without it a lost message cannot even be looked up.
+  const id = ((await res.json().catch(() => ({}))) as { id?: string }).id;
+  console.log(`[email] Resend accepted id=${id ?? 'unknown'} to=${to} subject=${subject}`);
+  return { sent: true, id };
 }

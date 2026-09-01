@@ -57,6 +57,10 @@ supportRoutes.post('/api/support/contact', async (c) => {
     html,
     { replyTo: email }
   );
+  // Ties the ticket to the Resend row. `r.sent` only means Resend took the message: a suppressed
+  // recipient is accepted with a 2xx and never delivered, so when a request goes missing this
+  // pairing is what turns "somewhere in the logs" into one lookup.
+  console.log(`[support] ${ticketId} relay sent=${r.sent} resendId=${r.id ?? 'none'}`);
 
   // Best-effort acknowledgement back to the user. Sent ONLY if the support relay actually went
   // through, and it deliberately does NOT echo the user-supplied message back: `email` is
