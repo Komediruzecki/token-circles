@@ -5,7 +5,7 @@
  * survives the deletion of the data that earned it.
  */
 import { ACHIEVEMENTS } from './definitions'
-import type {AchievementId} from './definitions';
+import type { AchievementId } from './definitions'
 import type { Earned } from './evaluate'
 
 export const SETTINGS_KEY = 'achievements'

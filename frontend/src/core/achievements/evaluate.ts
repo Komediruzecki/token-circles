@@ -6,7 +6,7 @@
 import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
 import { currentStreak, monthOf, monthReaching } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
-import type {AchievementId} from './definitions';
+import type { AchievementId } from './definitions'
 
 export interface EvaluateInput {
   transactions: Array<Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id'>>

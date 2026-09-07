@@ -5,10 +5,10 @@
  * Recipe and glyphs match the gallery page in disjoint-colliders
  * (packages/showcase-gallery/gallery-viewer/token-circles-badges.html).
  */
-import { createUniqueId  } from 'solid-js'
+import { createUniqueId } from 'solid-js'
 import { BADGE_GLYPHS } from './badgeGlyphs'
 import styles from './BadgeMedallion.module.css'
-import type {JSX} from 'solid-js';
+import type { JSX } from 'solid-js'
 import type { AchievementId, Band } from '../core/achievements/definitions'
 
 const RINGS: Record<Band, Array<{ r: number; w: number }>> = {

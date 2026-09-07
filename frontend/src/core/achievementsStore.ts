@@ -6,16 +6,11 @@
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
 import { evaluateAchievements } from './achievements/evaluate'
-import {
-  diffUnlocks,
-  parseRecords,
-  serializeRecords,
-  SETTINGS_KEY
-} from './achievements/records'
+import { diffUnlocks, parseRecords, serializeRecords, SETTINGS_KEY } from './achievements/records'
 import { api } from './api'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
-import type {UnlockRecord} from './achievements/records';
+import type { UnlockRecord } from './achievements/records'
 
 export const DATA_CHANGED_EVENT = 'tc:data-changed'
 
