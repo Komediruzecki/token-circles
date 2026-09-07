@@ -45,6 +45,19 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **The dashboard's period bar stopped pinning.** #534 put `<PeriodBar>` and the streak chip in a
+  shared `.periodRow` flex wrapper; `position: sticky` only travels inside its own parent's box, so
+  a wrapper sized to the bar pins it for zero pixels — the exact failure `PeriodBar.module.css`
+  warns about at the top of the file. Nothing went red because the dashboard fixture was a little
+  shorter than the 720px viewport, so `sticky-period-bar.spec.ts` hit its `pageIsScrollable` guard
+  and *skipped* the dashboard case. #536's badge rail made the page taller, the case ran for the
+  first time in two merges, and the bar was measured 402px above the viewport. `Dashboard.tsx` now
+  renders the bar and the rail as siblings of the page container, `.periodRow` is gone, and
+  `BadgeRail.module.css` carries the 12px the row used to supply. Two things stop it recurring:
+  the three pinning cases are tagged `@smoke`, so a pull request runs them instead of only main,
+  and the describe pins a 560px-tall viewport so every page under test is scrollable and the guard
+  stays a guard.
+
 - **The app never linked Privacy or Terms.** `about.tokencircles.com/privacy` and `/terms` exist
   and are real (operator, sub-processors, updated 2026-07-14), but a grep of `frontend/src` found
   no link to either — not on the sign-in screen, not in Settings. `components/LegalLinks.tsx` (new)
