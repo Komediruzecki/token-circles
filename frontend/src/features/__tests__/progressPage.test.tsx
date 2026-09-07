@@ -84,9 +84,14 @@ describe('Progress page', () => {
     )
     expect(c.querySelectorAll('[data-month-cell]')).toHaveLength(12)
     expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(1)
-    // Every badge in the set, however many that is: the page renders all four bands.
-    expect(c.querySelectorAll('[data-band]')).toHaveLength(ACHIEVEMENTS.length)
-    expect(c.querySelectorAll('[data-lit="true"]')).toHaveLength(1)
+    // Every badge in the set, however many that is: the gallery renders all four bands. Scoped
+    // past the timeline, which draws a medallion of its own for each badge already earned.
+    const gallery = c.querySelector('[aria-labelledby="badges-title"]')!
+    expect(gallery.querySelectorAll('[data-band]')).toHaveLength(ACHIEVEMENTS.length)
+    expect(gallery.querySelectorAll('[data-lit="true"]')).toHaveLength(1)
+    // The one earned badge appears on the timeline too, dated to the month it was earned.
+    const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
+    expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })
