@@ -1,0 +1,95 @@
+.medal {
+  --size: 48px;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  transform: perspective(700px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+  flex: none;
+}
+.medal > svg,
+.medal > .shine {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.medal[data-lit='false'] {
+  filter: grayscale(1);
+  opacity: 0.38;
+}
+.base {
+  transform: translateZ(0);
+}
+.glyph {
+  transform: translateZ(30px);
+  color: var(--text);
+}
+.medal[data-band='mastery'] .glyph {
+  color: var(--accent-warm);
+}
+.orbs {
+  transform: translateZ(46px);
+  opacity: 0;
+  transition: opacity 0.45s;
+}
+.orbit {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: spin 7s linear infinite;
+  animation-play-state: paused;
+}
+.ccw {
+  animation: spin 11s linear infinite reverse;
+  animation-play-state: paused;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.shine {
+  border-radius: 50%;
+  transform: translateZ(54px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle at var(--mx, 50%) var(--my, 50%),
+    rgba(255, 255, 255, 0.3),
+    rgba(255, 255, 255, 0.07) 26%,
+    transparent 54%
+  );
+}
+.medal[data-interactive='true']:hover .orbs,
+.medal[data-interactive='true']:focus-visible .orbs {
+  opacity: 1;
+}
+.medal[data-interactive='true']:hover .orbit,
+.medal[data-interactive='true']:focus-visible .orbit {
+  animation-play-state: running;
+}
+.medal[data-interactive='true']:hover .shine,
+.medal[data-interactive='true']:focus-visible .shine {
+  opacity: 1;
+}
+.medal[data-interactive='true']:hover .base {
+  filter: drop-shadow(0 0 16px rgba(110, 155, 255, 0.38));
+}
+.medal[data-band='mastery'][data-interactive='true']:hover .base {
+  filter: drop-shadow(0 0 18px rgba(240, 168, 96, 0.42));
+}
+@media (prefers-reduced-motion: reduce) {
+  .orbit {
+    animation: none !important;
+  }
+  .medal,
+  .orbs,
+  .shine {
+    transition: none !important;
+  }
+}

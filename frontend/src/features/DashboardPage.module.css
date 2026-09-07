@@ -628,3 +628,11 @@
   flex-direction: column;
   gap: 20px;
 }
+
+/* Period bar and the badges streak chip share one row. */
+.periodRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}

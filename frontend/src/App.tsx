@@ -16,6 +16,7 @@ import {
   Suspense,
 } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
+import AchievementsHost from './components/AchievementsHost'
 import CommandBar from './components/CommandBar'
 import ConfirmDialog from './components/ConfirmDialog'
 import GuidedOrbit from './components/GuidedOrbit'
@@ -1140,6 +1141,7 @@ export function App() {
                   pages here stay mounted and hidden, so a per-page home would render it once
                   per page. */}
               <VerifyEmailBanner />
+              <AchievementsHost />
               {Object.entries(allPages).map(([name, page]) => (
                 <Show when={mountedPages().has(name)}>
                   <div style={{ display: activePage() === name ? 'block' : 'none' }}>
