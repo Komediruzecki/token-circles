@@ -10,6 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **A Progress page.** Your tracked months, your badges and advice drawn from your own numbers, all in one place, with a year in review. Budgets running hot, goals that will miss their date, months that ran in the red: each one says what it is built from and takes you to the page that shows it. The dashboard now carries the badges you have earned.
 - **Badges.** Tracking your money now earns badges: a month tracked, a quarter, a year, saving streaks, budgets held, and more. Fifteen in three bands, per profile, worked out on your device, never taken away, and each one shareable as a card. Your history counts from day one.
 
 ### Fixed

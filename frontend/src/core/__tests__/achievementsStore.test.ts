@@ -5,19 +5,29 @@ vi.mock('../api', () => ({
   api: {
     getSettings: vi.fn(async () => ({ achievements: calls.stored?.[0] })),
     updateSettings: vi.fn(async (data: unknown) => {
-      calls.updated = [data]
+      calls.updated = [...(calls.updated ?? []), data]
     }),
     getTransactions: vi.fn(async () => calls.transactions ?? []),
     getBudgets: vi.fn(async () => []),
     getGoals: vi.fn(async () => []),
     getImportLogs: vi.fn(async () => []),
+    getCategories: vi.fn(async () => [{ id: 1, name: 'Food' }]),
+    getBills: vi.fn(async () => []),
   },
 }))
 const toasts: string[] = []
 vi.mock('../toastStore', () => ({ addToast: vi.fn((m: string) => toasts.push(m)) }))
 vi.mock('../storage/storageFactory', () => ({ getStorageMode: () => 'serverless' }))
+vi.mock('../appStore', () => ({ setPage: vi.fn() }))
 
-import { refreshAchievements, streak, unlocks } from '../achievementsStore'
+import {
+  dismissAdvice,
+  dismissedAdvice,
+  refreshAchievements,
+  snapshot,
+  streak,
+  unlocks,
+} from '../achievementsStore'
 
 const month = (m: string) =>
   [3, 4, 5].map((d) => ({ date: `${m}-0${d}`, type: 'expense', amount: 10, category_id: 1 }))
@@ -73,6 +83,28 @@ describe('achievementsStore.refreshAchievements', () => {
     expect(newly.map((n) => n.id)).toEqual(['one-month'])
     expect(unlocks().map((u) => u.id)).toEqual(['first-entry', 'named-everything', 'one-month'])
     expect(toasts).toEqual(['Badge unlocked: One month.'])
+  })
+
+  it('keeps the loaded arrays in a snapshot, so the page needs no second fetch', async () => {
+    calls.transactions = month(thisMonth)
+    await refreshAchievements()
+    expect(snapshot()!.transactions).toHaveLength(3)
+    expect(snapshot()!.categories).toEqual([{ id: 1, name: 'Food' }])
+    expect(snapshot()!.evaluation.streak).toBe(1)
+    expect(snapshot()!.today).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+  })
+
+  it('persists a dismissed advice id beside the unlocks, not in a key of its own', async () => {
+    calls.transactions = month(thisMonth)
+    await refreshAchievements()
+    await dismissAdvice(`uncategorised:${thisMonth}`)
+    const saved = JSON.parse((calls.updated!.at(-1) as { achievements: string }).achievements) as {
+      unlocks: unknown[]
+      dismissedAdvice: string[]
+    }
+    expect(saved.dismissedAdvice).toEqual([`uncategorised:${thisMonth}`])
+    expect(saved.unlocks.length).toBeGreaterThan(0)
+    expect(dismissedAdvice()).toEqual([`uncategorised:${thisMonth}`])
   })
 
   it('nothing new means no write and no toast', async () => {

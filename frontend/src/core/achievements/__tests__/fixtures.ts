@@ -35,3 +35,17 @@ export function input(over: Partial<EvaluateInput> = {}): EvaluateInput {
     ...over,
   }
 }
+
+/** The advice engine takes the evaluator's input plus names and dismissals. */
+export function adviceInput(over: Record<string, unknown> = {}) {
+  return {
+    ...input(),
+    categories: [
+      { id: 1, name: 'Food' },
+      { id: 2, name: 'Transport' },
+    ],
+    bills: [],
+    dismissed: [] as string[],
+    ...over,
+  } as never
+}

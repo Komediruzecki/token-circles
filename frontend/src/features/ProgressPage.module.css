@@ -1,0 +1,256 @@
+.page {
+  padding: 0 0 40px;
+}
+.page-header {
+  margin-bottom: 22px;
+}
+.page-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+.subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.card {
+  padding: 22px 24px;
+  margin-bottom: 22px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+.section {
+  margin-bottom: 26px;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.section-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.record-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.streak {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+.hint {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* The last twelve months. A gap in the record is meant to be visible. */
+.strip {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.cell {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+.cell-mark {
+  width: 100%;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+}
+.cell[data-tracked='true'] .cell-mark {
+  border-color: transparent;
+  background: linear-gradient(180deg, #93b4ff, #3b6fe0);
+}
+.cell-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+
+/* Advice */
+.advice {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.advice-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 14px 18px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: 14px;
+}
+.advice-card[data-tone='warn'] {
+  border-left-color: var(--accent-warm);
+}
+.advice-card[data-tone='info'] {
+  border-left-color: var(--primary);
+}
+.advice-body {
+  flex: 1;
+  min-width: 0;
+}
+.advice-title {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.advice-detail {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+.advice-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.figure {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.dismiss {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.dismiss:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+.empty {
+  margin: 0;
+  padding: 18px 20px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.ghost {
+  padding: 5px 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+.ghost:hover {
+  border-color: var(--primary);
+}
+
+/* Badges */
+.band {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.band-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.band-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.next {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.badge {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+.badge-name {
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+.badge-rule {
+  margin: 0;
+  min-height: 2.8em;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.privacy {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Year in review */
+.review {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin: 6px 0 0;
+}
+.review dt {
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.review dd {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .strip {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}

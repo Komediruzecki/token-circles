@@ -1,0 +1,74 @@
+.rail {
+  min-width: 0;
+}
+.head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.streak {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+.see-all {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.see-all:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+/* Sideways, with a fade at the right edge so it reads as scrollable. */
+.shelf {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0 0;
+  padding: 2px 2px 6px;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 26px), transparent 100%);
+}
+.item {
+  scroll-snap-align: start;
+  flex: none;
+}
+.item-button {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 84px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.item-button:hover {
+  border-color: var(--border);
+  background: var(--surface);
+}
+.name {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+.when {
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.empty {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}

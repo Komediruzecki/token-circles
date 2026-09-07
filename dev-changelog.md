@@ -11,6 +11,18 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Added
 
+- **Progress page** (`frontend/src/features/Progress.tsx`, `core/achievements/advice.ts`,
+  `review.ts`, `components/BadgeRail.tsx`). Sidebar entry after Bills. Nothing fetches: the
+  achievements store keeps its loaded arrays in a `snapshot` signal and the page computes
+  advice and the year in review from it. `buildAdvice` is pure and ranked (budget drift, goal
+  pace, in the red, uncategorised, unbudgeted category, streak at risk); each card has a stable
+  id so a dismissal sticks, and dismissals live in the same `achievements` settings key as the
+  unlocks, so there is no migration. `BadgesPanel` and `StreakChip` are deleted: the panel's
+  markup is now the page's badges section, and the dashboard shows `BadgeRail`, a sideways
+  scroller of earned badges with a link to the page. Settings and the unlock toast both call
+  `setPage('progress')`. `BadgeMedallion` gains the generated aurora face
+  (`public/badges/face-<band>.webp`, one per band, about 20 KB each); `face="plain"` keeps the
+  drawn one for tests and as a fallback. Plan: `docs/plans/progress-page-plan.md`.
 - **Achievements** (`frontend/src/core/achievements/*`, `core/achievementsStore.ts`,
   `components/BadgeMedallion.tsx`, `BadgesPanel.tsx`, `StreakChip.tsx`, `AchievementsHost.tsx`).
   One pure evaluator (`evaluate.ts`) over the profile's transactions, budgets, goals and import

@@ -604,6 +604,11 @@ export function App() {
       ),
     },
     {
+      name: 'progress' as PageName,
+      label: 'Progress',
+      icon: <path d="M12 3a9 9 0 109 9h-9V3zM12 3v9h9M7 17v-3M11 17v-6M15 17v-4" />,
+    },
+    {
       name: 'rentBuy' as PageName,
       label: 'Rent vs Buy',
       icon: (
@@ -694,7 +699,7 @@ export function App() {
   const pick = (...names: string[]) =>
     names.map((n) => navByName[n]).filter((x): x is (typeof navItems)[number] => Boolean(x))
   const navSections: { group?: string; items: (typeof navItems)[number][] }[] = [
-    { items: pick('dashboard', 'transactions', 'categories', 'accounts', 'bills') },
+    { items: pick('dashboard', 'transactions', 'categories', 'accounts', 'bills', 'progress') },
     { group: 'Planning', items: pick('budgets', 'goals', 'loans', 'retirement') },
     { group: 'Calculators', items: pick('compound', 'emergency', 'rentBuy') },
     { group: 'Analytics', items: pick('analytics', 'portfolio', 'tags') },

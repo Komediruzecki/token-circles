@@ -42,10 +42,9 @@ import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
-import { openBadgesPanel } from '../core/achievementsStore'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
-import { bumpProfileVersion } from '../core/appStore'
+import { bumpProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
@@ -1909,8 +1908,13 @@ export default function Settings() {
                 </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">
                   <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-                    <button class={styles.btnSecondary} onclick={openBadgesPanel}>
-                      Badges
+                    <button
+                      class={styles.btnSecondary}
+                      onclick={() => {
+                        setPage('progress')
+                      }}
+                    >
+                      Progress and badges
                     </button>
                     <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
                       View Changelog

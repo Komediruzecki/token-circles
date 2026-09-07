@@ -5,7 +5,6 @@
 import { createEffect, on, onCleanup, onMount } from 'solid-js'
 import { DATA_CHANGED_EVENT, refreshAchievements } from '../core/achievementsStore'
 import { useAppState } from '../core/appStore'
-import BadgesPanel from './BadgesPanel'
 import type { JSX } from 'solid-js'
 
 const DEBOUNCE_MS = 1200
@@ -31,5 +30,5 @@ export default function AchievementsHost(): JSX.Element {
     window.removeEventListener(DATA_CHANGED_EVENT, schedule)
     clearTimeout(timer)
   })
-  return <BadgesPanel />
+  return null
 }

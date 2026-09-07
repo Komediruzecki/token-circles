@@ -130,7 +130,15 @@ describe('evaluateAchievements', () => {
   })
 
   it('goals: created is dated to creation, reached to today', () => {
-    const goals = [{ target_amount: 500, current_amount: 500, created_at: '2026-02-10T00:00:00Z' }]
+    const goals = [
+      {
+        name: 'Trip',
+        target_amount: 500,
+        current_amount: 500,
+        deadline: null,
+        created_at: '2026-02-10T00:00:00Z',
+      },
+    ]
     const r = evaluateAchievements(input({ goals }))
     expect(on(r, 'goal-in-sight')).toBe('2026-02-01')
     expect(on(r, 'goal-reached')).toBe('2026-09-01')
