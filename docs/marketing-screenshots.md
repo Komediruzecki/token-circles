@@ -34,7 +34,9 @@ export WRANGLER_PERSIST_TO=$(mktemp -d)
 # 1. the Worker, on ports of your own, supervised (wrangler dev crashes a minute or two into
 #    a run; scripts/serve-worker.mjs restarts it — never raw `wrangler dev` here)
 cd worker
-pnpm run d1:migrate:local -- --persist-to "$WRANGLER_PERSIST_TO"
+# wrangler directly, not `pnpm run d1:migrate:local -- …`: the flag did not reach wrangler that
+# way, the shared database answered "No migrations to apply!", and dev came up on an empty one.
+pnpm exec wrangler d1 migrations apply finance-manager --local --persist-to "$WRANGLER_PERSIST_TO"
 cd ../frontend
 E2E_API_PORT=8790 node scripts/serve-worker.mjs &
 
