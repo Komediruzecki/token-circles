@@ -1,7 +1,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ACHIEVEMENTS } from '../../core/achievements/definitions'
-import { BADGE_GLYPHS } from '../badgeGlyphs'
+import { BADGE_GLYPHS, GLYPH_OFFSET } from '../badgeGlyphs'
 import BadgeMedallion, { medallionSvg } from '../BadgeMedallion'
 import type { JSX } from 'solid-js'
 
@@ -21,6 +21,23 @@ const mount = (el: () => JSX.Element): HTMLDivElement => {
 describe('BadgeMedallion', () => {
   it('has a glyph for every badge', () => {
     for (const a of ACHIEVEMENTS) expect(BADGE_GLYPHS[a.id], a.id).toMatch(/<(path|circle|rect)/)
+  })
+  it('only carries centring offsets for badges that exist', () => {
+    // A typo'd key here is silent: the lookup misses and the glyph quietly renders off centre.
+    const ids = new Set(ACHIEVEMENTS.map((a) => a.id))
+    for (const id of Object.keys(GLYPH_OFFSET)) expect(ids.has(id as never), id).toBe(true)
+  })
+  it('places the glyph by its measured ink, not by its box', () => {
+    // half-a-year is an arc across the top of its box with dots under it, so its ink sits high
+    // and the medallion has to push it down. The number comes from scripts/measure-badge-glyphs.
+    const [dx, dy] = GLYPH_OFFSET['half-a-year']!
+    expect(dy).toBeGreaterThan(1)
+    expect(medallionSvg('half-a-year', 'mastery', 220)).toContain(
+      `translate(${dx - 24} ${dy - 24})`
+    )
+    // A glyph with no entry is drawn on the box centre, unshifted.
+    expect(GLYPH_OFFSET['two-years']).toBeUndefined()
+    expect(medallionSvg('two-years', 'mastery', 220)).toContain('translate(-24 -24)')
   })
   it('draws one, two or three rings by band and marks unlit', () => {
     const c = mount(() => (

@@ -6,7 +6,7 @@
  * (packages/showcase-gallery/gallery-viewer/token-circles-badges.html).
  */
 import { createUniqueId, Show } from 'solid-js'
-import { BADGE_GLYPHS } from './badgeGlyphs'
+import { BADGE_GLYPHS, GLYPH_OFFSET } from './badgeGlyphs'
 import styles from './BadgeMedallion.module.css'
 import type { JSX } from 'solid-js'
 import type { AchievementId, Band } from '../core/achievements/definitions'
@@ -59,8 +59,15 @@ function baseMarkup(uid: string, band: Band): string {
   return `${defs(uid)}<circle cx="110" cy="110" r="80" fill="url(#${uid}-face)" stroke="rgba(147,180,255,.22)"/><circle cx="110" cy="110" r="93" fill="none" stroke="${paint}" stroke-width="1.2" stroke-dasharray="1.6 4.4" opacity=".55"/>${rings}`
 }
 
-const glyphMarkup = (id: AchievementId): string =>
-  `<g transform="translate(110 110) scale(1.55) translate(-24 -24)" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${BADGE_GLYPHS[id]}</g>`
+/**
+ * The glyph is placed by its measured ink, not by its box: a shallow arc with dots under it fills
+ * only part of its 48-unit square and would otherwise render high in the medallion. GLYPH_OFFSET
+ * carries the correction (see badgeGlyphs.ts).
+ */
+const glyphMarkup = (id: AchievementId): string => {
+  const [dx, dy] = GLYPH_OFFSET[id] ?? [0, 0]
+  return `<g transform="translate(110 110) scale(1.55) translate(${dx - 24} ${dy - 24})" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${BADGE_GLYPHS[id]}</g>`
+}
 
 const orbsMarkup = (band: Band): string =>
   `<g class="${styles.orbit}">${[0, 120, 240].map((a) => orbAt(93, a, 3.2, ORB[band])).join('')}</g><g class="${styles.orbit} ${styles.ccw}">${[60, 240].map((a) => orbAt(104, a, 2, ORB[band])).join('')}</g>`
