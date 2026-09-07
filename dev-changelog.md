@@ -11,6 +11,16 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **The app never linked Privacy or Terms.** `about.tokencircles.com/privacy` and `/terms` exist
+  and are real (operator, sub-processors, updated 2026-07-14), but a grep of `frontend/src` found
+  no link to either — not on the sign-in screen, not in Settings. `components/LegalLinks.tsx` (new)
+  renders both as absolute links (`target="_blank" rel="noopener noreferrer"`) and exports the
+  URLs; it sits in the sign-in footer next to Support and in Settings → About under Support. A
+  case in `loginScreen.captcha.test.tsx` pins the sign-in screen having them, since that is the
+  screen that was missing them.
+
+### Fixed
+
 - **The dev deployment and both API hosts were indexable.** Search Console reported
   `api.dev.tokencircles.com/` as a 404 — it had crawled an API host (found through certificate
   transparency, most likely) because nothing told it not to. Auditing every host: `dev.tokencircles.com`

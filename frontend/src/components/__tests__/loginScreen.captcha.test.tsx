@@ -165,4 +165,9 @@ describe('the sign-in form labels', () => {
     const html = host.innerHTML
     expect(html.indexOf('Continue with Google')).toBeLessThan(html.indexOf('Create one'))
   })
+  it('links Privacy and Terms from the footer — the app never pointed at either before', async () => {
+    await mount()
+    expect(host.querySelector('a[href="https://about.tokencircles.com/privacy"]')).not.toBeNull()
+    expect(host.querySelector('a[href="https://about.tokencircles.com/terms"]')).not.toBeNull()
+  })
 })
