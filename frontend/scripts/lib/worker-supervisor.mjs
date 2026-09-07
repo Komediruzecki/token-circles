@@ -272,7 +272,14 @@ export class WorkerSupervisor {
     this.log(`starting wrangler dev on :${this.port} (start ${this.starts}) — ${why}`)
     const t0 = Date.now()
 
-    const child = spawn(bin, ['dev', '--port', String(this.port)], {
+    // Its own local state on request. The marketing-shots recipe wants a fresh D1 so the seed —
+    // which dates everything relative to now — lands in an empty database; the shared e2e
+    // database keeps its fixture from whenever it was first seeded, so weeks later the current
+    // month is empty and the transactions frame comes back blank. The migrate step has to be
+    // given the same directory, or the two disagree about which database exists.
+    const persist = process.env.WRANGLER_PERSIST_TO
+    const args = ['dev', '--port', String(this.port), ...(persist ? ['--persist-to', persist] : [])]
+    const child = spawn(bin, args, {
       cwd: this.workerDir,
       stdio: ['ignore', 'pipe', 'pipe'],
       // Its own process group. wrangler forks workerd, and killing only the parent leaves that

@@ -25,12 +25,20 @@ needs the servers to still be up when it runs and Playwright stops the ones it
 starts.
 
 ```sh
-# 1. the Worker, on ports of your own (it keeps running)
+# 0. a database of this run's own. The seed dates everything relative to NOW and runs once
+#    per database, so the shared e2e database — seeded whenever it was first used — has an
+#    empty current month weeks later, and 02-transactions comes back blank. A fresh directory
+#    is what makes the seed date to today. Export it: the supervisor in step 1 reads it.
+export WRANGLER_PERSIST_TO=$(mktemp -d)
+
+# 1. the Worker, on ports of your own, supervised (wrangler dev crashes a minute or two into
+#    a run; scripts/serve-worker.mjs restarts it — never raw `wrangler dev` here)
 cd worker
-pnpm run d1:migrate:local && pnpm exec wrangler dev --port 8790 &
+pnpm run d1:migrate:local -- --persist-to "$WRANGLER_PERSIST_TO"
+cd ../frontend
+E2E_API_PORT=8790 node scripts/serve-worker.mjs &
 
 # 2. the dev server pointed at it
-cd ../frontend
 API_PROXY_TARGET=http://127.0.0.1:8790 npx vite --port 3900 --strictPort &
 
 # 3. register and seed the fixture account against those two
