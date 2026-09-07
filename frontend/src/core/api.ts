@@ -798,7 +798,7 @@ export class ApiClient {
   async getImportLogs(): Promise<Array<{ id: number; created_at: string }>> {
     return this.request(
       '/import-logs',
-      z.array(z.object({ id: z.number(), created_at: z.string() }).passthrough())
+      z.array(z.looseObject({ id: z.number(), created_at: z.string() }))
     )
   }
 
