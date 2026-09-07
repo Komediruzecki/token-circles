@@ -53,8 +53,6 @@ All notable changes to Token Circles are documented here. The format is based on
   case in `loginScreen.captcha.test.tsx` pins the sign-in screen having them, since that is the
   screen that was missing them.
 
-### Fixed
-
 - **The dev deployment and both API hosts were indexable.** Search Console reported
   `api.dev.tokencircles.com/` as a 404 — it had crawled an API host (found through certificate
   transparency, most likely) because nothing told it not to. Auditing every host: `dev.tokencircles.com`
