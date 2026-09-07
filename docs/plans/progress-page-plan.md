@@ -1,5 +1,7 @@
 # Progress Page Implementation Plan
 
+Status: **shipped** in #536 (`f864d32b`, dev deploy 2026-09-07). Kept as the record of what was built and why; the checkboxes below are the plan as written, not a live task list.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A Progress page in the sidebar after Bills, where the badges, the tracked-month record, and advice drawn from the profile's own data live together, and where the dashboard's badge rail sends people.
