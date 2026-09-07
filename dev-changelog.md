@@ -11,6 +11,19 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Added
 
+- **Nine more badges and a fourth band** (`core/achievements/definitions.ts`, `evaluate.ts`,
+  `components/badgeGlyphs.ts`, `BadgeMedallion.tsx`). The ladder no longer stops at Two years:
+  Three years joins Mastery and a new **Legacy** band holds Five, Ten and Twenty years plus
+  Twenty thousand entries. `BANDS` gains `legacy` at four rings, and the Progress page needed no
+  change because it already iterates `Object.keys(BANDS)`. Volume is the second axis, from
+  `VOLUME_STEPS` (100 / 1 000 / 5 000 / 10 000 / 20 000): `monthOfNth` sorts the dates and reads
+  the nth, so importing ten years of statements dates the hundredth entry to the month it
+  actually happened rather than to today — the same rule the rest of the set follows. Volume
+  counts every transaction, tracked month or not, so a two-entries-a-month profile still earns
+  them. `public/badges/face-legacy.webp` is a fourth generated aurora face, gold-dominant
+  (mean RGB 54/36/24 against mastery's 41/49/74) and blank in the middle like the others, so the
+  glyph is still vector.
+
 - **Progress page** (`frontend/src/features/Progress.tsx`, `core/achievements/advice.ts`,
   `review.ts`, `components/BadgeRail.tsx`). Sidebar entry after Bills. Nothing fetches: the
   achievements store keeps its loaded arrays in a `snapshot` signal and the page computes
@@ -50,7 +63,7 @@ All notable changes to Token Circles are documented here. The format is based on
   a wrapper sized to the bar pins it for zero pixels — the exact failure `PeriodBar.module.css`
   warns about at the top of the file. Nothing went red because the dashboard fixture was a little
   shorter than the 720px viewport, so `sticky-period-bar.spec.ts` hit its `pageIsScrollable` guard
-  and *skipped* the dashboard case. #536's badge rail made the page taller, the case ran for the
+  and _skipped_ the dashboard case. #536's badge rail made the page taller, the case ran for the
   first time in two merges, and the bar was measured 402px above the viewport. `Dashboard.tsx` now
   renders the bar and the rail as siblings of the page container, `.periodRow` is gone, and
   `BadgeRail.module.css` carries the 12px the row used to supply. Two things stop it recurring:

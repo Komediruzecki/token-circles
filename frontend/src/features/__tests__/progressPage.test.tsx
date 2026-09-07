@@ -58,6 +58,7 @@ vi.mock('../../core/achievementsStore', () => ({
   ],
 }
 
+import { ACHIEVEMENTS } from '../../core/achievements/definitions'
 import { dismissAdvice } from '../../core/achievementsStore'
 import { setPage } from '../../core/appStore'
 import Progress from '../Progress'
@@ -83,7 +84,8 @@ describe('Progress page', () => {
     )
     expect(c.querySelectorAll('[data-month-cell]')).toHaveLength(12)
     expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(1)
-    expect(c.querySelectorAll('[data-band]')).toHaveLength(15)
+    // Every badge in the set, however many that is: the page renders all four bands.
+    expect(c.querySelectorAll('[data-band]')).toHaveLength(ACHIEVEMENTS.length)
     expect(c.querySelectorAll('[data-lit="true"]')).toHaveLength(1)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')

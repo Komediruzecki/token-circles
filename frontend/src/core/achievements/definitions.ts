@@ -1,8 +1,12 @@
 /**
- * The fifteen badges, three bands. Data only: rules live in evaluate.ts, art in
+ * The badges and their bands. Data only: rules live in evaluate.ts, art in
  * components/badgeGlyphs.ts. `share` is the one line on the share card.
+ *
+ * Four bands, so there is always one rung within reach and one far enough away to aim at.
+ * Legacy is the top: it holds only things that take five years or a lifetime of entries, and
+ * almost nobody will fill it, which is the point.
  */
-export type Band = 'beginnings' | 'building' | 'mastery'
+export type Band = 'beginnings' | 'building' | 'mastery' | 'legacy'
 
 export type AchievementId =
   | 'first-entry'
@@ -20,6 +24,15 @@ export type AchievementId =
   | 'saver-x6'
   | 'two-years'
   | 'own-the-stack'
+  | 'three-years'
+  | 'five-years'
+  | 'ten-years'
+  | 'twenty-years'
+  | 'hundred-entries'
+  | 'thousand-entries'
+  | 'five-thousand-entries'
+  | 'ten-thousand-entries'
+  | 'twenty-thousand-entries'
 
 export interface AchievementDef {
   id: AchievementId
@@ -38,7 +51,11 @@ export const BANDS: Record<Band, { label: string; rings: number }> = {
   beginnings: { label: 'Beginnings', rings: 1 },
   building: { label: 'Building', rings: 2 },
   mastery: { label: 'Mastery', rings: 3 },
+  legacy: { label: 'Legacy', rings: 4 },
 }
+
+/** Transaction counts that earn a volume badge, ascending. */
+export const VOLUME_STEPS = [100, 1_000, 5_000, 10_000, 20_000] as const
 
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
   {
@@ -77,6 +94,13 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     share: 'Set a savings goal in Token Circles.',
   },
   {
+    id: 'hundred-entries',
+    band: 'beginnings',
+    name: 'A hundred entries',
+    rule: 'A hundred transactions, all time.',
+    share: 'A hundred transactions tracked.',
+  },
+  {
     id: 'one-month',
     band: 'building',
     name: 'One month',
@@ -112,6 +136,13 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     share: 'Reached a savings goal.',
   },
   {
+    id: 'thousand-entries',
+    band: 'building',
+    name: 'A thousand entries',
+    rule: 'A thousand transactions, all time.',
+    share: 'A thousand transactions tracked.',
+  },
+  {
     id: 'half-a-year',
     band: 'mastery',
     name: 'Half a year',
@@ -140,11 +171,60 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     share: 'Tracked my money for two years.',
   },
   {
+    id: 'three-years',
+    band: 'mastery',
+    name: 'Three years',
+    rule: 'Thirty-six tracked months in a row.',
+    share: 'Tracked my money for three years.',
+  },
+  {
+    id: 'five-thousand-entries',
+    band: 'mastery',
+    name: 'Five thousand entries',
+    rule: 'Five thousand transactions, all time.',
+    share: 'Five thousand transactions tracked.',
+  },
+  {
+    id: 'ten-thousand-entries',
+    band: 'mastery',
+    name: 'Ten thousand entries',
+    rule: 'Ten thousand transactions, all time.',
+    share: 'Ten thousand transactions tracked.',
+  },
+  {
     id: 'own-the-stack',
     band: 'mastery',
     name: 'Own the stack',
     rule: 'Running against your own server, not ours.',
     share: 'Running Token Circles on my own stack.',
+  },
+  {
+    id: 'five-years',
+    band: 'legacy',
+    name: 'Five years',
+    rule: 'Sixty tracked months in a row.',
+    share: 'Tracked my money for five years.',
+  },
+  {
+    id: 'ten-years',
+    band: 'legacy',
+    name: 'Ten years',
+    rule: 'A hundred and twenty tracked months in a row.',
+    share: 'A decade of my own financial history, in one place.',
+  },
+  {
+    id: 'twenty-years',
+    band: 'legacy',
+    name: 'Twenty years',
+    rule: 'Two hundred and forty tracked months in a row.',
+    share: 'Twenty years of tracking my own money.',
+  },
+  {
+    id: 'twenty-thousand-entries',
+    band: 'legacy',
+    name: 'Twenty thousand entries',
+    rule: 'Twenty thousand transactions, all time.',
+    share: 'Twenty thousand transactions tracked.',
   },
 ]
 
