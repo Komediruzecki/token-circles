@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Badges.** Tracking your money now earns badges: a month tracked, a quarter, a year, saving streaks, budgets held, and more. Fifteen in three bands, per profile, worked out on your device, never taken away, and each one shareable as a card. Your history counts from day one.
+
 ### Fixed
 
 - **Privacy Policy and Terms are now one tap away.** Both are linked from the sign-in screen and from Settings → About; before, the app never pointed at either.

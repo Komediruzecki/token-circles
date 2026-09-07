@@ -9,6 +9,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Achievements** (`frontend/src/core/achievements/*`, `core/achievementsStore.ts`,
+  `components/BadgeMedallion.tsx`, `BadgesPanel.tsx`, `StreakChip.tsx`, `AchievementsHost.tsx`).
+  One pure evaluator (`evaluate.ts`) over the profile's transactions, budgets, goals and import
+  logs; a tracked month is three or more transactions dated inside it; the streak is the run of
+  tracked months ending this month or last. Unlocks are `{ id, earnedOn, unlockedAt }` records
+  kept as JSON under the profile settings key `achievements`, not a table: fifteen rows did not
+  justify a migration, a route and four backup sites, and settings are already per profile, in
+  both storage modes and in every backup. `api.ts` dispatches `tc:data-changed` after any
+  non-GET, non-settings request; `AchievementsHost` debounces that into a refresh, and the first
+  evaluation on a history toasts once as a summary. Art is the SVG ring recipe from the gallery
+  page (disjoint-colliders `gallery-viewer/token-circles-badges.html`); the share card is
+  rendered client-side from the same SVG. Plan: `docs/plans/achievements-and-badges-plan.md`.
 
 - **Marketing stills: no verify-email banner, year-to-date transactions**
   (`frontend/scripts/gen-marketing-shots.mjs`). The fixture account never verifies its email, so
