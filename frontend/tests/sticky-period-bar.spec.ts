@@ -55,13 +55,28 @@ const pageIsScrollable = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight > 400)
 
 test.describe('the period bar stays in view', () => {
+  /*
+   * Desktop Chrome's 720px viewport left the dashboard barely taller than the screen, so
+   * `pageIsScrollable` was false and the dashboard case skipped — silently, for two merges, while
+   * the bar was not pinning at all. A short window makes every one of these pages scrollable, so
+   * the guard below stays a guard instead of becoming the outcome. Width is untouched: the
+   * breakpoints are all width-based.
+   */
+  test.use({ viewport: { width: 1280, height: 560 } })
+
   test.beforeEach(async ({ page }) => {
     await enableSticky(page)
     await login(page)
   })
 
+  /*
+   * `@smoke`: a pull request only runs the smoke subset, so an untagged case here is checked
+   * nowhere until it is already on main. This spec is three seconds and it is the only thing that
+   * can see a wrapper stealing the bar's containing block — which is how the dashboard lost its
+   * pinning for two merges without anything going red.
+   */
   for (const { route, container } of PAGES) {
-    test(`pins to the top on ${route}`, async ({ page }) => {
+    test(`pins to the top on ${route} @smoke`, async ({ page }) => {
       await navigateToRoute(page, route)
       await expect(barIn(page, container)).toBeVisible()
       test.skip(!(await pageIsScrollable(page)), `${route} is too short to scroll in this fixture`)

@@ -1,5 +1,9 @@
 .rail {
   min-width: 0;
+  /* The rail sits under the period bar, not beside it: a shared flex row would be the bar's
+     containing block and `position: sticky` would have nowhere to travel. This replaces the gap
+     that row used to provide. */
+  margin-top: 12px;
 }
 .head {
   display: flex;

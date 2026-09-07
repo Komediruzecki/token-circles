@@ -560,10 +560,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div class={styles.periodRow}>
-        <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
-        <BadgeRail />
-      </div>
+      {/*
+        Both are direct children of the page, not of a shared flex row. `position: sticky` only
+        travels inside its own parent's box (see PeriodBar.module.css), so a wrapper sized to the
+        bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
+      */}
+      <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
+      <BadgeRail />
 
       {initialLoad() && !metrics() ? (
         // Mirrors the real first paint: a metrics row above a chart. The header and period bar
