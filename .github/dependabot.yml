@@ -60,6 +60,9 @@ updates:
   #
   #     cd worker && pnpm install --no-frozen-lockfile --ignore-workspace
   #
+  # From a worktree with no node_modules, `--lockfile-only` regenerates the file without installing
+  # anything — and needs `CI=true`, or pnpm aborts on the missing TTY while still exiting 0.
+  #
   # Everything lands in ONE group deliberately. Each of these PRs costs the manual step above, so
   # five small PRs a week is five times the handling of one — and they conflict with each other on
   # the lockfile besides. Majors still break out on their own: those are the ones worth reading.
@@ -80,6 +83,13 @@ updates:
       # is a deliberate choice made against a green E2E run.
       - dependency-name: wrangler
         update-types: [version-update:semver-minor, version-update:semver-major]
+      # vitest 5 is out, but @cloudflare/vitest-pool-workers 0.22.0 peers `vitest ^4.1.0` and says
+      # at runtime that it "depends on internal Vitest APIs that are not protected by semantic-
+      # versioning guarantees". #522 (4.1.11 -> 5.0.0) failed Worker Tests on exactly that. Lift
+      # this when pool-workers ships a release whose peer range includes 5; the frontend, which
+      # does not use the pool, is already on 5.
+      - dependency-name: vitest
+        update-types: [version-update:semver-major]
       # TypeScript 7 is the native port and the ecosystem has not caught up. On the 5.9.3 -> 7.0.2
       # PR, typescript-eslint 8.x crashed outright (`Cannot read properties of undefined (reading
       # 'FunctionType')`) and tsc rejected our own tsconfig: `baseUrl` is removed in 7 and the

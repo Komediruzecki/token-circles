@@ -62,7 +62,13 @@ jobs:
       # lockfile ("deps installed fresh"), so --frozen-lockfile fails with ERR_PNPM_NO_LOCKFILE.
       - name: Install worker deps (outside the pnpm workspace)
         working-directory: worker
-        run: pnpm install --no-frozen-lockfile --ignore-workspace
+        # Frozen, like e2e.yml and deploy-worker.yml. This was --no-frozen-lockfile from #397,
+        # before worker/pnpm-lock.yaml was committed (#460), and was never brought in line: a
+        # Dependabot worker PR — which arrives without a lockfile update, see dependabot.yml —
+        # passed here against whatever resolved that morning and failed E2E on the frozen
+        # install, which read as a flaky suite. Now every job installs the same pinned tree,
+        # and a stale lockfile fails here first, with its real error.
+        run: pnpm install --frozen-lockfile --ignore-workspace
 
       - name: Typecheck
         working-directory: worker
