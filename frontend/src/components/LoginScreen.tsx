@@ -10,6 +10,7 @@ import {
 } from '../core/webauthn'
 import EmailCodeLogin from './EmailCodeLogin'
 import layoutStyles from './Layout.module.css'
+import LegalLinks from './LegalLinks'
 import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
@@ -498,6 +499,7 @@ export default function LoginScreen() {
 
         <div class={styles.footer}>
           <SupportContact />
+          <LegalLinks />
           <span class={styles.version}>v{displayVersion()}</span>
         </div>
       </div>

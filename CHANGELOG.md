@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Privacy Policy and Terms are now one tap away.** Both are linked from the sign-in screen and from Settings → About; before, the app never pointed at either.
+
 ## [5.13.1] — 2026-09-01
 
 ### Changed

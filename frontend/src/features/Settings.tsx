@@ -32,6 +32,7 @@ import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
+import LegalLinks from '../components/LegalLinks'
 import { LogViewer } from '../components/LogViewer'
 import OrbitalToggle from '../components/OrbitalToggle'
 import PasskeySettings from '../components/PasskeySettings'
@@ -1949,6 +1950,9 @@ export default function Settings() {
                   </p>
                   <div style="margin-top: 12px;">
                     <SupportContact />
+                  </div>
+                  <div style="margin-top: 10px;">
+                    <LegalLinks />
                   </div>
                 </div>
               </div>
