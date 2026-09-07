@@ -5,7 +5,7 @@
  * Recipe and glyphs match the gallery page in disjoint-colliders
  * (packages/showcase-gallery/gallery-viewer/token-circles-badges.html).
  */
-import { createUniqueId } from 'solid-js'
+import { createUniqueId, Show } from 'solid-js'
 import { BADGE_GLYPHS } from './badgeGlyphs'
 import styles from './BadgeMedallion.module.css'
 import type { JSX } from 'solid-js'
@@ -59,6 +59,20 @@ export function medallionSvg(id: AchievementId, band: Band, size: number, uid = 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="${size}" height="${size}" color="${color}">${baseMarkup(uid, band)}${glyphMarkup(id)}</svg>`
 }
 
+/**
+ * The face behind the glyph. 'art' is the shipped one: a generated aurora-glass face per band
+ * (public/badges/face-<band>.webp, about 20 KB), drawn once and shared by every badge in that
+ * band, so a new badge costs a glyph and not a render. 'plain' is the drawn face, kept as the
+ * no-download fallback and for tests.
+ */
+export type BadgeFace = 'art' | 'plain'
+
+const FACE_SRC: Record<Band, string> = {
+  beginnings: '/badges/face-beginnings.webp',
+  building: '/badges/face-building.webp',
+  mastery: '/badges/face-mastery.webp',
+}
+
 export interface BadgeMedallionProps {
   id: AchievementId
   band: Band
@@ -68,6 +82,8 @@ export interface BadgeMedallionProps {
   lit?: boolean
   /** Tilt to the pointer and run the orbs on hover/focus. */
   interactive?: boolean
+  /** Defaults to the generated art face. */
+  face?: BadgeFace
   class?: string
   label?: string
 }
@@ -99,6 +115,7 @@ export default function BadgeMedallion(props: BadgeMedallionProps): JSX.Element 
       class={`${styles.medal} ${props.class ?? ''}`}
       style={{ '--size': `${props.size ?? 48}px` }}
       data-band={props.band}
+      data-face={props.face ?? 'art'}
       data-lit={props.lit === false ? 'false' : 'true'}
       data-interactive={props.interactive ? 'true' : 'false'}
       role="img"
@@ -106,12 +123,19 @@ export default function BadgeMedallion(props: BadgeMedallionProps): JSX.Element 
       onPointerMove={onMove}
       onPointerLeave={onLeave}
     >
-      <svg
-        class={styles.base}
-        viewBox="0 0 220 220"
-        aria-hidden="true"
-        innerHTML={baseMarkup(uid, props.band)}
-      />
+      <Show
+        when={(props.face ?? 'art') === 'art'}
+        fallback={
+          <svg
+            class={styles.base}
+            viewBox="0 0 220 220"
+            aria-hidden="true"
+            innerHTML={baseMarkup(uid, props.band)}
+          />
+        }
+      >
+        <img class={styles.art} src={FACE_SRC[props.band]} alt="" loading="lazy" decoding="async" />
+      </Show>
       <svg
         class={styles.glyph}
         viewBox="0 0 220 220"

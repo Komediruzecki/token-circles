@@ -23,17 +23,31 @@ describe('BadgeMedallion', () => {
     for (const a of ACHIEVEMENTS) expect(BADGE_GLYPHS[a.id], a.id).toMatch(/<(path|circle|rect)/)
   })
   it('draws one, two or three rings by band and marks unlit', () => {
-    const c = mount(() => <BadgeMedallion id="a-year" band="mastery" size={96} lit={false} />)
+    const c = mount(() => (
+      <BadgeMedallion id="a-year" band="mastery" size={96} lit={false} face="plain" />
+    ))
     const el = c.querySelector('[data-band="mastery"]') as HTMLElement
     expect(el.querySelectorAll('[data-ring]')).toHaveLength(3)
     expect(el.dataset.lit).toBe('false')
     expect(el.style.getPropertyValue('--size')).toBe('96px')
     dispose?.()
     host.remove()
-    const c2 = mount(() => <BadgeMedallion id="first-entry" band="beginnings" />)
+    const c2 = mount(() => <BadgeMedallion id="first-entry" band="beginnings" face="plain" />)
     expect(c2.querySelectorAll('[data-ring]')).toHaveLength(1)
     expect((c2.firstElementChild as HTMLElement).dataset.lit).toBe('true')
   })
+  it('uses the generated face per band by default and the drawn one on request', () => {
+    const c = mount(() => <BadgeMedallion id="a-year" band="mastery" size={120} />)
+    expect((c.firstElementChild as HTMLElement).dataset.face).toBe('art')
+    expect(c.querySelector('img')?.getAttribute('src')).toBe('/badges/face-mastery.webp')
+    expect(c.querySelectorAll('[data-ring]')).toHaveLength(0)
+    dispose?.()
+    host.remove()
+    const c2 = mount(() => <BadgeMedallion id="a-year" band="mastery" face="plain" />)
+    expect(c2.querySelector('img')).toBeNull()
+    expect(c2.querySelectorAll('[data-ring]')).toHaveLength(3)
+  })
+
   it('renders a static SVG string for the share card with no raster', () => {
     const svg = medallionSvg('a-year', 'mastery', 400)
     expect(svg.startsWith('<svg')).toBe(true)
