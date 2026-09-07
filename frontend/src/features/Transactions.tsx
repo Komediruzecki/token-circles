@@ -124,9 +124,7 @@ export default function Transactions() {
   // client-side filter (periodRange), so it needs no refetch here.
   refetchOnActive(
     'transactions',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       refreshTransactions()
     }
@@ -152,9 +150,7 @@ export default function Transactions() {
   // mount never appeared here and the bulk-tag modal read "No tags yet".
   refetchOnActive(
     'transactions',
-    () => {
-      void state.tagsVersion
-    },
+    () => state.tagsVersion,
     () => {
       void loadTags()
     }

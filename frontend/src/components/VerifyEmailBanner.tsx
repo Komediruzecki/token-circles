@@ -10,7 +10,7 @@
  * all on a backend that does not report the field, which is how the legacy self-hosted server
  * answers.
  */
-import { createEffect, createSignal, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, on, onMount, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { fetchVerificationStatus, takeEmailVerifyResult } from '../core/emailVerification'
@@ -50,10 +50,14 @@ export const VerifyEmailBanner: Component = () => {
 
   // Re-ask on every session change, so the nudge appears straight after an in-session sign-up
   // rather than on the next reload.
-  createEffect(() => {
-    void state.isAuthenticated
-    void refresh()
-  })
+  createEffect(
+    on(
+      () => state.isAuthenticated,
+      () => {
+        void refresh()
+      }
+    )
+  )
 
   onMount(() => {
     const result = takeEmailVerifyResult()

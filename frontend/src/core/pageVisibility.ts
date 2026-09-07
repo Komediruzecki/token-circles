@@ -35,7 +35,8 @@ export function usePageActive(name: PageName): () => boolean {
  *     loadCategories()
  *   })
  *
- * `track` reads the reactive deps (profile version, focus period, …); `run` performs
+ * `track` reads the reactive deps (profile version, focus period, …) — return what it
+ * reads, one value or a tuple, rather than `void`-ing them; `run` performs
  * the fetch. When a dep changes and the page is visible, `run` fires now; when hidden,
  * the page is flagged stale and `run` fires once on the next show. The deps effect
  * also runs on mount (a page mounts only while active), performing the initial load —

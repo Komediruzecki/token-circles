@@ -288,9 +288,7 @@ export default function Goals() {
   // page defers its refetch until it is next shown (keep-alive fan-out guard).
   refetchOnActive(
     'goals',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       loadGoals()
       loadCategories()

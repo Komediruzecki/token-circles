@@ -326,9 +326,7 @@ export default function Loans() {
   // page defers its refetch until it is next shown (keep-alive fan-out guard).
   refetchOnActive(
     'loans',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       loadLoans()
     }

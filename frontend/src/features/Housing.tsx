@@ -216,9 +216,7 @@ export default function HousingForm() {
   // page defers its refetch until it is next shown (keep-alive fan-out guard).
   refetchOnActive(
     'housing',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       void loadHousings()
       void loadSubscriptions()

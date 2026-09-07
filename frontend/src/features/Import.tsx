@@ -37,7 +37,7 @@
  * The onboarding wizard embeds the same flow + components.
  */
 
-import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
@@ -66,17 +66,17 @@ export default function Import() {
   // returns to the Import page (e.g. after creating an account elsewhere), so a
   // freshly created account appears without a full page reload.
   let skipFirstAccountsReload = true
-  createEffect(() => {
-    const onImport = state.page === 'import'
-    // Accounts are profile-scoped, so a profile switch invalidates them too — not just
-    // navigating away and back.
-    void state.profileVersion
-    if (skipFirstAccountsReload) {
-      skipFirstAccountsReload = false
-      return
-    }
-    if (onImport) void flow.loadBankAccounts()
-  })
+  // Accounts are profile-scoped, so a profile switch invalidates them too — not just
+  // navigating away and back.
+  createEffect(
+    on([() => state.page, () => state.profileVersion], ([page]) => {
+      if (skipFirstAccountsReload) {
+        skipFirstAccountsReload = false
+        return
+      }
+      if (page === 'import') void flow.loadBankAccounts()
+    })
+  )
 
   onMount(() => {
     flow.init()
