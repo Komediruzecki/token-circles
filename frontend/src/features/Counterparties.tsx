@@ -46,9 +46,7 @@ export default function Counterparties() {
   // fans out to every mounted keep-alive page at once.
   refetchOnActive(
     'counterparties',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       void loadData()
     }

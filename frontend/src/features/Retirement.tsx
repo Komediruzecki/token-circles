@@ -211,9 +211,7 @@ export default function Retirement() {
   // goals until the page was reloaded. Track the profile and reload, deferred while hidden.
   refetchOnActive(
     'retirement',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       loadGoals()
     }

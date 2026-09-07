@@ -43,9 +43,7 @@ export default function EmergencyFundCalculator() {
   const state = useAppState()
   refetchOnActive(
     'emergency',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       void loadEmergencyFund()
     }

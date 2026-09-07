@@ -491,19 +491,14 @@ export default function Budgets() {
   // the old onMount + two effects (which triple-fetched categories on mount).
   refetchOnActive(
     'budgets',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       loadImprovements()
     }
   )
   refetchOnActive(
     'budgets',
-    () => {
-      void state.profileVersion
-      void month()
-    },
+    () => [state.profileVersion, month()],
     () => {
       loadCategories()
     }

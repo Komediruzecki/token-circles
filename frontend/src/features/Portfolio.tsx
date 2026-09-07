@@ -109,9 +109,7 @@ export default function Portfolio() {
   // page defers its refetch until it is next shown (keep-alive fan-out guard).
   refetchOnActive(
     'portfolio',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       void loadData()
     }

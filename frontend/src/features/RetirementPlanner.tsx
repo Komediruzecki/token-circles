@@ -387,9 +387,7 @@ export default function RetirementPlanner() {
   // plan. refetchOnActive reloads while visible and defers while hidden.
   refetchOnActive(
     'retirement',
-    () => {
-      void state.profileVersion
-    },
+    () => state.profileVersion,
     () => {
       void load()
     }

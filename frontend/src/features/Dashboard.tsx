@@ -167,10 +167,7 @@ export default function Dashboard() {
   // Month/year modes show the full net-worth trend; range/preset windows filter it.
   refetchOnActive(
     'dashboard',
-    () => {
-      void period()
-      void state.profileVersion
-    },
+    () => [period(), state.profileVersion],
     () => {
       void refreshDashboard()
     }
@@ -272,11 +269,7 @@ export default function Dashboard() {
   // Sankey follows the focus month + profile, gated on visibility like the rest.
   refetchOnActive(
     'dashboard',
-    () => {
-      void year()
-      void month()
-      void state.profileVersion
-    },
+    () => [year(), month(), state.profileVersion],
     () => {
       const y = year()
       const m = month()
