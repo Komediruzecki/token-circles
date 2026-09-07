@@ -323,16 +323,12 @@ export default function Spotlight() {
         )}
       </svg>
 
-      {/* Tooltip */}
+      {/* Tooltip. Placement comes out of tooltipStyle(), which computes the position outright,
+          so there are no per-placement classes to toggle here. */}
       <div
         ref={tooltipRef}
         class={styles.tooltip}
-        classList={{
-          [styles.visible]: tooltipReady(),
-          [styles.bottom]: tooltip().placement === 'bottom',
-          [styles.top]: tooltip().placement === 'top',
-          [styles.center]: tooltip().placement === 'center',
-        }}
+        classList={{ [styles.visible]: tooltipReady() }}
         style={tooltipStyle()}
       >
         {targetMissing() && currentStep().targetSelector && (

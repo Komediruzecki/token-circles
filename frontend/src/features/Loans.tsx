@@ -441,7 +441,7 @@ export default function Loans() {
                       <div class={styles.loanActions}>
                         <button
                           data-test-id="loans-prepay-btn"
-                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
                           title="Prepayments"
                           onclick={() => {
                             setPrepaymentsLoanId(loan.id)
@@ -461,7 +461,7 @@ export default function Loans() {
                         </button>
                         <button
                           data-test-id="loans-amortization-btn"
-                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
                           title="View Amortization"
                           onclick={() => {
                             setAmortizationLoan(loan)
@@ -481,7 +481,7 @@ export default function Loans() {
                         </button>
                         <button
                           data-test-id="loans-item-edit"
-                          class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
+                          class={`${styles.btnSm} ${styles.btnGhost}`}
                           onclick={() => {
                             editLoan(loan)
                           }}

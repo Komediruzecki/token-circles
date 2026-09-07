@@ -348,11 +348,7 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
               {(bill) => (
                 <div
                   class={`${styles.popoverBill} ${
-                    bill.is_overdue
-                      ? styles.popoverBillOverdue
-                      : bill.paid
-                        ? styles.popoverBillPaid
-                        : ''
+                    bill.is_overdue ? styles.popoverBillOverdue : ''
                   }`}
                 >
                   <div class={styles.popoverBillLeft}>

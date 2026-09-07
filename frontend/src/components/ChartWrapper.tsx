@@ -170,11 +170,11 @@ export default function ChartWrapper(props: ChartWrapperProps) {
 
   const heightClass = createMemo(() =>
     props.variant === 'tall'
-      ? ChartContainer.chartTall
+      ? ChartContainer.tall
       : props.variant === 'medium'
-        ? ChartContainer.chartMedium
+        ? ChartContainer.medium
         : props.variant === 'short'
-          ? ChartContainer.chartShort
+          ? ChartContainer.short
           : ''
   )
 

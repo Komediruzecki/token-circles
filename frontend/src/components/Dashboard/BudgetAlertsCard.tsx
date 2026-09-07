@@ -35,10 +35,12 @@ export default function BudgetAlertsCard() {
   const loading = () => alertsResource.loading
   const alerts = () => alertsResource() ?? []
 
+  // "ok" carries no modifier: .alertItem already reads as the resting state, and only over
+  // and warning tint it.
   const statusClass = (status: string) => {
     if (status === 'over') return styles.over
     if (status === 'warning') return styles.warning
-    return styles.ok
+    return ''
   }
 
   return (
@@ -46,7 +48,7 @@ export default function BudgetAlertsCard() {
       {loading() ? (
         <div class={styles.emptyMsg}>Loading...</div>
       ) : alerts().length === 0 ? (
-        <div class={`${styles.alertItem} ${styles.ok}`}>
+        <div class={styles.alertItem}>
           <svg
             width="18"
             height="18"

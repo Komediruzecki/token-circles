@@ -322,7 +322,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
             <For each={trendRows()}>
               {(row) => (
                 <div class={styles.trendRow}>
-                  <div class={styles.trendMeta}>
+                  <div>
                     <p class={styles.trendLabel}>{row.label}</p>
                     <p class={styles.trendValue}>{money(row.series[row.series.length - 1] ?? 0)}</p>
                   </div>

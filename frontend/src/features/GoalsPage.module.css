@@ -551,3 +551,31 @@
   align-items: center;
   justify-content: center;
 }
+
+/*
+ * The category modal is a twin of the one on Bills -- same "+ Add Category" link, same colour
+ * field -- but it arrived here without the two rules that dress them, so the button rendered as
+ * a native grey box and the swatch at the browser's own ~50x25px default. Kept identical to
+ * BillsPage.module.css so the two modals stay indistinguishable.
+ */
+.goals-page .btn-link {
+  font-size: 13px;
+  color: var(--primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.goals-page .btn-link:hover {
+  text-decoration: underline;
+}
+
+.goals-page .color-input {
+  width: 100%;
+  height: 44px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}

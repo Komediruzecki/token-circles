@@ -816,6 +816,24 @@
   border-color: var(--primary);
 }
 
+/* The delimiter select and the paste textarea on the "Paste data" tab. Same treatment as the
+   settings fields above; without it both dropped back to the browser's native controls in the
+   middle of an otherwise styled panel. */
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--card-bg);
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
 /* Template download */
 .templateSection {
   text-align: center;

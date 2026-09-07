@@ -495,7 +495,7 @@ export default function Accounts() {
                             {formatAmount(account.balance)}
                           </div>
                         </div>
-                        <div data-test-id="activity-section" class={styles.accountActivity}>
+                        <div data-test-id="activity-section">
                           <div class={styles.activityHeader}>
                             <span class={styles.activityLabel}>Recent Activity</span>
                             <a

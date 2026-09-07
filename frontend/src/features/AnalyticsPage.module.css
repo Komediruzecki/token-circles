@@ -972,3 +972,16 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* The page's six empty and loading states. Same shape as the one on Dashboard and Budgets:
+   centred, generously padded, secondary text -- so "No data available" reads as a state of the
+   panel rather than as a stray line of copy pinned to its top-left corner. */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+.empty-state p {
+  font-size: 14px;
+}
