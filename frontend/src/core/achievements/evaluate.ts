@@ -34,7 +34,7 @@ export interface Evaluation {
   trackedMonths: string[]
 }
 
-type Tx = EvaluateInput['transactions'][number]
+export type Tx = EvaluateInput['transactions'][number]
 
 const MONTH_RE = /^\d{4}-\d{2}/
 const firstDay = (month: string): string => `${month}-01`
@@ -45,19 +45,29 @@ const earliestMonth = (dates: string[]): string | null => {
     .sort()
   return months[0] ?? null
 }
-const sum = (list: Tx[], types: string[]): number =>
-  list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + Math.abs(t.amount), 0)
+const sum = sumTypes
 
-export function evaluateAchievements(input: EvaluateInput): Evaluation {
-  const nowMonth = monthOf(input.today)
+/** Transactions grouped by 'YYYY-MM', skipping anything without a parseable date. */
+export function bucketByMonth(transactions: EvaluateInput['transactions']): Map<string, Tx[]> {
   const byMonth = new Map<string, Tx[]>()
-  for (const t of input.transactions) {
+  for (const t of transactions) {
     if (!MONTH_RE.test(t.date)) continue
     const m = monthOf(t.date)
     const list = byMonth.get(m)
     if (list) list.push(t)
     else byMonth.set(m, [t])
   }
+  return byMonth
+}
+
+/** Total of the given transaction types, absolute amounts. */
+export function sumTypes(list: Tx[], types: string[]): number {
+  return list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + Math.abs(t.amount), 0)
+}
+
+export function evaluateAchievements(input: EvaluateInput): Evaluation {
+  const nowMonth = monthOf(input.today)
+  const byMonth = bucketByMonth(input.transactions)
   const tracked = [...byMonth.entries()]
     .filter(([, list]) => list.length >= TRACKED_MONTH_MIN_TRANSACTIONS)
     .map(([m]) => m)
