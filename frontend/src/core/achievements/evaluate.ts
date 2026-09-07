@@ -3,7 +3,7 @@
  * an input, so a fixture profile always evaluates the same way. Runs over arrays the app already
  * holds; cost is one pass per array.
  */
-import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
+import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS, VOLUME_STEPS } from './definitions'
 import { currentStreak, monthOf, monthReaching } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
 import type { AchievementId } from './definitions'
@@ -48,6 +48,20 @@ const earliestMonth = (dates: string[]): string | null => {
   return months[0] ?? null
 }
 const sum = sumTypes
+
+/**
+ * The month in which the nth transaction was entered, by transaction date. Volume badges are
+ * dated to when the count was actually reached, not to today, so importing ten years of
+ * statements dates the hundredth entry to the month it happened.
+ */
+function monthOfNth(transactions: EvaluateInput['transactions'], n: number): string | null {
+  const dates = transactions
+    .map((t) => t.date)
+    .filter((d) => MONTH_RE.test(d))
+    .sort()
+  const at = dates[n - 1]
+  return at === undefined ? null : monthOf(at)
+}
 
 /** Transactions grouped by 'YYYY-MM', skipping anything without a parseable date. */
 export function bucketByMonth(transactions: EvaluateInput['transactions']): Map<string, Tx[]> {
@@ -125,6 +139,15 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
     'saver-x6': monthReaching(savingMonths, 6),
     'two-years': monthReaching(tracked, 24),
     'own-the-stack': input.selfHosted ? nowMonth : null,
+    'three-years': monthReaching(tracked, 36),
+    'five-years': monthReaching(tracked, 60),
+    'ten-years': monthReaching(tracked, 120),
+    'twenty-years': monthReaching(tracked, 240),
+    'hundred-entries': monthOfNth(input.transactions, VOLUME_STEPS[0]),
+    'thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[1]),
+    'five-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[2]),
+    'ten-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[3]),
+    'twenty-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[4]),
   }
 
   const earned: Earned[] = []

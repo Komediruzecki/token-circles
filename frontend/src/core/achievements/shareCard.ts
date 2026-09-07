@@ -14,7 +14,8 @@ export function shareCardSvg(id: AchievementId): string {
   const medal = medallionSvg(id, def.band, 400, 'share')
     .replace(/^<svg[^>]*>/, '')
     .replace(/<\/svg>$/, '')
-  const glyphColor = def.band === 'mastery' ? '#f0a860' : '#e8edff'
+  const glyphColor =
+    def.band === 'legacy' ? '#f5c777' : def.band === 'mastery' ? '#f0a860' : '#e8edff'
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" font-family="Georgia, 'Times New Roman', serif">
 <defs>
 <radialGradient id="bg-glow" cx="0.78" cy="0.5" r="0.6"><stop offset="0" stop-color="#3b6fe0" stop-opacity=".45"/><stop offset=".6" stop-color="#f0a860" stop-opacity=".12"/><stop offset="1" stop-color="#0a0e1c" stop-opacity="0"/></radialGradient>

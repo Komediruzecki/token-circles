@@ -22,8 +22,19 @@ const RINGS: Record<Band, Array<{ r: number; w: number }>> = {
     { r: 73, w: 1.8 },
     { r: 63, w: 1.3 },
   ],
+  legacy: [
+    { r: 86, w: 1.4 },
+    { r: 78, w: 2.6 },
+    { r: 68, w: 2 },
+    { r: 59, w: 1.4 },
+  ],
 }
-const ORB: Record<Band, string> = { beginnings: '#93b4ff', building: '#93b4ff', mastery: '#f0a860' }
+const ORB: Record<Band, string> = {
+  beginnings: '#93b4ff',
+  building: '#93b4ff',
+  mastery: '#f0a860',
+  legacy: '#f5c777',
+}
 
 const orbAt = (r: number, deg: number, size: number, color: string): string => {
   const t = (deg * Math.PI) / 180
@@ -33,11 +44,12 @@ const orbAt = (r: number, deg: number, size: number, color: string): string => {
 const defs = (uid: string): string => `<defs>
 <linearGradient id="${uid}-azure" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#93b4ff"/><stop offset="1" stop-color="#3b6fe0"/></linearGradient>
 <linearGradient id="${uid}-mastery" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#93b4ff"/><stop offset=".5" stop-color="#6e9bff"/><stop offset="1" stop-color="#f0a860"/></linearGradient>
+<linearGradient id="${uid}-legacy" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#93b4ff"/><stop offset=".22" stop-color="#f0a860"/><stop offset="1" stop-color="#b4762c"/></linearGradient>
 <radialGradient id="${uid}-face" cx=".36" cy=".3" r=".8"><stop offset="0" stop-color="#ffffff" stop-opacity=".16"/><stop offset=".55" stop-color="#6e9bff" stop-opacity=".06"/><stop offset="1" stop-color="#6e9bff" stop-opacity=".02"/></radialGradient>
 </defs>`
 
 function baseMarkup(uid: string, band: Band): string {
-  const paint = `url(#${uid}-${band === 'mastery' ? 'mastery' : 'azure'})`
+  const paint = `url(#${uid}-${band === 'mastery' || band === 'legacy' ? band : 'azure'})`
   const rings = RINGS[band]
     .map(
       (r) =>
@@ -55,7 +67,7 @@ const orbsMarkup = (band: Band): string =>
 
 /** One static SVG (base + glyph) as a string, for the share card. */
 export function medallionSvg(id: AchievementId, band: Band, size: number, uid = 'm'): string {
-  const color = band === 'mastery' ? '#f0a860' : '#e8edff'
+  const color = band === 'legacy' ? '#f5c777' : band === 'mastery' ? '#f0a860' : '#e8edff'
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="${size}" height="${size}" color="${color}">${baseMarkup(uid, band)}${glyphMarkup(id)}</svg>`
 }
 
@@ -71,6 +83,7 @@ const FACE_SRC: Record<Band, string> = {
   beginnings: '/badges/face-beginnings.webp',
   building: '/badges/face-building.webp',
   mastery: '/badges/face-mastery.webp',
+  legacy: '/badges/face-legacy.webp',
 }
 
 export interface BadgeMedallionProps {

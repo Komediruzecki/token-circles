@@ -161,3 +161,61 @@ describe('evaluateAchievements', () => {
     expect(ids(r)).toEqual(['first-entry', 'named-everything', 'one-month'])
   })
 })
+
+describe('the long ladder', () => {
+  it('earns each rung as the streak reaches it, and dates it to that month', () => {
+    // Sixty tracked months ending this month: everything up to Five years, nothing above.
+    const r = evaluateAchievements(input({ transactions: trackedRun('2026-09', 60) }))
+    const earned = ids(r)
+    expect(earned).toContain('three-years')
+    expect(earned).toContain('five-years')
+    expect(earned).not.toContain('ten-years')
+    expect(earned).not.toContain('twenty-years')
+    expect(r.streak).toBe(60)
+
+    // The run starts 2021-10, so the 36th month is 2024-09 and the 60th is 2026-09.
+    expect(on(r, 'three-years')).toBe('2024-09-01')
+    expect(on(r, 'five-years')).toBe('2026-09-01')
+  })
+
+  it('a decade earns Ten years but not Twenty', () => {
+    const r = evaluateAchievements(input({ transactions: trackedRun('2026-09', 120) }))
+    expect(ids(r)).toContain('ten-years')
+    expect(ids(r)).not.toContain('twenty-years')
+  })
+
+  it('a gap resets the ladder: two runs of thirty do not make five years', () => {
+    const r = evaluateAchievements(
+      input({ transactions: [...trackedRun('2023-06', 30), ...trackedRun('2026-09', 30)] })
+    )
+    expect(ids(r)).toContain('two-years')
+    expect(ids(r)).not.toContain('three-years')
+    expect(ids(r)).not.toContain('five-years')
+  })
+})
+
+describe('volume badges', () => {
+  it('are dated to the month the count was reached, not to today', () => {
+    // 120 transactions, four a month over thirty months ending 2025-12.
+    const r = evaluateAchievements(
+      input({ transactions: trackedRun('2025-12', 30, 4), today: '2026-09-07' })
+    )
+    expect(ids(r)).toContain('hundred-entries')
+    expect(ids(r)).not.toContain('thousand-entries')
+    // The 100th transaction by date falls in the 25th month of the run, 2025-07.
+    expect(on(r, 'hundred-entries')).toBe('2025-07-01')
+  })
+
+  it('counts every transaction, tracked month or not', () => {
+    // Two transactions a month is below the tracked threshold, so no month badge is earned,
+    // but the entries still count towards volume.
+    const r = evaluateAchievements(input({ transactions: trackedRun('2026-09', 60, 2) }))
+    expect(ids(r)).toContain('hundred-entries')
+    expect(ids(r)).not.toContain('one-month')
+  })
+
+  it('needs the full count: ninety-nine entries earn nothing', () => {
+    const txs = Array.from({ length: 99 }, (_, i) => tx(`2026-0${(i % 9) + 1}-05`))
+    expect(ids(evaluateAchievements(input({ transactions: txs })))).not.toContain('hundred-entries')
+  })
+})
