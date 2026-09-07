@@ -110,6 +110,21 @@ app.use(
   })
 );
 
+// Crawlers. This host is an API: nothing it returns is a page, and the dev host is a copy of prod
+// besides. Search Console did try — api.dev.tokencircles.com/ came back as a 404 report — because
+// nothing told it not to. The header is the signal that counts: it rides on every response, 404s
+// and errors included, where a robots.txt only gates the crawl. The /robots.txt route is the
+// courtesy copy for anyone who looks; Cloudflare's managed robots.txt prepends its own "content
+// signals" block to whatever the origin serves there, and the Disallow survives that.
+app.use('*', async (c, next) => {
+  try {
+    await next();
+  } finally {
+    c.res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  }
+});
+app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means
 // the gate has no secret and every password sign-in on this environment fails closed. It
@@ -174,6 +189,10 @@ app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
 // Mirrors the Express AppError handler: honor an attached statusCode, else 500.
 app.onError((err, c) => {
+  // The crawler middleware sets this after next(); when next() threw, the response it stamped is
+  // the one this handler is about to replace. Say it again here so a 5xx is never the one
+  // response on the host without it.
+  c.header('X-Robots-Tag', 'noindex, nofollow');
   // A `d1 export` backup (deploy-worker.yml) or a transient blip briefly locks D1 — and the
   // in-helper retries (db.ts) were exhausted (or the query bypassed the helpers). Return a
   // retryable 503 instead of a hard 500, and skip persisting it to the (also-locked) error_logs.

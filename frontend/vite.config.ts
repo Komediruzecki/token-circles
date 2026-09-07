@@ -4,6 +4,7 @@ import { defineConfig } from 'vite'
 import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import { pwaManifest } from './src/pwaManifest'
+import { crawlerPolicyPlugin } from './src/crawlerPolicy'
 import solidPlugin from 'vite-plugin-solid'
 import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
 import fs from 'fs'
@@ -82,6 +83,9 @@ export default defineConfig(({ command, mode }) => {
     },
     plugins: [
       solidPlugin(),
+      // Only the production build is indexable. Everything else — the dev deploy above all —
+      // says noindex three ways (meta, robots.txt, header); see src/crawlerPolicy.ts.
+      crawlerPolicyPlugin(mode),
       ANALYZE_BUNDLE ? bundleAnalyzer() : undefined,
       ...(process.env.NODE_ENV !== 'production' ? [devtools({ targetOrigin: 'auto' })] : []),
       {
