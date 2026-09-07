@@ -699,7 +699,7 @@ export function App() {
   const pick = (...names: string[]) =>
     names.map((n) => navByName[n]).filter((x): x is (typeof navItems)[number] => Boolean(x))
   const navSections: { group?: string; items: (typeof navItems)[number][] }[] = [
-    { items: pick('dashboard', 'transactions', 'categories', 'accounts', 'bills') },
+    { items: pick('dashboard', 'transactions', 'categories', 'accounts', 'bills', 'progress') },
     { group: 'Planning', items: pick('budgets', 'goals', 'loans', 'retirement') },
     { group: 'Calculators', items: pick('compound', 'emergency', 'rentBuy') },
     { group: 'Analytics', items: pick('analytics', 'portfolio', 'tags') },
