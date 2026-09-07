@@ -219,3 +219,189 @@ describe('volume badges', () => {
     expect(ids(evaluateAchievements(input({ transactions: txs })))).not.toContain('hundred-entries')
   })
 })
+
+describe('the comeback', () => {
+  it('is earned by resuming after a real break, and dated to the month tracking resumed', () => {
+    // Four tracked months to 2025-04, nothing in May-July, back in 2025-08.
+    const r = evaluateAchievements(
+      input({
+        transactions: [...trackedRun('2025-04', 4), ...trackedRun('2026-09', 3)],
+      })
+    )
+    expect(ids(r)).toContain('the-comeback')
+    expect(on(r, 'the-comeback')).toBe('2026-07-01')
+  })
+
+  it('needs a run of three before the break', () => {
+    const r = evaluateAchievements(
+      input({ transactions: [...trackedRun('2025-04', 2), ...trackedRun('2026-09', 3)] })
+    )
+    expect(ids(r)).not.toContain('the-comeback')
+  })
+
+  it('a single missed month is not a comeback', () => {
+    const r = evaluateAchievements(
+      input({ transactions: [...trackedRun('2026-04', 4), ...trackedRun('2026-09', 3)] })
+    )
+    expect(ids(r)).toContain('the-comeback')
+    // One month off is a gap of one, which does not count.
+    const tight = evaluateAchievements(
+      input({ transactions: [...trackedRun('2026-06', 4), ...trackedRun('2026-09', 2)] })
+    )
+    expect(ids(tight)).not.toContain('the-comeback')
+  })
+})
+
+describe('the chased set', () => {
+  it('Reconciled needs every transaction in the month marked', () => {
+    const done = month('2026-03', 3, { reconciled: true })
+    expect(ids(evaluateAchievements(input({ transactions: done })))).toContain('reconciled')
+
+    const partial = [...month('2026-03', 2, { reconciled: true }), ...month('2026-03', 1)]
+    expect(ids(evaluateAchievements(input({ transactions: partial })))).not.toContain('reconciled')
+  })
+
+  it('The full picture needs income, spending and a transfer, all named', () => {
+    const mixed = [
+      ...month('2026-03', 1, { type: 'income' }),
+      ...month('2026-03', 1, { type: 'expense' }),
+      ...month('2026-03', 1, { type: 'transfer' }),
+    ]
+    expect(ids(evaluateAchievements(input({ transactions: mixed })))).toContain('the-full-picture')
+
+    const spendOnly = month('2026-03', 3, { type: 'expense' })
+    expect(ids(evaluateAchievements(input({ transactions: spendOnly })))).not.toContain(
+      'the-full-picture'
+    )
+  })
+
+  it('A perfect year is twelve saving months in a row', () => {
+    const saving = (m: string) => [
+      ...month(m, 2, { type: 'income', amount: 500 }),
+      ...month(m, 2, { type: 'expense', amount: 50 }),
+    ]
+    const twelve = Array.from({ length: 12 }, (_, i) =>
+      saving(`2026-${String(i + 1).padStart(2, '0')}`)
+    ).flat()
+    const r = evaluateAchievements(input({ transactions: twelve, today: '2026-12-31' }))
+    expect(ids(r)).toContain('perfect-year')
+    expect(ids(r)).toContain('every-month')
+    expect(on(r, 'every-month')).toBe('2026-12-01')
+  })
+
+  it('Every month of a year needs all twelve of one calendar year', () => {
+    // Twelve in a row but straddling two years: a streak, not a calendar year.
+    const r = evaluateAchievements(input({ transactions: trackedRun('2026-06', 12) }))
+    expect(ids(r)).toContain('a-year')
+    expect(ids(r)).not.toContain('every-month')
+  })
+
+  it('Ahead of plan needs a deadline still ahead; Goal reached does not', () => {
+    const goal = (over: Record<string, unknown>) => ({
+      target_amount: 1000,
+      current_amount: 1000,
+      created_at: '2026-01-01',
+      deadline: null as string | null,
+      name: 'Fund',
+      ...over,
+    })
+    const early = evaluateAchievements(input({ goals: [goal({ deadline: '2026-12-01' })] }))
+    expect(ids(early)).toContain('ahead-of-plan')
+
+    const late = evaluateAchievements(input({ goals: [goal({ deadline: '2026-01-01' })] }))
+    expect(ids(late)).toContain('goal-reached')
+    expect(ids(late)).not.toContain('ahead-of-plan')
+  })
+
+  it('Rainy day needs a reached goal worth three months of spending', () => {
+    // Three tracked months at 300 a month: the bar is 900.
+    const spend = trackedRun('2026-08', 3, 3).map((t) => ({ ...t, amount: 100 }))
+    const withGoal = (target: number) =>
+      evaluateAchievements(
+        input({
+          transactions: spend,
+          goals: [
+            {
+              target_amount: target,
+              current_amount: target,
+              created_at: '2026-01-01',
+              deadline: null,
+              name: 'Emergency fund',
+            },
+          ],
+        })
+      )
+    expect(ids(withGoal(900))).toContain('rainy-day')
+    expect(ids(withGoal(500))).not.toContain('rainy-day')
+  })
+
+  it('Clean sweep needs the month both fully named and fully under budget', () => {
+    const budgets = [
+      {
+        category_id: 1,
+        amount: 1000,
+        period: 'monthly' as const,
+        start_date: '2026-01-01',
+        end_date: null,
+        created_at: '2026-01-01',
+      },
+    ]
+    // Amounts are pinned: `tx` derives its default from a module-wide counter, so a test that
+    // relies on it being small passes alone and fails after a case that created a few hundred.
+    const named = evaluateAchievements(
+      input({ transactions: month('2026-03', 3, { amount: 100 }), budgets, today: '2026-09-07' })
+    )
+    expect(ids(named)).toContain('clean-sweep')
+
+    // Same month, one transaction left uncategorised: named fails, so the sweep does too.
+    const messy = evaluateAchievements(
+      input({
+        transactions: [
+          ...month('2026-03', 2, { amount: 100 }),
+          ...month('2026-03', 1, { amount: 100, category_id: null }),
+        ],
+        budgets,
+        today: '2026-09-07',
+      })
+    )
+    expect(ids(messy)).toContain('held-the-line')
+    expect(ids(messy)).not.toContain('clean-sweep')
+  })
+})
+
+describe('debt free', () => {
+  const loan = (over: Record<string, unknown> = {}) => ({
+    principal: 12000,
+    start_date: '2020-01-01',
+    term_months: 24,
+    rate_periods: [{ rate: 5, start_month: 1, end_month: null }],
+    prepayments: [] as Array<{ month: number; amount: number }>,
+    ...over,
+  })
+
+  it('is earned when a loan has run its schedule out, dated to the payoff month', () => {
+    const r = evaluateAchievements(input({ loans: [loan()] }))
+    expect(ids(r)).toContain('debt-free')
+    // Twenty-four payments from 2020-01.
+    expect(on(r, 'debt-free')).toBe('2021-12-01')
+  })
+
+  it('is not earned while the loan is still running', () => {
+    const r = evaluateAchievements(input({ loans: [loan({ start_date: '2026-01-01' })] }))
+    expect(ids(r)).not.toContain('debt-free')
+  })
+
+  it('counts a prepayment that finishes the loan early', () => {
+    const r = evaluateAchievements(
+      input({
+        loans: [loan({ start_date: '2025-01-01', prepayments: [{ month: 3, amount: 11000 }] })],
+      })
+    )
+    expect(ids(r)).toContain('debt-free')
+  })
+
+  it('ignores a loan with no principal', () => {
+    const r = evaluateAchievements(input({ loans: [loan({ principal: 0 })] }))
+    expect(ids(r)).not.toContain('debt-free')
+  })
+})

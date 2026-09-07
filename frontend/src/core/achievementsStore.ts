@@ -45,6 +45,7 @@ export interface AchievementsSnapshot {
   budgets: EvaluateInput['budgets']
   goals: EvaluateInput['goals']
   importLogs: EvaluateInput['importLogs']
+  loans: EvaluateInput['loans']
   categories: Array<{ id: number; name: string }>
   bills: Array<{ category_id?: number | null; amount?: number; name?: string }>
   evaluation: Evaluation
@@ -99,9 +100,31 @@ export function refreshAchievements(): Promise<UnlockRecord[]> {
   return inFlight
 }
 
+/**
+ * The loans, with the rate periods and prepayments the amortisation needs. The list route does
+ * not carry either in server mode, so each loan is fetched once; a profile with no loans makes
+ * no extra request at all, and one with a mortgage makes one.
+ */
+async function loadLoans(): Promise<EvaluateInput['loans']> {
+  const list = await api.getLoans().catch(() => [])
+  if (list.length === 0) return []
+  const details = await Promise.all(
+    list.map((l) => api.getLoan(l.id).catch(() => null as unknown as null))
+  )
+  return details
+    .filter((d): d is NonNullable<typeof d> => d !== null)
+    .map((d) => ({
+      principal: d.principal,
+      start_date: d.start_date,
+      term_months: d.term_months,
+      rate_periods: d.rate_periods ?? [],
+      prepayments: d.prepayments ?? [],
+    }))
+}
+
 async function run(): Promise<UnlockRecord[]> {
-  const [settings, transactions, budgets, goals, importLogs, categories, bills] = await Promise.all(
-    [
+  const [settings, transactions, budgets, goals, importLogs, categories, bills, loans] =
+    await Promise.all([
       api.getSettings(),
       api.getTransactions(),
       api.getBudgets(),
@@ -109,8 +132,8 @@ async function run(): Promise<UnlockRecord[]> {
       api.getImportLogs(),
       api.getCategories(),
       api.getBills(),
-    ]
-  )
+      loadLoans(),
+    ])
   const stored = parseRecords(settings[SETTINGS_KEY])
   const dismissed = parseDismissed(settings[SETTINGS_KEY])
   const now = new Date()
@@ -120,6 +143,7 @@ async function run(): Promise<UnlockRecord[]> {
     budgets,
     goals,
     importLogs,
+    loans,
     selfHosted: isSelfHosted(),
     today,
   })
@@ -130,6 +154,7 @@ async function run(): Promise<UnlockRecord[]> {
     budgets,
     goals,
     importLogs,
+    loans,
     categories,
     bills,
     evaluation,

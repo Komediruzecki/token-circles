@@ -295,6 +295,9 @@ export interface Loan {
   term_months: number
   created_at: string
   profile_id: ProfileId
+  /** Present on GET /loans/:id, absent from the list route. */
+  rate_periods?: Array<{ rate: number; start_month: number; end_month: number | null }>
+  prepayments?: Array<{ month: number; amount: number }>
 }
 
 export interface LoanRatePeriod {

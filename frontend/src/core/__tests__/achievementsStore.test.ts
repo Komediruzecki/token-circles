@@ -13,6 +13,10 @@ vi.mock('../api', () => ({
     getImportLogs: vi.fn(async () => []),
     getCategories: vi.fn(async () => [{ id: 1, name: 'Food' }]),
     getBills: vi.fn(async () => []),
+    getLoans: vi.fn(async () => calls.loans ?? []),
+    getLoan: vi.fn(async (id: number) =>
+      (calls.loans as Array<{ id: number }>)?.find((l) => l.id === id)
+    ),
   },
 }))
 const toasts: string[] = []

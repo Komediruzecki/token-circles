@@ -3,13 +3,14 @@
  * an input, so a fixture profile always evaluates the same way. Runs over arrays the app already
  * holds; cost is one pass per array.
  */
+import { calculateSchedule, payoffDate } from '../loanCalculator'
 import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS, VOLUME_STEPS } from './definitions'
-import { currentStreak, monthOf, monthReaching } from './months'
+import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
 import type { AchievementId } from './definitions'
 
 export interface EvaluateInput {
-  transactions: Array<Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id'>>
+  transactions: Array<Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'>>
   budgets: Array<
     Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'>
   >
@@ -17,6 +18,17 @@ export interface EvaluateInput {
     Pick<SavingsGoal, 'target_amount' | 'current_amount' | 'created_at' | 'deadline' | 'name'>
   >
   importLogs: Array<{ created_at: string }>
+  /**
+   * Enough of each loan to run the amortisation: the schedule, not a stored balance, is what
+   * says when a loan reached zero, and prepayments are what make that earlier than the term.
+   */
+  loans: Array<{
+    principal: number
+    start_date: string
+    term_months: number
+    rate_periods: Array<{ rate: number; start_month: number; end_month: number | null }>
+    prepayments: Array<{ month: number; amount: number }>
+  }>
   /** Server mode against an origin that is not ours. */
   selfHosted: boolean
   /** YYYY-MM-DD. Injected so evaluation is reproducible. */
@@ -98,6 +110,13 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const namedMonths = tracked.filter((m) =>
     inMonth(m).every((t) => t.type === 'transfer' || t.category_id !== null)
   )
+  const reconciledMonths = tracked.filter((m) => inMonth(m).every((t) => t.reconciled === true))
+  // Income, spending and a transfer, all named: the month someone used the app for everything.
+  const fullPictureMonths = tracked.filter((m) => {
+    const list = inMonth(m)
+    if (!list.every((t) => t.category_id !== null || t.type === 'transfer')) return false
+    return ['income', 'expense', 'transfer'].every((kind) => list.some((t) => t.type === kind))
+  })
   const heldMonths = tracked.filter((m) => {
     if (m >= nowMonth) return false // only finished months
     const start = firstDay(m)
@@ -118,6 +137,68 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
         ) <= b.amount
     )
   })
+
+  const heldSet = new Set(heldMonths)
+  const cleanSweeps = namedMonths.filter((m) => heldSet.has(m))
+
+  /**
+   * The first tracked month that follows a break of two or more, where the run before the break
+   * was at least three. The point is the return, so it is dated to the month tracking resumed.
+   */
+  const comeback = ((): string | null => {
+    const spans = runs(tracked)
+    for (let i = 1; i < spans.length; i++) {
+      const before = spans[i - 1]
+      const gap = spans[i].start
+      const resumedAfter = addMonths(before.start, before.length)
+      if (before.length >= 3 && gap >= addMonths(resumedAfter, 2)) return spans[i].start
+    }
+    return null
+  })()
+
+  /** The last month of the first calendar year with all twelve months tracked. */
+  const everyMonth = ((): string | null => {
+    const perYear = new Map<string, number>()
+    for (const m of tracked) perYear.set(m.slice(0, 4), (perYear.get(m.slice(0, 4)) ?? 0) + 1)
+    const year = [...perYear.entries()]
+      .filter(([, n]) => n === 12)
+      .map(([y]) => y)
+      .sort()[0]
+    return year === undefined ? null : `${year}-12`
+  })()
+
+  /** Average monthly spend across tracked months: what "three months of spending" means here. */
+  const avgMonthlySpend =
+    tracked.length === 0
+      ? 0
+      : tracked.reduce((acc, m) => acc + sum(inMonth(m), ['expense', 'deduction']), 0) /
+        tracked.length
+
+  const reachedGoals = input.goals.filter(
+    (g) => g.target_amount > 0 && g.current_amount >= g.target_amount
+  )
+
+  /**
+   * A loan is paid off when its own amortisation, prepayments included, runs out before today.
+   * There is no stored balance to read: the schedule is the only thing that knows.
+   */
+  const debtFreeOn = ((): string | null => {
+    const months: string[] = []
+    for (const loan of input.loans) {
+      if (loan.principal <= 0 || loan.term_months <= 0) continue
+      const end = payoffDate(
+        calculateSchedule(
+          loan.principal,
+          loan.start_date,
+          loan.term_months,
+          loan.rate_periods,
+          loan.prepayments
+        )
+      )
+      if (end !== null && monthOf(end) <= nowMonth) months.push(monthOf(end))
+    }
+    return months.sort()[0] ?? null
+  })()
 
   const when: Record<AchievementId, string | null> = {
     'first-entry': earliestMonth(input.transactions.map((t) => t.date)),
@@ -148,6 +229,27 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
     'five-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[2]),
     'ten-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[3]),
     'twenty-thousand-entries': monthOfNth(input.transactions, VOLUME_STEPS[4]),
+    'the-comeback': comeback,
+    'clean-sweep': cleanSweeps[0] ?? null,
+    reconciled: reconciledMonths[0] ?? null,
+    'ahead-of-plan': input.goals.some(
+      (g) =>
+        g.target_amount > 0 &&
+        g.current_amount >= g.target_amount &&
+        g.deadline !== null &&
+        input.today <= g.deadline
+    )
+      ? nowMonth
+      : null,
+    'the-full-picture': fullPictureMonths[0] ?? null,
+    'perfect-year': monthReaching(savingMonths, 12),
+    'under-budget-six': monthReaching(heldMonths, 6),
+    'rainy-day':
+      avgMonthlySpend > 0 && reachedGoals.some((g) => g.target_amount >= avgMonthlySpend * 3)
+        ? nowMonth
+        : null,
+    'debt-free': debtFreeOn,
+    'every-month': everyMonth,
   }
 
   const earned: Earned[] = []

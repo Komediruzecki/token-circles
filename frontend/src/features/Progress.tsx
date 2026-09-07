@@ -87,6 +87,7 @@ export default function Progress(): JSX.Element {
         budgets: s.budgets,
         goals: s.goals,
         importLogs: s.importLogs,
+        loans: s.loans,
         categories: s.categories,
         bills: s.bills,
         selfHosted: false,

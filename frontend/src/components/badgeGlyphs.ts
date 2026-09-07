@@ -48,5 +48,21 @@ export const BADGE_GLYPHS: Record<AchievementId, string> = {
     '<rect x="8" y="11" width="26" height="26" rx="3"/><path d="M8 18h26M8 25h26M8 32h26M15 11v26M22 11v26"/><path d="M38 15v18"/>',
   'twenty-thousand-entries':
     '<rect x="7" y="10" width="24" height="28" rx="3"/><path d="M7 17h24M7 24h24M7 31h24M14 10v28M21 10v28"/><path d="M35 13v22M40 17v14"/>',
+  'the-comeback':
+    '<path d="M14 22a11 11 0 1 0 4-8.5"/><path d="M9 8v8h8"/><circle cx="24" cy="24" r="3.2" fill="currentColor" stroke="none"/>',
+  'clean-sweep': '<path d="M12 25l8 8 16-18"/><path d="M8 33l5 5"/>',
+  reconciled:
+    '<path d="M10 17h20l-4-4M38 31H18l4 4"/><path d="M33 13l5 4-5 4"/><path d="M15 27l-5 4 5 4"/>',
+  'ahead-of-plan':
+    '<circle cx="24" cy="26" r="12"/><path d="M24 26V18M24 26l6 4"/><path d="M18 8h12"/>',
+  'the-full-picture': `<circle cx="24" cy="24" r="13"/><path d="M24 11v13l9 9"/>${dots(13, [200], 2.4)}`,
+  'perfect-year': `<circle cx="24" cy="24" r="14" opacity=".3"/>${dots(14, [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330], 1.9)}<path d="M17 24l5 5 9-10"/>`,
+  'under-budget-six': '<path d="M9 34h30"/><path d="M13 28l7-6 6 4 9-11"/><path d="M28 15h7v7"/>',
+  'rainy-day':
+    '<path d="M16 20a8 8 0 0 1 15.6-2.4A6 6 0 1 1 32 30H17a5 5 0 0 1-1-9.9z"/><path d="M19 35l-1.5 4M25 35l-1.5 4M31 35l-1.5 4"/>',
+  'debt-free':
+    '<path d="M14 30a10 10 0 1 1 20 0"/><path d="M24 12v-4M11 20l-3-2M37 20l3-2"/><path d="M17 36h14"/><path d="M20 30l3 3 6-7"/>',
+  'every-month':
+    '<rect x="9" y="12" width="30" height="27" rx="3"/><path d="M9 21h30M17 8v8M31 8v8"/><path d="M15 27h4M22 27h4M29 27h4M15 33h4M22 33h4M29 33h4"/>',
   'own-the-stack': `<rect x="10" y="9" width="28" height="9" rx="2"/><rect x="10" y="19.5" width="28" height="9" rx="2"/><rect x="10" y="30" width="28" height="9" rx="2"/>${['13.5', '24', '34.5'].map((y) => `<circle cx="15" cy="${y}" r="1.5" fill="currentColor" stroke="none"/>`).join('')}`,
 }
