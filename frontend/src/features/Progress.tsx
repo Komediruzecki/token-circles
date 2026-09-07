@@ -5,6 +5,7 @@
  */
 import { createMemo, For, Show } from 'solid-js'
 import BadgeMedallion from '../components/BadgeMedallion'
+import BadgeTimeline from '../components/BadgeTimeline'
 import { buildAdvice } from '../core/achievements/advice'
 import { ACHIEVEMENTS, BANDS } from '../core/achievements/definitions'
 import { monthsTo } from '../core/achievements/evaluate'
@@ -105,6 +106,17 @@ export default function Progress(): JSX.Element {
 
   const nextIn = (band: Band): AchievementDef | undefined =>
     ACHIEVEMENTS.find((a) => a.band === band && !earned().has(a.id))
+
+  /**
+   * Earned first inside each band, definition order otherwise. With thirty-four badges a mixed
+   * grid buries the lit ones among the dim; this keeps what a person has done at the top of the
+   * band they did it in, and leaves the rest below as the thing to aim at.
+   */
+  const inBand = (band: Band): AchievementDef[] => {
+    const held = earned()
+    const all = ACHIEVEMENTS.filter((a) => a.band === band)
+    return [...all.filter((a) => held.has(a.id)), ...all.filter((a) => !held.has(a.id))]
+  }
 
   const nextCopy = (next: AchievementDef): string => {
     const target = STREAK_TARGET[next.id]
@@ -231,12 +243,20 @@ export default function Progress(): JSX.Element {
         </Show>
       </section>
 
+      <section class={styles.section} aria-labelledby="earned-title">
+        <div class={styles.sectionHead}>
+          <h2 id="earned-title">What you have earned</h2>
+          <span class={styles.hint}>
+            {unlocks().length} of {ACHIEVEMENTS.length}
+          </span>
+        </div>
+        <BadgeTimeline />
+      </section>
+
       <section class={styles.section} aria-labelledby="badges-title">
         <div class={styles.sectionHead}>
-          <h2 id="badges-title">Badges</h2>
-          <span class={styles.hint}>
-            {unlocks().length} of {ACHIEVEMENTS.length} earned
-          </span>
+          <h2 id="badges-title">Every badge</h2>
+          <span class={styles.hint}>Earned first, then what is left</span>
         </div>
         <For each={Object.keys(BANDS) as Band[]}>
           {(band) => (
@@ -248,7 +268,7 @@ export default function Progress(): JSX.Element {
                 </Show>
               </div>
               <ul class={styles.grid}>
-                <For each={ACHIEVEMENTS.filter((a) => a.band === band)}>
+                <For each={inBand(band)}>
                   {(a) => {
                     const rec = () => earned().get(a.id)
                     return (

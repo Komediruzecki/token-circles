@@ -11,6 +11,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Added
 
+- **A timeline of what has been earned, above the gallery** (`components/BadgeTimeline.tsx` and
+  its module CSS, wired into `features/Progress.tsx`). At thirty-four badges one flat grid buries
+  the lit ones among the dim, and it answers "what is there to get" while never answering "what
+  have I done". The strip groups unlocks by `earnedOn` — the month the rule was met, not
+  `unlockedAt`, the moment the app noticed — so a profile that imports five years of statements
+  reads as five years of history instead of one very busy afternoon. Oldest first, because a
+  timeline reads forwards. The connecting rule is drawn on the stop's dot with a `::before`, not
+  behind the row, so it never crosses the medal art.
+- **The gallery sorts earned first within each band** (`inBand` in `Progress.tsx`), so a band
+  shows what was done at the top and what is left underneath. The headings say so: "What you have
+  earned" over the timeline, "Every badge" over the gallery.
+- The progress-page test scopes its badge count to the gallery section, since the timeline now
+  draws a medallion of its own for each earned badge.
+
 - **Ten badges people will chase, and loans in the evaluator**
   (`core/achievements/definitions.ts`, `evaluate.ts`, `achievementsStore.ts`). The set was
   complete but characterless: everything in it was earned by simply continuing. These are the
