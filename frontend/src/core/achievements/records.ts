@@ -43,8 +43,23 @@ export function parseRecords(raw: unknown): UnlockRecord[] {
   }
 }
 
-export const serializeRecords = (records: UnlockRecord[]): string =>
-  JSON.stringify({ v: 1, unlocks: records })
+export const serializeRecords = (records: UnlockRecord[], dismissedAdvice: string[] = []): string =>
+  JSON.stringify({ v: 1, unlocks: records, dismissedAdvice })
+
+/**
+ * Advice cards the user has waved away, in the same settings blob as the unlocks: one key, one
+ * write, and an older blob without the field simply reads as none dismissed.
+ */
+export function parseDismissed(raw: unknown): string[] {
+  if (typeof raw !== 'string') return []
+  try {
+    const parsed = JSON.parse(raw) as { dismissedAdvice?: unknown } | null
+    const list = Array.isArray(parsed?.dismissedAdvice) ? parsed.dismissedAdvice : []
+    return list.filter((v): v is string => typeof v === 'string').slice(0, 200)
+  } catch {
+    return []
+  }
+}
 
 /** Stored wins; earned-but-unstored becomes a new record stamped `now`. Definition order. */
 export function diffUnlocks(
