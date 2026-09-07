@@ -9,6 +9,33 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The dev deployment and both API hosts were indexable.** Search Console reported
+  `api.dev.tokencircles.com/` as a 404 — it had crawled an API host (found through certificate
+  transparency, most likely) because nothing told it not to. Auditing every host: `dev.tokencircles.com`
+  served **prod's** `robots.txt` (`Allow: /` plus prod's sitemap), so a full second copy of the app
+  was open to ranking; the API hosts served Cloudflare's managed "content signals" file with no
+  `Disallow`; and no host sent `X-Robots-Tag`. The 404 itself was correct — there is no root route —
+  it was the crawl that should never have happened.
+
+  - **`frontend/src/crawlerPolicy.ts`** (new) is a Vite plugin gated on `mode === 'production'`.
+    For every other build — `--mode dev`, which both the dev deploy and PR previews use — it
+    injects `<meta name="robots" content="noindex, nofollow">`, overwrites `robots.txt` with
+    `Disallow: /`, and appends an `X-Robots-Tag` block to `_headers`. Three signals because they
+    have three consumers: the meta for renderers, robots.txt for the crawl gate, the header for
+    every non-HTML asset. It runs in `closeBundle`, not `writeBundle`: Vite copies `public/` —
+    which holds prod's `Allow: /` — into `dist/` after `writeBundle`, so an earlier hook would write
+    the Disallow and then watch the Allow land on top of it. Verified by building both modes.
+    Prod emits nothing, so `public/robots.txt` stays the single source of truth there.
+  - **`worker/src/index.ts`**: a middleware sets `X-Robots-Tag: noindex, nofollow` on every
+    response in a `finally`, so 404s from `notFound` and handler-written 4xx carry it; `onError`
+    sets it again explicitly, because the response it builds replaces the one the middleware
+    stamped. `GET /robots.txt` returns `Disallow: /` as the courtesy copy — Cloudflare's managed
+    robots.txt prepends its block to whatever the origin serves there, and the Disallow survives.
+  - Tests: `worker/test/crawler-policy.test.ts` (200, 404, unauthenticated 4xx, robots.txt) and
+    `frontend/src/__tests__/crawlerPolicy.test.ts` (both modes, the `_headers` merge, `apply: 'build'`).
+
 ## [5.13.1] — 2026-09-01
 
 ### Changed
