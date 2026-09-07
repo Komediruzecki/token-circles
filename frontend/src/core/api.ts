@@ -107,6 +107,12 @@ export class ApiClient {
         throw err
       }
 
+      // Anything that wrote data may have earned a badge; achievementsStore listens. Settings
+      // writes are excluded so persisting an unlock does not trigger another evaluation.
+      if (method !== 'GET' && !endpoint.startsWith('/settings') && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('tc:data-changed', { detail: { endpoint } }))
+      }
+
       const contentType = response.headers.get('content-type')
       if (contentType === null || !contentType.includes('application/json')) {
         return {} as T
@@ -786,6 +792,14 @@ export class ApiClient {
    */
   async getSettings(): Promise<Models.Settings> {
     return this.request<Models.Settings>('/settings', Schemas.SettingsSchema)
+  }
+
+  /** Past imports, newest first (mirrors GET /api/import-logs). */
+  async getImportLogs(): Promise<Array<{ id: number; created_at: string }>> {
+    return this.request(
+      '/import-logs',
+      z.array(z.object({ id: z.number(), created_at: z.string() }).passthrough())
+    )
   }
 
   /**
