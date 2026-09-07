@@ -140,13 +140,17 @@ proposal, and the tasklist says pick one for 5.14. The argument for this one is 
 timing: it ships a share loop before the Show HN / Product Hunt push, and the badges panel is
 itself a screenshot.
 
-## Decisions needed
+## Decisions (taken 2026-09-07)
 
-1. **Per profile** (proposed) or per user? Per profile matches the data; per user reads more
-   like "my" achievements. Proposed: per profile, and the share card names neither.
-2. **"Tracked" threshold** — three transactions a month (proposed), or one?
-3. **Backfill dates** — the month the rule was met (proposed), or the day it shipped?
-4. **Is this the 5.14 feature**, ahead of the smart sheet? See sizing.
+1. **Per profile.** One account is often a family with several profiles, and the data a badge is
+   computed from is per profile. The share card names neither the profile nor the account. Later,
+   as an option: count all of an account's profiles towards the same badges.
+2. **"Tracked" means three transactions in the month.** Enough to rule out an empty month, low
+   enough that nobody has to work for it. Revisit once real usage shows what a tracked month
+   actually looks like.
+3. **Backfill dates a badge to the month its rule was met**, not to the day the feature shipped.
+4. **Ships in the next release**, together with the smart sheet and period navigator if that
+   proposal is green-lit (`smart-sheet-and-date-navigator.md`, pending); otherwise on its own.
 
 ## Explicitly not in v1
 

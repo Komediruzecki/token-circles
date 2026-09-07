@@ -9,6 +9,14 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+
+- **Marketing stills: no verify-email banner, year-to-date transactions**
+  (`frontend/scripts/gen-marketing-shots.mjs`). The fixture account never verifies its email, so
+  `VerifyEmailBanner` sat above every frame; the init script now sets its per-tab dismiss key
+  (`tc:verifyEmailDismissed` in sessionStorage) and the shot loop fails loudly if the banner is on
+  screen anyway. The transactions frame navigates to `#transactions?period=ytd` — the current month
+  has only a handful of rows early in the month, and the frame's minimum is five.
+
 ### Fixed
 
 - **The app never linked Privacy or Terms.** `about.tokencircles.com/privacy` and `/terms` exist

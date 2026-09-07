@@ -91,7 +91,7 @@ const SHOTS = [
   },
   {
     slug: '02-transactions',
-    route: 'transactions',
+    route: 'transactions?period=ytd',
     ready: 'transactions-header',
     expect: { selector: '[data-test-id="transactions-row"]', min: 5 },
   },
@@ -236,6 +236,10 @@ await ctx.addInitScript(
     localStorage.setItem('finance_storage_mode', 'self-hosted')
     // A first-run overlay or an auto-launched tour would sit on top of every shot.
     localStorage.setItem('finance_onboarding', 'completed')
+    // The fixture account never verifies its email, so VerifyEmailBanner would sit
+    // above every page. Dismissing it is what a real user does; the key is per tab
+    // (sessionStorage, src/components/VerifyEmailBanner.tsx), hence set on every document.
+    sessionStorage.setItem('tc:verifyEmailDismissed', '1')
   },
   { dark: DARK, profile: PROFILE }
 )
@@ -283,6 +287,11 @@ for (const shot of wanted) {
     // Charts mount their series after the data resolves, a frame or two behind the
     // readiness hook.
     await page.waitForTimeout(1200)
+    // The fixture never verifies its email; the init script dismisses the banner for the tab.
+    // Fail loudly rather than ship a still with it, should that pin ever stop matching the key.
+    if (await page.locator('[data-testid="verify-email-banner"]').count()) {
+      throw new Error('verify-email banner is on screen — the sessionStorage pin did not take')
+    }
 
     const found = await page.locator(shot.expect.selector).count()
     if (found < shot.expect.min) {
