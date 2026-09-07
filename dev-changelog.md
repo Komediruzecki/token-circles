@@ -151,6 +151,30 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
   and the describe pins a 560px-tall viewport so every page under test is scrollable and the guard
   stays a guard.
 
+- **Thirty-four `styles.*` references pointed at classes their CSS module never declared.** A
+  module exports only what its stylesheet declares, and a miss is silent — `styles.whatever` is
+  `undefined`, the attribute renders `class="... undefined"` or nothing, and neither tsc, eslint
+  nor the build says a word. Auditing every reference in `frontend/src` against the export map
+  vite actually produces turned up thirty-four across twelve files, in three kinds. **Wrong
+  name:** `ChartWrapper` asked for `chartTall`/`chartMedium`/`chartShort` while
+  `ChartContainer.module.css` writes `.chart-container.tall`/`.medium`/`.short`, which export as
+  `tall`/`medium`/`short` — so the `variant` prop had never applied a class (invisible today,
+  since both Dashboard call sites also pass an inline `height` that outranks it). **Rule
+  missing:** `AnalyticsPage.module.css` had no `.empty-state` at all, so six empty and loading
+  states rendered as bare text in a panel's top-left corner; Goals' category modal, a copy of
+  Bills', never got `.btn-link` or `.color-input` copied with it, leaving "+ Add Category" a
+  native grey button and the colour field at the browser's ~50x25px default; Import's paste tab
+  put `.form-control` on a select and a textarea against a module with no such rule. All three
+  added, matching the existing house rules verbatim. **Vestigial:** the seven transaction-table
+  headers asking for a base `.col` (`.transaction-table th` already styles them), Loans' three
+  icon buttons asking for a base `.btn` under standalone `.btnSm`/`.btnGhost`, the budget-alert
+  `ok` state, BillCalendar's paid row (already showing "Paid" and a green check), Spotlight's
+  three placement classes (placement is computed into an inline style), and single dead
+  references in `App`, `OverviewDeck`, `Accounts` and `Tags` — removed, several of which had
+  been emitting a literal `undefined` class into the DOM. `TwofaSettings`'
+  `layoutStyles.btnDanger ?? layoutStyles.btnSecondary` is left as is: it already degrades on
+  purpose, and whether the shared button system should grow a danger variant is a design call.
+
 - **The app never linked Privacy or Terms.** `about.tokencircles.com/privacy` and `/terms` exist
   and are real (operator, sub-processors, updated 2026-07-14), but a grep of `frontend/src` found
   no link to either — not on the sign-in screen, not in Settings. `components/LegalLinks.tsx` (new)

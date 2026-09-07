@@ -17,6 +17,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Sharing a badge works.** Every Share ended in an error instead of producing the card.
 
+- **Some corners of the app were missing their styling.** Analytics showed "No data available" as a stray line of text in the corner of an otherwise finished panel; the "Add Category" link and colour picker in Goals looked like raw browser controls next to the identical ones on Bills; the paste box on the Import screen did too. All three now match the rest of the app.
+
 - **Privacy Policy and Terms are now one tap away.** Both are linked from the sign-in screen and from Settings → About; before, the app never pointed at either.
 
 ## [5.13.1] — 2026-09-01
