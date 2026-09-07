@@ -17,6 +17,7 @@ import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
 import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
+import StreakChip from '../components/StreakChip'
 import {
   api,
   apiHouseholdGet,
@@ -559,7 +560,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
+      <div class={styles.periodRow}>
+        <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
+        <StreakChip />
+      </div>
 
       {initialLoad() && !metrics() ? (
         // Mirrors the real first paint: a metrics row above a chart. The header and period bar

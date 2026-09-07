@@ -42,6 +42,7 @@ import SupportContact from '../components/SupportContact'
 import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
+import { openBadgesPanel } from '../core/achievementsStore'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion } from '../core/appStore'
@@ -1908,6 +1909,9 @@ export default function Settings() {
                 </Show>
                 <div class={styles.formGroup} style="margin-top: 16px;">
                   <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class={styles.btnSecondary} onclick={openBadgesPanel}>
+                      Badges
+                    </button>
                     <button class={styles.btnSecondary} onclick={() => setShowChangelog(true)}>
                       View Changelog
                     </button>

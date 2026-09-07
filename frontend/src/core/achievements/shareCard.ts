@@ -4,7 +4,7 @@
  */
 import { medallionSvg } from '../../components/BadgeMedallion'
 import { achievementById, BANDS } from './definitions'
-import type {AchievementId} from './definitions';
+import type { AchievementId } from './definitions'
 
 const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -50,7 +50,10 @@ async function toPng(svg: string): Promise<Blob> {
     if (!ctx) throw new Error('no canvas context')
     ctx.drawImage(img, 0, 0)
     return await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => { b ? resolve(b) : reject(new Error('toBlob failed')); }, 'image/png')
+      canvas.toBlob((b) => {
+        if (b) resolve(b)
+        else reject(new Error('toBlob failed'))
+      }, 'image/png')
     })
   } finally {
     URL.revokeObjectURL(url)
@@ -61,7 +64,7 @@ export async function shareBadge(id: AchievementId): Promise<'shared' | 'downloa
   const def = achievementById(id)
   const png = await toPng(shareCardSvg(id))
   const file = new File([png], `token-circles-${id}.png`, { type: 'image/png' })
-  const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean }
+  const nav = window.navigator as Navigator & { canShare?: (d: ShareData) => boolean }
   if (typeof nav.share === 'function' && nav.canShare?.({ files: [file] })) {
     await nav.share({ files: [file], title: def.name, text: def.share })
     return 'shared'

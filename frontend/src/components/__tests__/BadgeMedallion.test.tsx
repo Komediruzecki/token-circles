@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { ACHIEVEMENTS } from '../../core/achievements/definitions'
 import { BADGE_GLYPHS } from '../badgeGlyphs'
 import BadgeMedallion, { medallionSvg } from '../BadgeMedallion'
+import type { JSX } from 'solid-js'
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -10,10 +11,10 @@ afterEach(() => {
   dispose?.()
   host?.remove()
 })
-const mount = (el: () => Element): HTMLDivElement => {
+const mount = (el: () => JSX.Element): HTMLDivElement => {
   host = document.createElement('div')
   document.body.appendChild(host)
-  dispose = render(el as () => never, host)
+  dispose = render(el, host)
   return host
 }
 
