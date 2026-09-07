@@ -15,7 +15,7 @@
 - Everything computes on device from the current profile's data. Nothing new leaves the device; nothing is added to the worker.
 - Per profile, like the badges. A tracked month is **three or more** transactions dated inside it. Unlocks are never revoked.
 - No emojis. Icons are inline SVG. No raster art in the app.
-- The medal face is **aurora glass** (decision of 2026-09-07); `data core` is the fallback if aurora fails a sanity check at 24 px or on a low-end device. Both are drawn in the gallery page; port the aurora recipe exactly.
+- The medal face is **aurora glass** (decision of 2026-09-07). Three ways to get it, all built in the gallery page: drawn in SVG, the generated blank face with the SVG glyph over it, or a full generated medal per badge. `data core` is the fallback if aurora fails a sanity check at 24 px or on a low-end device.
 - Advice never scolds and never invents a number. Every card names the figure it is built from and links to the page that shows it.
 - `CHANGELOG.md`: one or two user-facing sentences. `dev-changelog.md`: the mechanism and the files.
 - Commits carry no co-author trailers. Before a PR: `cd frontend && npx vitest run && npm run lint && pnpm run typecheck`, then `pnpm run test:tours` (the dashboard tour anchors on the period bar, and the rail sits beside it).
@@ -158,14 +158,26 @@ CSS additions:
 }
 ```
 
-- [ ] **Step 4: Check it at chip size before believing it**
+- [ ] **Step 4 (alternative worth taking): the generated face instead of the drawn one**
+
+`packages/showcase-gallery/assets/token-circles/branding/2026-09-07-medal-faces/aurora-blank-<band>.webp`
+are the same aurora with no symbol in them, one per band, about 20 KB each. Copying those three
+into `frontend/public/badges/` and rendering `<img>` under the existing glyph layer gives the
+generated look for all fifteen badges, and a sixteenth badge still costs only a glyph. The
+trade is a fixed look that cannot follow a light theme, three network requests, and blur past
+440 px. Decide between this and the drawn face at this step, in front of both:
+`gallery-viewer/token-circles-badges.html`, face switch `aurora` against `art`. If the art wins,
+`BadgeMedallion` takes `face="art"` and swaps the `<svg class="base">` for an `<img>`, and
+everything downstream in this plan is unchanged.
+
+- [ ] **Step 5: Check it at chip size before believing it**
 
 Run the tests, then the visual sanity check the decision depends on: render the rail at 24 px and 32 px and confirm the glyph still reads over the aurora. If it does not, switch the default to `'core'` and say so in the PR.
 
 Run: `cd frontend && npx vitest run src/components/__tests__/BadgeMedallion.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add frontend/src/components/BadgeMedallion.tsx frontend/src/components/BadgeMedallion.module.css frontend/src/components/__tests__/BadgeMedallion.test.tsx
