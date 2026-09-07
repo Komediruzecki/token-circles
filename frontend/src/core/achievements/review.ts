@@ -4,7 +4,7 @@
  */
 import { TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
 import { bucketByMonth, sumTypes } from './evaluate'
-import type {EvaluateInput} from './evaluate';
+import type { EvaluateInput } from './evaluate'
 
 export interface YearReview {
   year: number

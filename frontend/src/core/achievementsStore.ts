@@ -5,7 +5,7 @@
  */
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
-import { evaluateAchievements   } from './achievements/evaluate'
+import { evaluateAchievements } from './achievements/evaluate'
 import {
   diffUnlocks,
   parseDismissed,
@@ -17,7 +17,7 @@ import { api } from './api'
 import { setPage } from './appStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
-import type {EvaluateInput, Evaluation} from './achievements/evaluate';
+import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
 export const DATA_CHANGED_EVENT = 'tc:data-changed'

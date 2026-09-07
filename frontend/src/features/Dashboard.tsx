@@ -3,6 +3,7 @@
  */
 
 import { batch, createSignal, For, Show } from 'solid-js'
+import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
 import { ChartErrorBoundary } from '../components/ChartErrorBoundary'
@@ -17,7 +18,6 @@ import { DashboardSettings } from '../components/DashboardSettings'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
 import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
-import StreakChip from '../components/StreakChip'
 import {
   api,
   apiHouseholdGet,
@@ -562,7 +562,7 @@ export default function Dashboard() {
 
       <div class={styles.periodRow}>
         <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
-        <StreakChip />
+        <BadgeRail />
       </div>
 
       {initialLoad() && !metrics() ? (

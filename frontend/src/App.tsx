@@ -604,6 +604,11 @@ export function App() {
       ),
     },
     {
+      name: 'progress' as PageName,
+      label: 'Progress',
+      icon: <path d="M12 3a9 9 0 109 9h-9V3zM12 3v9h9M7 17v-3M11 17v-6M15 17v-4" />,
+    },
+    {
       name: 'rentBuy' as PageName,
       label: 'Rent vs Buy',
       icon: (

@@ -14,6 +14,7 @@ export const pages: Record<PageName, PageComponent> = {
   loans: lazy(() => import('./features/Loans.tsx')),
   goals: lazy(() => import('./features/Goals.tsx')),
   bills: lazy(() => import('./features/Bills.tsx')),
+  progress: lazy(() => import('./features/Progress.tsx')),
   rentBuy: lazy(() => import('./features/RentBuyCalculator.tsx')),
   compound: lazy(() => import('./features/CompoundInterestCalculator.tsx')),
   emergency: lazy(() => import('./features/EmergencyFundCalculator.tsx')),

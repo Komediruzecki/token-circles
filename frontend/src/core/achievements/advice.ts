@@ -3,9 +3,9 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
-import { bucketByMonth,  sumTypes  } from './evaluate'
+import { bucketByMonth, sumTypes } from './evaluate'
 import { addMonths, monthOf } from './months'
-import type {EvaluateInput, Tx} from './evaluate';
+import type { EvaluateInput, Tx } from './evaluate'
 
 export type AdviceKind =
   | 'budget-drift'
@@ -105,7 +105,7 @@ function goalPace(input: AdviceInput): AdviceCard[] {
     const sinceStart = Math.max(1, monthsBetween(monthOf(g.created_at), monthOf(input.today)))
     const pace = contributed / sinceStart
     if (pace >= needed) continue
-    const name = (g as { name?: string }).name ?? 'a savings goal'
+    const name = g.name || 'a savings goal'
     cards.push({
       id: `goal-pace:${name}:${g.deadline}`,
       kind: 'goal-pace',
@@ -173,7 +173,11 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
 function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
   const budgeted = new Set(input.budgets.map((b) => b.category_id))
-  const billed = new Set(input.bills.map((b) => b.category_id).filter((id) => id != null))
+  const billed = new Set(
+    input.bills
+      .map((b) => b.category_id)
+      .filter((id): id is number => id !== null && id !== undefined)
+  )
   const counts = new Map<number, number>()
   for (const t of byMonth.get(month) ?? []) {
     if (t.type !== 'expense' || t.category_id === null) continue

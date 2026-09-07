@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildAdvice } from '../advice'
 import { adviceInput, month, tx } from './fixtures'
-import type {AdviceInput} from '../advice';
+import type { AdviceInput } from '../advice'
 
 const make = (over: Record<string, unknown> = {}): AdviceInput =>
   adviceInput(over) as unknown as AdviceInput

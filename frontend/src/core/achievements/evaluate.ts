@@ -13,7 +13,9 @@ export interface EvaluateInput {
   budgets: Array<
     Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'>
   >
-  goals: Array<Pick<SavingsGoal, 'target_amount' | 'current_amount' | 'created_at'>>
+  goals: Array<
+    Pick<SavingsGoal, 'target_amount' | 'current_amount' | 'created_at' | 'deadline' | 'name'>
+  >
   importLogs: Array<{ created_at: string }>
   /** Server mode against an origin that is not ours. */
   selfHosted: boolean

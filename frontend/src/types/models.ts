@@ -26,6 +26,7 @@ export type PageName =
   | 'loans'
   | 'goals'
   | 'bills'
+  | 'progress'
   | 'import'
   | 'accounts'
   | 'categories'
