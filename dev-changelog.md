@@ -11,6 +11,28 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Added
 
+- **Ten badges people will chase, and loans in the evaluator**
+  (`core/achievements/definitions.ts`, `evaluate.ts`, `achievementsStore.ts`). The set was
+  complete but characterless: everything in it was earned by simply continuing. These are the
+  ones with a story. **The comeback** is the important one — a tracked month after a gap of two
+  or more, once there had been a run of three — because it is the only badge that makes returning
+  read as progress rather than as failure; it is dated to the month tracking resumed. Alongside
+  it: **Clean sweep** (a month both fully categorised and fully under budget, the intersection of
+  the two month lists that already existed), **Reconciled**, **Ahead of plan** (a reached goal
+  whose deadline has not passed — we cannot know when it was reached, so a live deadline is the
+  honest proxy, and the record only ever adds), **The full picture**, **A perfect year**,
+  **Six months under**, **Rainy day** (a reached goal worth three times the profile's own average
+  monthly spend), **Every month of a year** (a calendar year, not a rolling streak) and
+  **Debt free**.
+- **Debt free needs the amortisation, not a balance.** `Loan` has no current-balance column, so
+  the rule runs `calculateSchedule` + `payoffDate` from `core/loanCalculator.ts` and asks whether
+  the schedule ran out before today — which means a prepayment that finishes a mortgage early
+  earns it early, as it should. `GET /loans` omits `rate_periods` and `prepayments` (worker
+  `routes/loans.ts` adds them only on the single-loan route) and `LoanSchema` was a plain
+  `z.object`, which strips unknown keys, so both are now optional fields on the schema and the
+  model. `achievementsStore.loadLoans` fetches the list and then one detail per loan, and makes
+  no request at all when a profile has none.
+
 - **Nine more badges and a fourth band** (`core/achievements/definitions.ts`, `evaluate.ts`,
   `components/badgeGlyphs.ts`, `BadgeMedallion.tsx`). The ladder no longer stops at Two years:
   Three years joins Mastery and a new **Legacy** band holds Five, Ten and Twenty years plus

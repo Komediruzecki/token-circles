@@ -30,6 +30,7 @@ export function input(over: Partial<EvaluateInput> = {}): EvaluateInput {
     budgets: [],
     goals: [],
     importLogs: [],
+    loans: [],
     selfHosted: false,
     today: '2026-09-07',
     ...over,

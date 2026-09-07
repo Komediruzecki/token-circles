@@ -112,6 +112,18 @@ export const LoanSchema = z.object({
   term_months: z.number(),
   created_at: z.string(),
   profile_id: z.number(),
+  // Only the single-loan route carries these; the list route omits them, so both are optional
+  // and a plain z.object would otherwise strip them on the way through.
+  rate_periods: z
+    .array(
+      z.object({
+        rate: z.number(),
+        start_month: z.number(),
+        end_month: z.number().nullable(),
+      })
+    )
+    .optional(),
+  prepayments: z.array(z.object({ month: z.number(), amount: z.number() })).optional(),
 })
 
 export const BillSchema = z.object({

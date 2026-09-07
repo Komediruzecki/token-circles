@@ -33,6 +33,16 @@ export type AchievementId =
   | 'five-thousand-entries'
   | 'ten-thousand-entries'
   | 'twenty-thousand-entries'
+  | 'the-comeback'
+  | 'clean-sweep'
+  | 'reconciled'
+  | 'ahead-of-plan'
+  | 'the-full-picture'
+  | 'perfect-year'
+  | 'under-budget-six'
+  | 'rainy-day'
+  | 'debt-free'
+  | 'every-month'
 
 export interface AchievementDef {
   id: AchievementId
@@ -136,6 +146,41 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     share: 'Reached a savings goal.',
   },
   {
+    id: 'the-comeback',
+    band: 'building',
+    name: 'The comeback',
+    rule: 'A tracked month after a break of two or more, once you had a run of three.',
+    share: 'Picked my money back up after a break.',
+  },
+  {
+    id: 'clean-sweep',
+    band: 'building',
+    name: 'Clean sweep',
+    rule: 'A tracked month with everything categorised and every budget held.',
+    share: 'A perfect month: everything named, every budget held.',
+  },
+  {
+    id: 'reconciled',
+    band: 'building',
+    name: 'Reconciled',
+    rule: 'A tracked month with every transaction reconciled.',
+    share: 'A whole month tied out against the bank.',
+  },
+  {
+    id: 'ahead-of-plan',
+    band: 'building',
+    name: 'Ahead of plan',
+    rule: 'A savings goal reached before its deadline.',
+    share: 'Hit a savings goal ahead of schedule.',
+  },
+  {
+    id: 'the-full-picture',
+    band: 'building',
+    name: 'The full picture',
+    rule: 'A tracked month with income, spending and a transfer, all categorised.',
+    share: 'A month with the whole picture, not just the spending.',
+  },
+  {
     id: 'thousand-entries',
     band: 'building',
     name: 'A thousand entries',
@@ -169,6 +214,41 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     name: 'Two years',
     rule: 'Twenty-four tracked months in a row.',
     share: 'Tracked my money for two years.',
+  },
+  {
+    id: 'perfect-year',
+    band: 'mastery',
+    name: 'A perfect year',
+    rule: 'Twelve months in a row, every one of them in the black.',
+    share: 'Twelve months in a row spending less than I earned.',
+  },
+  {
+    id: 'under-budget-six',
+    band: 'mastery',
+    name: 'Six months under',
+    rule: 'Six months in a row with every budgeted category held.',
+    share: 'Six months running, every budget held.',
+  },
+  {
+    id: 'rainy-day',
+    band: 'mastery',
+    name: 'Rainy day',
+    rule: 'A savings goal reached worth three months of your own spending.',
+    share: 'Saved three months of my own spending.',
+  },
+  {
+    id: 'debt-free',
+    band: 'mastery',
+    name: 'Debt free',
+    rule: 'A loan paid down to nothing.',
+    share: 'Paid off a loan, in full.',
+  },
+  {
+    id: 'every-month',
+    band: 'mastery',
+    name: 'Every month of a year',
+    rule: 'All twelve months of one calendar year, tracked.',
+    share: 'Tracked every single month of the year.',
   },
   {
     id: 'three-years',
