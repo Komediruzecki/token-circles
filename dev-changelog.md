@@ -9,6 +9,29 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The badge art was off centre, twice over.** Reported from the app: the Beginnings and
+  Building faces sat high in their black cutout while Mastery and Legacy looked right, and several
+  glyphs did not sit dead centre in the medallion.
+  - **The faces.** `aurora-blank-*.webp` were cropped by hand out of the generated row, so each
+    medallion landed somewhere slightly different: Beginnings and Building were 19px high in a
+    440px frame and also smaller than Mastery (379 and 385 wide against 402). All four are now
+    cropped from the masters by measurement — the medallion's content box is found by threshold,
+    the crop is centred on it, and the side is `diameter / 0.945` so every band fills the frame
+    identically. Re-measured: all four content boxes centre on (220, 220) within a pixel.
+  - **The glyphs.** They are drawn by hand and their ink lands where the paths fall, not where
+    the 48-unit box says: `a-quarter` sat 8.95 units high, `half-a-year` 7.35, and 23 of the 34
+    were off by at least 0.4. `BadgeMedallion` cannot measure anything — it builds the share card
+    as a string, with no DOM — so the corrections live in `GLYPH_OFFSET` in `badgeGlyphs.ts` and
+    are applied in the glyph transform. `scripts/measure-badge-glyphs.mjs` generates the table:
+    it rasterises each glyph at the app's stroke and scans the alpha channel, so caps and joins
+    count. Every glyph now centres within 0.12 units of the medallion's middle.
+  - **The comeback's arrowhead** was a corner bracket at (9,8)-(17,16) next to an arc that
+    started at (14,22) — nothing lined it up. The arc and the head are now generated from one
+    circle: both endpoints sit on r=13 about (24,24) and the head's vertex _is_ the arc's end
+    point, so the chevron cannot drift off the ring.
+
 ### Added
 
 - **A timeline of what has been earned, above the gallery** (`components/BadgeTimeline.tsx` and
