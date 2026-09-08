@@ -227,6 +227,21 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
   screen anyway. The transactions frame navigates to `#transactions?period=ytd` — the current month
   has only a handful of rows early in the month, and the frame's minimum is five.
 
+### Fixed
+
+- **A tour step navigating to a lazily-loaded page flashed the "target missing" banner**
+  (`Spotlight.tsx`, new `__tests__/spotlightLateTarget.test.tsx`). Two effects race for the same
+  state: the step-change effect resolves the anchor with a MutationObserver and a 6s budget,
+  calling `showTargetMissing()` only when that budget expires — while `updatePositions`, which
+  runs from a 100ms timer and from every resize and scroll, was calling `setTargetMissing(true)`
+  the instant `querySelector` came back empty. On a page whose chunk had not mounted, the second
+  won first and the banner appeared over a step that resolved milliseconds later.
+  `updatePositions` now only hides the highlight; raising the banner belongs to the one effect
+  that knows how long it has waited. Found by the pre-release tour walk, which reported
+  `MISS step 1: Settings 97x50 [target-missing banner]` — a spotlight with a real measured rect
+  _and_ the banner, which is the shape of this race. The step passes in isolation; it needs the
+  full 15-tour walk to be slow enough to lose.
+
 ### Changed
 
 - **The bottom of the transactions table** (`TransactionTable.module.css`,
