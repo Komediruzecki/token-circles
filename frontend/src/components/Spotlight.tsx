@@ -158,7 +158,12 @@ export default function Spotlight() {
 
     const target = document.querySelector(selector) as HTMLElement
     if (!target) {
-      setTargetMissing(true)
+      // Absent, but not missing — not yet. This function runs from the resize/scroll handler
+      // and from a 100ms timer, both of which fire while a lazily-loaded page is still
+      // mounting. The step-change effect below owns that wait (6s, then showTargetMissing),
+      // and it is the only thing that knows the budget has run out. Raising the banner from
+      // here made every tour step that navigates to a lazy page flash "target missing" over a
+      // step that resolved a moment later — which is what the tour gate caught on Settings.
       setHighlight({ top: 0, left: 0, width: 0, height: 0, rx: 8, visible: false })
       return
     }

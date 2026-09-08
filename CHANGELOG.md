@@ -21,6 +21,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Guided tours no longer claim a step is missing while the page is still loading.** Moving to another page mid-tour could flash "this step's feature isn't visible" over a highlight that appeared a moment later.
+
 - **The bottom of the transactions list is no longer ragged.** The table, the page summary under it and the one above now share the same rounded corners and edge, and the last row's rule no longer cuts across the table's bottom corners.
 
 - **Tags and category colours show up again.** A tag on a transaction row lost its colour entirely — white text on the row behind it, and on the light theme that meant white on white — and the coloured dots beside categories and tags in the filters, and beside a budget alert on the dashboard, were not drawn at all. Each was being handed a colour the browser could not read.
