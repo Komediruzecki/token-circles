@@ -553,8 +553,8 @@
 }
 
 /*
- * The category modal is a twin of the one on Bills -- same "+ Add Category" link, same colour
- * field -- but it arrived here without the two rules that dress them, so the button rendered as
+ * The category modal is a twin of the one on Bills — same "+ Add Category" link, same colour
+ * field — but it arrived here without the two rules that dress them, so the button rendered as
  * a native grey box and the swatch at the browser's own ~50x25px default. Kept identical to
  * BillsPage.module.css so the two modals stay indistinguishable.
  */

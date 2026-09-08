@@ -816,9 +816,8 @@
   border-color: var(--primary);
 }
 
-/* The delimiter select and the paste textarea on the "Paste data" tab. Same treatment as the
-   settings fields above; without it both dropped back to the browser's native controls in the
-   middle of an otherwise styled panel. */
+/* The delimiter select and the paste textarea on the "Paste data" tab — without this both
+   dropped back to the browser's native controls in the middle of an otherwise styled panel. */
 .form-control {
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -832,6 +831,15 @@
 .form-control:focus {
   outline: none;
   border-color: var(--primary);
+}
+
+/* styles/index.css keeps every control at >=16px on touch, because mobile Safari force-zooms the
+   page when a focused control is smaller — and a class outranks its bare element selector, so a
+   13px rule here would quietly switch that guard off for the delimiter select. Re-assert it. */
+@media (pointer: coarse), (max-width: 768px) {
+  .form-control {
+    font-size: 16px;
+  }
 }
 
 /* Template download */

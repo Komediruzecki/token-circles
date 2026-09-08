@@ -12,7 +12,6 @@ export interface ChartWrapperProps {
   data: ChartJS.ChartData
   options?: ChartJS.ChartOptions
   height?: number
-  variant?: 'tall' | 'medium' | 'short'
   showExport?: boolean
   filename?: string
   onReady?: (chart: ChartJS.Chart) => void
@@ -168,16 +167,12 @@ export default function ChartWrapper(props: ChartWrapperProps) {
     }
   })
 
-  const heightClass = createMemo(() =>
-    props.variant === 'tall'
-      ? ChartContainer.tall
-      : props.variant === 'medium'
-        ? ChartContainer.medium
-        : props.variant === 'short'
-          ? ChartContainer.short
-          : ''
-  )
-
+  // No `variant` prop. It mapped 'tall'/'medium'/'short' onto .chart-container.tall/.medium/
+  // /.short, but asked for them by the names `chartTall`/`chartMedium`/`chartShort`, which the
+  // module never exported — so for its whole life it applied nothing. Correcting the names would
+  // have made it apply 400px/300px/220px while both call sites pin their own `height` inline,
+  // which outranks a class: a rule that says one thing and a chart that is another, waiting for
+  // someone to delete the "redundant" height. `height` is the one that ever worked; keep it.
   const heightStyle = createMemo(() => (props.height ? `height: ${props.height}px` : undefined))
 
   return (
@@ -185,7 +180,6 @@ export default function ChartWrapper(props: ChartWrapperProps) {
       fallback={(_err) => (
         <div
           class={ChartContainer.chartContainer}
-          classList={{ [heightClass()]: !!heightClass() }}
           style={{
             ...(heightStyle()
               ? {
@@ -203,11 +197,7 @@ export default function ChartWrapper(props: ChartWrapperProps) {
         </div>
       )}
     >
-      <div
-        class={ChartContainer.chartContainer}
-        classList={{ [heightClass()]: !!heightClass() }}
-        style={heightStyle()}
-      >
+      <div class={ChartContainer.chartContainer} style={heightStyle()}>
         {props.showExport && props.filename && (
           <ExportChartButton filename={props.filename} chart={chartInstance()} />
         )}
