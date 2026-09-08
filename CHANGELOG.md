@@ -17,6 +17,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Tags and category colours show up again.** A tag on a transaction row lost its colour entirely — white text on the row behind it, and on the light theme that meant white on white — and the coloured dots beside categories and tags in the filters, and beside a budget alert on the dashboard, were not drawn at all. Each was being handed a colour the browser could not read.
+
 - **Sharing a badge works.** Every Share ended in an error instead of producing the card.
 
 - **Some corners of the app were missing their styling.** Analytics showed "No data available" as a stray line of text in the corner of an otherwise finished panel; the "Add Category" link and colour picker in Goals looked like raw browser controls next to the identical ones on Bills; the paste box on the Import screen did too. All three now match the rest of the app.

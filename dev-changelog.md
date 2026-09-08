@@ -11,6 +11,33 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **Four colours were built by pasting a `#` in front of a value that already had one.** Category
+  and tag colours carry the hash at every write — the columns default to `'#6b7280'`
+  (`worker/migrations/0001_init.sql`), the seeded categories are `'#22C55E'`/`'#F97316'` and the
+  rest (`worker/src/profileData.ts`), the offline handler writes `'#6e9bff'`, and the pickers are
+  either `<input type="color">` (Bills, Goals) or swatch buttons over `CATEGORY_PALETTE`
+  (Categories, Tags) — neither can emit anything else. Nothing strips it, and the places that
+  render these correctly (`Tags.tsx`, `BulkActionBar.tsx`) pass the stored value straight through.
+  So ``style={{ background: `#${tag.color}` }}`` built `##6e9bff`; the CSS parser rejects the
+  declaration and drops it silently, with no console warning and a diff that reads like every
+  correct line beside it. The worst of the four was the tag chip on a transaction row
+  (`TransactionTable.tsx`): `.tag` sets `color: #fff` and no background of its own, so a tagged
+  transaction rendered white text on the table's own background. The other three —
+  `FilterBar.tsx`'s category and tag swatches and `BudgetAlertsCard.tsx`'s alert dot — are 10x10
+  circles with no colour of their own, so they were simply not there whenever the row had a colour
+  to show; the budget dot painted only in the one case the value was null, where the bare fallback
+  (`'ef4444'`) happened to make the template's `#` correct. Both fallbacks now carry their own hash, and the two tag sites, which
+  had none, gained one — so a tag saved without a colour gets a visible chip rather than the same
+  invisible one. The dot in `FilterBar` uses `var(--primary)`, matching the dot `BulkActionBar`
+  already falls back on; the chip in `TransactionTable` uses the column's own default `#6b7280`
+  instead, because `.tag` prints its label in white and white on the dark theme's `--primary`
+  (`#6e9bff`) is 2.7:1, against 4.8:1 for the grey in every theme. Guarded twice:
+  `src/components/__tests__/storedColours.test.tsx` reads the colour back off the rendered chip,
+  because the markup and the value are both right and only the browser's rejection of `##` shows
+  the bug; `src/__tests__/storedColourHash.test.ts` scans every source line for the shape, skipping
+  hash routes (`href={`#${page}`}`) and SVG paint servers (`fill="url(#${id})"`), which are the two
+  places the same syntax is correct.
+
 - **Every badge Share failed, for two independent reasons.** `shareBadge` hands the card's SVG
   to an `<img>` and draws that on a canvas, and both steps were broken since the feature shipped;
   nothing caught it because neither is visible until the button is pressed.

@@ -70,7 +70,7 @@ export default function BudgetAlertsCard() {
             <div class={`${styles.alertItem} ${statusClass(alert.status)}`}>
               <span
                 class={styles.alertDot}
-                style={{ 'background-color': `#${alert.categoryColor || 'ef4444'}` }}
+                style={{ 'background-color': alert.categoryColor || '#ef4444' }}
               />
               <div class={styles.alertContent}>
                 <div class={styles.alertTitle}>{alert.categoryName}</div>
