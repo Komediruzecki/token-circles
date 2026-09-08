@@ -19,8 +19,8 @@ installBootRecovery()
 applyDemoModeFromUrl()
 
 // The mirror image: a `?plan=` link from the marketing site wants an ACCOUNT, so it switches
-// to server mode instead. Same reason it lives here — <App/> reads the storage mode once, on
-// the way in. It reloads when it has to switch, so nothing below needs to run.
+// to server mode instead. Same reason it lives here, and the only reason it needs no reload of
+// its own — <App/> reads the storage mode on the way in.
 applyPlanIntentFromUrl()
 
 // `beforeinstallprompt` fires early and is never replayed, and the event itself is the only

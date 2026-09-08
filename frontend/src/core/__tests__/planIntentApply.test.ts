@@ -1,6 +1,10 @@
 /**
  * The switch is the part that matters: get it wrong and a visitor who clicked "Start on
  * Advanced" lands on a Settings page with no Billing tab, which is worse than the root.
+ *
+ * It must NOT reload. Every reader of the storage mode reads it lazily, and this runs before
+ * render, so the switch alone is enough — a reload here would cost a second page load on every
+ * click that arrives from the marketing site.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -38,19 +42,24 @@ afterEach(() => {
 })
 
 describe('applyPlanIntentFromUrl', () => {
-  it('parks the tier and reloads into server mode when the app is local-only', () => {
+  it('parks the tier and switches to server mode when the app is local-only', () => {
     at('https://tokencircles.com/?plan=advanced')
-    expect(applyPlanIntentFromUrl()).toBe(true)
+    expect(applyPlanIntentFromUrl()).toBe('advanced')
     expect(setStorageMode).toHaveBeenCalledWith('self-hosted')
-    expect(reload).toHaveBeenCalledTimes(1)
-    // Parked, because the reload is exactly what a query parameter cannot survive.
+    // Parked, because sign-in reloads and a query parameter cannot survive that.
     expect(storedPlanIntent()).toBe('advanced')
   })
 
-  it('parks it without reloading when the app already talks to a server', () => {
+  it('never reloads — it runs before render, so setting the mode is the whole job', () => {
+    at('https://tokencircles.com/?plan=advanced')
+    applyPlanIntentFromUrl()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('leaves the mode alone when the app already talks to a server', () => {
     getStorageMode.mockReturnValue('self-hosted')
     at('https://tokencircles.com/?plan=ultimate')
-    expect(applyPlanIntentFromUrl()).toBe(false)
+    expect(applyPlanIntentFromUrl()).toBe('ultimate')
     expect(setStorageMode).not.toHaveBeenCalled()
     expect(reload).not.toHaveBeenCalled()
     expect(storedPlanIntent()).toBe('ultimate')
@@ -65,14 +74,14 @@ describe('applyPlanIntentFromUrl', () => {
 
   it('does nothing at all without a plan parameter', () => {
     at('https://tokencircles.com/')
-    expect(applyPlanIntentFromUrl()).toBe(false)
+    expect(applyPlanIntentFromUrl()).toBeNull()
     expect(setStorageMode).not.toHaveBeenCalled()
     expect(storedPlanIntent()).toBeNull()
   })
 
   it('does not switch anyone out of local mode over a tier it does not sell', () => {
     at('https://tokencircles.com/?plan=free')
-    expect(applyPlanIntentFromUrl()).toBe(false)
+    expect(applyPlanIntentFromUrl()).toBeNull()
     expect(setStorageMode).not.toHaveBeenCalled()
     expect(reload).not.toHaveBeenCalled()
   })

@@ -18,15 +18,21 @@ All notable changes to Token Circles are documented here. The format is based on
   - Production ships `VITE_DEFAULT_STORAGE=dexie`, so a first-time visitor opens in serverless
     (local) mode — and `isTabVisible('billing', 'serverless')` is false. A link straight to
     Settings would have shown them a page with **no Billing tab at all**.
-  - Reaching an account means switching to server mode, which reloads; sign-in reloads again.
-    A query parameter survives neither, so the intent is parked in localStorage and consumed on
-    the far side.
+  - Sign-in reloads the page — every path through LoginScreen ends in
+    `window.location.reload()` — and a query parameter cannot survive that, so the intent is
+    parked in localStorage and consumed on the far side.
 
   `applyPlanIntentFromUrl()` runs before render, next to `applyDemoModeFromUrl()` and for the
   same reason — `<App/>` reads the storage mode once, on the way in. It is the mirror image of
   `?demo=`: that one switches _to_ client-only mode, this one switches _away_ from it. The
   switch is unconditional, exactly as the app's own "Sign in" button already is (`App.tsx`
   `handleLogin`): asking for a paid tier is asking for an account.
+
+  It deliberately does **not** reload, and `handleLogin` is why that needed checking rather than
+  copying: it reloads for this same switch, but only because it runs after the app is already
+  up. Every reader of the mode reads it lazily — `apiFetch` per call, the storage adapter on
+  first use, nothing captured at import — so setting it before render is the whole job, and a
+  reload would have cost a second page load on every click arriving from the marketing site.
 
   After `checkLogin()` returns true the intent fires — Settings, Billing tab, hash updated — and
   `BillingPlans` scrolls the requested card into view and rings it for a couple of seconds

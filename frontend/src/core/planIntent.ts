@@ -9,13 +9,16 @@
  *    `isTabVisible('billing', 'serverless')` is false, because a plan means nothing without an
  *    account on our server. Landing such a visitor on Settings would show them a page with no
  *    Billing tab at all.
- * 2. **Reaching an account reloads the page.** Switching to server mode is the only route to
- *    the sign-in gate and it goes through `window.location.reload()` — as does sign-in itself.
- *    A query parameter cannot survive that, so the intent is parked in localStorage and
- *    consumed on the far side.
+ * 2. **Sign-in reloads the page.** Every path through LoginScreen ends in
+ *    `window.location.reload()`, and a query parameter cannot survive that — so the intent is
+ *    parked in localStorage and consumed on the far side, once there is an account to bill.
  *
  * The switch happens before render (see index.tsx), mirroring `applyDemoModeFromUrl`, which
- * makes the same move in the opposite direction for `?demo=`.
+ * makes the same move in the opposite direction for `?demo=`. Being early is what makes it
+ * cheap: every reader of the mode reads it lazily (`apiFetch` per call, the storage adapter on
+ * first use), so setting it here is enough and the app comes up in server mode on the first
+ * paint. `App.handleLogin` reloads for this same switch because it runs after the app is
+ * already up, which is not our case.
  */
 import { createSignal } from 'solid-js'
 import { getStorageMode, setStorageMode } from './storage/storageFactory'
@@ -78,21 +81,17 @@ function stripParam(): void {
 
 /**
  * Called before render. Parks a `?plan=` intent and, when the app is in local mode, switches to
- * server mode and reloads into the sign-in gate — the intent is read back after the reload.
+ * server mode so the app comes up on the sign-in gate rather than in the local demo.
  *
- * Returns true when it triggered a reload, so the caller knows not to bother rendering.
+ * Returns the tier it parked, or null when the URL carried none.
  */
-export function applyPlanIntentFromUrl(): boolean {
+export function applyPlanIntentFromUrl(): PlanIntent | null {
   const plan = parsePlanParam()
-  if (!plan) return false
+  if (!plan) return null
   store(plan)
   stripParam()
-  if (getStorageMode() !== 'self-hosted') {
-    setStorageMode('self-hosted')
-    window.location.reload()
-    return true
-  }
-  return false
+  if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
+  return plan
 }
 
 /**
