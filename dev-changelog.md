@@ -41,6 +41,33 @@ All notable changes to Token Circles are documented here. The format is based on
   what an account already is. Eleven tests, including that a bad tier never switches anyone out
   of local mode.
 
+- **A light-theme set of plan card art** (`public/plans/card-light-*.webp`, `styles/index.css`).
+  The generated art shipped dark-only and said so in a comment: 8-16% mean luminance, so under a
+  light card it would have put dark text on a dark field. A light user saw four flat cards.
+
+  The light set is the dark set's own ring geometry re-painted, not a second generation run —
+  which is the point: a tier's card is recognisably itself in both themes, and adding a tier
+  means one image, not two art directions. Derived and measured, never eyeballed:
+
+  ```sh
+  magick card-<tier>.webp -colorspace gray -level 6%,55% -evaluate multiply 0.50 mask.png
+  magick -size 560x831 xc:'#eef3ff' \( -size 560x831 xc:'#3b6fe0' \) mask.png -composite \
+    -quality 88 card-light-<tier>.webp
+  ```
+
+  The **black point** is what stops the source's navy ground arriving as a grey wash; the
+  **multiply** is what keeps the rings a tint rather than a block of azure. Both were picked by
+  sweeping and measuring, not by looking: `-auto-level` was the obvious first choice and is
+  wrong — it normalises each image independently, so the faint Free card came out with _more_
+  ink than Basic, inverting the tier gradient. Result is 90-94% mean luminance across the four,
+  the clean mirror of the dark set's 8-16%, with ink coverage still ascending by tier.
+
+  The shared rule moved from `:root[data-theme='dark'] [data-plan-card]` to a bare
+  `[data-plan-card]` with `var(--plan-card-art, none)`; each theme block now sets only the four
+  urls. Verified in a real browser against the built CSS — the same check that caught the
+  `background` shorthand bug when this art first shipped — that dark resolves to `card-*.webp`
+  and light to `card-light-*.webp` for all four tiers.
+
 ## [5.14.0] — 2026-09-08
 
 ### Fixed
