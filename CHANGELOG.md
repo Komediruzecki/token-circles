@@ -8,16 +8,19 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.14.0] — 2026-09-08
+
 ### Added
+
+- **A Progress page.** Your tracked months, your badges and advice drawn from your own numbers, all in one place, with a year in review. Budgets running hot, goals that will miss their date, months that ran in the red: each one says what it is built from and takes you to the page that shows it. The dashboard now carries the badges you have earned.
+
+- **Badges.** Tracking your money now earns badges: a month tracked, a quarter, a year, saving streaks, budgets held, and more. Thirty-four in four bands, from your first entry to a twenty-year ladder, with a badge for coming back after a break, for a month where everything is named and every budget held, for a year entirely in the black, and for paying off a loan. The Progress page opens with a timeline of what you have earned and when, then the full gallery. Per profile, worked out on your device, never taken away, and each one shareable as a card. Your history counts from day one.
 
 - **The paid plans now differ from each other.** API and MCP access is included from Basic (2 tokens, 10 on Advanced, unlimited on Ultimate), Advanced adds imports that run on a schedule and 25 MB receipt uploads, and Ultimate adds priority support with a reply in 1-3 working days. Each card lists only what its tier adds to the one below.
 
-- **Save & Close is in the Views dialog's header too**, so you no longer have to scroll to the bottom of the widget list to get out of it.
-
 - **The badges row is now a dashboard widget you can switch off**, in Views alongside the others. Both badge strips scroll sideways with the mouse wheel.
 
-- **A Progress page.** Your tracked months, your badges and advice drawn from your own numbers, all in one place, with a year in review. Budgets running hot, goals that will miss their date, months that ran in the red: each one says what it is built from and takes you to the page that shows it. The dashboard now carries the badges you have earned.
-- **Badges.** Tracking your money now earns badges: a month tracked, a quarter, a year, saving streaks, budgets held, and more. Thirty-four in four bands, from your first entry to a twenty-year ladder, with a badge for coming back after a break, for a month where everything is named and every budget held, for a year entirely in the black, and for paying off a loan. The Progress page opens with a timeline of what you have earned and when, then the full gallery. Per profile, worked out on your device, never taken away, and each one shareable as a card. Your history counts from day one.
+- **Save & Close is in the Views dialog's header too**, so you no longer have to scroll to the bottom of the widget list to get out of it.
 
 ### Fixed
 

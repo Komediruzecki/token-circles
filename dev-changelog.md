@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.14.0] — 2026-09-08
+
 ### Fixed
 
 - **Four colours were built by pasting a `#` in front of a value that already had one.** Category
