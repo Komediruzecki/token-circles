@@ -37,7 +37,7 @@ const unwrap = (r: any): any => {
 
 beforeAll(async () => {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, 'w@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, 'w@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
   )
     .bind(USER_ID)
     .run();
@@ -161,7 +161,7 @@ describe('write tools', () => {
 
   it('categorize_transactions refuses a category from another profile', async () => {
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (9699, 'o@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (9699, 'o@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
     ).run();
     await env.DB.prepare(
       "INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (9699, 'Other', 9699)"

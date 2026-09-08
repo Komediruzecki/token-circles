@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import * as db from '../db';
+import { requireFeature } from '../plan';
 
 // Saved import origins ("Connected Sources", migration 0020). A saved Google-Sheet link
 // (later: Drive folder / bank aggregator) the user can re-fetch + import on demand. config,
@@ -11,6 +12,9 @@ export const importSourcesRoutes = new Hono<AppEnv>();
 
 const KINDS = new Set(['google_sheet', 'google_drive_folder', 'bank_aggregator']);
 const SCHEDULES = new Set(['manual', 'on_open', 'daily']);
+// 'manual' is the user pressing Import — their own file, their own machine, free forever.
+// Anything else is us doing the work on a schedule, which is what a paid plan buys.
+const AUTOMATED_SCHEDULES = new Set(['on_open', 'daily']);
 
 interface ImportSourceRow {
   id: number;
@@ -106,6 +110,23 @@ function readWritable(
   return { data };
 }
 
+/**
+ * 402 when a write asks for a schedule the plan does not include. Only when the write actually
+ * sets one: editing the label of a source that is already on a daily schedule must not fail
+ * because of a field the request never mentioned.
+ */
+async function requireAutomationIfScheduled(
+  c: Parameters<typeof requireFeature>[0],
+  schedule: unknown
+): Promise<void> {
+  if (typeof schedule !== 'string' || !AUTOMATED_SCHEDULES.has(schedule)) return;
+  await requireFeature(
+    c,
+    'automatedImports',
+    'Scheduled imports are an Advanced feature. Upgrade, or set this source to Manual.'
+  );
+}
+
 // ── GET /api/import-sources — all sources across the selected profiles ─────────
 importSourcesRoutes.get('/api/import-sources', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
@@ -124,6 +145,7 @@ importSourcesRoutes.post('/api/import-sources', requireAuth, async (c) => {
   const b = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const { data, error } = readWritable(b, false);
   if (error) return c.json({ error }, 400);
+  await requireAutomationIfScheduled(c, data.schedule);
   const res = await db.insert(c.env.DB, 'import_sources', { profile_id: pid, ...data });
   const row = await db.first<ImportSourceRow>(
     c.env.DB,
@@ -148,6 +170,7 @@ importSourcesRoutes.put('/api/import-sources/:id', requireAuth, async (c) => {
   const b = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const { data, error } = readWritable(b, true);
   if (error) return c.json({ error }, 400);
+  await requireAutomationIfScheduled(c, data.schedule);
   data.updated_at = new Date().toISOString();
   await db.update(c.env.DB, 'import_sources', data, 'id = ? AND profile_id = ?', id, pid);
   const row = await db.first<ImportSourceRow>(

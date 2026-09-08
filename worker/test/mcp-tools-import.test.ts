@@ -38,7 +38,7 @@ const unwrap = (result: any): any => {
 
 beforeAll(async () => {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, 'imp@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, 'imp@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
   )
     .bind(USER_ID)
     .run();
@@ -138,7 +138,7 @@ describe('import tools', () => {
 
   it("undo_import will not touch another profile's batch", async () => {
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (9599, 'them@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (9599, 'them@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
     ).run();
     await env.DB.prepare(
       "INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (9599, 'Theirs', 9599)"

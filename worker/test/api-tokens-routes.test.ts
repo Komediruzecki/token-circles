@@ -11,7 +11,7 @@ const USER_ID = 9100;
 
 async function seed(): Promise<string> {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, 'tok@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, 'tok@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'ultimate')"
   )
     .bind(USER_ID)
     .run();
@@ -173,7 +173,7 @@ describe('token management endpoints', () => {
     expect(bad.status).toBe(422);
 
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (9101, 'other@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (9101, 'other@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'ultimate')"
     ).run();
     const theirs = await mintApiToken(env.DB, 9101, { name: 'theirs', scopes: ['read'] });
     const res = await SELF.fetch(`https://api.example.com/api/account/api-tokens/${theirs.id}`, {

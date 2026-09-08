@@ -159,3 +159,48 @@ h2 {
     padding-box;
   border-width: 1px;
 }
+
+/* Plan card art.
+   One generated background per tier in the badges' own language — navy ground, hairline rings,
+   azure warming into gold as the tier climbs — so the paid surface and the reward surface read
+   as one product.
+
+   The card is narrow and tall, so the images are cropped to the ring cluster rather than left
+   landscape: `cover` on a wide source in a 200px column shows a slice of empty navy and nothing
+   else. A scrim over the left two-thirds keeps the text on flat ground; the art reads down the
+   right edge.
+
+   The card sets `background-color`, never the `background` shorthand — the shorthand resets
+   background-image to none at inline-style specificity, where no rule here can reach it.
+
+   Dark theme only: the art measures 8-16% mean luminance, so under a light card it would put
+   dark text on a dark field. A light set is a follow-up, not a silent compromise. */
+:root[data-theme='dark'] [data-plan-card] {
+  background-image:
+    linear-gradient(
+      100deg,
+      var(--bg, #0b0e14) 22%,
+      color-mix(in oklab, var(--bg, #0b0e14) 72%, transparent) 58%,
+      transparent 100%
+    ),
+    var(--plan-card-art);
+  background-size:
+    100% 100%,
+    cover;
+  background-position:
+    center,
+    right center;
+  background-repeat: no-repeat;
+}
+:root[data-theme='dark'] [data-plan-card='free'] {
+  --plan-card-art: url('/plans/card-free.webp');
+}
+:root[data-theme='dark'] [data-plan-card='basic'] {
+  --plan-card-art: url('/plans/card-basic.webp');
+}
+:root[data-theme='dark'] [data-plan-card='advanced'] {
+  --plan-card-art: url('/plans/card-advanced.webp');
+}
+:root[data-theme='dark'] [data-plan-card='ultimate'] {
+  --plan-card-art: url('/plans/card-ultimate.webp');
+}

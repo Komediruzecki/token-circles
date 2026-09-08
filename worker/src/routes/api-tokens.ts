@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { HttpError } from '../http';
 import { mintApiToken, parseScopes, type Scope } from '../apitoken';
+import { apiTokenLimit, requireFeature } from '../plan';
 import * as db from '../db';
 import { enforce } from '../ratelimit';
 
@@ -13,10 +14,36 @@ export const apiTokensRoutes = new Hono<AppEnv>();
 const VALID_SCOPES: Scope[] = ['read', 'write', 'import'];
 
 apiTokensRoutes.post('/api/account/api-tokens', requireAuth, async (c) => {
+  // The API reads and writes account data on our server, which only a paid plan has, so the
+  // gate is the same one cloud sync sits behind rather than a separate upsell.
+  await requireFeature(
+    c,
+    'apiAccess',
+    'API access is a paid feature. Upgrade to Basic or higher to create API tokens.'
+  );
   // A minted token is a long-lived credential that deliberately survives sign-out-everywhere,
   // so minting is budgeted like the other credential-issuing routes.
   const limited = await enforce(c, `api-token-mint:${c.get('userId')}`, 20, 3600);
   if (limited) return limited;
+
+  // Counted over live tokens only: a revoked or expired one is not occupying a slot, so
+  // rotating a token never needs an upgrade first.
+  const cap = await apiTokenLimit(c);
+  if (cap !== null) {
+    const live = await db.first<{ n: number }>(
+      c.env.DB,
+      `SELECT COUNT(*) AS n FROM api_tokens
+        WHERE user_id = ? AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > datetime('now'))`,
+      c.get('userId')
+    );
+    if ((live?.n ?? 0) >= cap) {
+      throw new HttpError(
+        402,
+        `Your plan allows ${cap} API token${cap === 1 ? '' : 's'}. Revoke one, or upgrade for more.`
+      );
+    }
+  }
   const body = (await c.req.json().catch(() => ({}))) as {
     name?: unknown;
     scopes?: unknown;
