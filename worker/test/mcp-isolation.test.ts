@@ -58,7 +58,7 @@ beforeAll(async () => {
     [B_USER, B_PROFILE, 'b@example.com'],
   ] as const) {
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', 1)"
+      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
     )
       .bind(uid, email)
       .run();

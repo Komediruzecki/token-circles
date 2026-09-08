@@ -8,6 +8,7 @@ import {
   receiptCountLimit,
   RECEIPT_ALLOWED_TYPES,
   RECEIPT_MAX_BYTES,
+  receiptMaxBytes,
 } from '../plan';
 import { HttpError } from '../http';
 import * as db from '../db';
@@ -62,11 +63,11 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
   if (!RECEIPT_ALLOWED_TYPES.includes(file.type)) {
     throw new HttpError(400, `Unsupported file type: ${file.type || 'unknown'}`);
   }
-  if (file.size > RECEIPT_MAX_BYTES) {
-    throw new HttpError(
-      413,
-      `File too large (max ${Math.round(RECEIPT_MAX_BYTES / 1024 / 1024)}MB)`
-    );
+  // Per plan, because an upload is bandwidth and R2 storage — the thing paid actually buys.
+  // Falls back to the shared floor so a plan with no cap configured still refuses a huge file.
+  const maxBytes = (await receiptMaxBytes(c)) || RECEIPT_MAX_BYTES;
+  if (file.size > maxBytes) {
+    throw new HttpError(413, `File too large (max ${Math.round(maxBytes / 1024 / 1024)}MB)`);
   }
   // Pre-flight, so an over-quota upload is refused before the file is streamed to R2. It is not
   // the enforcement: counting and then inserting leaves a window where two uploads both see

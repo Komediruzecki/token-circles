@@ -159,3 +159,36 @@ h2 {
     padding-box;
   border-width: 1px;
 }
+
+/* Plan card art.
+   One generated background per tier in the badges' own language — navy ground, hairline rings
+   entering from the right, azure warming into gold as the tier climbs — so the paid surface and
+   the reward surface read as one product. The art is dark by construction (measured 4-6%
+   luminance across the left half, where the text sits), which is why it is scoped to the dark
+   theme: laying a navy field under a light card would put dark-on-dark text on it. A light set
+   is a follow-up, not a silent compromise.
+   `background-color` stays underneath, so a card whose image fails to load is exactly the card
+   it was before. */
+:root[data-theme='dark'] [data-plan-card] {
+  background-image:
+    linear-gradient(90deg, var(--card-bg) 34%, transparent 78%), var(--plan-card-art);
+  background-size:
+    100% 100%,
+    cover;
+  background-position:
+    center,
+    right center;
+  background-repeat: no-repeat;
+}
+:root[data-theme='dark'] [data-plan-card='free'] {
+  --plan-card-art: url('/plans/card-free.webp');
+}
+:root[data-theme='dark'] [data-plan-card='basic'] {
+  --plan-card-art: url('/plans/card-basic.webp');
+}
+:root[data-theme='dark'] [data-plan-card='advanced'] {
+  --plan-card-art: url('/plans/card-advanced.webp');
+}
+:root[data-theme='dark'] [data-plan-card='ultimate'] {
+  --plan-card-art: url('/plans/card-ultimate.webp');
+}

@@ -1,4 +1,5 @@
 import * as db from './db';
+import { planHasFeature } from './plans';
 
 // Personal access tokens. Bearer credentials for /mcp and /api/v1/*, and for nothing else --
 // see requireToken (added alongside the middleware) for why that boundary is an allow-list
@@ -86,14 +87,20 @@ export async function verifyApiToken(DB: D1Database, raw: string): Promise<Token
     default_profile_id: number | null;
     expires_at: string | null;
     revoked_at: string | null;
+    plan: string | null;
   }>(
     DB,
-    `SELECT id, user_id, scopes, default_profile_id, expires_at, revoked_at
-       FROM api_tokens WHERE token_hash = ?`,
+    `SELECT t.id, t.user_id, t.scopes, t.default_profile_id, t.expires_at, t.revoked_at, u.plan
+       FROM api_tokens t JOIN users u ON u.id = t.user_id
+      WHERE t.token_hash = ?`,
     await hashToken(raw)
   );
   if (!row || row.revoked_at) return null;
   if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) return null;
+  // The plan is checked here, not only where tokens are minted, so a downgrade or a lapsed
+  // subscription actually closes the API rather than leaving whatever was minted while paid
+  // working forever. It is a joined column, so it costs no extra round trip.
+  if (!planHasFeature(row.plan, 'apiAccess')) return null;
 
   // Conditional, so an active token costs one write per TOKEN_TOUCH_SECONDS rather than one per
   // request. Fire-and-forget: a failed touch must never fail the request.

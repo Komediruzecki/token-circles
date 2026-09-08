@@ -13,16 +13,37 @@ interface PlanDef {
     receiptsPerProfile: number | null
     remindersPerMonth: number | null
     profiles: number | null
+    apiTokens: number | null
+    receiptMaxMb: number
   }
   features: {
     cloudSync: boolean
     emailReminders: boolean
     receipts: boolean
     advancedReports: boolean
+    apiAccess: boolean
+    automatedImports: boolean
+    prioritySupport: boolean
   }
 }
 
+/**
+ * The tiers are cumulative, so a card lists only what its tier ADDS. Repeating the eight rows
+ * every card shares turns the comparison into a wall a reader has to diff by eye; the "Everything
+ * in X, plus" line does that work for them, and the differences are then the only thing on the
+ * card. Free has no predecessor, so it lists its own.
+ */
+const PREDECESSOR: Record<string, string> = {
+  basic: 'Free',
+  advanced: 'Basic',
+  ultimate: 'Advanced',
+}
+
 const RECOMMENDED = 'advanced'
+/** Which tier each one builds on, for the cumulative diff. */
+const BELOW: Record<string, string> = { basic: 'free', advanced: 'basic', ultimate: 'advanced' }
+/** Kept in one place because it is a promise that also goes to Stripe and onto the invoice. */
+const SUPPORT_LABEL = 'Priority support (reply in 1-3 working days)'
 
 function CheckIcon() {
   return (
@@ -195,6 +216,70 @@ export default function BillingPlans(props: {
   const fmt = (n: number | null) =>
     n === null ? 'Unlimited' : n === 0 ? '—' : n.toLocaleString('en-US')
 
+  /**
+   * Every row a card could carry, in reading order. A row is shown when it is on for this tier
+   * and either the tier below did not have it, or the number moved — which is exactly "what does
+   * this step buy me". Free shows all of its own.
+   */
+  const allRows = (p: PlanDef): Array<{ key: string; on: boolean; label: string }> => [
+    {
+      key: 'profiles',
+      on: p.limits.profiles !== 0,
+      label:
+        p.limits.profiles === null
+          ? 'Unlimited profiles'
+          : `${p.limits.profiles} profile${p.limits.profiles === 1 ? '' : 's'}`,
+    },
+    { key: 'cloudSync', on: p.features.cloudSync, label: 'Cloud sync' },
+    {
+      key: 'reminders',
+      on: p.features.emailReminders,
+      // "Unlimited" reads as a word, not as a quantity: "(Unlimited/mo)" is a unit applied to
+      // something that has no number.
+      label: !p.features.emailReminders
+        ? 'Email reminders'
+        : p.limits.remindersPerMonth === null
+          ? 'Unlimited email reminders'
+          : `Email reminders (${fmt(p.limits.remindersPerMonth)}/mo)`,
+    },
+    {
+      key: 'receipts',
+      on: p.features.receipts,
+      label: !p.features.receipts
+        ? 'Receipt storage'
+        : p.limits.receiptsPerProfile === null
+          ? 'Unlimited receipt storage'
+          : `Receipt storage (${fmt(p.limits.receiptsPerProfile)})`,
+    },
+    {
+      key: 'receiptSize',
+      on: p.features.receipts && p.limits.receiptMaxMb > 0,
+      label: `Uploads up to ${p.limits.receiptMaxMb} MB`,
+    },
+    { key: 'reports', on: p.features.advancedReports, label: 'Advanced reports (tax & P&L)' },
+    {
+      key: 'api',
+      on: p.features.apiAccess,
+      label:
+        p.limits.apiTokens === null
+          ? 'API & MCP access (unlimited tokens)'
+          : `API & MCP access (${p.limits.apiTokens} token${p.limits.apiTokens === 1 ? '' : 's'})`,
+    },
+    { key: 'imports', on: p.features.automatedImports, label: 'Automated imports on a schedule' },
+    { key: 'support', on: p.features.prioritySupport, label: SUPPORT_LABEL },
+  ]
+
+  const addedRows = (p: PlanDef): Array<{ on: boolean; label: string }> => {
+    const below = plans().find((x) => x.id === BELOW[p.id])
+    if (!below) return allRows(p).filter((r) => r.on)
+    const prev = new Map(allRows(below).map((r) => [r.key, r]))
+    return allRows(p).filter((r) => {
+      if (!r.on) return false
+      const was = prev.get(r.key)
+      return !was?.on || was.label !== r.label
+    })
+  }
+
   const row = (on: boolean, label: string) => (
     <div style={{ display: 'flex', 'align-items': 'center', gap: '7px', margin: '5px 0' }}>
       {on ? <CheckIcon /> : <DashIcon />}
@@ -266,6 +351,7 @@ export default function BillingPlans(props: {
             return (
               <div
                 data-testid={mine() ? 'plan-card-current' : undefined}
+                data-plan-card={p.id}
                 style={{
                   position: 'relative',
                   // The plan you are ON outranks the plan we recommend. Before this the only
@@ -324,26 +410,21 @@ export default function BillingPlans(props: {
                 </div>
 
                 <div style={{ flex: 1 }}>
-                  {row(
-                    p.limits.profiles !== 0,
-                    p.limits.profiles === null
-                      ? 'Unlimited profiles'
-                      : `${p.limits.profiles} profile${p.limits.profiles === 1 ? '' : 's'}`
-                  )}
-                  {row(p.features.cloudSync, 'Cloud sync')}
-                  {row(
-                    p.features.emailReminders,
-                    p.features.emailReminders
-                      ? `Email reminders (${fmt(p.limits.remindersPerMonth)}/mo)`
-                      : 'Email reminders'
-                  )}
-                  {row(
-                    p.features.receipts,
-                    p.features.receipts
-                      ? `Receipt storage (${fmt(p.limits.receiptsPerProfile)})`
-                      : 'Receipt storage'
-                  )}
-                  {row(p.features.advancedReports, 'Advanced reports (tax & P&L)')}
+                  <Show when={PREDECESSOR[p.id]}>
+                    {(prev) => (
+                      <div
+                        style={{
+                          'font-size': '12.5px',
+                          'font-weight': 600,
+                          color: 'var(--text-secondary)',
+                          margin: '0 0 8px',
+                        }}
+                      >
+                        Everything in {prev()}, plus
+                      </div>
+                    )}
+                  </Show>
+                  <For each={addedRows(p)}>{(r) => row(r.on, r.label)}</For>
                 </div>
 
                 {/* CTA */}

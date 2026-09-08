@@ -8,7 +8,7 @@ import { mintApiToken, verifyApiToken, TOKEN_PREFIX } from '../src/apitoken';
 
 async function seedUser(id: number): Promise<void> {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', 1, 'ultimate')"
   )
     .bind(id, `u${id}@example.com`)
     .run();
@@ -38,7 +38,7 @@ describe('api_tokens schema', () => {
   it('rejects a duplicate token_hash', async () => {
     // The user FK is real, so a token row needs an owner before it can exist at all.
     await env.DB.prepare(
-      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (1, 'dup@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+      "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (1, 'dup@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'ultimate')"
     ).run();
     const row = (id: string) =>
       env.DB.prepare(

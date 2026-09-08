@@ -43,7 +43,7 @@ beforeEach(async () => {
   }
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'sources@example.com', 'password', 1)"
+      "INSERT INTO users (id, email, auth_provider, token_version, plan) VALUES (?, 'sources@example.com', 'password', 1, 'advanced')"
     ).bind(USER_ID),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Main')").bind(
       PROFILE_ID,
@@ -54,7 +54,7 @@ beforeEach(async () => {
       USER_ID
     ),
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'othersources@example.com', 'password', 1)"
+      "INSERT INTO users (id, email, auth_provider, token_version, plan) VALUES (?, 'othersources@example.com', 'password', 1, 'advanced')"
     ).bind(OTHER_USER_ID),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Theirs')").bind(
       OTHER_PROFILE_ID,

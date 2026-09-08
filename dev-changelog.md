@@ -55,6 +55,38 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
 
 ### Added
 
+- **Tiered plans that actually differ** (`worker/src/plans.ts`, `plan.ts`, `apitoken.ts`,
+  `routes/api-tokens.ts`, `routes/import-sources.ts`, `routes/receipts.ts`,
+  `components/BillingPlans.tsx`; decisions in `docs/plans/billing-tiers.md`).
+  Basic, Advanced and Ultimate carried **identical** feature flags — only profiles, receipts and
+  reminders differed — so the page asked 3x the money for more of the same. `PlanFeatures` gains
+  `apiAccess`, `automatedImports` and `prioritySupport`; `PlanLimits` gains `apiTokens` and
+  `receiptMaxMb`. Reminders drop from 2 000/20 000 to **500/2 000/unlimited**: a household on top
+  of every bill sends about thirty a month, so the old numbers advertised a cost we would have
+  eaten if anyone had believed them.
+- **API access is enforced, not just advertised.** `POST /api/account/api-tokens` and the MCP
+  server had **no plan check at all**, so a Free account could drive the whole product from a
+  script. Minting now requires `apiAccess` and counts live tokens against the plan's cap —
+  live only, so revoking one frees its slot and rotating never needs an upgrade. The check also
+  sits in `verifyApiToken`, on a column joined into the query it already ran, so a downgrade or a
+  lapsed subscription closes the API instead of leaving whatever was minted while paying working
+  for ever.
+- **Scheduled imports are an Advanced feature.** Gated at the write, and only when the request
+  actually sets a non-`manual` schedule — renaming a source that is already daily must not 402 on
+  a field the body never mentioned. Manual import stays free: it is the user's own file.
+- **Receipt upload size is per plan** (5/25/50 MB), because upload size is bandwidth and R2.
+  `RECEIPT_MAX_BYTES` stays as the floor a plan with no cap falls back to.
+- **The plan cards are cumulative.** `addedRows` diffs a tier against the one below and renders
+  only what changed, under an "Everything in X, plus" line. At nine rows a flat list was a wall
+  the reader had to diff by eye. Four generated backgrounds (`public/plans/card-<tier>.webp`,
+  4-16 KB each) sit behind the cards in the badges' own language — navy, hairline rings, azure
+  warming into gold as the tier climbs. Scoped to the dark theme: the art measures 4-6% luminance
+  across the left half where the text sits, so laying it under a light card would put dark text on
+  a dark field. A light set is a follow-up, not a silent compromise.
+- Worker fixtures that exercise API tokens, MCP and import sources now seed a paid plan. They
+  were creating users with no `plan`, which defaults to Free — the new gates were right to
+  refuse them.
+
 - **A timeline of what has been earned, above the gallery** (`components/BadgeTimeline.tsx` and
   its module CSS, wired into `features/Progress.tsx`). At thirty-four badges one flat grid buries
   the lit ones among the dim, and it answers "what is there to get" while never answering "what
