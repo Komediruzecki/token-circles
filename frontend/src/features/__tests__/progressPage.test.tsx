@@ -107,7 +107,7 @@ describe('Progress page', () => {
     const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
     expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
     // The three section headings are the brand's orbit dividers, not plain rules.
-    expect(c.querySelectorAll('path[pathLength="1"]')).toHaveLength(3)
+    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })

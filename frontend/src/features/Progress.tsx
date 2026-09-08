@@ -183,6 +183,7 @@ export default function Progress(): JSX.Element {
       <section class={styles.section} aria-label="Worth a look">
         <OrbitalDivider
           id="progress-sec-advice"
+          testId="progress-divider-advice"
           label="Worth a look"
           actions={
             dismissedAdvice().length > 0 ? (
@@ -248,6 +249,7 @@ export default function Progress(): JSX.Element {
       <section class={styles.section} aria-label="What you have earned">
         <OrbitalDivider
           id="progress-sec-earned"
+          testId="progress-divider-earned"
           label="What you have earned"
           meta={`${unlocks().length} of ${ACHIEVEMENTS.length}`}
         />
@@ -257,6 +259,7 @@ export default function Progress(): JSX.Element {
       <section class={styles.section} aria-label="Every badge">
         <OrbitalDivider
           id="progress-sec-badges"
+          testId="progress-divider-badges"
           label="Every badge"
           meta="Earned first, then what is left"
         />
