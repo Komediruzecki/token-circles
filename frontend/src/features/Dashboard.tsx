@@ -27,6 +27,7 @@ import {
   toast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { loadWidgetPrefs } from '../core/dashboardWidgets'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
@@ -44,65 +45,6 @@ const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 // top of the page, rendered by OverviewDeck); they support show/hide but not
 // reordering. Everything after them is the scroll-down tail, reorderable as
 // before.
-const DEFAULT_WIDGET_ORDER = [
-  'metrics',
-  'deck-sankey',
-  'deck-heatmap',
-  'deck-radar',
-  'deck-trends',
-  'deck-portfolio',
-  'deck-transactions',
-  'category-chart',
-  'recent-transactions',
-  'upcoming-bills',
-  'savings-rate',
-  'budget-alerts',
-  'recurring-insights',
-  'income-vs-expenses',
-]
-
-const DEFAULT_VISIBLE = [
-  'metrics',
-  'deck-sankey',
-  'deck-heatmap',
-  'deck-radar',
-  'deck-trends',
-  'deck-portfolio',
-  'deck-transactions',
-  'category-chart',
-  'upcoming-bills',
-  'budget-alerts',
-]
-
-function loadWidgetPrefs() {
-  const saved = localStorage.getItem('dashboard_widgets')
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      const visible =
-        parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)
-          ? parsed.visibleWidgets
-          : DEFAULT_VISIBLE
-      const order =
-        parsed.widgetOrder && Array.isArray(parsed.widgetOrder) && parsed.widgetOrder.length > 0
-          ? parsed.widgetOrder
-          : DEFAULT_WIDGET_ORDER
-      // Widgets added after the user saved their layout: splice them in (a saved
-      // order that predates a widget would otherwise hide it forever). An id
-      // missing from the saved order is new — user-hidden ids stay in order.
-      const newIds = DEFAULT_WIDGET_ORDER.filter((id) => !order.includes(id))
-      for (const id of newIds) {
-        order.splice(DEFAULT_WIDGET_ORDER.indexOf(id), 0, id)
-        if (DEFAULT_VISIBLE.includes(id) && !visible.includes(id)) visible.push(id)
-      }
-      return { visible, order }
-    } catch {
-      /* ignore */
-    }
-  }
-  return { visible: DEFAULT_VISIBLE, order: DEFAULT_WIDGET_ORDER }
-}
-
 export default function Dashboard() {
   const state = useAppState()
   const { period, helpers } = usePeriod()
@@ -566,7 +508,9 @@ export default function Dashboard() {
         bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
       */}
       <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
-      <BadgeRail />
+      <Show when={isWidgetVisible('badges')}>
+        <BadgeRail />
+      </Show>
 
       {initialLoad() && !metrics() ? (
         // Mirrors the real first paint: a metrics row above a chart. The header and period bar
@@ -897,6 +841,7 @@ export default function Dashboard() {
                 <>
                   {isWidgetVisible(widgetId) &&
                   widgetId !== 'metrics' &&
+                  widgetId !== 'badges' &&
                   !widgetId.startsWith('deck-')
                     ? renderWidget(widgetId)
                     : null}

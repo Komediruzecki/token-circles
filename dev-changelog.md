@@ -82,6 +82,32 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
 
 ### Added
 
+- **A wheel over a sideways strip moves the strip** (`utils/horizontalWheel.ts`, used by
+  `BadgeTimeline` and `BadgeRail`). `scrollHorizontallyOnWheel(el)` maps `deltaY` onto
+  `scrollLeft` and returns its own detach function; both call sites register it from the
+  element's `ref` callback through `onCleanup`, which covers the `<Show>` case where the strip
+  appears only once a badge exists.
+  Three details are the whole design. It is registered `{ passive: false }` because Chrome makes
+  wheel listeners passive by default and a passive listener cannot `preventDefault` at all. It
+  calls `preventDefault` **only while the strip can still move that way**, so the last badge is
+  not a wall the page scroll cannot get past — the pointer never has to leave the strip to carry
+  on down the page. And a gesture whose `deltaX` already exceeds its `deltaY` is left alone, so a
+  trackpad's own sideways scroll is not fought over. `deltaMode` is honoured (Firefox reports
+  lines, not pixels: a 3-line notch would otherwise move the strip three pixels).
+
+- **The badges rail is a dashboard widget** (`core/dashboardWidgets.ts`, `features/Dashboard.tsx`,
+  `components/DashboardSettings.tsx`). It renders at a fixed spot under the period bar, so like
+  `metrics` and the `deck-*` ids it is excluded from the ordered loop and gated on
+  `isWidgetVisible('badges')` where it sits.
+  The registry is new and is the point of the change: the page and the Views dialog each held
+  their own copy of the widget lists, and the dialog had no equivalent of the page's
+  splice-in-new-ids migration. Adding an id to both copies would still have left every existing
+  user — everyone, since the rail already shipped — with a saved `widgetOrder` that predates
+  `badges`, so the dialog would have rendered no row for it and the next Save would have written
+  a `visibleWidgets` without it, switching the rail off for a user who never asked. `ALL_WIDGET_IDS`,
+  `DEFAULT_WIDGET_ORDER`, `DEFAULT_VISIBLE`, `WIDGET_STORAGE_KEY` and `loadWidgetPrefs()` now live
+  in one module both read.
+
 - **Tiered plans that actually differ** (`worker/src/plans.ts`, `plan.ts`, `apitoken.ts`,
   `routes/api-tokens.ts`, `routes/import-sources.ts`, `routes/receipts.ts`,
   `components/BillingPlans.tsx`; decisions in `docs/plans/billing-tiers.md`).
@@ -200,6 +226,20 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
   (`tc:verifyEmailDismissed` in sessionStorage) and the shot loop fails loudly if the banner is on
   screen anyway. The transactions frame navigates to `#transactions?period=ytd` — the current month
   has only a handful of rows early in the month, and the frame's minimum is five.
+
+### Changed
+
+- **The Progress page's section headings are `OrbitalDivider`s** (`features/Progress.tsx`), the
+  same orbit-arc separator every other section-bearing page uses; they were plain `<h2>` rows.
+  The hint text moves to the divider's `meta` slot and "Restore dismissed" becomes an
+  `OrbitalAction`. Each `<section>` swaps `aria-labelledby` for `aria-label` — the divider owns
+  its own heading and the old ids no longer exist. `progressPage.test.tsx` needed a `matchMedia`
+  stub, since the divider asks about `prefers-reduced-motion` on mount (`tagsPage.test.tsx` has
+  the same stub for the same reason).
+
+- **The badge rail no longer touches the cards below it** (`BadgeRail.module.css`). It carried no
+  bottom margin at all, so the rail and the first chart card read as one block; it now has 20px,
+  against the period bar's 16px above it.
 
 ### Fixed
 

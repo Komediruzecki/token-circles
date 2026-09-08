@@ -1,5 +1,5 @@
 import { render } from 'solid-js/web'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
 
 vi.mock('../../core/appStore', () => ({ setPage: vi.fn() }))
@@ -64,6 +64,20 @@ import { setPage } from '../../core/appStore'
 import Progress from '../Progress'
 
 let host: HTMLDivElement
+beforeEach(() => {
+  // jsdom has no matchMedia, and the OrbitalDivider between sections asks it about
+  // prefers-reduced-motion the moment it mounts.
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    onchange: null,
+    dispatchEvent: () => false,
+  }))
+})
 let dispose: (() => void) | undefined
 afterEach(() => {
   dispose?.()
@@ -86,12 +100,14 @@ describe('Progress page', () => {
     expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(1)
     // Every badge in the set, however many that is: the gallery renders all four bands. Scoped
     // past the timeline, which draws a medallion of its own for each badge already earned.
-    const gallery = c.querySelector('[aria-labelledby="badges-title"]')!
+    const gallery = c.querySelector('[aria-label="Every badge"]')!
     expect(gallery.querySelectorAll('[data-band]')).toHaveLength(ACHIEVEMENTS.length)
     expect(gallery.querySelectorAll('[data-lit="true"]')).toHaveLength(1)
     // The one earned badge appears on the timeline too, dated to the month it was earned.
     const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
     expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
+    // The three section headings are the brand's orbit dividers, not plain rules.
+    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })

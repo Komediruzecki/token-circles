@@ -3,10 +3,11 @@
  * sideways, with a way through to the Progress page. Before the first badge it says what will
  * appear rather than showing an empty strip.
  */
-import { createMemo, For, Show } from 'solid-js'
+import { createMemo, For, onCleanup, Show } from 'solid-js'
 import { achievementById } from '../core/achievements/definitions'
 import { streak, unlocks } from '../core/achievementsStore'
 import { setPage } from '../core/appStore'
+import { scrollHorizontallyOnWheel } from '../utils/horizontalWheel'
 import BadgeMedallion from './BadgeMedallion'
 import styles from './BadgeRail.module.css'
 import type { JSX } from 'solid-js'
@@ -47,6 +48,9 @@ export default function BadgeRail(): JSX.Element {
       >
         <ul
           class={`${styles.shelf} brand-scroll`}
+          ref={(el) => {
+            onCleanup(scrollHorizontallyOnWheel(el))
+          }}
           tabindex="0"
           aria-label="Badges earned. Scroll sideways to browse."
         >

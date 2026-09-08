@@ -6,9 +6,10 @@
  * rule was met — not by the day the app noticed — so importing five years of statements reads as
  * five years of history rather than as one very busy afternoon.
  */
-import { createMemo, For, Show } from 'solid-js'
+import { createMemo, For, onCleanup, Show } from 'solid-js'
 import { achievementById } from '../core/achievements/definitions'
 import { unlocks } from '../core/achievementsStore'
+import { scrollHorizontallyOnWheel } from '../utils/horizontalWheel'
 import BadgeMedallion from './BadgeMedallion'
 import styles from './BadgeTimeline.module.css'
 import type { JSX } from 'solid-js'
@@ -53,6 +54,9 @@ export default function BadgeTimeline(): JSX.Element {
     >
       <ol
         class={`${styles.track} brand-scroll`}
+        ref={(el) => {
+          onCleanup(scrollHorizontallyOnWheel(el))
+        }}
         data-test-id="badge-timeline"
         tabindex="0"
         aria-label="Badges earned, oldest first. Scroll sideways to browse."

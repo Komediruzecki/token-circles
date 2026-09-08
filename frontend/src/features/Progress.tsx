@@ -6,6 +6,7 @@
 import { createMemo, For, Show } from 'solid-js'
 import BadgeMedallion from '../components/BadgeMedallion'
 import BadgeTimeline from '../components/BadgeTimeline'
+import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import { buildAdvice } from '../core/achievements/advice'
 import { ACHIEVEMENTS, BANDS } from '../core/achievements/definitions'
 import { monthsTo } from '../core/achievements/evaluate'
@@ -179,21 +180,23 @@ export default function Progress(): JSX.Element {
         </ol>
       </section>
 
-      <section class={styles.section} aria-labelledby="advice-title">
-        <div class={styles.sectionHead}>
-          <h2 id="advice-title">Worth a look</h2>
-          <Show when={dismissedAdvice().length > 0}>
-            <button
-              type="button"
-              class={styles.ghost}
-              onClick={() => {
-                void restoreAdvice()
-              }}
-            >
-              Restore dismissed
-            </button>
-          </Show>
-        </div>
+      <section class={styles.section} aria-label="Worth a look">
+        <OrbitalDivider
+          id="progress-sec-advice"
+          testId="progress-divider-advice"
+          label="Worth a look"
+          actions={
+            dismissedAdvice().length > 0 ? (
+              <OrbitalAction
+                onClick={() => {
+                  void restoreAdvice()
+                }}
+              >
+                Restore dismissed
+              </OrbitalAction>
+            ) : undefined
+          }
+        />
         <Show
           when={advice().length > 0}
           fallback={
@@ -243,21 +246,23 @@ export default function Progress(): JSX.Element {
         </Show>
       </section>
 
-      <section class={styles.section} aria-labelledby="earned-title">
-        <div class={styles.sectionHead}>
-          <h2 id="earned-title">What you have earned</h2>
-          <span class={styles.hint}>
-            {unlocks().length} of {ACHIEVEMENTS.length}
-          </span>
-        </div>
+      <section class={styles.section} aria-label="What you have earned">
+        <OrbitalDivider
+          id="progress-sec-earned"
+          testId="progress-divider-earned"
+          label="What you have earned"
+          meta={`${unlocks().length} of ${ACHIEVEMENTS.length}`}
+        />
         <BadgeTimeline />
       </section>
 
-      <section class={styles.section} aria-labelledby="badges-title">
-        <div class={styles.sectionHead}>
-          <h2 id="badges-title">Every badge</h2>
-          <span class={styles.hint}>Earned first, then what is left</span>
-        </div>
+      <section class={styles.section} aria-label="Every badge">
+        <OrbitalDivider
+          id="progress-sec-badges"
+          testId="progress-divider-badges"
+          label="Every badge"
+          meta="Earned first, then what is left"
+        />
         <For each={Object.keys(BANDS) as Band[]}>
           {(band) => (
             <div class={styles.band}>
