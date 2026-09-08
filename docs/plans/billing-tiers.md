@@ -145,13 +145,41 @@ first.
 Roughly one focused PR for the model and the gates, one for the pricing UI and art, one for
 Stripe once the login is refreshed.
 
-## Decisions needed
+## Decisions (taken 2026-09-08)
 
-1. **Reminder numbers**: 500 / 2 000 / unlimited as proposed?
-2. **API access from Basic**, with tokens at 2 / 10 / unlimited — or hold API back to Advanced
-   as a stronger upgrade hook?
-3. **Automated imports as the Advanced feature** — agreed, or does that belong at Basic?
-4. **Priority support at Ultimate**: what response time are you willing to promise in writing?
-5. **Any of the "reasonable candidates" you want in v1** rather than noted for later —
-   household sharing and the larger receipt cap are the two that are cheap to add now.
-6. **Prices**: unchanged at €3 / €6 / €10?
+1. **Reminders**: 500 / 2 000 / unlimited. Agreed.
+2. **API access starts at Basic**, tokens at 2 / 10 / unlimited. Agreed.
+3. **Automated imports at Advanced.** Agreed.
+4. **Priority support at Ultimate: a reply within 1–3 working days**, holidays excepted. That
+   wording goes on the card and into the Stripe description verbatim, because it is a promise.
+5. **Larger receipt uploads move to Advanced**, not Ultimate: 5 MB on Basic, **25 MB on
+   Advanced**, 50 MB on Ultimate. `RECEIPT_MAX_BYTES` becomes a per-plan limit.
+6. **Prices unchanged** at €3 / €6 / €10 monthly, €30 / €60 / €100 annual — which is exactly
+   what the live Stripe prices already charge.
+7. **Household sharing is not in v1.** Left in the candidates table.
+
+### Two features that are not built yet
+
+- **Receipt OCR** — Advanced and up, when it ships.
+- **End-to-end encryption** — tier still open, Basic or Advanced.
+
+**Neither goes on the pricing card until it works.** A paid pricing page that lists a feature
+the product does not have is a misleading commercial practice under the EU's UCPD, and this is
+the same account the compliance work was done for; "coming soon" on a page whose whole job is
+taking money does not save it. The tier intent is recorded here and in `plans.ts` comments so
+the decision is not lost, and the row appears the day the feature does.
+
+## What changes in Stripe
+
+The three live products already exist with the right prices (€3/€6/€10 monthly, €30/€60/€100
+annual) and each has an image and a `marketing_features` list. What needs updating:
+
+| Product | Change |
+| --- | --- |
+| **Basic** | Add "API access and MCP server — 2 tokens". State the reminder allowance as 500/mo. |
+| **Advanced** | Add "Automated imports on a schedule", "10 API tokens", "Receipt uploads up to 25 MB". State reminders as 2 000/mo. Fix the stray `~` in "Up to 10 profiles / households~". |
+| **Ultimate** | Add "Unlimited API tokens" and "Priority support — a reply within 1–3 working days". |
+
+Descriptions get the same cumulative wording as the cards, since a customer reads them again at
+checkout and on the invoice. Nothing is written to the live account without a go-ahead on the
+exact commands.
