@@ -161,21 +161,28 @@ h2 {
 }
 
 /* Plan card art.
-   One generated background per tier in the badges' own language — navy ground, hairline rings,
-   azure warming into gold as the tier climbs — so the paid surface and the reward surface read
-   as one product.
+   One generated background per tier in the badges' own language — hairline rings on the theme's
+   own ground — so the paid surface and the reward surface read as one product.
 
    The card is narrow and tall, so the images are cropped to the ring cluster rather than left
-   landscape: `cover` on a wide source in a 200px column shows a slice of empty navy and nothing
-   else. A scrim over the left two-thirds keeps the text on flat ground; the art reads down the
-   right edge.
+   landscape: `cover` on a wide source in a 200px column shows a slice of empty ground and
+   nothing else. A scrim over the left two-thirds keeps the text on flat ground; the art reads
+   down the right edge.
 
    The card sets `background-color`, never the `background` shorthand — the shorthand resets
    background-image to none at inline-style specificity, where no rule here can reach it.
 
-   Dark theme only: the art measures 8-16% mean luminance, so under a light card it would put
-   dark text on a dark field. A light set is a follow-up, not a silent compromise. */
-:root[data-theme='dark'] [data-plan-card] {
+   Two sets, one per scheme, and the split is not decoration. The dark art measures 8-16% mean
+   luminance and the light art 90-94%: hand either one to the other theme and you get text the
+   same colour as the field behind it. The light set is the dark set's own ring geometry
+   re-painted — same composition per tier, so a tier's card is recognisably itself in both
+   themes — measured, not eyeballed:
+     magick card-<tier>.webp -colorspace gray -level 6%,55% -evaluate multiply 0.50 mask.png
+     magick -size 560x831 xc:'#eef3ff' \( -size 560x831 xc:'#3b6fe0' \) mask.png -composite \
+       -quality 88 card-light-<tier>.webp
+   The black point is what keeps the source's navy ground from arriving as a grey wash; the
+   multiply is what keeps the rings a tint rather than a block of azure. */
+[data-plan-card] {
   background-image:
     linear-gradient(
       100deg,
@@ -183,7 +190,7 @@ h2 {
       color-mix(in oklab, var(--bg, #0b0e14) 72%, transparent) 58%,
       transparent 100%
     ),
-    var(--plan-card-art);
+    var(--plan-card-art, none);
   background-size:
     100% 100%,
     cover;
@@ -203,6 +210,18 @@ h2 {
 }
 :root[data-theme='dark'] [data-plan-card='ultimate'] {
   --plan-card-art: url('/plans/card-ultimate.webp');
+}
+:root[data-theme='light'] [data-plan-card='free'] {
+  --plan-card-art: url('/plans/card-light-free.webp');
+}
+:root[data-theme='light'] [data-plan-card='basic'] {
+  --plan-card-art: url('/plans/card-light-basic.webp');
+}
+:root[data-theme='light'] [data-plan-card='advanced'] {
+  --plan-card-art: url('/plans/card-light-advanced.webp');
+}
+:root[data-theme='light'] [data-plan-card='ultimate'] {
+  --plan-card-art: url('/plans/card-light-ultimate.webp');
 }
 
 /* The card a visitor asked for by name.
