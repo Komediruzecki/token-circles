@@ -50,10 +50,13 @@ const defs = (uid: string): string => `<defs>
 
 function baseMarkup(uid: string, band: Band): string {
   const paint = `url(#${uid}-${band === 'mastery' || band === 'legacy' ? band : 'azure'})`
+  // `data-ring` carries its index rather than standing bare: this same string is parsed as XML
+  // when the share card is rasterised, and XML has no valueless attributes — one of them killed
+  // the whole document and every share ended in "Could not build the share card".
   const rings = RINGS[band]
     .map(
-      (r) =>
-        `<circle data-ring cx="110" cy="110" r="${r.r}" fill="none" stroke="${paint}" stroke-width="${r.w}"/>`
+      (r, i) =>
+        `<circle data-ring="${i + 1}" cx="110" cy="110" r="${r.r}" fill="none" stroke="${paint}" stroke-width="${r.w}"/>`
     )
     .join('')
   return `${defs(uid)}<circle cx="110" cy="110" r="80" fill="url(#${uid}-face)" stroke="rgba(147,180,255,.22)"/><circle cx="110" cy="110" r="93" fill="none" stroke="${paint}" stroke-width="1.2" stroke-dasharray="1.6 4.4" opacity=".55"/>${rings}`

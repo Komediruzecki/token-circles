@@ -38,7 +38,7 @@
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  scrollbar-width: thin;
+  /* Painted by `brand-scroll` in styles/index.css. */
   mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 26px), transparent 100%);
 }
 .item {

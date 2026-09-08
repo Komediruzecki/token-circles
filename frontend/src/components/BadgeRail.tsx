@@ -46,7 +46,7 @@ export default function BadgeRail(): JSX.Element {
         }
       >
         <ul
-          class={styles.shelf}
+          class={`${styles.shelf} brand-scroll`}
           tabindex="0"
           aria-label="Badges earned. Scroll sideways to browse."
         >

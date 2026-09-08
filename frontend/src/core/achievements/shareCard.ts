@@ -1,6 +1,17 @@
 /**
  * The marketing loop: a 1200x630 card rendered client-side from the medallion SVG. Web Share
  * with a file where the platform has it, a PNG download otherwise. Nothing is uploaded.
+ *
+ * Two rules this file has to keep, because the card is rasterised by handing the SVG to an
+ * `<img>` and drawing that on a canvas:
+ *
+ * 1. **It must be well-formed XML.** An SVG loaded as an image is parsed strictly, so anything
+ *    HTML forgives — a valueless attribute, an unclosed tag — fails the whole document and the
+ *    image never loads.
+ * 2. **No `<foreignObject>`.** Chrome taints the canvas when the drawn SVG carries one, and
+ *    `toBlob` then throws a SecurityError. Text is wrapped into tspans here instead.
+ *
+ * Both of those shipped at once and every Share ended in "Could not build the share card".
  */
 import { medallionSvg } from '../../components/BadgeMedallion'
 import { achievementById, BANDS } from './definitions'
@@ -8,6 +19,25 @@ import type { AchievementId } from './definitions'
 
 const esc = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+/**
+ * Greedy word wrap to a character budget. Crude on purpose: the strings are ours, they are one
+ * sentence each, and the alternative — measuring text — needs a DOM this function does not have.
+ */
+export function wrapShare(text: string, perLine = 34): string[] {
+  const lines: string[] = []
+  let line = ''
+  for (const word of text.split(' ')) {
+    if (line === '') line = word
+    else if (`${line} ${word}`.length <= perLine) line = `${line} ${word}`
+    else {
+      lines.push(line)
+      line = word
+    }
+  }
+  if (line !== '') lines.push(line)
+  return lines
+}
 
 export function shareCardSvg(id: AchievementId): string {
   const def = achievementById(id)
@@ -25,7 +55,11 @@ export function shareCardSvg(id: AchievementId): string {
 <g fill="none" stroke="#6e9bff" opacity=".35"><circle cx="900" cy="315" r="300" stroke-dasharray="2 8"/><circle cx="900" cy="315" r="360" stroke-width=".8"/></g>
 <text x="84" y="150" font-family="ui-monospace, Menlo, monospace" font-size="18" letter-spacing="4" fill="#93b4ff">TOKEN CIRCLES · ${esc(BANDS[def.band].label.toUpperCase())}</text>
 <text x="84" y="270" font-size="96" font-weight="600" fill="#e8edff" letter-spacing="-2">${esc(def.name)}</text>
-<foreignObject x="84" y="300" width="520" height="160"><div xmlns="http://www.w3.org/1999/xhtml" style="font-family: system-ui, sans-serif; font-size: 30px; line-height: 1.3; color: #c3ccf0;">${esc(def.share)}</div></foreignObject>
+<text x="84" y="340" font-family="system-ui, sans-serif" font-size="30" fill="#c3ccf0">${wrapShare(
+    def.share
+  )
+    .map((line, i) => `<tspan x="84" dy="${i === 0 ? 0 : 40}">${esc(line)}</tspan>`)
+    .join('')}</text>
 <text x="84" y="530" font-family="ui-monospace, Menlo, monospace" font-size="20" letter-spacing="1" fill="#93b4ff">tokencircles.com</text>
 <svg x="700" y="115" width="400" height="400" viewBox="0 0 220 220" color="${glyphColor}">${medal}</svg>
 </svg>`

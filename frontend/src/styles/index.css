@@ -118,3 +118,44 @@ h2 {
     font-size: 16px;
   }
 }
+
+/* Branded sideways scrollbars.
+   `overflow-x: auto` gets the platform's grey bar, which reads as chrome from another app
+   sitting under our content. This paints the thumb in the theme's own primary, so it belongs
+   to the page and follows every theme without a second definition. Firefox has only the two
+   `scrollbar-*` properties; WebKit and Blink need the pseudo-elements, so both are set.
+   Opt in with `class="brand-scroll"` — it is deliberately not applied to every scroller,
+   because the page's own vertical bar should stay the platform's. */
+.brand-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--primary) 60%, transparent) transparent;
+}
+.brand-scroll::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+.brand-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.brand-scroll::-webkit-scrollbar-thumb {
+  /* The medal gradient, the same azure-into-gold the badges use, so the bar under a row of
+     medallions is visibly part of them. Inset by a transparent border so it reads as a pill
+     floating in the gutter rather than filling it. */
+  background: linear-gradient(
+      90deg,
+      color-mix(in oklab, var(--primary) 75%, transparent),
+      color-mix(in oklab, var(--accent-warm, var(--primary)) 55%, var(--primary))
+    )
+    padding-box;
+  border: 2px solid transparent;
+  border-radius: 999px;
+}
+.brand-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+      90deg,
+      var(--primary),
+      color-mix(in oklab, var(--accent-warm, var(--primary)) 80%, var(--primary))
+    )
+    padding-box;
+  border-width: 1px;
+}

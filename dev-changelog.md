@@ -11,6 +11,27 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **Every badge Share failed, for two independent reasons.** `shareBadge` hands the card's SVG
+  to an `<img>` and draws that on a canvas, and both steps were broken since the feature shipped;
+  nothing caught it because neither is visible until the button is pressed.
+  1. `baseMarkup` emitted `<circle data-ring ...>`. A valueless attribute is fine in HTML and
+     **invalid in XML**, and an SVG loaded as an image is parsed strictly — so the document
+     failed to parse, `img.onerror` fired, and the catch showed "Could not build the share card".
+     `data-ring` now carries its index.
+  2. With that fixed the image loaded and `toBlob` threw `SecurityError: Tainted canvases may not
+be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignObject>`,
+     which the card used to wrap the share line. Replaced with `wrapShare`, a greedy word wrap
+     into `<tspan>`s — crude on purpose, since the strings are ours and one sentence each.
+     Verified by rasterising all 34 cards in a real browser on a real origin: 34 of 34 produce a
+     PNG, against 0 of 34 before. Three tests now pin it — every card parses as XML, no card
+     carries a `foreignObject`, and every share line fits two wrapped lines.
+- **The badge timeline's scrollbar was the OS grey.** `.brand-scroll` in `styles/index.css`
+  paints the thumb in the theme's own `--primary` graduating into `--accent-warm`, the same
+  azure-into-gold the medals use, inset by a transparent border so it reads as a pill in the
+  gutter. Firefox has only `scrollbar-width`/`scrollbar-color`; Blink and WebKit need the
+  pseudo-elements, so both are set. Applied to the Progress timeline and the dashboard badge
+  rail, and deliberately not globally: the page's own vertical bar stays the platform's.
+
 - **The badge art was off centre, twice over.** Reported from the app: the Beginnings and
   Building faces sat high in their black cutout while Mastery and Legacy looked right, and several
   glyphs did not sit dead centre in the medallion.
