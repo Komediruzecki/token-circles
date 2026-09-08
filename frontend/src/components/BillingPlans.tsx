@@ -1,4 +1,5 @@
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
+import { highlightedPlan, setHighlightedPlan } from '../core/planIntent'
 
 // Renders the plan catalogue from the worker's GET /api/plans (single source of truth = plans.ts)
 // so the comparison can never drift from what the worker enforces. Server-mode only.
@@ -142,6 +143,19 @@ export default function BillingPlans(props: {
     } catch {
       /* leave empty — the card just won't render tiers */
     }
+    // Arriving from the marketing site's "Start on Advanced": bring that card into view and
+    // let its ring fade. Runs after the fetch, because until the tiers render there is nothing
+    // to scroll to. The signal clears itself so a later visit to Billing is unmarked.
+    const wanted = highlightedPlan()
+    if (!wanted) return
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-plan-card="${wanted}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => {
+        setHighlightedPlan(null)
+      }, 2600)
+    })
   })
 
   // The billing status stores 'premium' (single price) → it maps to the 'advanced' tier.
@@ -352,6 +366,9 @@ export default function BillingPlans(props: {
               <div
                 data-testid={mine() ? 'plan-card-current' : undefined}
                 data-plan-card={p.id}
+                // Set when the visitor arrived on `?plan=<id>` from the marketing site: the
+                // card they clicked gets scrolled to and ringed once. Styled in index.css.
+                data-plan-wanted={highlightedPlan() === p.id ? 'true' : undefined}
                 style={{
                   position: 'relative',
                   // The plan you are ON outranks the plan we recommend. Before this the only

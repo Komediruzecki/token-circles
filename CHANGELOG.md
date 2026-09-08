@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Pricing links from the website land on the plan you picked.** Choosing a tier on tokencircles.com now opens the app on that plan's card in Billing, signing you in first if you are not already.
+
 ## [5.14.0] — 2026-09-08
 
 ### Added

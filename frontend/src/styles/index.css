@@ -204,3 +204,30 @@ h2 {
 :root[data-theme='dark'] [data-plan-card='ultimate'] {
   --plan-card-art: url('/plans/card-ultimate.webp');
 }
+
+/* The card a visitor asked for by name.
+   `?plan=advanced` from about.tokencircles.com lands on Billing with that tier ringed, so the
+   click that started on the marketing site finishes on the right card rather than at the top of
+   a four-card grid. The mark clears itself after a couple of seconds (see planIntent.ts) —
+   it says "here" once, it is not a state. */
+[data-plan-card][data-plan-wanted='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  animation: plan-wanted-pulse 2.4s var(--ease, cubic-bezier(0.22, 1, 0.36, 1));
+}
+@keyframes plan-wanted-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-plan-card][data-plan-wanted='true'] {
+    animation: none;
+  }
+}
