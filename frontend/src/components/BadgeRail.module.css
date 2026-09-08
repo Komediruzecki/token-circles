@@ -4,6 +4,9 @@
      containing block and `position: sticky` would have nowhere to travel. This replaces the gap
      that row used to provide. */
   margin-top: 12px;
+  /* And below: the chart cards start immediately after, and without this they read as one
+     block glued to the rail. Matches the period bar's own 16px above it. */
+  margin-bottom: 20px;
 }
 .head {
   display: flex;

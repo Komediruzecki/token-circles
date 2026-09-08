@@ -51,6 +51,30 @@ describe('BadgeRail', () => {
     expect(setPage).toHaveBeenCalledWith('progress')
   })
 
+  it('scrolls the shelf sideways on a wheel, and stops when unmounted', () => {
+    state.streak = 1
+    state.unlocks = [
+      { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-07-02T00:00:00.000Z' },
+    ]
+    const c = mount(() => <BadgeRail />)
+    const shelf = c.querySelector('ul[aria-label]') as HTMLElement
+    // jsdom lays nothing out, so the strip has to be told it overflows.
+    Object.defineProperty(shelf, 'scrollWidth', { value: 900, configurable: true })
+    Object.defineProperty(shelf, 'clientWidth', { value: 300, configurable: true })
+    const roll = (): boolean => {
+      const e = new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })
+      shelf.dispatchEvent(e)
+      return e.defaultPrevented
+    }
+    expect(roll()).toBe(true)
+    expect(shelf.scrollLeft).toBe(120)
+    // The listener is registered through onCleanup in the ref callback; disposing must drop it.
+    dispose?.()
+    dispose = undefined
+    expect(roll()).toBe(false)
+    expect(shelf.scrollLeft).toBe(120)
+  })
+
   it('says what will appear before the first badge is earned', () => {
     state.streak = 0
     state.unlocks = []

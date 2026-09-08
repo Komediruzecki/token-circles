@@ -3,42 +3,14 @@
  */
 
 import { createSignal, For, onMount } from 'solid-js'
+import {
+  ALL_WIDGET_IDS,
+  DEFAULT_WIDGET_ORDER,
+  loadWidgetPrefs,
+  WIDGET_STORAGE_KEY,
+} from '../core/dashboardWidgets'
 import styles from './DashboardSettings.module.css'
 import type { Component } from 'solid-js'
-
-const ALL_WIDGET_IDS = [
-  'metrics',
-  'deck-sankey',
-  'deck-heatmap',
-  'deck-radar',
-  'deck-trends',
-  'deck-portfolio',
-  'deck-transactions',
-  'category-chart',
-  'recent-transactions',
-  'upcoming-bills',
-  'savings-rate',
-  'budget-alerts',
-  'recurring-insights',
-  'income-vs-expenses',
-]
-
-const DEFAULT_WIDGET_ORDER = [
-  'metrics',
-  'deck-sankey',
-  'deck-heatmap',
-  'deck-radar',
-  'deck-trends',
-  'deck-portfolio',
-  'deck-transactions',
-  'category-chart',
-  'recent-transactions',
-  'upcoming-bills',
-  'savings-rate',
-  'budget-alerts',
-  'recurring-insights',
-  'income-vs-expenses',
-]
 
 export interface DashboardSettingsProps {
   onSave?: () => void
@@ -53,6 +25,27 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
   const [dragIdx, setDragIdx] = createSignal<number | null>(null)
 
   const widgets = [
+    {
+      id: 'badges',
+      name: 'Streak and Badges',
+      icon: (
+        <svg
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="12" cy="9" r="5" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M8.6 13.2 7 21l5-2.7 5 2.7-1.6-7.8"
+          />
+        </svg>
+      ),
+    },
     {
       id: 'metrics',
       name: 'Metrics Cards',
@@ -291,23 +284,13 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     // Expose reset to the host modal header (see registerReset prop). In onMount so
     // resetSettings (declared below) is initialized before we hand it up.
     props.registerReset?.(resetSettings)
-    const saved = localStorage.getItem('dashboard_widgets')
-    if (saved !== null) {
-      try {
-        const parsed = JSON.parse(saved)
-        if (parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)) {
-          setSelectedWidget(parsed.visibleWidgets.join(','))
-        }
-        if (
-          parsed.widgetOrder &&
-          Array.isArray(parsed.widgetOrder) &&
-          parsed.widgetOrder.length > 0
-        ) {
-          setWidgetOrder(parsed.widgetOrder)
-        }
-      } catch (e) {
-        console.error('Failed to load dashboard settings:', e)
-      }
+    // Through the shared loader, so a widget added since the user last saved arrives here in
+    // the same state the dashboard is already rendering it in — otherwise its row is missing
+    // from this list and the next Save silently switches it off.
+    if (localStorage.getItem(WIDGET_STORAGE_KEY) !== null) {
+      const prefs = loadWidgetPrefs()
+      setSelectedWidget(prefs.visible.join(','))
+      setWidgetOrder(prefs.order)
     }
   })
 
@@ -372,7 +355,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     const current = selectedWidget()
     const ids = current ? current.split(',').filter(Boolean) : []
     localStorage.setItem(
-      'dashboard_widgets',
+      WIDGET_STORAGE_KEY,
       JSON.stringify({
         visibleWidgets: ids,
         widgetOrder: widgetOrder(),
