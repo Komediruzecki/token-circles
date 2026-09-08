@@ -215,7 +215,15 @@ export default function TransactionTable(props: TransactionTableProps) {
                     <div class={styles.tags}>
                       <For each={transaction.tags.slice(0, 2)}>
                         {(tag) => (
-                          <span class={styles.tag} style={{ background: `#${tag.color}` }}>
+                          <span
+                            class={styles.tag}
+                            /* The column default, not var(--primary): .tag prints its label in
+                               white, and white on the dark theme's primary is 2.7:1. #6b7280 is
+                               what the database would have stored anyway, and holds 4.8:1 in
+                               every theme. FilterBar's dot has no text, so it uses --primary
+                               like BulkActionBar's. */
+                            style={{ background: tag.color || '#6b7280' }}
+                          >
                             {tag.name}
                           </span>
                         )}

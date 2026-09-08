@@ -269,10 +269,7 @@ export default function FilterBar(props: FilterBarProps) {
                           toggleCat(cat.id)
                         }}
                       />
-                      <span
-                        class={styles.catDot}
-                        style={{ background: `#${cat.color || '94a3b8'}` }}
-                      />
+                      <span class={styles.catDot} style={{ background: cat.color || '#94a3b8' }} />
                       <span>{cat.name}</span>
                     </label>
                   )}
@@ -367,7 +364,10 @@ export default function FilterBar(props: FilterBarProps) {
                           toggleTag(tag.id)
                         }}
                       />
-                      <span class={styles.tagDot} style={{ background: `#${tag.color}` }} />
+                      <span
+                        class={styles.tagDot}
+                        style={{ background: tag.color || 'var(--primary)' }}
+                      />
                       <span>{tag.name}</span>
                     </label>
                   )}
