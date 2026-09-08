@@ -175,16 +175,31 @@
 
 /* Badges */
 .band {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
+  margin-top: 22px;
 }
+/* The band title carries its own rule, so the section needs no grey line above it: a strip
+   running out of the label in the medals' own azure-into-gold, fading before it reaches the
+   hint on the right. The OrbitalDividers above are the page's sections; these are one level
+   down and stay quiet — no orbs, no planets. */
 .band-head {
   display: flex;
   align-items: baseline;
   gap: 14px;
   flex-wrap: wrap;
   margin-bottom: 14px;
+}
+.band-rule {
+  flex: 1 1 40px;
+  align-self: center;
+  min-width: 24px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(
+    90deg,
+    var(--primary) 0%,
+    color-mix(in oklab, var(--accent-warm, #f0a860) 75%, transparent) 42%,
+    transparent 100%
+  );
 }
 .band-head h3 {
   margin: 0;

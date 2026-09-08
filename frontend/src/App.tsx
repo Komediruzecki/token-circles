@@ -606,7 +606,11 @@ export function App() {
     {
       name: 'progress' as PageName,
       label: 'Progress',
-      icon: <path d="M12 3a9 9 0 109 9h-9V3zM12 3v9h9M7 17v-3M11 17v-6M15 17v-4" />,
+      // A line climbing inside its axes. The old glyph drew a pie wedge and a bar chart on
+      // top of each other in the same 24 units and read as neither. Distinct from Savings
+      // Goals (the bare trending-up line) by the axes, and from Budgets (bars) by not
+      // being bars.
+      icon: <path d="M4 4v16h16M19 9h-4m4 0v4m0-4l-6 6-3-3-3.5 3.5" />,
     },
     {
       name: 'rentBuy' as PageName,

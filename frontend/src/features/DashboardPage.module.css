@@ -628,3 +628,13 @@
   flex-direction: column;
   gap: 20px;
 }
+
+/* Save in the modal header as well as its footer: the widget list scrolls, and whichever end
+   you finish at should have a way out. Sized down to sit beside "Reset Default" rather than
+   tower over it. */
+.header-save-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius);
+}

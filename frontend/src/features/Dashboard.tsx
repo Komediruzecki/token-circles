@@ -74,8 +74,10 @@ export default function Dashboard() {
         }
       : {}
   const [showSettingsModal, setShowSettingsModal] = createSignal(false)
-  // DashboardSettings registers its reset action here so the modal header can host the button.
+  // DashboardSettings registers its reset and save actions here so the modal header can host
+  // both buttons without this file knowing how either one works.
   const [resetViews, setResetViews] = createSignal<(() => void) | null>(null)
+  const [saveViews, setSaveViews] = createSignal<(() => void) | null>(null)
 
   // The overview deck is the default view; the classic charts + widgets live
   // below a "show more" toggle (choice persisted).
@@ -866,6 +868,13 @@ export default function Dashboard() {
                       Reset Default
                     </button>
                     <button
+                      class={`${styles.btnPrimary} ${styles.headerSaveBtn}`}
+                      onClick={() => saveViews()?.()}
+                      data-test-id="dashboard-views-save-header"
+                    >
+                      Save &amp; Close
+                    </button>
+                    <button
                       class={styles.modalClose}
                       onClick={() => setShowSettingsModal(false)}
                       aria-label="Close"
@@ -891,6 +900,7 @@ export default function Dashboard() {
                   <DashboardSettings
                     onSave={handleSettingsSave}
                     registerReset={(fn) => setResetViews(() => fn)}
+                    registerSave={(fn) => setSaveViews(() => fn)}
                   />
                 </div>
               </div>

@@ -268,6 +268,7 @@ export default function Progress(): JSX.Element {
             <div class={styles.band}>
               <div class={styles.bandHead}>
                 <h3>{BANDS[band].label}</h3>
+                <span class={styles.bandRule} aria-hidden="true" />
                 <Show when={nextIn(band)}>
                   {(next) => <span class={styles.next}>{nextCopy(next())}</span>}
                 </Show>

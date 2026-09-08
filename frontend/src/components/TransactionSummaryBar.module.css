@@ -1,3 +1,6 @@
+/* Same radius and the same 1px edge as the table it sits against — three blocks in a column
+   with three different corner radii and no borders is what made the bottom of the page read
+   as broken. */
 .summaryBar {
   display: flex;
   align-items: center;
@@ -5,7 +8,8 @@
   gap: 12px 24px;
   padding: 12px 16px;
   background-color: var(--bg-secondary);
-  border-radius: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   margin-bottom: 16px;
 }
 
@@ -81,9 +85,9 @@
 
 .summaryBarPage {
   padding: 8px 16px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   background-color: var(--bg-tertiary, var(--bg-secondary));
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: 13px;
 }
 
