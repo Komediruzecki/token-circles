@@ -368,7 +368,7 @@ export default function BillingPlans(props: {
                   'border-radius': '12px',
                   // 2px vs 1px would shift the card's contents by a pixel against its neighbours.
                   padding: mine() ? '15px' : '16px',
-                  background: 'var(--bg, #0b0e14)',
+                  'background-color': 'var(--bg, #0b0e14)',
                   display: 'flex',
                   'flex-direction': 'column',
                 }}

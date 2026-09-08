@@ -79,10 +79,16 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
 - **The plan cards are cumulative.** `addedRows` diffs a tier against the one below and renders
   only what changed, under an "Everything in X, plus" line. At nine rows a flat list was a wall
   the reader had to diff by eye. Four generated backgrounds (`public/plans/card-<tier>.webp`,
-  4-16 KB each) sit behind the cards in the badges' own language — navy, hairline rings, azure
-  warming into gold as the tier climbs. Scoped to the dark theme: the art measures 4-6% luminance
-  across the left half where the text sits, so laying it under a light card would put dark text on
-  a dark field. A light set is a follow-up, not a silent compromise.
+  3-15 KB each) sit behind the cards in the badges' own language — navy, hairline rings, azure
+  warming into gold as the tier climbs. Two things had to be right and were not at first: the card
+  set the `background` **shorthand** inline, which resets `background-image` to none at a
+  specificity no stylesheet rule can reach, so the art rendered as literally nothing (measured:
+  `getComputedStyle().backgroundImage === 'none'`, and an on/off screenshot diff of exactly 0);
+  and the sources were landscape while a plan card is a 200px column, so `cover` would have shown
+  a slice of empty navy. The card now sets `background-color`, and the art is cropped to the ring
+  cluster. On/off diff is now 7.2% RMSE. Scoped to the dark theme: the art is 8-16% mean
+  luminance, so under a light card it would put dark text on a dark field. A light set is a
+  follow-up, not a silent compromise.
 - Worker fixtures that exercise API tokens, MCP and import sources now seed a paid plan. They
   were creating users with no `plan`, which defaults to Free — the new gates were right to
   refuse them.
