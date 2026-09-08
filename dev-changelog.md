@@ -229,6 +229,33 @@ be exported`: Chrome taints the canvas when the drawn SVG contains a `<foreignOb
 
 ### Changed
 
+- **The bottom of the transactions table** (`TransactionTable.module.css`,
+  `TransactionSummaryBar.module.css`). Three faults stacked into one ragged corner: every
+  `tbody tr` drew a `border-bottom`, the last one included, so a straight 1px rule ran across the
+  card's `var(--radius)` (14px) bottom and stopped dead where the corner curved away; the card had
+  `box-shadow` but no border, which on the dark themes is no visible edge at all; and the
+  page-summary bar sitting flush beneath it used `border-radius: 6px` against the table's 14px.
+  Now: `tbody tr:last-child td { border-bottom: none }`, a `1px solid var(--border)` on the table,
+  `var(--radius)` on both summary-bar variants, and 12px between the blocks.
+
+- **The Progress page's band headings carry their own rule** (`Progress.tsx`,
+  `ProgressPage.module.css`). `.band` had a flat `border-top: 1px solid var(--border)` — the plain
+  grey line the OrbitalDividers above had just replaced. The line is gone; the heading row gains a
+  `.band-rule` strip running out of the label in `--primary` through `--accent-warm`, fading before
+  the hint on the right — the medals' own azure-into-gold. Deliberately quieter than an
+  OrbitalDivider: these sit one level below the page's sections, so no arc and no planets.
+
+- **The sidebar's Progress glyph** (`App.tsx`). It drew a pie wedge _and_ a three-bar chart
+  overlapping in the same 24 units and read as neither. Replaced with a line climbing inside its
+  axes, arrow corner at the end — distinct from Savings Goals (the bare trending-up line, no axes)
+  and from Budgets (bars).
+
+- **Save & Close is in the Views modal header** (`Dashboard.tsx`, `DashboardSettings.tsx`,
+  `DashboardPage.module.css`). `DashboardSettings` grew a `registerSave` prop mirroring the
+  `registerReset` it already had, so the host modal renders the button without knowing how saving
+  works. The footer button stays — the widget list scrolls, and whichever end you finish at should
+  have a way out.
+
 - **The Progress page's section headings are `OrbitalDivider`s** (`features/Progress.tsx`), the
   same orbit-arc separator every other section-bearing page uses; they were plain `<h2>` rows.
   The hint text moves to the divider's `meta` slot and "Restore dismissed" becomes an

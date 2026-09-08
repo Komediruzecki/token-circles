@@ -17,6 +17,9 @@ export interface DashboardSettingsProps {
   // Lets the host modal render the "Reset Default" button in its header instead
   // of this component duplicating the title row.
   registerReset?: (reset: () => void) => void
+  // Same again for Save, so the header can offer it too. The footer button stays: the list
+  // is long enough to scroll, and whichever end you finish at should have a way out.
+  registerSave?: (save: () => void) => void
 }
 
 export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
@@ -284,6 +287,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
     // Expose reset to the host modal header (see registerReset prop). In onMount so
     // resetSettings (declared below) is initialized before we hand it up.
     props.registerReset?.(resetSettings)
+    props.registerSave?.(saveSettings)
     // Through the shared loader, so a widget added since the user last saved arrives here in
     // the same state the dashboard is already rendering it in — otherwise its row is missing
     // from this list and the next Save silently switches it off.

@@ -1,8 +1,13 @@
+/* The card the rows live in. It carries a border as well as the shadow: on the dark themes the
+   shadow is nearly invisible against the ground, which left the table with no edge at all — the
+   "where does this end" feeling, on the page that has the most rows to end. */
 .transaction-table {
   width: 100%;
   background: var(--card-bg);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  margin-bottom: 12px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -31,6 +36,13 @@
 
 .transaction-table tbody tr {
   transition: background-color 0.15s;
+}
+
+/* Every row draws a rule under itself, the last one included — so a straight 1px line ran
+   across the card's rounded bottom and stopped dead where the corner curved away. The card's
+   own border is the bottom edge; the last row does not need one of its own. */
+.transaction-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .transaction-table tbody tr:hover {
