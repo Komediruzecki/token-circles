@@ -52,7 +52,7 @@ export default function BadgeTimeline(): JSX.Element {
       }
     >
       <ol
-        class={styles.track}
+        class={`${styles.track} brand-scroll`}
         data-test-id="badge-timeline"
         tabindex="0"
         aria-label="Badges earned, oldest first. Scroll sideways to browse."

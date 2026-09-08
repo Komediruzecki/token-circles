@@ -8,8 +8,8 @@
   list-style: none;
   overflow-x: auto;
   scroll-snap-type: x proximity;
-  /* The strip is the one place a scrollbar is worth the pixels: it says there is more. */
-  scrollbar-width: thin;
+  /* The strip is the one place a scrollbar is worth the pixels: it says there is more. It is
+     painted by `brand-scroll` in styles/index.css, so it is the theme's blue, not the OS grey. */
   -webkit-mask-image: linear-gradient(90deg, #000 0, #000 92%, transparent 100%);
   mask-image: linear-gradient(90deg, #000 0, #000 92%, transparent 100%);
 }
