@@ -9,6 +9,32 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`?plan=<tier>` as an entry point from the marketing site** (new `core/planIntent.ts`,
+  `index.tsx`, `App.tsx`, `BillingPlans.tsx`, `styles/index.css`). about.tokencircles.com prices
+  four tiers; until now every one of its buttons could only land on the app's root, because
+  nothing deeper worked:
+  - Production ships `VITE_DEFAULT_STORAGE=dexie`, so a first-time visitor opens in serverless
+    (local) mode — and `isTabVisible('billing', 'serverless')` is false. A link straight to
+    Settings would have shown them a page with **no Billing tab at all**.
+  - Reaching an account means switching to server mode, which reloads; sign-in reloads again.
+    A query parameter survives neither, so the intent is parked in localStorage and consumed on
+    the far side.
+
+  `applyPlanIntentFromUrl()` runs before render, next to `applyDemoModeFromUrl()` and for the
+  same reason — `<App/>` reads the storage mode once, on the way in. It is the mirror image of
+  `?demo=`: that one switches _to_ client-only mode, this one switches _away_ from it. The
+  switch is unconditional, exactly as the app's own "Sign in" button already is (`App.tsx`
+  `handleLogin`): asking for a paid tier is asking for an account.
+
+  After `checkLogin()` returns true the intent fires — Settings, Billing tab, hash updated — and
+  `BillingPlans` scrolls the requested card into view and rings it for a couple of seconds
+  (`data-plan-wanted`). The parameter is stripped from the address bar with `replaceState` so a
+  refresh cannot re-fire it, and `free` is rejected on purpose: it needs no billing page, it is
+  what an account already is. Eleven tests, including that a bad tier never switches anyone out
+  of local mode.
+
 ## [5.14.0] — 2026-09-08
 
 ### Fixed

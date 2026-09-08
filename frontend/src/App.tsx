@@ -58,6 +58,8 @@ import { resolvePageFromHash } from './core/hashRoute.js'
 import { logger } from './core/logger.js'
 import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
+import { clearPlanIntent, setHighlightedPlan, storedPlanIntent } from './core/planIntent'
+import { setSettingsTab } from './core/settingsStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
 import {
   setShowTourSelection,
@@ -375,6 +377,20 @@ export function App() {
 
     const loggedIn = await api.checkLogin()
     setIsAuthenticated(loggedIn)
+    // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
+    // both the mode switch and sign-in itself reload the page. Now that there is an account,
+    // land on the tier the visitor picked. Not logged in yet: leave it stored — the gate is
+    // rendering, and sign-in reloads back through here.
+    if (loggedIn) {
+      const wanted = storedPlanIntent()
+      if (wanted) {
+        clearPlanIntent()
+        setHighlightedPlan(wanted)
+        setSettingsTab('billing')
+        setActivePage('settings')
+        window.location.hash = 'settings'
+      }
+    }
     if (loggedIn) {
       await loadProfiles(true)
       void loadBillingPlan()

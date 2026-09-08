@@ -8,6 +8,7 @@ import { noteWaitingBuild } from './core/appVersion'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
 import { consumeEmailVerifyRedirect } from './core/emailVerification'
+import { applyPlanIntentFromUrl } from './core/planIntent'
 
 // Install the stale-chunk recovery listeners before anything renders, so a failed dynamic
 // import after a deploy quietly reloads to the fresh build instead of surfacing a parse error.
@@ -16,6 +17,11 @@ installBootRecovery()
 // A shared demo link (?demo=high|mid|low) must switch to client-only mode before
 // <App/> reads the storage mode, so do it here — before render().
 applyDemoModeFromUrl()
+
+// The mirror image: a `?plan=` link from the marketing site wants an ACCOUNT, so it switches
+// to server mode instead. Same reason it lives here — <App/> reads the storage mode once, on
+// the way in. It reloads when it has to switch, so nothing below needs to run.
+applyPlanIntentFromUrl()
 
 // `beforeinstallprompt` fires early and is never replayed, and the event itself is the only
 // handle on the native install sheet — miss it and the app can never offer installation at all.
