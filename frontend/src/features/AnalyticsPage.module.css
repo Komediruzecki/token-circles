@@ -972,3 +972,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* The page's six empty and loading states. Same shape as the one on Dashboard and Budgets:
+   centred, generously padded, secondary text — so "No data available" reads as a state of the
+   panel rather than as a stray line of copy pinned to its top-left corner. */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+}
+
+/* preflight zeroes every margin, and one of the six states ("No data available" above "Add some
+   transactions to see analytics.") is two paragraphs, which without this touch at identical size
+   and colour. Budgets spaces its own the same way. */
+.empty-state p {
+  margin: 8px 0;
+  font-size: 14px;
+}

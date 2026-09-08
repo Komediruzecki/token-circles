@@ -81,7 +81,7 @@ export default function TransactionTable(props: TransactionTableProps) {
               />
             </th>
             <th
-              class={`${styles.col} ${styles.dateCol}`}
+              class={styles.dateCol}
               data-test-id="transactions-sort-date"
               onClick={() => {
                 handleSort('date')
@@ -95,7 +95,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                 : ''}
             </th>
             <th
-              class={`${styles.col} ${styles.descriptionCol}`}
+              class={styles.descriptionCol}
               onClick={() => {
                 handleSort('description')
               }}
@@ -108,7 +108,7 @@ export default function TransactionTable(props: TransactionTableProps) {
                 : ''}
             </th>
             <th
-              class={`${styles.col} ${styles.categoryCol}`}
+              class={styles.categoryCol}
               onClick={() => {
                 handleSort('category')
               }}
@@ -120,9 +120,9 @@ export default function TransactionTable(props: TransactionTableProps) {
                   : '↓'
                 : ''}
             </th>
-            <th class={`${styles.col} ${styles.counterPartyCol}`}>From/To</th>
+            <th class={styles.counterPartyCol}>From/To</th>
             <th
-              class={`${styles.col} ${styles.amountCol}`}
+              class={styles.amountCol}
               onClick={() => {
                 handleSort('amount')
               }}
@@ -134,8 +134,8 @@ export default function TransactionTable(props: TransactionTableProps) {
                   : '↓'
                 : ''}
             </th>
-            <th class={`${styles.col} ${styles.typeCol}`}>Type</th>
-            <th class={`${styles.col} ${styles.actionsCol}`}>Actions</th>
+            <th class={styles.typeCol}>Type</th>
+            <th class={styles.actionsCol}>Actions</th>
           </tr>
         </thead>
         <tbody>

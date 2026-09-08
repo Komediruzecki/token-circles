@@ -1141,7 +1141,7 @@ export default function Tags() {
                               <For each={result().sample}>
                                 {(row) => (
                                   <li>
-                                    <span class={styles.sampleDate}>{row.date}</span>
+                                    <span>{row.date}</span>
                                     <span class={styles.sampleDesc}>{row.description}</span>
                                     <span class={styles.sampleAmount}>
                                       {formatCurrency(row.amount)}

@@ -840,7 +840,6 @@ export default function Dashboard() {
                           ],
                         }}
                         height={320}
-                        variant="tall"
                         showExport
                         filename="net-worth-over-time"
                       />
@@ -881,7 +880,6 @@ export default function Dashboard() {
                           ],
                         }}
                         height={300}
-                        variant="medium"
                         showExport
                         filename="cash-flow-12months"
                       />

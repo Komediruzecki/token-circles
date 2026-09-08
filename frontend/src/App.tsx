@@ -807,7 +807,6 @@ export function App() {
                         {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
                       </div>
                       <span
-                        class={profileStyles.profileName}
                         style={{
                           'font-weight': 600,
                           overflow: 'hidden',

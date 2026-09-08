@@ -12,14 +12,9 @@
   max-width: 100%;
 }
 
-.chart-container.tall {
-  height: 400px;
-}
-
-.chart-container.medium {
-  height: 300px;
-}
-
-.chart-container.short {
-  height: 220px;
-}
+/*
+ * No .tall / .medium / .short. ChartWrapper was the only thing that could ever have produced the
+ * compound selector, through a `variant` prop that asked for them under names the module never
+ * exported — so they styled nothing for their whole life. The prop is gone and every caller sizes
+ * its chart with `height`, which as an inline style would have outranked these anyway.
+ */
