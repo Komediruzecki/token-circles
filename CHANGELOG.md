@@ -8,6 +8,16 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.15.1] — 2026-09-09
+
+### Added
+
+- **The app now publishes an `llms.txt`.** Token Circles is a single-page app, so anything fetching the site without running JavaScript — an assistant answering a question about it, for instance — saw an empty shell. The file describes what the app does and, deliberately, what it does not: no live bank connection (statements are imported), no financial advice, and neither receipt OCR nor end-to-end encryption, which are decided but not built.
+
+### Removed
+
+- **The old self-hosting and Docker guides are gone.** They described building images from a server that was removed back in 5.9.3, so following them could not work. Self-hosting is the Cloudflare Worker path in the README. If you still run an image built from the old server, both guides remain readable at tag `v5.9.3`.
+
 ## [5.15.0] — 2026-09-09
 
 ### Added
