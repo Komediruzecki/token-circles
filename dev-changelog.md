@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.15.1] — 2026-09-09
+
 - **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;
   what stayed was a layer of documentation for it that nobody could follow, because the files it
   told you to build no longer exist. Deleted: `docs/self-hosting.md` and `docs/docker.md` (19 KB
@@ -29,6 +31,13 @@ All notable changes to Token Circles are documented here. The format is based on
   Express routes but describing behaviour the Worker carried over, and `AGENTS.md` says so. The
   `// Port of backend/routes/*.js` headers in `worker/src/routes/` stay for the same reason: they
   are provenance for why a handler is shaped the way it is, not a pointer at a live runtime.
+
+- **`frontend/public/llms.txt`** (#556). The app host answered 404 for it while every sibling
+  property in the group had one. Served as a static asset alongside `robots.txt` and
+  `sitemap.xml`; content mirrors `README.md` and about.tokencircles.com, so it introduces no
+  claim that is not already published. Half of it is a "what this does not do" section — the
+  four things most often assumed about a finance app — because the host previously gave a
+  fetcher nothing to check an assumption against.
 
 ## [5.15.0] — 2026-09-09
 
