@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.15.0] — 2026-09-09
+
 ### Added
 
 - **`?plan=<tier>` as an entry point from the marketing site** (new `core/planIntent.ts`,
