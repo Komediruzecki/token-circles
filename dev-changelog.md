@@ -9,6 +9,27 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+- **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;
+  what stayed was a layer of documentation for it that nobody could follow, because the files it
+  told you to build no longer exist. Deleted: `docs/self-hosting.md` and `docs/docker.md` (19 KB
+  of `docker compose` instructions against a `Dockerfile` and `docker-compose.yml` that were
+  removed with the server), and the root `.env.example`, whose every variable — `APP_PORT=3847`,
+  `PORT`, `SESSION_SECRET`, `DATABASE_PATH=db/finance.db`, `SMTP_*`, `DEFAULT_USERNAME` — belonged
+  to that server and is read by nothing in the tree (the Worker takes `wrangler.toml` vars plus
+  `.dev.vars`; the frontend takes `VITE_*` from `frontend/.env*`). Both guides are still readable
+  at tag `v5.9.3` for anyone running an image built from that server.
+- Also corrected the references that pointed at them: `README.md`, `docs/README.md`, `AGENTS.md`,
+  `SECURITY.md` (which still described the Worker's security features as a contrast against a
+  "deprecated" Express server), and `ROADMAP.md`, which carried an open checkbox for bringing
+  `backend/routes/importRoutes.js` to import parity — unreachable work on a deleted file. The
+  `frontend/vite.config.ts` proxy comment still told you to set `API_PROXY_TARGET` to
+  "the legacy Node/SQLite backend (http://127.0.0.1:3847)" and claimed the Playwright suite pinned
+  it there; both Playwright configs have pinned it at the Worker since the retirement.
+- `docs/specs/backend/` and `test/e2e/specs/` stay. They are the API contract, written against the
+  Express routes but describing behaviour the Worker carried over, and `AGENTS.md` says so. The
+  `// Port of backend/routes/*.js` headers in `worker/src/routes/` stay for the same reason: they
+  are provenance for why a handler is shaped the way it is, not a pointer at a live runtime.
+
 ## [5.15.0] — 2026-09-09
 
 ### Added

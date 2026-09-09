@@ -15,8 +15,8 @@ Do not include exploit details or sensitive information in public issues.
 
 ## Security Features
 
-These describe the maintained Cloudflare Worker backend (`worker/`). The legacy Express
-server (`backend/`) is deprecated and not deployed.
+These describe the Cloudflare Worker backend (`worker/`), which is the only server this
+project ships.
 
 - **Passwords** hashed with PBKDF2-HMAC-SHA256 (WebCrypto), per-user random salt, constant-time
   verification. Login is protected against user enumeration (a dummy hash is always verified) and

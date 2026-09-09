@@ -23,7 +23,6 @@ You must **verify before fixing**: for each suspected bug, first write a failing
   - `self-hosted`: real `fetch` to the Worker API with cookie credentials (`frontend/src/core/api.ts`).
   - **There is no sync engine** — switching modes is a one-shot export→clear→import migration (`frontend/src/core/storage/storageFactory.ts`, `migrateData()`). "Cloud sync" in marketing terms means "server is the store". Keep this in mind: any "sync bug" you look for is actually a migration or dual-implementation-drift bug.
 - **Worker backend** (`worker/`): Hono 4 on Cloudflare Workers, D1 (SQLite) + R2 (receipts), Zod validation (narrow — `worker/src/validation.ts` only), raw WebCrypto (no auth/Stripe SDKs). Routes in `worker/src/routes/*.ts`, mounted in `worker/src/index.ts`. Migrations in `worker/migrations/0001–0018`.
-- **Legacy backend** (`backend/`): deprecated Express server, slated for removal. **Do not fix bugs here**; only flag if it's deployed anywhere or shares secrets/schema with the Worker.
 - **Dual implementation hazard**: every entity operation exists **twice** (local handlers + worker routes). Fixing a bug on one side usually requires the same fix on the other, plus a test on each side. Always check both.
 - **Multi-profile model**: scoping unit is `profile_id` (a "household" is just multiple profiles of one `user_id`). Server: profile resolved from `X-Profile-Id` / `X-Profile-Ids` headers in `worker/src/profile.ts`; enforcement is **per-query**, there is no scoping middleware. Client: localStorage keys `currentProfileId` (write target) and `selectedProfileIds` (read view), resolved in `idb.ts:181–201`.
 
@@ -48,32 +47,39 @@ You must **verify before fixing**: for each suspected bug, first write a failing
 Investigate each suspect below. These were flagged by a preliminary scan and most are **unverified** — confirm with a failing test first.
 
 ### 1A. Money representation and float drift
+
 - All amounts are floats end-to-end: `z.number()` in `frontend/src/schemas/models.ts`; SQLite `REAL` in `worker/migrations/0001_init.sql`; balances mutated incrementally (`frontend/src/core/storage/idb.ts:375–382` `_adjustAccountBalance`; `UPDATE accounts SET balance = balance + ?` in `worker/src/routes/transactions.ts`).
 - Only the worker import recompute rounds (`worker/src/routes/imports.ts:541`); incremental paths never round → drift accumulates across create/update/delete cycles (`updateTransaction` reverses then re-applies deltas, `idb.ts:314–333`).
 - **Do:** write a property/soak test (hundreds of add/edit/delete cycles with amounts like 0.1, 0.2, 19.99) asserting stored balance equals ledger-derived balance to the cent, on both sides. Then decide the minimal safe fix: full integer-cents migration is a **Phase 4 recommendation**, not a Phase 1 fix; the Phase 1 fix is consistent round-to-cents at every balance mutation point plus a "recompute balance from ledger" repair routine (see 1C).
 
 ### 1B. Transfers
+
 - Single-row model: `type='transfer'` with `account_id` (source) and `transfer_account_id` (dest). Client: a transfer **without** `transfer_account_id` silently produces **no** balance adjustment while the row persists (`frontend/src/core/storage/idb.ts:163–165` in `computeBalanceDeltas`) — balances stop reconciling against history. Check the worker's equivalent path in `worker/src/routes/transactions.ts` and `worker/src/validation.ts` (is a destination required?).
 - Test matrix: transfer create/edit/delete; editing a transfer's source account; editing amount vs `amount_local` (delta uses `amount_local` when present, `idb.ts:157`); self-transfer; transfer where source==dest; deleting the destination account of an existing transfer.
 
 ### 1C. Stored balances vs ledger
+
 - Balances are denormalized on both sides with no recompute routine (client's only re-derivation is `deleteAllTransactions` → `starting_balance`, `idb.ts:359–373`; the `amount_local` preservation hack at `idb.ts:321–328` exists because drift already occurred).
 - **Do:** implement a `recomputeBalances(profileId)` routine on both sides (worker has one inside imports — extract/reuse it), expose it as a maintenance endpoint/action, and add an invariant test helper `assertBalancesMatchLedger()` used across the Phase 1 suites.
 
 ### 1D. Bulk operations
+
 - **Worker bulk update does not touch balances** (`worker/src/routes/transactions.ts:373–444`): the allow-list includes `type`, so bulk income→expense flips change balance semantics with no balance correction; bulk **delete** does reverse balances. Confirm and fix (either adjust balances or exclude `type` from bulk update — pick the safe one, and mirror the decision in `frontend/src/core/storage/handlers/transactions.ts:185–256`).
 - Client bulk update silently drops `deduction` from allowed types — verify intended.
 - Test: focused bulk suite on both sides — allow-list enforcement, 1000-id cap, cross-profile id smuggling (ids belonging to another profile/user in the id array), balance invariant after bulk type-change and bulk delete.
 
 ### 1E. Import correctness
+
 Files: `frontend/src/core/storage/handlers/importFlow.ts`, `frontend/src/core/importMapping.ts`, `frontend/src/core/bankImport/*`, `worker/src/routes/imports.ts`.
-- **Duplicate detection is weak** (`importFlow.ts:114–158`): key is date+description with amount tolerance ±0.01; ignores account/type/currency; doesn't dedupe rows *within the same file*. Write the test matrix, then tighten (include account/type/currency in the key; in-file dedup with a "same row twice is legitimate" escape hatch — flag, don't silently drop).
+
+- **Duplicate detection is weak** (`importFlow.ts:114–158`): key is date+description with amount tolerance ±0.01; ignores account/type/currency; doesn't dedupe rows _within the same file_. Write the test matrix, then tighten (include account/type/currency in the key; in-file dedup with a "same row twice is legitimate" escape hatch — flag, don't silently drop).
 - **Date handling inconsistencies**: generic path converts via UTC `toISOString().slice(0,10)` (`importFlow.ts:35,64`) while bank path uses local date (`bankImport/parse.ts:96–101`) → off-by-one-day near midnight and cross-importer mismatch. Ambiguous `xx/yy/zzzz` is always day-first (`importFlow.ts:52–57`) — US dates misparse. Fix: single shared date-normalization utility, local-date semantics, day-first/month-first decided by mapping config or locale with explicit user choice when ambiguous. Full unit-test matrix for `normalizeDate` (Excel serials, gviz dates, all string formats, midnight-boundary cases).
 - **Worker import is not atomic** (`worker/src/routes/imports.ts:340,391,496,551` — separate batches for accounts/categories/tx-chunks/balances; mid-run failure leaves partial state, mitigated only by `import_id` retry). Assess whether a single `batch()` is feasible within D1 limits; at minimum add a test for the partial-failure + idempotent-retry path.
 - Number parsing: generic path is bare `parseFloat` (`importFlow.ts:149,574`) vs the bank path's locale-aware parsers (`bankImport/parse.ts:131–163`) — European "1.234,56" through the generic path is a corruption risk. Unify.
 - Import session store: in-memory `Map`, `Date.now()-Math.random()` keys, never evicted (`importFlow.ts:74,179`) — add eviction and stronger ids (`crypto.randomUUID()`).
 
 ### 1F. Multi-profile isolation (correctness half; security half in Phase 3)
+
 - Client fallback to profile `1` when localStorage is unset (`idb.ts:183`, `api.ts:49–58`) — unkeyed operations read/write profile 1. Reproduce (e.g. cleared localStorage with multiple profiles) and fix: fail loudly or resolve the user's actual first profile.
 - Worker: wrong/unowned `X-Profile-Id` **silently falls back** to the user's first profile instead of 403 (`worker/src/profile.ts:34–50`). Within-user only, but a stale header writes data into the wrong household member's profile. Decide: keep fallback for reads, hard-error for writes (recommended), and test it.
 - Client raw `getAll` bypasses: `exportData()` exports **all profiles** (`idb.ts:616–643`) — verify whether the UI presents that as "export my profile"; logs store is global. Test that every list/read handler respects `selectedProfileIds` and every write targets `currentProfileId`.
@@ -81,10 +87,12 @@ Files: `frontend/src/core/storage/handlers/importFlow.ts`, `frontend/src/core/im
 - Cross-profile reference smuggling: `accountBelongsToProfile` (`worker/src/db.ts:43`) guards transactions — verify equivalent guards exist for every route that accepts a foreign key (budgets→category, receipts→transaction, recurring→account, bills→account, loans, transaction_tags, balance-history→account).
 
 ### 1G. Schema/type drift
+
 - `Account.starting_date` (interface) vs `starting_balance_date`/`balance_date` (runtime); `Budget` interface missing rollover fields that handlers read/write (`frontend/src/types/models.ts:103–126`). Align interfaces with reality; boolean coercion in schemas (`schemas/models.ts:18,62,109`) — verify imports/restores can't produce surprising truthiness.
 - Budget rollover chains only one month back (`handlers/budgets.ts:276–388`) — confirm intended; verify the worker computes rollover identically (dual-implementation drift). Test both.
 
 ### 1H. Concurrency (client)
+
 - Local handlers do read-modify-write across multiple awaits outside a single IndexedDB transaction (e.g. `bulkDeleteTransactions` loop `idb.ts:346–357`); multi-tab is expected (`api.ts:30–32` storage listener). Write an interleaving test if feasible; otherwise wrap balance-mutating sequences in single IDB transactions where the `idb` library allows.
 
 ## Phase 2 — Test coverage for missing segments
@@ -92,6 +100,7 @@ Files: `frontend/src/core/storage/handlers/importFlow.ts`, `frontend/src/core/im
 Beyond the tests written in Phase 1, add coverage where none exists today:
 
 **Worker (16 existing test files; gaps):**
+
 - Auth: register/login/logout, cookie flags, JWT expiry + `token_version` invalidation, malformed tokens, password-reset flow, anti-enumeration responses, rate-limit windows (`worker/test/` has none of this).
 - Google OAuth callback: state HMAC validation, `returnTo` allowlist, `aud`/`iss` checks (mock Google's tokeninfo).
 - Stripe: webhook signature verification (valid/invalid/expired timestamp/replay), `stripe_events` idempotency, `stripe_event_at` ordering watermark, plan enforcement (`worker/src/plan.ts`) — a free user must get 402 on premium endpoints.
@@ -101,6 +110,7 @@ Beyond the tests written in Phase 1, add coverage where none exists today:
 - Bulk endpoints (from 1D).
 
 **Frontend (35 unit + 30 e2e files; gaps):**
+
 - `importFlow.ts`: `normalizeDate` matrix, `detectDuplicates` matrix, `importExecute` row-skip/auto-create/balance-replay beyond transfers.
 - Focused bulk-edit suite.
 - Float/soak balance invariant tests (1A).
@@ -116,7 +126,7 @@ Run an OWASP-style pass over the Worker + frontend. Known items to verify first:
 1. **AuthZ / IDOR sweep**: for every route in `worker/src/routes/`, confirm each query is scoped by `profile_id`/`user_id` and each client-supplied foreign key is ownership-checked. Enumerate any endpoint missing `requireAuth`. Pay attention to sub-resources (loan rates/prepayments, balance-history, transaction_tags, import-logs, custom_reports) and the stub endpoints in `receipts.ts` (share/split/categorize/export).
 2. **Silent profile fallback** (`profile.ts:44–46`) — see 1F; from the security side, ensure it can never cross `user_id`.
 3. **JWT/session**: HS256 + `JWT_SECRET`; 7-day non-refreshed cookie; `SameSite=Lax` + CORS `credentials:true` reflection of single `CORS_ORIGIN` (`worker/src/index.ts:71`). Assess: CSRF exposure on state-changing endpoints given Lax + custom headers, cookie `Domain` scoping, logout-everywhere correctness (`token_version`), secret rotation story.
-4. **Headers/CSP**: verify the Worker and the deployed frontend set CSP, HSTS, X-Content-Type-Options, frame-ancestors; the legacy Helmet claims in `SECURITY.md` belong to the deprecated Express app — update `SECURITY.md` to describe the Worker reality (it also still says bcrypt; Worker uses PBKDF2-SHA256/100k — while you're there, evaluate raising iterations to OWASP-current or migrating to a stronger KDF, and the legacy-bcrypt re-hash-on-login TODO in `worker/src/auth.ts:89–107`).
+4. **Headers/CSP**: verify the Worker and the deployed frontend set CSP, HSTS, X-Content-Type-Options, frame-ancestors, and that `SECURITY.md` still matches what the Worker actually does. Password hashing is PBKDF2-HMAC-SHA256 at 100k iterations — evaluate raising that to OWASP-current or migrating to a stronger KDF.
 5. **Data egress**: Google-Sheets import routes user sheet URLs through third-party `corsproxy.io` (`importFlow.ts:302`) — remove or make opt-in with a warning; prefer the Worker as the proxy for cloud users, direct published-CSV endpoints for local mode.
 6. **Financial data in logs**: `localApiRouter.ts:926–931` logs full request bodies on validation failure; sweep both codebases for `console.log` of transaction/user payloads; check `worker/src/errorlog.ts` for PII in persisted `error_logs`.
 7. **Uploads**: `xlsx` (SheetJS) parses untrusted files on both sides — check the vendored version against known CVEs (prototype pollution, ReDoS); enforce size limits before parse; R2 upload content-type/extension handling.

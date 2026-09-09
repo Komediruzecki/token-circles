@@ -217,10 +217,10 @@ export default defineConfig(({ command, mode }) => {
       host: '127.0.0.1',
       port: 3800,
       proxy: {
-        // Local dev: same-origin /api proxied to a backend. Defaults to the Cloudflare worker
-        // (`pnpm -C worker run dev`, wrangler's port 8787) — same-origin keeps the SameSite=Lax
-        // session cookie working with no CORS. Set API_PROXY_TARGET to the legacy Node/SQLite
-        // backend (http://127.0.0.1:3847); the Playwright e2e suite pins it to the seeded backend.
+        // Local dev: same-origin /api proxied to the Worker. Defaults to wrangler's port 8787
+        // (`pnpm -C worker run dev`) — same-origin keeps the SameSite=Lax session cookie working
+        // with no CORS. Set API_PROXY_TARGET to point at a different one; the Playwright e2e
+        // suite pins it at the Worker it seeds and starts.
         '/api': {
           target: process.env.API_PROXY_TARGET || 'http://127.0.0.1:8787',
           changeOrigin: true,
