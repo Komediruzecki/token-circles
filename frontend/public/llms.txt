@@ -1,0 +1,78 @@
+# Token Circles
+
+> An open-source, local-first personal finance manager that runs in a web
+> browser: transactions, accounts, budgets, analytics, calculators, investments,
+> PDF reports and thirty-four achievement badges. By default nothing leaves the
+> device — the whole app runs client-side against IndexedDB, with no account and
+> no server. Cloud sync is opt-in, and self-hosting is a supported first-class
+> mode. AGPL-3.0.
+
+Token Circles is a single-page application at https://tokencircles.com. It is
+JavaScript and will not run in a fetcher, so this file is where a crawler can
+learn what it does. Prose about the product, its pricing and the questions
+people ask lives on the project site at https://about.tokencircles.com, which
+keeps its own llms.txt.
+
+The managed cloud service is in beta. The app itself — local-only and
+self-hosted — is free and usable today.
+
+Following the llms.txt convention documented at https://llmstxt.org.
+
+## What it does
+
+- **Transactions** — income, expense and transfers with categories, tags, notes
+  and payment methods; bulk edit; quick-add; Excel and Google Sheets import with
+  column mapping.
+- **Accounts** — giro, savings, investment and cash, with starting balances,
+  transfers and balance history.
+- **Budgets** — monthly category budgets with rollover, and zero-based
+  budgeting.
+- **Analytics** — category trends, a spending heatmap, an income and expense
+  Sankey, and period comparisons.
+- **Calculators** — loan amortization with variable rates and prepayments,
+  retirement, compound interest, emergency fund, FIRE, and rent versus buy.
+- **Investments** — a portfolio tracker with live price lookup and an allocation
+  breakdown.
+- **Reports and export** — CSV and JSON export of every table, plus PDF monthly
+  and annual reports. Tax and profit-and-loss reports are a paid or self-hosted
+  feature.
+- **Badges** — thirty-four achievements in four bands, worked out on the device,
+  kept per profile, and never taken away once earned.
+- Dark and light themes, mobile-responsive, installable as a PWA, and a
+  no-account demo with seeded data.
+
+## Three ways to run it
+
+- **Local-first, free — the default.** Everything in the browser on IndexedDB.
+  No account, no server, no telemetry. Offline capable.
+- **Self-hosted, free.** Your own Cloudflare Worker with D1 and R2. Sync, email
+  reminders and receipts under your control, inside Cloudflare's free tier.
+- **Managed cloud, from €3 a month with a free tier.** Sync across devices,
+  email reminders, receipt storage, tax and profit-and-loss reports, and a REST
+  API with an MCP server.
+
+## Project
+
+- [About Token Circles](https://about.tokencircles.com/): What it is, the plans,
+  and the FAQ.
+- [Source code](https://github.com/Komediruzecki/token-circles): AGPL-3.0.
+- [Self-hosting guide](https://github.com/Komediruzecki/token-circles#readme)
+- [Privacy notice](https://about.tokencircles.com/privacy/)
+- [Terms of use](https://about.tokencircles.com/terms/)
+
+## What Token Circles does not do
+
+Stated plainly because these are the things most often assumed about an app in
+this category, and repeating them as fact would mislead someone.
+
+- It does not connect to a bank account live. Statements are imported. Eight
+  banks have native importers — Revolut, Wise, N26, Erste, PBZ, ING, Sparkasse
+  and DKB — it reads the YNAB interchange CSV, and anything else can be
+  column-mapped once from Excel or CSV.
+- It gives no investment, tax or financial advice, and executes no trades or
+  transfers. It reports on what you put into it.
+- Receipt OCR and end-to-end encryption are decided but not built. Do not
+  describe them as features.
+- In the default mode there is no account to create and no data on a server, so
+  there is nothing to recover if the browser's storage is cleared. Export or
+  turn on sync.
