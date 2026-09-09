@@ -1,8 +1,11 @@
 # Achievements: the next fifty
 
-Status: **proposal for decision**. The first fifteen shipped in #534 and now live on the
-Progress page (#536). This proposes what comes next and, more importantly, the rules for
-deciding what is worth adding at all.
+Status: **shipped**, in #539 / #540 / #541 (released in 5.14.0, 2026-09-08). Every badge
+proposed below is live, plus two the review added. Kept as the record of what was built and why
+— the tables are the plan as written, not a live task list.
+
+The first fifteen shipped in #534 and went live on the Progress page (#536). This proposed what
+came next and, more importantly, the rules for deciding what is worth adding at all.
 
 ## The problem with just adding more
 
@@ -129,14 +132,26 @@ the band and the face.
 3. **Debt free, Rainy day, Ahead of plan, Reconciled, The full picture, Every month of a year.**
 4. **Legacy band and its face**, once there is something to put in it.
 
-## Decisions needed
+## Decisions taken
 
-1. **Fourth band, or stretch Mastery?** Proposed: a fourth band, Legacy, for Five, Ten and
-   Twenty years. It keeps Mastery reachable and gives the far end its own look.
-2. **Volume thresholds** — 100 / 1 000 / 5 000 / 10 000 as proposed, or tuned once there is
-   real usage to look at?
-3. **The comeback's shape** — as proposed (a gap of two or more months after a streak of three
-   or more), or any return at all after any gap? The proposed version keeps it meaningful.
-4. **Does the panel stay one page at 33 badges**, or do earned and unearned separate once the
-   set is this large?
-5. **Debt free** needs loans in the evaluator input. Worth the extra fetch, or park it?
+Answered 2026-09-07, and all five are in the shipped set.
+
+1. **Fourth band, or stretch Mastery?** → **Both.** Legacy holds Five, Ten and Twenty years at
+   four rings and a deeper gold; Mastery gained Three years.
+2. **Volume thresholds** → As proposed, **plus a fifth at 20 000**: "5k and 10k and 20k is
+   definitely doable for people that tracked their whole life."
+3. **The comeback's shape** → As proposed. A gap of two or more months after a streak of three
+   or more, so the badge still means something.
+4. **The panel at 33 badges** → **Separated, and given a timeline.** The Progress page opens with
+   a horizontal strip of what was earned and when, then the full gallery below with earned badges
+   lit and the rest plain.
+5. **Debt free** → **Built.** The evaluator now loads the loans array; a loan reaching a zero
+   balance earns it.
+
+## What shipped that this document did not propose
+
+- **Twenty thousand entries** (Legacy), from decision 2.
+- **Own the stack** (Mastery), which the review added.
+
+The set is **34 badges in four bands**. The rules in "The problem with just adding more" are
+what the next one has to pass.

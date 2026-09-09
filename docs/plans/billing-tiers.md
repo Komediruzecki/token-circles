@@ -1,8 +1,9 @@
 # Billing: three paid tiers that actually differ
 
-Status: **proposal for decision**. Nothing built. Companion to `worker/src/plans.ts`, which is
-already the single source of truth — most of this proposal is edits to that one object plus the
-gates that read it.
+Status: **shipped** in #546 (released in 5.14.0, 2026-09-08), with the light-theme card art
+following in #553 and the `?plan=<tier>` deep link in #552. Kept as the record of what was built
+and why. Companion to `worker/src/plans.ts`, which is the single source of truth — most of this
+was edits to that one object plus the gates that read it.
 
 ## The problem
 
@@ -22,25 +23,25 @@ whole product from a script.
 Two constraints shape everything below:
 
 - **Free must stay genuinely useful.** Local-first is the product's argument. Free is not a
-  trial; it is the whole app on your own device. What paid buys is *our* infrastructure —
+  trial; it is the whole app on your own device. What paid buys is _our_ infrastructure —
   servers, storage, email, compute — never a feature that could run on the user's machine.
 - **Tiers are cumulative.** Each tier is "everything before, plus…". That is how the cards
   should read and how the Stripe descriptions should read.
 
 ## The shape
 
-| | **Free** | **Basic** €3/mo | **Advanced** €6/mo | **Ultimate** €10/mo |
-| --- | --- | --- | --- | --- |
-| | Your device, your data | Everything in Free, plus | Everything in Basic, plus | Everything in Advanced, plus |
-| Profiles | 2 | 5 | 10 | Unlimited |
-| Cloud sync | — | Yes | Yes | Yes |
-| Email reminders | — | **500**/mo | **2 000**/mo | Unlimited |
-| Receipt storage | — | 500 | 5 000 | Unlimited |
-| Advanced reports (tax & P&L) | — | Yes | Yes | Yes |
-| **API access + MCP** | — | **Yes** | Yes | Yes |
-| **API tokens** | — | **2** | **10** | **Unlimited** |
-| **Automated imports** | — | — | **Yes** | Yes |
-| **Priority support** | — | — | — | **Yes** |
+|                              | **Free**               | **Basic** €3/mo          | **Advanced** €6/mo        | **Ultimate** €10/mo          |
+| ---------------------------- | ---------------------- | ------------------------ | ------------------------- | ---------------------------- |
+|                              | Your device, your data | Everything in Free, plus | Everything in Basic, plus | Everything in Advanced, plus |
+| Profiles                     | 2                      | 5                        | 10                        | Unlimited                    |
+| Cloud sync                   | —                      | Yes                      | Yes                       | Yes                          |
+| Email reminders              | —                      | **500**/mo               | **2 000**/mo              | Unlimited                    |
+| Receipt storage              | —                      | 500                      | 5 000                     | Unlimited                    |
+| Advanced reports (tax & P&L) | —                      | Yes                      | Yes                       | Yes                          |
+| **API access + MCP**         | —                      | **Yes**                  | Yes                       | Yes                          |
+| **API tokens**               | —                      | **2**                    | **10**                    | **Unlimited**                |
+| **Automated imports**        | —                      | —                        | **Yes**                   | Yes                          |
+| **Priority support**         | —                      | —                        | —                         | **Yes**                      |
 
 Annual is unchanged: 10 months for 12 (€30 / €60 / €100).
 
@@ -52,7 +53,7 @@ literally, and they made the Basic→Advanced step look absurd (2 000 → 20 000
 nobody uses ten of). **500 / 2 000 / unlimited** is generous against real use and honest about
 what it is protecting.
 
-**API access becomes a listed paid feature.** It already *needs* cloud sync — an API token
+**API access becomes a listed paid feature.** It already _needs_ cloud sync — an API token
 authenticates against the account's server data, which Free does not have — so it is paid in
 practice today, just not enforced or advertised. Two things follow:
 
@@ -78,15 +79,15 @@ list.
 
 ### Reasonable candidates
 
-| Candidate | Tier | Argument |
-| --- | --- | --- |
-| **Scheduled/automated imports** | Advanced | Our compute, on a schedule. Already modelled. |
-| **API token count** | all three | A count is a fair meter on an integration surface. |
-| **Priority support** | Ultimate | Costs time, not code. Wanted by exactly that buyer. |
-| **Receipt OCR / auto-extract** | Advanced | Not built. Real per-call cost when it is. |
-| **Household sharing** (a second sign-in on one household) | Advanced | Real server cost per seat; the natural "family" step. |
-| **Longer retention of deleted data** (30 vs 7 days) | Ultimate | Storage cost, and a genuine safety net. |
-| **Larger receipt file cap** (5 MB → 25 MB) | Ultimate | Bandwidth and R2. One constant already exists. |
+| Candidate                                                 | Tier      | Argument                                              |
+| --------------------------------------------------------- | --------- | ----------------------------------------------------- |
+| **Scheduled/automated imports**                           | Advanced  | Our compute, on a schedule. Already modelled.         |
+| **API token count**                                       | all three | A count is a fair meter on an integration surface.    |
+| **Priority support**                                      | Ultimate  | Costs time, not code. Wanted by exactly that buyer.   |
+| **Receipt OCR / auto-extract**                            | Advanced  | Not built. Real per-call cost when it is.             |
+| **Household sharing** (a second sign-in on one household) | Advanced  | Real server cost per seat; the natural "family" step. |
+| **Longer retention of deleted data** (30 vs 7 days)       | Ultimate  | Storage cost, and a genuine safety net.               |
+| **Larger receipt file cap** (5 MB → 25 MB)                | Ultimate  | Bandwidth and R2. One constant already exists.        |
 
 ### Deliberately not gated
 
@@ -132,15 +133,15 @@ first.
 
 ## Sizing
 
-| Piece | Size | Notes |
-| --- | --- | --- |
-| `plans.ts`: new limits, new feature flags, reminder numbers | small | One object; every gate reads through helpers |
-| Enforce API access + token count | small | `requireFeature` on the api-tokens and MCP routes |
-| Enforce automated imports | small | Gate the non-`manual` schedule at write time |
-| Pricing card rows: cumulative rendering, new rows | small–medium | `BillingPlans.tsx` renders a flat list today |
-| Card backgrounds (generate, downscale, apply) | medium | Four images plus CSS and a contrast pass |
-| Stripe product/description sync | small | Blocked on `stripe login` |
-| Tests: gates return 402, limits enforced, cards render | medium | The part worth doing carefully |
+| Piece                                                       | Size         | Notes                                             |
+| ----------------------------------------------------------- | ------------ | ------------------------------------------------- |
+| `plans.ts`: new limits, new feature flags, reminder numbers | small        | One object; every gate reads through helpers      |
+| Enforce API access + token count                            | small        | `requireFeature` on the api-tokens and MCP routes |
+| Enforce automated imports                                   | small        | Gate the non-`manual` schedule at write time      |
+| Pricing card rows: cumulative rendering, new rows           | small–medium | `BillingPlans.tsx` renders a flat list today      |
+| Card backgrounds (generate, downscale, apply)               | medium       | Four images plus CSS and a contrast pass          |
+| Stripe product/description sync                             | small        | Blocked on `stripe login`                         |
+| Tests: gates return 402, limits enforced, cards render      | medium       | The part worth doing carefully                    |
 
 Roughly one focused PR for the model and the gates, one for the pricing UI and art, one for
 Stripe once the login is refreshed.
@@ -174,11 +175,11 @@ the decision is not lost, and the row appears the day the feature does.
 The three live products already exist with the right prices (€3/€6/€10 monthly, €30/€60/€100
 annual) and each has an image and a `marketing_features` list. What needs updating:
 
-| Product | Change |
-| --- | --- |
-| **Basic** | Add "API access and MCP server — 2 tokens". State the reminder allowance as 500/mo. |
+| Product      | Change                                                                                                                                                                      |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Basic**    | Add "API access and MCP server — 2 tokens". State the reminder allowance as 500/mo.                                                                                         |
 | **Advanced** | Add "Automated imports on a schedule", "10 API tokens", "Receipt uploads up to 25 MB". State reminders as 2 000/mo. Fix the stray `~` in "Up to 10 profiles / households~". |
-| **Ultimate** | Add "Unlimited API tokens" and "Priority support — a reply within 1–3 working days". |
+| **Ultimate** | Add "Unlimited API tokens" and "Priority support — a reply within 1–3 working days".                                                                                        |
 
 Descriptions get the same cumulative wording as the cards, since a customer reads them again at
 checkout and on the invoice. Nothing is written to the live account without a go-ahead on the
