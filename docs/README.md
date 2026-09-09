@@ -2,9 +2,8 @@
 
 **Start here if you are an agent or a new contributor: [AGENTS.md](../AGENTS.md)** — what ships
 (the SolidJS frontend and the Cloudflare Worker), what no longer exists (the Express/SQLite server
-that stood under `backend/`, and the Docker files that described it — all deleted, though the
-guides below are kept for anyone still running an old image), and the rules that are not
-negotiable.
+that stood under `backend/`, and the Docker files that described it — all deleted), and the rules
+that are not negotiable.
 
 ## Getting Started
 
@@ -20,9 +19,7 @@ negotiable.
 
 ## Deploying
 
-- [worker/README.md](../worker/README.md) — **Self-hosting today**: your own Cloudflare Worker, D1 and R2
-- [Self-Hosting Guide](self-hosting.md) — _retired_ — Docker, reverse proxy, environment variables for the Express server
-- [Docker Guide](docker.md) — _retired_ — container setup for the Express server
+- [worker/README.md](../worker/README.md) — **Self-hosting**: your own Cloudflare Worker, D1 and R2. This is the only self-host path; the Docker/Express guides were deleted with the server they described (they are at tag `v5.9.3` if you still run an image built from it).
 - [Deploy-Update Pipeline](deploy-update-pipeline.md) — How open tabs cross a release: service worker, version.json, reload bounds, manual verification
 - [PWA Install Assets](pwa-install-assets.md) — The maskable icon and the install-dialog screenshots: what they are, why they fail silently, and how to regenerate them
 

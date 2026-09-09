@@ -49,7 +49,7 @@ Open **http://localhost:3800** — it runs entirely in your browser (client-only
 - **Backend (current)** — [`worker/`](./worker): a Cloudflare Worker (Hono) with **D1** (SQLite) for data and **R2** for receipts. Auth is Google sign-in + email/password (HS256 JWT cookie); Stripe for billing; Resend for email; Cloudflare Turnstile on the auth forms.
 - **Testing** — the frontend and the Worker each have a vitest suite; the Playwright e2e suite drives the real built app against a locally-run Worker (`pnpm run test:e2e`).
 
-> The original Node/Express + SQLite server has been removed. Self-hosting means running your own Worker; `docs/self-hosting.md` and `docs/docker.md` describe the old server and are kept only for anyone still running an old Docker image.
+> The original Node/Express + SQLite server has been removed, along with the `Dockerfile` and `docker-compose.yml` that built it. Self-hosting means running your own Worker — see [worker/README.md](./worker/README.md). The old server's guides are at tag `v5.9.3` for anyone still running an image built from it.
 
 ```
 token-circles/

@@ -25,14 +25,20 @@ There was a Node/Express + SQLite server under `backend/`, from before the Worke
 If you find something that still refers to it — a doc, a script, a stale comment — that is a bug in
 the reference, not a runtime you should go looking for.
 
-Two leftovers are still in the tree and are worth reading with that in mind:
+Its Docker guides went with it: `docs/self-hosting.md` and `docs/docker.md` described a
+`Dockerfile` and `docker-compose.yml` that are no longer in the tree, so nobody could follow them.
+Self-hosting means running your own copy of the Worker (`wrangler deploy`) against your own D1 and
+R2 — [worker/README.md](worker/README.md). It does not mean Docker. The deleted guides are at tag
+`v5.9.3` for anyone still running an image built from that server.
 
-- `docs/self-hosting.md` and `docs/docker.md` describe deploying that server with Docker. Kept for
-  anyone running an old image, marked retired at the top. Self-hosting today means running your own
-  copy of the Worker (`wrangler deploy`) against your own D1 and R2. It does not mean Docker.
+Two references to it are deliberate and are worth reading with that in mind:
+
 - `docs/specs/backend/` and `test/e2e/specs/` were written against the Express routes. Read them for
   _what the API does_ — that contract carried over — not for how it is implemented. The
   implementation is `worker/src/routes/`.
+- The `// Port of backend/routes/<name>.js` header on most files in `worker/src/routes/` is
+  provenance: it says where that handler's shape came from, which is often the answer to "why is
+  this written like that". The file it names is gone; do not go looking for it.
 
 `0001_init.sql` also still creates tables only that server used. They are empty and unread. That is
 not a reason to name a new table around them, but see the schema rule below before reusing a name.
