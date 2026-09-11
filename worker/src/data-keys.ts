@@ -310,6 +310,8 @@ export async function rewrapStaleKeys(
  */
 export class DataKeyring {
   private readonly keys = new Map<number, CryptoKey>();
+  /** Users found to have no key while this deployment has no master key (see resolve). */
+  private readonly keyless = new Set<number>();
   private readonly inflight = new Map<string, Promise<CryptoKey | null>>();
 
   constructor(readonly env: KeyEnv) {}
@@ -347,12 +349,17 @@ export class DataKeyring {
   private resolve(userId: number, create: boolean): Promise<CryptoKey | null> {
     const known = this.keys.get(userId);
     if (known) return Promise.resolve(known);
+    if (!create && this.keyless.has(userId)) return Promise.resolve(null);
     const slot = `${userId}:${create ? 'create' : 'read'}`;
     let pending = this.inflight.get(slot);
     if (!pending) {
       pending = this.load(userId, create)
         .then((key) => {
           if (key) this.keys.set(userId, key);
+          // With no master key nothing here can give the user a key, so "none" holds for the rest
+          // of the request — remembered, or a keyless import or restore asks D1 again for every
+          // row it writes. With one, the next write creates the key, so "none" is never kept.
+          else if (!this.enabled) this.keyless.add(userId);
           return key;
         })
         .finally(() => this.inflight.delete(slot));

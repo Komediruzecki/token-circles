@@ -190,6 +190,39 @@ describe('data keys', () => {
   });
 });
 
+describe('looking keys up', () => {
+  /** env.DB, counting the queries that look a user's data key up. */
+  function counting(): { DB: D1Database; lookups: () => number } {
+    let n = 0;
+    const DB = new Proxy(env.DB, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if (prop !== 'prepare') return typeof value === 'function' ? value.bind(target) : value;
+        return (sql: string) => {
+          if (sql.startsWith('SELECT dek_wrapped FROM users')) n++;
+          return target.prepare(sql);
+        };
+      },
+    });
+    return { DB, lookups: () => n };
+  }
+
+  it('with no master key, asks about a user once per request, not once per row written', async () => {
+    const { DB, lookups } = counting();
+    const ring = new DataKeyring({ DB });
+    for (let row = 0; row < 3; row++) expect(await ring.forWrite(901)).toBeNull();
+    expect(await ring.existing(901)).toBeNull();
+    expect(lookups()).toBe(1);
+  });
+
+  it('with a master key, a user found to have no key still gets one on the first write', async () => {
+    const ring = new DataKeyring({ DB: env.DB, DATA_KEK_1: K1 });
+    expect(await ring.existing(901)).toBeNull();
+    expect(await ring.forWrite(901)).not.toBeNull();
+    expect(await dekOf(901)).not.toBeNull();
+  });
+});
+
 describe('master key rotation', () => {
   // Versions no other test file uses. Every other file's key in the shared D1 is under DATA_KEK_1,
   // which these envs lack, so to them it is a key under a retired master key: counted as failed and
