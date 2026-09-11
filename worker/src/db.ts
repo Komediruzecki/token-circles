@@ -142,6 +142,14 @@ export async function run(db: D1Database, sql: string, ...params: unknown[]): Pr
   );
 }
 
+/**
+ * A batch of writes, retried like `run`: only on the export lock, which rejects the whole batch
+ * before any statement in it runs, so a retry cannot apply anything twice.
+ */
+export async function batch(db: D1Database, stmts: D1PreparedStatement[]): Promise<D1Result[]> {
+  return withD1Retry(() => db.batch(stmts), isRetriableWriteError);
+}
+
 /** INSERT helper — validates table + column identifiers, parameterizes values. */
 export async function insert(
   db: D1Database,

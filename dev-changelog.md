@@ -9,6 +9,89 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Field encryption at rest — server-side, per-user keys, shipping dark.** Nothing changes on a
+  deployment until it is given a master key (`DATA_KEK_1`, a Workers Secret: base64 of 32 random
+  bytes, one per environment). With one, `transactions.description`/`beneficiary`/`payor`/`notes`,
+  `recurring_transactions.description`/`notes`, `bills.name`/`notes` and receipt files in R2 are
+  sealed with AES-256-GCM under a per-user data key (`users.dek_wrapped`), itself wrapped by the
+  master key. The Worker decrypts to compute, so every feature keeps working: this protects a
+  leaked `d1 export` or bucket, not the data from the operator. It is not end-to-end encryption,
+  which was dropped. Design, threat model and rollout: `docs/plans/field-encryption.md`.
+  - `worker/src/field-crypto.ts` — the pure primitives. A text value is `tc1.<iv>.<ct>`, with
+    additional data binding table, column and owner, so a value copied into another column or
+    another user's row fails authentication instead of decrypting. Receipts use a chunked format
+    (`TCE1`, 1 MiB chunks, index and final flag in every chunk's additional data, so a truncated or
+    reordered object fails to open), streamed through a `TransformStream`: a 50 MB receipt never
+    sits in a 128 MB Worker beside its own ciphertext. `TextDecoder` runs with `ignoreBOM: true` —
+    the default strips a leading U+FEFF, so a description starting with one came back shorter.
+  - `worker/src/data-keys.ts` — the key hierarchy, deliberately independent of `JWT_SECRET`: 2FA
+    derives its key from that, so rotating the auth secret orphans every TOTP secret, and the same
+    coupling here would orphan everyone's history. A user's first key is created by compare-and-set
+    (`… WHERE dek_wrapped IS NULL`), so two concurrent first writes cannot seal under two different
+    keys. Once a user has a key, a missing or wrong master key is a 503 on reads AND writes — never
+    a fallback to plaintext. Keys are cached per request (a `WeakMap` on the Request object), never
+    at module scope, where one would outlive account deletion and key rotation in a warm isolate.
+  - `worker/src/sealed-rows.ts` — `sealForInsert`, `openRows`, and `sealedUpdate`, which sends an
+    edit as one batch in both forms (`… AND text_enc = 1` sealed, `… AND text_enc = 0` plain). D1
+    runs a batch as a transaction, so exactly one matches the row as it stands. That closes the race
+    in which the backfill converts a row between an edit's read and its write, and plaintext lands
+    inside a sealed row for good.
+  - `worker/src/sealed-objects.ts` — receipt upload, streaming download and whole-object read, plus
+    the backfill's reseal.
+  - `worker/src/backfill.ts` — the only place an existing row changes form, by compare-and-set
+    against the exact values it read, so an edit landing in between makes it miss rather than be
+    overwritten. Its own trigger `*/20 * * * *` (added for dev and prod) returns before the daily
+    jobs, so their frequency is unchanged. Keyset pagination; 60 s / 5 000 rows / 50 receipts per
+    run. A receipt is resealed to a new object key, its row swapped by compare-and-set, and only
+    then the plaintext original deleted. Rows on ownerless legacy profiles stay plaintext.
+  - Migration 0031: `users.dek_wrapped`, `text_enc` on the three tables, `receipts.enc`, and a
+    partial index over unsealed transactions for the backfill. Schema only; every row starts at 0.
+  - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured`.
+  - CI runs the worker suite twice — keyless (`pnpm test`), proving a deployment with no key is
+    unchanged, and keyed (`pnpm test:sealed`, a throwaway key per run), proving no read path forgets
+    to decrypt. `test/apply-migrations.ts` refuses to run in the wrong mode: wrangler loads
+    `worker/.dev.vars` as secrets, and a `DATA_KEK_1` there would silently make the keyless run keyed.
+  - Measured in workerd: ~9 µs to open a value, ~2.5 µs to seal one. A 20 000-row ledger opened in
+    full is about 0.7 s of CPU.
+  - Every read and write of the sealed columns goes through those helpers: the transactions list,
+    summary, create, edit and bulk edit; imports (with the daily sheet sync and email-in); bills and
+    recurring rules, mark-paid and populate; the dashboard, exports, reports, counterparties,
+    backup and restore, receipts; tag rules and category suggestions; the bills reminder email; the
+    MCP read tools and the v1 ingest. Keyless deployments keep their SQL; with a key, what SQL can
+    no longer do over ciphertext — `LIKE`, text `ORDER BY`, `GROUP BY` — runs in JS over opened
+    rows and must give the same answers. It reproduces SQLite's BINARY collation, its compensated
+    `SUM`, and the tie order its sorter produces (under `ORDER BY ABS(total) DESC` SQLite returns
+    equal totals key DESCENDING, which decides which merchants survive a `LIMIT`); tests compare
+    the JS path against the original SQL in the keyless run. Shared as `compareBinary`, `SqlSum`
+    and `textMatches` in `sealed-rows.ts`.
+  - A key never changes what is stored. D1 binds a JS number as REAL and the TEXT column renders it
+    (`1234` is stored as `'1234.0'`); sealing `String(v)` would have kept `'1234'`, so a spreadsheet
+    cell or raw API value would store differently with a key than without, and dedup would diverge.
+    Non-string values are rendered by SQLite itself (`CAST(? AS TEXT)`) before sealing.
+  - Backups and exports are plaintext by contract: rows are opened, receipts decrypted, and the
+    markers left out, so a file restores anywhere. A restore seals under the RESTORING user's key
+    and never trusts markers in the file. An export that meets a value that will not open fails
+    rather than shipping ciphertext; `GET /api/v1/snapshot` without `includeReceiptFiles` no longer
+    fetches receipt objects at all.
+  - `/api/health` reports `misconfigured`, not `off`, when no master key is set but someone holds a
+    data key — a deleted secret must not look like a deployment that never had one. The backfill no
+    longer lets rows it cannot seal (an owner whose key fails) use up each run's budget, and a row
+    read without `text_enc` fails closed on a key fault instead of returning ciphertext.
+  - `db.batch` retries the D1 export lock like `db.run`, so the bill and recurring-rule edits,
+    now batches, kept that retry.
+
+### Changed
+
+- **End-to-end encryption is dropped, and the tier contradiction goes with it.**
+  `docs/plans/billing-tiers.md` listed encryption both under "Deliberately not gated" and as "tier
+  still open, Basic or Advanced", and only the second was mirrored into `worker/src/plans.ts`,
+  which that document names as the source of truth. Field encryption is not a plan feature at all.
+  `SECURITY.md` stopped promising E2EE as "on the roadmap" — `ROADMAP.md` never listed it — and now
+  describes field encryption as what it is. `docs/e2ee-research.md` and the bank plan's open
+  decisions record the outcome.
+
 ## [5.15.1] — 2026-09-09
 
 - **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;

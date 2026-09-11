@@ -6,6 +6,8 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows } from '../sealed-rows';
 import {
   explainTagRule,
   linkTransactionsToTag,
@@ -227,10 +229,19 @@ tagsRoutes.post('/api/tags/rules/preview', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, unknown>;
   const criteria = normalizeTagRuleCriteria(b.criteria);
-  const { ids, scanned, truncated } = await matchTransactions(c.env.DB, pid, [criteria]);
+  const ring = keyringFor(c);
+  const owner = c.get('userId');
+  const { ids, scanned, truncated } = await matchTransactions(
+    c.env.DB,
+    pid,
+    [criteria],
+    ring,
+    owner
+  );
   // Only when the rule found nothing — the breakdown is shown only then, and it costs a second
   // (deliberately unnarrowed) scan.
-  const conditions = ids.length === 0 ? await explainTagRule(c.env.DB, pid, criteria) : [];
+  const conditions =
+    ids.length === 0 ? await explainTagRule(c.env.DB, pid, criteria, ring, owner) : [];
 
   // How many matches the tag already covers, so the UI can show "N new".
   let alreadyTagged = 0;
@@ -254,13 +265,18 @@ tagsRoutes.post('/api/tags/rules/preview', requireAuth, async (c) => {
 
   const sampleIds = ids.slice(0, 10);
   const sample = sampleIds.length
-    ? await db.all(
-        c.env.DB,
-        `SELECT id, description, amount, date, type FROM transactions
-         WHERE profile_id = ? AND id IN (${sampleIds.map(() => '?').join(',')})
-         ORDER BY date DESC, id DESC`,
-        pid,
-        ...sampleIds
+    ? await openRows(
+        ring,
+        owner,
+        'transactions',
+        await db.all(
+          c.env.DB,
+          `SELECT id, description, amount, date, type, text_enc FROM transactions
+           WHERE profile_id = ? AND id IN (${sampleIds.map(() => '?').join(',')})
+           ORDER BY date DESC, id DESC`,
+          pid,
+          ...sampleIds
+        )
       )
     : [];
 
@@ -331,7 +347,13 @@ tagsRoutes.post('/api/tags/:id/apply', requireAuth, async (c) => {
     throw new HttpError(400, 'This tag has no rules to apply');
   }
 
-  const { ids, scanned, truncated } = await matchTransactions(c.env.DB, pid, criteriaList);
+  const { ids, scanned, truncated } = await matchTransactions(
+    c.env.DB,
+    pid,
+    criteriaList,
+    keyringFor(c),
+    c.get('userId')
+  );
   const tagged = await linkTransactionsToTag(c.env.DB, tagId, ids);
   return c.json({ matched: ids.length, tagged, scanned, truncated });
 });
@@ -636,6 +658,12 @@ tagsRoutes.get('/api/transactions/by-tag/:tagId', requireAuth, async (c) => {
   const offset = c.req.query('offset');
   if (limit && !isNaN(parseInt(limit))) sql += ` LIMIT ${Math.min(parseInt(limit), 1000)}`;
   if (offset && !isNaN(parseInt(offset))) sql += ` OFFSET ${parseInt(offset)}`;
-  const rows = await db.all(c.env.DB, sql, ...params);
+  // t.* carries text_enc; openRows opens the four sealed columns and drops the marker.
+  const rows = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'transactions',
+    await db.all(c.env.DB, sql, ...params)
+  );
   return c.json({ rows, total: rows.length });
 });

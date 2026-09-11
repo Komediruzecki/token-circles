@@ -1,7 +1,11 @@
-import { env, SELF } from 'cloudflare:test';
+import { createExecutionContext, env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import app from '../src/index';
 import { issueSessionCookie } from '../src/auth';
+import { DataKeyring } from '../src/data-keys';
+import { sealForInsert } from '../src/sealed-rows';
+import { putReceipt } from '../src/sealed-objects';
 import { DEFAULT_CATEGORIES } from '../src/profileData';
 
 const TABLES = [
@@ -483,5 +487,74 @@ describe('category reset referential integrity', () => {
     const budgets = (await budgetsRes.json()) as Array<{ id: number }>;
     expect(budgets.map((b) => b.id)).toContain(7213);
     expect(budgets.map((b) => b.id)).not.toContain(7212);
+  });
+});
+
+// Forced on, whatever mode the suite runs in; user 56200 only ever goes through KEYED.
+describe('account deletion with field encryption on', () => {
+  it('takes the data key with the account, along with the sealed rows and objects', async () => {
+    const K = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+    const KEYED = { ...env, DATA_KEK_1: K };
+    const USER = 56200;
+    const PROFILE = 56210;
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'sealed-owner@example.com', 'password', 1)"
+      ).bind(USER),
+      env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Sealed')").bind(
+        PROFILE,
+        USER
+      ),
+    ]);
+    const ring = new DataKeyring(KEYED);
+    const tx = await sealForInsert(ring, USER, 'transactions', {
+      description: 'Pharmacy',
+      notes: 'private',
+    });
+    expect(tx.text_enc).toBe(1);
+    await env.DB.prepare(
+      "INSERT INTO transactions (id, profile_id, amount, date, description, notes, text_enc) VALUES (56220, ?, 9, '2026-07-01', ?, ?, ?)"
+    )
+      .bind(PROFILE, tx.description, tx.notes, tx.text_enc)
+      .run();
+    const key = `${PROFILE}/sealed.png`;
+    const enc = await putReceipt(
+      ring,
+      USER,
+      env.RECEIPTS,
+      key,
+      new Uint8Array([1, 2, 3]),
+      'image/png'
+    );
+    expect(enc).toBe(1);
+    await env.DB.prepare(
+      `INSERT INTO receipts (profile_id, transaction_id, filename, original_name, file_type, file_size, storage_path, enc)
+       VALUES (?, 56220, ?, 'sealed.png', 'image/png', 3, ?, ?)`
+    )
+      .bind(PROFILE, key, key, enc)
+      .run();
+    expect(
+      await env.DB.prepare('SELECT dek_wrapped FROM users WHERE id = ?')
+        .bind(USER)
+        .first<{ dek_wrapped: string | null }>()
+    ).toMatchObject({ dek_wrapped: expect.stringMatching(/^dk1\./) });
+
+    const ownerCookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+    const response = await app.fetch(
+      new Request('https://example.com/api/account', {
+        method: 'DELETE',
+        headers: { Cookie: ownerCookie, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: 'delete' }),
+      }),
+      KEYED,
+      createExecutionContext()
+    );
+    expect(response.status).toBe(200);
+
+    // The wrapped key lived on the users row: with it gone, nothing left anywhere opens.
+    expect(await env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(USER).first()).toBeNull();
+    expect(await count('transactions', PROFILE)).toBe(0);
+    expect(await count('receipts', PROFILE)).toBe(0);
+    expect(await env.RECEIPTS.get(key)).toBeNull();
   });
 });

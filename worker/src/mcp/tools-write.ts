@@ -10,6 +10,7 @@ import * as db from '../db';
 // (undo_import is the one delete, and it is scoped to a batch id).
 
 import { profileArg, DATE } from './args';
+import { keyringFor } from '../data-keys';
 
 defineTool({
   name: 'create_transactions',
@@ -73,6 +74,7 @@ defineTool({
     ]);
 
     const outcome = await executeImport(c.env.DB, profileId, {
+      ring: keyringFor(c),
       rows,
       mapping,
       importId: crypto.randomUUID(),

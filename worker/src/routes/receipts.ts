@@ -12,6 +12,8 @@ import {
 } from '../plan';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { putReceipt, receiptStream } from '../sealed-objects';
 
 // Port of backend/routes/receipts.js + backend/repositories/receiptsRepo.js.
 // Only the receipt *metadata* operations are ported here — the receipts table is
@@ -33,6 +35,14 @@ interface ReceiptRow {
   storage_path: string;
   uploaded_at: string;
   profile_id: number;
+  /** 0: the R2 object is the raw upload. 1: it is sealed under the owner's key (sealed-objects). */
+  enc?: number;
+}
+
+// The enc marker is storage bookkeeping, not part of the receipt: no response carries it.
+function publicReceipt<R extends { enc?: unknown }>(row: R): Omit<R, 'enc'> {
+  const { enc: _enc, ...rest } = row;
+  return rest;
 }
 
 // ── GET /api/receipts — list all receipts for the active profile ──────────────
@@ -44,7 +54,7 @@ receiptsRoutes.get('/api/receipts', requireAuth, async (c) => {
     'SELECT * FROM receipts WHERE profile_id = ? ORDER BY id DESC',
     pid
   );
-  return c.json(rows);
+  return c.json(rows.map(publicReceipt));
 });
 
 // ── Upload (PREMIUM) — store the file in R2, save metadata in D1 ───────────────
@@ -118,9 +128,16 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
   const ext =
     (file.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
   const key = `${pid}/${crypto.randomUUID()}.${ext}`;
-  await c.env.RECEIPTS.put(key, await file.arrayBuffer(), {
-    httpMetadata: { contentType: file.type },
-  });
+  // Sealed under the user's key when they have one — streamed through the cipher, never buffered —
+  // and stored exactly as before when they do not. `enc` says which, and both INSERTs record it.
+  const enc = await putReceipt(
+    keyringFor(c),
+    c.get('userId'),
+    c.env.RECEIPTS,
+    key,
+    file,
+    file.type
+  );
 
   let res: D1Result;
   try {
@@ -138,23 +155,14 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
             file_size: file.size,
             storage_path: key,
             profile_id: pid,
+            enc,
           })
         : await c.env.DB.prepare(
-            `INSERT INTO receipts (transaction_id, filename, original_name, file_type, file_size, storage_path, profile_id)
-             SELECT ?, ?, ?, ?, ?, ?, ?
+            `INSERT INTO receipts (transaction_id, filename, original_name, file_type, file_size, storage_path, profile_id, enc)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?
              WHERE (SELECT COUNT(*) FROM receipts WHERE profile_id = ?) < ?`
           )
-            .bind(
-              transactionId,
-              key,
-              file.name,
-              file.type,
-              file.size,
-              key,
-              pid,
-              pid,
-              limit
-            )
+            .bind(transactionId, key, file.name, file.type, file.size, key, pid, enc, pid, limit)
             .run();
     if ((res.meta.changes ?? 0) === 0) {
       throw new HttpError(403, `Receipt limit reached (${limit ?? 0} per profile)`);
@@ -166,15 +174,35 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
     });
     throw e;
   }
-  const receipt = await db.first(
+  const receipt = await db.first<ReceiptRow>(
     c.env.DB,
     'SELECT * FROM receipts WHERE id = ?',
     res.meta.last_row_id
   );
-  return c.json(receipt, 201);
+  return c.json(receipt && publicReceipt(receipt), 201);
 }
 receiptsRoutes.post('/api/receipts/upload', requireAuth, handleUpload);
 receiptsRoutes.post('/api/receipts', requireAuth, handleUpload);
+
+// Both file routes serve through here, so they cannot drift. A sealed object is opened on the way
+// out through a streaming decrypt, never buffered; a plaintext one is the R2 body as before. The
+// type comes from receipts.file_type: a sealed object is stored as application/octet-stream.
+async function serveReceipt(
+  c: Context<AppEnv>,
+  bucket: R2Bucket,
+  receipt: ReceiptRow
+): Promise<Response> {
+  const obj = await bucket.get(receipt.storage_path);
+  if (!obj) throw new HttpError(404, 'File not found');
+  const body = await receiptStream(keyringFor(c), c.get('userId'), obj, receipt.enc);
+  return new Response(body, {
+    headers: {
+      'Content-Type': receipt.file_type || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${receipt.original_name}"`,
+      'Cache-Control': 'private, max-age=3600',
+    },
+  });
+}
 
 // ── GET /api/receipts/file/:filename — stream the file from R2 ─────────────────
 // Scoped to the caller's profile (the Express version served any filename with no
@@ -190,15 +218,7 @@ receiptsRoutes.get('/api/receipts/file/:filename', requireAuth, async (c) => {
     pid
   );
   if (!receipt) throw new HttpError(404, 'Receipt not found');
-  const obj = await c.env.RECEIPTS.get(receipt.storage_path);
-  if (!obj) throw new HttpError(404, 'File not found');
-  return new Response(obj.body, {
-    headers: {
-      'Content-Type': receipt.file_type || 'application/octet-stream',
-      'Content-Disposition': `inline; filename="${receipt.original_name}"`,
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
+  return serveReceipt(c, c.env.RECEIPTS, receipt);
 });
 
 // ── GET /api/receipts/:id/file — stream the file from R2 by receipt id ────────
@@ -215,15 +235,7 @@ receiptsRoutes.get('/api/receipts/:id/file', requireAuth, async (c) => {
     pid
   );
   if (!receipt) throw new HttpError(404, 'Receipt not found');
-  const obj = await c.env.RECEIPTS.get(receipt.storage_path);
-  if (!obj) throw new HttpError(404, 'File not found');
-  return new Response(obj.body, {
-    headers: {
-      'Content-Type': receipt.file_type || 'application/octet-stream',
-      'Content-Disposition': `inline; filename="${receipt.original_name}"`,
-      'Cache-Control': 'private, max-age=3600',
-    },
-  });
+  return serveReceipt(c, c.env.RECEIPTS, receipt);
 });
 
 // ── GET /api/receipts/transaction/:transactionId ──────────────────────────────
@@ -239,7 +251,7 @@ receiptsRoutes.get('/api/receipts/transaction/:transactionId', requireAuth, asyn
     pid
   );
   if (!receipt) throw new HttpError(404, 'Receipt not found');
-  return c.json(receipt);
+  return c.json(publicReceipt(receipt));
 });
 
 // ── GET /api/receipts/:id ─────────────────────────────────────────────────────
@@ -254,7 +266,7 @@ receiptsRoutes.get('/api/receipts/:id', requireAuth, async (c) => {
     pid
   );
   if (!receipt) throw new HttpError(404, 'Receipt not found');
-  return c.json(receipt);
+  return c.json(publicReceipt(receipt));
 });
 
 // ── DELETE /api/receipts/:id — remove the R2 object and the metadata row ──────

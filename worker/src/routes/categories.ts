@@ -4,6 +4,8 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows } from '../sealed-rows';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
@@ -269,6 +271,17 @@ const MERCHANT_DICTIONARY: { pattern: string; category: string; confidence: numb
   { pattern: 'interest', category: 'Investments', confidence: 0.9 },
 ];
 
+/**
+ * `LOWER(value) LIKE '%needle%'` for a needle of [a-z0-9] only, as SQLite evaluates it: NULL never
+ * matches, and only ASCII letters fold (SQLite's LOWER leaves everything else alone, where
+ * toLowerCase would turn e.g. the Kelvin sign into a 'k').
+ */
+function likeContains(value: unknown, needle: string): boolean {
+  return (
+    typeof value === 'string' && value.replace(/[A-Z]+/g, (m) => m.toLowerCase()).includes(needle)
+  );
+}
+
 // Suggest categories for uncategorized transactions. Port of
 // backend/routes/categories.js POST /api/categories/auto-map. Matches each
 // uncategorized transaction against (1) learned mappings, (2) the merchant
@@ -298,13 +311,16 @@ categoriesRoutes.post('/api/categories/auto-map', requireAuth, async (c) => {
   );
 
   // If transaction_ids provided, use those; otherwise filter by description+amount.
+  const ring = keyringFor(c);
   let txQuery = `
-    SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, c.name as category_name
+    SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, t.text_enc, c.name as category_name
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     WHERE t.profile_id = ? AND (t.category_id IS NULL OR c.name = 'Other')
     `;
   let params: unknown[] = [pid];
+  // Set when the description filter has to run in JS, over opened text (see below).
+  let textNeedle: string | null = null;
 
   if (transaction_ids && transaction_ids.length > 0) {
     txQuery += ' AND t.id IN (' + transaction_ids.map(() => '?').join(',') + ')';
@@ -317,17 +333,40 @@ categoriesRoutes.post('/api/categories/auto-map', requireAuth, async (c) => {
       .replace(/[^a-z0-9]/g, '');
     // amountMatch is computed but unused upstream; preserved for parity.
     amount.toString().replace(/[^0-9.]/g, '');
-    txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
-    params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    if (ring.enabled) {
+      // Sealed text cannot be matched in SQL. Every other predicate stays in the query, and the
+      // LIKE runs in JS once the rows are open — over rows in either form, since the backfill
+      // may not have reached them all.
+      textNeedle = normalizedDesc;
+    } else {
+      // No key in this deployment, so every row is plaintext: the query is exactly as it was.
+      txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
+      params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    }
   }
 
-  const transactions = await db.all<{
-    id: number;
-    description: string;
-    beneficiary: string | null;
-    payor: string | null;
-    amount: number;
-  }>(c.env.DB, txQuery, ...params);
+  // Opened before anything reads the text: scoring ciphertext would match short patterns by
+  // chance ('hbo', 'gas') and suggest the wrong category, and a row that cannot be opened fails
+  // the request instead.
+  const opened = await openRows(
+    ring,
+    c.get('userId'),
+    'transactions',
+    await db.all<{
+      id: number;
+      description: string;
+      beneficiary: string | null;
+      payor: string | null;
+      amount: number;
+    }>(c.env.DB, txQuery, ...params)
+  );
+  const needle = textNeedle;
+  const transactions =
+    needle === null
+      ? opened
+      : opened.filter(
+          (tx) => likeContains(tx.description, needle) || likeContains(tx.beneficiary, needle)
+        );
 
   const proposedMappings: any[] = [];
 

@@ -9,6 +9,15 @@ import { recalcGoalsByCategory } from '../recalc-goals';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { autoApplyTagRules } from '../tag-rules';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import {
+  compareBinary,
+  openRows,
+  sealForInsert,
+  sealedUpdate,
+  sqlSum,
+  textMatches,
+} from '../sealed-rows';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
 // Table: transactions (snake_case columns), LEFT JOINed to categories. The backend's
@@ -174,6 +183,27 @@ function chunkIds<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
+// ── Sealed text (field encryption, docs/plans/field-encryption.md) ───────────
+// description, beneficiary, payor and notes may be ciphertext at rest, so once a deployment has a
+// master key SQL can no longer search or sort by them: those steps run in JS over opened rows. With
+// no master key every row is plaintext by construction and the SQL paths below run unchanged.
+
+/** The columns the search box matches, as `(t.description LIKE ? OR t.beneficiary LIKE ? …)`. */
+const SEARCH_FIELDS = ['description', 'beneficiary', 'payor', 'notes'] as const;
+/** Sortable columns that are sealed. The other sort keys stay in SQL in every mode. */
+const TEXT_SORTS: ReadonlySet<string> = new Set(['description', 'beneficiary', 'payor']);
+
+/** `ORDER BY t.<col> <dir>, t.id <dir>` over opened rows. NULL first ascending, last descending. */
+function sortByText<R extends { id: number }>(rows: R[], col: string, desc: boolean): R[] {
+  const dir = desc ? -1 : 1;
+  return [...rows].sort(
+    (a, b) =>
+      dir *
+      (compareBinary((a as Record<string, unknown>)[col], (b as Record<string, unknown>)[col]) ||
+        compareBinary(a.id, b.id))
+  );
+}
+
 // ── GET /api/transactions — main list with filters + categories LEFT JOIN ─────
 transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
@@ -191,6 +221,28 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   const limit = c.req.query('limit');
   const offset = c.req.query('offset');
   // TODO: tag_ids filter (transaction_tags subquery) not ported yet.
+
+  // ORDER BY (allowlisted columns; category_name maps to c.name).
+  const sortCols = [
+    'date',
+    'amount',
+    'description',
+    'category_name',
+    'type',
+    'beneficiary',
+    'payor',
+  ];
+  const sortKey = sort && sortCols.includes(sort) ? sort : null;
+  const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
+
+  // With a master key configured, rows may be sealed and SQL cannot see their text. A search or a
+  // text sort then runs in JS over opened rows — and the window and the count move with it, since
+  // SQL can no longer tell which rows fall inside the page. Every other filter stays in SQL to bound
+  // what is fetched. Without a key every row is plaintext and the SQL below is exactly as before.
+  const ring = keyringFor(c);
+  const userId = c.get('userId');
+  const jsSort = ring.enabled && sortKey !== null && TEXT_SORTS.has(sortKey);
+  const textInJs = ring.enabled && (!!search || jsSort);
 
   // Build the shared WHERE fragment (used by both the row query and the count query).
   const where: string[] = [];
@@ -226,7 +278,7 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
       params.push(aid, aid);
     }
   }
-  if (search) {
+  if (search && !textInJs) {
     where.push(
       '(t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ? OR t.notes LIKE ?)'
     );
@@ -252,20 +304,12 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
     WHERE t.profile_id IN (${inClause})${whereSql}
   `;
 
-  // ORDER BY (allowlisted columns; category_name maps to c.name).
-  const sortCols = [
-    'date',
-    'amount',
-    'description',
-    'category_name',
-    'type',
-    'beneficiary',
-    'payor',
-  ];
-  if (sort && sortCols.includes(sort)) {
-    const sortCol = sort === 'category_name' ? 'c.name' : `t.${sort}`;
-    const sortOrder = order === 'asc' ? 'ASC' : 'DESC';
-    sql += ` ORDER BY ${sortCol} ${sortOrder}, t.id ${sortOrder}`;
+  if (sortKey) {
+    // A text sort under a master key happens in JS after opening (below), so SQL orders nothing.
+    if (!jsSort) {
+      const sortCol = sortKey === 'category_name' ? 'c.name' : `t.${sortKey}`;
+      sql += ` ORDER BY ${sortCol} ${sortOrder}, t.id ${sortOrder}`;
+    }
   } else {
     sql += ' ORDER BY t.date DESC, t.id DESC';
   }
@@ -275,15 +319,36 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   // SQLite's own spelling of "no upper bound", which is what an offset without a limit means.
   const off = offset ? parseInt(offset, 10) : NaN;
   const hasOffset = !isNaN(off) && off > 0;
-  if (limit) {
-    const lim = parseInt(limit, 10);
-    sql += ` LIMIT ${isNaN(lim) ? 50 : Math.min(lim, 1000)}`;
-  } else if (hasOffset) {
-    sql += ' LIMIT -1';
+  const parsedLimit = limit ? parseInt(limit, 10) : NaN;
+  const sqlLimit = isNaN(parsedLimit) ? 50 : Math.min(parsedLimit, 1000);
+  if (!textInJs) {
+    if (limit) {
+      sql += ` LIMIT ${sqlLimit}`;
+    } else if (hasOffset) {
+      sql += ' LIMIT -1';
+    }
+    if (hasOffset) sql += ` OFFSET ${off}`;
   }
-  if (hasOffset) sql += ` OFFSET ${off}`;
 
-  const rows = await db.all<TxRow>(c.env.DB, sql, ...pids, ...params);
+  let rows = await openRows(
+    ring,
+    userId,
+    'transactions',
+    await db.all<TxRow>(c.env.DB, sql, ...pids, ...params)
+  );
+
+  // The JS half of a search / text sort: filter, sort, then cut the same window SQL would have.
+  // `filteredTotal` is what the COUNT would have returned — the filtered set, before the window.
+  let filteredTotal: number | null = null;
+  if (textInJs) {
+    if (search) rows = rows.filter((row) => textMatches(row, SEARCH_FIELDS, search));
+    if (jsSort && sortKey) rows = sortByText(rows, sortKey, sortOrder === 'DESC');
+    filteredTotal = rows.length;
+    const start = hasOffset ? off : 0;
+    // SQLite reads a negative LIMIT as "no upper bound", as `LIMIT -1` above spells it.
+    const end = limit && sqlLimit >= 0 ? start + sqlLimit : rows.length;
+    rows = rows.slice(start, end);
+  }
 
   // Attach tags in ONE query (was N+1 — a tag query per row, which made large pages time out:
   // ~4800 transactions = ~4800 sequential tag SELECTs).
@@ -323,7 +388,9 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   // count runs whenever a window reached the SQL and never when one did not, including the edge
   // cases where a parameter was present but inert (`?limit=`, `?offset=0`, `?offset=abc`).
   let total: number;
-  if (!limit && !hasOffset) {
+  if (filteredTotal !== null) {
+    total = filteredTotal;
+  } else if (!limit && !hasOffset) {
     total = rows.length;
   } else {
     const countSql = `SELECT COUNT(*) as c FROM transactions t WHERE t.profile_id IN (${inClause})${whereSql}`;
@@ -352,7 +419,67 @@ transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
   const type = c.req.query('type');
   const search = c.req.query('search');
 
-  let sql = `
+  // The plaintext filters, shared by the aggregate and (under a master key) the row query below.
+  let filterSql = '';
+  const filterParams: unknown[] = [];
+  if (startDate) {
+    filterSql += ' AND t.date >= ?';
+    filterParams.push(startDate);
+  }
+  if (endDate) {
+    filterSql += ' AND t.date <= ?';
+    filterParams.push(endDate);
+  }
+  if (categoryIdsQ) {
+    const ids = categoryIdsQ
+      .split(',')
+      .map((id) => parseInt(id, 10))
+      .filter((id) => !isNaN(id))
+      .slice(0, 80); // cap to stay under D1's ~100 bound-variable limit on the IN-list
+    if (ids.length > 0) {
+      filterSql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
+      filterParams.push(...ids);
+    }
+  }
+  if (type) {
+    filterSql += ' AND t.type = ?';
+    filterParams.push(type);
+  }
+
+  type Totals = {
+    total_amount: number | null;
+    total_expense: number | null;
+    total_income: number | null;
+    count: number | null;
+  };
+  let result: Totals | null;
+
+  const ring = keyringFor(c);
+  if (search && ring.enabled) {
+    // Rows may be sealed, so the search runs in JS over opened rows and the aggregate moves with
+    // it. Same plaintext filters and the same value expression as the aggregate (its categories
+    // join is 1:1 and feeds nothing, so it is left out); sqlSum reproduces SUM — a NULL value is
+    // skipped, and the CASE's ELSE 0 still counts toward its sum as a 0.
+    const raw = await db.all<{ type: string | null; value: number | null; [k: string]: unknown }>(
+      c.env.DB,
+      `SELECT t.id, t.type, ${amountSql} AS value,
+              t.description, t.beneficiary, t.payor, t.notes, t.text_enc
+         FROM transactions t
+        WHERE t.profile_id IN (${inClause})${filterSql}`,
+      ...pids,
+      ...filterParams
+    );
+    const matched = (await openRows(ring, c.get('userId'), 'transactions', raw)).filter((row) =>
+      textMatches(row, SEARCH_FIELDS, search)
+    );
+    result = {
+      total_amount: sqlSum(matched.map((r) => r.value)),
+      total_expense: sqlSum(matched.map((r) => (r.type === 'expense' ? r.value : 0))),
+      total_income: sqlSum(matched.map((r) => (r.type === 'income' ? r.value : 0))),
+      count: matched.length,
+    };
+  } else {
+    let sql = `
     SELECT
       SUM(${amountSql}) as total_amount,
       SUM(CASE WHEN t.type = 'expense' THEN ${amountSql} ELSE 0 END) as total_expense,
@@ -362,42 +489,15 @@ transactionsRoutes.get('/api/transactions/summary', requireAuth, async (c) => {
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     WHERE t.profile_id IN (${inClause})
   `;
-  const params: unknown[] = [...pids];
-  if (startDate) {
-    sql += ' AND t.date >= ?';
-    params.push(startDate);
-  }
-  if (endDate) {
-    sql += ' AND t.date <= ?';
-    params.push(endDate);
-  }
-  if (categoryIdsQ) {
-    const ids = categoryIdsQ
-      .split(',')
-      .map((id) => parseInt(id, 10))
-      .filter((id) => !isNaN(id))
-      .slice(0, 80); // cap to stay under D1's ~100 bound-variable limit on the IN-list
-    if (ids.length > 0) {
-      sql += ` AND t.category_id IN (${ids.map(() => '?').join(',')})`;
-      params.push(...ids);
+    sql += filterSql;
+    const params: unknown[] = [...pids, ...filterParams];
+    if (search) {
+      sql +=
+        ' AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ? OR t.notes LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
     }
+    result = await db.first<Totals>(c.env.DB, sql, ...params);
   }
-  if (type) {
-    sql += ' AND t.type = ?';
-    params.push(type);
-  }
-  if (search) {
-    sql +=
-      ' AND (t.description LIKE ? OR t.beneficiary LIKE ? OR t.payor LIKE ? OR t.notes LIKE ?)';
-    params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
-  }
-
-  const result = await db.first<{
-    total_amount: number | null;
-    total_expense: number | null;
-    total_income: number | null;
-    count: number | null;
-  }>(c.env.DB, sql, ...params);
 
   return c.json({
     total_amount: result?.total_amount || 0,
@@ -521,6 +621,9 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
     ];
     const updates: string[] = [];
     const setParams: unknown[] = [];
+    // The text fields, which may be sealed: written through sealedUpdate so each row keeps the
+    // form it is in (sealed rows get ciphertext, plaintext rows plaintext). Defaults applied first.
+    const sealedSet: Record<string, unknown> = {};
 
     for (const field of allowedFields) {
       if (Object.prototype.hasOwnProperty.call(data, field)) {
@@ -554,15 +657,17 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
           updates.push('type = ?');
           setParams.push(data.type);
         } else {
-          updates.push(`${field} = ?`);
-          setParams.push(data[field] || '');
+          sealedSet[field] = data[field] || '';
         }
       }
     }
 
-    if (updates.length === 0) {
+    const hasSealed = Object.keys(sealedSet).length > 0;
+    if (updates.length === 0 && !hasSealed) {
       throw new HttpError(400, 'No valid fields to update');
     }
+    const ring = keyringFor(c);
+    const userId = c.get('userId');
 
     updates.push("updated_at = datetime('now')");
 
@@ -616,7 +721,21 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
         }
       }
       // Balance corrections and the row UPDATE for this chunk commit atomically; the UPDATE is
-      // pushed last so its changes count is the final result in the batch.
+      // pushed last so its changes count is the final result in the batch. The text fields go
+      // just before it, as sealedUpdate's pair (one matches each row, sealed or not); the plain
+      // UPDATE always sets updated_at, so it still touches — and counts — every row in the chunk.
+      if (hasSealed) {
+        stmts.push(
+          ...(await sealedUpdate(
+            ring,
+            userId,
+            'transactions',
+            sealedSet,
+            `profile_id IN (${inClause}) AND id IN (${placeholders})`,
+            [...pids, ...chunk]
+          ))
+        );
+      }
       stmts.push(
         c.env.DB.prepare(
           `UPDATE transactions SET ${updates.join(', ')} WHERE profile_id IN (${inClause}) AND id IN (${placeholders})`
@@ -804,28 +923,41 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   });
   if (invariantError) throw new HttpError(400, invariantError);
 
+  // The text fields, defaults applied, sealed under the user's key when there is one (text_enc
+  // says which form the row is stored in). Sealed only now that the request has validated, so a
+  // rejected create never mints a first key for nothing.
+  const ring = keyringFor(c);
+  const userId = c.get('userId');
+  const text = await sealForInsert(ring, userId, 'transactions', {
+    description,
+    beneficiary: beneficiary || '',
+    payor: payor || '',
+    notes: notes || '',
+  });
+
   // Persist the row and its balance side effects atomically. The INSERT is first in the batch so
   // its generated id can be read back from the batch result.
   const stmts: D1PreparedStatement[] = [
     c.env.DB.prepare(
-      `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id, currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id, currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id, text_enc)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
-      description,
+      text.description,
       amount,
       resolvedDate,
-      beneficiary || '',
-      payor || '',
+      text.beneficiary,
+      text.payor,
       category_id || null,
       currency || 'USD',
       amount_local ?? amount,
       means_of_payment || '',
       exchange_rate || 1.0,
       type || 'expense',
-      notes || '',
+      text.notes,
       pid,
       resolvedAccountId,
-      resolvedTransferAccountId
+      resolvedTransferAccountId,
+      text.text_enc
     ),
   ];
 
@@ -874,13 +1006,15 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   }
   const [insertResult] = await c.env.DB.batch(stmts);
 
-  // Return the created transaction with all fields including timestamps.
-  const created = await db.first<TxRow>(
+  // Return the created transaction with all fields including timestamps — opened, since both the
+  // tag rules below and the response need its text, not its ciphertext.
+  const stored = await db.first<TxRow>(
     c.env.DB,
     'SELECT * FROM transactions WHERE id = ? AND profile_id = ?',
     insertResult.meta.last_row_id,
     pid
   );
+  const created = stored ? (await openRows(ring, userId, 'transactions', [stored]))[0] : null;
 
   // Apply auto-apply tag rules to the new row. Deliberately after the balance batch has
   // committed and fail-soft inside autoApplyTagRules — a tagging problem must never fail or
@@ -900,7 +1034,7 @@ transactionsRoutes.get('/api/transactions/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
 
-  const tx = await db.first<Record<string, unknown>>(
+  const stored = await db.first<Record<string, unknown>>(
     c.env.DB,
     `
     SELECT t.*, c.name as category_name, c.color as category_color,
@@ -913,7 +1047,8 @@ transactionsRoutes.get('/api/transactions/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!tx) throw new HttpError(404, 'Transaction not found');
+  if (!stored) throw new HttpError(404, 'Transaction not found');
+  const [tx] = await openRows(keyringFor(c), c.get('userId'), 'transactions', [stored]);
 
   tx.tags = await getTagsForTransaction(c.env.DB, id, pid);
 
@@ -981,11 +1116,13 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
 
   const updates: string[] = [];
   const params: unknown[] = [];
+  // The text fields, which may be sealed: written through sealedUpdate (below) so the row keeps
+  // whichever form it is in. Defaults are applied here, before sealing.
+  const sealedSet: Record<string, unknown> = {};
   let hasUpdate = false;
 
   if (description !== undefined) {
-    updates.push('description = ?');
-    params.push(description);
+    sealedSet.description = description;
     hasUpdate = true;
   }
   if (amount !== undefined) {
@@ -1004,13 +1141,11 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     hasUpdate = true;
   }
   if (beneficiary !== undefined) {
-    updates.push('beneficiary = ?');
-    params.push(beneficiary || '');
+    sealedSet.beneficiary = beneficiary || '';
     hasUpdate = true;
   }
   if (payor !== undefined) {
-    updates.push('payor = ?');
-    params.push(payor || '');
+    sealedSet.payor = payor || '';
     hasUpdate = true;
   }
   if (category_id !== undefined) {
@@ -1044,8 +1179,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     hasUpdate = true;
   }
   if (notes !== undefined) {
-    updates.push('notes = ?');
-    params.push(notes || '');
+    sealedSet.notes = notes || '';
     hasUpdate = true;
   }
   if (reconciled !== undefined) {
@@ -1152,7 +1286,24 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     stmts.push(bal(newAmountLocal, newTransferAccountId));
   }
 
-  // The row itself goes LAST, so every balance statement above still matched the pre-state.
+  // The text fields, as sealedUpdate's pair (exactly one matches the row, whichever form it is in).
+  // Under the same guard, and before the row UPDATE below: the guard reads only balance fields,
+  // which these statements never change, so both still see the pre-state.
+  if (Object.keys(sealedSet).length > 0) {
+    stmts.push(
+      ...(await sealedUpdate(
+        keyringFor(c),
+        c.get('userId'),
+        'transactions',
+        sealedSet,
+        `id = ? AND profile_id = ? AND ${guard.sql}`,
+        [id, pid, ...guard.binds]
+      ))
+    );
+  }
+
+  // The row itself goes LAST, so every balance statement above still matched the pre-state. It
+  // always sets updated_at, so its changes count decides the 409 whether or not text changed.
   stmts.push(
     c.env.DB.prepare(
       `UPDATE transactions SET ${updates.join(', ')} WHERE id = ? AND profile_id = ? AND ${guard.sql}`

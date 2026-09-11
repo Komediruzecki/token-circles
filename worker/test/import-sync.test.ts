@@ -2,6 +2,7 @@ import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import wranglerRaw from '../wrangler.jsonc?raw';
 import { runScheduledSheetSyncs } from '../src/import-sync';
+import { openedRows } from './helpers/sealed';
 
 // The daily cron that re-syncs saved Google-Sheet sources (src/import-sync.ts). It is the one
 // import path with no human in front of it: nobody sees a preview, nobody clicks "Import", and a
@@ -120,13 +121,23 @@ async function addSource(opts: {
   return res.meta.last_row_id as number;
 }
 
+const OWNER_OF: Record<number, number> = {
+  [PROFILE_ID]: USER_ID,
+  [OTHER_PROFILE_ID]: OTHER_USER_ID,
+};
+// BINARY collation order, which is what ORDER BY date, description gave before the description
+// could be sealed (and so could no longer be sorted in SQL).
+const binary = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 const txFor = (profileId = PROFILE_ID) =>
-  env.DB.prepare(
-    'SELECT date, description, amount, import_id FROM transactions WHERE profile_id = ? ORDER BY date, description'
-  )
-    .bind(profileId)
-    .all<{ date: string; description: string; amount: number; import_id: string | null }>()
-    .then((r) => r.results);
+  openedRows<{ date: string; description: string; amount: number; import_id: string | null }>(
+    'transactions',
+    OWNER_OF[profileId]!,
+    'SELECT date, description, amount, import_id, text_enc FROM transactions WHERE profile_id = ?',
+    profileId
+  ).then((rows) =>
+    rows.sort((a, b) => binary(a.date, b.date) || binary(a.description ?? '', b.description ?? ''))
+  );
 
 const logsFor = (profileId = PROFILE_ID) =>
   env.DB.prepare(

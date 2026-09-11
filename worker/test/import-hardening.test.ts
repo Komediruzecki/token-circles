@@ -11,6 +11,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { openedRows } from './helpers/sealed';
 
 const USER = 700;
 const PROFILE = 7000;
@@ -55,11 +56,15 @@ function execute(body: Record<string, unknown>): Promise<Response> {
 async function txByDescription(
   description: string
 ): Promise<{ date: string; amount: number } | null> {
-  return env.DB.prepare(
-    'SELECT date, amount FROM transactions WHERE profile_id = ? AND description = ?'
-  )
-    .bind(PROFILE, description)
-    .first<{ date: string; amount: number }>();
+  // The description may be sealed, so it is matched after opening rather than in SQL.
+  const rows = await openedRows<{ date: string; amount: number; description: string }>(
+    'transactions',
+    USER,
+    'SELECT date, amount, description, text_enc FROM transactions WHERE profile_id = ?',
+    PROFILE
+  );
+  const tx = rows.find((t) => t.description === description);
+  return tx ? { date: tx.date, amount: tx.amount } : null;
 }
 
 describe('import date parsing (audit I2)', () => {

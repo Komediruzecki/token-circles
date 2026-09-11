@@ -8,6 +8,8 @@ import { HttpError } from '../http';
 import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows } from '../sealed-rows';
 import { clearProfileData } from '../profileData';
 
 // Data export, versioned restore, and wipe.
@@ -38,16 +40,26 @@ exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
   const type = c.req.param('type');
   const format = c.req.query('format') || 'csv';
 
+  // Sealed text is opened straight after each query. openRows also drops text_enc, which matters
+  // here more than anywhere: toCsv takes its header from the first row's keys, and the JSON format
+  // serializes every key, so a leftover marker would become a column in the user's file.
+  const ring = keyringFor(c);
+  const userId = c.get('userId');
   let rows: Record<string, unknown>[];
   let filename: string;
   switch (type) {
     case 'transactions':
-      rows = await db.all(
-        c.env.DB,
-        `SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category
+      rows = await openRows(
+        ring,
+        userId,
+        'transactions',
+        await db.all(
+          c.env.DB,
+          `SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category, t.text_enc
          FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
          WHERE t.profile_id IN (${inClause}) ORDER BY t.date DESC`,
-        ...pids
+          ...pids
+        )
       );
       filename = 'transactions';
       break;
@@ -88,11 +100,16 @@ exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
       filename = 'loans';
       break;
     case 'recurring':
-      rows = await db.all(
-        c.env.DB,
-        `SELECT description, amount, type, frequency, day_of_month, next_date, notes, active
+      rows = await openRows(
+        ring,
+        userId,
+        'recurring_transactions',
+        await db.all(
+          c.env.DB,
+          `SELECT description, amount, type, frequency, day_of_month, next_date, notes, active, text_enc
          FROM recurring_transactions WHERE profile_id IN (${inClause})`,
-        ...pids
+          ...pids
+        )
       );
       filename = 'recurring_transactions';
       break;

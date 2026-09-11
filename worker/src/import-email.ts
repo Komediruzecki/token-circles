@@ -4,6 +4,7 @@ import { autoDetectMapping } from '../../shared/importMapping';
 import type { Env } from './index';
 import * as db from './db';
 import { executeImport, parseCsv } from './routes/imports';
+import { DataKeyring } from './data-keys';
 
 // Cloudflare Email Routing → Worker email-in (Ask 3). A bank statement forwarded to
 // `ingest+<EMAIL_INGEST_SECRET>@<your-domain>` lands here: CSV/XLSX attachments are auto-mapped
@@ -98,6 +99,8 @@ export async function handleIngestEmail(message: ForwardableEmailMessage, env: E
     const attachments = Array.isArray(email.attachments) ? email.attachments : [];
     let totalImported = 0;
     let totalDupes = 0;
+    // One keyring per message: every attachment lands in the same profile, so one key lookup.
+    const ring = new DataKeyring(env);
     for (const att of attachments) {
       const table = parseAttachment(att.filename || '', att.mimeType || '', toBytes(att.content));
       if (!table || table.headers.length === 0 || table.rows.length === 0) continue;
@@ -106,6 +109,7 @@ export async function handleIngestEmail(message: ForwardableEmailMessage, env: E
       if (mapping.date === undefined || mapping.amount === undefined) continue;
       const importId = crypto.randomUUID();
       const outcome = await executeImport(env.DB, profileId, {
+        ring,
         rows: table.rows,
         mapping,
         importId,

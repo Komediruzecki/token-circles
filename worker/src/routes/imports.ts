@@ -20,6 +20,8 @@ import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
+import { type DataKeyring, keyringFor, profileOwner } from '../data-keys';
+import { openRows, sealForInsert } from '../sealed-rows';
 
 // Parse CSV text into headers + data rows. The implementation moved to shared/ so this and the
 // frontend's copy stop drifting; re-exported under the old name so existing call sites and tests
@@ -342,6 +344,9 @@ importRoutes.post('/api/import/googlesheet', requireAuth, async (c) => {
 // creates missing categories, inserts each transaction scoped to `pid`, then recomputes affected
 // account balances. `mapping` is field→column-index and `rows` are arrays, as the client sends.
 export interface ExecuteImportInput {
+  /** Seals new rows under the profile owner's key and opens stored rows for dedup. Pass
+   *  keyringFor(c) in a request, or one new DataKeyring(env) per cron/email invocation. */
+  ring: DataKeyring;
   rows: any;
   mapping: any;
   categoryTypes?: any;
@@ -362,6 +367,11 @@ export async function executeImport(
   const rows = input.rows;
   const mapping = input.mapping;
   if (!rows || !mapping) return { status: 400, body: { error: 'Missing data' } };
+  const ring = input.ring;
+  // The user whose key seals this profile's rows, resolved once per call. Every caller has already
+  // checked the profile belongs to its user (getProfileId / the signed capability / the saved
+  // source), so this is that user. Null is a legacy profile nobody owns: its rows stay plaintext.
+  const owner = await profileOwner(DB, pid);
   const pids = [pid];
   const inClause = pids.map(() => '?').join(',');
   const categoryTypes = input.categoryTypes;
@@ -419,6 +429,10 @@ export async function executeImport(
     amount: number;
     amountLocal: number;
     exchangeRate: number;
+    /** The stored date. Resolved here, once, so the dedup read below can be bounded by the
+     *  range of dates this import can match -- and so a run crossing midnight cannot parse a
+     *  blank date to one day for the bound and the next day for the key. */
+    parsedDate: string;
   }> = [];
   for (let index = 0; index < rowsArr.length; index++) {
     const row = rowsArr[index]!;
@@ -456,6 +470,7 @@ export async function executeImport(
       amount: Math.abs(amountRaw),
       amountLocal: Math.abs(amountLocal),
       exchangeRate,
+      parsedDate: parseDateString(rawDate ?? today()),
     });
   }
   const validRows = validatedRows.map(({ row }) => row);
@@ -646,9 +661,23 @@ export async function executeImport(
   // Build all transaction inserts, then flush in chunks — one D1 round-trip per chunk instead of
   // one per row (the old per-row loop was the hang for large imports).
   const TX_SQL = `INSERT INTO transactions (description, amount, date, beneficiary, payor, category_id,
-        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id, import_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-  const txStmts: D1PreparedStatement[] = [];
+        currency, amount_local, means_of_payment, exchange_rate, type, notes, profile_id, account_id, transfer_account_id, import_id, text_enc)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  // Rows to insert, in plaintext. Sealed only once the dry-run exit is behind us: a preview only
+  // counts them, and must not mint the user's data key just to count.
+  const toInsert: Array<{
+    text: { description: unknown; beneficiary: unknown; payor: unknown; notes: unknown };
+    amount: number;
+    parsedDate: string;
+    categoryId: number | null;
+    currency: string;
+    amountLocal: number;
+    mopName: unknown;
+    exchangeRate: number;
+    validatedType: string;
+    accountId: number | null;
+    transferAccountId: number | null;
+  }> = [];
 
   // Resolution-aware duplicate detection (audit A2), matching the serverless import.
   // Key on the RESOLVED (date, lowercased description, account_id, type, currency) with a
@@ -664,19 +693,42 @@ export async function executeImport(
     type: string,
     currency: string
   ): string => `${date}\x00${desc}\x00${accountId ?? ''}\x00${type}\x00${currency}`;
-  const existingForDedup = await db.all<{
-    date: string;
-    description: string | null;
-    amount: number;
-    type: string | null;
-    currency: string | null;
-    account_id: number | null;
-  }>(
-    DB,
-    `SELECT date, description, amount, type, currency, account_id FROM transactions
-       WHERE profile_id = ?${importId ? ' AND (import_id IS NULL OR import_id != ?)' : ''}`,
-    ...(importId ? [pid, importId] : [pid])
-  );
+  // Bounded to the incoming rows' date range: the key carries the exact date, so no stored row
+  // outside [min, max] can match one. ISO yyyy-mm-dd strings order the same under JS < and
+  // SQLite's BINARY collation, and a stored date equal to an incoming one is inside the range
+  // under either. No valid rows means nothing to match, so no read at all.
+  let minDate: string | null = null;
+  let maxDate: string | null = null;
+  for (const { parsedDate } of validatedRows) {
+    if (minDate === null || parsedDate < minDate) minDate = parsedDate;
+    if (maxDate === null || parsedDate > maxDate) maxDate = parsedDate;
+  }
+  // text_enc comes along so the description can be opened: the key is built from the stored TEXT,
+  // and a ciphertext key never equals a plaintext one -- every re-import and every daily sheet sync
+  // would silently duplicate everything. A value that fails to open throws and aborts the import
+  // (fail closed) rather than counting as a non-match.
+  const existingForDedup =
+    minDate === null || maxDate === null
+      ? []
+      : await openRows(
+          ring,
+          () => owner,
+          'transactions',
+          await db.all<{
+            date: string;
+            description: string | null;
+            amount: number;
+            type: string | null;
+            currency: string | null;
+            account_id: number | null;
+            text_enc: number;
+          }>(
+            DB,
+            `SELECT date, description, amount, type, currency, account_id, text_enc FROM transactions
+       WHERE profile_id = ? AND date BETWEEN ? AND ?${importId ? ' AND (import_id IS NULL OR import_id != ?)' : ''}`,
+            ...(importId ? [pid, minDate, maxDate, importId] : [pid, minDate, maxDate])
+          )
+        );
   const dedupBuckets = new Map<string, number[]>();
   for (const t of existingForDedup) {
     const k = dedupKeyOf(
@@ -696,7 +748,7 @@ export async function executeImport(
   const duplicateIndices: number[] = [];
 
   for (const validated of validatedRows) {
-    const { index: ri, row, amountRaw, amount, amountLocal, exchangeRate } = validated;
+    const { index: ri, row, amountRaw, amount, amountLocal, exchangeRate, parsedDate } = validated;
     const catRaw = pick(row, mapping, 'category');
     const catName = catRaw ? String(catRaw).trim() : '';
     const catLower = catName.toLowerCase();
@@ -744,7 +796,6 @@ export async function executeImport(
     const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
     const description = pick(row, mapping, 'description') || '';
-    const parsedDate = parseDateString(dateRaw);
     const invariantError = transactionInvariantError({
       type: validatedType,
       amount,
@@ -809,26 +860,26 @@ export async function executeImport(
       continue;
     }
 
-    txStmts.push(
-      DB.prepare(TX_SQL).bind(
+    // Defaults applied BEFORE sealing, so an absent value is stored as '' (never sealed) exactly
+    // as before. `description` itself stays plaintext: the dedup key above and the skip labels use it.
+    toInsert.push({
+      text: {
         description,
-        amount,
-        parsedDate,
-        pick(row, mapping, 'beneficiary') || '',
-        pick(row, mapping, 'payor') || '',
-        categoryId,
-        currency,
-        amountLocal,
-        mopName,
-        exchangeRate,
-        validatedType,
-        pick(row, mapping, 'notes') || '',
-        pid,
-        accountId,
-        transferAccountId,
-        importId
-      )
-    );
+        beneficiary: pick(row, mapping, 'beneficiary') || '',
+        payor: pick(row, mapping, 'payor') || '',
+        notes: pick(row, mapping, 'notes') || '',
+      },
+      amount,
+      parsedDate,
+      categoryId,
+      currency,
+      amountLocal,
+      mopName,
+      exchangeRate,
+      validatedType,
+      accountId,
+      transferAccountId,
+    });
   }
 
   // Preview mode: report what WOULD be created without mutating anything (B5/A2).
@@ -836,7 +887,7 @@ export async function executeImport(
     return {
       status: 200,
       body: {
-        imported: txStmts.length,
+        imported: toInsert.length,
         skipped: skippedItems.length,
         skipped_items: skippedItems,
         warnings,
@@ -852,6 +903,34 @@ export async function executeImport(
         message: 'Dry run — no changes made',
       },
     };
+  }
+
+  // Seal every row BEFORE the retry-delete below: a key that cannot be produced must fail the import
+  // while the prior attempt's rows are still in place, not after they are gone.
+  const txStmts: D1PreparedStatement[] = [];
+  for (const r of toInsert) {
+    const t = await sealForInsert(ring, owner, 'transactions', r.text);
+    txStmts.push(
+      DB.prepare(TX_SQL).bind(
+        t.description,
+        r.amount,
+        r.parsedDate,
+        t.beneficiary,
+        t.payor,
+        r.categoryId,
+        r.currency,
+        r.amountLocal,
+        r.mopName,
+        r.exchangeRate,
+        r.validatedType,
+        t.notes,
+        pid,
+        r.accountId,
+        r.transferAccountId,
+        importId,
+        t.text_enc
+      )
+    );
   }
 
   // Idempotent retry: drop any rows a prior (partial) run of THIS import created before re-inserting,
@@ -903,6 +982,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, any>;
   const importId = typeof b.importId === 'string' && b.importId ? b.importId : null;
   const { status, body } = await executeImport(c.env.DB, pid, {
+    ring: keyringFor(c),
     rows: b.rows,
     mapping: b.mapping,
     categoryTypes: b.categoryTypes,
