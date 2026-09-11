@@ -130,6 +130,13 @@ app.use('*', async (c, next) => {
   }
 });
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+// security.txt (RFC 9116) lives with the app, in frontend/public/.well-known/. The API host sends
+// anyone who asks for it there rather than keeping a second copy that could drift from it.
+app.get('/.well-known/security.txt', (c) => {
+  const appOrigin = (c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || '').trim();
+  if (!appOrigin) return c.notFound();
+  return c.redirect(`${appOrigin.replace(/\/+$/, '')}/.well-known/security.txt`, 301);
+});
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means
