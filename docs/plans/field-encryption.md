@@ -151,7 +151,9 @@ finding a learned category pattern again to count another use of it.
 
 Semantics on that path differ from SQLite's `LIKE` in two ways, both closer to what someone
 typing into a search box means: case folding covers all of Unicode (SQLite folds ASCII only),
-and `%` and `_` are literal characters rather than wildcards.
+and `%` and `_` are literal characters rather than wildcards. Where they must agree, they do: a
+query is compared in the form D1 stores text in (`asStored` — UTF-8 cannot carry a lone surrogate,
+so D1 and sealing both store U+FFFD, and D1 converts its parameters the same way).
 
 Measured in workerd: **~9 µs to open a value, ~2.5 µs to seal one.** The worst case — a
 20,000-row ledger, four columns, 80,000 opens — is about 0.7 s of CPU; a typical 2,000–5,000-row
@@ -225,6 +227,13 @@ Open:
 - **Bank and OAuth tokens.** Nothing stores them yet — bank sync is not built. When it is, they are
   sealed under this key hierarchy before the first one is written (bank-connectivity plan,
   decision 1).
+- **Receipt objects no row names.** Deleting a receipt deletes its row first, then the object
+  that row named. If D1 commits the delete but its answer is lost, the Worker never learns which
+  object to delete, and it stays in R2 with nothing pointing at it — on a keyless deployment, a
+  plaintext file its owner believes gone. Rare (a D1 failure after commit), and the only cure is a
+  sweep: from the backfill cron, delete objects under a profile's prefix that no `receipts` row
+  names and that are older than a day. Not built: it deletes user files, so it gets its own
+  review.
 - **Keyed scans have no cap.** The counterparty, merchant and search scans open every candidate
   row. Opening concurrently was measured and does not help — 20,000 opens take ~178 ms one at a
   time and ~171 ms 64 at a time in workerd, because the work is CPU, not I/O — so `openRows` stays

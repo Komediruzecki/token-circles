@@ -53,7 +53,8 @@ All notable changes to Token Circles are documented here. The format is based on
     nothing sealed is touched. The `[backfill]` log line gains `rewrapped`, `rewrapFailed` and
     `staleKeys`; `staleKeys=0` is when the old master key can be removed. A key under a master key
     that is already gone is counted without an attempt, so retiring one too early is a number in
-    the log, not an error line per user every 20 minutes. Procedure: the plan doc, "Rotation".
+    the log, not an error line per user every 20 minutes. A damaged key is not mistaken for one: it
+    is tried, and its `[data-keys]` line names the user. Procedure: the plan doc, "Rotation".
   - Migration 0031: `users.dek_wrapped`, `text_enc` on the three tables, `receipts.enc`, and a
     partial index over unsealed transactions for the backfill. Schema only; every row starts at 0.
   - Migration 0032: an index on `users.dek_wrapped`. `/api/health` asks whether any key is under a
@@ -69,8 +70,10 @@ All notable changes to Token Circles are documented here. The format is based on
     `listTagRules` and `autoApplyTagRules` now take the keyring. Names stay plaintext; the plan
     doc says why.
   - Edits to those rows go through `sealedUpdate`, which leaves out a field the body left out. Two
-    edits change with it. A retirement-goal or housing edit that omitted a field bound `undefined`
-    and failed with a 500; it now leaves that field alone. A portfolio-holding edit without `notes`
+    edits change with it. A retirement-goal edit without `name`, `target_amount` or
+    `current_amount`, or a housing edit without `property_name`, bound `undefined` and failed with
+    a 500; it now leaves that field alone. (Not their `notes`: those routes still write `''` when
+    the body has none, as they always did.) A portfolio-holding edit without `notes`
     wrote the stored value back; it now leaves the column untouched, because the stored value may
     be sealed, and sealing it again would store ciphertext of ciphertext.
   - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured` — which includes a data
@@ -108,7 +111,8 @@ All notable changes to Token Circles are documented here. The format is based on
   - `db.batch` retries the D1 export lock like `db.run`, so the bill and recurring-rule edits,
     now batches, kept that retry.
   - Numeric spreadsheet cells in an import are stored as the text the cell showed — `1234`, not
-    D1's `'1234.0'` — with or without a key (`cellText` in `routes/imports.ts`).
+    D1's `'1234.0'`, and to the 15 significant digits SQLite renders a REAL with, so float noise
+    such as `0.1 + 0.2` is `0.3` — with or without a key (`cellText` in `routes/imports.ts`).
   - Cheaper keyed reads. A bounded text sort without a search reads only `id` and the sort column,
     sorts, and then fetches the page; the keyed counterparty query drops empty names in SQL; MCP
     merchant grouping no longer opens a description it will not use. Opening values concurrently
@@ -122,6 +126,17 @@ All notable changes to Token Circles are documented here. The format is based on
     copy in R2 with nothing pointing at it. `db.writeReturning` runs such a statement.
   - Saving auto-categorize results opens the learned patterns once per request rather than once
     per mapping, and a pattern that fails to be learned is logged instead of dropped.
+  - Without a master key, the keyring remembers for the rest of the request that a user has no data
+    key. It asked D1 again for every sealed row written, so a keyless import or restore of N rows
+    ran N extra queries — on every deployment, since none has a key yet.
+  - A JS comparison against stored text first puts the query in the form D1 stores
+    (`asStored` in `sealed-rows.ts`: a lone surrogate, which UTF-8 cannot carry, becomes U+FFFD —
+    D1 converts its parameters the same way). The keyed learned-pattern lookup and search now match
+    exactly what `pattern = ?` and `LIKE` match.
+  - `sealForInsert` refuses an insert that leaves out a sealed column whose DEFAULT is not empty
+    (`MUST_NAME_ON_INSERT`: `tag_rules.criteria`, DEFAULT `'{}'`), which would otherwise sit
+    unsealed in a row marked sealed. A test reads every sealed column's default from the schema and
+    holds the list to it.
 - **`security.txt` (RFC 9116).** `frontend/public/.well-known/security.txt` points researchers at
   GitHub's private vulnerability reporting, and the API host redirects its
   `/.well-known/security.txt` there. The service worker now leaves `/.well-known/` to the network
