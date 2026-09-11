@@ -344,4 +344,31 @@ describe('master key rotation', () => {
     await env.DB.prepare("UPDATE users SET dek_wrapped = 'not-a-key' WHERE id = 902").run();
     expect(await encryptionStatus(retiredTooEarly)).toBe('misconfigured');
   });
+
+  it('names a damaged key in the log, where a key under a retired master key is only counted', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await new DataKeyring({ DB: env.DB, DATA_KEK_3: K1 }).forWrite(903); // its master key is gone
+    await env.DB.batch([
+      env.DB.prepare("UPDATE users SET dek_wrapped = 'dk1.x.a.b' WHERE id = 901"),
+      env.DB.prepare("UPDATE users SET dek_wrapped = 'dk1.33.a.b' WHERE id = 902"),
+    ]);
+    const others = await othersKeys();
+
+    expect(await rewrapStaleKeys(BOTH, { limit: 1000 })).toEqual({
+      rewrapped: 0,
+      failed: others.size + 3,
+      remaining: others.size + 3,
+    });
+    expect(errors.mock.calls.map(([line]) => String(line))).toEqual([
+      expect.stringContaining('user 901: users.dek_wrapped is malformed'),
+      expect.stringContaining('user 902: users.dek_wrapped is malformed'),
+    ]);
+  });
+
+  it('tells a key under master key 10 from one under master key 1', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await new DataKeyring({ DB: env.DB, DATA_KEK_10: K2 }).forWrite(901);
+    expect(await encryptionStatus({ DB: env.DB, DATA_KEK_1: K1 })).toBe('misconfigured');
+    expect(await encryptionStatus({ DB: env.DB, DATA_KEK_1: K1, DATA_KEK_10: K2 })).toBe('on');
+  });
 });

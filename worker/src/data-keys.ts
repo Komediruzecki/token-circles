@@ -174,20 +174,30 @@ async function wrapDek(env: KeyEnv, raw: Uint8Array<ArrayBuffer>, userId: number
   return `${DEK_PREFIX}.${version}.${b64urlEncode(iv)}.${b64urlEncode(ct)}`;
 }
 
+/**
+ * The master-key version a wrapped key names — `dk1.<n>.<iv>.<ct>`, with n written as wrapDek
+ * writes it — or null for a value that is not a wrapped key at all.
+ */
+function wrappedVersion(wrapped: string): number | null {
+  const parts = wrapped.split('.');
+  const version = Number(parts[1]);
+  const wellFormed =
+    parts.length === 4 &&
+    parts[0] === DEK_PREFIX &&
+    String(version) === parts[1] &&
+    version >= 1 &&
+    version <= MAX_KEK_VERSION;
+  return wellFormed ? version : null;
+}
+
 async function unwrapRaw(
   env: KeyEnv,
   wrapped: string,
   userId: number
 ): Promise<Uint8Array<ArrayBuffer>> {
   const parts = wrapped.split('.');
-  const version = Number(parts[1]);
-  if (
-    parts.length !== 4 ||
-    parts[0] !== DEK_PREFIX ||
-    !Number.isInteger(version) ||
-    version < 1 ||
-    version > MAX_KEK_VERSION
-  ) {
+  const version = wrappedVersion(wrapped);
+  if (version === null) {
     throw new DataKeyUnavailableError(`user ${userId}: users.dek_wrapped is malformed`);
   }
   if (!env[kekName(version)]?.trim()) {
@@ -275,8 +285,10 @@ export async function rewrapStaleKeys(
     for (const row of rows) {
       // Under a master key this deployment no longer has, there is nothing to unwrap it with.
       // Counted without trying, so a key retired too early is one number in the log rather than
-      // an error line per user on every run.
-      if (!versions.includes(Number(row.dek_wrapped.split('.')[1]))) {
+      // an error line per user on every run. A damaged key goes on to unwrapRaw, which names its
+      // user in the log: putting an old master key back would not mend it.
+      const version = wrappedVersion(row.dek_wrapped);
+      if (version !== null && !versions.includes(version)) {
         stats.failed++;
         continue;
       }
