@@ -109,19 +109,20 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
   }
 
   // receipts.transaction_id is UNIQUE — re-uploading for the same transaction replaces the
-  // previous receipt (drop its row + R2 object first) rather than hitting a UNIQUE 500.
+  // previous receipt (drop its row + R2 object first) rather than hitting a UNIQUE 500. The row
+  // goes first and names its object as it stood when deleted (see the DELETE route for why).
   if (transactionId !== null) {
-    const prev = await db.first<{ id: number; storage_path: string }>(
+    const prev = await db.writeReturning<{ storage_path: string | null }>(
       c.env.DB,
-      'SELECT id, storage_path FROM receipts WHERE transaction_id = ? AND profile_id = ?',
+      'DELETE FROM receipts WHERE transaction_id = ? AND profile_id = ? RETURNING storage_path',
       transactionId,
       pid
     );
-    if (prev) {
-      await c.env.RECEIPTS.delete(prev.storage_path).catch((e: unknown) => {
+    for (const { storage_path } of prev) {
+      if (!storage_path) continue;
+      await c.env.RECEIPTS.delete(storage_path).catch((e: unknown) => {
         console.error('R2 delete of replaced receipt failed:', e);
       });
-      await db.del(c.env.DB, 'receipts', 'id = ?', prev.id);
     }
   }
 
@@ -273,19 +274,23 @@ receiptsRoutes.get('/api/receipts/:id', requireAuth, async (c) => {
 receiptsRoutes.delete('/api/receipts/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const receipt = await db.first<ReceiptRow>(
+  // The row goes first, and names the object it pointed at as it was deleted. The encryption
+  // backfill moves a receipt to a new object and swaps the row to it at any moment; reading the
+  // path, deleting that object and then the row left the new object behind with no row pointing
+  // at it whenever the swap landed in between. Deleted first, the row can only name the current
+  // object — and a swap that comes after finds no row and removes its own copy.
+  const [deleted] = await db.writeReturning<{ storage_path: string | null }>(
     c.env.DB,
-    'SELECT * FROM receipts WHERE id = ? AND profile_id = ?',
+    'DELETE FROM receipts WHERE id = ? AND profile_id = ? RETURNING storage_path',
     id,
     pid
   );
-  if (!receipt) throw new HttpError(404, 'Receipt not found');
-  if (c.env.RECEIPTS && receipt.storage_path) {
-    await c.env.RECEIPTS.delete(receipt.storage_path).catch((e: unknown) => {
+  if (!deleted) throw new HttpError(404, 'Receipt not found');
+  if (c.env.RECEIPTS && deleted.storage_path) {
+    await c.env.RECEIPTS.delete(deleted.storage_path).catch((e: unknown) => {
       console.error('R2 delete of receipt failed:', e);
     });
   }
-  await db.del(c.env.DB, 'receipts', 'id = ? AND profile_id = ?', id, pid);
   return c.json({ message: 'Receipt deleted successfully' });
 });
 

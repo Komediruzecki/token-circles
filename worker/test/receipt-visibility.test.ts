@@ -111,6 +111,130 @@ describe('receipt visibility', () => {
 
 // Forced on, whatever mode the suite runs in. Users 56100-56199 only ever go through KEYED: a user
 // who got a key here and was then read through SELF in a keyless run would get a 503 by design.
+/**
+ * An env whose D1 runs `race` once, right after the first statement matching `sql` has run —
+ * the moment a concurrent writer (here, the encryption backfill) would land in between.
+ */
+function racingEnv(sql: RegExp, race: () => Promise<void>): typeof env {
+  let fired = false;
+  const wrapBound = (bound: D1PreparedStatement): D1PreparedStatement =>
+    new Proxy(bound, {
+      get(target, prop) {
+        const value = Reflect.get(target, prop, target);
+        if (prop !== 'first' && prop !== 'all' && prop !== 'run') {
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+        return async (...args: unknown[]) => {
+          const out = await (value as (...a: unknown[]) => Promise<unknown>).apply(target, args);
+          if (!fired) {
+            fired = true;
+            await race();
+          }
+          return out;
+        };
+      },
+    });
+  const DB = new Proxy(env.DB, {
+    get(target, prop) {
+      if (prop === 'prepare') {
+        return (text: string) => {
+          const stmt = target.prepare(text);
+          if (!sql.test(text)) return stmt;
+          return new Proxy(stmt, {
+            get(s, p) {
+              if (p === 'bind') return (...args: unknown[]) => wrapBound(s.bind(...args));
+              const value = Reflect.get(s, p, s);
+              return typeof value === 'function' ? value.bind(s) : value;
+            },
+          });
+        };
+      }
+      const value = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  return { ...env, DB } as typeof env;
+}
+
+/** What the backfill does to one receipt: copy it to a new key, swap the row by compare-and-set,
+ *  then delete whichever copy lost. */
+async function resealLikeTheBackfill(receiptId: number): Promise<void> {
+  const row = await env.DB.prepare('SELECT storage_path FROM receipts WHERE id = ?')
+    .bind(receiptId)
+    .first<{ storage_path: string }>();
+  const from = row?.storage_path ?? `gone-${receiptId}`;
+  const to = `${from}.sealed-race`;
+  const obj = await env.RECEIPTS!.get(from);
+  if (!obj) return;
+  await env.RECEIPTS!.put(to, await obj.arrayBuffer());
+  const res = await env.DB.prepare(
+    'UPDATE receipts SET storage_path = ?, enc = 1 WHERE id = ? AND enc = 0 AND storage_path = ?'
+  )
+    .bind(to, receiptId, from)
+    .run();
+  await env.RECEIPTS!.delete((res.meta.changes ?? 0) === 1 ? from : to);
+}
+
+async function objectsUnder(prefix: string): Promise<string[]> {
+  return (await env.RECEIPTS!.list({ prefix })).objects.map((o) => o.key);
+}
+
+describe('deleting a receipt while the backfill moves it', () => {
+  // beforeEach resets D1, not the bucket: start from no objects under this profile.
+  beforeEach(async () => {
+    const keys = await objectsUnder('700/');
+    if (keys.length) await env.RECEIPTS!.delete(keys);
+  });
+
+  it('leaves no object behind when the delete races a reseal', async () => {
+    const receiptId = await uploadReceipt(7001, 'lunch-receipt.png');
+    await env.DB.prepare('UPDATE receipts SET enc = 0 WHERE id = ?').bind(receiptId).run();
+    const racing = racingEnv(/FROM receipts WHERE id = \? AND profile_id = \?/, () =>
+      resealLikeTheBackfill(receiptId)
+    );
+    const res = await app.fetch(
+      new Request(`https://example.com/api/receipts/${receiptId}`, {
+        method: 'DELETE',
+        headers: { Cookie: cookie },
+      }),
+      racing,
+      createExecutionContext()
+    );
+    expect(res.status).toBe(200);
+    expect(
+      await env.DB.prepare('SELECT id FROM receipts WHERE id = ?').bind(receiptId).first()
+    ).toBeNull();
+    expect(await objectsUnder('700/')).toEqual([]);
+  });
+
+  it('leaves no object behind when a re-upload replaces a receipt mid-reseal', async () => {
+    const first = await uploadReceipt(7001, 'first.png');
+    await env.DB.prepare('UPDATE receipts SET enc = 0 WHERE id = ?').bind(first).run();
+    const racing = racingEnv(/FROM receipts WHERE transaction_id = \? AND profile_id = \?/, () =>
+      resealLikeTheBackfill(first)
+    );
+    const form = new FormData();
+    form.append('receipt', new File([PNG], 'second.png', { type: 'image/png' }));
+    form.append('transaction_id', '7001');
+    const res = await app.fetch(
+      new Request('https://example.com/api/receipts/upload', {
+        method: 'POST',
+        headers: { Cookie: cookie },
+        body: form,
+      }),
+      racing,
+      createExecutionContext()
+    );
+    expect(res.status).toBe(201);
+    const { id: second } = (await res.json()) as { id: number };
+    const { storage_path } = (await env.DB.prepare('SELECT storage_path FROM receipts WHERE id = ?')
+      .bind(second)
+      .first<{ storage_path: string }>())!;
+    // Only the new receipt's object is left.
+    expect(await objectsUnder('700/')).toEqual([storage_path]);
+  });
+});
+
 describe('receipts with field encryption on', () => {
   const K = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
   const KEYED = { ...env, DATA_KEK_1: K };
