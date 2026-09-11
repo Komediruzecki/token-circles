@@ -184,34 +184,48 @@ them again from the start, and counted they would use it up before reaching anyo
    `complete=true`; then use the app end to end.
 3. **Prod.** Only after dev sign-off, with a separate prod-only key.
 
-Merging deploys to dev and applies migration 0031 there. **Tagging a release applies 0031 to
-prod**: schema only — four columns and one partial index, every existing row at `text_enc = 0` —
-and with no prod key, behaviour is unchanged. The migration rehearsal for 0031 uses synthetic
-data, not a prod export.
+Merging deploys to dev and applies migrations 0031–0033 there. **Tagging a release applies them
+to prod**: schema only — `users.dek_wrapped`, a `text_enc` marker on eleven tables and
+`receipts.enc`, a partial index over unsealed transactions and an index on `users.dek_wrapped`,
+with every existing row at 0 — and with no prod key, behaviour is unchanged. The rehearsal for
+them uses synthetic data, not a prod export.
 
 ## Failure modes
 
-| Symptom                                         | Cause                                                                                   | Effect                                                                                                             |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `encryption: "misconfigured"`                   | a `DATA_KEK_<n>` that is not base64 of 32 bytes                                         | writes for users needing a new key fail with 503                                                                   |
-| `encryption: "misconfigured"`                   | no `DATA_KEK_<n>` at all while some user holds a data key — a deleted or dropped secret | every read and write of sealed data fails with 503; a search on the keyless SQL path can silently miss sealed rows |
-| `encryption: "unknown"`                         | D1 did not answer the health check's query                                              | nothing by itself; ask again                                                                                       |
-| 503 "Encrypted data is temporarily unavailable" | master key missing or wrong for a user who has a key                                    | that user's sealed data is unreadable until the key is restored                                                    |
-| 500 naming a table and column                   | a stored value failed authentication — tampered, or truncated                           | the request fails; nothing is shown in its place                                                                   |
+| Symptom                                         | Cause                                                                                                                    | Effect                                                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `encryption: "misconfigured"`                   | a `DATA_KEK_<n>` that is not base64 of 32 bytes                                                                          | writes for users needing a new key fail with 503                                                                   |
+| `encryption: "misconfigured"`                   | no `DATA_KEK_<n>` at all while some user holds a data key — a deleted or dropped secret                                  | every read and write of sealed data fails with 503; a search on the keyless SQL path can silently miss sealed rows |
+| `encryption: "misconfigured"`                   | a data key wrapped under a `DATA_KEK_<n>` that is no longer configured — the old key removed before the re-wrap finished | that user's sealed data fails with 503 until the old key is put back                                               |
+| `staleKeys` above 0 run after run               | keys the re-wrap cannot open (`rewrapFailed`): under a master key already removed, or damaged                            | the older master key cannot be retired yet                                                                         |
+| `encryption: "unknown"`                         | D1 did not answer the health check's query                                                                               | nothing by itself; ask again                                                                                       |
+| 503 "Encrypted data is temporarily unavailable" | master key missing or wrong for a user who has a key                                                                     | that user's sealed data is unreadable until the key is restored                                                    |
+| 500 naming a table and column                   | a stored value failed authentication — tampered, or truncated                                                            | the request fails; nothing is shown in its place                                                                   |
 
 ## Follow-ups
 
-- Immediate crypto-shredding: keep wrapped keys outside the data backups.
-- Seal bank and OAuth refresh tokens with the same key hierarchy before any is stored
-  (bank-connectivity plan, decision 1).
-- The remaining plaintext columns listed above.
-- `security.txt` (RFC 9116), still open from Stage 0.
-- Cheaper keyed reads. A text sort opens every sealed column of the whole filtered set before
-  cutting the page (it needs only the sort column until then); `openRows` decrypts one value at a
-  time; and the keyed counterparty, merchant and search scans have no cap. Narrow the sort to
-  `id` plus the sort column and fetch the page afterwards, batch the decrypts, and consider
-  precomputed counterparty aggregates if a large ledger gets near the CPU limit.
-- A sealed receipt download carries no `Content-Length` — the decrypting stream has no known
-  length. Nothing in the app reads it today.
-- A receipt deleted while the backfill is resealing it can leave the sealed copy in R2 with no row
-  pointing at it (ciphertext, not plaintext). A sweep for unreferenced objects would reclaim it.
+Done since the first version of this plan: master-key rotation (the re-wrap job, above); sealing
+the notes on accounts, goals, housing, holdings and loan prepayments, learned patterns and
+tag-rule criteria (migration 0033); `security.txt`; a `Content-Length` on sealed receipt
+downloads (the plaintext size is stored with the object); a receipt deleted mid-reseal no longer
+orphans its sealed copy (the row is deleted first); and a keyed text sort opens only the sort
+column before it cuts the page.
+
+Open:
+
+- **Immediate crypto-shredding — a decision, not a task.** D1 Time Travel keeps 30 days of the
+  database whatever the app does, so a deleted account's wrapped key stays recoverable for that
+  long. Holding keys outside D1 (in R2, say) would make deletion immediate, but a lost or corrupted
+  key store would then take everyone's data with it, and restoring the database from a backup would
+  no longer restore its keys. Recommendation: state the 30-day erasure window in the privacy
+  policy rather than build this.
+- **Names.** Account, category and tag names stay plaintext by design: SQL sorts, joins and looks
+  rows up by them. Goal, loan, housing, tag-rule, report and import-source names are only labels
+  and could be sealed the way notes are; so could `receipts.original_name`. Undecided.
+- **Bank and OAuth tokens.** Nothing stores them yet — bank sync is not built. When it is, they are
+  sealed under this key hierarchy before the first one is written (bank-connectivity plan,
+  decision 1).
+- **Keyed scans have no cap.** The counterparty, merchant and search scans open every candidate
+  row. Opening concurrently was measured and does not help — 20,000 opens take ~178 ms one at a
+  time and ~171 ms 64 at a time in workerd, because the work is CPU, not I/O — so `openRows` stays
+  sequential. If a large ledger nears the CPU limit, precomputed counterparty aggregates are next.

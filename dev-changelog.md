@@ -64,7 +64,7 @@ All notable changes to Token Circles are documented here. The format is based on
     retirement goals, housing and portfolio holdings, `loan_prepayments.note` (its owner found
     through its loan, in the backfill too), `category_mappings.pattern` and `tag_rules.criteria`.
     A learned pattern used to be found by `pattern = ?`; with a key it is found among the
-    profile's opened mappings (`findMapping` in `routes/categories.ts`), exactly and lowest id
+    profile's opened mappings (`mappingFinder` in `routes/categories.ts`), exactly and lowest id
     first, as the query found it. Tag-rule criteria are opened before they are parsed, so
     `listTagRules` and `autoApplyTagRules` now take the keyring. Names stay plaintext; the plan
     doc says why.
@@ -107,6 +107,27 @@ All notable changes to Token Circles are documented here. The format is based on
     read without `text_enc` fails closed on a key fault instead of returning ciphertext.
   - `db.batch` retries the D1 export lock like `db.run`, so the bill and recurring-rule edits,
     now batches, kept that retry.
+  - Numeric spreadsheet cells in an import are stored as the text the cell showed — `1234`, not
+    D1's `'1234.0'` — with or without a key (`cellText` in `routes/imports.ts`).
+  - Cheaper keyed reads. A bounded text sort without a search reads only `id` and the sort column,
+    sorts, and then fetches the page; the keyed counterparty query drops empty names in SQL; MCP
+    merchant grouping no longer opens a description it will not use. Opening values concurrently
+    was measured and does not help (20 000 opens: ~178 ms one at a time, ~171 ms 64 at a time), so
+    `openRows` stays sequential.
+  - A sealed receipt download declares its `Content-Length`. The plaintext size is stored in the
+    object's metadata on upload and on reseal, and the decrypting stream runs through a
+    `FixedLengthStream` of that size, which also fails a stream that comes out a different length.
+  - Deleting or replacing a receipt deletes its row first (`RETURNING storage_path`), then the
+    object that row named, so a backfill reseal landing in between can no longer leave its sealed
+    copy in R2 with nothing pointing at it. `db.writeReturning` runs such a statement.
+  - Saving auto-categorize results opens the learned patterns once per request rather than once
+    per mapping, and a pattern that fails to be learned is logged instead of dropped.
+- **`security.txt` (RFC 9116).** `frontend/public/.well-known/security.txt` points researchers at
+  GitHub's private vulnerability reporting, and the API host redirects its
+  `/.well-known/security.txt` there. The service worker now leaves `/.well-known/` to the network
+  (`frontend/src/swRoutes.ts`): it answered every navigation with the app shell, so an installed
+  app showed its sign-in page instead. `frontend/src/__tests__/securityTxt.test.ts` starts failing
+  a month before `Expires`.
 
 ### Changed
 

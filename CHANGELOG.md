@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Imported numbers keep the form the spreadsheet showed.** A cell holding `1234` is saved as `1234`, not `1234.0`.
+
 ## [5.15.1] — 2026-09-09
 
 ### Added

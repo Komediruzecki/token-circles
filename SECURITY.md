@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Finance Manager, please use GitHub's [private vulnerability reporting](https://github.com/Komediruzecki/finance-manager/security/advisories/new) to disclose it securely. Alternatively, you can open a public issue stating that you found a potential security issue and a maintainer will provide a private channel for details.
+If you discover a security vulnerability in Token Circles, please use GitHub's [private vulnerability reporting](https://github.com/Komediruzecki/token-circles/security/advisories/new) to disclose it securely. The same contact is published at [tokencircles.com/.well-known/security.txt](https://tokencircles.com/.well-known/security.txt). Alternatively, you can open a public issue stating that you found a potential security issue and a maintainer will provide a private channel for details.
 
 Do not include exploit details or sensitive information in public issues.
 
