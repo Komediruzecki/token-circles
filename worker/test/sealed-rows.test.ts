@@ -368,6 +368,15 @@ describe('non-text values', () => {
 });
 
 describe('textMatches', () => {
+  it('matches a query the way D1 does: a lone surrogate as the U+FFFD stored in its place', async () => {
+    const d1 = await env.DB.prepare("SELECT ('caf' || char(65533)) LIKE ('%' || ? || '%') AS hit")
+      .bind('caf\ud800')
+      .first<{ hit: number }>();
+    expect(d1?.hit).toBe(1);
+    const stored = `caf${String.fromCodePoint(0xfffd)}`; // what D1 stores for 'caf\ud800'
+    expect(textMatches({ description: stored }, ['description'], 'caf\ud800')).toBe(true);
+  });
+
   it('folds case across Unicode and takes % and _ literally', () => {
     expect(textMatches({ description: 'Čevapi Ž' }, ['description'], 'čeVAPI')).toBe(true);
     expect(textMatches({ description: '50% off' }, ['description'], '%')).toBe(true);

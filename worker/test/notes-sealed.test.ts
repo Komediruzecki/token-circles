@@ -371,6 +371,29 @@ describe('notes with encryption on', () => {
     ]);
   });
 
+  it('learned category patterns: found again however D1 had to store them, with or without a key', async () => {
+    // A lone surrogate is not valid UTF-8. D1 stores U+FFFD in its place, and so does sealing, so a
+    // lookup has to compare what was stored, not the string as it arrived.
+    const pattern = 'caf\ud800';
+    // Without a key first: D1's own `pattern = ?` is the answer the keyed lookup has to agree with.
+    for (const [user, profile, via] of [
+      [U2, P2, KEYLESS],
+      [U, P, KEYED],
+    ] as const) {
+      const category = await insert(
+        "INSERT INTO categories (name, type, profile_id) VALUES ('Food', 'expense', ?)",
+        profile
+      );
+      const as = { user, env: via };
+      const body = { pattern, category_id: category };
+      const first = await json(call('POST', '/api/categories/mappings', body, as));
+      expect(
+        await json(call('POST', '/api/categories/mappings', body, as)),
+        `${user}`
+      ).toMatchObject({ id: first.id, use_count: 2 });
+    }
+  });
+
   it('tag rules: criteria sealed on save and on edit, parsed on read, and still applied', async () => {
     const tag = await insert("INSERT INTO tags (name, profile_id) VALUES ('Bakery', ?)", P);
     const rule = await json(

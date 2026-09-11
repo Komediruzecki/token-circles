@@ -6,7 +6,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { keyringFor } from '../data-keys';
-import { openRows, sealForInsert } from '../sealed-rows';
+import { asStored, openRows, sealForInsert } from '../sealed-rows';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
@@ -100,7 +100,7 @@ type MappingRef = { id: number; use_count: number };
 
 /**
  * Finds this profile's mapping for a pattern the way `pattern = ?` did: exactly, as BINARY
- * collation compares, lowest id first. A sealed pattern cannot be compared in SQL, so with a master
+ * collation compares, in the form D1 stores (asStored), lowest id first. A sealed pattern cannot be compared in SQL, so with a master
  * key configured the profile's mappings are opened once, on first use, and looked up in memory;
  * `saved` keeps that copy current as the caller inserts and bumps, so a request that saves hundreds
  * of mappings opens them once rather than once per mapping. Without a key nothing can be sealed,
@@ -139,10 +139,10 @@ function mappingFinder(c: Context<AppEnv>, pid: number) {
         );
       }
       known ??= await openAll();
-      return known.get(pattern) ?? null;
+      return known.get(asStored(pattern)) ?? null;
     },
     saved(pattern: string, mapping: MappingRef): void {
-      known?.set(pattern, mapping);
+      known?.set(asStored(pattern), mapping);
     },
   };
 }

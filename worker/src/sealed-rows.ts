@@ -239,9 +239,21 @@ export async function openRows<R extends Row>(
  * literal characters rather than wildcards — both strictly closer to what a user typing into a
  * search box means.
  */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+const REPLACEMENT_CHARACTER = String.fromCodePoint(0xfffd);
+
+/**
+ * Text in the form D1 stores it, and sealing too: UTF-8 cannot carry a lone surrogate, so each one
+ * becomes U+FFFD. D1 converts its parameters the same way, so `pattern = ?` and LIKE match such
+ * text; a comparison in JS against what was stored has to convert first, or it misses.
+ */
+export function asStored(text: string): string {
+  return text.replace(LONE_SURROGATE, REPLACEMENT_CHARACTER);
+}
+
 export function textMatches(row: Row, fields: readonly string[], query: string): boolean {
   // toLowerCase, not toLocaleLowerCase: the fold must not depend on the runtime's locale.
-  const needle = query.toLowerCase();
+  const needle = asStored(query).toLowerCase();
   if (needle === '') return true;
   return fields.some((f) => {
     const v = row[f];
