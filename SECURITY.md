@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Finance Manager, please use GitHub's [private vulnerability reporting](https://github.com/Komediruzecki/finance-manager/security/advisories/new) to disclose it securely. Alternatively, you can open a public issue stating that you found a potential security issue and a maintainer will provide a private channel for details.
+If you discover a security vulnerability in Token Circles, please use GitHub's [private vulnerability reporting](https://github.com/Komediruzecki/token-circles/security/advisories/new) to disclose it securely. The same contact is published at [tokencircles.com/.well-known/security.txt](https://tokencircles.com/.well-known/security.txt). Alternatively, you can open a public issue stating that you found a potential security issue and a maintainer will provide a private channel for details.
 
 Do not include exploit details or sensitive information in public issues.
 
@@ -41,5 +41,13 @@ project ships.
 ### Data storage & encryption
 
 Data is encrypted at rest by the platform (Cloudflare D1 and R2 use AES-256) and in transit via
-TLS. In the default **local-first** mode, data never leaves the browser (IndexedDB). End-to-end
-(zero-knowledge) encryption of synced data is on the roadmap, not yet implemented; see the docs.
+TLS. In the default **local-first** mode, data never leaves the browser (IndexedDB).
+
+A deployment that configures a master key additionally seals the most identifying fields —
+transaction descriptions, counterparties and notes, bill and recurring-rule names, the notes on
+accounts, goals, loans, housing and holdings, learned category patterns, tag-rule criteria, and
+receipt files — under a per-user key, so a leaked database export or storage bucket is unreadable
+without the separately held master key. This is **server-side** encryption: the service holds
+the keys and decrypts to provide its features. It is not end-to-end or zero-knowledge
+encryption, and that is not planned. Design and threat model:
+[docs/plans/field-encryption.md](docs/plans/field-encryption.md).

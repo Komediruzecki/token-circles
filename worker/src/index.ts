@@ -22,6 +22,8 @@ import { retirementGoalsRoutes } from './routes/retirement-goals';
 import { counterpartiesRoutes } from './routes/counterparties';
 import { settingsRoutes } from './routes/settings';
 import { turnstileConfigured } from './turnstile';
+import { encryptionStatus } from './data-keys';
+import { BACKFILL_CRON, runFieldEncryptionBackfill } from './backfill';
 import { dashboardRoutes } from './routes/dashboard';
 import { analyticsRoutes } from './routes/analytics';
 import { calculatorsRoutes } from './routes/calculators';
@@ -75,6 +77,10 @@ export interface Env {
   EMAIL_INGEST_SECRET?: string; // secret — token in the ingest address +tag (ingest+<secret>@…); unset → email-in disabled
   EMAIL_INGEST_PROFILE_ID?: string; // var — profile id that emailed statements import into
   EMAIL_INGEST_ALLOWED_SENDERS?: string; // var — optional comma-separated sender allowlist
+  // secret — field encryption master keys (docs/plans/field-encryption.md): base64 of 32 random
+  // bytes, one set per environment. The highest <n> wraps new user keys; keep the previous one
+  // configured through a rotation. None set → encryption off and every row stays plaintext.
+  [kek: `DATA_KEK_${number}`]: string | undefined;
 }
 
 /** Hono generics shared across route modules: bindings + per-request vars. */
@@ -124,13 +130,24 @@ app.use('*', async (c, next) => {
   }
 });
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+// security.txt (RFC 9116) lives with the app, in frontend/public/.well-known/. The API host sends
+// anyone who asks for it there rather than keeping a second copy that could drift from it.
+app.get('/.well-known/security.txt', (c) => {
+  const appOrigin = (c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || '').trim();
+  if (!appOrigin) return c.notFound();
+  return c.redirect(`${appOrigin.replace(/\/+$/, '')}/.well-known/security.txt`, 301);
+});
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means
 // the gate has no secret and every password sign-in on this environment fails closed. It
 // reports only whether a secret exists, which is not a fact worth hiding — in the "missing"
 // state nobody can authenticate at all.
-app.get('/api/health', (c) =>
+// `encryption` likewise: 'off' (no DATA_KEK_<n> and nobody's data sealed), 'on', 'misconfigured'
+// (a key that will not import, or sealed data with no key to open it, such as a data key under a
+// master key that has been removed), or 'unknown' (D1 did not answer). Whether a key exists is
+// not a secret; the key is.
+app.get('/api/health', async (c) =>
   c.json({
     ok: true,
     env: c.env.APP_ENV ?? 'unknown',
@@ -139,6 +156,7 @@ app.get('/api/health', (c) =>
       : c.env.APP_ENV === 'development'
         ? 'disabled'
         : 'missing',
+    encryption: await encryptionStatus(c.env),
   })
 );
 
@@ -212,6 +230,16 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    // The field-encryption backfill has its own frequent trigger, which must not also fire the
+    // daily jobs below — and the daily triggers do not run it.
+    if (event.cron === BACKFILL_CRON) {
+      ctx.waitUntil(
+        runFieldEncryptionBackfill(env).catch((e: unknown) => {
+          console.error('[backfill] run failed', e);
+        })
+      );
+      return;
+    }
     ctx.waitUntil(
       Promise.all([
         runScheduledReminders(event.cron, env),

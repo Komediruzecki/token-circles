@@ -2,6 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { issueSessionCookie } from '../src/auth';
+import { openedRows } from './helpers/sealed';
 
 const USER = 91;
 const CURRENT = 910;
@@ -108,9 +109,19 @@ describe('Worker profile-link integrity', () => {
       category_id: 9111,
     });
     expect(direct.status).toBe(200);
-    const directRow = await env.DB.prepare(
-      "SELECT account_id FROM transactions WHERE description = 'Stale name'"
-    ).first<{ account_id: number | null }>();
+    // Matched in JS on the opened text: description may be sealed, so SQL cannot filter on it.
+    const byDescription = async (description: string) =>
+      (
+        await openedRows<{ description: string; profile_id: number; account_id: number | null }>(
+          'transactions',
+          USER,
+          'SELECT description, profile_id, account_id, text_enc FROM transactions WHERE profile_id IN (?, ?)',
+          CURRENT,
+          HOUSEHOLD
+        )
+      ).find((row) => row.description === description);
+    const directRow = await byDescription('Stale name');
+    expect(directRow).toBeDefined();
     expect(directRow?.account_id).toBeNull();
 
     const imported = await post('/api/import/execute', {
@@ -118,10 +129,10 @@ describe('Worker profile-link integrity', () => {
       mapping: { description: 0, amount: 1, means_of_payment: 2, type: 3 },
     });
     expect(imported.status).toBe(200);
-    const importRow = await env.DB.prepare(
-      "SELECT profile_id, account_id FROM transactions WHERE description = 'Imported stale name'"
-    ).first<{ profile_id: number; account_id: number | null }>();
-    expect(importRow).toEqual({ profile_id: CURRENT, account_id: null });
+    const importRow = await byDescription('Imported stale name');
+    expect(
+      importRow && { profile_id: importRow.profile_id, account_id: importRow.account_id }
+    ).toEqual({ profile_id: CURRENT, account_id: null });
     const foreignBalance = await env.DB.prepare(
       'SELECT balance FROM accounts WHERE id = 922'
     ).first<{ balance: number }>();
@@ -139,10 +150,12 @@ describe('Worker profile-link integrity', () => {
     });
     expect(result.status).toBe(200);
     expect((await result.json()) as { updated: number }).toEqual({ ok: true, updated: 1 });
-    const rows = await env.DB.prepare(
-      'SELECT id, description FROM transactions WHERE id IN (91001, 92002) ORDER BY id'
-    ).all<{ id: number; description: string }>();
-    expect(rows.results).toEqual([
+    const rows = await openedRows<{ id: number; description: string }>(
+      'transactions',
+      USER,
+      'SELECT id, description, text_enc FROM transactions WHERE id IN (91001, 92002) ORDER BY id'
+    );
+    expect(rows).toEqual([
       { id: 91001, description: 'Bulk changed' },
       { id: 92002, description: 'Household row' },
     ]);

@@ -1,9 +1,12 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { asStored, openRows, sealForInsert } from '../sealed-rows';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
@@ -92,6 +95,78 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
 });
 
 // ── Category mappings (learned auto-categorization patterns) ──────────────────
+
+type MappingRef = { id: number; use_count: number };
+
+/**
+ * Finds this profile's mapping for a pattern the way `pattern = ?` did: exactly, as BINARY
+ * collation compares, in the form D1 stores (asStored), lowest id first. A sealed pattern cannot be compared in SQL, so with a master
+ * key configured the profile's mappings are opened once, on first use, and looked up in memory;
+ * `saved` keeps that copy current as the caller inserts and bumps, so a request that saves hundreds
+ * of mappings opens them once rather than once per mapping. Without a key nothing can be sealed,
+ * and every lookup is the query it always was.
+ */
+function mappingFinder(c: Context<AppEnv>, pid: number) {
+  const ring = keyringFor(c);
+  let known: Map<string, MappingRef> | null = null;
+  const openAll = async (): Promise<Map<string, MappingRef>> => {
+    const rows = await openRows(
+      ring,
+      c.get('userId'),
+      'category_mappings',
+      await db.all<MappingRef & { pattern: string }>(
+        c.env.DB,
+        'SELECT id, use_count, pattern, text_enc FROM category_mappings WHERE profile_id = ? ORDER BY id',
+        pid
+      )
+    );
+    const byPattern = new Map<string, MappingRef>();
+    for (const row of rows) {
+      if (!byPattern.has(row.pattern)) {
+        byPattern.set(row.pattern, { id: row.id, use_count: row.use_count });
+      }
+    }
+    return byPattern;
+  };
+  return {
+    async find(pattern: string): Promise<MappingRef | null> {
+      if (!ring.enabled) {
+        return db.first<MappingRef>(
+          c.env.DB,
+          'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
+          pid,
+          pattern
+        );
+      }
+      known ??= await openAll();
+      return known.get(asStored(pattern)) ?? null;
+    },
+    saved(pattern: string, mapping: MappingRef): void {
+      known?.set(asStored(pattern), mapping);
+    },
+  };
+}
+
+async function insertMapping(
+  c: Context<AppEnv>,
+  pid: number,
+  pattern: string,
+  category_id: number,
+  confidence: number
+): Promise<D1Result> {
+  return db.insert(
+    c.env.DB,
+    'category_mappings',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'category_mappings', {
+      profile_id: pid,
+      pattern,
+      category_id,
+      confidence,
+      use_count: 1,
+    })
+  );
+}
+
 categoriesRoutes.get('/api/categories/mappings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const rows = await db.all(
@@ -103,7 +178,7 @@ categoriesRoutes.get('/api/categories/mappings', requireAuth, async (c) => {
      ORDER BY cm.use_count DESC, cm.confidence DESC`,
     pid
   );
-  return c.json(rows);
+  return c.json(await openRows(keyringFor(c), c.get('userId'), 'category_mappings', rows));
 });
 
 categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
@@ -124,12 +199,7 @@ categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
   const confidence = b.confidence || 0.9;
 
   // upsertMapping: bump use_count on an existing (profile_id, pattern), else insert.
-  const existing = await db.first<{ id: number; use_count: number }>(
-    c.env.DB,
-    'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
-    pid,
-    pattern.trim()
-  );
+  const existing = await mappingFinder(c, pid).find(pattern.trim());
   if (existing) {
     const newUseCount = (existing.use_count || 0) + 1;
     await db.run(
@@ -142,15 +212,7 @@ categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
     );
     return c.json({ ok: true, id: existing.id, use_count: newUseCount });
   }
-  const res = await db.run(
-    c.env.DB,
-    'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)',
-    pid,
-    pattern.trim(),
-    category_id,
-    confidence,
-    1
-  );
+  const res = await insertMapping(c, pid, pattern.trim(), category_id, confidence);
   return c.json({ ok: true, id: res.meta.last_row_id, use_count: 1 });
 });
 
@@ -269,6 +331,17 @@ const MERCHANT_DICTIONARY: { pattern: string; category: string; confidence: numb
   { pattern: 'interest', category: 'Investments', confidence: 0.9 },
 ];
 
+/**
+ * `LOWER(value) LIKE '%needle%'` for a needle of [a-z0-9] only, as SQLite evaluates it: NULL never
+ * matches, and only ASCII letters fold (SQLite's LOWER leaves everything else alone, where
+ * toLowerCase would turn e.g. the Kelvin sign into a 'k').
+ */
+function likeContains(value: unknown, needle: string): boolean {
+  return (
+    typeof value === 'string' && value.replace(/[A-Z]+/g, (m) => m.toLowerCase()).includes(needle)
+  );
+}
+
 // Suggest categories for uncategorized transactions. Port of
 // backend/routes/categories.js POST /api/categories/auto-map. Matches each
 // uncategorized transaction against (1) learned mappings, (2) the merchant
@@ -286,25 +359,34 @@ categoriesRoutes.post('/api/categories/auto-map', requireAuth, async (c) => {
     'SELECT * FROM categories WHERE profile_id = ? ORDER BY type, name',
     pid
   );
-  const learnedMappings = await db.all<{
-    pattern: string;
-    category_id: number;
-    confidence: number;
-    use_count: number;
-  }>(
-    c.env.DB,
-    'SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count FROM category_mappings cm WHERE cm.profile_id = ?',
-    pid
+  // A learned pattern is sealed text like any other, opened before anything matches against it.
+  const ring = keyringFor(c);
+  const learnedMappings = await openRows(
+    ring,
+    c.get('userId'),
+    'category_mappings',
+    await db.all<{
+      pattern: string;
+      category_id: number;
+      confidence: number;
+      use_count: number;
+    }>(
+      c.env.DB,
+      'SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count, cm.text_enc FROM category_mappings cm WHERE cm.profile_id = ?',
+      pid
+    )
   );
 
   // If transaction_ids provided, use those; otherwise filter by description+amount.
   let txQuery = `
-    SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, c.name as category_name
+    SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, t.text_enc, c.name as category_name
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     WHERE t.profile_id = ? AND (t.category_id IS NULL OR c.name = 'Other')
     `;
   let params: unknown[] = [pid];
+  // Set when the description filter has to run in JS, over opened text (see below).
+  let textNeedle: string | null = null;
 
   if (transaction_ids && transaction_ids.length > 0) {
     txQuery += ' AND t.id IN (' + transaction_ids.map(() => '?').join(',') + ')';
@@ -317,17 +399,40 @@ categoriesRoutes.post('/api/categories/auto-map', requireAuth, async (c) => {
       .replace(/[^a-z0-9]/g, '');
     // amountMatch is computed but unused upstream; preserved for parity.
     amount.toString().replace(/[^0-9.]/g, '');
-    txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
-    params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    if (ring.enabled) {
+      // Sealed text cannot be matched in SQL. Every other predicate stays in the query, and the
+      // LIKE runs in JS once the rows are open — over rows in either form, since the backfill
+      // may not have reached them all.
+      textNeedle = normalizedDesc;
+    } else {
+      // No key in this deployment, so every row is plaintext: the query is exactly as it was.
+      txQuery += ' AND (LOWER(t.description) LIKE ? OR LOWER(t.beneficiary) LIKE ?)';
+      params.push('%' + normalizedDesc + '%', '%' + normalizedDesc + '%');
+    }
   }
 
-  const transactions = await db.all<{
-    id: number;
-    description: string;
-    beneficiary: string | null;
-    payor: string | null;
-    amount: number;
-  }>(c.env.DB, txQuery, ...params);
+  // Opened before anything reads the text: scoring ciphertext would match short patterns by
+  // chance ('hbo', 'gas') and suggest the wrong category, and a row that cannot be opened fails
+  // the request instead.
+  const opened = await openRows(
+    ring,
+    c.get('userId'),
+    'transactions',
+    await db.all<{
+      id: number;
+      description: string;
+      beneficiary: string | null;
+      payor: string | null;
+      amount: number;
+    }>(c.env.DB, txQuery, ...params)
+  );
+  const needle = textNeedle;
+  const transactions =
+    needle === null
+      ? opened
+      : opened.filter(
+          (tx) => likeContains(tx.description, needle) || likeContains(tx.beneficiary, needle)
+        );
 
   const proposedMappings: any[] = [];
 
@@ -463,6 +568,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
   }
 
   let updated = 0;
+  const learned = mappingFinder(c, pid);
 
   for (const mapping of mappings) {
     const { transaction_id, category_id, pattern } = mapping;
@@ -484,12 +590,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
         .replace(/[^a-z0-9]/g, '');
       if (normalizedPattern.length >= 3) {
         try {
-          const existing = await db.first<{ id: number; use_count: number }>(
-            c.env.DB,
-            'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
-            pid,
-            normalizedPattern
-          );
+          const existing = await learned.find(normalizedPattern);
           if (existing) {
             const newUseCount = (existing.use_count || 0) + 1;
             await db.run(
@@ -500,19 +601,15 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
               newUseCount,
               existing.id
             );
+            learned.saved(normalizedPattern, { id: existing.id, use_count: newUseCount });
           } else {
-            await db.run(
-              c.env.DB,
-              'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)',
-              pid,
-              normalizedPattern,
-              category_id,
-              0.9,
-              1
-            );
+            const res = await insertMapping(c, pid, normalizedPattern, category_id, 0.9);
+            learned.saved(normalizedPattern, { id: Number(res.meta.last_row_id), use_count: 1 });
           }
         } catch (e) {
-          // Ignore duplicate errors.
+          // Best-effort: the transaction is already categorized. Logged, not dropped — with a key a
+          // failure here is a key fault, and the pattern would silently never be learned.
+          console.error('[categories] apply-mappings: pattern not learned', e);
         }
       }
     }

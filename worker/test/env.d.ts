@@ -5,5 +5,6 @@ declare module 'cloudflare:test' {
   interface ProvidedEnv extends Env {
     JWT_SECRET: string;
     TEST_MIGRATIONS: D1Migration[];
+    TEST_EXPECT_KEK: '0' | '1';
   }
 }

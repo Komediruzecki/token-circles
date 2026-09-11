@@ -6,6 +6,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
+import { openedRows } from './helpers/sealed';
 
 const USER_ID = 9600;
 const PROFILE_ID = 9601;
@@ -119,11 +120,14 @@ describe('write tools', () => {
         ],
       })
     );
-    const row = await env.DB.prepare(
-      "SELECT account_id FROM transactions WHERE profile_id = ? AND description = 'Linked'"
-    )
-      .bind(PROFILE_ID)
-      .first<{ account_id: number | null }>();
+    // Matched after opening: in a keyed run the stored description is ciphertext.
+    const rows = await openedRows<{ account_id: number | null; description: string }>(
+      'transactions',
+      USER_ID,
+      'SELECT account_id, description, text_enc FROM transactions WHERE profile_id = ?',
+      PROFILE_ID
+    );
+    const row = rows.find((r) => r.description === 'Linked');
     expect(row?.account_id).toBe(account.id);
   });
 
@@ -218,9 +222,13 @@ describe('write tools', () => {
       })
     );
     expect(out.tagId).toBeGreaterThan(0);
-    const rule = await env.DB.prepare('SELECT name, criteria FROM tag_rules WHERE id = ?')
-      .bind(out.ruleId)
-      .first<{ name: string; criteria: string }>();
+    // Opened: in a keyed run the stored criteria are ciphertext.
+    const [rule] = await openedRows<{ name: string; criteria: string }>(
+      'tag_rules',
+      USER_ID,
+      'SELECT name, criteria, text_enc FROM tag_rules WHERE id = ?',
+      out.ruleId
+    );
     expect(rule?.name).toBe('Streaming services');
     expect(JSON.parse(rule!.criteria).descriptionContains).toContain('netflix');
   });

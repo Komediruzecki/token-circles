@@ -9,6 +9,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { openedRows } from './helpers/sealed';
 
 const USER = 710;
 const PROFILE = 7100;
@@ -60,18 +61,18 @@ async function allTxns(): Promise<
     category_id: number | null;
   }[]
 > {
-  const { results } = await env.DB.prepare(
-    'SELECT description, amount, type, account_id, category_id FROM transactions WHERE profile_id = ?'
-  )
-    .bind(PROFILE)
-    .all<{
-      description: string;
-      amount: number;
-      type: string;
-      account_id: number | null;
-      category_id: number | null;
-    }>();
-  return results ?? [];
+  return openedRows<{
+    description: string;
+    amount: number;
+    type: string;
+    account_id: number | null;
+    category_id: number | null;
+  }>(
+    'transactions',
+    USER,
+    'SELECT description, amount, type, account_id, category_id, text_enc FROM transactions WHERE profile_id = ?',
+    PROFILE
+  );
 }
 
 async function categoryNames(): Promise<string[]> {
@@ -228,12 +229,14 @@ describe('worker import — configured account currency', () => {
   };
 
   const transactionCurrency = async (description: string): Promise<string | null> => {
-    const transaction = await env.DB.prepare(
-      'SELECT currency FROM transactions WHERE profile_id = ? AND description = ?'
-    )
-      .bind(PROFILE, description)
-      .first<{ currency: string }>();
-    return transaction?.currency ?? null;
+    // The description may be sealed, so it is matched after opening rather than in SQL.
+    const rows = await openedRows<{ currency: string; description: string }>(
+      'transactions',
+      USER,
+      'SELECT currency, description, text_enc FROM transactions WHERE profile_id = ?',
+      PROFILE
+    );
+    return rows.find((t) => t.description === description)?.currency ?? null;
   };
 
   it('normalizes the configured currency for imported accounts and currency-less rows', async () => {

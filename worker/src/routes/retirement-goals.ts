@@ -5,6 +5,8 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { changesOf, openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { projectRetirement } from '../../../shared/retirement';
 import {
@@ -111,7 +113,7 @@ retirementGoalsRoutes.get('/api/retirement-goals', requireAuth, async (c) => {
     pids[0]
   );
   return c.json({
-    goals: rows,
+    goals: await openRows(keyringFor(c), c.get('userId'), 'retirement_goals', rows),
     settings: settings ? JSON.parse(settings.value) : {},
   });
 });
@@ -122,18 +124,22 @@ retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
   const dl = b.deadline || b.target_date || null;
   if (!b.name || b.target_amount == null)
     throw new HttpError(400, 'Name and target amount are required');
-  const res = await db.insert(c.env.DB, 'retirement_goals', {
-    profile_id: pid,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: dl,
-    notes: b.notes || '',
-    current_age: b.current_age || 30,
-    retirement_age: b.retirement_age || 65,
-    monthly_contribution: b.monthly_contribution || 0,
-    expected_return_rate: b.expected_return_rate || 7,
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'retirement_goals',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'retirement_goals', {
+      profile_id: pid,
+      name: b.name,
+      target_amount: b.target_amount,
+      current_amount: b.current_amount || 0,
+      deadline: dl,
+      notes: b.notes || '',
+      current_age: b.current_age || 30,
+      retirement_age: b.retirement_age || 65,
+      monthly_contribution: b.monthly_contribution || 0,
+      expected_return_rate: b.expected_return_rate || 7,
+    })
+  );
   return c.json({
     id: res.meta.last_row_id,
     name: b.name,
@@ -149,25 +155,31 @@ retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) =>
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
   const dl = b.deadline || b.target_date || null;
-  const res = await db.update(
-    c.env.DB,
-    'retirement_goals',
-    {
-      name: b.name,
-      target_amount: b.target_amount,
-      current_amount: b.current_amount,
-      deadline: dl,
-      notes: b.notes || '',
-      current_age: b.current_age || 30,
-      retirement_age: b.retirement_age || 65,
-      monthly_contribution: b.monthly_contribution || 0,
-      expected_return_rate: b.expected_return_rate || 7,
-    },
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
+  const set = {
+    name: b.name,
+    target_amount: b.target_amount,
+    current_amount: b.current_amount,
+    deadline: dl,
+    notes: b.notes || '',
+    current_age: b.current_age || 30,
+    retirement_age: b.retirement_age || 65,
+    monthly_contribution: b.monthly_contribution || 0,
+    expected_return_rate: b.expected_return_rate || 7,
+  };
+  const changed = changesOf(
+    await db.batch(
+      c.env.DB,
+      await sealedUpdate(
+        keyringFor(c),
+        c.get('userId'),
+        'retirement_goals',
+        set,
+        'id = ? AND profile_id = ?',
+        [c.req.param('id'), pid]
+      )
+    )
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!changed) throw new HttpError(404, 'Not found');
   return c.json({ ok: true });
 });
 

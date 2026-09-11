@@ -231,8 +231,12 @@ server-side bank aggregation forbids it.
 
 ### Open decisions
 
-1. Token-at-rest scheme — Workers Secrets KEK + per-user AES-GCM DEK (recommended)
-   — approve before storing any OAuth/bank token.
-2. Do we open the E2EE (Stage 1) track now, or after the sync features ship?
-3. Refresh `SECURITY.md` + add security.txt as a standalone quick win now?
+1. Token-at-rest scheme — **decided 2026-09-11.** The key hierarchy built for field encryption
+   ([field-encryption.md](./field-encryption.md): a Workers Secrets master key, independent of
+   `JWT_SECRET`, wrapping a per-user AES-256-GCM key) is the scheme. Bank and OAuth tokens get
+   sealed with it before the first one is stored.
+2. Open the E2EE (Stage 1) track? — **decided 2026-09-11: no.** Server-side field encryption
+   instead. Bank sync needs the server to read the data anyway, as this document says above.
+3. `SECURITY.md` + security.txt — `SECURITY.md` now describes field encryption honestly;
+   security.txt is still open.
 4. Password KDF bump (Argon2id-WASM or PBKDF2 ≥600k) — in scope or later?

@@ -7,6 +7,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
 import { verifyCapability } from '../src/signed-url';
+import { openedRows } from './helpers/sealed';
 
 const USER_ID = 9500;
 const PROFILE_ID = 9501;
@@ -130,10 +131,13 @@ describe('import tools', () => {
 
     const out = unwrap(await call('undo_import', { importId: 'imp-a' }));
     expect(out.deleted).toBe(1);
-    const left = await env.DB.prepare('SELECT description FROM transactions WHERE profile_id = ?')
-      .bind(PROFILE_ID)
-      .all<{ description: string }>();
-    expect(left.results?.map((r) => r.description)).toEqual(['from B']);
+    const left = await openedRows<{ description: string }>(
+      'transactions',
+      USER_ID,
+      'SELECT description, text_enc FROM transactions WHERE profile_id = ?',
+      PROFILE_ID
+    );
+    expect(left.map((r) => r.description)).toEqual(['from B']);
   });
 
   it("undo_import will not touch another profile's batch", async () => {

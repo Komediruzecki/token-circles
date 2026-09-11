@@ -10,6 +10,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { signCapability } from '../src/signed-url';
+import { openedRows } from './helpers/sealed';
 
 const USER_ID = 9300;
 const PROFILE_ID = 9301;
@@ -108,15 +109,16 @@ describe('POST /api/v1/import - bank adapters first', () => {
       filename: 'ERSTE_Izvadak.csv',
       query: { account: 'Erste Current' },
     });
-    const rows = await env.DB.prepare(
-      'SELECT type, amount, description FROM transactions WHERE profile_id = ? ORDER BY date'
-    )
-      .bind(PROFILE_ID)
-      .all<{ type: string; amount: number; description: string }>();
+    const rows = await openedRows<{ type: string; amount: number; description: string }>(
+      'transactions',
+      USER_ID,
+      'SELECT type, amount, description, text_enc FROM transactions WHERE profile_id = ? ORDER BY date',
+      PROFILE_ID
+    );
 
     // Isplate 8.330,91 is money out; Uplate 2.500,00 is money in. Read as US decimals both
     // would have been ~8.33 and ~2.50 -- the failure this asserts against.
-    expect(rows.results.map((r) => [r.type, r.amount])).toEqual([
+    expect(rows.map((r) => [r.type, r.amount])).toEqual([
       ['expense', 8330.91],
       ['income', 2500],
     ]);

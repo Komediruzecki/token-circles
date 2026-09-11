@@ -9,6 +9,153 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Field encryption at rest — server-side, per-user keys, shipping dark.** Nothing changes on a
+  deployment until it is given a master key (`DATA_KEK_1`, a Workers Secret: base64 of 32 random
+  bytes, one per environment). With one, `transactions.description`/`beneficiary`/`payor`/`notes`,
+  `recurring_transactions.description`/`notes`, `bills.name`/`notes`, the notes on accounts, goals,
+  housing, holdings and loan prepayments, learned category patterns, tag-rule criteria and receipt
+  files in R2 are sealed with AES-256-GCM under a per-user data key (`users.dek_wrapped`), itself wrapped by the
+  master key. The Worker decrypts to compute, so every feature keeps working: this protects a
+  leaked `d1 export` or bucket, not the data from the operator. It is not end-to-end encryption,
+  which was dropped. Design, threat model and rollout: `docs/plans/field-encryption.md`.
+  - `worker/src/field-crypto.ts` — the pure primitives. A text value is `tc1.<iv>.<ct>`, with
+    additional data binding table, column and owner, so a value copied into another column or
+    another user's row fails authentication instead of decrypting. Receipts use a chunked format
+    (`TCE1`, 1 MiB chunks, index and final flag in every chunk's additional data, so a truncated or
+    reordered object fails to open), streamed through a `TransformStream`: a 50 MB receipt never
+    sits in a 128 MB Worker beside its own ciphertext. `TextDecoder` runs with `ignoreBOM: true` —
+    the default strips a leading U+FEFF, so a description starting with one came back shorter.
+  - `worker/src/data-keys.ts` — the key hierarchy, deliberately independent of `JWT_SECRET`: 2FA
+    derives its key from that, so rotating the auth secret orphans every TOTP secret, and the same
+    coupling here would orphan everyone's history. A user's first key is created by compare-and-set
+    (`… WHERE dek_wrapped IS NULL`), so two concurrent first writes cannot seal under two different
+    keys. Once a user has a key, a missing or wrong master key is a 503 on reads AND writes — never
+    a fallback to plaintext. Keys are cached per request (a `WeakMap` on the Request object), never
+    at module scope, where one would outlive account deletion and key rotation in a warm isolate.
+  - `worker/src/sealed-rows.ts` — `sealForInsert`, `openRows`, and `sealedUpdate`, which sends an
+    edit as one batch in both forms (`… AND text_enc = 1` sealed, `… AND text_enc = 0` plain). D1
+    runs a batch as a transaction, so exactly one matches the row as it stands. That closes the race
+    in which the backfill converts a row between an edit's read and its write, and plaintext lands
+    inside a sealed row for good.
+  - `worker/src/sealed-objects.ts` — receipt upload, streaming download and whole-object read, plus
+    the backfill's reseal.
+  - `worker/src/backfill.ts` — the only place an existing row changes form, by compare-and-set
+    against the exact values it read, so an edit landing in between makes it miss rather than be
+    overwritten. Its own trigger `*/20 * * * *` (added for dev and prod) returns before the daily
+    jobs, so their frequency is unchanged. Keyset pagination; 60 s / 5 000 rows / 50 receipts per
+    run. A receipt is resealed to a new object key, its row swapped by compare-and-set, and only
+    then the plaintext original deleted. Rows on ownerless legacy profiles stay plaintext.
+  - Master-key rotation (`rewrapStaleKeys` in `data-keys.ts`, the first step of every backfill
+    run): each data key not under the newest `DATA_KEK_<n>` is unwrapped and wrapped again under
+    it, by compare-and-set on `users.dek_wrapped`, up to 1 000 per run. Data keys never change, so
+    nothing sealed is touched. The `[backfill]` log line gains `rewrapped`, `rewrapFailed` and
+    `staleKeys`; `staleKeys=0` is when the old master key can be removed. A key under a master key
+    that is already gone is counted without an attempt, so retiring one too early is a number in
+    the log, not an error line per user every 20 minutes. A damaged key is not mistaken for one: it
+    is tried, and its `[data-keys]` line names the user. Procedure: the plan doc, "Rotation".
+  - Migration 0031: `users.dek_wrapped`, `text_enc` on the three tables, `receipts.enc`, and a
+    partial index over unsealed transactions for the backfill. Schema only; every row starts at 0.
+  - Migration 0032: an index on `users.dek_wrapped`. `/api/health` asks whether any key is under a
+    master key that is not configured, and the rotation step asks which keys are not under the
+    newest one. A wrapped key starts `dk1.<n>.`, so both are range lookups on it that read nothing
+    when there is nothing to find — /api/health is public, so neither may scan `users` per call.
+  - Migration 0033 seals the free text beside the ledger: `notes` on accounts, savings and
+    retirement goals, housing and portfolio holdings, `loan_prepayments.note` (its owner found
+    through its loan, in the backfill too), `category_mappings.pattern` and `tag_rules.criteria`.
+    A learned pattern used to be found by `pattern = ?`; with a key it is found among the
+    profile's opened mappings (`mappingFinder` in `routes/categories.ts`), exactly and lowest id
+    first, as the query found it. Tag-rule criteria are opened before they are parsed, so
+    `listTagRules` and `autoApplyTagRules` now take the keyring. Names stay plaintext; the plan
+    doc says why.
+  - Edits to those rows go through `sealedUpdate`, which leaves out a field the body left out. Two
+    edits change with it. A retirement-goal edit without `name`, `target_amount` or
+    `current_amount`, or a housing edit without `property_name`, bound `undefined` and failed with
+    a 500; it now leaves that field alone. (Not their `notes`: those routes still write `''` when
+    the body has none, as they always did.) A portfolio-holding edit without `notes`
+    wrote the stored value back; it now leaves the column untouched, because the stored value may
+    be sealed, and sealing it again would store ciphertext of ciphertext.
+  - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured` — which includes a data
+    key under a master key that has been removed.
+  - CI runs the worker suite twice — keyless (`pnpm test`), proving a deployment with no key is
+    unchanged, and keyed (`pnpm test:sealed`, a throwaway key per run), proving no read path forgets
+    to decrypt. `test/apply-migrations.ts` refuses to run in the wrong mode: wrangler loads
+    `worker/.dev.vars` as secrets, and a `DATA_KEK_1` there would silently make the keyless run keyed.
+  - Measured in workerd: ~9 µs to open a value, ~2.5 µs to seal one. A 20 000-row ledger opened in
+    full is about 0.7 s of CPU.
+  - Every read and write of the sealed columns goes through those helpers: the transactions list,
+    summary, create, edit and bulk edit; imports (with the daily sheet sync and email-in); bills and
+    recurring rules, mark-paid and populate; the dashboard, exports, reports, counterparties,
+    backup and restore, receipts; tag rules and category suggestions; the bills reminder email; the
+    MCP read tools and the v1 ingest. Keyless deployments keep their SQL; with a key, what SQL can
+    no longer do over ciphertext — `LIKE`, text `ORDER BY`, `GROUP BY` — runs in JS over opened
+    rows and must give the same answers. It reproduces SQLite's BINARY collation, its compensated
+    `SUM`, and the tie order its sorter produces (under `ORDER BY ABS(total) DESC` SQLite returns
+    equal totals key DESCENDING, which decides which merchants survive a `LIMIT`); tests compare
+    the JS path against the original SQL in the keyless run. Shared as `compareBinary`, `SqlSum`
+    and `textMatches` in `sealed-rows.ts`.
+  - A key never changes what is stored. D1 binds a JS number as REAL and the TEXT column renders it
+    (`1234` is stored as `'1234.0'`); sealing `String(v)` would have kept `'1234'`, so a spreadsheet
+    cell or raw API value would store differently with a key than without, and dedup would diverge.
+    Non-string values are rendered by SQLite itself (`CAST(? AS TEXT)`) before sealing.
+  - Backups and exports are plaintext by contract: rows are opened, receipts decrypted, and the
+    markers left out, so a file restores anywhere. A restore seals under the RESTORING user's key
+    and never trusts markers in the file. An export that meets a value that will not open fails
+    rather than shipping ciphertext; `GET /api/v1/snapshot` without `includeReceiptFiles` no longer
+    fetches receipt objects at all.
+  - `/api/health` reports `misconfigured`, not `off`, when no master key is set but someone holds a
+    data key — a deleted secret must not look like a deployment that never had one. The backfill no
+    longer lets rows it cannot seal (an owner whose key fails) use up each run's budget, and a row
+    read without `text_enc` fails closed on a key fault instead of returning ciphertext.
+  - `db.batch` retries the D1 export lock like `db.run`, so the bill and recurring-rule edits,
+    now batches, kept that retry.
+  - Numeric spreadsheet cells in an import are stored as the text the cell showed — `1234`, not
+    D1's `'1234.0'`, and to the 15 significant digits SQLite renders a REAL with, so float noise
+    such as `0.1 + 0.2` is `0.3` — with or without a key (`cellText` in `routes/imports.ts`).
+  - Cheaper keyed reads. A bounded text sort without a search reads only `id` and the sort column,
+    sorts, and then fetches the page; the keyed counterparty query drops empty names in SQL; MCP
+    merchant grouping no longer opens a description it will not use. Opening values concurrently
+    was measured and does not help (20 000 opens: ~178 ms one at a time, ~171 ms 64 at a time), so
+    `openRows` stays sequential.
+  - A sealed receipt download declares its `Content-Length`. The plaintext size is stored in the
+    object's metadata on upload and on reseal, and the decrypting stream runs through a
+    `FixedLengthStream` of that size, which also fails a stream that comes out a different length.
+  - Deleting or replacing a receipt deletes its row first (`RETURNING storage_path`), then the
+    object that row named, so a backfill reseal landing in between can no longer leave its sealed
+    copy in R2 with nothing pointing at it. `db.writeReturning` runs such a statement.
+  - Saving auto-categorize results opens the learned patterns once per request rather than once
+    per mapping, and a pattern that fails to be learned is logged instead of dropped.
+  - Without a master key, the keyring remembers for the rest of the request that a user has no data
+    key. It asked D1 again for every sealed row written, so a keyless import or restore of N rows
+    ran N extra queries — on every deployment, since none has a key yet.
+  - A JS comparison against stored text first puts the query in the form D1 stores
+    (`asStored` in `sealed-rows.ts`: a lone surrogate, which UTF-8 cannot carry, becomes U+FFFD —
+    D1 converts its parameters the same way). The keyed learned-pattern lookup and search now match
+    exactly what `pattern = ?` and `LIKE` match.
+  - `sealForInsert` refuses an insert that leaves out a sealed column whose DEFAULT is not empty
+    (`MUST_NAME_ON_INSERT`: `tag_rules.criteria`, DEFAULT `'{}'`), which would otherwise sit
+    unsealed in a row marked sealed. A test reads every sealed column's default from the schema and
+    holds the list to it.
+- **`security.txt` (RFC 9116).** `frontend/public/.well-known/security.txt` points researchers at
+  GitHub's private vulnerability reporting, and the API host redirects its
+  `/.well-known/security.txt` there. The service worker now leaves `/.well-known/` to the network
+  (`frontend/src/swRoutes.ts`): it answered every navigation with the app shell, so an installed
+  app showed its sign-in page instead. `frontend/public/_headers` serves it as
+  `text/plain; charset=utf-8`, which RFC 9116 requires; the asset server's default for `.txt` has no
+  charset. `frontend/src/__tests__/securityTxt.test.ts` pins that rule, and starts failing a month
+  before `Expires`.
+
+### Changed
+
+- **End-to-end encryption is dropped, and the tier contradiction goes with it.**
+  `docs/plans/billing-tiers.md` listed encryption both under "Deliberately not gated" and as "tier
+  still open, Basic or Advanced", and only the second was mirrored into `worker/src/plans.ts`,
+  which that document names as the source of truth. Field encryption is not a plan feature at all.
+  `SECURITY.md` stopped promising E2EE as "on the roadmap" — `ROADMAP.md` never listed it — and now
+  describes field encryption as what it is. `docs/e2ee-research.md` and the bank plan's open
+  decisions record the outcome.
+
 ## [5.15.1] — 2026-09-09
 
 - **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;
