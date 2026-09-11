@@ -126,8 +126,10 @@ All notable changes to Token Circles are documented here. The format is based on
   GitHub's private vulnerability reporting, and the API host redirects its
   `/.well-known/security.txt` there. The service worker now leaves `/.well-known/` to the network
   (`frontend/src/swRoutes.ts`): it answered every navigation with the app shell, so an installed
-  app showed its sign-in page instead. `frontend/src/__tests__/securityTxt.test.ts` starts failing
-  a month before `Expires`.
+  app showed its sign-in page instead. `frontend/public/_headers` serves it as
+  `text/plain; charset=utf-8`, which RFC 9116 requires; the asset server's default for `.txt` has no
+  charset. `frontend/src/__tests__/securityTxt.test.ts` pins that rule, and starts failing a month
+  before `Expires`.
 
 ### Changed
 
