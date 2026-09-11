@@ -28,10 +28,20 @@ if [ -n "$fmt_files" ]; then
   printf '%s\n' "$fmt_files" | xargs pnpm exec prettier --write --log-level warn
 fi
 
-if [ -n "$lint_files" ]; then
-  echo "pre-commit: eslint --fix"
+# ESLint runs from inside frontend/ on its own paths, so frontend/eslint.config.js
+# applies - the same run as `pnpm lint` in pre-push and CI. No other package has an
+# ESLint config: a worker/, shared/ or packages/ path in the list made ESLint abort
+# with "couldn't find an eslint.config.* file" before fixing anything, frontend
+# files included. Those files are still formatted above, just never linted.
+frontend_lint="$(printf '%s\n' "$lint_files" | sed -n 's|^frontend/||p')"
+
+if [ -n "$frontend_lint" ]; then
+  echo "pre-commit: eslint --fix (frontend)"
   # Don't abort the commit on unfixable lint - pre-push enforces it before CI.
-  printf '%s\n' "$lint_files" | xargs pnpm exec eslint --fix || true
+  # --no-warn-ignored: a staged file the config ignores (vite.config.ts, public/**)
+  # is skipped silently, as `pnpm lint` skips it.
+  printf '%s\n' "$frontend_lint" | xargs pnpm -C frontend exec eslint --fix --no-warn-ignored ||
+    echo "pre-commit: eslint exited non-zero (output above) - not blocking; pre-push runs pnpm lint"
 fi
 
 # Re-stage only the files we just touched (-r: skip git add when none matched,
