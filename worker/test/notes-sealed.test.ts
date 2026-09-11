@@ -55,11 +55,13 @@ async function purge(): Promise<void> {
     .bind(U, U2, P, P2)
     .all<{ id: number }>();
   for (const { id } of results) {
-    await env.DB.prepare(
-      'DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)'
-    )
-      .bind(id)
-      .run();
+    for (const child of ['loan_prepayments', 'loan_rate_periods']) {
+      await env.DB.prepare(
+        `DELETE FROM ${child} WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)`
+      )
+        .bind(id)
+        .run();
+    }
     await env.DB.prepare(
       'DELETE FROM transaction_tags WHERE transaction_id IN (SELECT id FROM transactions WHERE profile_id = ?)'
     )
@@ -235,6 +237,74 @@ describe('notes with encryption on', () => {
     });
   });
 
+  it('goals and tag rules: a row the backfill has not reached is edited as plaintext, not a 404', async () => {
+    await new DataKeyring(KEYED).forWrite(U);
+    // These three routes answer 404 from the number of rows the edit changed, so the plaintext form
+    // of the edit has to count as well as the sealed one.
+    const goal = await insert(
+      "INSERT INTO savings_goals (name, target_amount, notes, profile_id) VALUES ('Trip', 900, 'draft', ?)",
+      P
+    );
+    await json(call('PUT', `/api/savings-goals/${goal}`, { notes: 'booked' }));
+    expect(await stored('savings_goals', goal)).toMatchObject({ text_enc: 0, notes: 'booked' });
+
+    const pension = await insert(
+      "INSERT INTO retirement_goals (name, target_amount, notes, profile_id) VALUES ('Pension', 1000, 'draft', ?)",
+      P
+    );
+    await json(
+      call('PUT', `/api/retirement-goals/${pension}`, {
+        name: 'Pension',
+        target_amount: 1000,
+        notes: 'second pillar',
+      })
+    );
+    expect(await stored('retirement_goals', pension)).toMatchObject({
+      text_enc: 0,
+      notes: 'second pillar',
+    });
+
+    const tag = await insert("INSERT INTO tags (name, profile_id) VALUES ('Bakery', ?)", P);
+    const rule = await insert(
+      `INSERT INTO tag_rules (profile_id, tag_id, name, criteria) VALUES (?, ?, 'bread', '{"match":"all","description":"pastry"}')`,
+      P,
+      tag
+    );
+    await json(
+      call('PUT', `/api/tags/rules/${rule}`, {
+        name: 'bread',
+        criteria: { match: 'all', description: 'bakery' },
+      })
+    );
+    const edited = await stored('tag_rules', rule);
+    expect(edited.text_enc).toBe(0);
+    expect(JSON.parse(String(edited.criteria))).toMatchObject({ description: 'bakery' });
+  });
+
+  it('retirement goals and housing: an edit that leaves a field out leaves it as it is', async () => {
+    const { id: pension } = await json<{ id: number }>(
+      call('POST', '/api/retirement-goals', {
+        name: 'Pension',
+        target_amount: 100000,
+        current_amount: 500,
+      })
+    );
+    // Left out, these used to be bound as `undefined`, which D1 refuses: the edit was a 500.
+    await json(call('PUT', `/api/retirement-goals/${pension}`, { monthly_contribution: 300 }));
+    expect(await stored('retirement_goals', pension)).toMatchObject({
+      name: 'Pension',
+      target_amount: 100000,
+      current_amount: 500,
+      monthly_contribution: 300,
+    });
+
+    const { id: home } = await json<{ id: number }>(
+      call('POST', '/api/housing', { property_name: 'Flat', monthly_amount: 700 })
+    );
+    await json(call('PUT', `/api/housing/${home}`, { monthly_amount: 750 }));
+    expect(await stored('housings', home)).toMatchObject({ name: 'Flat', monthly_amount: 750 });
+  });
+
   it('housing and holdings: sealed on create and on edit, text in every read', async () => {
     const { id: home } = await json<{ id: number }>(
       call('POST', '/api/housing', {
@@ -353,20 +423,21 @@ describe('notes with encryption on', () => {
       expect.objectContaining({ id: first.id, use_count: 3 }),
     ]);
 
-    // One request that learns the same pattern twice: the second finds the first in memory and
-    // bumps it, instead of inserting a copy.
+    // One request that learns the same pattern three times: the second finds the first in memory
+    // and bumps it instead of inserting a copy, and the third bumps what the second saved.
     await json(
       call('POST', '/api/categories/apply-mappings', {
         mappings: [
           { transaction_id: tx, category_id: category, pattern: 'Market!' },
           { transaction_id: tx, category_id: category, pattern: 'Bakery' },
           { transaction_id: tx, category_id: category, pattern: 'BAKERY' },
+          { transaction_id: tx, category_id: category, pattern: 'bakery.' },
         ],
       })
     );
     const learned = await json<Row[]>(call('GET', '/api/categories/mappings'));
     expect(learned.map((m) => [m.pattern, m.use_count]).sort()).toEqual([
-      ['bakery', 2],
+      ['bakery', 3],
       ['market', 4],
     ]);
   });
@@ -478,6 +549,7 @@ describe('notes with encryption on', () => {
           mappings: [
             { transaction_id: 0, category_id: category, pattern: 'Bakery' },
             { transaction_id: 0, category_id: category, pattern: 'bakery' },
+            { transaction_id: 0, category_id: category, pattern: 'bakery.' },
           ],
         },
         plain
@@ -485,7 +557,7 @@ describe('notes with encryption on', () => {
     );
     const learned = await json<Row[]>(call('GET', '/api/categories/mappings', undefined, plain));
     expect(learned.map((m) => [m.pattern, m.use_count]).sort()).toEqual([
-      ['bakery', 2],
+      ['bakery', 3],
       ['market', 2],
     ]);
     const key = await env.DB.prepare('SELECT dek_wrapped FROM users WHERE id = ?').bind(U2).first();
@@ -602,5 +674,36 @@ describe('notes with encryption on', () => {
     expect(String((await openRows(ring, U, 'tag_rules', rules))[0].criteria)).toContain(
       '"description":"bakery"'
     );
+  });
+
+  it('a restore gives a rule with no criteria empty ones, and seals criteria given as an object', async () => {
+    const tag = await insert("INSERT INTO tags (name, profile_id) VALUES ('Bakery', ?)", P);
+    await json(
+      call('POST', '/api/tags/rules', {
+        tag_id: tag,
+        name: 'bread',
+        criteria: { match: 'all', description: 'bakery' },
+      })
+    );
+    const data = await exportBackup(KEYED as never, U, [P]);
+    const ring = new DataKeyring(KEYED);
+    const variants: [unknown, Row][] = [
+      [null, {}],
+      [
+        { match: 'all', description: 'rye' },
+        { match: 'all', description: 'rye' },
+      ],
+    ];
+    for (const [criteria, expected] of variants) {
+      const file = { ...data, tagRules: [{ ...data.tagRules[0], criteria }] };
+      const { first_profile_id: restored } = await restoreBackup(KEYED as never, U, file);
+      const { results } = await env.DB.prepare('SELECT * FROM tag_rules WHERE profile_id = ?')
+        .bind(restored)
+        .all<Row>();
+      expect(results).toHaveLength(1);
+      expect(isSealed(results[0].criteria)).toBe(true);
+      const [rule] = await openRows(ring, U, 'tag_rules', results);
+      expect(JSON.parse(String(rule.criteria))).toEqual(expected);
+    }
   });
 });

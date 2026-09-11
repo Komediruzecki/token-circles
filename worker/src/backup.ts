@@ -792,8 +792,9 @@ export async function restoreBackup(
     'category_mappings',
     data.categoryMappings
   );
-  // Criteria are stored as JSON text, so they are sealed as that text. A file written when the
-  // export carried them as objects is normalized first — sealing an object would store nothing.
+  // Criteria are stored, and sealed, as JSON text. An object from an older file is written as its
+  // JSON, and a rule with no criteria (null or missing) restores as `{}`, which matches nothing:
+  // the column is NOT NULL, so passed through as null the whole restore would fail.
   const sealedTagRules = await sealRestoreRows(
     ring,
     userId,
