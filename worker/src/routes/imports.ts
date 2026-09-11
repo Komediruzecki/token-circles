@@ -162,6 +162,15 @@ function parseDateString(dateStr: unknown): string {
 export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 
 // Pull a value from a row using any of the casing variants the Express code checks.
+/**
+ * A text column's value from a cell. A spreadsheet cell arrives as whatever type it holds, and a
+ * raw number bound to D1 is bound as REAL, so the TEXT column stored 1234 as '1234.0'. Its JS text
+ * is what the cell showed. An empty or falsy cell is '' exactly as `|| ''` always made it.
+ */
+function cellText(value: unknown): string {
+  return value ? String(value) : '';
+}
+
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {
   const variants = [key, key.charAt(0).toUpperCase() + key.slice(1), key.toUpperCase()];
   // Also support the CamelCase forms used for compound mapping keys.
@@ -795,7 +804,7 @@ export async function executeImport(
       : null;
     const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
-    const description = pick(row, mapping, 'description') || '';
+    const description = cellText(pick(row, mapping, 'description'));
     const invariantError = transactionInvariantError({
       type: validatedType,
       amount,
@@ -865,9 +874,9 @@ export async function executeImport(
     toInsert.push({
       text: {
         description,
-        beneficiary: pick(row, mapping, 'beneficiary') || '',
-        payor: pick(row, mapping, 'payor') || '',
-        notes: pick(row, mapping, 'notes') || '',
+        beneficiary: cellText(pick(row, mapping, 'beneficiary')),
+        payor: cellText(pick(row, mapping, 'payor')),
+        notes: cellText(pick(row, mapping, 'notes')),
       },
       amount,
       parsedDate,

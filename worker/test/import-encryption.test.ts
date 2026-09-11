@@ -172,7 +172,7 @@ describe('import with a master key: sealing new rows', () => {
       rows: [
         ['2026-05-01', 'Konzum', '-12.50', 'Konzum d.d.', 'Main account', 'weekly shop'],
         ['2026-05-02', 'Coffee', '-3', '', '', ''],
-        // A JSON number where text is expected: sealed as D1 stores it with no key ('1234.0').
+        // A JSON number where text is expected: stored as the text the cell showed.
         ['2026-05-03', 1234, '-1', '', '', ''],
       ],
       mapping: { date: 0, description: 1, amount: 2, beneficiary: 3, payor: 4, notes: 5 },
@@ -197,7 +197,7 @@ describe('import with a master key: sealing new rows', () => {
     expect(opened.map((r) => [r.description, r.beneficiary, r.payor, r.notes])).toEqual([
       ['Konzum', 'Konzum d.d.', 'Main account', 'weekly shop'],
       ['Coffee', '', '', ''],
-      ['1234.0', '', '', ''],
+      ['1234', '', '', ''],
     ]);
   });
 
@@ -213,7 +213,10 @@ describe('import with a master key: sealing new rows', () => {
     expect((await execute(USER, PROFILE, KEYED, body)).status).toBe(200);
     const text = (r: Omit<Raw, 'text_enc'>) => [r.description, r.beneficiary, r.payor, r.notes];
     const plain = (await rawRows(PARITY_PROFILE)).map(text);
-    expect(plain[0]![0]).toBe('1234.0');
+    // As the cell showed it — never D1's REAL rendering ('1234.0'), in either mode.
+    expect(plain.map((r) => r[0])).toEqual(['1234', '12.5']);
+    expect(plain.map((r) => r[1])).toEqual(['', '0.1']);
+    expect(plain.map((r) => r[3])).toEqual(['true', '']);
     expect((await openedRows(PROFILE, USER)).map(text)).toEqual(plain);
   });
 
