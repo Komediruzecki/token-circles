@@ -233,6 +233,7 @@ describe('GET /api/transactions — sealed rows answer exactly like plaintext SQ
     '?sort=payor&order=asc',
     '?sort=payor&order=desc',
     '?sort=payor&order=asc&limit=3&offset=2',
+    '?sort=payor&order=desc&limit=2&type=expense&startDate=2026-01-07',
     '?sort=description&limit=0',
     '?sort=beneficiary&limit=-1&offset=3',
     '?sort=description&offset=10',

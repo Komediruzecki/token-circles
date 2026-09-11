@@ -295,13 +295,14 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
 
   // Receipt join: one receipt per transaction (upload replaces the previous one), so a
   // LEFT JOIN stays 1:1. Exposing receipt_id/receipt_name lets the table show the chip.
-  let sql = `
+  const selectSql = `
     SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon,
            r.id as receipt_id, r.original_name as receipt_name
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
     LEFT JOIN receipts r ON r.transaction_id = t.id AND r.profile_id = t.profile_id
-    WHERE t.profile_id IN (${inClause})${whereSql}
+    WHERE t.profile_id IN (${inClause})`;
+  let sql = `${selectSql}${whereSql}
   `;
 
   if (sortKey) {
@@ -330,24 +331,62 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
     if (hasOffset) sql += ` OFFSET ${off}`;
   }
 
-  let rows = await openRows(
-    ring,
-    userId,
-    'transactions',
-    await db.all<TxRow>(c.env.DB, sql, ...pids, ...params)
-  );
-
   // The JS half of a search / text sort: filter, sort, then cut the same window SQL would have.
   // `filteredTotal` is what the COUNT would have returned — the filtered set, before the window.
+  let rows: TxRow[];
   let filteredTotal: number | null = null;
-  if (textInJs) {
-    if (search) rows = rows.filter((row) => textMatches(row, SEARCH_FIELDS, search));
-    if (jsSort && sortKey) rows = sortByText(rows, sortKey, sortOrder === 'DESC');
-    filteredTotal = rows.length;
-    const start = hasOffset ? off : 0;
-    // SQLite reads a negative LIMIT as "no upper bound", as `LIMIT -1` above spells it.
-    const end = limit && sqlLimit >= 0 ? start + sqlLimit : rows.length;
-    rows = rows.slice(start, end);
+  const start = hasOffset ? off : 0;
+  // SQLite reads a negative LIMIT as "no upper bound", as `LIMIT -1` above spells it.
+  const bounded = !!limit && sqlLimit >= 0;
+  if (jsSort && sortKey && !search && bounded) {
+    // A page of a text sort: order the whole set by the one sealed column it sorts on, then fetch
+    // and open full rows for that page alone, instead of opening every column of every row.
+    const ordered = sortByText(
+      await openRows(
+        ring,
+        userId,
+        'transactions',
+        await db.all<{ id: number } & Record<string, unknown>>(
+          c.env.DB,
+          `SELECT t.id, t.${sortKey}, t.text_enc FROM transactions t
+            WHERE t.profile_id IN (${inClause})${whereSql}`,
+          ...pids,
+          ...params
+        )
+      ),
+      sortKey,
+      sortOrder === 'DESC'
+    );
+    filteredTotal = ordered.length;
+    const pageIds = ordered.slice(start, start + sqlLimit).map((row) => row.id);
+    const byId = new Map<number, TxRow>();
+    // D1 binds at most 100 parameters; the profile ids take their share of each statement.
+    const perQuery = Math.max(1, 90 - pids.length);
+    for (let i = 0; i < pageIds.length; i += perQuery) {
+      const chunk = pageIds.slice(i, i + perQuery);
+      const found = await db.all<TxRow>(
+        c.env.DB,
+        `${selectSql} AND t.id IN (${chunk.map(() => '?').join(',')})`,
+        ...pids,
+        ...chunk
+      );
+      for (const row of await openRows(ring, userId, 'transactions', found)) byId.set(row.id, row);
+    }
+    // A row deleted between the two reads simply drops out of the page.
+    rows = pageIds.map((id) => byId.get(id)).filter((row): row is TxRow => row !== undefined);
+  } else {
+    rows = await openRows(
+      ring,
+      userId,
+      'transactions',
+      await db.all<TxRow>(c.env.DB, sql, ...pids, ...params)
+    );
+    if (textInJs) {
+      if (search) rows = rows.filter((row) => textMatches(row, SEARCH_FIELDS, search));
+      if (jsSort && sortKey) rows = sortByText(rows, sortKey, sortOrder === 'DESC');
+      filteredTotal = rows.length;
+      rows = rows.slice(start, bounded ? start + sqlLimit : rows.length);
+    }
   }
 
   // Attach tags in ONE query (was N+1 — a tag query per row, which made large pages time out:

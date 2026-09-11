@@ -25,11 +25,12 @@ counterpartiesRoutes.get('/api/counterparties', requireAuth, async (c) => {
   let incoming: GroupRow[];
 
   if (ring.enabled) {
-    // beneficiary and payor may be ciphertext, which SQL can neither filter on nor group by. So
-    // fetch one row per transaction — still bounded by the plaintext type and profile predicates —
-    // open only the one column each query needs, and rebuild exactly what GROUP BY returned: one
-    // row per exact name, in BINARY name order, SUM skipping NULL amounts, COUNT(*) every row. The
-    // merge below then sees the same rows in the same order as with no key, ties and all.
+    // beneficiary and payor may be ciphertext, which SQL can neither compare nor group. So fetch
+    // one row per transaction and open only the one column each query needs, then rebuild exactly
+    // what GROUP BY returned: one row per exact name, in BINARY name order, SUM skipping NULL
+    // amounts, COUNT(*) every row. The merge below then sees the same rows in the same order as
+    // with no key, ties and all. `!= ''` alone stays in SQL: '' and NULL are never sealed, so it
+    // means the same on either form and keeps empty names out of the scan.
     const userId = c.get('userId');
     const groups = async (
       column: 'beneficiary' | 'payor',
@@ -43,7 +44,7 @@ counterpartiesRoutes.get('/api/counterparties', requireAuth, async (c) => {
           c.env.DB,
           `SELECT ${column}, text_enc, ${amountSql} AS amt
            FROM transactions
-           WHERE type = '${type}' AND profile_id IN (${inClause})`,
+           WHERE ${column} != '' AND type = '${type}' AND profile_id IN (${inClause})`,
           ...pids
         )
       );

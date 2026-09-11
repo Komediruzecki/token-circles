@@ -326,7 +326,20 @@ async function merchantGroups(
       WHERE ${where.join(' AND ')}`,
     ...params
   );
-  const opened = await openRows(ring, c.get('userId'), 'transactions', rows);
+  // A row's key is its beneficiary unless that is empty, and emptiness shows without opening
+  // anything ('' and NULL are never sealed). So each row has exactly one column opened: the
+  // description is dropped before openRows wherever the beneficiary already decides the key. One
+  // query, in the same order, so every group sums its rows in the order SQL did.
+  const opened = await openRows(
+    ring,
+    c.get('userId'),
+    'transactions',
+    rows.map((r): Record<string, unknown> => {
+      if (r.beneficiary === null || r.beneficiary === '') return r;
+      const { description: _unused, ...rest } = r;
+      return rest;
+    })
+  );
   const byKey = new Map<unknown, { sum: SqlSum; count: number }>();
   for (const r of opened) {
     const beneficiary = r.beneficiary ?? null;
@@ -398,7 +411,9 @@ async function counterparties(
 ): Promise<{ name: string }[]> {
   const rows = await db.all<{ beneficiary: unknown }>(
     c.env.DB,
-    'SELECT beneficiary, text_enc FROM transactions WHERE profile_id = ?',
+    // `<> ''` is safe on a sealed column: '' and NULL are never sealed, so it drops exactly the
+    // rows the plaintext query drops, before anything is opened.
+    "SELECT beneficiary, text_enc FROM transactions WHERE profile_id = ? AND beneficiary <> ''",
     profileId
   );
   const names = new Set<string>();
