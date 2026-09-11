@@ -11,7 +11,7 @@
  * (profiles.user_id NULL — legacy data) have no key to be sealed under and stay plaintext.
  */
 import * as db from './db';
-import { DataKeyring, DataKeyUnavailableError, type KeyEnv } from './data-keys';
+import { DataKeyring, DataKeyUnavailableError, rewrapStaleKeys, type KeyEnv } from './data-keys';
 import { sealField } from './field-crypto';
 import { resealReceipt } from './sealed-objects';
 import { changesOf, SEALED_COLUMNS, type SealedTable } from './sealed-rows';
@@ -22,6 +22,8 @@ export interface BackfillBudget {
   ms: number;
   rows: number;
   receipts: number;
+  /** Data keys to move onto the newest master key per run (rotation); 1 000 when unset. */
+  keys?: number;
 }
 // A cron run gets far more than this; the budget exists so one run is never the reason a
 // scheduled invocation is killed. Every 20 minutes at 5 000 rows is 360 000 rows a day.
@@ -33,6 +35,13 @@ export interface BackfillStats {
   missed: number;
   /** Users whose key could not be produced this run; their rows are left for a later run. */
   failedOwners: number[];
+  /**
+   * Master-key rotation: keys moved onto the newest master key this run, keys that could not be,
+   * and keys still not under it. staleKeys=0 is when the older DATA_KEK_<n> can be removed.
+   */
+  rewrapped: number;
+  rewrapFailed: number;
+  staleKeys: number;
   /** False when the budget ran out, or anything was missed or skipped. */
   complete: boolean;
 }
@@ -96,6 +105,9 @@ export async function runFieldEncryptionBackfill(
     sealed: { transactions: 0, recurring_transactions: 0, bills: 0, receipts: 0 },
     missed: 0,
     failedOwners: [],
+    rewrapped: 0,
+    rewrapFailed: 0,
+    staleKeys: 0,
     complete: true,
   };
   const finish = (): BackfillStats => {
@@ -104,10 +116,19 @@ export async function runFieldEncryptionBackfill(
     console.log(
       `[backfill] sealed tx=${stats.sealed.transactions} recurring=${stats.sealed.recurring_transactions} ` +
         `bills=${stats.sealed.bills} receipts=${stats.sealed.receipts} missed=${stats.missed} ` +
-        `failedOwners=${stats.failedOwners.join(',') || 'none'} complete=${stats.complete}`
+        `failedOwners=${stats.failedOwners.join(',') || 'none'} rewrapped=${stats.rewrapped} ` +
+        `rewrapFailed=${stats.rewrapFailed} staleKeys=${stats.staleKeys} complete=${stats.complete}`
     );
     return stats;
   };
+
+  // Rotation first. Between rotations it is one index lookup that finds nothing; during one it is
+  // the step an operator waits on.
+  const rewrap = await rewrapStaleKeys(env, { limit: budget.keys ?? 1_000, outOfTime });
+  stats.rewrapped = rewrap.rewrapped;
+  stats.rewrapFailed = rewrap.failed;
+  stats.staleKeys = rewrap.remaining;
+  if (rewrap.remaining > 0) stats.complete = false;
 
   let rowsLeft = budget.rows;
   for (const table of Object.keys(SEALED_COLUMNS) as SealedTable[]) {

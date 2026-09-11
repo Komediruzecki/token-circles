@@ -137,8 +137,9 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 // reports only whether a secret exists, which is not a fact worth hiding — in the "missing"
 // state nobody can authenticate at all.
 // `encryption` likewise: 'off' (no DATA_KEK_<n> and nobody's data sealed), 'on', 'misconfigured'
-// (a key that will not import, or sealed data with no key to open it), or 'unknown' (D1 did not
-// answer). Whether a key exists is not a secret; the key is.
+// (a key that will not import, or sealed data with no key to open it, such as a data key under a
+// master key that has been removed), or 'unknown' (D1 did not answer). Whether a key exists is
+// not a secret; the key is.
 app.get('/api/health', async (c) =>
   c.json({
     ok: true,

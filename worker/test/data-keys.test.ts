@@ -7,13 +7,14 @@
  * the same thing whether or not the suite is running with TEST_DATA_KEK.
  */
 import { env } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DataKeyring,
   DataKeyUnavailableError,
   encryptionEnabled,
   encryptionStatus,
   kekVersions,
+  rewrapStaleKeys,
 } from '../src/data-keys';
 import { openText, sealText } from '../src/field-crypto';
 
@@ -29,6 +30,18 @@ async function dekOf(id: number): Promise<string | null> {
     .bind(id)
     .first<{ dek_wrapped: string | null }>();
   return row?.dek_wrapped ?? null;
+}
+
+async function versionOf(id: number): Promise<string | undefined> {
+  return (await dekOf(id))?.split('.')[1];
+}
+
+/** Every other test file's keys in the shared D1, by user. */
+async function othersKeys(): Promise<Map<number, string>> {
+  const { results } = await env.DB.prepare(
+    'SELECT id, dek_wrapped FROM users WHERE dek_wrapped IS NOT NULL AND id NOT IN (901, 902, 903)'
+  ).all<{ id: number; dek_wrapped: string }>();
+  return new Map(results.map((r) => [r.id, r.dek_wrapped]));
 }
 
 /** A key works for a user iff what one ring seals, another ring opens. */
@@ -50,6 +63,12 @@ beforeEach(async () => {
       "INSERT INTO users (id, email, auth_provider) VALUES (903, 'k3@example.com', 'password')"
     ),
   ]);
+});
+
+// The D1 is shared with every other test file. A key left here under DATA_KEK_2 or above would read
+// as stranded to /api/health, and as stale to the backfill, in every file that runs after this one.
+afterAll(async () => {
+  await env.DB.prepare('DELETE FROM users WHERE id IN (901, 902, 903)').run();
 });
 
 describe('master key configuration', () => {
@@ -168,5 +187,128 @@ describe('data keys', () => {
     await new DataKeyring(E).forWrite(901);
     await env.DB.prepare('DELETE FROM users WHERE id = 901').run();
     await expect(new DataKeyring(E).forRead(901)).rejects.toBeInstanceOf(DataKeyUnavailableError);
+  });
+});
+
+describe('master key rotation', () => {
+  // Versions no other test file uses. Every other file's key in the shared D1 is under DATA_KEK_1,
+  // which these envs lack, so to them it is a key under a retired master key: counted as failed and
+  // remaining, and never rewritten.
+  const OLD = { DB: env.DB, DATA_KEK_4: K1 };
+  const BOTH = { DB: env.DB, DATA_KEK_4: K1, DATA_KEK_5: K2 };
+  const NEW = { DB: env.DB, DATA_KEK_5: K2 };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('re-wraps keys onto the newest master key, and what they sealed opens under it alone', async () => {
+    const before = (await new DataKeyring(OLD).forWrite(901))!;
+    await new DataKeyring(OLD).forWrite(902);
+    const ctx = { ...CTX, userId: 901 };
+    const sealed = await sealText(before, 'Groceries', ctx);
+    const others = await othersKeys();
+
+    expect(await rewrapStaleKeys(BOTH, { limit: 1000 })).toEqual({
+      rewrapped: 2,
+      failed: others.size,
+      remaining: others.size,
+    });
+    expect([await versionOf(901), await versionOf(902)]).toEqual(['5', '5']);
+    expect(await openText(await new DataKeyring(NEW).forRead(901), sealed, ctx)).toBe('Groceries');
+    expect(await othersKeys()).toEqual(others);
+  });
+
+  it('has nothing to do while every key is under the newest master key', async () => {
+    await new DataKeyring({ DB: env.DB, DATA_KEK_1: K1 }).forWrite(901);
+    const none = { rewrapped: 0, failed: 0, remaining: 0 };
+    expect(await rewrapStaleKeys({ DB: env.DB, DATA_KEK_1: K1 }, { limit: 1000 })).toEqual(none);
+    expect(await rewrapStaleKeys({ DB: env.DB }, { limit: 1000 })).toEqual(none);
+  });
+
+  it('leaves a key it cannot open exactly as it was, and counts it', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await new DataKeyring({ DB: env.DB, DATA_KEK_3: K1 }).forWrite(901); // its master key is gone
+    await new DataKeyring({ DB: env.DB, DATA_KEK_4: K2 }).forWrite(902); // right version, wrong key
+    await new DataKeyring(OLD).forWrite(903);
+    const [k901, k902] = [await dekOf(901), await dekOf(902)];
+    const others = await othersKeys();
+
+    expect(await rewrapStaleKeys(BOTH, { limit: 1000 })).toEqual({
+      rewrapped: 1,
+      failed: others.size + 2,
+      remaining: others.size + 2,
+    });
+    expect([await dekOf(901), await dekOf(902), await versionOf(903)]).toEqual([k901, k902, '5']);
+  });
+
+  it('stops at its limit without spending it on keys it cannot open, and resumes', async () => {
+    await new DataKeyring({ DB: env.DB, DATA_KEK_3: K1 }).forWrite(901);
+    await new DataKeyring(OLD).forWrite(902);
+    await new DataKeyring(OLD).forWrite(903);
+    expect((await rewrapStaleKeys(BOTH, { limit: 1 })).rewrapped).toBe(1);
+    expect(await Promise.all([901, 902, 903].map(versionOf))).toEqual(['3', '5', '4']);
+    expect((await rewrapStaleKeys(BOTH, { limit: 1 })).rewrapped).toBe(1);
+    expect(await Promise.all([901, 902, 903].map(versionOf))).toEqual(['3', '5', '5']);
+  });
+
+  it('stops when its time is up', async () => {
+    await new DataKeyring(OLD).forWrite(901);
+    const stats = await rewrapStaleKeys(BOTH, { limit: 1000, outOfTime: () => true });
+    expect(stats.rewrapped).toBe(0);
+    expect(stats.remaining).toBeGreaterThan(0);
+    expect(await versionOf(901)).toBe('4');
+  });
+
+  it('misses rather than overwrites a key that changed after it was read', async () => {
+    const original = (await new DataKeyring(OLD).forWrite(901))!;
+    // Another run overlapping this one re-wraps 901 between this run's read and its write.
+    let raced = false;
+    const racing = new Proxy(env.DB, {
+      get(target, prop, receiver) {
+        if (prop !== 'prepare') {
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+        return (sql: string) => {
+          const stmt = target.prepare(sql);
+          if (!sql.startsWith('SELECT id, dek_wrapped FROM users')) return stmt;
+          return {
+            bind: (...params: unknown[]) => ({
+              all: async () => {
+                const read = await stmt.bind(...params).all<{ id: number }>();
+                if (!raced && read.results.some((r) => r.id === 901)) {
+                  raced = true;
+                  await rewrapStaleKeys(BOTH, { limit: 1000 });
+                }
+                return read;
+              },
+            }),
+          };
+        };
+      },
+    });
+
+    const stats = await rewrapStaleKeys({ ...BOTH, DB: racing }, { limit: 1000 });
+    expect(raced).toBe(true);
+    expect(stats.rewrapped).toBe(0);
+    expect(await versionOf(901)).toBe('5');
+    await interoperate(original, await new DataKeyring(NEW).forRead(901), 901);
+  });
+
+  it('makes /api/health say misconfigured while a key is under a master key that is not configured', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await new DataKeyring(OLD).forWrite(901);
+    // Every other file's key is under DATA_KEK_1, so version 1 stays configured throughout.
+    const before = { DB: env.DB, DATA_KEK_1: K1, DATA_KEK_4: K1 };
+    const retiredTooEarly = { DB: env.DB, DATA_KEK_1: K1, DATA_KEK_5: K2 };
+    expect(await encryptionStatus(before)).toBe('on');
+    expect(await encryptionStatus(retiredTooEarly)).toBe('misconfigured');
+
+    await rewrapStaleKeys({ ...before, DATA_KEK_5: K2 }, { limit: 1000 });
+    expect(await encryptionStatus(retiredTooEarly)).toBe('on');
+
+    await env.DB.prepare("UPDATE users SET dek_wrapped = 'not-a-key' WHERE id = 902").run();
+    expect(await encryptionStatus(retiredTooEarly)).toBe('misconfigured');
   });
 });

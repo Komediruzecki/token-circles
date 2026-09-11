@@ -26,6 +26,7 @@ export interface KeyEnv {
 
 // Probed by name rather than by enumerating env, which is not guaranteed to be a plain object.
 const MAX_KEK_VERSION = 32;
+const DEK_PREFIX = 'dk1';
 const utf8 = new TextEncoder();
 
 /**
@@ -91,10 +92,33 @@ function kekFor(env: KeyEnv, version: number): Promise<CryptoKey> {
 }
 
 /**
+ * A WHERE term matching a wrapped key under none of `versions`, a malformed one included, written
+ * as ranges on idx_users_dek_wrapped rather than a parse of every row: `dk1.<n>.…` sorts inside
+ * [`dk1.<n>.`, `dk1.<n>/`), '/' being the byte after '.', and no two versions' ranges overlap.
+ * NULL (no key yet) matches nothing. `versions` must not be empty.
+ */
+function notUnder(versions: number[]): { sql: string; params: string[] } {
+  const ranges = versions
+    .map((v) => [`${DEK_PREFIX}.${v}.`, `${DEK_PREFIX}.${v}/`])
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+  const terms = ['dek_wrapped < ?'];
+  const params = [ranges[0][0]];
+  for (let i = 1; i < ranges.length; i++) {
+    terms.push('(dek_wrapped >= ? AND dek_wrapped < ?)');
+    params.push(ranges[i - 1][1], ranges[i][0]);
+  }
+  terms.push('dek_wrapped >= ?');
+  params.push(ranges[ranges.length - 1][1]);
+  return { sql: `(${terms.join(' OR ')})`, params };
+}
+
+/**
  * For /api/health: whether this deployment seals, and whether every configured key is usable.
  * No master key is only 'off' while nobody holds a data key. Once anyone does, their data is sealed
  * and every read of it is failing, which is the state this check exists to catch — a deleted or
- * dropped secret must not read like a deployment that never had one.
+ * dropped secret must not read like a deployment that never had one. For the same reason a data
+ * key wrapped under a master version that is no longer configured is 'misconfigured': it is what
+ * retiring the old key before the re-wrap finished looks like.
  */
 export async function encryptionStatus(
   env: KeyEnv
@@ -113,13 +137,21 @@ export async function encryptionStatus(
   }
   try {
     await Promise.all(versions.map((v) => kekFor(env, v)));
-    return 'on';
   } catch {
     return 'misconfigured';
   }
+  try {
+    const outside = notUnder(versions);
+    const stranded = await db.first<{ one: number }>(
+      env.DB,
+      `SELECT 1 AS one FROM users WHERE ${outside.sql} LIMIT 1`,
+      ...outside.params
+    );
+    return stranded ? 'misconfigured' : 'on';
+  } catch {
+    return 'unknown';
+  }
 }
-
-const DEK_PREFIX = 'dk1';
 
 function dekAad(userId: number, version: number): Uint8Array<ArrayBuffer> {
   return new Uint8Array(utf8.encode(`dk1|u${userId}|k${version}`));
@@ -142,7 +174,11 @@ async function wrapDek(env: KeyEnv, raw: Uint8Array<ArrayBuffer>, userId: number
   return `${DEK_PREFIX}.${version}.${b64urlEncode(iv)}.${b64urlEncode(ct)}`;
 }
 
-async function unwrapDek(env: KeyEnv, wrapped: string, userId: number): Promise<CryptoKey> {
+async function unwrapRaw(
+  env: KeyEnv,
+  wrapped: string,
+  userId: number
+): Promise<Uint8Array<ArrayBuffer>> {
   const parts = wrapped.split('.');
   const version = Number(parts[1]);
   if (
@@ -179,7 +215,92 @@ async function unwrapDek(env: KeyEnv, wrapped: string, userId: number): Promise<
   if (raw.byteLength !== 32) {
     throw new DataKeyUnavailableError(`user ${userId}: unwrapped key has the wrong length`);
   }
-  return importDek(new Uint8Array(raw));
+  return new Uint8Array(raw);
+}
+
+async function unwrapDek(env: KeyEnv, wrapped: string, userId: number): Promise<CryptoKey> {
+  return importDek(await unwrapRaw(env, wrapped, userId));
+}
+
+export interface RewrapStats {
+  /** Keys moved onto the newest master key this run. */
+  rewrapped: number;
+  /** Keys that could not be: their master key is no longer configured, or they do not unwrap. */
+  failed: number;
+  /** Keys not under the newest master key after the run. Zero is when an older one can go. */
+  remaining: number;
+}
+
+const REWRAP_PAGE = 50;
+
+/**
+ * Master-key rotation: re-wrap every data key that is not under the newest DATA_KEK_<n> with it,
+ * so an older one can be removed. The data keys themselves do not change, so nothing sealed is
+ * touched — only users.dek_wrapped, by compare-and-set against the value read: anything that
+ * changed it meanwhile makes the write miss rather than be overwritten. A key that cannot be
+ * re-wrapped is counted and passed over (keyset pagination) and does not count against `limit`.
+ */
+export async function rewrapStaleKeys(
+  env: KeyEnv,
+  opts: { limit: number; outOfTime?: () => boolean }
+): Promise<RewrapStats> {
+  const stats: RewrapStats = { rewrapped: 0, failed: 0, remaining: 0 };
+  const versions = kekVersions(env);
+  if (versions.length === 0) return stats;
+  const stale = notUnder([versions[versions.length - 1]]);
+  const countStale = async (): Promise<number> =>
+    (
+      await db.first<{ n: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS n FROM users WHERE ${stale.sql}`,
+        ...stale.params
+      )
+    )?.n ?? 0;
+  // Every run between rotations: one index lookup that finds nothing.
+  if ((await countStale()) === 0) return stats;
+
+  let afterId = 0;
+  let left = opts.limit;
+  while (left > 0 && !opts.outOfTime?.()) {
+    const rows = await db.all<{ id: number; dek_wrapped: string }>(
+      env.DB,
+      `SELECT id, dek_wrapped FROM users WHERE ${stale.sql} AND id > ? ORDER BY id LIMIT ?`,
+      ...stale.params,
+      afterId,
+      Math.min(REWRAP_PAGE, left)
+    );
+    if (rows.length === 0) break;
+    afterId = rows[rows.length - 1].id;
+    const writes: D1PreparedStatement[] = [];
+    for (const row of rows) {
+      // Under a master key this deployment no longer has, there is nothing to unwrap it with.
+      // Counted without trying, so a key retired too early is one number in the log rather than
+      // an error line per user on every run.
+      if (!versions.includes(Number(row.dek_wrapped.split('.')[1]))) {
+        stats.failed++;
+        continue;
+      }
+      try {
+        const raw = await unwrapRaw(env, row.dek_wrapped, row.id);
+        writes.push(
+          env.DB.prepare('UPDATE users SET dek_wrapped = ? WHERE id = ? AND dek_wrapped = ?').bind(
+            await wrapDek(env, raw, row.id),
+            row.id,
+            row.dek_wrapped
+          )
+        );
+      } catch (e) {
+        if (!(e instanceof DataKeyUnavailableError)) throw e;
+        stats.failed++;
+      }
+    }
+    if (writes.length === 0) continue;
+    left -= writes.length;
+    const results = await db.batch(env.DB, writes);
+    stats.rewrapped += results.filter((r) => (r.meta.changes ?? 0) === 1).length;
+  }
+  stats.remaining = await countStale();
+  return stats;
 }
 
 /**

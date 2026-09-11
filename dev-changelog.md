@@ -46,9 +46,21 @@ All notable changes to Token Circles are documented here. The format is based on
     jobs, so their frequency is unchanged. Keyset pagination; 60 s / 5 000 rows / 50 receipts per
     run. A receipt is resealed to a new object key, its row swapped by compare-and-set, and only
     then the plaintext original deleted. Rows on ownerless legacy profiles stay plaintext.
+  - Master-key rotation (`rewrapStaleKeys` in `data-keys.ts`, the first step of every backfill
+    run): each data key not under the newest `DATA_KEK_<n>` is unwrapped and wrapped again under
+    it, by compare-and-set on `users.dek_wrapped`, up to 1 000 per run. Data keys never change, so
+    nothing sealed is touched. The `[backfill]` log line gains `rewrapped`, `rewrapFailed` and
+    `staleKeys`; `staleKeys=0` is when the old master key can be removed. A key under a master key
+    that is already gone is counted without an attempt, so retiring one too early is a number in
+    the log, not an error line per user every 20 minutes. Procedure: the plan doc, "Rotation".
   - Migration 0031: `users.dek_wrapped`, `text_enc` on the three tables, `receipts.enc`, and a
     partial index over unsealed transactions for the backfill. Schema only; every row starts at 0.
-  - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured`.
+  - Migration 0032: an index on `users.dek_wrapped`. `/api/health` asks whether any key is under a
+    master key that is not configured, and the rotation step asks which keys are not under the
+    newest one. A wrapped key starts `dk1.<n>.`, so both are range lookups on it that read nothing
+    when there is nothing to find — /api/health is public, so neither may scan `users` per call.
+  - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured` — which includes a data
+    key under a master key that has been removed.
   - CI runs the worker suite twice — keyless (`pnpm test`), proving a deployment with no key is
     unchanged, and keyed (`pnpm test:sealed`, a throwaway key per run), proving no read path forgets
     to decrypt. `test/apply-migrations.ts` refuses to run in the wrong mode: wrangler loads

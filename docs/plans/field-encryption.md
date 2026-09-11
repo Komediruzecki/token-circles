@@ -80,8 +80,21 @@ that user's sealed columns and receipt objects
 - **One key per user**, because profiles are never shared between users (every access check is
   `id = ? AND user_id = ?`), so a user's whole multi-profile household is under one key. A
   household shared _between_ users would need multi-recipient wrapping; it is not in v1.
-- **Rotation:** add `DATA_KEK_2`. New keys wrap under 2; existing ones still unwrap under 1, so
-  keep 1 configured. Retiring 1 needs a re-wrap job, which is a follow-up.
+- **Rotation** retires a master key; it does not change a single data key.
+  1. Add `DATA_KEK_2`, keeping 1. New data keys wrap under 2 at once, and the backfill cron
+     re-wraps existing ones from 1 to 2, up to 1 000 per run, by compare-and-set.
+  2. Wait for `staleKeys=0` in the `[backfill]` log line. `rewrapFailed` counts keys that could
+     not be re-wrapped: under a master key already removed, or damaged (those log a `[data-keys]`
+     line naming the user).
+  3. Remove `DATA_KEK_1` from the Worker. Removing it too early shows at once: `/api/health` says
+     `misconfigured` while any key is under a master key that is not configured.
+  4. Keep `DATA_KEK_1` itself in Proton Pass. Backups taken before step 2 finished — the deploy's
+     `d1 export` artifacts and D1 Time Travel, 30 days each — still hold keys wrapped under it.
+
+  This protects against the old master key leaking _later_. If it has already leaked together with
+  a copy of the database, the data keys in that copy are exposed and re-wrapping them changes
+  nothing: that takes new data keys and every row re-sealed, which is not built.
+
 - **Deleting an account deletes the only live copy of its key.** It does not make old backups
   unreadable on its own: the deploy's `d1 export` includes `users`, wrapped keys and all, so a
   deleted user's data in a backup still opens with the master key until the 30-day retention
@@ -181,7 +194,6 @@ data, not a prod export.
 
 ## Follow-ups
 
-- A re-wrap job, so a retired `DATA_KEK_<n>` can actually be removed.
 - Immediate crypto-shredding: keep wrapped keys outside the data backups.
 - Seal bank and OAuth refresh tokens with the same key hierarchy before any is stored
   (bank-connectivity plan, decision 1).

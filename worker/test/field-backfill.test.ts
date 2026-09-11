@@ -286,4 +286,33 @@ describe('field-encryption backfill', () => {
       storage_path: `${P1}/does-not-exist.png`,
     });
   });
+
+  it('re-wraps data keys onto the newest master key and reports the rotation', async () => {
+    // Versions no other test file uses: every other file's key is under DATA_KEK_1, which these
+    // envs lack, so each one is counted as stale and left exactly as it is.
+    const before = { DB: env.DB, RECEIPTS: env.RECEIPTS!, DATA_KEK_7: K };
+    const rotating = {
+      ...before,
+      DATA_KEK_8: btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32)))),
+    };
+    await new DataKeyring(before).forWrite(U1);
+    const others = (await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM users WHERE dek_wrapped IS NOT NULL AND id NOT IN (?, ?)'
+    )
+      .bind(U1, U2)
+      .first<{ n: number }>())!.n;
+
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const stats = await runFieldEncryptionBackfill(rotating, BIG);
+    expect(stats).toMatchObject({
+      rewrapped: 1,
+      rewrapFailed: others,
+      staleKeys: others,
+      complete: others === 0,
+    });
+    expect(String((await row('users', U1)).dek_wrapped)).toMatch(/^dk1\.8\./);
+    expect(log).toHaveBeenCalledWith(
+      expect.stringContaining(`rewrapped=1 rewrapFailed=${others} staleKeys=${others}`)
+    );
+  });
 });
