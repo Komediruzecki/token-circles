@@ -352,6 +352,23 @@ describe('notes with encryption on', () => {
     expect(await json<Row[]>(call('GET', '/api/categories/mappings'))).toEqual([
       expect.objectContaining({ id: first.id, use_count: 3 }),
     ]);
+
+    // One request that learns the same pattern twice: the second finds the first in memory and
+    // bumps it, instead of inserting a copy.
+    await json(
+      call('POST', '/api/categories/apply-mappings', {
+        mappings: [
+          { transaction_id: tx, category_id: category, pattern: 'Market!' },
+          { transaction_id: tx, category_id: category, pattern: 'Bakery' },
+          { transaction_id: tx, category_id: category, pattern: 'BAKERY' },
+        ],
+      })
+    );
+    const learned = await json<Row[]>(call('GET', '/api/categories/mappings'));
+    expect(learned.map((m) => [m.pattern, m.use_count]).sort()).toEqual([
+      ['bakery', 2],
+      ['market', 4],
+    ]);
   });
 
   it('tag rules: criteria sealed on save and on edit, parsed on read, and still applied', async () => {
@@ -429,6 +446,25 @@ describe('notes with encryption on', () => {
         expect.objectContaining({ pattern: 'market', use_count: 2 }),
       ]);
     }
+    // The same repeated-pattern request on the SQL path: the same answer.
+    await json(
+      call(
+        'POST',
+        '/api/categories/apply-mappings',
+        {
+          mappings: [
+            { transaction_id: 0, category_id: category, pattern: 'Bakery' },
+            { transaction_id: 0, category_id: category, pattern: 'bakery' },
+          ],
+        },
+        plain
+      )
+    );
+    const learned = await json<Row[]>(call('GET', '/api/categories/mappings', undefined, plain));
+    expect(learned.map((m) => [m.pattern, m.use_count]).sort()).toEqual([
+      ['bakery', 2],
+      ['market', 2],
+    ]);
     const key = await env.DB.prepare('SELECT dek_wrapped FROM users WHERE id = ?').bind(U2).first();
     expect(key).toEqual({ dek_wrapped: null });
   });

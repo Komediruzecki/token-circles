@@ -96,38 +96,55 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
 
 // ── Category mappings (learned auto-categorization patterns) ──────────────────
 
+type MappingRef = { id: number; use_count: number };
+
 /**
- * This profile's mapping for `pattern`, if it has one. A sealed pattern cannot be compared in SQL,
- * so with a master key configured the profile's mappings are opened and compared in JS: exactly,
- * as `=` compares under BINARY collation, lowest id first. Without one nothing can be sealed, and
- * the query is the one it always was.
+ * Finds this profile's mapping for a pattern the way `pattern = ?` did: exactly, as BINARY
+ * collation compares, lowest id first. A sealed pattern cannot be compared in SQL, so with a master
+ * key configured the profile's mappings are opened once, on first use, and looked up in memory;
+ * `saved` keeps that copy current as the caller inserts and bumps, so a request that saves hundreds
+ * of mappings opens them once rather than once per mapping. Without a key nothing can be sealed,
+ * and every lookup is the query it always was.
  */
-async function findMapping(
-  c: Context<AppEnv>,
-  pid: number,
-  pattern: string
-): Promise<{ id: number; use_count: number } | null> {
+function mappingFinder(c: Context<AppEnv>, pid: number) {
   const ring = keyringFor(c);
-  if (!ring.enabled) {
-    return db.first<{ id: number; use_count: number }>(
-      c.env.DB,
-      'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
-      pid,
-      pattern
+  let known: Map<string, MappingRef> | null = null;
+  const openAll = async (): Promise<Map<string, MappingRef>> => {
+    const rows = await openRows(
+      ring,
+      c.get('userId'),
+      'category_mappings',
+      await db.all<MappingRef & { pattern: string }>(
+        c.env.DB,
+        'SELECT id, use_count, pattern, text_enc FROM category_mappings WHERE profile_id = ? ORDER BY id',
+        pid
+      )
     );
-  }
-  const rows = await openRows(
-    ring,
-    c.get('userId'),
-    'category_mappings',
-    await db.all<{ id: number; use_count: number; pattern: string }>(
-      c.env.DB,
-      'SELECT id, use_count, pattern, text_enc FROM category_mappings WHERE profile_id = ? ORDER BY id',
-      pid
-    )
-  );
-  const hit = rows.find((r) => r.pattern === pattern);
-  return hit ? { id: hit.id, use_count: hit.use_count } : null;
+    const byPattern = new Map<string, MappingRef>();
+    for (const row of rows) {
+      if (!byPattern.has(row.pattern)) {
+        byPattern.set(row.pattern, { id: row.id, use_count: row.use_count });
+      }
+    }
+    return byPattern;
+  };
+  return {
+    async find(pattern: string): Promise<MappingRef | null> {
+      if (!ring.enabled) {
+        return db.first<MappingRef>(
+          c.env.DB,
+          'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
+          pid,
+          pattern
+        );
+      }
+      known ??= await openAll();
+      return known.get(pattern) ?? null;
+    },
+    saved(pattern: string, mapping: MappingRef): void {
+      known?.set(pattern, mapping);
+    },
+  };
 }
 
 async function insertMapping(
@@ -182,7 +199,7 @@ categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
   const confidence = b.confidence || 0.9;
 
   // upsertMapping: bump use_count on an existing (profile_id, pattern), else insert.
-  const existing = await findMapping(c, pid, pattern.trim());
+  const existing = await mappingFinder(c, pid).find(pattern.trim());
   if (existing) {
     const newUseCount = (existing.use_count || 0) + 1;
     await db.run(
@@ -551,6 +568,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
   }
 
   let updated = 0;
+  const learned = mappingFinder(c, pid);
 
   for (const mapping of mappings) {
     const { transaction_id, category_id, pattern } = mapping;
@@ -572,7 +590,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
         .replace(/[^a-z0-9]/g, '');
       if (normalizedPattern.length >= 3) {
         try {
-          const existing = await findMapping(c, pid, normalizedPattern);
+          const existing = await learned.find(normalizedPattern);
           if (existing) {
             const newUseCount = (existing.use_count || 0) + 1;
             await db.run(
@@ -583,11 +601,15 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
               newUseCount,
               existing.id
             );
+            learned.saved(normalizedPattern, { id: existing.id, use_count: newUseCount });
           } else {
-            await insertMapping(c, pid, normalizedPattern, category_id, 0.9);
+            const res = await insertMapping(c, pid, normalizedPattern, category_id, 0.9);
+            learned.saved(normalizedPattern, { id: Number(res.meta.last_row_id), use_count: 1 });
           }
         } catch (e) {
-          // Ignore duplicate errors.
+          // Best-effort: the transaction is already categorized. Logged, not dropped — with a key a
+          // failure here is a key fault, and the pattern would silently never be learned.
+          console.error('[categories] apply-mappings: pattern not learned', e);
         }
       }
     }
