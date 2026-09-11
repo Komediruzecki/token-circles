@@ -222,9 +222,13 @@ describe('write tools', () => {
       })
     );
     expect(out.tagId).toBeGreaterThan(0);
-    const rule = await env.DB.prepare('SELECT name, criteria FROM tag_rules WHERE id = ?')
-      .bind(out.ruleId)
-      .first<{ name: string; criteria: string }>();
+    // Opened: in a keyed run the stored criteria are ciphertext.
+    const [rule] = await openedRows<{ name: string; criteria: string }>(
+      'tag_rules',
+      USER_ID,
+      'SELECT name, criteria, text_enc FROM tag_rules WHERE id = ?',
+      out.ruleId
+    );
     expect(rule?.name).toBe('Streaming services');
     expect(JSON.parse(rule!.criteria).descriptionContains).toContain('netflix');
   });

@@ -1059,7 +1059,7 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   // committed and fail-soft inside autoApplyTagRules — a tagging problem must never fail or
   // roll back a transaction the user successfully saved.
   if (created) {
-    await autoApplyTagRules(c.env.DB, pid, created.id as number, created);
+    await autoApplyTagRules(c.env.DB, pid, created.id as number, created, { ring, owner: userId });
   }
 
   // Recalculate linked goal progress.

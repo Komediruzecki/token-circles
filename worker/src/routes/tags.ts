@@ -7,7 +7,7 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { keyringFor } from '../data-keys';
-import { openRows } from '../sealed-rows';
+import { changesOf, openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 import {
   explainTagRule,
   linkTransactionsToTag,
@@ -164,7 +164,7 @@ tagsRoutes.get('/api/tags/summary', requireAuth, async (c) => {
 
 tagsRoutes.get('/api/tags/rules', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const rules = await listTagRules(c.env.DB, pid);
+  const rules = await listTagRules(c.env.DB, pid, { ring: keyringFor(c), owner: c.get('userId') });
   return c.json(rules);
 });
 
@@ -199,13 +199,17 @@ async function readRuleBody(
 tagsRoutes.post('/api/tags/rules', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const { tag_id, name, criteria, auto_apply } = await readRuleBody(c, pid, { requireTag: true });
-  const res = await db.insert(c.env.DB, 'tag_rules', {
-    profile_id: pid,
-    tag_id,
-    name,
-    criteria,
-    auto_apply,
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'tag_rules',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'tag_rules', {
+      profile_id: pid,
+      tag_id,
+      name,
+      criteria,
+      auto_apply,
+    })
+  );
   // Echo the parsed criteria, not the stored JSON string — GET /api/tags/rules and the local
   // runtime both return objects, and a client shouldn't have to branch on which call it made.
   return c.json(
@@ -296,15 +300,20 @@ tagsRoutes.put('/api/tags/rules/:ruleId', requireAuth, async (c) => {
   const { tag_id, name, criteria, auto_apply } = await readRuleBody(c, pid, { requireTag: false });
   const data: Record<string, unknown> = { name, criteria, auto_apply };
   if (tag_id !== undefined) data.tag_id = tag_id;
-  const res = await db.update(
-    c.env.DB,
-    'tag_rules',
-    data,
-    'id = ? AND profile_id = ?',
-    c.req.param('ruleId'),
-    pid
+  const changed = changesOf(
+    await db.batch(
+      c.env.DB,
+      await sealedUpdate(
+        keyringFor(c),
+        c.get('userId'),
+        'tag_rules',
+        data,
+        'id = ? AND profile_id = ?',
+        [c.req.param('ruleId'), pid]
+      )
+    )
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Rule not found');
+  if (!changed) throw new HttpError(404, 'Rule not found');
   return c.json({ ok: true });
 });
 
@@ -341,7 +350,14 @@ tagsRoutes.post('/api/tags/:id/apply', requireAuth, async (c) => {
   const criteriaList =
     body.criteria !== undefined
       ? [normalizeTagRuleCriteria(body.criteria)]
-      : (await listTagRules(c.env.DB, pid, { tagId })).map((rule) => rule.criteria);
+      : (
+          await listTagRules(
+            c.env.DB,
+            pid,
+            { ring: keyringFor(c), owner: c.get('userId') },
+            { tagId }
+          )
+        ).map((rule) => rule.criteria);
 
   if (!criteriaList.length) {
     throw new HttpError(400, 'This tag has no rules to apply');

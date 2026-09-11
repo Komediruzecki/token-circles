@@ -1048,6 +1048,8 @@ describe('tag rules over sealed text', () => {
 
   it('auto-apply never matches text that is still sealed', async () => {
     const ids = await seedLedger();
+    // The rules below are saved through KEYED, so their criteria are sealed under K.
+    const keys = { ring: new DataKeyring(KEYED), owner: S_USER };
     const probe = await keyedTag('Auto probe');
     await keyedCall('/api/tags/rules', {
       method: 'POST',
@@ -1057,7 +1059,7 @@ describe('tag rules over sealed text', () => {
       .bind(ids[0])
       .first<Record<string, unknown>>();
     expect(String(raw!.description).startsWith('tc1.')).toBe(true);
-    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], raw!)).toEqual([]);
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], raw!, keys)).toEqual([]);
     expect(await taggedIds(probe)).toEqual([]);
 
     // Opened, the same row is matched on its real text.
@@ -1067,13 +1069,13 @@ describe('tag rules over sealed text', () => {
       body: { tag_id: aws, criteria: { description: 'aws' }, auto_apply: true },
     });
     const [opened] = await openRows(new DataKeyring(KEYED), S_USER, 'transactions', [raw!]);
-    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], opened)).toEqual([aws]);
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], opened, keys)).toEqual([aws]);
 
     // Plaintext that merely starts with "tc1." is text, and matches like any other.
     const lookalike = await insertRow({ ...plainOf(LEDGER[7]), description: 'tc1. token refill' });
     const row = await env.DB.prepare('SELECT * FROM transactions WHERE id = ?')
       .bind(lookalike)
       .first<Record<string, unknown>>();
-    expect(await autoApplyTagRules(env.DB, S_PROFILE, lookalike, row!)).toEqual([probe]);
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, lookalike, row!, keys)).toEqual([probe]);
   });
 });

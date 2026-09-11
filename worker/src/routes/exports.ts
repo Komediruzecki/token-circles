@@ -72,10 +72,15 @@ exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
       filename = 'categories';
       break;
     case 'accounts':
-      rows = await db.all(
-        c.env.DB,
-        `SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id IN (${inClause})`,
-        ...pids
+      rows = await openRows(
+        ring,
+        userId,
+        'accounts',
+        await db.all(
+          c.env.DB,
+          `SELECT name, type, currency, balance, notes, text_enc FROM accounts WHERE profile_id IN (${inClause})`,
+          ...pids
+        )
       );
       filename = 'accounts';
       break;

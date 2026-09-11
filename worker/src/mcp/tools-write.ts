@@ -11,6 +11,7 @@ import * as db from '../db';
 
 import { profileArg, DATE } from './args';
 import { keyringFor } from '../data-keys';
+import { sealForInsert, sealedUpdate } from '../sealed-rows';
 
 defineTool({
   name: 'create_transactions',
@@ -244,24 +245,32 @@ defineTool({
       args.name
     );
     const criteria = JSON.stringify(args.criteria);
+    const ring = keyringFor(c);
     if (existing) {
-      await db.update(
+      await db.batch(
         c.env.DB,
-        'tag_rules',
-        { criteria, auto_apply: args.autoApply ? 1 : 0 },
-        'id = ? AND profile_id = ?',
-        existing.id,
-        profileId
+        await sealedUpdate(
+          ring,
+          c.get('userId'),
+          'tag_rules',
+          { criteria, auto_apply: args.autoApply ? 1 : 0 },
+          'id = ? AND profile_id = ?',
+          [existing.id, profileId]
+        )
       );
       return { tagId: tag.id, ruleId: existing.id, created: false };
     }
-    const created = await db.insert(c.env.DB, 'tag_rules', {
-      profile_id: profileId,
-      tag_id: tag.id,
-      name: args.name,
-      criteria,
-      auto_apply: args.autoApply ? 1 : 0,
-    });
+    const created = await db.insert(
+      c.env.DB,
+      'tag_rules',
+      await sealForInsert(ring, c.get('userId'), 'tag_rules', {
+        profile_id: profileId,
+        tag_id: tag.id,
+        name: args.name,
+        criteria,
+        auto_apply: args.autoApply ? 1 : 0,
+      })
+    );
     return { tagId: tag.id, ruleId: Number(created.meta.last_row_id), created: true };
   },
 });

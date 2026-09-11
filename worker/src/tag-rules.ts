@@ -19,7 +19,8 @@ import type { TagRuleCriteria, TagRuleTransaction } from '../../shared/tagRules'
 // runtime's in-memory slice cap agree. Re-exported for callers that import it from this module.
 export { TAG_RULE_SCAN_LIMIT };
 
-export interface TagRuleRow {
+// A type alias rather than an interface, so rows satisfy openRows' Record<string, unknown>.
+export type TagRuleRow = {
   id: number;
   profile_id: number;
   tag_id: number;
@@ -27,7 +28,7 @@ export interface TagRuleRow {
   criteria: string;
   auto_apply: number;
   created_at: string;
-}
+};
 
 export interface ParsedTagRule {
   id: number;
@@ -143,6 +144,7 @@ export function parseTagRule(row: TagRuleRow): ParsedTagRule {
 export async function listTagRules(
   database: D1Database,
   profileId: number,
+  keys: { ring: DataKeyring; owner: number },
   opts: { tagId?: number; autoApplyOnly?: boolean } = {}
 ): Promise<ParsedTagRule[]> {
   let sql = 'SELECT * FROM tag_rules WHERE profile_id = ?';
@@ -154,7 +156,8 @@ export async function listTagRules(
   if (opts.autoApplyOnly) sql += ' AND auto_apply = 1';
   sql += ' ORDER BY id';
   const rows = await db.all<TagRuleRow>(database, sql, ...params);
-  return rows.map(parseTagRule);
+  // Criteria are sealed text like any other: opened before they are parsed.
+  return (await openRows(keys.ring, keys.owner, 'tag_rules', rows)).map(parseTagRule);
 }
 
 /**
@@ -385,7 +388,8 @@ export async function autoApplyTagRules(
   database: D1Database,
   profileId: number,
   transactionId: number,
-  transaction: TagRuleTransaction
+  transaction: TagRuleTransaction,
+  keys: { ring: DataKeyring; owner: number }
 ): Promise<number[]> {
   const stillSealed = (['description', 'beneficiary', 'payor', 'notes'] as const).filter((col) =>
     looksSealed(transaction[col])
@@ -397,7 +401,7 @@ export async function autoApplyTagRules(
     return [];
   }
   try {
-    const rules = await listTagRules(database, profileId, { autoApplyOnly: true });
+    const rules = await listTagRules(database, profileId, keys, { autoApplyOnly: true });
     if (!rules.length) return [];
     const tagIds = new Set<number>();
     for (const rule of rules) {

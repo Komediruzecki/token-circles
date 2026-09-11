@@ -53,6 +53,11 @@ type Row = Record<string, unknown> & { id: number; owner: number };
 const PAGE = 100;
 const BATCH = 50;
 
+// How a row reaches the profile that owns it: its own profile_id, or a child row's parent's.
+const PROFILE_JOIN: Partial<Record<SealedTable, string>> = {
+  loan_prepayments: 'JOIN loans l ON l.id = t.loan_id JOIN profiles p ON p.id = l.profile_id',
+};
+
 /**
  * Compare-and-set statements sealing `rows` of `table`: `… WHERE id = ? AND text_enc = 0 AND
  * col IS ? …` against the values read, so a row edited since misses. Exported for tests.
@@ -102,7 +107,9 @@ export async function runFieldEncryptionBackfill(
   const outOfTime = () => Date.now() - started > budget.ms;
   const failed = new Set<number>();
   const stats: BackfillStats = {
-    sealed: { transactions: 0, recurring_transactions: 0, bills: 0, receipts: 0 },
+    sealed: Object.fromEntries(
+      [...Object.keys(SEALED_COLUMNS), 'receipts'].map((t) => [t, 0])
+    ) as BackfillStats['sealed'],
     missed: 0,
     failedOwners: [],
     rewrapped: 0,
@@ -114,8 +121,9 @@ export async function runFieldEncryptionBackfill(
     stats.failedOwners = [...failed];
     if (failed.size > 0 || stats.missed > 0) stats.complete = false;
     console.log(
-      `[backfill] sealed tx=${stats.sealed.transactions} recurring=${stats.sealed.recurring_transactions} ` +
-        `bills=${stats.sealed.bills} receipts=${stats.sealed.receipts} missed=${stats.missed} ` +
+      `[backfill] sealed ${Object.entries(stats.sealed)
+        .map(([table, n]) => `${table}=${n}`)
+        .join(' ')} missed=${stats.missed} ` +
         `failedOwners=${stats.failedOwners.join(',') || 'none'} rewrapped=${stats.rewrapped} ` +
         `rewrapFailed=${stats.rewrapFailed} staleKeys=${stats.staleKeys} complete=${stats.complete}`
     );
@@ -145,7 +153,7 @@ export async function runFieldEncryptionBackfill(
         env.DB,
         `SELECT t.id, p.user_id AS owner, ${cols.map((c) => `t.${c}`).join(', ')}
            FROM ${table} t
-           JOIN profiles p ON p.id = t.profile_id
+           ${PROFILE_JOIN[table] ?? 'JOIN profiles p ON p.id = t.profile_id'}
            JOIN users u ON u.id = p.user_id
           WHERE t.text_enc = 0 AND t.id > ?
           ORDER BY t.id

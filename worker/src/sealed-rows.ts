@@ -21,6 +21,15 @@ export const SEALED_COLUMNS = {
   transactions: ['description', 'beneficiary', 'payor', 'notes'],
   recurring_transactions: ['description', 'notes'],
   bills: ['name', 'notes'],
+  // Migration 0033: the free text beside the ledger.
+  accounts: ['notes'],
+  savings_goals: ['notes'],
+  retirement_goals: ['notes'],
+  loan_prepayments: ['note'],
+  housings: ['notes'],
+  portfolio_holdings: ['notes'],
+  category_mappings: ['pattern'],
+  tag_rules: ['criteria'],
 } as const;
 
 export type SealedTable = keyof typeof SEALED_COLUMNS;

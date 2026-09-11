@@ -409,23 +409,23 @@ export async function exportBackup(
     profiles,
     categories,
     storedTransactions,
-    accounts,
+    storedAccounts,
     budgets,
     budgetsZeroBased,
-    goals,
-    retirementGoals,
+    storedGoals,
+    storedRetirementGoals,
     emergencyFundConfig,
     loans,
     loanRatePeriods,
-    loanPrepayments,
-    portfolioHoldings,
+    storedLoanPrepayments,
+    storedPortfolioHoldings,
     storedBills,
     storedRecurring,
-    housings,
+    storedHousings,
     tags,
-    tagRules,
+    storedTagRules,
     transactionTags,
-    categoryMappings,
+    storedCategoryMappings,
     receipts,
     balanceHistoryRows,
     importLogs,
@@ -476,6 +476,24 @@ export async function exportBackup(
   const transactions = await openRows(ring, userId, 'transactions', storedTransactions);
   const bills = await openRows(ring, userId, 'bills', storedBills);
   const recurring = await openRows(ring, userId, 'recurring_transactions', storedRecurring);
+  const accounts = await openRows(ring, userId, 'accounts', storedAccounts);
+  const goals = await openRows(ring, userId, 'savings_goals', storedGoals);
+  const retirementGoals = await openRows(ring, userId, 'retirement_goals', storedRetirementGoals);
+  const loanPrepayments = await openRows(ring, userId, 'loan_prepayments', storedLoanPrepayments);
+  const portfolioHoldings = await openRows(
+    ring,
+    userId,
+    'portfolio_holdings',
+    storedPortfolioHoldings
+  );
+  const housings = await openRows(ring, userId, 'housings', storedHousings);
+  const tagRules = await openRows(ring, userId, 'tag_rules', storedTagRules);
+  const categoryMappings = await openRows(
+    ring,
+    userId,
+    'category_mappings',
+    storedCategoryMappings
+  );
 
   // One unreadable receipt used to fail the whole export with a 503 — no backup file at all,
   // because one image out of hundreds was missing from storage. That is the worst possible failure
@@ -747,6 +765,45 @@ export async function restoreBackup(
     'recurring_transactions',
     data.recurring
   );
+  const sealedAccounts = await sealRestoreRows(ring, userId, 'accounts', data.accounts);
+  const sealedGoals = await sealRestoreRows(ring, userId, 'savings_goals', data.goals);
+  const sealedRetirementGoals = await sealRestoreRows(
+    ring,
+    userId,
+    'retirement_goals',
+    data.retirementGoals
+  );
+  const sealedLoanPrepayments = await sealRestoreRows(
+    ring,
+    userId,
+    'loan_prepayments',
+    data.loanPrepayments
+  );
+  const sealedPortfolioHoldings = await sealRestoreRows(
+    ring,
+    userId,
+    'portfolio_holdings',
+    data.portfolioHoldings
+  );
+  const sealedHousings = await sealRestoreRows(ring, userId, 'housings', data.housings);
+  const sealedCategoryMappings = await sealRestoreRows(
+    ring,
+    userId,
+    'category_mappings',
+    data.categoryMappings
+  );
+  // Criteria are stored as JSON text, so they are sealed as that text. A file written when the
+  // export carried them as objects is normalized first — sealing an object would store nothing.
+  const sealedTagRules = await sealRestoreRows(
+    ring,
+    userId,
+    'tag_rules',
+    data.tagRules.map((row) => ({
+      ...row,
+      criteria:
+        typeof row.criteria === 'string' ? row.criteria : JSON.stringify(row.criteria ?? {}),
+    }))
+  );
 
   const DB = env.DB;
   const stagedProfileIds: number[] = [];
@@ -803,6 +860,11 @@ export async function restoreBackup(
       await runChunks(DB, statements);
       rowsRestored += source.length;
     };
+    const insertSealed = (
+      table: string,
+      sealed: SealedRestoreRows,
+      transform: (row: Row, index: number) => Row
+    ): Promise<void> => insertRows(table, sealed.rows, transform, sealed.markers);
     const withProfile = (row: Row, context: string): Row => ({
       ...row,
       profile_id: mapped(profileMap, row.profile_id, `${context}.profile_id`, false),
@@ -812,8 +874,11 @@ export async function restoreBackup(
       ...withProfile(row, `categories[${index}]`),
       parent_id: null,
     }));
-    const accountMap = await insertMappedRows('accounts', data.accounts, (row, index) =>
-      withProfile(row, `accounts[${index}]`)
+    const accountMap = await insertMappedRows(
+      'accounts',
+      sealedAccounts.rows,
+      (row, index) => withProfile(row, `accounts[${index}]`),
+      sealedAccounts.markers
     );
     const loanMap = await insertMappedRows('loans', data.loans, (row, index) =>
       withProfile(row, `loans[${index}]`)
@@ -862,11 +927,11 @@ export async function restoreBackup(
         false
       ),
     }));
-    await insertRows('savings_goals', data.goals, (row, index) => ({
+    await insertSealed('savings_goals', sealedGoals, (row, index) => ({
       ...withProfile(row, `goals[${index}]`),
       category_id: mapped(categoryMap, row.category_id, `goals[${index}].category_id`),
     }));
-    await insertRows('retirement_goals', data.retirementGoals, (row, index) =>
+    await insertSealed('retirement_goals', sealedRetirementGoals, (row, index) =>
       withProfile(row, `retirementGoals[${index}]`)
     );
     await insertRows('emergency_fund_config', data.emergencyFundConfig, (row, index) =>
@@ -876,11 +941,11 @@ export async function restoreBackup(
       ...row,
       loan_id: mapped(loanMap, row.loan_id, `loanRatePeriods[${index}].loan_id`, false),
     }));
-    await insertRows('loan_prepayments', data.loanPrepayments, (row, index) => ({
+    await insertSealed('loan_prepayments', sealedLoanPrepayments, (row, index) => ({
       ...row,
       loan_id: mapped(loanMap, row.loan_id, `loanPrepayments[${index}].loan_id`, false),
     }));
-    await insertRows('portfolio_holdings', data.portfolioHoldings, (row, index) =>
+    await insertSealed('portfolio_holdings', sealedPortfolioHoldings, (row, index) =>
       withProfile(row, `portfolioHoldings[${index}]`)
     );
     await insertRows(
@@ -908,10 +973,10 @@ export async function restoreBackup(
       }),
       sealedRecurring.markers
     );
-    await insertRows('housings', data.housings, (row, index) =>
+    await insertSealed('housings', sealedHousings, (row, index) =>
       withProfile(row, `housings[${index}]`)
     );
-    await insertRows('category_mappings', data.categoryMappings, (row, index) => ({
+    await insertSealed('category_mappings', sealedCategoryMappings, (row, index) => ({
       ...withProfile(row, `categoryMappings[${index}]`),
       category_id: mapped(
         categoryMap,
@@ -939,12 +1004,11 @@ export async function restoreBackup(
       ),
       tag_id: mapped(tagMap, row.tag_id, `transactionTags[${index}].tag_id`, false),
     }));
-    await insertRows('tag_rules', data.tagRules, (row, index) => ({
+    // Criteria round-trip as the opaque JSON blob shared/tagRules.ts normalizes on read; they were
+    // made text before sealing, above.
+    await insertSealed('tag_rules', sealedTagRules, (row, index) => ({
       ...withProfile(row, `tagRules[${index}]`),
       tag_id: mapped(tagMap, row.tag_id, `tagRules[${index}].tag_id`, false),
-      // Criteria round-trip as the opaque JSON blob shared/tagRules.ts normalizes on read.
-      criteria:
-        typeof row.criteria === 'string' ? row.criteria : JSON.stringify(row.criteria ?? {}),
     }));
     await insertRows('import_logs', data.importLogs, (row, index) =>
       withProfile(row, `importLogs[${index}]`)

@@ -9,7 +9,7 @@ import { runFieldEncryptionBackfill, sealStatements } from '../src/backfill';
 import { DataKeyring } from '../src/data-keys';
 import { TEXT_PREFIX } from '../src/field-crypto';
 import { receiptBytes } from '../src/sealed-objects';
-import { changesOf, openRows } from '../src/sealed-rows';
+import { changesOf, openRows, SEALED_COLUMNS, type SealedTable } from '../src/sealed-rows';
 
 const K = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
 const KEYED = { DB: env.DB, RECEIPTS: env.RECEIPTS!, DATA_KEK_1: K };
@@ -21,9 +21,15 @@ const P2 = 9320;
 const P0 = 9330; // nobody owns it
 type Row = Record<string, unknown>;
 
+// Every table the backfill seals, whoever's rows are in it: it would seal them all.
+const SEALED_TABLES = ['receipts', ...Object.keys(SEALED_COLUMNS)];
+
 async function wipe(): Promise<void> {
-  for (const t of ['receipts', 'transactions', 'recurring_transactions', 'bills']) {
+  for (const t of SEALED_TABLES) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
+  }
+  for (const t of ['categories', 'tags', 'loans']) {
+    await env.DB.prepare(`DELETE FROM ${t} WHERE profile_id IN (?, ?, ?)`).bind(P1, P2, P0).run();
   }
   await env.DB.prepare('DELETE FROM profiles WHERE id IN (?, ?, ?)').bind(P1, P2, P0).run();
   await env.DB.prepare('DELETE FROM users WHERE id IN (?, ?)').bind(U1, U2).run();
@@ -162,12 +168,7 @@ describe('field-encryption backfill', () => {
     await tx(P1, 'Once');
     await runFieldEncryptionBackfill(KEYED, BIG);
     const again = await runFieldEncryptionBackfill(KEYED, BIG);
-    expect(again!.sealed).toEqual({
-      transactions: 0,
-      recurring_transactions: 0,
-      bills: 0,
-      receipts: 0,
-    });
+    expect(again!.sealed).toEqual(Object.fromEntries(SEALED_TABLES.map((t) => [t, 0])));
   });
 
   it('stops at its row budget and resumes where it stopped', async () => {
@@ -285,6 +286,119 @@ describe('field-encryption backfill', () => {
       enc: 0,
       storage_path: `${P1}/does-not-exist.png`,
     });
+  });
+
+  it('seals the free text beside the ledger too, and a loan prepayment through its loan', async () => {
+    const insert = async (sql: string, ...params: unknown[]): Promise<number> =>
+      Number(
+        (
+          await env.DB.prepare(sql)
+            .bind(...params)
+            .run()
+        ).meta.last_row_id
+      );
+    const category = await insert(
+      "INSERT INTO categories (name, profile_id) VALUES ('Food', ?)",
+      P1
+    );
+    const tag = await insert("INSERT INTO tags (name, profile_id) VALUES ('Groceries', ?)", P1);
+    const loan = await insert(
+      "INSERT INTO loans (name, principal, start_date, term_months, profile_id) VALUES ('Car', 10000, '2026-01-01', 60, ?)",
+      P1
+    );
+    const criteria = '{"match":"all","description":"market"}';
+    const cases: [SealedTable, number, string, string][] = [
+      [
+        'accounts',
+        await insert(
+          "INSERT INTO accounts (name, notes, profile_id) VALUES ('Giro', 'joint account', ?)",
+          P1
+        ),
+        'notes',
+        'joint account',
+      ],
+      [
+        'savings_goals',
+        await insert(
+          "INSERT INTO savings_goals (name, target_amount, notes, profile_id) VALUES ('Trip', 900, 'shared with partner', ?)",
+          P1
+        ),
+        'notes',
+        'shared with partner',
+      ],
+      [
+        'retirement_goals',
+        await insert(
+          "INSERT INTO retirement_goals (name, target_amount, notes, profile_id) VALUES ('Pension', 100000, 'second pillar', ?)",
+          P1
+        ),
+        'notes',
+        'second pillar',
+      ],
+      [
+        'loan_prepayments',
+        await insert(
+          "INSERT INTO loan_prepayments (loan_id, month, amount, note) VALUES (?, 3, 500, 'bonus')",
+          loan
+        ),
+        'note',
+        'bonus',
+      ],
+      [
+        'housings',
+        await insert(
+          "INSERT INTO housings (profile_id, name, monthly_amount, notes) VALUES (?, 'Flat', 700, 'heating included')",
+          P1
+        ),
+        'notes',
+        'heating included',
+      ],
+      [
+        'portfolio_holdings',
+        await insert(
+          "INSERT INTO portfolio_holdings (ticker, shares, purchase_price, purchase_date, notes, profile_id) VALUES ('VWCE', 10, 100, '2026-01-02', 'monthly plan', ?)",
+          P1
+        ),
+        'notes',
+        'monthly plan',
+      ],
+      [
+        'category_mappings',
+        await insert(
+          "INSERT INTO category_mappings (profile_id, pattern, category_id, confidence) VALUES (?, 'market', ?, 0.9)",
+          P1,
+          category
+        ),
+        'pattern',
+        'market',
+      ],
+      [
+        'tag_rules',
+        await insert(
+          "INSERT INTO tag_rules (profile_id, tag_id, name, criteria) VALUES (?, ?, 'shop', ?)",
+          P1,
+          tag,
+          criteria
+        ),
+        'criteria',
+        criteria,
+      ],
+    ];
+    const legacy = await insert(
+      "INSERT INTO accounts (name, notes, profile_id) VALUES ('Old', 'nobody owns it', ?)",
+      P0
+    );
+
+    const stats = await runFieldEncryptionBackfill(KEYED, BIG);
+    const ring = new DataKeyring(KEYED);
+    for (const [table, id, column, text] of cases) {
+      expect(stats!.sealed[table]).toBe(1);
+      const stored = await row(table, id);
+      expect(stored.text_enc).toBe(1);
+      expect(String(stored[column]).startsWith(TEXT_PREFIX)).toBe(true);
+      expect((await openRows(ring, U1, table, [stored]))[0][column]).toBe(text);
+    }
+    expect(await row('accounts', legacy)).toMatchObject({ text_enc: 0, notes: 'nobody owns it' });
   });
 
   it('re-wraps data keys onto the newest master key and reports the rotation', async () => {

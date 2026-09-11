@@ -513,10 +513,15 @@ defineTool({
     return guardSize({
       month,
       budgets: budgets.map((b) => ({ ...b, remaining: (b.amount ?? 0) - (b.spent ?? 0) })),
-      savingsGoals: await db.all(
-        c.env.DB,
-        'SELECT * FROM savings_goals WHERE profile_id = ? ORDER BY id',
-        profileId
+      savingsGoals: await openRows(
+        keyringFor(c),
+        c.get('userId'),
+        'savings_goals',
+        await db.all(
+          c.env.DB,
+          'SELECT * FROM savings_goals WHERE profile_id = ? ORDER BY id',
+          profileId
+        )
       ),
       loans: await db.all(
         c.env.DB,

@@ -14,8 +14,9 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Field encryption at rest — server-side, per-user keys, shipping dark.** Nothing changes on a
   deployment until it is given a master key (`DATA_KEK_1`, a Workers Secret: base64 of 32 random
   bytes, one per environment). With one, `transactions.description`/`beneficiary`/`payor`/`notes`,
-  `recurring_transactions.description`/`notes`, `bills.name`/`notes` and receipt files in R2 are
-  sealed with AES-256-GCM under a per-user data key (`users.dek_wrapped`), itself wrapped by the
+  `recurring_transactions.description`/`notes`, `bills.name`/`notes`, the notes on accounts, goals,
+  housing, holdings and loan prepayments, learned category patterns, tag-rule criteria and receipt
+  files in R2 are sealed with AES-256-GCM under a per-user data key (`users.dek_wrapped`), itself wrapped by the
   master key. The Worker decrypts to compute, so every feature keeps working: this protects a
   leaked `d1 export` or bucket, not the data from the operator. It is not end-to-end encryption,
   which was dropped. Design, threat model and rollout: `docs/plans/field-encryption.md`.
@@ -59,6 +60,19 @@ All notable changes to Token Circles are documented here. The format is based on
     master key that is not configured, and the rotation step asks which keys are not under the
     newest one. A wrapped key starts `dk1.<n>.`, so both are range lookups on it that read nothing
     when there is nothing to find — /api/health is public, so neither may scan `users` per call.
+  - Migration 0033 seals the free text beside the ledger: `notes` on accounts, savings and
+    retirement goals, housing and portfolio holdings, `loan_prepayments.note` (its owner found
+    through its loan, in the backfill too), `category_mappings.pattern` and `tag_rules.criteria`.
+    A learned pattern used to be found by `pattern = ?`; with a key it is found among the
+    profile's opened mappings (`findMapping` in `routes/categories.ts`), exactly and lowest id
+    first, as the query found it. Tag-rule criteria are opened before they are parsed, so
+    `listTagRules` and `autoApplyTagRules` now take the keyring. Names stay plaintext; the plan
+    doc says why.
+  - Edits to those rows go through `sealedUpdate`, which leaves out a field the body left out. Two
+    edits change with it. A retirement-goal or housing edit that omitted a field bound `undefined`
+    and failed with a 500; it now leaves that field alone. A portfolio-holding edit without `notes`
+    wrote the stored value back; it now leaves the column untouched, because the stored value may
+    be sealed, and sealing it again would store ciphertext of ciphertext.
   - `/api/health` reports `encryption`: `off`, `on`, or `misconfigured` — which includes a data
     key under a master key that has been removed.
   - CI runs the worker suite twice — keyless (`pnpm test`), proving a deployment with no key is

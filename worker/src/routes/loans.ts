@@ -4,6 +4,8 @@ import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
 import { HttpError } from '../http'
 import * as db from '../db'
+import { keyringFor } from '../data-keys'
+import { openRows, sealForInsert } from '../sealed-rows'
 
 // Port of backend/routes/loans.js + backend/repositories/loansRepo.js.
 // Loans are profile-scoped. Rate periods and prepayments are keyed by loan_id
@@ -85,10 +87,11 @@ loansRoutes.get('/api/loans/:id', requireAuth, async (c) => {
     'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month',
     id
   )
-  loan.prepayments = await db.all(
-    c.env.DB,
-    'SELECT * FROM loan_prepayments WHERE loan_id = ? ORDER BY month',
-    id
+  loan.prepayments = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'loan_prepayments',
+    await db.all(c.env.DB, 'SELECT * FROM loan_prepayments WHERE loan_id = ? ORDER BY month', id)
   )
   return c.json(loan)
 })
@@ -188,12 +191,16 @@ loansRoutes.post('/api/loans/:id/prepayments', requireAuth, async (c) => {
   const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
   if (!loan) throw new HttpError(404, 'Loan not found')
   const b = (await c.req.json()) as Record<string, any>
-  const res = await db.insert(c.env.DB, 'loan_prepayments', {
-    loan_id: id,
-    month: b.month,
-    amount: b.amount,
-    note: b.note || '',
-  })
+  const res = await db.insert(
+    c.env.DB,
+    'loan_prepayments',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'loan_prepayments', {
+      loan_id: id,
+      month: b.month,
+      amount: b.amount,
+      note: b.note || '',
+    })
+  )
   return c.json({ id: res.meta.last_row_id })
 })
 
@@ -375,10 +382,15 @@ loansRoutes.post('/api/loans/:id/calculate', requireAuth, async (c) => {
     'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month',
     id
   )
-  const prepayments = await db.all<{ month: number; amount: number; note: string }>(
-    c.env.DB,
-    'SELECT * FROM loan_prepayments WHERE loan_id = ? ORDER BY month',
-    id
+  const prepayments = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'loan_prepayments',
+    await db.all<{ month: number; amount: number; note: string }>(
+      c.env.DB,
+      'SELECT * FROM loan_prepayments WHERE loan_id = ? ORDER BY month',
+      id
+    )
   )
 
   // Prepend the loan's initial rate as the first rate period (months 1 to before

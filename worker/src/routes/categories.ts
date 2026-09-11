@@ -1,11 +1,12 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { keyringFor } from '../data-keys';
-import { openRows } from '../sealed-rows';
+import { openRows, sealForInsert } from '../sealed-rows';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
@@ -94,6 +95,61 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
 });
 
 // ── Category mappings (learned auto-categorization patterns) ──────────────────
+
+/**
+ * This profile's mapping for `pattern`, if it has one. A sealed pattern cannot be compared in SQL,
+ * so with a master key configured the profile's mappings are opened and compared in JS: exactly,
+ * as `=` compares under BINARY collation, lowest id first. Without one nothing can be sealed, and
+ * the query is the one it always was.
+ */
+async function findMapping(
+  c: Context<AppEnv>,
+  pid: number,
+  pattern: string
+): Promise<{ id: number; use_count: number } | null> {
+  const ring = keyringFor(c);
+  if (!ring.enabled) {
+    return db.first<{ id: number; use_count: number }>(
+      c.env.DB,
+      'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
+      pid,
+      pattern
+    );
+  }
+  const rows = await openRows(
+    ring,
+    c.get('userId'),
+    'category_mappings',
+    await db.all<{ id: number; use_count: number; pattern: string }>(
+      c.env.DB,
+      'SELECT id, use_count, pattern, text_enc FROM category_mappings WHERE profile_id = ? ORDER BY id',
+      pid
+    )
+  );
+  const hit = rows.find((r) => r.pattern === pattern);
+  return hit ? { id: hit.id, use_count: hit.use_count } : null;
+}
+
+async function insertMapping(
+  c: Context<AppEnv>,
+  pid: number,
+  pattern: string,
+  category_id: number,
+  confidence: number
+): Promise<D1Result> {
+  return db.insert(
+    c.env.DB,
+    'category_mappings',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'category_mappings', {
+      profile_id: pid,
+      pattern,
+      category_id,
+      confidence,
+      use_count: 1,
+    })
+  );
+}
+
 categoriesRoutes.get('/api/categories/mappings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const rows = await db.all(
@@ -105,7 +161,7 @@ categoriesRoutes.get('/api/categories/mappings', requireAuth, async (c) => {
      ORDER BY cm.use_count DESC, cm.confidence DESC`,
     pid
   );
-  return c.json(rows);
+  return c.json(await openRows(keyringFor(c), c.get('userId'), 'category_mappings', rows));
 });
 
 categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
@@ -126,12 +182,7 @@ categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
   const confidence = b.confidence || 0.9;
 
   // upsertMapping: bump use_count on an existing (profile_id, pattern), else insert.
-  const existing = await db.first<{ id: number; use_count: number }>(
-    c.env.DB,
-    'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
-    pid,
-    pattern.trim()
-  );
+  const existing = await findMapping(c, pid, pattern.trim());
   if (existing) {
     const newUseCount = (existing.use_count || 0) + 1;
     await db.run(
@@ -144,15 +195,7 @@ categoriesRoutes.post('/api/categories/mappings', requireAuth, async (c) => {
     );
     return c.json({ ok: true, id: existing.id, use_count: newUseCount });
   }
-  const res = await db.run(
-    c.env.DB,
-    'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)',
-    pid,
-    pattern.trim(),
-    category_id,
-    confidence,
-    1
-  );
+  const res = await insertMapping(c, pid, pattern.trim(), category_id, confidence);
   return c.json({ ok: true, id: res.meta.last_row_id, use_count: 1 });
 });
 
@@ -299,19 +342,25 @@ categoriesRoutes.post('/api/categories/auto-map', requireAuth, async (c) => {
     'SELECT * FROM categories WHERE profile_id = ? ORDER BY type, name',
     pid
   );
-  const learnedMappings = await db.all<{
-    pattern: string;
-    category_id: number;
-    confidence: number;
-    use_count: number;
-  }>(
-    c.env.DB,
-    'SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count FROM category_mappings cm WHERE cm.profile_id = ?',
-    pid
+  // A learned pattern is sealed text like any other, opened before anything matches against it.
+  const ring = keyringFor(c);
+  const learnedMappings = await openRows(
+    ring,
+    c.get('userId'),
+    'category_mappings',
+    await db.all<{
+      pattern: string;
+      category_id: number;
+      confidence: number;
+      use_count: number;
+    }>(
+      c.env.DB,
+      'SELECT cm.pattern, cm.category_id, cm.confidence, cm.use_count, cm.text_enc FROM category_mappings cm WHERE cm.profile_id = ?',
+      pid
+    )
   );
 
   // If transaction_ids provided, use those; otherwise filter by description+amount.
-  const ring = keyringFor(c);
   let txQuery = `
     SELECT t.id, t.description, t.beneficiary, t.payor, t.amount, t.text_enc, c.name as category_name
     FROM transactions t
@@ -523,12 +572,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
         .replace(/[^a-z0-9]/g, '');
       if (normalizedPattern.length >= 3) {
         try {
-          const existing = await db.first<{ id: number; use_count: number }>(
-            c.env.DB,
-            'SELECT id, use_count FROM category_mappings WHERE profile_id = ? AND pattern = ?',
-            pid,
-            normalizedPattern
-          );
+          const existing = await findMapping(c, pid, normalizedPattern);
           if (existing) {
             const newUseCount = (existing.use_count || 0) + 1;
             await db.run(
@@ -540,15 +584,7 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
               existing.id
             );
           } else {
-            await db.run(
-              c.env.DB,
-              'INSERT INTO category_mappings (profile_id, pattern, category_id, confidence, use_count) VALUES (?, ?, ?, ?, ?)',
-              pid,
-              normalizedPattern,
-              category_id,
-              0.9,
-              1
-            );
+            await insertMapping(c, pid, normalizedPattern, category_id, 0.9);
           }
         } catch (e) {
           // Ignore duplicate errors.

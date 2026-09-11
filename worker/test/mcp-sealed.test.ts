@@ -464,6 +464,53 @@ describe('get_overview over sealed bills', () => {
   });
 });
 
+describe('goals and tag rules through a keyed deployment', () => {
+  it('get_budgets_and_goals opens goal notes, and upsert_tag_rule seals criteria', async () => {
+    await insert(
+      'savings_goals',
+      await sealForInsert(new DataKeyring(KEYED), MIXED_USER, 'savings_goals', {
+        name: 'Bike',
+        target_amount: 800,
+        notes: 'gravel frame',
+        profile_id: MIXED_PROFILE,
+      })
+    );
+    const { savingsGoals } = await call('keyed', MIXED_USER, 'get_budgets_and_goals', {});
+    expect(savingsGoals).toEqual([
+      expect.objectContaining({ name: 'Bike', notes: 'gravel frame' }),
+    ]);
+    for (const goal of savingsGoals) expect(goal).not.toHaveProperty('text_enc');
+
+    const criteriaOf = async (id: number): Promise<Record<string, unknown>> => {
+      const raw = await env.DB.prepare('SELECT criteria FROM tag_rules WHERE id = ?')
+        .bind(id)
+        .first<{ criteria: string }>();
+      expect(raw!.criteria.startsWith('tc1.')).toBe(true);
+      const [rule] = await keyedRows(
+        'tag_rules',
+        MIXED_USER,
+        'SELECT criteria, text_enc FROM tag_rules WHERE id = ?',
+        id
+      );
+      return JSON.parse(String(rule.criteria));
+    };
+    const created = await call('keyed', MIXED_USER, 'upsert_tag_rule', {
+      tagName: 'bikes',
+      name: 'Bike shop',
+      criteria: { description: 'cycle' },
+    });
+    expect(created.created).toBe(true);
+    expect(await criteriaOf(created.ruleId)).toMatchObject({ description: 'cycle' });
+    const updated = await call('keyed', MIXED_USER, 'upsert_tag_rule', {
+      tagName: 'bikes',
+      name: 'Bike shop',
+      criteria: { description: 'bicycle' },
+    });
+    expect(updated).toMatchObject({ ruleId: created.ruleId, created: false });
+    expect(await criteriaOf(created.ruleId)).toMatchObject({ description: 'bicycle' });
+  });
+});
+
 describe('writes through a keyed deployment', () => {
   const batch = [
     { date: '2026-06-01', description: 'Latte', amount: -4, beneficiary: 'Cafe', notes: 'oat' },

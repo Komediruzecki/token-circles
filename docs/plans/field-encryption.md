@@ -42,19 +42,25 @@ leaked export without the master key is that case.
 
 ## What is sealed
 
-| Table / store            | Sealed                                         | Why these                                                                                                          |
-| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `transactions`           | `description`, `beneficiary`, `payor`, `notes` | Who you paid, who paid you, and what for — the identifying part of a ledger.                                       |
-| `recurring_transactions` | `description`, `notes`                         | Copied verbatim into the transactions they generate; left plaintext they would reveal exactly what those rows say. |
-| `bills`                  | `name`, `notes`                                | Same reason: paying a bill writes its name into a transaction.                                                     |
-| R2 receipts              | the object bytes                               | Photos of receipts — the most sensitive artefact in the product.                                                   |
+| Table / store                                                                     | Sealed                                         | Why these                                                                                                                         |
+| --------------------------------------------------------------------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `transactions`                                                                    | `description`, `beneficiary`, `payor`, `notes` | Who you paid, who paid you, and what for — the identifying part of a ledger.                                                      |
+| `recurring_transactions`                                                          | `description`, `notes`                         | Copied verbatim into the transactions they generate; left plaintext they would reveal exactly what those rows say.                |
+| `bills`                                                                           | `name`, `notes`                                | Same reason: paying a bill writes its name into a transaction.                                                                    |
+| `accounts`, `savings_goals`, `retirement_goals`, `housings`, `portfolio_holdings` | `notes`                                        | What a person writes beside the numbers: an account number, who shares an account, what a goal or holding is for. Migration 0033. |
+| `loan_prepayments`                                                                | `note`                                         | The same. It has no profile of its own; its owner is found through its loan.                                                      |
+| `category_mappings`                                                               | `pattern`                                      | A normalised piece of a description the categoriser learned — the text the transaction itself seals.                              |
+| `tag_rules`                                                                       | `criteria`                                     | A saved filter's JSON, which quotes description and counterparty text.                                                            |
+| R2 receipts                                                                       | the object bytes                               | Photos of receipts — the most sensitive artefact in the product.                                                                  |
 
 **Readable on purpose:** amounts, dates, types, currencies, category, account and profile ids —
 what SQL filters, sorts and sums on.
 
-**Still plaintext, out of scope for this pass:** `category_mappings.pattern` (a normalised copy
-of descriptions the categoriser learned), `tag_rules` criteria, account and category names, and
-the `notes` columns on accounts, budgets, loans and goals.
+**Still plaintext:** account, category and tag names, which SQL sorts, joins and looks rows up by
+(`lower(name) = lower(?)`, `ORDER BY a.name`, `c.name = 'Other'`); the other names — profiles,
+goals, loans, housing, tag rules, saved reports, import sources, API tokens — which are only labels
+and could be sealed the way notes are; receipt file names (`receipts.original_name`); import-log
+details and auth-log reasons. Names are an open decision (Follow-ups).
 
 **What a leaked database still reveals about a sealed value:** whether it is empty (NULL and `''`
 are stored unsealed, below), and its length — AES-GCM ciphertext is exactly as long as the
@@ -140,7 +146,8 @@ storing the value assigns.
 
 On a deployment with a key: transaction search and text sorts (with pagination and totals), the
 summary totals under a search, MCP search, merchant grouping and the counterparty list,
-counterparty totals, bill ordering, import dedup, tag-rule matching and category suggestions.
+counterparty totals, bill ordering, import dedup, tag-rule matching, category suggestions, and
+finding a learned category pattern again to count another use of it.
 
 Semantics on that path differ from SQLite's `LIKE` in two ways, both closer to what someone
 typing into a search box means: case folding covers all of Unicode (SQLite folds ASCII only),

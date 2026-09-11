@@ -44,8 +44,9 @@ Data is encrypted at rest by the platform (Cloudflare D1 and R2 use AES-256) and
 TLS. In the default **local-first** mode, data never leaves the browser (IndexedDB).
 
 A deployment that configures a master key additionally seals the most identifying fields —
-transaction descriptions, counterparties and notes, bill and recurring-rule names, and receipt
-files — under a per-user key, so a leaked database export or storage bucket is unreadable
+transaction descriptions, counterparties and notes, bill and recurring-rule names, the notes on
+accounts, goals, loans, housing and holdings, learned category patterns, tag-rule criteria, and
+receipt files — under a per-user key, so a leaked database export or storage bucket is unreadable
 without the separately held master key. This is **server-side** encryption: the service holds
 the keys and decrypts to provide its features. It is not end-to-end or zero-knowledge
 encryption, and that is not planned. Design and threat model:
