@@ -206,6 +206,8 @@ describe('import with a master key: sealing new rows', () => {
       rows: [
         ['2026-05-03', 1234, '-1', '', '', true],
         ['2026-05-04', 12.5, '-2', 0.1, '', false],
+        // What a formula or a running balance can hold: float noise past the 15th digit.
+        ['2026-05-05', 0.1 + 0.2, '-3', 1234.5600000000002, '', ''],
       ],
       mapping: { date: 0, description: 1, amount: 2, beneficiary: 3, payor: 4, notes: 5 },
     };
@@ -213,10 +215,11 @@ describe('import with a master key: sealing new rows', () => {
     expect((await execute(USER, PROFILE, KEYED, body)).status).toBe(200);
     const text = (r: Omit<Raw, 'text_enc'>) => [r.description, r.beneficiary, r.payor, r.notes];
     const plain = (await rawRows(PARITY_PROFILE)).map(text);
-    // As the cell showed it — never D1's REAL rendering ('1234.0'), in either mode.
-    expect(plain.map((r) => r[0])).toEqual(['1234', '12.5']);
-    expect(plain.map((r) => r[1])).toEqual(['', '0.1']);
-    expect(plain.map((r) => r[3])).toEqual(['true', '']);
+    // As the cell showed it, in either mode: never D1's REAL rendering ('1234.0'), and to the 15
+    // significant digits SQLite renders a REAL with, so 0.1 + 0.2 is '0.3'.
+    expect(plain.map((r) => r[0])).toEqual(['1234', '12.5', '0.3']);
+    expect(plain.map((r) => r[1])).toEqual(['', '0.1', '1234.56']);
+    expect(plain.map((r) => r[3])).toEqual(['true', '', '']);
     expect((await openedRows(PROFILE, USER)).map(text)).toEqual(plain);
   });
 

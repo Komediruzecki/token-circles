@@ -164,11 +164,17 @@ export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 // Pull a value from a row using any of the casing variants the Express code checks.
 /**
  * A text column's value from a cell. A spreadsheet cell arrives as whatever type it holds, and a
- * raw number bound to D1 is bound as REAL, so the TEXT column stored 1234 as '1234.0'. Its JS text
- * is what the cell showed. An empty or falsy cell is '' exactly as `|| ''` always made it.
+ * raw number bound to D1 is bound as REAL, so the TEXT column stored 1234 as '1234.0'. What the
+ * cell showed is the number to the 15 significant digits SQLite renders a REAL with: 1234 is
+ * '1234', and 0.1 + 0.2 is '0.3', not JS's '0.30000000000000004'. An empty or falsy cell is ''
+ * exactly as `|| ''` always made it.
  */
 function cellText(value: unknown): string {
-  return value ? String(value) : '';
+  if (!value) return '';
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Number(value.toPrecision(15)));
+  }
+  return String(value);
 }
 
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {
