@@ -35,6 +35,16 @@ export const SEALED_COLUMNS = {
 export type SealedTable = keyof typeof SEALED_COLUMNS;
 type Row = Record<string, unknown>;
 
+/**
+ * Sealed columns whose DEFAULT is not empty. An INSERT through sealForInsert must name them: left
+ * out, the default would sit unsealed in a row marked sealed, where it fails to open. Every other
+ * sealed column defaults to '' or NULL, which are stored unsealed in either form. A test holds this
+ * list to the schema.
+ */
+export const MUST_NAME_ON_INSERT = {
+  tag_rules: ['criteria'], // DEFAULT '{}'
+} as const satisfies Partial<Record<SealedTable, readonly string[]>>;
+
 const MARKER = 'text_enc';
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
@@ -69,9 +79,9 @@ async function asColumnText(db: D1Database, values: Row, columns: readonly strin
 
 /**
  * For an INSERT: seals whichever sealed columns `values` carries and adds the text_enc the row
- * must be stored with. Sealed columns the INSERT leaves out get the column DEFAULT ('' or NULL),
+ * must be stored with. Sealed columns the INSERT leaves out get the column DEFAULT, '' or NULL,
  * which field-crypto stores unsealed in either form — so a sealed row never holds a plaintext
- * value that is not empty.
+ * value that is not empty. The few with any other default (MUST_NAME_ON_INSERT) must be given.
  *
  * ownerId null is a legacy profile nobody owns: nobody holds a key, so the row stays plaintext.
  */
@@ -81,6 +91,12 @@ export async function sealForInsert<T extends Row>(
   table: SealedTable,
   values: T
 ): Promise<T & { text_enc: 0 | 1 }> {
+  const mustName: Partial<Record<SealedTable, readonly string[]>> = MUST_NAME_ON_INSERT;
+  for (const column of mustName[table] ?? []) {
+    if (values[column] === undefined) {
+      throw new Error(`sealForInsert: ${table}.${column} must be given; its default is not empty`);
+    }
+  }
   const key = ownerId === null ? null : await ring.forWrite(ownerId);
   if (!key || ownerId === null) return { ...values, text_enc: 0 };
   const out: Row = await asColumnText(

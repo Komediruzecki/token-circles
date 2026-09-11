@@ -7,7 +7,15 @@ import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataKeyring, DataKeyUnavailableError } from '../src/data-keys';
 import { TEXT_PREFIX } from '../src/field-crypto';
-import { changesOf, openRows, sealedUpdate, sealForInsert, textMatches } from '../src/sealed-rows';
+import {
+  changesOf,
+  MUST_NAME_ON_INSERT,
+  openRows,
+  SEALED_COLUMNS,
+  sealedUpdate,
+  sealForInsert,
+  textMatches,
+} from '../src/sealed-rows';
 
 const K = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
 const keyed = () => new DataKeyring({ DB: env.DB, DATA_KEK_1: K });
@@ -101,6 +109,37 @@ describe('sealForInsert', () => {
     expect(stored.notes).toBe('');
     const [opened] = await openRows(keyed(), U, 'transactions', [stored]);
     expect(opened).toMatchObject({ description: 'Only this', notes: '', payor: '' });
+  });
+});
+
+describe('sealed columns and their defaults', () => {
+  it('refuses to leave out a sealed column whose default is not empty', async () => {
+    // tag_rules.criteria defaults to '{}': left out, that would sit unsealed in a row marked sealed.
+    for (const ring of [keyed(), unkeyed()]) {
+      await expect(
+        sealForInsert(ring, U, 'tag_rules', { profile_id: P, tag_id: 1, name: 'rule' })
+      ).rejects.toThrow('tag_rules.criteria');
+    }
+  });
+
+  it('knows every sealed column whose default is not empty', async () => {
+    const found: string[] = [];
+    for (const [table, columns] of Object.entries(SEALED_COLUMNS)) {
+      const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{
+        name: string;
+        dflt_value: string | null;
+      }>();
+      for (const column of columns) {
+        const dflt = results.find((r) => r.name === column)?.dflt_value ?? null;
+        if (dflt !== null && dflt !== "''" && dflt.toUpperCase() !== 'NULL') {
+          found.push(`${table}.${column}`);
+        }
+      }
+    }
+    const listed = Object.entries(MUST_NAME_ON_INSERT).flatMap(([table, columns]) =>
+      columns.map((column) => `${table}.${column}`)
+    );
+    expect(found.sort()).toEqual(listed.sort());
   });
 });
 
