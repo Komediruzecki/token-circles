@@ -16,10 +16,26 @@ import {
 } from './field-crypto';
 
 const contextFor = (userId: number) => ({ kind: 'receipt' as const, userId });
-const SEALED_METADATA = {
-  httpMetadata: { contentType: 'application/octet-stream' },
-  customMetadata: { sealed: 'tce1' },
-};
+
+/**
+ * What a sealed object is stored with. `plainSize` is the opened length, so a download can declare
+ * its Content-Length up front: the decrypting stream itself has no known length, and a sealed
+ * receipt would otherwise always be sent chunked, with no progress for the client to show.
+ */
+function sealedMetadata(plainSize: number): R2PutOptions {
+  return {
+    httpMetadata: { contentType: 'application/octet-stream' },
+    customMetadata: { sealed: 'tce1', plainSize: String(plainSize) },
+  };
+}
+
+/** The plaintext length recorded when the object was sealed, or null if it carries none. */
+function plainSizeOf(obj: R2Object): number | null {
+  const raw = obj.customMetadata?.plainSize;
+  if (raw === undefined || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) ? n : null;
+}
 
 /**
  * Store a receipt. Sealed when the owner has a key, and a File is streamed through the cipher
@@ -48,9 +64,13 @@ export async function putReceipt(
       .stream()
       .pipeThrough(sealObjectStream(dek, contextFor(ownerId)))
       .pipeTo(writable);
-    await Promise.all([bucket.put(key, readable, SEALED_METADATA), pumped]);
+    await Promise.all([bucket.put(key, readable, sealedMetadata(body.size)), pumped]);
   } else {
-    await bucket.put(key, await sealBytes(dek, body, contextFor(ownerId)), SEALED_METADATA);
+    await bucket.put(
+      key,
+      await sealBytes(dek, body, contextFor(ownerId)),
+      sealedMetadata(body.length)
+    );
   }
   return 1;
 }
@@ -65,9 +85,13 @@ export async function receiptStream(
   if (enc !== 1) return obj.body;
   if (ownerId === null) throw new SealedValueError('receipt object: sealed, but nobody owns it');
   const dek = await ring.forRead(ownerId);
-  return (obj.body as ReadableStream<Uint8Array>).pipeThrough(
+  const opened = (obj.body as ReadableStream<Uint8Array>).pipeThrough(
     openObjectStream(dek, contextFor(ownerId))
   );
+  // A FixedLengthStream is what gives a streamed Response its Content-Length. If the opened bytes
+  // ever came out a different length, it errors the stream rather than send a wrong one.
+  const size = plainSizeOf(obj);
+  return size === null ? opened : opened.pipeThrough(new FixedLengthStream(size));
 }
 
 /** The whole object, opened — for the backup export, which base64s it anyway. */
@@ -103,6 +127,6 @@ export async function resealReceipt(
   const pumped = (obj.body as ReadableStream<Uint8Array>)
     .pipeThrough(sealObjectStream(dek, contextFor(ownerId)))
     .pipeTo(writable);
-  await Promise.all([bucket.put(toKey, readable, SEALED_METADATA), pumped]);
+  await Promise.all([bucket.put(toKey, readable, sealedMetadata(obj.size)), pumped]);
   return true;
 }
