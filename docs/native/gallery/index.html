@@ -1,0 +1,425 @@
+<!doctype html>
+<!--
+THESIS: A review room for the native Token Circles program, with evidence and images leading each decision.
+OWN-WORLD: Neutral research-paper chrome around the confirmed Observatory and Dawn app identity.
+STORY: Read the recommendation, compare three compositions, inspect costs, then record explicit decisions.
+FIRST VIEWPORT: Project title, status and reading links, followed by a large A concept board.
+FORM: Read/Experience research artifact. App composition remains pending; this page does not implement a mobile app.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Token Circles — Native app research</title>
+    <link rel="stylesheet" href="gallery.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to research</a>
+    <header class="masthead">
+      <a class="brand" href="../README.md"
+        ><img class="brand-mark" src="assets/token-circles.svg" width="34" height="34" alt="" />Token Circles</a
+      >
+      <span>Native app program <span class="separator">/</span> Research &amp; design review</span>
+    </header>
+    <main id="main">
+      <section class="intro" aria-labelledby="title">
+        <div>
+          <p class="status">Planning proposal · Decisions pending</p>
+          <h1>Your finances.<br />A native perspective.</h1>
+          <p class="lede">
+            One product, a purpose-built mobile experience. A plan for iOS and Android that keeps the local-first
+            foundation and gives every flow room to feel at home.
+          </p>
+        </div>
+        <div class="brief">
+          <p>
+            <strong>Keep the identity. Redesign the flow.</strong><br />Capacitor · SolidJS · TypeScript · Cloudflare<br />EU/EEA
+            and United States first.
+          </p>
+          <p>
+            Start with a coherent daily finance loop. Reuse tested logic, build a separate mobile interface, and advance
+            one accepted surface at a time.
+          </p>
+          <a class="link-button" href="../README.md">Read the master plan <span aria-hidden="true">↗</span></a
+          ><a class="text-link" href="../decisions.md">Open the decision checklist</a>
+        </div>
+      </section>
+      <nav class="sections" aria-label="Research sections">
+        <a href="#concepts">Concept boards</a><a href="#patterns">Native patterns</a
+        ><a href="#economics">Subscription economics</a><a href="#execution">Execution gates</a
+        ><a href="#sources">Research library</a>
+      </nav>
+
+      <section id="concepts" class="section" aria-labelledby="concept-title">
+        <div class="section-heading">
+          <div>
+            <p class="label">Composition review</p>
+            <h2 id="concept-title">Three ways into the same product.</h2>
+          </div>
+          <p>Generated design studies with synthetic data.<br />Each board shows three phones and a tablet.</p>
+        </div>
+        <div class="proposal">
+          <strong>Recommended:</strong> A's daily overview with B's transaction list and tablet detail layout. The
+          visual choice is pending. These boards test hierarchy; their generated text, icons, keyboard and dates are not
+          implementation specifications.
+        </div>
+        <figure id="concept-a">
+          <a class="board" href="assets/concept-a-daily-orbit.png" target="_blank" rel="noopener"
+            ><img
+              src="assets/concept-a-daily-orbit.png"
+              width="1536"
+              height="1024"
+              alt="Concept A, Daily orbit: dark orbital welcome, monthly budget overview, light expense editor with keyboard, and tablet budget list and detail."
+              fetchpriority="high"
+          /></a>
+          <figcaption>
+            <div>
+              <h3>A / Daily orbit</h3>
+              <p>
+                Budget context leads. A useful monthly relationship, fast expense entry and an expanded planning view.
+              </p>
+            </div>
+            <div>
+              <strong>Carry forward</strong>
+              <p>The welcome composition, amount-first entry and clear spent/limit/remaining relationship.</p>
+              <strong>Refine</strong>
+              <p>
+                Replace decorative timeline dots, generated glyphs and serif money-entry text. Avoid a stack of
+                dashboard cards.
+              </p>
+            </div>
+          </figcaption>
+        </figure>
+        <figure id="concept-b">
+          <a class="board" href="assets/concept-b-daily-ledger.png" target="_blank" rel="noopener"
+            ><img
+              src="assets/concept-b-daily-ledger.png"
+              width="1536"
+              height="1024"
+              alt="Concept B, Daily ledger: light orbital welcome, dark transaction list and overview, and a light tablet transaction list beside selected receipt details."
+              loading="lazy"
+          /></a>
+          <figcaption>
+            <div>
+              <h3>B / The daily ledger</h3>
+              <p>Transactions lead. A legible everyday list becomes a focused reconciliation workspace on a tablet.</p>
+            </div>
+            <div>
+              <strong>Carry forward</strong>
+              <p>Date grouping, aligned amounts and contextual detail. Keep the current task visible while editing.</p>
+              <strong>Refine</strong>
+              <p>
+                Use native operating typography. Rebuild receipt and transaction values from coherent fixtures; do not
+                inherit unverified actions.
+              </p>
+            </div>
+          </figcaption>
+        </figure>
+        <figure id="concept-c">
+          <a class="board" href="assets/concept-c-account-perspective.png" target="_blank" rel="noopener"
+            ><img
+              src="assets/concept-c-account-perspective.png"
+              width="1536"
+              height="1024"
+              alt="Concept C, Account perspective: dark welcome, light account overview, dark category budgets and a dark expanded tablet account overview."
+              loading="lazy"
+          /></a>
+          <figcaption>
+            <div>
+              <h3>C / Account perspective</h3>
+              <p>
+                Accounts lead. The relationship between balances, budget and recent activity is visible at a glance.
+              </p>
+            </div>
+            <div>
+              <strong>Carry forward</strong>
+              <p>Account hierarchy and the tablet context pane.</p>
+              <strong>Refine</strong>
+              <p>
+                Label balances precisely, avoid implying net worth or investment returns, and keep navigation stable.
+              </p>
+            </div>
+          </figcaption>
+        </figure>
+        <p class="small">
+          Open a board to inspect the full image. Original images are retained.
+          <a href="PROMPTS.md">Prompts and generation provenance</a> ·
+          <a href="../visual-research.md">Detailed critique and art production plan</a>
+        </p>
+      </section>
+
+      <section id="patterns" class="section" aria-labelledby="patterns-title">
+        <div class="section-heading">
+          <div>
+            <p class="label">Screen contracts</p>
+            <h2 id="patterns-title">Built around the task.</h2>
+          </div>
+          <p>Brand expression at entry.<br />Clarity wherever money changes.</p>
+        </div>
+        <div class="pattern-grid">
+          <article>
+            <h3>A useful first minute</h3>
+            <p>
+              Welcome → choose storage → create an account → record a transaction. Local use has no forced sign-in or
+              purchase. Cloud and self-hosted options explain where data goes.
+            </p>
+            <p class="small">
+              Local-first does not currently mean automatic offline cloud sync. Browser data does not silently appear in
+              native storage.
+            </p>
+          </article>
+          <article>
+            <h3>Four destinations. One action.</h3>
+            <p>
+              Overview, Transactions, Plan and More are the proposed destinations. Add transaction is a distinct action.
+              A tablet gains a rail and meaningful list/detail panes.
+            </p>
+            <p class="small">
+              Native back, keyboard, safe area, resume and assistive technology need real-device evidence.
+            </p>
+          </article>
+          <article>
+            <h3>A complete screen includes failure</h3>
+            <p>
+              Put empty, loading, offline, permission denied, unsaved, save failed and recovery states beside the
+              success state. A payment screen also needs restore and existing-subscriber paths.
+            </p>
+            <p class="small">
+              A generated frame is an idea. An accepted surface includes real content, state behavior and accessibility
+              checks.
+            </p>
+          </article>
+        </div>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Screen review table">
+          <table>
+            <caption>
+              First detailed phone and tablet review, after composition and scope approval
+            </caption>
+            <thead>
+              <tr>
+                <th>Surface group</th>
+                <th>Phone review</th>
+                <th>Expanded review</th>
+                <th>Important state</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Entry &amp; identity</td>
+                <td>Welcome, storage, setup, sign-in</td>
+                <td>Welcome split layout</td>
+                <td>Cancellation, recovery, existing local data</td>
+              </tr>
+              <tr>
+                <td>Daily finance</td>
+                <td>Overview, list, expense, detail, transfer</td>
+                <td>Transaction list/detail</td>
+                <td>Keyboard, failed save, pending draft</td>
+              </tr>
+              <tr>
+                <td>Planning</td>
+                <td>Accounts, budgets, category detail</td>
+                <td>Budget list/detail, overview</td>
+                <td>Over budget, no budget, empty account</td>
+              </tr>
+              <tr>
+                <td>Understand &amp; keep</td>
+                <td>Insights, receipts, export, backup</td>
+                <td>Chart and report selection</td>
+                <td>No data, denied permission, invalid import</td>
+              </tr>
+              <tr>
+                <td>Cloud &amp; control</td>
+                <td>Upgrade, manage, restore, settings, delete</td>
+                <td>Settings and subscription detail</td>
+                <td>Existing Stripe plan, revoked purchase</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><a href="../surface-plan.md">Read the complete feature and state inventory →</a></p>
+      </section>
+
+      <section id="economics" class="section" aria-labelledby="economics-title">
+        <div class="section-heading">
+          <div>
+            <p class="label">Commercial decision</p>
+            <h2 id="economics-title">Count what remains.</h2>
+          </div>
+          <p>Customer revenue ≠ proceeds ≠ profit.<br />Tax, fixed fees and purchase route matter.</p>
+        </div>
+        <p class="body-copy">
+          The proposed starting point is Stripe on the web, native subscriptions for new mobile buyers, and one
+          server-owned entitlement model. Existing web subscribers sign in and retain their plan. Regional external
+          payments need their own fee and compliance calculation.
+        </p>
+        <div class="table-wrap" tabindex="0" role="region" aria-label="Subscription economics table">
+          <table class="money">
+            <caption>
+              Illustrative proceeds per charge · EUR · prices include 25% VAT
+            </caption>
+            <thead>
+              <tr>
+                <th>Current plan price</th>
+                <th>Web Stripe</th>
+                <th>Native 15%</th>
+                <th>EU native 26%</th>
+                <th>Native 30%</th>
+                <th>External 10% + Stripe</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Basic · €3 monthly</td>
+                <td>€2.07</td>
+                <td>€2.04</td>
+                <td>€1.78</td>
+                <td>€1.68</td>
+                <td>€1.83</td>
+              </tr>
+              <tr>
+                <td>Basic · €30 annually</td>
+                <td>€22.94</td>
+                <td>€20.40</td>
+                <td>€17.76</td>
+                <td>€16.80</td>
+                <td>€20.54</td>
+              </tr>
+              <tr>
+                <td>Advanced · €6 monthly</td>
+                <td>€4.39</td>
+                <td>€4.08</td>
+                <td>€3.55</td>
+                <td>€3.36</td>
+                <td>€3.91</td>
+              </tr>
+              <tr>
+                <td>Advanced · €60 annually</td>
+                <td>€46.13</td>
+                <td>€40.80</td>
+                <td>€35.52</td>
+                <td>€33.60</td>
+                <td>€41.33</td>
+              </tr>
+              <tr>
+                <td>Ultimate · €10 monthly</td>
+                <td>€7.48</td>
+                <td>€6.80</td>
+                <td>€5.92</td>
+                <td>€5.60</td>
+                <td>€6.68</td>
+              </tr>
+              <tr>
+                <td>Ultimate · €100 annually</td>
+                <td>€77.05</td>
+                <td>€68.00</td>
+                <td>€59.20</td>
+                <td>€56.00</td>
+                <td>€69.05</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">
+          Scenario, not actual income. Stripe uses Croatian published standard EEA card fees: 1.5% + €0.25, plus 0.7%
+          Billing and 0.5% Tax. Native commissions are applied to ex-tax revenue; external routes add PSP costs.
+          Excludes middleware, refunds, FX, support, delivery and fixed costs. Store eligibility and accepted agreements
+          determine the applicable rate.
+          <a href="../research/subscriptions-and-economics.md">Sources, formulas, regional rules and all assumptions</a
+          >.
+        </p>
+        <div class="financial-links">
+          <a class="link-button" href="../outputs/native-subscription-economics.xlsx"
+            >Open the editable economics workbook <span aria-hidden="true">↗</span></a
+          >
+          <p>
+            Change tax, fees, prices and operating assumptions. Annual receipts fund twelve months of service; cash
+            collected is not monthly profit.
+          </p>
+        </div>
+        <p class="body-copy">
+          <strong>Policy checkpoint:</strong> Apple EU and Google US have material changes effective October 1, 2026. EU
+          is not identical to EEA. US Apple external links do not establish a guaranteed permanent zero platform fee.
+          Recheck the actual agreements before implementation and submission.
+          <a href="../research/subscriptions-and-economics.md#purchase-policy-decision-matrix"
+            >Read the regional matrix</a
+          >.
+        </p>
+      </section>
+
+      <section id="execution" class="section" aria-labelledby="execution-title">
+        <div class="section-heading">
+          <div>
+            <p class="label">Execution</p>
+            <h2 id="execution-title">Progress by accepted evidence.</h2>
+          </div>
+          <p>No deadlines or duration estimates.<br />One coherent phase at a time.</p>
+        </div>
+        <ol class="phases" start="0">
+          <li>
+            <h3>Research and decisions</h3>
+            <p>Actual product, reference architectures, fee model, scope and storage promise.</p>
+          </li>
+          <li>
+            <h3>Design contracts</h3>
+            <p>Selected composition, detailed phone/tablet frames and all material states.</p>
+          </li>
+          <li>
+            <h3>Native scaffold</h3>
+            <p>Independent mobile package, platform projects, native lifecycle and unsigned build evidence.</p>
+          </li>
+          <li>
+            <h3>Reusable foundations</h3>
+            <p>Small tested domain extractions, storage/runtime ports and secure native identity.</p>
+          </li>
+          <li>
+            <h3>Complete daily finance loop</h3>
+            <p>Accounts, transactions, transfers, overview, budgets and backup.</p>
+          </li>
+          <li>
+            <h3>Cloud, billing and V1 coverage</h3>
+            <p>Existing subscribers, verified purchases, receipts, analytics and approved parity work.</p>
+          </li>
+          <li>
+            <h3>Store readiness</h3>
+            <p>Real device evidence, listing assets, disclosures and explicit publication approval.</p>
+          </li>
+        </ol>
+        <p><a href="../README.md#execution-phases">Read each phase's exit gates →</a></p>
+      </section>
+
+      <section id="sources" class="section" aria-labelledby="sources-title">
+        <div class="section-heading">
+          <div>
+            <p class="label">Research library</p>
+            <h2 id="sources-title">The evidence stays with the plan.</h2>
+          </div>
+        </div>
+        <div class="library">
+          <a href="../research/product-audit.md"
+            ><strong>Product audit</strong><span>Current code, feature truth, prices and gaps</span></a
+          ><a href="../research/reference-architecture.md"
+            ><strong>Sibling applications</strong><span>MercuryPitch, BesideCue and Chaos Master</span></a
+          ><a href="../architecture.md"
+            ><strong>Architecture</strong><span>Package boundaries, data and native runtime</span></a
+          ><a href="../authentication.md"
+            ><strong>Authentication</strong><span>Apple, Google, email and native sessions</span></a
+          ><a href="../research/subscriptions-and-economics.md"
+            ><strong>Subscriptions</strong><span>Primary policy sources and cost formulas</span></a
+          ><a href="../visual-research.md"
+            ><strong>Visual references</strong><span>Mobbin links, native guidance and critique</span></a
+          ><a href="../release-checklist.md"
+            ><strong>Release checklist</strong><span>Device, privacy, billing and review gates</span></a
+          ><a href="../decisions.md"
+            ><strong>Decision register</strong><span>Explicit approvals and unresolved choices</span></a
+          >
+        </div>
+      </section>
+    </main>
+    <footer>
+      <span>Token Circles native program</span
+      ><span>Research accessed September 13, 2026 · <a href="../verification.md">Verification record</a></span>
+    </footer>
+  </body>
+</html>

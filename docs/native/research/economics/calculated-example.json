@@ -1,0 +1,120 @@
+{
+  "asOf": "2026-09-13",
+  "basis": "Default editable assumptions, before RevenueCat and operating expenses",
+  "prices": [
+    {
+      "plan": "Basic",
+      "interval": "Monthly",
+      "months": 1,
+      "listPrice": 3,
+      "grossCollected": 3,
+      "proceedsByChannel": {
+        "Native reduced / Play": 2.04,
+        "Apple EU native standard": 1.7759999999999998,
+        "Apple ordinary standard": 1.68,
+        "Web Stripe EEA card": 2.069,
+        "Web Stripe international": 2.0195,
+        "Alternative reduced EEA": 1.829,
+        "Apple EU in-app standard": 1.589,
+        "Apple EU link standard": 1.7089999999999999,
+        "Play US alternative": 1.7794999999999999,
+        "US iOS link sensitivity": 2.0195
+      }
+    },
+    {
+      "plan": "Basic",
+      "interval": "Annual",
+      "months": 12,
+      "listPrice": 30,
+      "grossCollected": 30,
+      "proceedsByChannel": {
+        "Native reduced / Play": 20.4,
+        "Apple EU native standard": 17.759999999999998,
+        "Apple ordinary standard": 16.8,
+        "Web Stripe EEA card": 22.94,
+        "Web Stripe international": 22.445,
+        "Alternative reduced EEA": 20.54,
+        "Apple EU in-app standard": 18.14,
+        "Apple EU link standard": 19.34,
+        "Play US alternative": 20.044999999999998,
+        "US iOS link sensitivity": 22.445
+      }
+    },
+    {
+      "plan": "Advanced",
+      "interval": "Monthly",
+      "months": 1,
+      "listPrice": 6,
+      "grossCollected": 6,
+      "proceedsByChannel": {
+        "Native reduced / Play": 4.08,
+        "Apple EU native standard": 3.5519999999999996,
+        "Apple ordinary standard": 3.36,
+        "Web Stripe EEA card": 4.388,
+        "Web Stripe international": 4.289,
+        "Alternative reduced EEA": 3.908,
+        "Apple EU in-app standard": 3.428,
+        "Apple EU link standard": 3.6679999999999997,
+        "Play US alternative": 3.8089999999999997,
+        "US iOS link sensitivity": 4.289
+      }
+    },
+    {
+      "plan": "Advanced",
+      "interval": "Annual",
+      "months": 12,
+      "listPrice": 60,
+      "grossCollected": 60,
+      "proceedsByChannel": {
+        "Native reduced / Play": 40.8,
+        "Apple EU native standard": 35.519999999999996,
+        "Apple ordinary standard": 33.6,
+        "Web Stripe EEA card": 46.13,
+        "Web Stripe international": 45.14,
+        "Alternative reduced EEA": 41.33,
+        "Apple EU in-app standard": 36.53,
+        "Apple EU link standard": 38.93,
+        "Play US alternative": 40.339999999999996,
+        "US iOS link sensitivity": 45.14
+      }
+    },
+    {
+      "plan": "Ultimate",
+      "interval": "Monthly",
+      "months": 1,
+      "listPrice": 10,
+      "grossCollected": 10,
+      "proceedsByChannel": {
+        "Native reduced / Play": 6.8,
+        "Apple EU native standard": 5.92,
+        "Apple ordinary standard": 5.6,
+        "Web Stripe EEA card": 7.48,
+        "Web Stripe international": 7.3149999999999995,
+        "Alternative reduced EEA": 6.68,
+        "Apple EU in-app standard": 5.880000000000001,
+        "Apple EU link standard": 6.279999999999999,
+        "Play US alternative": 6.515,
+        "US iOS link sensitivity": 7.3149999999999995
+      }
+    },
+    {
+      "plan": "Ultimate",
+      "interval": "Annual",
+      "months": 12,
+      "listPrice": 100,
+      "grossCollected": 100,
+      "proceedsByChannel": {
+        "Native reduced / Play": 68,
+        "Apple EU native standard": 59.2,
+        "Apple ordinary standard": 56,
+        "Web Stripe EEA card": 77.05,
+        "Web Stripe international": 75.4,
+        "Alternative reduced EEA": 69.05,
+        "Apple EU in-app standard": 61.05,
+        "Apple EU link standard": 65.05,
+        "Play US alternative": 67.4,
+        "US iOS link sensitivity": 75.4
+      }
+    }
+  ]
+}
