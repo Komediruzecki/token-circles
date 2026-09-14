@@ -25,15 +25,15 @@
   },
   "dependencies": {
     "@simplewebauthn/server": "^14.0.0",
-    "hono": "^4.13.5",
+    "hono": "^4.13.7",
     "pdf-lib": "^1.17.1",
     "postal-mime": "^3.0.0",
     "xlsx": "file:../vendor/xlsx-0.20.3.tgz",
-    "zod": "^4.5.4"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.22.0",
-    "@cloudflare/workers-types": "^5.20260904.1",
+    "@cloudflare/workers-types": "^5.20260911.1",
     "typescript": "^5.7.2",
     "vitest": "4.1.11",
     "wrangler": "4.126.0"
