@@ -430,6 +430,34 @@ export default function Settings() {
   // the page, so reading this non-reactively is enough.
   const visibleTabs = (): typeof tabs => tabs.filter((t) => isTabVisible(t.id, getStorageMode()))
 
+  interface BankAccount {
+    id: string
+    name: string
+    currency: string
+    type: string
+    iban?: string | null
+  }
+  interface BankSessionInfo {
+    connected: boolean
+    aspspName?: string
+    expiresAt?: number
+    accounts?: BankAccount[]
+  }
+  const [bankSession, setBankSession] = createSignal<BankSessionInfo | null>(null)
+  const [bankSyncing, setBankSyncing] = createSignal(false)
+
+  const loadBankSession = async () => {
+    if (getStorageMode() === 'serverless') return
+    try {
+      const res = await apiFetch('/api/imports/enablebanking/session')
+      if (res.ok) {
+        setBankSession(await res.json())
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
   // then consume it so re-entering Settings later does not force the tab again.
   createEffect(() => {
@@ -753,6 +781,7 @@ export default function Settings() {
     if (storageMode() === 'self-hosted') {
       void loadBilling()
       void loadNotifications()
+      void loadBankSession()
       // Who am I signed in as (shown in the About card).
       void apiFetch('/api/auth/me', { credentials: 'include' })
         .then(async (res) => {
@@ -1205,105 +1234,159 @@ export default function Settings() {
 
               <div class={styles.card}>
                 <CardHead
-                  icon={<IconSun />}
+                  icon={<IconServer />}
                   title="Bank Sync (Enable Banking)"
                   desc="Connect your bank account to automatically import transactions (Requires PSD2/AISP)."
                 />
-                <button
-                  type="button"
-                  class={styles.btnPrimary}
-                  onClick={async () => {
-                    try {
-                      const res = await apiFetch('/api/imports/enablebanking/auth-url', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          aspspName: 'Mock ASPSP',
-                          redirectUri: `${window.location.origin}/bank-callback`,
-                        }),
-                      })
-                      if (!res.ok)
-                        throw new Error((await res.json()).error || 'Failed to start authorization')
-                      const { url } = await res.json()
-                      window.location.href = url
-                    } catch (e: any) {
-                      toast(`Failed to connect: ${e.message}`, 'error')
-                    }
-                  }}
-                >
-                  Connect Mock ASPSP (Sandbox)
-                </button>
-              </div>
-              <div class={styles.card} data-tour="settings-theme">
-                <CardHead
-                  icon={<IconServer />}
-                  title="Enable Banking Sandbox Test"
-                  desc={
-                    getStorageMode() === 'serverless'
-                      ? '⚠️ Enable Banking requires the secure backend (Self-Hosted mode). It will not work in Local mode.'
-                      : 'Test fetching data from Mock ASPSP after you have connected.'
+
+                <Show
+                  when={getStorageMode() !== 'serverless'}
+                  fallback={
+                    <div style="padding: 0.75rem; border-radius: 6px; background-color: rgba(239, 68, 68, 0.1); color: var(--text-secondary); font-size: 0.875rem;">
+                      Enable Banking requires the secure backend (Self-Hosted mode). It is
+                      unavailable in Local mode.
+                    </div>
                   }
-                />
-
-                <div
-                  class={styles.row}
-                  style="flex-direction: column; align-items: stretch; gap: 0.5rem;"
                 >
-                  <label class={styles.rowLabel}>Session ID</label>
-                  <input
-                    type="text"
-                    id="mock-session-id"
-                    class="form-input"
-                    placeholder="Enter the session_id"
-                  />
-
-                  <label class={styles.rowLabel} style="margin-top: 0.5rem;">
-                    Account ID
-                  </label>
-                  <input
-                    type="text"
-                    id="mock-account-id"
-                    class="form-input"
-                    placeholder="Enter the account_id"
-                  />
-
-                  <button
-                    class="btn-primary"
-                    style="margin-top: 1rem; align-self: flex-start;"
-                    disabled={getStorageMode() === 'serverless'}
-                    onClick={async () => {
-                      const sessionId = (
-                        document.getElementById('mock-session-id') as HTMLInputElement
-                      ).value
-                      const accountId = (
-                        document.getElementById('mock-account-id') as HTMLInputElement
-                      ).value
-                      if (!sessionId || !accountId) {
-                        toast('Please provide both session ID and account ID', 'error')
-                        return
-                      }
-
-                      try {
-                        const res = await apiFetch('/api/imports/enablebanking/transactions', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ accountId, sessionId }),
-                        })
-                        const data = await res.json()
-                        console.info('Sample Data from Mock ASPSP:', data)
-                        if (data.error) {
-                          toast(`Error: ${data.error}`, 'error')
-                        } else {
-                          toast('Data pulled! Check the browser console.', 'success')
-                        }
-                      } catch (e: any) {
-                        toast(`Error: ${e.message}`, 'error')
-                      }
-                    }}
+                  <Show
+                    when={bankSession()?.connected}
+                    fallback={
+                      <div class={styles.row}>
+                        <div class={styles.rowText}>
+                          <span class={styles.rowLabel}>Mock ASPSP Sandbox</span>
+                          <span class={styles.rowDesc}>
+                            Connect to simulation sandbox to test account and transaction retrieval.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          class={styles.btnPrimary}
+                          onClick={async () => {
+                            try {
+                              const res = await apiFetch('/api/imports/enablebanking/auth-url', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  aspspName: 'Mock ASPSP',
+                                  redirectUri: `${window.location.origin}/bank-callback`,
+                                }),
+                              })
+                              if (!res.ok) {
+                                const errData = await res.json().catch(() => ({}))
+                                throw new Error(errData.error || 'Failed to start authorization')
+                              }
+                              const { url } = await res.json()
+                              window.location.href = url
+                            } catch (e: any) {
+                              toast(`Failed to connect: ${e.message}`, 'error')
+                            }
+                          }}
+                        >
+                          Connect Bank (Mock ASPSP)
+                        </button>
+                      </div>
+                    }
                   >
-                    Test Sync Data
-                  </button>
-                </div>
+                    <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+                      <div
+                        class={styles.row}
+                        style="justify-content: space-between; align-items: center;"
+                      >
+                        <div>
+                          <span class={styles.rowLabel} style="font-weight: 600;">
+                            {bankSession()?.aspspName || 'Connected Bank'}
+                          </span>
+                          <div class={styles.rowDesc} style="margin-top: 0.25rem;">
+                            Session active
+                            {bankSession()?.expiresAt
+                              ? ` - valid until ${new Date(bankSession()!.expiresAt! * 1000).toLocaleDateString()}`
+                              : ''}
+                          </div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                          <button
+                            type="button"
+                            class={styles.btnPrimary}
+                            disabled={bankSyncing()}
+                            onClick={async () => {
+                              setBankSyncing(true)
+                              try {
+                                const res = await apiFetch('/api/imports/enablebanking/sync', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                })
+                                const data = await res.json()
+                                if (!res.ok || data.error) {
+                                  throw new Error(data.error || 'Sync failed')
+                                }
+                                const count = Array.isArray(data.transactions)
+                                  ? data.transactions.length
+                                  : 0
+                                toast(
+                                  `Sync successful: retrieved ${count} transactions.`,
+                                  'success'
+                                )
+                              } catch (e: any) {
+                                toast(`Sync failed: ${e.message}`, 'error')
+                              } finally {
+                                setBankSyncing(false)
+                              }
+                            }}
+                          >
+                            {bankSyncing() ? 'Syncing...' : 'Sync Transactions'}
+                          </button>
+                          <button
+                            type="button"
+                            class={styles.btnSecondary}
+                            onClick={async () => {
+                              try {
+                                const res = await apiFetch('/api/imports/enablebanking/session', {
+                                  method: 'DELETE',
+                                })
+                                if (res.ok) {
+                                  toast('Bank disconnected.', 'info')
+                                  void loadBankSession()
+                                }
+                              } catch {
+                                toast('Failed to disconnect bank.', 'error')
+                              }
+                            }}
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      </div>
+
+                      <Show when={bankSession()?.accounts && bankSession()!.accounts!.length > 0}>
+                        <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 0.75rem;">
+                          <div
+                            class={styles.rowLabel}
+                            style="font-size: 0.85rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);"
+                          >
+                            Discovered Accounts
+                          </div>
+                          <For each={bankSession()?.accounts}>
+                            {(acc) => (
+                              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem;">
+                                <div>
+                                  <strong>{acc.name}</strong>
+                                  <Show when={acc.iban}>
+                                    <span style="margin-left: 0.5rem; color: var(--text-secondary); font-family: monospace;">
+                                      {acc.iban}
+                                    </span>
+                                  </Show>
+                                </div>
+                                <span style="background: rgba(0, 0, 0, 0.05); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
+                                  {acc.currency} ({acc.type})
+                                </span>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </Show>
               </div>
 
               <div class={styles.card} data-tour="settings-theme">

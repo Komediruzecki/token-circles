@@ -90,6 +90,23 @@ export class EnableBankingClient {
     return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
   }
 
+  private static async handleApiError(res: Response, context: string): Promise<never> {
+    const text = await res.text();
+    let message = text;
+    try {
+      const data = JSON.parse(text);
+      if (data.error === 'ALREADY_AUTHORIZED') {
+        message =
+          'This bank session authorization has already been processed or expired. Please restart authorization.';
+      } else {
+        message = data.message || data.error || text;
+      }
+    } catch {
+      // Use raw text if not JSON
+    }
+    throw new Error(`${context}: ${res.status} - ${message}`);
+  }
+
   async getASPSPs(country = 'HR') {
     const jwt = await this.generateJWT();
     const res = await fetch(`https://api.enablebanking.com/aspsps?country=${country}`, {
@@ -99,7 +116,7 @@ export class EnableBankingClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Enable Banking API error: ${res.status} ${await res.text()}`);
+      await EnableBankingClient.handleApiError(res, 'Failed to fetch banks');
     }
     return res.json();
   }
@@ -129,7 +146,7 @@ export class EnableBankingClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Enable Banking Auth error: ${res.status} ${await res.text()}`);
+      await EnableBankingClient.handleApiError(res, 'Failed to start authorization');
     }
     return res.json();
   }
@@ -149,7 +166,7 @@ export class EnableBankingClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Enable Banking Sessions error: ${res.status} ${await res.text()}`);
+      await EnableBankingClient.handleApiError(res, 'Bank authorization failed');
     }
     return res.json();
   }
@@ -164,7 +181,7 @@ export class EnableBankingClient {
     });
 
     if (!res.ok) {
-      throw new Error(`Enable Banking Balances error: ${res.status} ${await res.text()}`);
+      await EnableBankingClient.handleApiError(res, 'Failed to fetch balances');
     }
     return res.json();
   }
@@ -188,7 +205,7 @@ export class EnableBankingClient {
     );
 
     if (!res.ok) {
-      throw new Error(`Enable Banking Transactions error: ${res.status} ${await res.text()}`);
+      await EnableBankingClient.handleApiError(res, 'Failed to fetch transactions');
     }
     return res.json();
   }

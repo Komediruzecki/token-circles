@@ -44,9 +44,106 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
 export const importRoutes = new Hono<AppEnv>();
 
+importRoutes.get('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const session = await c.env.DB.prepare(
+    'SELECT id, aspsp_name, session_id, accounts, expires_at, updated_at FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(profileId)
+    .first<{
+      id: string;
+      aspsp_name: string;
+      session_id: string;
+      accounts: string;
+      expires_at: number;
+      updated_at: string;
+    }>();
+
+  if (!session) {
+    return c.json({ connected: false });
+  }
+
+  let parsedAccounts: any[] = [];
+  try {
+    parsedAccounts = JSON.parse(session.accounts);
+  } catch {
+    parsedAccounts = [];
+  }
+
+  return c.json({
+    connected: true,
+    aspspName: session.aspsp_name,
+    expiresAt: session.expires_at,
+    accounts: parsedAccounts.map((acc: any) => ({
+      id: acc.uid || acc.resource_id,
+      name: acc.name || 'Bank Account',
+      currency: acc.currency || 'EUR',
+      type: acc.cash_account_type || 'CHECKING',
+      iban: acc.account_id?.iban || null,
+    })),
+  });
+});
+
+importRoutes.delete('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  await c.env.DB.prepare('DELETE FROM bank_sessions WHERE profile_id = ?').bind(profileId).run();
+  return c.json({ success: true });
+});
+
+importRoutes.post('/api/imports/enablebanking/sync', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const session = await c.env.DB.prepare(
+    'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(profileId)
+    .first<{ session_id: string; accounts: string }>();
+
+  if (!session) {
+    return c.json({ error: 'No active bank session found. Please connect your bank first.' }, 400);
+  }
+
+  let accounts: any[] = [];
+  try {
+    accounts = JSON.parse(session.accounts);
+  } catch {
+    accounts = [];
+  }
+
+  if (!accounts.length) {
+    return c.json({ error: 'No bank accounts found in this session.' }, 400);
+  }
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+  if (!pem || !appId) return c.json({ error: 'Enable Banking is not configured' }, 500);
+
+  const client = await EnableBankingClient.create(appId, pem);
+  const body = (await c.req.json().catch(() => ({}))) as any;
+  const targetAccountId = body.accountId || accounts[0].uid || accounts[0].resource_id;
+
+  try {
+    const transactionsData = await client.getTransactions(
+      session.session_id,
+      targetAccountId,
+      body.dateFrom,
+      body.dateTo
+    );
+    const balancesData = await client.getBalances(session.session_id, targetAccountId);
+    return c.json({
+      success: true,
+      accountId: targetAccountId,
+      transactions: transactionsData.transactions || transactionsData,
+      balances: balancesData.balances || balancesData,
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async (c) => {
   const profileId = await getProfileId(c);
-  const { accountId, sessionId, dateFrom, dateTo } = await c.req.json();
+  const { accountId, sessionId, dateFrom, dateTo } = await c.req.json().catch(() => ({}));
 
   const env = c.env as any;
   const pem = env.ENABLE_BANKING_PRIVATE_KEY;
@@ -56,10 +153,45 @@ importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async 
     return c.json({ error: 'Enable Banking is not configured' }, 500);
   }
 
+  // Fallback to active session in database if not explicitly provided
+  let effectiveSessionId = sessionId;
+  let effectiveAccountId = accountId;
+
+  if (!effectiveSessionId || !effectiveAccountId) {
+    const session = await c.env.DB.prepare(
+      'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+    )
+      .bind(profileId)
+      .first<{ session_id: string; accounts: string }>();
+
+    if (session) {
+      effectiveSessionId = effectiveSessionId || session.session_id;
+      if (!effectiveAccountId) {
+        try {
+          const accs = JSON.parse(session.accounts);
+          if (accs.length > 0) {
+            effectiveAccountId = accs[0].uid || accs[0].resource_id;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+
+  if (!effectiveSessionId || !effectiveAccountId) {
+    return c.json({ error: 'No active session or account ID found' }, 400);
+  }
+
   try {
     const client = await EnableBankingClient.create(appId, pem);
-    const transactions = await client.getTransactions(sessionId, accountId, dateFrom, dateTo);
-    const balances = await client.getBalances(sessionId, accountId);
+    const transactions = await client.getTransactions(
+      effectiveSessionId,
+      effectiveAccountId,
+      dateFrom,
+      dateTo
+    );
+    const balances = await client.getBalances(effectiveSessionId, effectiveAccountId);
 
     return c.json({ success: true, transactions, balances });
   } catch (err: any) {
@@ -78,7 +210,6 @@ importRoutes.post('/api/imports/enablebanking/auth-url', requireAuth, async (c) 
 
   try {
     const client = await EnableBankingClient.create(appId, pem);
-    // pass a random state or profileId
     const state = profileId.toString();
     const result = await client.startAuthorization(aspspName, redirectUri, state);
     return c.json(result);
@@ -112,13 +243,7 @@ importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) 
        expires_at = excluded.expires_at,
        updated_at = current_timestamp`
     )
-      .bind(
-        profileId,
-        'Mock ASPSP', // We'd want to track which aspsp this is for, ideally via state or by storing it first.
-        result.session_id,
-        JSON.stringify(result.accounts),
-        expiresAt
-      )
+      .bind(profileId, 'Mock ASPSP', result.session_id, JSON.stringify(result.accounts), expiresAt)
       .run();
 
     return c.json({ success: true, accounts: result.accounts, session_id: result.session_id });

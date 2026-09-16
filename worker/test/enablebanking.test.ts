@@ -38,4 +38,69 @@ describe('Enable Banking APIs', () => {
     });
     expect(res.status).toBe(401);
   });
+
+  it('GET /api/imports/enablebanking/session returns connected: false when no session exists', async () => {
+    const res = await SELF.fetch('https://example.com/api/imports/enablebanking/session', {
+      method: 'GET',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID },
+    });
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as any;
+    expect(data.connected).toBe(false);
+  });
+
+  it('GET and DELETE /api/imports/enablebanking/session manage stored bank sessions', async () => {
+    // Seed a mock session in DB
+    await env.DB.prepare(
+      `INSERT INTO bank_sessions (id, profile_id, aspsp_name, session_id, accounts, expires_at)
+       VALUES ('test-sess-1', ?, 'Mock ASPSP', 'sess-123', ?, 1999999999)`
+    )
+      .bind(
+        Number(PROFILE_ID),
+        JSON.stringify([
+          {
+            uid: 'acc-uuid-1',
+            name: 'Aino Virtanen',
+            currency: 'EUR',
+            cash_account_type: 'CARD',
+          },
+        ])
+      )
+      .run();
+
+    const getRes = await SELF.fetch('https://example.com/api/imports/enablebanking/session', {
+      method: 'GET',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID },
+    });
+    expect(getRes.status).toBe(200);
+    const getData = (await getRes.json()) as any;
+    expect(getData.connected).toBe(true);
+    expect(getData.aspspName).toBe('Mock ASPSP');
+    expect(getData.accounts).toHaveLength(1);
+    expect(getData.accounts[0].id).toBe('acc-uuid-1');
+
+    const delRes = await SELF.fetch('https://example.com/api/imports/enablebanking/session', {
+      method: 'DELETE',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID },
+    });
+    expect(delRes.status).toBe(200);
+
+    const checkRes = await SELF.fetch('https://example.com/api/imports/enablebanking/session', {
+      method: 'GET',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID },
+    });
+    const checkData = (await checkRes.json()) as any;
+    expect(checkData.connected).toBe(false);
+  });
+
+  it('POST /api/imports/enablebanking/sync returns 400 if no active session', async () => {
+    const res = await SELF.fetch('https://example.com/api/imports/enablebanking/sync', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const data = (await res.json()) as any;
+    expect(data.error).toContain('No active bank session found');
+  });
 });

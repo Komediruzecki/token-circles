@@ -3,6 +3,27 @@ import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { setPage } from '../core/appStore'
 
+function humanizeError(rawError: string | null): string {
+  if (!rawError) return 'An unexpected error occurred during bank connection.'
+  if (rawError.includes('ALREADY_AUTHORIZED') || rawError.includes('already authorized')) {
+    return 'This bank authorization link has already been used or has expired. Please initiate a new connection from Settings.'
+  }
+  if (rawError.includes('access_denied') || rawError.includes('Cancelled by user')) {
+    return 'Bank connection was cancelled.'
+  }
+  // Strip raw JSON wrapping if present
+  try {
+    const jsonMatch = rawError.match(/\{.*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      if (parsed.message) return parsed.message
+    }
+  } catch {
+    // Ignore JSON parse errors and return original
+  }
+  return rawError
+}
+
 async function authorizeSession(code: string) {
   const res = await apiFetch('/api/imports/enablebanking/callback', {
     method: 'POST',
@@ -27,6 +48,8 @@ export default function BankCallback() {
   onMount(() => {
     if (code && !err) {
       setAuthCode(code)
+      // Wipe the query params from the URL immediately to avoid re-submitting an already-used one-time code
+      window.history.replaceState(null, '', '/#bankCallback')
     }
   })
 
@@ -40,6 +63,12 @@ export default function BankCallback() {
     }
   })
 
+  const errorMessage = () => {
+    if (err) return humanizeError(errDesc || err)
+    if (resource.error) return humanizeError(resource.error.message)
+    return null
+  }
+
   return (
     <div
       style={{ padding: '2rem', 'max-width': '600px', margin: '0 auto', 'text-align': 'center' }}
@@ -49,30 +78,22 @@ export default function BankCallback() {
         <p>Please wait while we establish a secure connection...</p>
       </Show>
 
-      <Show when={err}>
+      <Show when={errorMessage()}>
         <div
-          style={{ color: 'red', 'margin-top': '1rem', padding: '1rem', border: '1px solid red' }}
-        >
-          Bank authorization failed: {errDesc || err}
-        </div>
-        <button
-          style={{ 'margin-top': '1rem', padding: '0.5rem 1rem' }}
-          onClick={() => {
-            setPage('settings')
+          style={{
+            color: 'var(--color-danger, #ef4444)',
+            'margin-top': '1.5rem',
+            padding: '1rem',
+            border: '1px solid var(--color-danger, #ef4444)',
+            'border-radius': '8px',
+            'background-color': 'rgba(239, 68, 68, 0.05)',
+            'line-height': '1.5',
           }}
         >
-          Return to Settings
-        </button>
-      </Show>
-
-      <Show when={resource.error}>
-        <div
-          style={{ color: 'red', 'margin-top': '1rem', padding: '1rem', border: '1px solid red' }}
-        >
-          {resource.error.message}
+          {errorMessage()}
         </div>
         <button
-          style={{ 'margin-top': '1rem', padding: '0.5rem 1rem' }}
+          style={{ 'margin-top': '1.5rem', padding: '0.5rem 1.25rem', cursor: 'pointer' }}
           onClick={() => {
             setPage('settings')
           }}
