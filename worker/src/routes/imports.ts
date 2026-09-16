@@ -1,3 +1,4 @@
+import { EnableBankingClient } from '../enableBankingClient';
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
@@ -42,6 +43,89 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 //   - the XLSX fallback branch of /googlesheet (when CSV export isn't available) also
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
 export const importRoutes = new Hono<AppEnv>();
+
+importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { accountId, sessionId, dateFrom, dateTo } = await c.req.json();
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+
+  if (!pem || !appId) {
+    return c.json({ error: 'Enable Banking is not configured' }, 500);
+  }
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    const transactions = await client.getTransactions(sessionId, accountId, dateFrom, dateTo);
+    const balances = await client.getBalances(sessionId, accountId);
+
+    return c.json({ success: true, transactions, balances });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+importRoutes.post('/api/imports/enablebanking/auth-url', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { aspspName, redirectUri } = await c.req.json();
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+  if (!pem || !appId) return c.json({ error: 'Not configured' }, 500);
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    // pass a random state or profileId
+    const state = profileId.toString();
+    const result = await client.startAuthorization(aspspName, redirectUri, state);
+    return c.json(result);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { code } = await c.req.json();
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+  if (!pem || !appId) return c.json({ error: 'Not configured' }, 500);
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    const result = (await client.authorizeSession(code)) as any;
+
+    // store session in DB
+    const expiresAt =
+      Math.floor(Date.now() / 1000) + (result.valid_until - Math.floor(Date.now() / 1000));
+    await c.env.DB.prepare(
+      `INSERT INTO bank_sessions (id, profile_id, aspsp_name, session_id, accounts, expires_at)
+       VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
+       ON CONFLICT(profile_id, aspsp_name) DO UPDATE SET
+       session_id = excluded.session_id,
+       accounts = excluded.accounts,
+       expires_at = excluded.expires_at,
+       updated_at = current_timestamp`
+    )
+      .bind(
+        profileId,
+        'Mock ASPSP', // We'd want to track which aspsp this is for, ideally via state or by storing it first.
+        result.session_id,
+        JSON.stringify(result.accounts),
+        expiresAt
+      )
+      .run();
+
+    return c.json({ success: true, accounts: result.accounts, session_id: result.session_id });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
 
 // ── getCategoryIcon — ported verbatim from backend/utils.js ───────────────────
 // Maps a category name to an icon key when /execute auto-creates a category.

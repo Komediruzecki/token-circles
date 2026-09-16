@@ -421,7 +421,13 @@ export function App() {
     }
 
     // Parse initial hash from URL (supports #pagename?param=value)
-    const initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
+    let initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
+
+    // Intercept OAuth redirects to non-hash paths
+    if (window.location.pathname === '/bank-callback') {
+      initialPage = 'bankCallback'
+    }
+
     if (initialPage) setActivePage(initialPage)
 
     // (Quick Add categories load reactively via the profileVersion effect above.)

@@ -238,6 +238,25 @@ function Svg(props: { children: JSX.Element }) {
 }
 
 // Rail (navigation) icons — reuse the approved mockup's paths.
+const IconServer = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+  </svg>
+)
+
 const IconGeneral = () => (
   <Svg>
     <path d="M4 6h16M4 12h16M4 18h16" />
@@ -1183,6 +1202,110 @@ export default function Settings() {
                   <InstallAppButton />
                 </div>
               </Show>
+
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconSun />}
+                  title="Bank Sync (Enable Banking)"
+                  desc="Connect your bank account to automatically import transactions (Requires PSD2/AISP)."
+                />
+                <button
+                  type="button"
+                  class={styles.btnPrimary}
+                  onClick={async () => {
+                    try {
+                      const res = await apiFetch('/api/imports/enablebanking/auth-url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          aspspName: 'Mock ASPSP',
+                          redirectUri: `${window.location.origin}/bank-callback`,
+                        }),
+                      })
+                      if (!res.ok)
+                        throw new Error((await res.json()).error || 'Failed to start authorization')
+                      const { url } = await res.json()
+                      window.location.href = url
+                    } catch (e: any) {
+                      toast(`Failed to connect: ${e.message}`, 'error')
+                    }
+                  }}
+                >
+                  Connect Mock ASPSP (Sandbox)
+                </button>
+              </div>
+              <div class={styles.card} data-tour="settings-theme">
+                <CardHead
+                  icon={<IconServer />}
+                  title="Enable Banking Sandbox Test"
+                  desc={
+                    getStorageMode() === 'serverless'
+                      ? '⚠️ Enable Banking requires the secure backend (Self-Hosted mode). It will not work in Local mode.'
+                      : 'Test fetching data from Mock ASPSP after you have connected.'
+                  }
+                />
+
+                <div
+                  class={styles.row}
+                  style="flex-direction: column; align-items: stretch; gap: 0.5rem;"
+                >
+                  <label class={styles.rowLabel}>Session ID</label>
+                  <input
+                    type="text"
+                    id="mock-session-id"
+                    class="form-input"
+                    placeholder="Enter the session_id"
+                  />
+
+                  <label class={styles.rowLabel} style="margin-top: 0.5rem;">
+                    Account ID
+                  </label>
+                  <input
+                    type="text"
+                    id="mock-account-id"
+                    class="form-input"
+                    placeholder="Enter the account_id"
+                  />
+
+                  <button
+                    class="btn-primary"
+                    style="margin-top: 1rem; align-self: flex-start;"
+                    disabled={getStorageMode() === 'serverless'}
+                    onClick={async () => {
+                      const sessionId = (
+                        document.getElementById('mock-session-id') as HTMLInputElement
+                      ).value
+                      const accountId = (
+                        document.getElementById('mock-account-id') as HTMLInputElement
+                      ).value
+                      if (!sessionId || !accountId) {
+                        toast('Please provide both session ID and account ID', 'error')
+                        return
+                      }
+
+                      try {
+                        const res = await apiFetch('/api/imports/enablebanking/transactions', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ accountId, sessionId }),
+                        })
+                        const data = await res.json()
+                        console.info('Sample Data from Mock ASPSP:', data)
+                        if (data.error) {
+                          toast(`Error: ${data.error}`, 'error')
+                        } else {
+                          toast('Data pulled! Check the browser console.', 'success')
+                        }
+                      } catch (e: any) {
+                        toast(`Error: ${e.message}`, 'error')
+                      }
+                    }}
+                  >
+                    Test Sync Data
+                  </button>
+                </div>
+              </div>
+
               <div class={styles.card} data-tour="settings-theme">
                 <CardHead
                   icon={<IconSun />}

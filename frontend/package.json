@@ -76,7 +76,6 @@
     "eslint-plugin-sonarjs": "^4.1.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^30.0.1",
-    "playwright": "^1.62.1",
     "prettier": "3.9.6",
     "solid-devtools": "^0.34.5",
     "typescript": "^5.7.2",
