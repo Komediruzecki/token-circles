@@ -90,9 +90,23 @@ importRoutes.delete('/api/imports/enablebanking/session', requireAuth, async (c)
   return c.json({ success: true });
 });
 
+importRoutes.put('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { accounts } = await c.req.json();
+  if (!accounts) return c.json({ error: 'Missing accounts' }, 400);
+
+  await c.env.DB.prepare(
+    'UPDATE bank_sessions SET accounts = ?, updated_at = CURRENT_TIMESTAMP WHERE profile_id = ?'
+  )
+    .bind(JSON.stringify(accounts), profileId)
+    .run();
+
+  return c.json({ success: true });
+});
+
 importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async (c) => {
   const profileId = await getProfileId(c);
-  const { accountId, sessionId, dateFrom, dateTo } = await c.req.json().catch(() => ({}));
+  const { dateFrom, dateTo } = await c.req.json().catch(() => ({}));
 
   const env = c.env as any;
   const pem = env.ENABLE_BANKING_PRIVATE_KEY;
@@ -102,48 +116,45 @@ importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async 
     return c.json({ error: 'Enable Banking is not configured' }, 500);
   }
 
-  // Fallback to active session in database if not explicitly provided
-  let effectiveSessionId = sessionId;
-  let effectiveAccountId = accountId;
+  const session = await c.env.DB.prepare(
+    'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(profileId)
+    .first<{ session_id: string; accounts: string }>();
 
-  if (!effectiveSessionId || !effectiveAccountId) {
-    const session = await c.env.DB.prepare(
-      'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
-    )
-      .bind(profileId)
-      .first<{ session_id: string; accounts: string }>();
-
-    if (session) {
-      effectiveSessionId = effectiveSessionId || session.session_id;
-      if (!effectiveAccountId) {
-        try {
-          const accs = JSON.parse(session.accounts);
-          if (accs.length > 0) {
-            effectiveAccountId = accs[0].uid || accs[0].resource_id;
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
+  if (!session) {
+    return c.json({ error: 'No active session found' }, 400);
   }
 
-  if (!effectiveSessionId || !effectiveAccountId) {
-    return c.json({ error: 'No active session or account ID found' }, 400);
+  const accountsList = JSON.parse(session.accounts) || [];
+  if (accountsList.length === 0) {
+    return c.json({ error: 'No accounts linked to session' }, 400);
   }
 
   try {
     const client = await EnableBankingClient.create(appId, pem);
-    const transactions = await client.getTransactions(effectiveAccountId, dateFrom, dateTo);
-    const balances = await client.getBalances(effectiveAccountId);
+    const results = [];
+
+    for (const acc of accountsList) {
+      const transactions = await client
+        .getTransactions(acc.uid, dateFrom, dateTo)
+        .catch(() => ({ transactions: [], balances: [] }));
+      const balances = await client.getBalances(acc.uid).catch(() => ({ balances: [] }));
+
+      results.push({
+        account_uid: acc.uid,
+        mapped_account_id: acc.mapped_account_id || null,
+        transactions: transactions.transactions || transactions || [],
+        balances: balances.balances || balances || [],
+      });
+    }
 
     return c.json({
       success: true,
-      transactions: transactions.transactions || transactions,
-      balances: balances.balances || balances,
+      accounts: results,
     });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
   }
 });
 

@@ -436,6 +436,9 @@ export default function Settings() {
     currency: string
     type: string
     iban?: string | null
+    uid?: string
+    resource_id?: string
+    mapped_account_id?: number | null
   }
   interface BankSessionInfo {
     connected: boolean
@@ -445,6 +448,7 @@ export default function Settings() {
   }
   const [bankSession, setBankSession] = createSignal<BankSessionInfo | null>(null)
   const [bankSyncing, setBankSyncing] = createSignal(false)
+  const [appAccounts, setAppAccounts] = createSignal<any[]>([])
 
   const loadBankSession = async () => {
     if (getStorageMode() === 'serverless') return
@@ -457,6 +461,18 @@ export default function Settings() {
       // ignore
     }
   }
+
+  onMount(async () => {
+    // load app accounts for mapping dropdown
+    try {
+      const accountsRes = await apiFetch('/api/accounts')
+      if (accountsRes.ok) {
+        const data = await accountsRes.json()
+        setAppAccounts(Array.isArray(data) ? data : data.items || data.accounts || [])
+      }
+    } catch {}
+    void loadBankSession()
+  })
 
   // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
   // then consume it so re-entering Settings later does not force the tab again.
@@ -1319,15 +1335,11 @@ export default function Settings() {
                                   }
                                 )
                                 const data = await res.json()
-                                if (!res.ok || data.error) {
-                                  throw new Error(data.error || 'Sync failed')
-                                }
-
-                                const rawTxs = Array.isArray(data.transactions)
-                                  ? data.transactions
-                                  : []
-                                if (rawTxs.length === 0) {
-                                  toast('Sync successful: no transactions found.', 'success')
+                                if (!res.ok || !data.success) {
+                                  toast(
+                                    `Bank sync failed: ${data.error || 'Unknown error'}`,
+                                    'error'
+                                  )
                                   return
                                 }
 
@@ -1336,72 +1348,115 @@ export default function Settings() {
                                 const existData = await existRes.json()
                                 const existArr = Array.isArray(existData)
                                   ? existData
-                                  : existData.items || existData.transactions || []
+                                  : existData.rows ||
+                                    existData.items ||
+                                    existData.transactions ||
+                                    []
                                 const existingNotes = new Set(
                                   existArr.map((t: any) => t.notes).filter(Boolean)
                                 )
 
+                                // Fetch accounts to assign to the default account
+                                const accountsRes = await apiFetch('/api/accounts')
+                                const accountsData = await accountsRes.json()
+                                const accountsArr = Array.isArray(accountsData)
+                                  ? accountsData
+                                  : accountsData.items || accountsData.accounts || []
+                                const defaultAccount =
+                                  accountsArr.find(
+                                    (a: any) => a.type === 'giro' || a.type === 'CHECKING'
+                                  ) || accountsArr[0]
+
+                                // Fetch category mappings for auto-categorization
+                                let categoryMappings: any[] = []
+                                try {
+                                  const mapRes = await apiFetch('/api/categories/mappings')
+                                  categoryMappings = await mapRes.json()
+                                  if (!Array.isArray(categoryMappings)) categoryMappings = []
+                                } catch (e) {
+                                  // ignore if mappings fail
+                                }
+
+                                const findMatchingCategory = (desc: string) => {
+                                  const lower = desc.toLowerCase().trim()
+                                  return categoryMappings.find(
+                                    (m: any) => m.pattern.toLowerCase() === lower
+                                  )
+                                }
+
                                 let newCount = 0
-                                for (const raw of rawTxs) {
-                                  const txId =
-                                    raw.transaction_id || raw.entry_reference || raw.id || ''
-                                  if (!txId) continue
-                                  const notes = `Bank TX ID: ${txId}`
-                                  if (existingNotes.has(notes)) continue
+                                const ebAccounts = data.accounts || []
+                                for (const ebAcc of ebAccounts) {
+                                  const accountId =
+                                    ebAcc.mapped_account_id ||
+                                    (defaultAccount ? defaultAccount.id : null)
+                                  const rawTxs = ebAcc.transactions || []
 
-                                  const isDebit =
-                                    raw.credit_debit_indicator === 'DBIT' ||
-                                    (raw.transaction_amount?.amount &&
-                                      parseFloat(raw.transaction_amount.amount) < 0)
-                                  const amtStr =
-                                    raw.transaction_amount?.amount || String(raw.amount || 0)
-                                  const amount = Math.abs(parseFloat(amtStr))
-                                  const currency =
-                                    raw.transaction_amount?.currency || raw.currency || 'EUR'
-                                  const date =
-                                    raw.booking_date ||
-                                    raw.value_date ||
-                                    raw.date ||
-                                    new Date().toISOString().split('T')[0]
+                                  for (const raw of rawTxs) {
+                                    const txId =
+                                      raw.transaction_id || raw.entry_reference || raw.id || ''
+                                    if (!txId) continue
+                                    const notes = `Bank TX ID: ${txId}`
+                                    if (existingNotes.has(notes)) continue
 
-                                  let description = 'Bank Sync'
-                                  if (
-                                    Array.isArray(raw.remittance_information) &&
-                                    raw.remittance_information.length > 0
-                                  ) {
-                                    description = raw.remittance_information.join(' ')
-                                  } else if (raw.remittance_information_unstructured) {
-                                    description = raw.remittance_information_unstructured
-                                  } else if (raw.creditor?.name) {
-                                    description = raw.creditor.name
-                                  } else if (raw.debtor?.name) {
-                                    description = raw.debtor.name
+                                    const isDebit =
+                                      raw.credit_debit_indicator === 'DBIT' ||
+                                      (raw.transaction_amount?.amount &&
+                                        parseFloat(raw.transaction_amount.amount) < 0)
+                                    const amtStr =
+                                      raw.transaction_amount?.amount || String(raw.amount || 0)
+                                    const amount = Math.abs(parseFloat(amtStr))
+                                    const currency =
+                                      raw.transaction_amount?.currency || raw.currency || 'EUR'
+                                    const date =
+                                      raw.booking_date ||
+                                      raw.value_date ||
+                                      raw.date ||
+                                      new Date().toISOString().split('T')[0]
+
+                                    let description = 'Bank Sync'
+                                    if (
+                                      Array.isArray(raw.remittance_information) &&
+                                      raw.remittance_information.length > 0
+                                    ) {
+                                      description = raw.remittance_information.join(' ')
+                                    } else if (raw.remittance_information_unstructured) {
+                                      description = raw.remittance_information_unstructured
+                                    } else if (raw.creditor?.name) {
+                                      description = raw.creditor.name
+                                    } else if (raw.debtor?.name) {
+                                      description = raw.debtor.name
+                                    }
+
+                                    const mapping = findMatchingCategory(description)
+
+                                    const txPayload = {
+                                      description: description.substring(0, 100),
+                                      amount: amount,
+                                      type: isDebit ? 'expense' : 'income',
+                                      date: date,
+                                      currency: currency,
+                                      beneficiary:
+                                        isDebit && raw.creditor?.name
+                                          ? raw.creditor.name
+                                          : raw.creditor_name || '',
+                                      payor:
+                                        !isDebit && raw.debtor?.name
+                                          ? raw.debtor.name
+                                          : raw.debtor_name || '',
+                                      notes: notes,
+                                      exchange_rate: 1.0,
+                                      account_id: accountId,
+                                      category_id: mapping ? mapping.category_id : null,
+                                    }
+
+                                    await apiFetch('/api/transactions', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(txPayload),
+                                    })
+                                    newCount++
                                   }
-
-                                  const txPayload = {
-                                    description: description.substring(0, 100),
-                                    amount: amount,
-                                    type: isDebit ? 'expense' : 'income',
-                                    date: date,
-                                    currency: currency,
-                                    beneficiary:
-                                      isDebit && raw.creditor?.name
-                                        ? raw.creditor.name
-                                        : raw.creditor_name || '',
-                                    payor:
-                                      !isDebit && raw.debtor?.name
-                                        ? raw.debtor.name
-                                        : raw.debtor_name || '',
-                                    notes: notes,
-                                    exchange_rate: 1.0,
-                                  }
-
-                                  await apiFetch('/api/transactions', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify(txPayload),
-                                  })
-                                  newCount++
                                 }
 
                                 toast(
@@ -1458,9 +1513,38 @@ export default function Settings() {
                                     </span>
                                   </Show>
                                 </div>
-                                <span style="background: rgba(0, 0, 0, 0.05); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
-                                  {acc.currency} ({acc.type})
-                                </span>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                  <span style="background: rgba(0, 0, 0, 0.05); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
+                                    {acc.currency} ({acc.type})
+                                  </span>
+                                  <select
+                                    class={styles.input}
+                                    style="max-width: 160px; padding: 0.2rem; font-size: 0.8rem;"
+                                    value={acc.mapped_account_id || ''}
+                                    onChange={async (e) => {
+                                      const newMappedId = e.currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null
+                                      const session = bankSession()!
+                                      const newAccounts = session.accounts!.map((a) =>
+                                        a.uid === acc.uid
+                                          ? { ...a, mapped_account_id: newMappedId }
+                                          : a
+                                      )
+                                      setBankSession({ ...session, accounts: newAccounts })
+                                      await apiFetch('/api/imports/enablebanking/session', {
+                                        method: 'PUT',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ accounts: newAccounts }),
+                                      })
+                                    }}
+                                  >
+                                    <option value="">Unmapped</option>
+                                    <For each={appAccounts()}>
+                                      {(a) => <option value={a.id}>{a.name}</option>}
+                                    </For>
+                                  </select>
+                                </div>
                               </div>
                             )}
                           </For>
