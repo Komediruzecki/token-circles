@@ -53,7 +53,7 @@ for (const m of appSrc.matchAll(/name:\s*'([A-Za-z0-9]+)'\s+as\s+PageName/g)) na
  * the Categories page ended up orphaned: a spotlight tour navigated to `#categories`, a
  * route with no way back and no way in).
  */
-const INTENTIONALLY_HIDDEN = new Set(['notFound'])
+const INTENTIONALLY_HIDDEN = new Set(['notFound', 'bankCallback'])
 
 const allSteps = SPOTLIGHT_TOURS.flatMap((t) => t.steps.map((s) => ({ tour: t.id, ...s })))
 const keyOf = (sel: string) => sel.match(/^\[data-tour="([a-z0-9-]+)"\]$/)?.[1]

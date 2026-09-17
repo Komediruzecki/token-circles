@@ -90,57 +90,6 @@ importRoutes.delete('/api/imports/enablebanking/session', requireAuth, async (c)
   return c.json({ success: true });
 });
 
-importRoutes.post('/api/imports/enablebanking/sync', requireAuth, async (c) => {
-  const profileId = await getProfileId(c);
-  const session = await c.env.DB.prepare(
-    'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
-  )
-    .bind(profileId)
-    .first<{ session_id: string; accounts: string }>();
-
-  if (!session) {
-    return c.json({ error: 'No active bank session found. Please connect your bank first.' }, 400);
-  }
-
-  let accounts: any[] = [];
-  try {
-    accounts = JSON.parse(session.accounts);
-  } catch {
-    accounts = [];
-  }
-
-  if (!accounts.length) {
-    return c.json({ error: 'No bank accounts found in this session.' }, 400);
-  }
-
-  const env = c.env as any;
-  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
-  const appId = env.ENABLE_BANKING_APPLICATION_ID;
-  if (!pem || !appId) return c.json({ error: 'Enable Banking is not configured' }, 500);
-
-  const client = await EnableBankingClient.create(appId, pem);
-  const body = (await c.req.json().catch(() => ({}))) as any;
-  const targetAccountId = body.accountId || accounts[0].uid || accounts[0].resource_id;
-
-  try {
-    const transactionsData = await client.getTransactions(
-      session.session_id,
-      targetAccountId,
-      body.dateFrom,
-      body.dateTo
-    );
-    const balancesData = await client.getBalances(session.session_id, targetAccountId);
-    return c.json({
-      success: true,
-      accountId: targetAccountId,
-      transactions: transactionsData.transactions || transactionsData,
-      balances: balancesData.balances || balancesData,
-    });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});
-
 importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async (c) => {
   const profileId = await getProfileId(c);
   const { accountId, sessionId, dateFrom, dateTo } = await c.req.json().catch(() => ({}));
@@ -185,15 +134,14 @@ importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async 
 
   try {
     const client = await EnableBankingClient.create(appId, pem);
-    const transactions = await client.getTransactions(
-      effectiveSessionId,
-      effectiveAccountId,
-      dateFrom,
-      dateTo
-    );
-    const balances = await client.getBalances(effectiveSessionId, effectiveAccountId);
+    const transactions = await client.getTransactions(effectiveAccountId, dateFrom, dateTo);
+    const balances = await client.getBalances(effectiveAccountId);
 
-    return c.json({ success: true, transactions, balances });
+    return c.json({
+      success: true,
+      transactions: transactions.transactions || transactions,
+      balances: balances.balances || balances,
+    });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
@@ -231,9 +179,22 @@ importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) 
     const client = await EnableBankingClient.create(appId, pem);
     const result = (await client.authorizeSession(code)) as any;
 
-    // store session in DB
-    const expiresAt =
-      Math.floor(Date.now() / 1000) + (result.valid_until - Math.floor(Date.now() / 1000));
+    let expiresAt = Math.floor(Date.now() / 1000) + 90 * 86400;
+    const rawValidUntil = (result as any).access?.valid_until || (result as any).valid_until;
+    if (typeof rawValidUntil === 'string') {
+      const ms = Date.parse(rawValidUntil);
+      if (!Number.isNaN(ms)) {
+        expiresAt = Math.floor(ms / 1000);
+      }
+    } else if (typeof rawValidUntil === 'number' && !Number.isNaN(rawValidUntil)) {
+      expiresAt =
+        rawValidUntil > 1e11 ? Math.floor(rawValidUntil / 1000) : Math.floor(rawValidUntil);
+    }
+
+    const accounts = Array.isArray(result.accounts) ? result.accounts : [];
+    const sessionId = result.session_id || result.id || '';
+    const aspspName = result.aspsp?.name || 'Mock ASPSP';
+
     await c.env.DB.prepare(
       `INSERT INTO bank_sessions (id, profile_id, aspsp_name, session_id, accounts, expires_at)
        VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
@@ -243,10 +204,10 @@ importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) 
        expires_at = excluded.expires_at,
        updated_at = current_timestamp`
     )
-      .bind(profileId, 'Mock ASPSP', result.session_id, JSON.stringify(result.accounts), expiresAt)
+      .bind(profileId, aspspName, sessionId, JSON.stringify(accounts), expiresAt)
       .run();
 
-    return c.json({ success: true, accounts: result.accounts, session_id: result.session_id });
+    return c.json({ success: true, accounts, session_id: sessionId });
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
   }

@@ -1252,12 +1252,12 @@ export default function Settings() {
                     when={bankSession()?.connected}
                     fallback={
                       <div class={styles.row}>
-                        <div class={styles.rowText}>
-                          <span class={styles.rowLabel}>Mock ASPSP Sandbox</span>
-                          <span class={styles.rowDesc}>
+                        <span class={styles.rowLabel}>
+                          Mock ASPSP Sandbox
+                          <small class={styles.rowHint}>
                             Connect to simulation sandbox to test account and transaction retrieval.
-                          </span>
-                        </div>
+                          </small>
+                        </span>
                         <button
                           type="button"
                           class={styles.btnPrimary}
@@ -1295,13 +1295,13 @@ export default function Settings() {
                         <div>
                           <span class={styles.rowLabel} style="font-weight: 600;">
                             {bankSession()?.aspspName || 'Connected Bank'}
+                            <small class={styles.rowHint} style="margin-top: 0.25rem;">
+                              Session active
+                              {bankSession()?.expiresAt
+                                ? ` - valid until ${new Date(bankSession()!.expiresAt! * 1000).toLocaleDateString()}`
+                                : ''}
+                            </small>
                           </span>
-                          <div class={styles.rowDesc} style="margin-top: 0.25rem;">
-                            Session active
-                            {bankSession()?.expiresAt
-                              ? ` - valid until ${new Date(bankSession()!.expiresAt! * 1000).toLocaleDateString()}`
-                              : ''}
-                          </div>
                         </div>
                         <div style="display: flex; gap: 0.5rem;">
                           <button
@@ -1311,10 +1311,13 @@ export default function Settings() {
                             onClick={async () => {
                               setBankSyncing(true)
                               try {
-                                const res = await apiFetch('/api/imports/enablebanking/sync', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                })
+                                const res = await apiFetch(
+                                  '/api/imports/enablebanking/transactions',
+                                  {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                  }
+                                )
                                 const data = await res.json()
                                 if (!res.ok || data.error) {
                                   throw new Error(data.error || 'Sync failed')

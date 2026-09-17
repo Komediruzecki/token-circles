@@ -1,5 +1,3 @@
-import { sign } from 'hono/jwt';
-
 export class EnableBankingClient {
   private appId: string;
   private privateKey: CryptoKey;
@@ -61,10 +59,6 @@ export class EnableBankingClient {
       kid: this.appId,
     };
 
-    // hono/jwt allows passing a custom header in the third argument, but Wait, sign() signature:
-    // sign(payload, secret, alg) -> hono/jwt doesn't let us set 'kid' easily unless we use the expanded signature?
-    // Let's check hono/jwt signature if needed, or we can build the JWT manually.
-    // We will build the JWT manually if Hono doesn't support setting the kid header easily.
     const encodedHeader = btoa(JSON.stringify(header))
       .replace(/=/g, '')
       .replace(/\+/g, '-')
@@ -171,7 +165,7 @@ export class EnableBankingClient {
     return res.json();
   }
 
-  async getBalances(sessionId: string, accountId: string) {
+  async getBalances(accountId: string) {
     const jwt = await this.generateJWT();
 
     const res = await fetch(`https://api.enablebanking.com/accounts/${accountId}/balances`, {
@@ -186,7 +180,7 @@ export class EnableBankingClient {
     return res.json();
   }
 
-  async getTransactions(sessionId: string, accountId: string, dateFrom?: string, dateTo?: string) {
+  async getTransactions(accountId: string, dateFrom?: string, dateTo?: string) {
     const jwt = await this.generateJWT();
 
     const params = new URLSearchParams();

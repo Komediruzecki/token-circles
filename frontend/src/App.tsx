@@ -375,63 +375,6 @@ export function App() {
       document.removeEventListener('click', handleClickOutside)
     })
 
-    const loggedIn = await api.checkLogin()
-    setIsAuthenticated(loggedIn)
-    // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
-    // both the mode switch and sign-in itself reload the page. Now that there is an account,
-    // land on the tier the visitor picked. Not logged in yet: leave it stored — the gate is
-    // rendering, and sign-in reloads back through here.
-    if (loggedIn) {
-      const wanted = storedPlanIntent()
-      if (wanted) {
-        clearPlanIntent()
-        setHighlightedPlan(wanted)
-        setSettingsTab('billing')
-        setActivePage('settings')
-        window.location.hash = 'settings'
-      }
-    }
-    if (loggedIn) {
-      await loadProfiles(true)
-      void loadBillingPlan()
-    } else if (!serverMode) {
-      // Client-only (serverless) mode: no login required — load local/demo profiles.
-      await loadProfiles(false)
-      if (profiles().length > 0) {
-        setCurrentProfile({ ...profiles()[0] })
-      }
-    }
-    // Server mode + no session: the gate renders <LoginScreen/>, so skip the profile and
-    // category loads below that would otherwise 401 against the worker.
-
-    // Shared demo link (?demo=high|mid|low): in client-only mode, open that sample
-    // income profile. Runs after the branch above regardless of the (demo) "logged
-    // in" state, which would otherwise pick a profile from a stale currentProfileId.
-    if (!serverMode) {
-      const demoTier = getDemoTier()
-      const demoProfile = demoTier
-        ? profiles().find((p) => p.name === DEMO_PROFILE_NAME[demoTier])
-        : undefined
-      if (demoProfile) {
-        localStorage.setItem('currentProfileId', String(demoProfile.id))
-        localStorage.setItem('selectedProfileIds', JSON.stringify([demoProfile.id]))
-        setSelectedProfileIds([demoProfile.id])
-        setCurrentProfile({ ...demoProfile })
-      }
-    }
-
-    // Parse initial hash from URL (supports #pagename?param=value)
-    let initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
-
-    // Intercept OAuth redirects to non-hash paths
-    if (window.location.pathname === '/bank-callback') {
-      initialPage = 'bankCallback'
-    }
-
-    if (initialPage) setActivePage(initialPage)
-
-    // (Quick Add categories load reactively via the profileVersion effect above.)
-
     // Command Bar shortcut: Ctrl/Cmd+K (quick entry) or the legacy Ctrl/Cmd+Shift+T.
     const handleQuickAddKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey
@@ -492,6 +435,63 @@ export function App() {
     // deploy never strands the user on a deleted chunk.
     const disposeVersionWatch = initVersionWatch()
     onCleanup(disposeVersionWatch)
+
+    const loggedIn = await api.checkLogin()
+    setIsAuthenticated(loggedIn)
+    // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
+    // both the mode switch and sign-in itself reload the page. Now that there is an account,
+    // land on the tier the visitor picked. Not logged in yet: leave it stored — the gate is
+    // rendering, and sign-in reloads back through here.
+    if (loggedIn) {
+      const wanted = storedPlanIntent()
+      if (wanted) {
+        clearPlanIntent()
+        setHighlightedPlan(wanted)
+        setSettingsTab('billing')
+        setActivePage('settings')
+        window.location.hash = 'settings'
+      }
+    }
+    if (loggedIn) {
+      await loadProfiles(true)
+      void loadBillingPlan()
+    } else if (!serverMode) {
+      // Client-only (serverless) mode: no login required — load local/demo profiles.
+      await loadProfiles(false)
+      if (profiles().length > 0) {
+        setCurrentProfile({ ...profiles()[0] })
+      }
+    }
+    // Server mode + no session: the gate renders <LoginScreen/>, so skip the profile and
+    // category loads below that would otherwise 401 against the worker.
+
+    // Shared demo link (?demo=high|mid|low): in client-only mode, open that sample
+    // income profile. Runs after the branch above regardless of the (demo) "logged
+    // in" state, which would otherwise pick a profile from a stale currentProfileId.
+    if (!serverMode) {
+      const demoTier = getDemoTier()
+      const demoProfile = demoTier
+        ? profiles().find((p) => p.name === DEMO_PROFILE_NAME[demoTier])
+        : undefined
+      if (demoProfile) {
+        localStorage.setItem('currentProfileId', String(demoProfile.id))
+        localStorage.setItem('selectedProfileIds', JSON.stringify([demoProfile.id]))
+        setSelectedProfileIds([demoProfile.id])
+        setCurrentProfile({ ...demoProfile })
+      }
+    }
+
+    // Parse initial hash from URL (supports #pagename?param=value)
+    let initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
+
+    // Intercept OAuth redirects to non-hash paths
+    if (window.location.pathname === '/bank-callback') {
+      initialPage = 'bankCallback'
+    }
+
+    if (initialPage) setActivePage(initialPage)
+
+    // (Quick Add categories load reactively via the profileVersion effect above.)
 
     _setIsLoading(false)
 
