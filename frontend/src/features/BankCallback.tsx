@@ -24,11 +24,11 @@ function humanizeError(rawError: string | null): string {
   return rawError
 }
 
-async function authorizeSession(code: string) {
+async function authorizeSession(payload: { code: string; state: string | null }) {
   const res = await apiFetch('/api/imports/enablebanking/callback', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify(payload),
   })
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
@@ -42,18 +42,21 @@ export default function BankCallback() {
   const code = params.get('code')
   const err = params.get('error')
   const errDesc = params.get('error_description')
+  const state = params.get('state')
 
-  const [authCode, setAuthCode] = createSignal<string | null>(null)
+  const [authPayload, setAuthPayload] = createSignal<{ code: string; state: string | null } | null>(
+    null
+  )
 
   onMount(() => {
     if (code && !err) {
-      setAuthCode(code)
+      setAuthPayload({ code, state })
       // Wipe the query params from the URL immediately to avoid re-submitting an already-used one-time code
       window.history.replaceState(null, '', '/#bankCallback')
     }
   })
 
-  const [resource] = createResource(authCode, authorizeSession)
+  const [resource] = createResource(authPayload, authorizeSession)
 
   createEffect(() => {
     if (resource.state === 'ready') {

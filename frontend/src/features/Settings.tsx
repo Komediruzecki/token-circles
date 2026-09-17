@@ -46,6 +46,7 @@ import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
+import { isSyncing, triggerBankSync } from '../core/bankSyncStore'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
@@ -447,7 +448,6 @@ export default function Settings() {
     accounts?: BankAccount[]
   }
   const [bankSession, setBankSession] = createSignal<BankSessionInfo | null>(null)
-  const [bankSyncing, setBankSyncing] = createSignal(false)
   const [appAccounts, setAppAccounts] = createSignal<any[]>([])
 
   const loadBankSession = async () => {
@@ -678,7 +678,7 @@ export default function Settings() {
             : `Switched to the ${name} plan.`,
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
-    } catch (_e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
     } finally {
       if (!leaving) setBillingBusyKey(null)
@@ -692,7 +692,7 @@ export default function Settings() {
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
       else throw new Error(data.error || failMsg)
-    } catch (_e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : failMsg, 'error')
       setBillingBusyKey(null)
     }
@@ -729,7 +729,7 @@ export default function Settings() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not save')
       toast('Notification settings saved.', 'success')
-    } catch (_e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not save', 'error')
     } finally {
       setNotifBusy(false)
@@ -758,7 +758,7 @@ export default function Settings() {
                 : 'Test email sent — check your inbox.',
         data.skipped ? 'info' : 'success'
       )
-    } catch (_e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not send', 'error')
     } finally {
       setNotifBusy(false)
@@ -1325,154 +1325,10 @@ export default function Settings() {
                           <button
                             type="button"
                             class={styles.btnPrimary}
-                            disabled={bankSyncing()}
-                            onClick={async () => {
-                              setBankSyncing(true)
-                              try {
-                                const res = await apiFetch(
-                                  '/api/imports/enablebanking/transactions',
-                                  {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                  }
-                                )
-                                const data = await res.json()
-                                if (!res.ok || !data.success) {
-                                  toast(
-                                    `Bank sync failed: ${data.error || 'Unknown error'}`,
-                                    'error'
-                                  )
-                                  return
-                                }
-
-                                // Fetch existing transactions for dedup
-                                const existRes = await apiFetch('/api/transactions?limit=1000')
-                                const existData = await existRes.json()
-                                const existArr = Array.isArray(existData)
-                                  ? existData
-                                  : existData.rows ||
-                                    existData.items ||
-                                    existData.transactions ||
-                                    []
-                                const existingNotes = new Set(
-                                  existArr.map((t: any) => t.notes).filter(Boolean)
-                                )
-
-                                // Fetch accounts to assign to the default account
-                                const accountsRes = await apiFetch('/api/accounts')
-                                const accountsData = await accountsRes.json()
-                                const accountsArr = Array.isArray(accountsData)
-                                  ? accountsData
-                                  : accountsData.items || accountsData.accounts || []
-                                const defaultAccount =
-                                  accountsArr.find(
-                                    (a: any) => a.type === 'giro' || a.type === 'CHECKING'
-                                  ) || accountsArr[0]
-
-                                // Fetch category mappings for auto-categorization
-                                let categoryMappings: any[] = []
-                                try {
-                                  const mapRes = await apiFetch('/api/categories/mappings')
-                                  categoryMappings = await mapRes.json()
-                                  if (!Array.isArray(categoryMappings)) categoryMappings = []
-                                } catch (_e) {
-                                  // ignore if mappings fail
-                                }
-
-                                const findMatchingCategory = (desc: string) => {
-                                  const lower = desc.toLowerCase().trim()
-                                  return categoryMappings.find(
-                                    (m: any) => m.pattern.toLowerCase() === lower
-                                  )
-                                }
-
-                                let newCount = 0
-                                const ebAccounts = data.accounts || []
-                                for (const ebAcc of ebAccounts) {
-                                  const accountId =
-                                    ebAcc.mapped_account_id ||
-                                    (defaultAccount ? defaultAccount.id : null)
-                                  const rawTxs = ebAcc.transactions || []
-
-                                  for (const raw of rawTxs) {
-                                    const txId =
-                                      raw.transaction_id || raw.entry_reference || raw.id || ''
-                                    if (!txId) continue
-                                    const notes = `Bank TX ID: ${txId}`
-                                    if (existingNotes.has(notes)) continue
-
-                                    const isDebit =
-                                      raw.credit_debit_indicator === 'DBIT' ||
-                                      (raw.transaction_amount?.amount &&
-                                        parseFloat(raw.transaction_amount.amount) < 0)
-                                    const amtStr =
-                                      raw.transaction_amount?.amount || String(raw.amount || 0)
-                                    const amount = Math.abs(parseFloat(amtStr))
-                                    const currency =
-                                      raw.transaction_amount?.currency || raw.currency || 'EUR'
-                                    const date =
-                                      raw.booking_date ||
-                                      raw.value_date ||
-                                      raw.date ||
-                                      new Date().toISOString().split('T')[0]
-
-                                    let description = 'Bank Sync'
-                                    if (
-                                      Array.isArray(raw.remittance_information) &&
-                                      raw.remittance_information.length > 0
-                                    ) {
-                                      description = raw.remittance_information.join(' ')
-                                    } else if (raw.remittance_information_unstructured) {
-                                      description = raw.remittance_information_unstructured
-                                    } else if (raw.creditor?.name) {
-                                      description = raw.creditor.name
-                                    } else if (raw.debtor?.name) {
-                                      description = raw.debtor.name
-                                    }
-
-                                    const mapping = findMatchingCategory(description)
-
-                                    const txPayload = {
-                                      description: description.substring(0, 100),
-                                      amount: amount,
-                                      type: isDebit ? 'expense' : 'income',
-                                      date: date,
-                                      currency: currency,
-                                      beneficiary:
-                                        isDebit && raw.creditor?.name
-                                          ? raw.creditor.name
-                                          : raw.creditor_name || '',
-                                      payor:
-                                        !isDebit && raw.debtor?.name
-                                          ? raw.debtor.name
-                                          : raw.debtor_name || '',
-                                      notes: notes,
-                                      exchange_rate: 1.0,
-                                      account_id: accountId,
-                                      category_id: mapping ? mapping.category_id : null,
-                                    }
-
-                                    await apiFetch('/api/transactions', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify(txPayload),
-                                    })
-                                    newCount++
-                                  }
-                                }
-
-                                toast(
-                                  `Sync successful: imported ${newCount} new transactions.`,
-                                  'success'
-                                )
-                              } catch (e: any) {
-                                toast(`Sync failed: ${e.message}`, 'error')
-                              } finally {
-                                setBankSyncing(false)
-                              }
-                            }}
+                            disabled={isSyncing()}
+                            onClick={() => void triggerBankSync(true)}
                           >
-                            {bankSyncing() ? 'Syncing...' : 'Sync Transactions'}
+                            {isSyncing() ? 'Syncing...' : 'Sync Transactions'}
                           </button>
                           <button
                             type="button"
@@ -1524,21 +1380,40 @@ export default function Settings() {
                                     style="max-width: 160px; padding: 0.2rem; font-size: 0.8rem;"
                                     value={acc.mapped_account_id || ''}
                                     onChange={async (e) => {
-                                      const newMappedId = e.currentTarget.value
+                                      const newAccountId = e.currentTarget.value
                                         ? Number(e.currentTarget.value)
                                         : null
-                                      const session = bankSession()!
-                                      const newAccounts = session.accounts!.map((a) =>
-                                        a.uid === acc.uid
-                                          ? { ...a, mapped_account_id: newMappedId }
+                                      const session = bankSession()
+                                      if (!session || !session.accounts) return
+
+                                      const oldAccounts = session.accounts
+                                      const newAccounts = session.accounts.map((a: any) =>
+                                        a.id === acc.id ||
+                                        a.uid === acc.uid ||
+                                        a.resource_id === acc.resource_id
+                                          ? { ...a, mapped_account_id: newAccountId }
                                           : a
                                       )
+
                                       setBankSession({ ...session, accounts: newAccounts })
-                                      await apiFetch('/api/imports/enablebanking/session', {
-                                        method: 'PUT',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ accounts: newAccounts }),
-                                      })
+                                      try {
+                                        const res = await apiFetch(
+                                          '/api/imports/enablebanking/session',
+                                          {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ accounts: newAccounts }),
+                                          }
+                                        )
+                                        if (!res.ok) throw new Error('Failed to save mapping')
+                                        toast('Account mapping updated.', 'success')
+                                      } catch (err: any) {
+                                        setBankSession({ ...session, accounts: oldAccounts })
+                                        toast(err.message, 'error')
+                                        e.currentTarget.value = acc.mapped_account_id
+                                          ? String(acc.mapped_account_id)
+                                          : ''
+                                      }
                                     }}
                                   >
                                     <option value="">Unmapped</option>

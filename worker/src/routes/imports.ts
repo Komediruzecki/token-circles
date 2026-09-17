@@ -179,7 +179,11 @@ importRoutes.post('/api/imports/enablebanking/auth-url', requireAuth, async (c) 
 
 importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) => {
   const profileId = await getProfileId(c);
-  const { code } = await c.req.json();
+  const { code, state } = await c.req.json();
+
+  if (state !== profileId.toString()) {
+    return c.json({ error: 'Invalid state parameter' }, 400);
+  }
 
   const env = c.env as any;
   const pem = env.ENABLE_BANKING_PRIVATE_KEY;
