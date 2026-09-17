@@ -1343,14 +1343,19 @@ export default function Settings() {
 
                                 let newCount = 0
                                 for (const raw of rawTxs) {
-                                  const txId = raw.transaction_id || raw.id || ''
+                                  const txId =
+                                    raw.transaction_id || raw.entry_reference || raw.id || ''
                                   if (!txId) continue
                                   const notes = `Bank TX ID: ${txId}`
                                   if (existingNotes.has(notes)) continue
 
+                                  const isDebit =
+                                    raw.credit_debit_indicator === 'DBIT' ||
+                                    (raw.transaction_amount?.amount &&
+                                      parseFloat(raw.transaction_amount.amount) < 0)
                                   const amtStr =
                                     raw.transaction_amount?.amount || String(raw.amount || 0)
-                                  const amount = parseFloat(amtStr)
+                                  const amount = Math.abs(parseFloat(amtStr))
                                   const currency =
                                     raw.transaction_amount?.currency || raw.currency || 'EUR'
                                   const date =
@@ -1358,20 +1363,35 @@ export default function Settings() {
                                     raw.value_date ||
                                     raw.date ||
                                     new Date().toISOString().split('T')[0]
-                                  const description =
-                                    raw.remittance_information_unstructured ||
-                                    raw.creditor_name ||
-                                    raw.debtor_name ||
-                                    'Bank Sync'
+
+                                  let description = 'Bank Sync'
+                                  if (
+                                    Array.isArray(raw.remittance_information) &&
+                                    raw.remittance_information.length > 0
+                                  ) {
+                                    description = raw.remittance_information.join(' ')
+                                  } else if (raw.remittance_information_unstructured) {
+                                    description = raw.remittance_information_unstructured
+                                  } else if (raw.creditor?.name) {
+                                    description = raw.creditor.name
+                                  } else if (raw.debtor?.name) {
+                                    description = raw.debtor.name
+                                  }
 
                                   const txPayload = {
                                     description: description.substring(0, 100),
-                                    amount: Math.abs(amount),
-                                    type: amount < 0 ? 'expense' : 'income',
+                                    amount: amount,
+                                    type: isDebit ? 'expense' : 'income',
                                     date: date,
                                     currency: currency,
-                                    beneficiary: amount < 0 ? raw.creditor_name || '' : '',
-                                    payor: amount >= 0 ? raw.debtor_name || '' : '',
+                                    beneficiary:
+                                      isDebit && raw.creditor?.name
+                                        ? raw.creditor.name
+                                        : raw.creditor_name || '',
+                                    payor:
+                                      !isDebit && raw.debtor?.name
+                                        ? raw.debtor.name
+                                        : raw.debtor_name || '',
                                     notes: notes,
                                     exchange_rate: 1.0,
                                   }
