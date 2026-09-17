@@ -1322,11 +1322,70 @@ export default function Settings() {
                                 if (!res.ok || data.error) {
                                   throw new Error(data.error || 'Sync failed')
                                 }
-                                const count = Array.isArray(data.transactions)
-                                  ? data.transactions.length
-                                  : 0
+
+                                const rawTxs = Array.isArray(data.transactions)
+                                  ? data.transactions
+                                  : []
+                                if (rawTxs.length === 0) {
+                                  toast('Sync successful: no transactions found.', 'success')
+                                  return
+                                }
+
+                                // Fetch existing transactions for dedup
+                                const existRes = await apiFetch('/api/transactions?limit=1000')
+                                const existData = await existRes.json()
+                                const existArr = Array.isArray(existData)
+                                  ? existData
+                                  : existData.items || existData.transactions || []
+                                const existingNotes = new Set(
+                                  existArr.map((t: any) => t.notes).filter(Boolean)
+                                )
+
+                                let newCount = 0
+                                for (const raw of rawTxs) {
+                                  const txId = raw.transaction_id || raw.id || ''
+                                  if (!txId) continue
+                                  const notes = `Bank TX ID: ${txId}`
+                                  if (existingNotes.has(notes)) continue
+
+                                  const amtStr =
+                                    raw.transaction_amount?.amount || String(raw.amount || 0)
+                                  const amount = parseFloat(amtStr)
+                                  const currency =
+                                    raw.transaction_amount?.currency || raw.currency || 'EUR'
+                                  const date =
+                                    raw.booking_date ||
+                                    raw.value_date ||
+                                    raw.date ||
+                                    new Date().toISOString().split('T')[0]
+                                  const description =
+                                    raw.remittance_information_unstructured ||
+                                    raw.creditor_name ||
+                                    raw.debtor_name ||
+                                    'Bank Sync'
+
+                                  const txPayload = {
+                                    description: description.substring(0, 100),
+                                    amount: Math.abs(amount),
+                                    type: amount < 0 ? 'expense' : 'income',
+                                    date: date,
+                                    currency: currency,
+                                    beneficiary: amount < 0 ? raw.creditor_name || '' : '',
+                                    payor: amount >= 0 ? raw.debtor_name || '' : '',
+                                    notes: notes,
+                                    exchange_rate: 1.0,
+                                  }
+
+                                  await apiFetch('/api/transactions', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(txPayload),
+                                  })
+                                  newCount++
+                                }
+
                                 toast(
-                                  `Sync successful: retrieved ${count} transactions.`,
+                                  `Sync successful: imported ${newCount} new transactions.`,
                                   'success'
                                 )
                               } catch (e: any) {
