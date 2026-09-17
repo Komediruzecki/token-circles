@@ -470,7 +470,9 @@ export default function Settings() {
         const data = await accountsRes.json()
         setAppAccounts(Array.isArray(data) ? data : data.items || data.accounts || [])
       }
-    } catch {}
+    } catch {
+      /* ignore */
+    }
     void loadBankSession()
   })
 
@@ -676,7 +678,7 @@ export default function Settings() {
             : `Switched to the ${name} plan.`,
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
-    } catch (e) {
+    } catch (_e) {
       toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
     } finally {
       if (!leaving) setBillingBusyKey(null)
@@ -690,7 +692,7 @@ export default function Settings() {
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
       else throw new Error(data.error || failMsg)
-    } catch (e) {
+    } catch (_e) {
       toast(e instanceof Error ? e.message : failMsg, 'error')
       setBillingBusyKey(null)
     }
@@ -727,7 +729,7 @@ export default function Settings() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not save')
       toast('Notification settings saved.', 'success')
-    } catch (e) {
+    } catch (_e) {
       toast(e instanceof Error ? e.message : 'Could not save', 'error')
     } finally {
       setNotifBusy(false)
@@ -756,7 +758,7 @@ export default function Settings() {
                 : 'Test email sent — check your inbox.',
         data.skipped ? 'info' : 'success'
       )
-    } catch (e) {
+    } catch (_e) {
       toast(e instanceof Error ? e.message : 'Could not send', 'error')
     } finally {
       setNotifBusy(false)
@@ -1373,7 +1375,7 @@ export default function Settings() {
                                   const mapRes = await apiFetch('/api/categories/mappings')
                                   categoryMappings = await mapRes.json()
                                   if (!Array.isArray(categoryMappings)) categoryMappings = []
-                                } catch (e) {
+                                } catch (_e) {
                                   // ignore if mappings fail
                                 }
 
@@ -1518,7 +1520,7 @@ export default function Settings() {
                                     {acc.currency} ({acc.type})
                                   </span>
                                   <select
-                                    class={styles.input}
+                                    class={styles.formControl}
                                     style="max-width: 160px; padding: 0.2rem; font-size: 0.8rem;"
                                     value={acc.mapped_account_id || ''}
                                     onChange={async (e) => {
