@@ -75,11 +75,14 @@ importRoutes.get('/api/imports/enablebanking/session', requireAuth, async (c) =>
     aspspName: session.aspsp_name,
     expiresAt: session.expires_at,
     accounts: parsedAccounts.map((acc: any) => ({
-      id: acc.uid || acc.resource_id,
+      id: acc.uid || acc.resource_id || acc.id,
+      uid: acc.uid || acc.resource_id || acc.id,
+      resource_id: acc.resource_id || acc.uid || acc.id,
       name: acc.name || 'Bank Account',
       currency: acc.currency || 'EUR',
-      type: acc.cash_account_type || 'CHECKING',
-      iban: acc.account_id?.iban || null,
+      type: acc.cash_account_type || acc.type || 'CHECKING',
+      iban: acc.account_id?.iban || acc.iban || null,
+      mapped_account_id: acc.mapped_account_id || null,
     })),
   });
 });
@@ -136,13 +139,14 @@ importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async 
     const results = [];
 
     for (const acc of accountsList) {
+      const accountUid = acc.uid || acc.resource_id || acc.id || '';
       const transactions = await client
-        .getTransactions(acc.uid, dateFrom, dateTo)
+        .getTransactions(accountUid, dateFrom, dateTo)
         .catch(() => ({ transactions: [], balances: [] }));
-      const balances = await client.getBalances(acc.uid).catch(() => ({ balances: [] }));
+      const balances = await client.getBalances(accountUid).catch(() => ({ balances: [] }));
 
       results.push({
-        account_uid: acc.uid,
+        account_uid: accountUid,
         mapped_account_id: acc.mapped_account_id || null,
         transactions: transactions.transactions || transactions || [],
         balances: balances.balances || balances || [],

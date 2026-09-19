@@ -129,7 +129,7 @@ describe('Enable Banking APIs', () => {
     });
     expect(res.status).toBe(400);
     const data = (await res.json()) as any;
-    expect(data.error).toContain('No active session or account ID found');
+    expect(data.error).toContain('No active session found');
   });
 
   it('POST /api/imports/enablebanking/transactions syncs using active DB session', async () => {
@@ -158,9 +158,21 @@ describe('Enable Banking APIs', () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as any;
     expect(data.success).toBe(true);
-    expect(data.transactions).toHaveLength(1);
-    expect(data.balances).toHaveLength(1);
+    expect(data.accounts).toHaveLength(1);
+    expect(data.accounts[0].transactions).toHaveLength(1);
+    expect(data.accounts[0].balances).toHaveLength(1);
     expect(mockClient.getTransactions).toHaveBeenCalledWith('acc-uuid-1', undefined, undefined);
+  });
+
+  it('POST /api/imports/enablebanking/callback rejects missing or invalid state (CSRF protection)', async () => {
+    const res = await SELF.fetch('https://example.com/api/imports/enablebanking/callback', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'auth-code-123', state: 'wrong-state' }),
+    });
+    expect(res.status).toBe(400);
+    const data = (await res.json()) as any;
+    expect(data.error).toBe('Invalid state parameter');
   });
 
   it('POST /api/imports/enablebanking/callback handles ISO string valid_until and persists to DB', async () => {
@@ -186,7 +198,7 @@ describe('Enable Banking APIs', () => {
     const res = await SELF.fetch('https://example.com/api/imports/enablebanking/callback', {
       method: 'POST',
       headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: 'auth-code-123' }),
+      body: JSON.stringify({ code: 'auth-code-123', state: PROFILE_ID }),
     });
 
     const text = await res.text();
@@ -223,7 +235,7 @@ describe('Enable Banking APIs', () => {
     const res = await SELF.fetch('https://example.com/api/imports/enablebanking/callback', {
       method: 'POST',
       headers: { Cookie: cookie, 'X-Profile-Id': PROFILE_ID, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: 'auth-code-nested' }),
+      body: JSON.stringify({ code: 'auth-code-nested', state: PROFILE_ID }),
     });
 
     expect(res.status).toBe(200);

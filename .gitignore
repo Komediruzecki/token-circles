@@ -97,6 +97,12 @@ local/
 /test-seed.js
 /backend/test-seed.js
 /backend/test-seed2.js
+/test-eb.*
+/account.json
+/add_dashboard_sync.js
+/update_settings.js
+/worker/test-eb.*
+/worker/src/test-eb.*
 CLAUDE.md
 
 # Playwright signed-in state, written by tests/global.setup.ts. Holds a session cookie.
