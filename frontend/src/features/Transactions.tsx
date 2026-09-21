@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -48,6 +48,7 @@ import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { fromPill, toRange } from '../utils/period'
@@ -148,11 +149,24 @@ export default function Transactions() {
   // the bulk-tag modal. Pages stay mounted once visited and refetchOnActive only refires when a
   // tracked dep changes — so without tracking tagsVersion, a tag created after this page's first
   // mount never appeared here and the bulk-tag modal read "No tags yet".
+  //
+  // `tagsVersion` is the hand-wired counter that fix introduced; `entityVersion('tags')` is the
+  // automatic one that now covers every tag write in both modes. Both are tracked while call
+  // sites still bump the old one — they are counters, so a double bump is one refetch, not two.
+  let tagHashApplied = false
   refetchOnActive(
     'transactions',
-    () => state.tagsVersion,
+    () => [state.profileVersion, state.tagsVersion, entityVersion('tags')],
     () => {
-      void loadTags()
+      void (async () => {
+        const list = await loadTags()
+        // The Tags page links here with `?tag=<id>` preselected. Applying it needs the tag names,
+        // so it waits for this first load rather than racing it from onMount.
+        if (!tagHashApplied) {
+          tagHashApplied = true
+          applyTagFromHash(list)
+        }
+      })()
     }
   )
 
@@ -834,60 +848,105 @@ export default function Transactions() {
     window.removeEventListener('hashchange', handleTagHashChange)
   })
 
-  onMount(async () => {
-    // (transactions load via the profileVersion effect above — no redundant fetch here)
+  /**
+   * Adopt a `?category=<name>` filter from the URL hash (e.g. #transactions?category=Erste).
+   * First load only — see loadCategories.
+   */
+  const applyCategoryFromHash = (known: Category[]) => {
+    const hash = window.location.hash.slice(1)
+    const queryIdx = hash.indexOf('?')
+    if (queryIdx < 0) return
+    const params = new URLSearchParams(hash.slice(queryIdx + 1))
+    const categoryName = params.get('category')
+    if (!categoryName) return
+    const matched = known.find((c) => c.name.toLowerCase() === categoryName.toLowerCase())
+    if (matched) setSelectedCategories([matched.id])
+  }
+
+  /**
+   * Adopt an `?account=<id>` filter from the URL hash — one id, or a comma-separated list from an
+   * account card's "View All". Unknown ids are dropped. First load only — see loadAccounts.
+   */
+  const applyAccountFromHash = (known: Array<{ id: number }>) => {
+    const hash = window.location.hash.slice(1)
+    const queryIdx = hash.indexOf('?')
+    if (queryIdx < 0) return
+    const params = new URLSearchParams(hash.slice(queryIdx + 1))
+    const raw = params.get('account')
+    if (!raw) return
+    const knownIds = new Set(known.map((a) => a.id))
+    const ids = raw
+      .split(',')
+      .map((v) => parseInt(v, 10))
+      .filter((id) => !isNaN(id) && knownIds.has(id))
+    if (ids.length > 0) setSelectedAccountIds(ids)
+  }
+
+  // The URL filters are a boot concern: they translate the link the user arrived on into filter
+  // state. A refetch must not re-apply them, or every category someone adds elsewhere would yank
+  // the filter back to whatever the address bar still says.
+  let categoryHashApplied = false
+  let accountHashApplied = false
+
+  /**
+   * Load the category list backing the filter bar, the bulk-category modal and — the one that
+   * mattered — the add/edit transaction form's type dropdown.
+   *
+   * This used to be a bare `onMount` fetch, so the list this page showed was whatever existed the
+   * first time the page was opened. Pages stay mounted (#317), so a category created afterwards
+   * on Categories, Budgets, Bills or Goals never appeared here, and neither did the right list
+   * after a profile switch; only a browser reload fixed it. It is now driven by the effect below.
+   *
+   * On failure the previous list is kept rather than blanked: a dropped refresh should not empty a
+   * dropdown the user is looking at.
+   */
+  const loadCategories = async () => {
     try {
       const cats = await api.getCategories()
-      if (Array.isArray(cats)) {
-        setCategories(cats as Category[])
-        // Check hash for category filter (e.g. #transactions?category=Erste)
-        const hash = window.location.hash.slice(1)
-        const queryIdx = hash.indexOf('?')
-        if (queryIdx >= 0) {
-          const params = new URLSearchParams(hash.slice(queryIdx + 1))
-          const categoryName = params.get('category')
-          if (categoryName) {
-            const matchedCat = (cats as Category[]).find(
-              (c) => c.name.toLowerCase() === categoryName.toLowerCase()
-            )
-            if (matchedCat) {
-              setSelectedCategories([matchedCat.id])
-            }
-          }
-        }
+      if (!Array.isArray(cats)) return
+      setCategories(cats as Category[])
+      if (!categoryHashApplied) {
+        categoryHashApplied = true
+        applyCategoryFromHash(cats as Category[])
       }
     } catch {
-      // Categories will remain empty
+      // Keep whatever is on screen.
     }
-    // Check hash for a tag filter (e.g. #transactions?tag=3 from the Tags page).
-    applyTagFromHash(await loadTags())
+  }
+
+  /** Load the account list for the filter bar and the transaction form. See loadCategories. */
+  const loadAccounts = async () => {
     try {
       const acctData = await api.getAccounts()
-      if (Array.isArray(acctData)) {
-        setAccounts(acctData as any[])
-        // Check hash for account filter (e.g. #transactions?account=5 from an account card's
-        // "View All", or a comma-separated list like ?account=3,4). Keep only known ids.
-        const hash = window.location.hash.slice(1)
-        const queryIdx = hash.indexOf('?')
-        if (queryIdx >= 0) {
-          const params = new URLSearchParams(hash.slice(queryIdx + 1))
-          const accountRaw = params.get('account')
-          if (accountRaw) {
-            const known = new Set((acctData as Array<{ id: number }>).map((a) => a.id))
-            const ids = accountRaw
-              .split(',')
-              .map((v) => parseInt(v, 10))
-              .filter((id) => !isNaN(id) && known.has(id))
-            if (ids.length > 0) {
-              setSelectedAccountIds(ids)
-            }
-          }
-        }
+      if (!Array.isArray(acctData)) return
+      setAccounts(acctData as any[])
+      if (!accountHashApplied) {
+        accountHashApplied = true
+        applyAccountFromHash(acctData as Array<{ id: number }>)
       }
     } catch {
-      // Accounts will remain empty
+      // Keep whatever is on screen.
     }
-  })
+  }
+
+  // Categories and accounts follow BOTH the active profile and any write to them from anywhere in
+  // the app — `entityVersion` is bumped in apiFetch for every successful mutation, in either
+  // storage mode (core/dataVersions.ts). refetchOnActive performs the initial load too, so there
+  // is no onMount fetch here to double it, and a hidden page defers its refetch until it is shown.
+  refetchOnActive(
+    'transactions',
+    () => [state.profileVersion, entityVersion('categories')],
+    () => {
+      void loadCategories()
+    }
+  )
+  refetchOnActive(
+    'transactions',
+    () => [state.profileVersion, entityVersion('accounts')],
+    () => {
+      void loadAccounts()
+    }
+  )
 
   return (
     <div
