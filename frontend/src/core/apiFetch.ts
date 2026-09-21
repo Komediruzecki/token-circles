@@ -2,6 +2,7 @@
  * API Fetch Interceptor
  * Routes API calls to either the real backend (self-hosted) or IndexedDB (serverless)
  */
+import { invalidateForRequest } from './dataVersions'
 import { getStorageMode } from './storage/storageFactory'
 import type { StorageMode } from './storage/storageFactory'
 
@@ -38,6 +39,10 @@ function toApiPath(url: string): string | null {
 /**
  * Replacement for window.fetch that intercepts app-API calls in serverless mode.
  * In self-hosted mode, passes through to the real fetch.
+ *
+ * This is also where every successful write announces itself: both modes pass through here, so
+ * one call to `invalidateForRequest` covers the whole app and cannot be forgotten by a new
+ * feature. See core/dataVersions.ts for why that matters.
  */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const mode: StorageMode = getStorageMode()
@@ -48,12 +53,14 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   // origin. Default credentials to 'include' so the session cookie rides along cross-origin.
   if (mode === 'self-hosted') {
     if (apiPath) {
-      return fetch(`${API_ORIGIN}${apiPath}`, {
+      const response = await fetch(`${API_ORIGIN}${apiPath}`, {
         ...init,
         // Pin credentials last so a caller's own `init.credentials` can't override it
         // and silently drop the cross-origin session cookie.
         credentials: 'include',
       })
+      invalidateForRequest(apiPath, init?.method, response.ok)
+      return response
     }
     return fetch(url, init)
   }
@@ -61,7 +68,9 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   // Serverless: route app-API calls to the IndexedDB-backed local router
   if (apiPath) {
     const router = await getLocalRouter()
-    return router(apiPath, init)
+    const response = await router(apiPath, init)
+    invalidateForRequest(apiPath, init?.method, response.ok)
+    return response
   }
 
   // Non-API calls (CDN, external) pass through
