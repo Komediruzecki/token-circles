@@ -200,8 +200,15 @@ export function App() {
     } catch {
       setProfiles([])
     }
-    // Refresh selected IDs after profile list changes (e.g., after data reset)
-    setSelectedProfileIds(getSelectedProfileIds())
+    // Refresh selected IDs after profile list changes (e.g., after data reset).
+    // Persist the repair, don't just hold it in the signal: the request headers are built from
+    // localStorage, not from this signal, so a selection that getSelectedProfileIds() had to
+    // correct (a deleted profile, a stale id) would otherwise keep being sent on every read.
+    const repaired = getSelectedProfileIds()
+    setSelectedProfileIds(repaired)
+    if (repaired.length > 0) {
+      localStorage.setItem('selectedProfileIds', JSON.stringify(repaired))
+    }
   }
 
   const selectProfile = (profileId: number) => {
@@ -276,7 +283,13 @@ export function App() {
       const ids = selectedProfileIds()
       localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
       if (ids.length > 0) {
+        // This moves where WRITES land (X-Profile-Id), so the displayed profile has to move with
+        // it. Without the setCurrentProfile below, the header kept showing the old profile while
+        // new rows were filed under ids[0] — the same class of split-brain that made a created
+        // category vanish. selectProfile() has always done both; this path had not.
         localStorage.setItem('currentProfileId', ids[0].toString())
+        const active = profiles().find((p) => p.id === ids[0])
+        if (active) setCurrentProfile({ ...active })
       }
       setShowDropdown(false)
       bumpProfileVersion()
