@@ -104,4 +104,15 @@ describe('data-changed announcements', () => {
     await apiPut('/api/settings', { theme: 'dark' })
     expect(events).toEqual([])
   })
+
+  it('does not fire for the exact call achievementsStore persists unlocks with', async () => {
+    // The loop this guards against is real and specific: refreshAchievements ends in
+    // `api.updateSettings({...})`. That is the typed client, whose endpoint is '/settings' and
+    // which only becomes '/api/settings' once apiFetch has resolved it — so the exclusion has to
+    // be written against the resolved path, not the endpoint the caller passed. Testing it
+    // through the raw helper above would not have caught getting that wrong.
+    const { api } = await loadApi()
+    await api.updateSettings({ theme: 'dark' } as never).catch(() => undefined)
+    expect(events).toEqual([])
+  })
 })
