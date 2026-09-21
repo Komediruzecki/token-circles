@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { householdProfileIds } from '../apiProfileScope'
 import {
   BACKUP_EXTENSION_SETTINGS_KEY,
   BACKUP_VERSION,
@@ -323,19 +324,16 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   /**
    * Get all selected profile IDs (for household/multi-profile view).
-   * Falls back to the single current profile ID if nothing stored.
+   *
+   * Delegates to the shared helper so local-first mode and server mode cannot disagree about
+   * what "the household" is. This used to be a second copy of that logic and carried the same
+   * defect: it returned the stored selection verbatim, so once the selection no longer listed
+   * the profile being written to (unchecking your own profile in Settings > Household was
+   * enough), every row created here was filed where none of the ~30 handlers that call this
+   * would look for it. The invariant lives in one place now.
    */
   getCurrentProfileIds(): number[] {
-    const stored = localStorage.getItem('selectedProfileIds')
-    if (stored) {
-      try {
-        const ids = JSON.parse(stored) as number[]
-        if (Array.isArray(ids) && ids.length > 0) return ids
-      } catch {
-        /* ignore */
-      }
-    }
-    return [this.getProfileId()]
+    return householdProfileIds()
   }
 
   // ---- Profiles ----

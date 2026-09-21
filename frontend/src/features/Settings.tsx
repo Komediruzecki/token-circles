@@ -44,7 +44,7 @@ import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
-import { activeProfileId } from '../core/apiProfileScope'
+import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import { bumpProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
@@ -90,11 +90,10 @@ function Reports() {
 
   onMount(() => {
     const currentYear = new Date().getFullYear()
-    const headers: Record<string, string> = {}
-    const currentProfileId = localStorage.getItem('currentProfileId')
-    const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
-    if (currentProfileId) headers['X-Profile-Id'] = currentProfileId
-    if (selectedProfileIds.length > 1) headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
+    // Use the shared builder rather than reading the two localStorage keys by hand: hand-rolled
+    // copies passed `selectedProfileIds` straight through, so they reproduced the split-brain
+    // (a read set that omits the profile being written to) even after it was fixed at the seam.
+    const headers: Record<string, string> = profileRequestHeaders('household')
     apiFetch('/api/analytics/distinct-years', { credentials: 'include', headers })
       .then((r) => r.json())
       .then((data) => {

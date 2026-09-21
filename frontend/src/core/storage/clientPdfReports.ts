@@ -84,15 +84,12 @@ async function loadReportSource(
   const { getStorageMode } = await import('./storageFactory')
   if (getStorageMode() === 'self-hosted') {
     const { apiFetch } = await import('../apiFetch')
-    const headers: Record<string, string> = {}
-    const pid = localStorage.getItem('currentProfileId')
-    if (pid) headers['X-Profile-Id'] = pid
-    try {
-      const sel = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]') as unknown
-      if (Array.isArray(sel) && sel.length > 1) headers['X-Profile-Ids'] = JSON.stringify(sel)
-    } catch {
-      // single-profile header only
-    }
+    // Built by the shared helper, not by reading the two localStorage keys here: a hand-rolled
+    // copy passed `selectedProfileIds` straight through and so could ask for a set that omits
+    // the profile being written to. apiProfileScope is a leaf module, so importing it does not
+    // reintroduce the cycle this function's dynamic imports exist to avoid.
+    const { profileRequestHeaders } = await import('../apiProfileScope')
+    const headers: Record<string, string> = profileRequestHeaders('household')
     const [txRes, catRes] = await Promise.all([
       apiFetch(`/api/transactions?startDate=${dateFrom}&endDate=${dateTo}&limit=100000`, {
         credentials: 'include',
