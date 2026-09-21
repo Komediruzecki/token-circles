@@ -57,7 +57,7 @@ export async function gotoServerlessZeroState(page: any, route: string, readyTes
  */
 export async function login(page: any) {
   await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await settleOnShell(page)
 }
 
 /**
@@ -69,7 +69,29 @@ export async function navigateToRoute(page: any, route: string) {
     timeout: 30000,
   })
   await page.waitForTimeout(500)
-  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+  await settleOnShell(page)
+}
+
+/**
+ * Best-effort wait for the app shell to be up, for the two navigation helpers above.
+ *
+ * This replaces a `waitForLoadState('networkidle')` in each. `networkidle` is the wrong signal
+ * twice over: it resolves on *network* quiet, which this app reaches before the shell has
+ * rendered (the same mistake `gotoServerless` above documents), and it never resolves at all on a
+ * page that polls. `sonarjs/no-networkidle-wait` flags it for exactly that reason.
+ *
+ * `profile-dropdown-btn` (App.tsx) is the header control that exists on every signed-in page, so
+ * its visibility is the shell being mounted — the condition the old wait was approximating.
+ *
+ * Deliberately best-effort, like the wait it replaces: every caller asserts its own page-specific
+ * readiness immediately afterwards, and those assertions are what should report a failure. A throw
+ * here would relabel 30 specs' real failures as a helper timeout.
+ */
+async function settleOnShell(page: any) {
+  await page
+    .getByTestId('profile-dropdown-btn')
+    .waitFor({ state: 'visible', timeout: 10000 })
+    .catch(() => {})
 }
 
 /**
