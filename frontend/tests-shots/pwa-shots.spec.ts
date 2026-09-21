@@ -78,7 +78,6 @@ for (const { route, slug, ready } of SHOTS) {
 
       await page.goto(`${E2E_BASE}/#${route}`, { waitUntil: 'domcontentloaded' })
       await expect(page.getByTestId(ready)).toBeVisible({ timeout: 30000 })
-      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})
       // No frame callback for 400ms means every chart has finished drawing. Tolerated rather
       // than awaited: a view that animates forever would never satisfy this, and a slightly
       // early screenshot beats failing the whole shot run.
