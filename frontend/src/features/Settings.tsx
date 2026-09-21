@@ -44,6 +44,7 @@ import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
+import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import { bumpProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
@@ -89,11 +90,10 @@ function Reports() {
 
   onMount(() => {
     const currentYear = new Date().getFullYear()
-    const headers: Record<string, string> = {}
-    const currentProfileId = localStorage.getItem('currentProfileId')
-    const selectedProfileIds = JSON.parse(localStorage.getItem('selectedProfileIds') || '[]')
-    if (currentProfileId) headers['X-Profile-Id'] = currentProfileId
-    if (selectedProfileIds.length > 1) headers['X-Profile-Ids'] = JSON.stringify(selectedProfileIds)
+    // Use the shared builder rather than reading the two localStorage keys by hand: hand-rolled
+    // copies passed `selectedProfileIds` straight through, so they reproduced the split-brain
+    // (a read set that omits the profile being written to) even after it was fixed at the seam.
+    const headers: Record<string, string> = profileRequestHeaders('household')
     apiFetch('/api/analytics/distinct-years', { credentials: 'include', headers })
       .then((r) => r.json())
       .then((data) => {
@@ -1118,8 +1118,15 @@ export default function Settings() {
     } else {
       newIds = [...current, id]
     }
-    if (newIds.length === 0) {
-      newIds = [parseInt(localStorage.getItem('currentProfileId') || '1')]
+    // Guard the active profile, not just emptiness. Unchecking the profile you are writing to
+    // used to leave every new category, account and transaction filed where no read would look
+    // for it — the row existed (a duplicate name was still refused) but appeared nowhere, and a
+    // reload could not help because this value is persisted. householdProfileIds() now enforces
+    // the same invariant at read time; keeping the stored value honest as well means the
+    // checkbox state and the requests agree about what is being shown.
+    const activeId = activeProfileId()
+    if (!newIds.includes(activeId)) {
+      newIds = [activeId, ...newIds]
     }
     setHouseholdIds(newIds)
     localStorage.setItem('selectedProfileIds', JSON.stringify(newIds))
