@@ -46,6 +46,7 @@ import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { bumpProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
+import { isSyncing, triggerBankSync } from '../core/bankSyncStore'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
@@ -238,6 +239,25 @@ function Svg(props: { children: JSX.Element }) {
 }
 
 // Rail (navigation) icons — reuse the approved mockup's paths.
+const IconServer = () => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+  </svg>
+)
+
 const IconGeneral = () => (
   <Svg>
     <path d="M4 6h16M4 12h16M4 18h16" />
@@ -410,6 +430,51 @@ export default function Settings() {
   // the draft would offer token creation that still answers from IndexedDB. Applying reloads
   // the page, so reading this non-reactively is enough.
   const visibleTabs = (): typeof tabs => tabs.filter((t) => isTabVisible(t.id, getStorageMode()))
+
+  interface BankAccount {
+    id: string
+    name: string
+    currency: string
+    type: string
+    iban?: string | null
+    uid?: string
+    resource_id?: string
+    mapped_account_id?: number | null
+  }
+  interface BankSessionInfo {
+    connected: boolean
+    aspspName?: string
+    expiresAt?: number
+    accounts?: BankAccount[]
+  }
+  const [bankSession, setBankSession] = createSignal<BankSessionInfo | null>(null)
+  const [appAccounts, setAppAccounts] = createSignal<any[]>([])
+
+  const loadBankSession = async () => {
+    if (getStorageMode() === 'serverless') return
+    try {
+      const res = await apiFetch('/api/imports/enablebanking/session')
+      if (res.ok) {
+        setBankSession(await res.json())
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  onMount(async () => {
+    // load app accounts for mapping dropdown
+    try {
+      const accountsRes = await apiFetch('/api/accounts')
+      if (accountsRes.ok) {
+        const data = await accountsRes.json()
+        setAppAccounts(Array.isArray(data) ? data : data.items || data.accounts || [])
+      }
+    } catch {
+      /* ignore */
+    }
+    void loadBankSession()
+  })
 
   // Honor a cross-component request to open a specific tab (e.g. ProfileModal → Billing),
   // then consume it so re-entering Settings later does not force the tab again.
@@ -613,7 +678,7 @@ export default function Settings() {
             : `Switched to the ${name} plan.`,
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
-    } catch (e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
     } finally {
       if (!leaving) setBillingBusyKey(null)
@@ -627,7 +692,7 @@ export default function Settings() {
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
       else throw new Error(data.error || failMsg)
-    } catch (e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : failMsg, 'error')
       setBillingBusyKey(null)
     }
@@ -664,7 +729,7 @@ export default function Settings() {
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Could not save')
       toast('Notification settings saved.', 'success')
-    } catch (e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not save', 'error')
     } finally {
       setNotifBusy(false)
@@ -693,7 +758,7 @@ export default function Settings() {
                 : 'Test email sent — check your inbox.',
         data.skipped ? 'info' : 'success'
       )
-    } catch (e) {
+    } catch (e: any) {
       toast(e instanceof Error ? e.message : 'Could not send', 'error')
     } finally {
       setNotifBusy(false)
@@ -734,6 +799,7 @@ export default function Settings() {
     if (storageMode() === 'self-hosted') {
       void loadBilling()
       void loadNotifications()
+      void loadBankSession()
       // Who am I signed in as (shown in the About card).
       void apiFetch('/api/auth/me', { credentials: 'include' })
         .then(async (res) => {
@@ -1183,6 +1249,189 @@ export default function Settings() {
                   <InstallAppButton />
                 </div>
               </Show>
+
+              <div class={styles.card}>
+                <CardHead
+                  icon={<IconServer />}
+                  title="Bank Sync (Enable Banking)"
+                  desc="Connect your bank account to automatically import transactions (Requires PSD2/AISP)."
+                />
+
+                <Show
+                  when={getStorageMode() !== 'serverless'}
+                  fallback={
+                    <div style="padding: 0.75rem; border-radius: 6px; background-color: rgba(239, 68, 68, 0.1); color: var(--text-secondary); font-size: 0.875rem;">
+                      Enable Banking requires the secure backend (Self-Hosted mode). It is
+                      unavailable in Local mode.
+                    </div>
+                  }
+                >
+                  <Show
+                    when={bankSession()?.connected}
+                    fallback={
+                      <div class={styles.row}>
+                        <span class={styles.rowLabel}>
+                          Mock ASPSP Sandbox
+                          <small class={styles.rowHint}>
+                            Connect to simulation sandbox to test account and transaction retrieval.
+                          </small>
+                        </span>
+                        <button
+                          type="button"
+                          class={styles.btnPrimary}
+                          onClick={async () => {
+                            try {
+                              const res = await apiFetch('/api/imports/enablebanking/auth-url', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  aspspName: 'Mock ASPSP',
+                                  redirectUri: `${window.location.origin}/bank-callback`,
+                                }),
+                              })
+                              if (!res.ok) {
+                                const errData = await res.json().catch(() => ({}))
+                                throw new Error(errData.error || 'Failed to start authorization')
+                              }
+                              const { url } = await res.json()
+                              window.location.href = url
+                            } catch (e: any) {
+                              toast(`Failed to connect: ${e.message}`, 'error')
+                            }
+                          }}
+                        >
+                          Connect Bank (Mock ASPSP)
+                        </button>
+                      </div>
+                    }
+                  >
+                    <div style="display: flex; flex-direction: column; gap: 1rem; width: 100%;">
+                      <div
+                        class={styles.row}
+                        style="justify-content: space-between; align-items: center;"
+                      >
+                        <div>
+                          <span class={styles.rowLabel} style="font-weight: 600;">
+                            {bankSession()?.aspspName || 'Connected Bank'}
+                            <small class={styles.rowHint} style="margin-top: 0.25rem;">
+                              Session active
+                              {bankSession()?.expiresAt
+                                ? ` - valid until ${new Date(bankSession()!.expiresAt! * 1000).toLocaleDateString()}`
+                                : ''}
+                            </small>
+                          </span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                          <button
+                            type="button"
+                            class={styles.btnPrimary}
+                            disabled={isSyncing()}
+                            onClick={() => void triggerBankSync(true)}
+                          >
+                            {isSyncing() ? 'Syncing...' : 'Sync Transactions'}
+                          </button>
+                          <button
+                            type="button"
+                            class={styles.btnSecondary}
+                            onClick={async () => {
+                              try {
+                                const res = await apiFetch('/api/imports/enablebanking/session', {
+                                  method: 'DELETE',
+                                })
+                                if (res.ok) {
+                                  toast('Bank disconnected.', 'info')
+                                  void loadBankSession()
+                                }
+                              } catch {
+                                toast('Failed to disconnect bank.', 'error')
+                              }
+                            }}
+                          >
+                            Disconnect
+                          </button>
+                        </div>
+                      </div>
+
+                      <Show when={bankSession()?.accounts && bankSession()!.accounts!.length > 0}>
+                        <div style="border-top: 1px solid var(--border-color, #e5e7eb); padding-top: 0.75rem;">
+                          <div
+                            class={styles.rowLabel}
+                            style="font-size: 0.85rem; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary);"
+                          >
+                            Discovered Accounts
+                          </div>
+                          <For each={bankSession()?.accounts}>
+                            {(acc) => (
+                              <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; font-size: 0.9rem;">
+                                <div>
+                                  <strong>{acc.name}</strong>
+                                  <Show when={acc.iban}>
+                                    <span style="margin-left: 0.5rem; color: var(--text-secondary); font-family: monospace;">
+                                      {acc.iban}
+                                    </span>
+                                  </Show>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                  <span style="background: rgba(0, 0, 0, 0.05); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem;">
+                                    {acc.currency} ({acc.type})
+                                  </span>
+                                  <select
+                                    class={styles.formControl}
+                                    style="max-width: 160px; padding: 0.2rem; font-size: 0.8rem;"
+                                    value={acc.mapped_account_id || ''}
+                                    onChange={async (e) => {
+                                      const newAccountId = e.currentTarget.value
+                                        ? Number(e.currentTarget.value)
+                                        : null
+                                      const session = bankSession()
+                                      if (!session || !session.accounts) return
+
+                                      const oldAccounts = session.accounts
+                                      const newAccounts = session.accounts.map((a: any) =>
+                                        a.id === acc.id ||
+                                        a.uid === acc.uid ||
+                                        a.resource_id === acc.resource_id
+                                          ? { ...a, mapped_account_id: newAccountId }
+                                          : a
+                                      )
+
+                                      setBankSession({ ...session, accounts: newAccounts })
+                                      try {
+                                        const res = await apiFetch(
+                                          '/api/imports/enablebanking/session',
+                                          {
+                                            method: 'PUT',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ accounts: newAccounts }),
+                                          }
+                                        )
+                                        if (!res.ok) throw new Error('Failed to save mapping')
+                                        toast('Account mapping updated.', 'success')
+                                      } catch (err: any) {
+                                        setBankSession({ ...session, accounts: oldAccounts })
+                                        toast(err.message, 'error')
+                                        e.currentTarget.value = acc.mapped_account_id
+                                          ? String(acc.mapped_account_id)
+                                          : ''
+                                      }
+                                    }}
+                                  >
+                                    <option value="">Unmapped</option>
+                                    <For each={appAccounts()}>
+                                      {(a) => <option value={a.id}>{a.name}</option>}
+                                    </For>
+                                  </select>
+                                </div>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </Show>
+              </div>
+
               <div class={styles.card} data-tour="settings-theme">
                 <CardHead
                   icon={<IconSun />}

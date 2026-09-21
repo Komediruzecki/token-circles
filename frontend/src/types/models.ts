@@ -41,6 +41,7 @@ export type PageName =
   | 'portfolio'
   | 'tags'
   | 'notFound'
+  | 'bankCallback'
 
 // ============ PROFILE ============
 export interface Profile {

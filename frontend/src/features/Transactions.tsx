@@ -45,6 +45,7 @@ import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
+import { isSyncing, triggerBankSync } from '../core/bankSyncStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
@@ -899,6 +900,34 @@ export default function Transactions() {
           Transactions
         </h1>
         <div class={styles.tableActions} data-test-id="transactions-actions">
+          <button
+            class={`${styles.btnSecondary} ${styles.btnSm}`}
+            onClick={() => void triggerBankSync(true)}
+            disabled={isSyncing()}
+            data-test-id="sync-bank-btn"
+          >
+            <Show
+              when={isSyncing()}
+              fallback={
+                <svg
+                  width="16"
+                  height="16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              }
+            >
+              <div
+                class="spinner"
+                style="width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"
+              />
+            </Show>
+            {isSyncing() ? 'Syncing...' : 'Sync Bank'}
+          </button>
           <button
             class={`${styles.btnPrimary} ${styles.btnSm}`}
             onClick={openTransactionModal}
