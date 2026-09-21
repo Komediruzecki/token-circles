@@ -20,7 +20,12 @@ import { addToast } from './toastStore'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
-export const DATA_CHANGED_EVENT = 'tc:data-changed'
+/**
+ * Re-exported so existing importers keep their import path. The constant itself lives in a leaf
+ * module because `apiFetch` dispatches it and this store imports the API client — importing it
+ * from here would close a cycle.
+ */
+export { DATA_CHANGED_EVENT } from './dataChangedEvent'
 
 const OUR_HOSTS = /(^|\.)tokencircles\.com$/i
 
