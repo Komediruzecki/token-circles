@@ -43,6 +43,9 @@
       "workerd",
       "@cloudflare/workerd-linux-64",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "sharp@<0.35.4": "0.35.4"
+    }
   }
 }
