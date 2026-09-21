@@ -29,4 +29,5 @@ export const pages: Record<PageName, PageComponent> = {
   portfolio: lazy(() => import('./features/Portfolio.tsx')),
   tags: lazy(() => import('./features/Tags.tsx')),
   notFound: lazy(() => import('./features/NotFound.tsx')),
+  bankCallback: lazy(() => import('./features/BankCallback.tsx')),
 }

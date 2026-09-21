@@ -59,7 +59,7 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   }
 
   // Serverless: route app-API calls to the IndexedDB-backed local router
-  if (apiPath) {
+  if (apiPath && !apiPath.startsWith('/api/imports/enablebanking')) {
     const router = await getLocalRouter()
     return router(apiPath, init)
   }

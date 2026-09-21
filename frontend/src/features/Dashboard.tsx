@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { batch, createSignal, For, Show } from 'solid-js'
+import { batch, createSignal, For, onMount, Show } from 'solid-js'
 import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
@@ -27,6 +27,7 @@ import {
   toast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { isSyncing, triggerBankSync } from '../core/bankSyncStore'
 import { loadWidgetPrefs } from '../core/dashboardWidgets'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
@@ -58,6 +59,10 @@ export default function Dashboard() {
   const [metrics, setMetrics] = createSignal<Models.DashboardMetrics | null>(null)
   const [monthlyData, setMonthlyData] = createSignal<Models.DashboardChartData | null>(null)
   const [initialLoad, setInitialLoad] = createSignal(true)
+
+  onMount(() => {
+    void triggerBankSync(false)
+  })
 
   // Human-readable label for the currently selected dashboard period
   const periodText = () => helpers.label(period())
@@ -456,6 +461,16 @@ export default function Dashboard() {
             <p data-test-id="dashboard-subtitle">Your financial overview</p>
           </div>
           <div class={styles.headerButtons}>
+            <Show when={isSyncing()}>
+              <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--text-secondary); font-size: 0.85rem; background: var(--bg-card); padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid var(--border-color);">
+                <div
+                  class="spinner"
+                  style="width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"
+                />
+                Bank syncing...
+                <style>{'@keyframes spin { 100% { transform: rotate(360deg); } }'}</style>
+              </div>
+            </Show>
             <button
               class={styles.btnSecondary}
               onClick={showSettings}

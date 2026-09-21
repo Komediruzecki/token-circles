@@ -1,3 +1,4 @@
+import { EnableBankingClient } from '../enableBankingClient';
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
@@ -42,6 +43,194 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 //   - the XLSX fallback branch of /googlesheet (when CSV export isn't available) also
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
 export const importRoutes = new Hono<AppEnv>();
+
+importRoutes.get('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const session = await c.env.DB.prepare(
+    'SELECT id, aspsp_name, session_id, accounts, expires_at, updated_at FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(profileId)
+    .first<{
+      id: string;
+      aspsp_name: string;
+      session_id: string;
+      accounts: string;
+      expires_at: number;
+      updated_at: string;
+    }>();
+
+  if (!session) {
+    return c.json({ connected: false });
+  }
+
+  let parsedAccounts: any[] = [];
+  try {
+    parsedAccounts = JSON.parse(session.accounts);
+  } catch {
+    parsedAccounts = [];
+  }
+
+  return c.json({
+    connected: true,
+    aspspName: session.aspsp_name,
+    expiresAt: session.expires_at,
+    accounts: parsedAccounts.map((acc: any) => ({
+      id: acc.uid || acc.resource_id || acc.id,
+      uid: acc.uid || acc.resource_id || acc.id,
+      resource_id: acc.resource_id || acc.uid || acc.id,
+      name: acc.name || 'Bank Account',
+      currency: acc.currency || 'EUR',
+      type: acc.cash_account_type || acc.type || 'CHECKING',
+      iban: acc.account_id?.iban || acc.iban || null,
+      mapped_account_id: acc.mapped_account_id || null,
+    })),
+  });
+});
+
+importRoutes.delete('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  await c.env.DB.prepare('DELETE FROM bank_sessions WHERE profile_id = ?').bind(profileId).run();
+  return c.json({ success: true });
+});
+
+importRoutes.put('/api/imports/enablebanking/session', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { accounts } = await c.req.json();
+  if (!accounts) return c.json({ error: 'Missing accounts' }, 400);
+
+  await c.env.DB.prepare(
+    'UPDATE bank_sessions SET accounts = ?, updated_at = CURRENT_TIMESTAMP WHERE profile_id = ?'
+  )
+    .bind(JSON.stringify(accounts), profileId)
+    .run();
+
+  return c.json({ success: true });
+});
+
+importRoutes.post('/api/imports/enablebanking/transactions', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { dateFrom, dateTo } = await c.req.json().catch(() => ({}));
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+
+  if (!pem || !appId) {
+    return c.json({ error: 'Enable Banking is not configured' }, 500);
+  }
+
+  const session = await c.env.DB.prepare(
+    'SELECT session_id, accounts FROM bank_sessions WHERE profile_id = ? ORDER BY updated_at DESC LIMIT 1'
+  )
+    .bind(profileId)
+    .first<{ session_id: string; accounts: string }>();
+
+  if (!session) {
+    return c.json({ error: 'No active session found' }, 400);
+  }
+
+  const accountsList = JSON.parse(session.accounts) || [];
+  if (accountsList.length === 0) {
+    return c.json({ error: 'No accounts linked to session' }, 400);
+  }
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    const results = [];
+
+    for (const acc of accountsList) {
+      const accountUid = acc.uid || acc.resource_id || acc.id || '';
+      const transactions = await client
+        .getTransactions(accountUid, dateFrom, dateTo)
+        .catch(() => ({ transactions: [], balances: [] }));
+      const balances = await client.getBalances(accountUid).catch(() => ({ balances: [] }));
+
+      results.push({
+        account_uid: accountUid,
+        mapped_account_id: acc.mapped_account_id || null,
+        transactions: transactions.transactions || transactions || [],
+        balances: balances.balances || balances || [],
+      });
+    }
+
+    return c.json({
+      success: true,
+      accounts: results,
+    });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+importRoutes.post('/api/imports/enablebanking/auth-url', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { aspspName, redirectUri } = await c.req.json();
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+  if (!pem || !appId) return c.json({ error: 'Not configured' }, 500);
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    const state = profileId.toString();
+    const result = await client.startAuthorization(aspspName, redirectUri, state);
+    return c.json(result);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+importRoutes.post('/api/imports/enablebanking/callback', requireAuth, async (c) => {
+  const profileId = await getProfileId(c);
+  const { code, state } = await c.req.json();
+
+  if (state !== profileId.toString()) {
+    return c.json({ error: 'Invalid state parameter' }, 400);
+  }
+
+  const env = c.env as any;
+  const pem = env.ENABLE_BANKING_PRIVATE_KEY;
+  const appId = env.ENABLE_BANKING_APPLICATION_ID;
+  if (!pem || !appId) return c.json({ error: 'Not configured' }, 500);
+
+  try {
+    const client = await EnableBankingClient.create(appId, pem);
+    const result = (await client.authorizeSession(code)) as any;
+
+    let expiresAt = Math.floor(Date.now() / 1000) + 90 * 86400;
+    const rawValidUntil = (result as any).access?.valid_until || (result as any).valid_until;
+    if (typeof rawValidUntil === 'string') {
+      const ms = Date.parse(rawValidUntil);
+      if (!Number.isNaN(ms)) {
+        expiresAt = Math.floor(ms / 1000);
+      }
+    } else if (typeof rawValidUntil === 'number' && !Number.isNaN(rawValidUntil)) {
+      expiresAt =
+        rawValidUntil > 1e11 ? Math.floor(rawValidUntil / 1000) : Math.floor(rawValidUntil);
+    }
+
+    const accounts = Array.isArray(result.accounts) ? result.accounts : [];
+    const sessionId = result.session_id || result.id || '';
+    const aspspName = result.aspsp?.name || 'Mock ASPSP';
+
+    await c.env.DB.prepare(
+      `INSERT INTO bank_sessions (id, profile_id, aspsp_name, session_id, accounts, expires_at)
+       VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?)
+       ON CONFLICT(profile_id, aspsp_name) DO UPDATE SET
+       session_id = excluded.session_id,
+       accounts = excluded.accounts,
+       expires_at = excluded.expires_at,
+       updated_at = current_timestamp`
+    )
+      .bind(profileId, aspspName, sessionId, JSON.stringify(accounts), expiresAt)
+      .run();
+
+    return c.json({ success: true, accounts, session_id: sessionId });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
 
 // ── getCategoryIcon — ported verbatim from backend/utils.js ───────────────────
 // Maps a category name to an icon key when /execute auto-creates a category.

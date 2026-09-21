@@ -22,6 +22,8 @@ export default defineConfig(async () => {
           // so requireAuth + issueSessionCookie work end-to-end.
           bindings: {
             JWT_SECRET: 'test-jwt-secret-not-for-prod',
+            ENABLE_BANKING_APPLICATION_ID: 'test-dummy-app-id',
+            ENABLE_BANKING_PRIVATE_KEY: 'test-dummy-pem-key',
             TEST_MIGRATIONS: migrations,
           },
         },
