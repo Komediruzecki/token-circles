@@ -39,6 +39,7 @@ import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import styles from './GoalsPage.module.css'
@@ -54,7 +55,6 @@ interface Goal {
   profile_id: number
   created_at: string
   category_id?: number | null
-  category_name?: string
 }
 
 interface CategoryOption {
@@ -91,9 +91,6 @@ export default function Goals() {
   const loadGoals = async () => {
     try {
       const data = await apiHouseholdGet<any[]>('/api/savings-goals')
-      // Also get category names for each goal
-      const cats = await apiHouseholdGet<any[]>('/api/categories')
-      const catMap = new Map<number, string>(cats.map((c: any) => [c.id, c.name]))
       setGoals(
         data.map((s) => ({
           id: s.id,
@@ -105,7 +102,6 @@ export default function Goals() {
           profile_id: s.profile_id,
           created_at: s.created_at,
           category_id: s.category_id || null,
-          category_name: s.category_id ? catMap.get(s.category_id) : undefined,
           tracking_start_date: s.tracking_start_date || null,
         }))
       )
@@ -126,6 +122,15 @@ export default function Goals() {
       // categories remain empty
     }
   }
+
+  /**
+   * A goal's category name, read off the loaded list rather than baked into the goal when it was
+   * fetched. Goals used to fetch the whole category list a second time just to build that map,
+   * which doubled the page's category traffic and froze the name at fetch time — a rename on the
+   * Categories page left the old one on screen.
+   */
+  const categoryNameOf = (goal: Goal): string | undefined =>
+    goal.category_id ? categories().find((c) => c.id === goal.category_id)?.name : undefined
 
   // Handle form submit (create or update)
   const handleSubmit = async (e: Event) => {
@@ -196,7 +201,7 @@ export default function Goals() {
       })
       setShowCategoryModal(false)
       setCategoryForm({ name: '', type: 'expense', color: '#6e9bff' })
-      loadCategories()
+      // No reload here: the POST bumped the categories counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to create category:', err)
       showToast('Failed to create category', 'error')
@@ -291,6 +296,15 @@ export default function Goals() {
     () => state.profileVersion,
     () => {
       loadGoals()
+    }
+  )
+  // Categories additionally follow writes made anywhere else — the Categories page, or another
+  // page's inline create modal. Tracked separately from the goals load so a category write
+  // refreshes only the selector, not the whole page.
+  refetchOnActive(
+    'goals',
+    () => [state.profileVersion, entityVersion('categories')],
+    () => {
       loadCategories()
     }
   )
@@ -374,8 +388,8 @@ export default function Goals() {
                         </h3>
                         <p data-test-id="goal-date" class={styles.goalDate}>
                           {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
-                          {goal.category_name && (
-                            <span class={styles.goalCategory}> • {goal.category_name}</span>
+                          {categoryNameOf(goal) && (
+                            <span class={styles.goalCategory}> • {categoryNameOf(goal)}</span>
                           )}
                         </p>
                       </div>
@@ -498,8 +512,8 @@ export default function Goals() {
                         {goal.category_id && (
                           <p class={styles.goalTrackHint}>
                             Progress tracks automatically from your
-                            {goal.category_name ? ` ${goal.category_name}` : ''} transactions — add
-                            spending in that category to move it.
+                            {categoryNameOf(goal) ? ` ${categoryNameOf(goal)}` : ''} transactions —
+                            add spending in that category to move it.
                           </p>
                         )}
                       </div>
