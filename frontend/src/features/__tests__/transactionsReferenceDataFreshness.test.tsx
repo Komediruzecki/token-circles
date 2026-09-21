@@ -31,13 +31,14 @@ let serverAccounts: Acct[] = []
 
 const getCategories = vi.fn(async () => serverCategories)
 const getAccounts = vi.fn(async () => serverAccounts)
+const getTags = vi.fn(async () => [] as Array<{ id: number; name: string; color: string }>)
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   api: {
     getTransactions: vi.fn(async () => []),
     getCategories: () => getCategories(),
-    getTags: vi.fn(async () => []),
+    getTags: () => getTags(),
     getAccounts: () => getAccounts(),
   },
   apiPut: vi.fn(async () => ({ ok: true })),
@@ -54,6 +55,7 @@ beforeEach(() => {
   serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR' }]
   getCategories.mockClear()
   getAccounts.mockClear()
+  getTags.mockClear()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -115,6 +117,9 @@ describe('Transactions reference data', () => {
     // fetch beside it — the shape this page used to have for tags — would double every one.
     expect(getCategories).toHaveBeenCalledTimes(1)
     expect(getAccounts).toHaveBeenCalledTimes(1)
+    // Tags had BOTH a refetchOnActive and an onMount load — the onMount one existed only to apply
+    // the ?tag= hash filter, and fetched the list a second time to do it. That is now one load.
+    expect(getTags).toHaveBeenCalledTimes(1)
   })
 
   it('picks up a category created on another page, without a browser reload', async () => {
