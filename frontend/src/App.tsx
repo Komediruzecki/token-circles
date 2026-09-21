@@ -375,6 +375,21 @@ export function App() {
       document.removeEventListener('click', handleClickOutside)
     })
 
+    // Everything below the first `await` in this async onMount runs OUTSIDE Solid's owner, so an
+    // `onCleanup` down there is silently dropped and its listener is never removed. Three document
+    // keydown handlers and two disposers were being registered that way — a leak per App mount,
+    // and duplicated global key handlers whenever a mount happened without a page load (HMR, and
+    // any test that mounts the shell more than once).
+    //
+    // This one `onCleanup` is registered synchronously, so the owner does track it; the post-await
+    // code pushes its teardowns onto the list instead of calling `onCleanup` itself. Deliberately
+    // NOT fixed by moving the async block below the listeners: that also moves `initPeriodSync`
+    // ahead of the initial hash parse, which is a behaviour change this does not need.
+    const lateTeardowns: Array<() => void> = []
+    onCleanup(() => {
+      for (const teardown of lateTeardowns.splice(0)) teardown()
+    })
+
     const loggedIn = await api.checkLogin()
     setIsAuthenticated(loggedIn)
     // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
@@ -437,7 +452,7 @@ export function App() {
       }
     }
     document.addEventListener('keydown', handleQuickAddKey)
-    onCleanup(() => {
+    lateTeardowns.push(() => {
       document.removeEventListener('keydown', handleQuickAddKey)
     })
 
@@ -451,7 +466,7 @@ export function App() {
       setShowShortcuts(true)
     }
     document.addEventListener('keydown', handleHelpKey)
-    onCleanup(() => {
+    lateTeardowns.push(() => {
       document.removeEventListener('keydown', handleHelpKey)
     })
 
@@ -474,18 +489,18 @@ export function App() {
       stepPeriod(e.key === 'ArrowRight' ? 1 : -1)
     }
     document.addEventListener('keydown', handlePeriodKeys)
-    onCleanup(() => {
+    lateTeardowns.push(() => {
       document.removeEventListener('keydown', handlePeriodKeys)
     })
 
     // Mirror the focus period into the URL hash + keep it across page navigation.
     const disposePeriodSync = initPeriodSync()
-    onCleanup(disposePeriodSync)
+    lateTeardowns.push(disposePeriodSync)
 
     // Watch for new deployments and reload at a safe moment (next navigation) so a mid-session
     // deploy never strands the user on a deleted chunk.
     const disposeVersionWatch = initVersionWatch()
-    onCleanup(disposeVersionWatch)
+    lateTeardowns.push(disposeVersionWatch)
 
     _setIsLoading(false)
 
