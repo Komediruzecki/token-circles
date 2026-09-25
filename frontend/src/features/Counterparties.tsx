@@ -8,6 +8,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiHouseholdGet } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import styles from './CounterpartiesPage.module.css'
 
@@ -41,12 +42,13 @@ export default function Counterparties() {
     }
   }
 
-  // Reload on profile change — but only when this page is visible. A hidden page is
-  // marked stale and refetches once when next shown, so a profile switch no longer
-  // fans out to every mounted keep-alive page at once.
+  // Reload on a profile change, or on any write that adds or changes transactions (this list is
+  // aggregated from their payees and payers) — but only when this page is visible. A hidden page
+  // is marked stale and refetches once when next shown, so a profile switch no longer fans out to
+  // every mounted keep-alive page at once.
   refetchOnActive(
     'counterparties',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('transactions')],
     () => {
       void loadData()
     }

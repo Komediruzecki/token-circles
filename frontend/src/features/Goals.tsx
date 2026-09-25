@@ -171,7 +171,6 @@ export default function Goals() {
         category_id: '',
         tracking_start_date: '',
       })
-      loadGoals()
     } catch (err) {
       console.error('Failed to save goal:', err)
       showToast('Failed to save goal', 'error')
@@ -183,7 +182,6 @@ export default function Goals() {
     try {
       await apiDelete(`/api/savings-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
-      loadGoals()
     } catch (err) {
       console.error('Failed to delete goal:', err)
       showToast('Failed to delete goal', 'error')
@@ -242,7 +240,6 @@ export default function Goals() {
       showToast('Contribution added', 'success')
       setContributingGoalId(null)
       setContributeAmount('')
-      loadGoals()
     } catch (err) {
       console.error('Failed to contribute:', err)
       showToast('Failed to add contribution', 'error')
@@ -289,11 +286,13 @@ export default function Goals() {
     })
   }
 
-  // Load on mount and reload on profile change — but only while visible. A hidden
-  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  // Load on mount, and reload on a profile change or a goal write from anywhere (including
+  // resume revalidation) — but only while visible. A hidden page defers its refetch until it is
+  // next shown (keep-alive fan-out guard). This page's own writes, contributions included, bump
+  // `savings-goals` through apiFetch, so none of them reloads by hand.
   refetchOnActive(
     'goals',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('savings-goals')],
     () => {
       loadGoals()
     }

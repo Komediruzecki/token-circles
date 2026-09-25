@@ -37,6 +37,7 @@ import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import styles from './HousingPage.module.css'
 
@@ -142,7 +143,6 @@ export default function HousingForm() {
         autopay: false,
         notes: '',
       })
-      loadHousings()
     } catch (err) {
       console.error('Failed to save housing expense:', err)
       showToast('Failed to save housing expense', 'error')
@@ -154,7 +154,6 @@ export default function HousingForm() {
     try {
       await apiDelete(`/api/housing/${id}`)
       showToast('Housing expense deleted', 'success')
-      loadHousings()
     } catch (err) {
       console.error('Failed to delete housing expense:', err)
       showToast('Failed to delete housing expense', 'error')
@@ -212,13 +211,23 @@ export default function HousingForm() {
     return formatCurrency(amount)
   }
 
-  // Load on mount and reload on profile change — but only while visible. A hidden
-  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  // Load on mount, and reload on a profile change or a write from anywhere (including resume
+  // revalidation) — but only while visible. A hidden page defers its refetch until it is next
+  // shown (keep-alive fan-out guard). The two lists follow separate entities, so a subscription
+  // edited on Bills does not reload the housing costs, and a housing write does not reload the
+  // subscriptions. This page's own writes bump `housing` through apiFetch, so none of them
+  // reloads by hand.
   refetchOnActive(
     'housing',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('housing')],
     () => {
       void loadHousings()
+    }
+  )
+  refetchOnActive(
+    'housing',
+    () => [state.profileVersion, entityVersion('bills')],
+    () => {
       void loadSubscriptions()
     }
   )

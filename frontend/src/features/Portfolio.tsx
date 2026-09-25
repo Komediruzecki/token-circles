@@ -19,6 +19,7 @@ import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
 import { convertToBase } from '../core/currency'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
@@ -105,11 +106,13 @@ export default function Portfolio() {
     }
   }
 
-  // Load on mount and reload on profile change — but only while visible. A hidden
-  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  // Load on mount, and reload on a profile change or a holding write from anywhere (including
+  // resume revalidation) — but only while visible. A hidden page defers its refetch until it is
+  // next shown (keep-alive fan-out guard). This page's own writes bump `portfolio` through
+  // apiFetch, so none of them reloads by hand; a price refresh is a read and bumps nothing.
   refetchOnActive(
     'portfolio',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('portfolio')],
     () => {
       void loadData()
     }
@@ -153,7 +156,6 @@ export default function Portfolio() {
         await apiPut(`/api/portfolio/holdings/${editingHolding()!.id}`, data)
         showToast('Holding updated', 'success')
         setShowAddModal(false)
-        loadData()
         return
       }
 
@@ -185,7 +187,6 @@ export default function Portfolio() {
             'success'
           )
           setShowAddModal(false)
-          loadData()
           return
         }
         // merge declined → fall through and add as a separate holding
@@ -194,7 +195,6 @@ export default function Portfolio() {
       await apiPost('/api/portfolio/holdings', data)
       showToast('Holding added', 'success')
       setShowAddModal(false)
-      loadData()
     } catch (err) {
       console.error('Failed to save holding', err)
       showToast('Failed to save holding', 'error')
@@ -205,7 +205,6 @@ export default function Portfolio() {
     try {
       await apiDelete(`/api/portfolio/holdings/${id}`)
       showToast('Holding deleted', 'success')
-      loadData()
     } catch (err) {
       console.error('Failed to delete holding', err)
       showToast('Failed to delete holding', 'error')

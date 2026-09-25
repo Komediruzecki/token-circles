@@ -493,14 +493,16 @@ export default function Budgets() {
     }
   }
 
-  // Improvements follow the profile; categories follow profile + focus month, and also any
-  // category write made elsewhere — including this page's own Add Category modal. Both
-  // gated on visibility — while Budgets is hidden they are deferred and flushed once
-  // on the next show. The first run also performs the initial load, so this replaces
-  // the old onMount + two effects (which triple-fetched categories on mount).
+  // Improvements follow the profile and every budget write — they compare budgets against
+  // spending, and transaction and category writes reach them through the `budgets` fan-out.
+  // Categories follow profile + focus month, and also any category write made elsewhere —
+  // including this page's own Add Category modal. Both gated on visibility — while Budgets is
+  // hidden they are deferred and flushed once on the next show. The first run also performs the
+  // initial load, so this replaces the old onMount + two effects (which triple-fetched
+  // categories on mount).
   refetchOnActive(
     'budgets',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('budgets')],
     () => {
       loadImprovements()
     }

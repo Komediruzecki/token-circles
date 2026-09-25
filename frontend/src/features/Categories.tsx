@@ -38,6 +38,7 @@ import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import styles from './CategoriesPage.module.css'
 
@@ -59,11 +60,16 @@ export default function Categories() {
   const state = useAppState()
 
   // Categories resource — fetches categories + budget summary
-  const [categoriesResource, { refetch: refetchCategories }] = createResource(
-    // Gated on visibility: a profile switch refetches now only while this page is
-    // visible; hidden, it is marked stale and refetches once on the next show. This
-    // also drives the initial load, replacing the old onMount + profileVersion effect.
-    gatedSource('categories', () => state.profileVersion),
+  const [categoriesResource] = createResource(
+    // Gated on visibility: a profile switch, or a category or budget write anywhere, refetches
+    // now only while this page is visible; hidden, it is marked stale and refetches once on the
+    // next show. This also drives the initial load, replacing the old onMount + profileVersion
+    // effect. The budget summary counts spending, which transaction writes reach through the
+    // `budgets` fan-out. This page's own writes bump both counters through apiFetch, so none of
+    // them refetches by hand.
+    gatedSource('categories', () =>
+      [state.profileVersion, entityVersion('categories'), entityVersion('budgets')].join('|')
+    ),
     async () => {
       const [allRes, budgetRes] = await Promise.all([
         apiHouseholdGet<Category[]>('/api/categories'),
@@ -127,7 +133,6 @@ export default function Categories() {
       setShowIconPicker(false)
       setEditingCategory(null)
       setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
-      refetchCategories()
     } catch (err) {
       console.error('Failed to save category:', err)
       showToast('Failed to save category', 'error')
@@ -139,7 +144,6 @@ export default function Categories() {
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
-      refetchCategories()
     } catch (err) {
       console.error('Failed to delete category:', err)
       showToast('Failed to delete category', 'error')
@@ -150,7 +154,6 @@ export default function Categories() {
   const updateColor = async (id: number, color: string) => {
     try {
       await apiPut(`/api/categories/${id}`, { color })
-      refetchCategories()
     } catch (err) {
       console.error('Failed to update color:', err)
       showToast('Failed to update color', 'error')
@@ -191,7 +194,6 @@ export default function Categories() {
       showToast('Budget set successfully', 'success')
       setShowBudgetModal(false)
       setSelectedCategory(null)
-      refetchCategories()
     } catch (err) {
       console.error('Failed to set budget', err)
       showToast('Failed to set budget', 'error')
