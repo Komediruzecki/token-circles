@@ -2,10 +2,13 @@
  * RecurringSection Component
  * Manages recurring transactions — list, create, edit, delete, populate
  */
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
 import { transactionInvariantError } from '../../../shared/transactionInvariant'
 import { api, toast } from '../core/api'
+import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
+import { entityVersion } from '../core/dataVersions'
+import { refetchOnActive } from '../core/pageVisibility'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
 
@@ -56,9 +59,18 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
-  onMount(() => {
-    loadItems()
-  })
+  // Loads on mount, and again on a profile switch or any recurring write — from anywhere, this
+  // section included, and on resume — while Transactions is visible; hidden, it reloads once on
+  // the next show. Adding a row to transactions moves the rule's next date on the server, so that
+  // write reloads the list too. None of the writes below reloads it by hand.
+  const state = useAppState()
+  refetchOnActive(
+    'transactions',
+    () => [state.profileVersion, entityVersion('recurring')],
+    () => {
+      void loadItems()
+    }
+  )
 
   const openAddModal = () => {
     setEditingId(null)
@@ -122,7 +134,6 @@ export default function RecurringSection(props: RecurringSectionProps) {
         await api.createRecurring(data)
       }
       setIsModalOpen(false)
-      await loadItems()
     } catch (error) {
       console.error('Failed to save recurring transaction:', error)
       toast(
@@ -142,7 +153,6 @@ export default function RecurringSection(props: RecurringSectionProps) {
       return
     try {
       await api.deleteRecurring(item.id)
-      await loadItems()
     } catch (error) {
       console.error('Failed to delete recurring:', error)
     }
@@ -151,6 +161,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
   const handlePopulate = async (item: RecurringTransaction) => {
     try {
       await api.populateRecurring(item.id)
+      // The transaction list tracks only the profile, so it still has to be told.
       props.onRefreshTransactions()
     } catch (error) {
       console.error('Failed to populate recurring:', error)
