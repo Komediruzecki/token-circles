@@ -3,6 +3,10 @@
  * profile's settings. Refresh happens on profile change and, debounced, after any mutating
  * request (apiFetch dispatches DATA_CHANGED_EVENT for both client surfaces — see
  * core/dataChangedEvent.ts). Nothing here is server-side.
+ *
+ * Badges are per profile: they are earned from the active profile's own rows and stored where
+ * only that profile reads them. They used to be judged on the household view, so ticking another
+ * profile into it in Settings earned the active profile that profile's badges, permanently.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
@@ -15,6 +19,7 @@ import {
   SETTINGS_KEY,
 } from './achievements/records'
 import { api } from './api'
+import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
@@ -81,19 +86,50 @@ export const streak = state.streak
 export const snapshot = state.snapshot
 export const dismissedAdvice = state.dismissedAdvice
 
+/**
+ * Where a profile's badge record is stored.
+ *
+ * The Worker's settings table is keyed by (key, profile_id), so there the plain key is already per
+ * profile. The browser store keeps one row per key for the whole device, so local-first mode puts
+ * the profile in the key — the convention the retirement settings set
+ * (storage/handlers/calculators.ts).
+ */
+export function recordKey(profileId: number): string {
+  return getStorageMode() === 'serverless' ? `${SETTINGS_KEY}:${profileId}` : SETTINGS_KEY
+}
+
 /** Wave a card away for good. Persisted next to the unlocks, so it survives a reload. */
 export async function dismissAdvice(id: string): Promise<void> {
   if (state.dismissedAdvice().includes(id)) return
   const next = [...state.dismissedAdvice(), id]
   state.setDismissedAdvice(next)
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(state.unlocks(), next) })
+  await api.updateSettings({
+    [recordKey(activeProfileId())]: serializeRecords(state.unlocks(), next),
+  })
 }
 
 /** Bring every dismissed card back. */
 export async function restoreAdvice(): Promise<void> {
   if (state.dismissedAdvice().length === 0) return
   state.setDismissedAdvice([])
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(state.unlocks(), []) })
+  await api.updateSettings({
+    [recordKey(activeProfileId())]: serializeRecords(state.unlocks(), []),
+  })
+}
+
+/**
+ * Keep the rows that belong to the active profile.
+ *
+ * The list reads cover the household view: the endpoints take the household scope, and in
+ * local-first mode the handlers read the household from storage whatever a request asks for. So
+ * the filter goes here, where it holds in both modes. The schemas require `profile_id` on every
+ * row this is used on; a row that names no profile cannot belong to another one, so it is kept.
+ */
+function ownRows<T extends object>(rows: T[], profileId: number): T[] {
+  return rows.filter((row) => {
+    const owner = (row as { profile_id?: number | null }).profile_id
+    return owner === null || owner === undefined || owner === profileId
+  })
 }
 
 let inFlight: Promise<UnlockRecord[]> | null = null
@@ -111,8 +147,8 @@ export function refreshAchievements(): Promise<UnlockRecord[]> {
  * not carry either in server mode, so each loan is fetched once; a profile with no loans makes
  * no extra request at all, and one with a mortgage makes one.
  */
-async function loadLoans(): Promise<EvaluateInput['loans']> {
-  const list = await api.getLoans().catch(() => [])
+async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
+  const list = ownRows(await api.getLoans().catch(() => []), profileId)
   if (list.length === 0) return []
   const details = await Promise.all(
     list.map((l) => api.getLoan(l.id).catch(() => null as unknown as null))
@@ -129,19 +165,34 @@ async function loadLoans(): Promise<EvaluateInput['loans']> {
 }
 
 async function run(): Promise<UnlockRecord[]> {
-  const [settings, transactions, budgets, goals, importLogs, categories, bills, loans] =
-    await Promise.all([
-      api.getSettings(),
-      api.getTransactions(),
-      api.getBudgets(),
-      api.getGoals(),
-      api.getImportLogs(),
-      api.getCategories(),
-      api.getBills(),
-      loadLoans(),
-    ])
-  const stored = parseRecords(settings[SETTINGS_KEY])
-  const dismissed = parseDismissed(settings[SETTINGS_KEY])
+  const profileId = activeProfileId()
+  const key = recordKey(profileId)
+  const [settings, ...lists] = await Promise.all([
+    api.getSettings(),
+    api.getTransactions(),
+    api.getBudgets(),
+    api.getGoals(),
+    api.getImportLogs(),
+    api.getCategories(),
+    api.getBills(),
+    loadLoans(profileId),
+  ])
+  const transactions = ownRows(lists[0], profileId)
+  const budgets = ownRows(lists[1], profileId)
+  const goals = ownRows(lists[2], profileId)
+  const importLogs = ownRows(lists[3], profileId)
+  const categories = ownRows(lists[4], profileId)
+  const bills = ownRows(lists[5], profileId)
+  const loans = lists[6]
+
+  // A record saved before badges were per profile sits under the plain key in local-first mode.
+  // The first profile to evaluate adopts it and the old key is emptied: left in place, it would be
+  // handed to every other profile too, which is the behaviour being fixed.
+  const adopting =
+    key !== SETTINGS_KEY && settings[key] === undefined && Boolean(settings[SETTINGS_KEY])
+  const raw = adopting ? settings[SETTINGS_KEY] : settings[key]
+  const stored = parseRecords(raw)
+  const dismissed = parseDismissed(raw)
   const now = new Date()
   const today = now.toISOString().slice(0, 10)
   const evaluation = evaluateAchievements({
@@ -168,9 +219,12 @@ async function run(): Promise<UnlockRecord[]> {
   })
   const { newly, merged } = diffUnlocks(stored, evaluation.earned, now.toISOString())
   state.setUnlocks(merged)
-  if (newly.length === 0) return []
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(merged, dismissed) })
-  announce(newly, stored.length === 0)
+  if (newly.length === 0 && !adopting) return []
+  await api.updateSettings({
+    [key]: serializeRecords(merged, dismissed),
+    ...(adopting ? { [SETTINGS_KEY]: '' } : {}),
+  })
+  if (newly.length > 0) announce(newly, stored.length === 0)
   return newly
 }
 
