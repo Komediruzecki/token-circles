@@ -52,6 +52,7 @@ import {
 } from './core/appStore'
 import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
+import { initDataRevalidation } from './core/dataRevalidation'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { isEditableTarget } from './core/domFocus'
 import { resolvePageFromHash } from './core/hashRoute.js'
@@ -503,6 +504,12 @@ export function App() {
     // deploy never strands the user on a deleted chunk.
     const disposeVersionWatch = initVersionWatch()
     lateTeardowns.push(disposeVersionWatch)
+
+    // Refresh the data when the app comes back from the background. Pages stay mounted for the
+    // whole session, so without this a tab left open overnight keeps showing yesterday's numbers
+    // and an edit made on another device never arrives.
+    const disposeRevalidation = initDataRevalidation()
+    lateTeardowns.push(disposeRevalidation)
 
     _setIsLoading(false)
 

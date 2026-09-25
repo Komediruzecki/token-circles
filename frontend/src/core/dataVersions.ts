@@ -136,6 +136,29 @@ export function invalidateForRequest(path: string, method: string | undefined, o
   })
 }
 
+/**
+ * Bump every counter that something is actually tracking.
+ *
+ * Used by resume revalidation (core/dataRevalidation.ts) when the app comes back from the
+ * background: at that point any entity could have been changed by another device, another tab or
+ * the scheduled importer, and the client has no way to know which. Bumping all of them is correct
+ * rather than wasteful — a slot exists only because a consumer called `entityVersion` for it, and
+ * `pageVisibility` defers every hidden page, so this costs one refetch on the visible page and
+ * nothing at all until the others are next shown.
+ */
+export function invalidateAllEntities(): void {
+  // One update for all of them: Budgets tracks both `categories` and `budgets`, and would
+  // otherwise refetch once per counter on every resume.
+  batch(() => {
+    for (const [, setVersion] of slots.values()) setVersion((n) => n + 1)
+  })
+}
+
+/** The entity names currently being tracked. Test and diagnostic use. */
+export function trackedEntities(): string[] {
+  return [...slots.keys()]
+}
+
 /** Test-only: forget every counter so one test's bumps cannot leak into the next. */
 export function __resetDataVersionsForTest(): void {
   slots.clear()
