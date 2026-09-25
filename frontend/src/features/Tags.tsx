@@ -26,6 +26,7 @@ import PeriodBar from '../components/PeriodBar'
 import { api, formatCurrency, showToast } from '../core/api'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
+import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { toRange } from '../utils/period'
@@ -94,7 +95,13 @@ export default function Tags() {
   // user-visible explanation at all. Instead the tag list — the one call the page cannot work
   // without — records its failure, and the page renders a retry banner.
   const [overview, { refetch: refetchOverview }] = createResource(
-    gatedSource('tags', () => `${state.profileVersion}|${range().from}|${range().to}`),
+    // Categories and accounts ride along in this resource, so their counters belong in the
+    // source too — otherwise a category created elsewhere never reaches the tag-rule editor.
+    gatedSource(
+      'tags',
+      () =>
+        `${state.profileVersion}|${range().from}|${range().to}|${entityVersion('categories')}|${entityVersion('accounts')}`
+    ),
     async () => {
       const [summary, rules, categories, accounts] = await Promise.all([
         api

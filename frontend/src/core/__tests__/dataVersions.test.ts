@@ -3,6 +3,7 @@
  * that write moves. These are the guards that keep the "stale until browser reload" class of bug
  * from coming back — each one fails if the corresponding rule is removed.
  */
+import { createComputed, createRoot } from 'solid-js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetDataVersionsForTest,
@@ -79,6 +80,21 @@ describe('invalidateForRequest', () => {
   it('does not bump when the write failed — the server state is unchanged, so refetching is waste', () => {
     invalidateForRequest('/api/categories', 'POST', false)
     expect(entityVersion('categories')).toBe(0)
+  })
+
+  it('is one reactive update however many counters a write bumps', () => {
+    // A category write bumps `categories` and `budgets`. Budgets tracks both; delivered as two
+    // separate updates, one save made that page load everything twice.
+    const seen: number[] = []
+    const dispose = createRoot((dispose) => {
+      createComputed(() => seen.push(entityVersion('categories') + entityVersion('budgets')))
+      return dispose
+    })
+
+    invalidateForRequest('/api/categories', 'POST', true)
+    dispose()
+
+    expect(seen).toEqual([0, 2])
   })
 
   it.each(['POST', 'PUT', 'PATCH', 'DELETE', 'post', 'delete'])(

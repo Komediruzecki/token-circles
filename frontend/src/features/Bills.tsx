@@ -67,6 +67,7 @@ import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
@@ -117,8 +118,10 @@ export default function Bills() {
   // Bills resource — fetches bills + expense categories
   const [billsResource, { refetch: refetchBills, mutate: mutateBills }] = createResource(
     // Gated on visibility: a profile switch refetches now only while this page is
-    // visible; hidden, it is marked stale and refetches once on the next show.
-    gatedSource('bills', () => state.profileVersion),
+    // visible; hidden, it is marked stale and refetches once on the next show. The
+    // categories counter is tracked too, so a category created on any other surface
+    // reaches this page's picker without a browser reload.
+    gatedSource('bills', () => [state.profileVersion, entityVersion('categories')].join('|')),
     async () => {
       const [allRes, categoryRes] = await Promise.all([
         apiHouseholdGet<Bill[]>('/api/bills'),
@@ -219,7 +222,8 @@ export default function Bills() {
       showToast('Category added', 'success')
       setCategoryForm({ name: '', type: 'expense', color: '#7182a8' })
       setShowCategoryModal(false)
-      refetchBills()
+      // No refetch here: the POST bumped the categories counter, which this page's
+      // resource source tracks.
     } catch (err) {
       console.error('Failed to add category', err)
       showToast('Failed to add category', 'error')
