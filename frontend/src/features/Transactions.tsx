@@ -1238,7 +1238,14 @@ export default function Transactions() {
                       >
                         <option value="">Select destination...</option>
                         <For each={accounts()}>
-                          {(acct) => <option value={String(acct.id)}>{acct.name}</option>}
+                          {(acct) => (
+                            <option
+                              value={String(acct.id)}
+                              selected={acct.id === formTransferAccountId()}
+                            >
+                              {acct.name}
+                            </option>
+                          )}
                         </For>
                       </select>
                     </div>
@@ -1260,7 +1267,11 @@ export default function Transactions() {
                     >
                       <option value="">Uncategorized</option>
                       <For each={filteredCategories()}>
-                        {(cat) => <option value={cat.id}>{cat.name}</option>}
+                        {(cat) => (
+                          <option value={cat.id} selected={cat.id === formCategory()}>
+                            {cat.name}
+                          </option>
+                        )}
                       </For>
                     </select>
                   </div>
@@ -1302,7 +1313,7 @@ export default function Transactions() {
                     <option value="">Select account...</option>
                     <For each={accounts()}>
                       {(acct) => (
-                        <option value={String(acct.id)}>
+                        <option value={String(acct.id)} selected={acct.id === formAccountId()}>
                           {acct.name} ({acct.type})
                         </option>
                       )}

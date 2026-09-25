@@ -833,7 +833,11 @@ export default function Analytics() {
                     >
                       <option value="">All categories</option>
                       <For each={stackedData().datasets}>
-                        {(d) => <option value={d.category}>{d.category}</option>}
+                        {(d) => (
+                          <option value={d.category} selected={d.category === soloCategory()}>
+                            {d.category}
+                          </option>
+                        )}
                       </For>
                     </select>
                   )}
@@ -901,7 +905,11 @@ export default function Analytics() {
                         >
                           <option value="">All Weeks</option>
                           <For each={weeks()}>
-                            {(w) => <option value={w.week}>{w.label}</option>}
+                            {(w) => (
+                              <option value={w.week} selected={String(w.week) === selectedWeek()}>
+                                {w.label}
+                              </option>
+                            )}
                           </For>
                         </select>
                       )}

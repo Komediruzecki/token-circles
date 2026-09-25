@@ -407,7 +407,13 @@ export default function RecurringSection(props: RecurringSectionProps) {
                     }}
                   >
                     <option value="">None (reminder only)</option>
-                    <For each={props.accounts}>{(a) => <option value={a.id}>{a.name}</option>}</For>
+                    <For each={props.accounts}>
+                      {(a) => (
+                        <option value={a.id} selected={a.id === formAccountId()}>
+                          {a.name}
+                        </option>
+                      )}
+                    </For>
                   </select>
                 </div>
                 <Show when={formType() === 'transfer'}>
@@ -423,7 +429,11 @@ export default function RecurringSection(props: RecurringSectionProps) {
                     >
                       <option value="">Select destination...</option>
                       <For each={props.accounts}>
-                        {(a) => <option value={a.id}>{a.name}</option>}
+                        {(a) => (
+                          <option value={a.id} selected={a.id === formTransferAccountId()}>
+                            {a.name}
+                          </option>
+                        )}
                       </For>
                     </select>
                   </div>
@@ -441,7 +451,11 @@ export default function RecurringSection(props: RecurringSectionProps) {
                 >
                   <option value="">Select category...</option>
                   <For each={props.categories}>
-                    {(cat) => <option value={cat.id}>{cat.name}</option>}
+                    {(cat) => (
+                      <option value={cat.id} selected={cat.id === formCategory()}>
+                        {cat.name}
+                      </option>
+                    )}
                   </For>
                 </select>
               </div>

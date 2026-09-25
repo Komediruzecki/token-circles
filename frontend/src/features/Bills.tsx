@@ -918,7 +918,11 @@ export default function Bills() {
                 >
                   <option value="">No category</option>
                   <For each={categories()}>
-                    {(cat) => <option value={cat.name}>{cat.name}</option>}
+                    {(cat) => (
+                      <option value={cat.name} selected={cat.name === formData().category}>
+                        {cat.name}
+                      </option>
+                    )}
                   </For>
                 </select>
                 <button
