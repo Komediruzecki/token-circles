@@ -10,7 +10,7 @@
  * Driven through Connected sources, whose "Fetch and preview" and "Auto sync" run the real flow.
  */
 import { render } from 'solid-js/web'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPage } from '../../../core/appStore'
 import {
   __resetDataVersionsForTest,
@@ -73,6 +73,12 @@ async function waitFor(predicate: () => boolean, label: string, turns = 60): Pro
   }
   throw new Error(`timed out waiting for: ${label}`)
 }
+
+// Loading the section (the import flow, the bank adapters) is the slow part of a mount. Done once
+// up front, so a loaded machine cannot push the first test past its 5 s timeout.
+beforeAll(async () => {
+  await import('../ConnectedSources')
+}, 120_000)
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined

@@ -5,7 +5,7 @@
  * user reads that silence as "the button does nothing".
  */
 import { render } from 'solid-js/web'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPage } from '../../../core/appStore'
 
 const source = {
@@ -77,6 +77,12 @@ async function waitFor(predicate: () => boolean, label: string, turns = 60): Pro
   }
   throw new Error(`timed out waiting for: ${label}`)
 }
+
+// Loading the section (the import flow, the bank adapters) is the slow part of a mount. Done once
+// up front, so a loaded machine cannot push the first test past its 5 s timeout.
+beforeAll(async () => {
+  await import('../ConnectedSources')
+}, 120_000)
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
