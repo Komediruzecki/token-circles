@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetDataVersionsForTest,
   entityVersion,
+  invalidateAllEntities,
   invalidateEntity,
   invalidateForRequest,
   tagsForPath,
@@ -104,4 +105,21 @@ describe('invalidateForRequest', () => {
       expect(entityVersion('accounts')).toBe(1)
     }
   )
+})
+
+describe('invalidateAllEntities', () => {
+  it('bumps every tracked counter in one update, so a page tracking several refetches once', () => {
+    // Resume revalidation calls this. Budgets tracks `categories` and `budgets`; bumped one at a
+    // time, every return to the app loaded that page twice.
+    const seen: number[] = []
+    const dispose = createRoot((dispose) => {
+      createComputed(() => seen.push(entityVersion('categories') + entityVersion('budgets')))
+      return dispose
+    })
+
+    invalidateAllEntities()
+    dispose()
+
+    expect(seen).toEqual([0, 2])
+  })
 })

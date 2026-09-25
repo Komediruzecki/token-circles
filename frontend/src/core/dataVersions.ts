@@ -147,7 +147,11 @@ export function invalidateForRequest(path: string, method: string | undefined, o
  * nothing at all until the others are next shown.
  */
 export function invalidateAllEntities(): void {
-  for (const [, setVersion] of slots.values()) setVersion((n) => n + 1)
+  // One update for all of them: Budgets tracks both `categories` and `budgets`, and would
+  // otherwise refetch once per counter on every resume.
+  batch(() => {
+    for (const [, setVersion] of slots.values()) setVersion((n) => n + 1)
+  })
 }
 
 /** The entity names currently being tracked. Test and diagnostic use. */
