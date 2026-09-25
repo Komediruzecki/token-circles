@@ -26,7 +26,7 @@
  * Settings Component
  * Application configuration and preferences with storage switching
  */
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js'
 import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
@@ -45,7 +45,7 @@ import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
-import { bumpProfileVersion, setPage } from '../core/appStore'
+import { bumpProfileVersion, getProfileVersion, setPage } from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
@@ -370,6 +370,10 @@ function CardHead(props: { icon: JSX.Element; title: string; desc?: string; tag?
     </div>
   )
 }
+
+/** Why the active profile's household checkbox cannot be cleared. Shown on hover and read by screen readers. */
+const HOUSEHOLD_LOCKED_HINT =
+  'This is your active profile, so it is always included: new transactions, categories and accounts are saved to it. To change it, switch profiles in the sidebar.'
 
 export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
@@ -1088,14 +1092,29 @@ export default function Settings() {
       budget_count?: number
     }>
   >([])
-  const [householdIds, setHouseholdIds] = createSignal<number[]>(
-    (() => {
-      const stored = localStorage.getItem('selectedProfileIds')
-      return stored
-        ? (JSON.parse(stored) as number[])
-        : [parseInt(localStorage.getItem('currentProfileId') || '1', 10)]
-    })()
+  const readStoredHouseholdIds = (): number[] => {
+    const stored = localStorage.getItem('selectedProfileIds')
+    return stored
+      ? (JSON.parse(stored) as number[])
+      : [parseInt(localStorage.getItem('currentProfileId') || '1', 10)]
+  }
+  const [householdIds, setHouseholdIds] = createSignal<number[]>(readStoredHouseholdIds())
+
+  // The sidebar's profile dropdown writes the same stored selection. This page stays mounted, so
+  // re-read it whenever the profile version moves, or the two lists disagree about the household.
+  createEffect(
+    on(getProfileVersion, () => setHouseholdIds(readStoredHouseholdIds()), { defer: true })
   )
+
+  // The active profile is where new transactions, categories and accounts are saved, so it is
+  // always part of the household: toggleHouseholdProfile and householdProfileIds() both enforce
+  // that. Its checkbox is therefore locked, with the reason on hover, rather than accepting a click
+  // and silently re-checking itself. Read through the profile version so that switching profiles
+  // in the sidebar moves the lock with it.
+  const lockedProfileId = createMemo(() => {
+    getProfileVersion()
+    return activeProfileId()
+  })
 
   const loadHouseholdProfiles = async () => {
     try {
@@ -1573,22 +1592,36 @@ export default function Settings() {
                     </button>
                   </div>
                   <div style="max-height: 200px; overflow-y: auto;">
+                    <span id="household-locked-hint" hidden>
+                      {HOUSEHOLD_LOCKED_HINT}
+                    </span>
                     <For each={allProfiles()}>
                       {(profile) => (
                         <label
+                          data-test-id={`household-profile-${profile.id}`}
+                          title={
+                            profile.id === lockedProfileId() ? HOUSEHOLD_LOCKED_HINT : undefined
+                          }
                           style={{
                             display: 'flex',
                             'align-items': 'center',
                             gap: '10px',
                             padding: '8px 0',
-                            cursor: 'pointer',
+                            cursor: profile.id === lockedProfileId() ? 'default' : 'pointer',
                             'border-bottom': '1px solid var(--border)',
                           }}
                         >
                           <input
                             type="checkbox"
                             class={styles.checkbox}
-                            checked={householdIds().includes(profile.id)}
+                            checked={
+                              householdIds().includes(profile.id) ||
+                              profile.id === lockedProfileId()
+                            }
+                            disabled={profile.id === lockedProfileId()}
+                            aria-describedby={
+                              profile.id === lockedProfileId() ? 'household-locked-hint' : undefined
+                            }
                             onchange={() => {
                               toggleHouseholdProfile(profile.id)
                             }}
@@ -1611,11 +1644,24 @@ export default function Settings() {
                                 >
                                   Edit
                                 </button>
-                                <Show
-                                  when={householdIds().length === 1 && householdIds().length > 0}
-                                >
-                                  <span style="font-size: 11px; color: var(--text-secondary);">
-                                    Current
+                                <Show when={profile.id === lockedProfileId()}>
+                                  <span
+                                    data-test-id="household-active-badge"
+                                    style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-secondary);"
+                                  >
+                                    <svg
+                                      width="11"
+                                      height="11"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      stroke-width="2"
+                                      aria-hidden="true"
+                                    >
+                                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                                      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                                    </svg>
+                                    Active
                                   </span>
                                 </Show>
                               </>
