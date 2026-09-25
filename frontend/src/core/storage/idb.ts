@@ -1005,7 +1005,9 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async createBudget(budget: Budget): Promise<number> {
     const db = await getDB()
-    const data = { ...budget }
+    // IndexedDB has no column defaults. D1 fills these two on insert (NULL, and now), and
+    // BudgetSchema requires both keys, so a row without them fails every typed read.
+    const data = { end_date: null, created_at: new Date().toISOString(), ...budget }
     if (!data.profile_id) data.profile_id = await this.getCurrentProfileId()
     return (await db.add('budgets', data)) as number
   }
@@ -1041,7 +1043,8 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async createGoal(goal: Goal): Promise<number> {
     const db = await getDB()
-    const data = { ...goal }
+    // D1's `created_at DEFAULT (datetime('now'))`, which SavingsGoalSchema requires.
+    const data = { created_at: new Date().toISOString(), ...goal }
     if (!data.profile_id) data.profile_id = await this.getCurrentProfileId()
     return (await db.add('goals', data)) as number
   }
@@ -1077,7 +1080,8 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async createLoan(loan: Loan): Promise<number> {
     const db = await getDB()
-    const data = { ...loan }
+    // D1's `created_at DEFAULT (datetime('now'))`, which LoanSchema requires.
+    const data = { created_at: new Date().toISOString(), ...loan }
     if (!data.profile_id) data.profile_id = await this.getCurrentProfileId()
     return (await db.add('loans', data)) as number
   }
@@ -1811,6 +1815,10 @@ export async function seedDemoProfiles(): Promise<void> {
       }
     }
 
+    // Every key the API contract requires is written out below. IndexedDB has no column defaults,
+    // so a key left off here is absent on the row and fails ApiClient's validation on every read.
+    const seededAt = now.toISOString()
+
     // ── Loans ──
     if (profile.name.includes('High')) {
       // Mortgage
@@ -1821,6 +1829,7 @@ export async function seedDemoProfiles(): Promise<void> {
         start_date: '2021-03-01',
         term_months: 240,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
     if (profile.name.includes('Mid')) {
@@ -1832,6 +1841,7 @@ export async function seedDemoProfiles(): Promise<void> {
         start_date: '2022-08-01',
         term_months: 60,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
 
@@ -1869,8 +1879,10 @@ export async function seedDemoProfiles(): Promise<void> {
         name: g.name,
         target_amount: g.target_amount,
         current_amount: g.current_amount,
+        deadline: null,
         notes: g.notes,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
 
@@ -1909,6 +1921,7 @@ export async function seedDemoProfiles(): Promise<void> {
         start_date: '2023-06-01',
         term_months: 240,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
     if (!profile.name.includes('Low')) {
@@ -1919,6 +1932,7 @@ export async function seedDemoProfiles(): Promise<void> {
         start_date: profile.name.includes('High') ? '2024-01-15' : '2022-08-01',
         term_months: profile.name.includes('High') ? 48 : 60,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
 
@@ -2125,12 +2139,16 @@ export async function seedDemoProfiles(): Promise<void> {
         name: bill.name,
         amount: bill.amount,
         due_date: dueDate,
+        category_id: catByName(bill.category)?.id ?? null,
         recurring: bill.recurring,
         frequency: bill.frequency,
         notes: bill.notes,
         is_active: 1,
+        last_paid_date: null,
+        next_due_date: null,
         profile_id: profileId,
         type: (bill as any).type || 'bill',
+        created_at: seededAt,
       })
     }
 
@@ -2156,6 +2174,7 @@ export async function seedDemoProfiles(): Promise<void> {
         rollover_enabled: 1,
         rollover_amount: 0,
         profile_id: profileId,
+        created_at: seededAt,
       })
     }
 

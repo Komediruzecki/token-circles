@@ -4,6 +4,7 @@
 import { calculateSchedule, getSummary } from '../../loanCalculator'
 import { getDB } from '../idb'
 import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
+import { normalizeLoan } from './normalize'
 
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
@@ -11,7 +12,7 @@ export async function loansList(): Promise<Response> {
     const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
     const prepayment_count = prepayments?.length || 0
-    return { ...l, total_prepaid, prepayment_count }
+    return { ...normalizeLoan(l), total_prepaid, prepayment_count }
   })
   return json(enriched)
 }
@@ -29,7 +30,7 @@ export async function loansCreate(body: unknown): Promise<Response> {
 export async function loansGet(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  return json(loan)
+  return json(normalizeLoan(loan))
 }
 
 export async function loansUpdate(
