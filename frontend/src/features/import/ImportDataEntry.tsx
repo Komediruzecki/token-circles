@@ -521,7 +521,11 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                       >
                         <option value="">Unknown</option>
                         <For each={listAdapters()}>
-                          {(a) => <option value={a.id}>{a.label}</option>}
+                          {(a) => (
+                            <option value={a.id} selected={a.id === row.bankId}>
+                              {a.label}
+                            </option>
+                          )}
                         </For>
                       </select>
                       <AccountSelect

@@ -771,7 +771,7 @@ export default function Goals() {
                   <option value="">None — manual tracking</option>
                   <For each={categories()}>
                     {(cat) => (
-                      <option value={cat.id}>
+                      <option value={cat.id} selected={String(cat.id) === formData().category_id}>
                         {cat.name} ({cat.type})
                       </option>
                     )}

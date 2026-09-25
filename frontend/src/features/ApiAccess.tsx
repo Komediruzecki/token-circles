@@ -281,7 +281,11 @@ export default function ApiAccess() {
           >
             <option value="">No default — use the first profile</option>
             <For each={profiles()}>
-              {(profile) => <option value={String(profile.id)}>{profile.name}</option>}
+              {(profile) => (
+                <option value={String(profile.id)} selected={profile.id === profileId()}>
+                  {profile.name}
+                </option>
+              )}
             </For>
           </select>
           <p class={styles.hint}>

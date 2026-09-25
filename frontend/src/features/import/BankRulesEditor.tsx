@@ -217,7 +217,11 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
                     >
                       <option value="">Account…</option>
                       <For each={flow.bankAccounts()}>
-                        {(a) => <option value={a.name}>{a.name}</option>}
+                        {(a) => (
+                          <option value={a.name} selected={a.name === cp.account}>
+                            {a.name}
+                          </option>
+                        )}
                       </For>
                     </select>
                     <button

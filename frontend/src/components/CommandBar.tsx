@@ -229,7 +229,13 @@ export function CommandBar(props: CommandBarProps) {
               aria-label="Category"
             >
               <option value="">pick category</option>
-              <For each={poolCats()}>{(c) => <option value={String(c.id)}>{c.name}</option>}</For>
+              <For each={poolCats()}>
+                {(c) => (
+                  <option value={String(c.id)} selected={c.id === eCategoryId()}>
+                    {c.name}
+                  </option>
+                )}
+              </For>
             </select>
           </span>
 
@@ -245,7 +251,13 @@ export function CommandBar(props: CommandBarProps) {
                 }
                 aria-label="Account"
               >
-                <For each={accounts()}>{(a) => <option value={String(a.id)}>{a.name}</option>}</For>
+                <For each={accounts()}>
+                  {(a) => (
+                    <option value={String(a.id)} selected={a.id === accountId()}>
+                      {a.name}
+                    </option>
+                  )}
+                </For>
               </select>
             </span>
           </Show>

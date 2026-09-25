@@ -1266,7 +1266,10 @@ export default function Budgets() {
               >
                 <For each={allocations()}>
                   {(a) => (
-                    <option value={a.category_id}>
+                    <option
+                      value={a.category_id}
+                      selected={a.category_id === selectedCategory()?.category_id}
+                    >
                       {a.category_name}
                       {a.is_budgeted ? ` (currently ${formatCurrency(a.allocated)})` : ''}
                     </option>
