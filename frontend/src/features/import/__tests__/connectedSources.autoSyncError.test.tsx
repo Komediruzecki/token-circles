@@ -6,6 +6,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setPage } from '../../../core/appStore'
 
 const source = {
   id: 1,
@@ -97,6 +98,9 @@ const syncButton = () =>
   host.querySelector<HTMLButtonElement>('button[aria-label="Auto sync Main"]')
 
 async function mountAndSync() {
+  // The list loads through refetchOnActive, which only fetches while the Import page is the visible
+  // one. In the app the section mounts only there; here we have to say so.
+  setPage('import')
   const { ConnectedSources } = await import('../ConnectedSources')
   dispose = render(() => <ConnectedSources />, host)
   await waitFor(() => syncButton() !== null, 'the saved source to render its Auto sync button')
