@@ -82,6 +82,22 @@ describe('tagsForPath', () => {
     }
   )
 
+  it('carries undoing an import into everything a transaction write moves', () => {
+    // Deleting an import's log deletes the transactions it created and recomputes the balances,
+    // in the worker and in the local handler alike. The path names only the log, so the undo
+    // reached nothing but the import history: the Dashboard, Analytics, Accounts and Budgets all
+    // went on counting the removed rows.
+    expect(tagsForPath('/api/import-logs/7')).toEqual(
+      expect.arrayContaining(['import-logs', ...tagsForPath('/api/transactions')])
+    )
+  })
+
+  it('moves only the history when an import is recorded in it', () => {
+    // Every import ends with this POST. The transactions were written by the execute call before
+    // it; counting the log as a transaction write too would reload every view a second time.
+    expect(tagsForPath('/api/import-logs')).toEqual(['import-logs'])
+  })
+
   it('moves only the goal when money is put towards it', () => {
     // A contribution raises the goal's saved amount and nothing else, in the worker and in the
     // local handler alike: no transaction row, no account balance. The table used to claim both,

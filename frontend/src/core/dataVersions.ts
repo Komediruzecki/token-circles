@@ -114,6 +114,16 @@ const ALSO_INVALIDATES: Record<string, readonly string[]> = {
 }
 
 /**
+ * Writes that move another entity where the rest of their own entity's writes do not, so the
+ * per-entity table above cannot carry them. Undoing an import — the DELETE on its log — deletes
+ * the transactions it created and recomputes the balances; recording a log, the POST every import
+ * ends with, touches only the log.
+ */
+const WRITES_THAT_ALSO_MOVE: readonly { path: RegExp; moves: string }[] = [
+  { path: /^\/api\/import-logs\/[^/?]+/, moves: 'transactions' },
+]
+
+/**
  * Lookups that are sent as POST because they take a body. They change nothing on the server, so
  * a successful one invalidates nothing — and it must not: each is called from a page that follows
  * the entity its URL names, so counting a price quote as a portfolio write reloaded the holdings
@@ -146,6 +156,7 @@ export function tagsForPath(path: string): string[] {
     for (const next of ALSO_INVALIDATES[tag] ?? []) reach(next)
   }
   reach(match[1])
+  for (const write of WRITES_THAT_ALSO_MOVE) if (write.path.test(path)) reach(write.moves)
   return tags
 }
 
