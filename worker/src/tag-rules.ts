@@ -10,13 +10,17 @@ import {
   transactionMatchesTagRule,
 } from '../../shared/tagRules';
 import * as db from './db';
+import type { DataKeyring } from './data-keys';
+import { TEXT_PREFIX } from './field-crypto';
+import { openRows } from './sealed-rows';
 import type { TagRuleCriteria, TagRuleTransaction } from '../../shared/tagRules';
 
 // TAG_RULE_SCAN_LIMIT lives in shared/tagRules.ts so the Worker's SQL LIMIT and the IndexedDB
 // runtime's in-memory slice cap agree. Re-exported for callers that import it from this module.
 export { TAG_RULE_SCAN_LIMIT };
 
-export interface TagRuleRow {
+// A type alias rather than an interface, so rows satisfy openRows' Record<string, unknown>.
+export type TagRuleRow = {
   id: number;
   profile_id: number;
   tag_id: number;
@@ -24,7 +28,7 @@ export interface TagRuleRow {
   criteria: string;
   auto_apply: number;
   created_at: string;
-}
+};
 
 export interface ParsedTagRule {
   id: number;
@@ -34,9 +38,90 @@ export interface ParsedTagRule {
   criteria: TagRuleCriteria;
 }
 
-/** Columns the matcher reads. Selecting only these keeps a full-ledger scan cheap. */
-const SCAN_COLUMNS =
-  'id, type, amount, amount_local, date, description, beneficiary, payor, notes, means_of_payment, category_id, account_id, transfer_account_id';
+/**
+ * The unsealed columns the matcher reads. Selecting only these keeps a full-ledger scan cheap.
+ * The sealed text columns are added per scan (scanColumns), and only those the criteria read.
+ */
+const BASE_SCAN_COLUMNS =
+  'id, type, amount, amount_local, date, means_of_payment, category_id, account_id, transfer_account_id';
+
+type SealedTextColumn = 'description' | 'beneficiary' | 'payor' | 'notes';
+
+/** A scanned row: the structural fields, plus whichever sealed columns the scan selected. */
+type ScanRow = TagRuleTransaction & Record<string, unknown> & { id: number };
+
+/**
+ * The sealed columns a criteria set reads, mirroring transactionMatchesTagRule in
+ * shared/tagRules.ts: description, counterparty (beneficiary OR payor), notes. means_of_payment
+ * is a text condition too, but not a sealed column.
+ */
+function sealedColumnsFor(criteria: TagRuleCriteria): SealedTextColumn[] {
+  const cols: SealedTextColumn[] = [];
+  if (criteria.description) cols.push('description');
+  if (criteria.counterparty) cols.push('beneficiary', 'payor');
+  if (criteria.notes) cols.push('notes');
+  return cols;
+}
+
+/**
+ * The SELECT list for a scan that reads `sealed`. A sealed column never travels without
+ * text_enc, so openRows knows which form each row is in; a scan that reads no sealed column
+ * reads no text_enc either, and is never opened.
+ */
+function scanColumns(sealed: ReadonlySet<SealedTextColumn>): string {
+  return sealed.size
+    ? `${BASE_SCAN_COLUMNS}, ${[...sealed].join(', ')}, text_enc`
+    : BASE_SCAN_COLUMNS;
+}
+
+/**
+ * One active rule, prepared so a row can be judged from its unsealed fields first.
+ *
+ * `structural` is the rule with its sealed-text conditions removed, or null when nothing else is
+ * left. `textFree` means the rule reads no sealed column at all.
+ */
+interface RulePlan {
+  criteria: TagRuleCriteria;
+  textFree: boolean;
+  structural: TagRuleCriteria | null;
+}
+
+function planRule(criteria: TagRuleCriteria): RulePlan {
+  const structural: TagRuleCriteria = { ...criteria, description: '', counterparty: '', notes: '' };
+  return {
+    criteria,
+    textFree: sealedColumnsFor(criteria).length === 0,
+    structural: isTagRuleCriteriaEmpty(structural) ? null : structural,
+  };
+}
+
+/**
+ * What a rule says about a row from its UNSEALED fields alone — true or false when that already
+ * decides it, null when the answer turns on sealed text. Exact, never a guess: under 'all' one
+ * failing condition fails the rule, under 'any' one passing condition passes it, and the
+ * structural criteria never read a sealed column (their text conditions are blank), so a row
+ * still holding ciphertext is safe to judge here. Rows that stay undecided are the only ones the
+ * scan opens — a rule's category or account then bounds the decryption, not just the SQL.
+ */
+function verdictWithoutText(row: ScanRow, plan: RulePlan): boolean | null {
+  if (plan.textFree) return transactionMatchesTagRule(row, plan.criteria);
+  if (!plan.structural) return null;
+  const passes = transactionMatchesTagRule(row, plan.structural);
+  if (plan.criteria.match === 'any') return passes ? true : null;
+  return passes ? null : false;
+}
+
+// The shape field-crypto's sealText writes: `tc1.` + a 12-byte IV and at least a 16-byte GCM tag,
+// both unpadded base64url. A description that merely starts with "tc1." does not fit it.
+const SEALED_SHAPE = /^[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{22,}$/;
+
+function looksSealed(value: unknown): boolean {
+  return (
+    typeof value === 'string' &&
+    value.startsWith(TEXT_PREFIX) &&
+    SEALED_SHAPE.test(value.slice(TEXT_PREFIX.length))
+  );
+}
 
 /**
  * How many bound variables the scan's optional SQL pushdown may spend.
@@ -59,6 +144,7 @@ export function parseTagRule(row: TagRuleRow): ParsedTagRule {
 export async function listTagRules(
   database: D1Database,
   profileId: number,
+  keys: { ring: DataKeyring; owner: number },
   opts: { tagId?: number; autoApplyOnly?: boolean } = {}
 ): Promise<ParsedTagRule[]> {
   let sql = 'SELECT * FROM tag_rules WHERE profile_id = ?';
@@ -70,7 +156,8 @@ export async function listTagRules(
   if (opts.autoApplyOnly) sql += ' AND auto_apply = 1';
   sql += ' ORDER BY id';
   const rows = await db.all<TagRuleRow>(database, sql, ...params);
-  return rows.map(parseTagRule);
+  // Criteria are sealed text like any other: opened before they are parsed.
+  return (await openRows(keys.ring, keys.owner, 'tag_rules', rows)).map(parseTagRule);
 }
 
 /**
@@ -146,11 +233,18 @@ export interface RuleMatchResult {
 /**
  * Find every transaction in `profileId` matching at least one of `criteriaList`.
  * Empty criteria are skipped, so a blank rule can never sweep the whole ledger.
+ *
+ * `ring` and `ownerId` (the profile's owner) open the sealed text the criteria read. Only rows
+ * whose answer turns on that text are opened, and only the columns the criteria reference are
+ * selected at all; a row that cannot be opened fails the whole call rather than being matched as
+ * ciphertext — a short "contains" needle can hit ciphertext by chance, and apply is a bulk write.
  */
 export async function matchTransactions(
   database: D1Database,
   profileId: number,
-  criteriaList: TagRuleCriteria[]
+  criteriaList: TagRuleCriteria[],
+  ring: DataKeyring,
+  ownerId: number
 ): Promise<RuleMatchResult> {
   const active = criteriaList.filter((criteria) => !isTagRuleCriteriaEmpty(criteria));
   if (!active.length) return { ids: [], scanned: 0, truncated: false };
@@ -158,19 +252,41 @@ export async function matchTransactions(
   // A single rule can be narrowed in SQL; several rules OR together, so the union has to be
   // computed over the unnarrowed set (each rule narrows differently).
   const narrowing = active.length === 1 ? narrowingClause(active[0]) : { sql: '', params: [] };
-  const rows = await db.all<TagRuleTransaction & { id: number }>(
+  const sealed = new Set(active.flatMap(sealedColumnsFor));
+  const rows = await db.all<ScanRow>(
     database,
-    `SELECT ${SCAN_COLUMNS} FROM transactions WHERE profile_id = ?${narrowing.sql}
+    `SELECT ${scanColumns(sealed)} FROM transactions WHERE profile_id = ?${narrowing.sql}
      ORDER BY date DESC, id DESC LIMIT ${TAG_RULE_SCAN_LIMIT}`,
     profileId,
     ...narrowing.params
   );
 
-  const ids: number[] = [];
+  const plans = active.map(planRule);
+  const matched = new Set<number>();
+  const undecided: ScanRow[] = [];
   for (const row of rows) {
-    if (active.some((criteria) => transactionMatchesTagRule(row, criteria))) ids.push(row.id);
+    let pending = false;
+    let hit = false;
+    for (const plan of plans) {
+      const verdict = verdictWithoutText(row, plan);
+      if (verdict === true) {
+        hit = true;
+        break;
+      }
+      if (verdict === null) pending = true;
+    }
+    if (hit) matched.add(row.id);
+    else if (pending) undecided.push(row);
+  }
+  if (undecided.length) {
+    const opened = await openRows(ring, ownerId, 'transactions', undecided);
+    for (const row of opened) {
+      if (active.some((criteria) => transactionMatchesTagRule(row, criteria))) matched.add(row.id);
+    }
   }
 
+  // Scan order (newest first) — callers take the first few as the preview sample.
+  const ids = rows.filter((row) => matched.has(row.id)).map((row) => row.id);
   return { ids, scanned: rows.length, truncated: rows.length >= TAG_RULE_SCAN_LIMIT };
 }
 
@@ -191,16 +307,22 @@ export interface TagRuleConditionCount {
 export async function explainTagRule(
   database: D1Database,
   profileId: number,
-  criteria: TagRuleCriteria
+  criteria: TagRuleCriteria,
+  ring: DataKeyring,
+  ownerId: number
 ): Promise<TagRuleConditionCount[]> {
   const conditions = splitTagRuleConditions(criteria);
   if (conditions.length < 2) return [];
-  const rows = await db.all<TagRuleTransaction>(
+  // Each text condition is counted on its own over the whole window, so every row is opened —
+  // but only in the columns those conditions read.
+  const sealed = new Set(conditions.flatMap((condition) => sealedColumnsFor(condition.criteria)));
+  const scanned = await db.all<ScanRow>(
     database,
-    `SELECT ${SCAN_COLUMNS} FROM transactions WHERE profile_id = ?
+    `SELECT ${scanColumns(sealed)} FROM transactions WHERE profile_id = ?
      ORDER BY date DESC, id DESC LIMIT ${TAG_RULE_SCAN_LIMIT}`,
     profileId
   );
+  const rows = sealed.size ? await openRows(ring, ownerId, 'transactions', scanned) : scanned;
   return conditions.map((condition) => ({
     key: condition.key,
     label: condition.label,
@@ -257,15 +379,29 @@ export async function linkTransactionsToTag(
  *
  * Called from the transaction-create path, so it is deliberately fail-soft: a tagging error must
  * never fail (or roll back) a transaction the user successfully saved. Returns the tag ids applied.
+ *
+ * `transaction` must already be opened (openRows): its text is matched as it stands. A row whose
+ * text is still sealed tags nothing — ciphertext could satisfy a short "contains" needle by
+ * chance and mis-tag the row for good — and is logged, since it means the caller skipped openRows.
  */
 export async function autoApplyTagRules(
   database: D1Database,
   profileId: number,
   transactionId: number,
-  transaction: TagRuleTransaction
+  transaction: TagRuleTransaction,
+  keys: { ring: DataKeyring; owner: number }
 ): Promise<number[]> {
+  const stillSealed = (['description', 'beneficiary', 'payor', 'notes'] as const).filter((col) =>
+    looksSealed(transaction[col])
+  );
+  if (stillSealed.length) {
+    console.error(
+      `[tag-rules] autoApplyTagRules: transaction ${transactionId} arrived with sealed ${stillSealed.join(', ')}; open it before matching`
+    );
+    return [];
+  }
   try {
-    const rules = await listTagRules(database, profileId, { autoApplyOnly: true });
+    const rules = await listTagRules(database, profileId, keys, { autoApplyOnly: true });
     if (!rules.length) return [];
     const tagIds = new Set<number>();
     for (const rule of rules) {

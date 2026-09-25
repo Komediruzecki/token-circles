@@ -2,6 +2,8 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileIds } from '../profile'
+import { keyringFor } from '../data-keys'
+import { openRows } from '../sealed-rows'
 import * as db from '../db'
 
 // Port of backend/routes/dashboard.js — read-only aggregations over
@@ -104,12 +106,19 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
   const momExpenseDelta = summary.expense - prevSummary.expense
   const momBalanceDelta = summary.income - summary.expense - (prevSummary.income - prevSummary.expense)
 
-  const recent = await db.all(
-    c.env.DB,
-    `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC LIMIT 10`,
-    ...pids,
-    startDate,
-    endDate
+  // t.* carries text_enc; openRows opens the sealed text and drops the marker from the response.
+  const ring = keyringFor(c)
+  const recent = await openRows(
+    ring,
+    c.get('userId'),
+    'transactions',
+    await db.all(
+      c.env.DB,
+      `SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? ORDER BY t.date DESC, t.id DESC LIMIT 10`,
+      ...pids,
+      startDate,
+      endDate
+    )
   )
 
   // Category breakdown for expenses.
@@ -131,12 +140,18 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
 
   // Upcoming bills (next 30 days).
   const today = new Date()
-  const upcomingBills = await db.all(
-    c.env.DB,
-    `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
-    ...pids,
-    today.toISOString().split('T')[0],
-    new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  // b.* carries bills.name / bills.notes and text_enc; profiles.name is not sealed.
+  const upcomingBills = await openRows(
+    ring,
+    c.get('userId'),
+    'bills',
+    await db.all(
+      c.env.DB,
+      `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
+      ...pids,
+      today.toISOString().split('T')[0],
+      new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    )
   )
 
   return c.json({
@@ -204,9 +219,14 @@ dashboardRoutes.get('/api/dashboard/summary', requireAuth, async (c) => {
   }
   summary.balance = summary.income - summary.expense
 
-  const recent = await db.all(
-    c.env.DB,
-    `
+  // t.* carries text_enc; openRows opens the sealed text and drops the marker from the response.
+  const recent = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'transactions',
+    await db.all(
+      c.env.DB,
+      `
     SELECT t.*, c.name as category_name, c.color as category_color, c.icon as category_icon
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
@@ -214,9 +234,10 @@ dashboardRoutes.get('/api/dashboard/summary', requireAuth, async (c) => {
     ORDER BY t.date DESC, t.id DESC
     LIMIT 10
     `,
-    ...pids,
-    startDate,
-    endDate
+      ...pids,
+      startDate,
+      endDate
+    )
   )
 
   const yearStart = `${y}-01-01`

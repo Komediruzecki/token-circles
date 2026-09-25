@@ -1,5 +1,7 @@
 import type { Env } from './index';
 import * as db from './db';
+import { DataKeyring } from './data-keys';
+import { openRows } from './sealed-rows';
 import { sendMail } from './email';
 import { planHasFeature, planLimit } from './plans';
 import { normalizedTransactionAmountSql } from './transaction-amount';
@@ -347,33 +349,63 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
 }
 
 // ── Upcoming bills (ported from the legacy bills reminder that never made it to the worker) ──
+//
+// bills.name is sealed at rest under the owner's data key. `ownerId` is the user whose profiles
+// these are (profileIdsForUser), and `ring` is one keyring for the whole cron run or preview. The
+// due-date window is decided on the plaintext due_date first, so only the bills that make it into
+// the email are opened; a name that cannot be opened throws rather than mail ciphertext.
 async function getUpcomingBills(
   env: Env,
+  ring: DataKeyring,
+  ownerId: number,
   profileId: number,
   asOf?: Date
 ): Promise<UpcomingBillRow[]> {
-  const bills = await db.all<{ name: string; amount: number; due_date: string | null }>(
+  const bills = await db.all<{
+    name: string;
+    amount: number;
+    due_date: string | null;
+    text_enc: number;
+  }>(
     env.DB,
-    "SELECT name, amount, due_date FROM bills WHERE profile_id = ? AND is_active = 1 AND type = 'bill'",
+    "SELECT name, amount, due_date, text_enc FROM bills WHERE profile_id = ? AND is_active = 1 AND type = 'bill'",
     profileId
   );
   const today = asOf ?? new Date();
-  const upcoming: UpcomingBillRow[] = [];
+  const due: Array<{ bill: (typeof bills)[number]; diffDays: number }> = [];
   for (const bill of bills) {
     if (!bill.due_date) continue;
     const dueDate = new Date(bill.due_date);
     if (isNaN(dueDate.getTime())) continue;
     const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) {
-      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: true });
-    } else if (diffDays <= 7) {
-      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: false });
-    }
+    // Overdue (diffDays < 0) or due within the week.
+    if (diffDays <= 7) due.push({ bill, diffDays });
   }
+  const opened = await openRows(
+    ring,
+    ownerId,
+    'bills',
+    due.map((d) => d.bill)
+  );
+  const upcoming: UpcomingBillRow[] = opened.map((bill, i) => {
+    const diffDays = due[i]!.diffDays;
+    return {
+      name: bill.name,
+      amount: bill.amount,
+      due_date: bill.due_date,
+      daysUntilDue: diffDays,
+      overdue: diffDays < 0,
+    };
+  });
   return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
 }
 
-export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<boolean> {
+/** `ring`: the cron passes one keyring for its whole run; a one-off call gets its own. */
+export async function sendBillsRemindersForUser(
+  env: Env,
+  u: UserRow,
+  ring: DataKeyring = new DataKeyring(env)
+): Promise<boolean> {
   if (!eligible(u)) return false;
   const pids = await profileIdsForUser(env, u.id);
   if (pids.length === 0) return false;
@@ -381,7 +413,7 @@ export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<b
   if (!(await notifEnabled(env, pids[0], 'email_bills_reminders'))) return false;
 
   const all: UpcomingBillRow[] = [];
-  for (const pid of pids) all.push(...(await getUpcomingBills(env, pid)));
+  for (const pid of pids) all.push(...(await getUpcomingBills(env, ring, u.id, pid)));
   const mail = renderBillsReminder({
     bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
     currency: await profileCurrency(env, pids[0]),
@@ -408,7 +440,8 @@ export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<b
 export async function composeReminderPreview(
   env: Env,
   userId: number,
-  type: 'budget' | 'spending' | 'bills'
+  type: 'budget' | 'spending' | 'bills',
+  ring: DataKeyring = new DataKeyring(env)
 ): Promise<RenderedEmail | null> {
   const u = await db.first<UserRow>(
     env.DB,
@@ -462,7 +495,7 @@ export async function composeReminderPreview(
 
   if (type === 'bills') {
     const all: UpcomingBillRow[] = [];
-    for (const pid of pids) all.push(...(await getUpcomingBills(env, pid)));
+    for (const pid of pids) all.push(...(await getUpcomingBills(env, ring, u.id, pid)));
     return renderBillsReminder({
       bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
       currency,
@@ -500,6 +533,8 @@ async function usersWithEmail(env: Env): Promise<UserRow[]> {
 /** Dispatched by the cron expression that fired (see wrangler.jsonc triggers.crons). */
 export async function runScheduledReminders(cron: string, env: Env): Promise<void> {
   const users = await usersWithEmail(env);
+  // One keyring per run: each user's data key is unwrapped once, and dropped when the run ends.
+  const ring = new DataKeyring(env);
   const isBudget = cron === '0 9 * * 1';
   const isReport = cron === '0 10 1,15 * *';
   const isBills = cron === '0 8 * * *';
@@ -507,7 +542,7 @@ export async function runScheduledReminders(cron: string, env: Env): Promise<voi
     try {
       if (isBudget) await sendBudgetAlertsForUser(env, u);
       else if (isReport) await sendSpendingReportForUser(env, u);
-      else if (isBills) await sendBillsRemindersForUser(env, u);
+      else if (isBills) await sendBillsRemindersForUser(env, u, ring);
     } catch (e) {
       console.error(`[reminder] failed for user ${u.id}:`, (e as Error).message);
     }

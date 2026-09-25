@@ -50,3 +50,8 @@
 # Workbox runtime is content-hashed → immutable.
 /workbox-*.js
   Cache-Control: public, max-age=31536000, immutable
+
+# RFC 9116 section 3: security.txt MUST be text/plain with charset=utf-8. The asset server sends a
+# bare text/plain for .txt files.
+/.well-known/security.txt
+  Content-Type: text/plain; charset=utf-8

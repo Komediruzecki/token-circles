@@ -10,6 +10,7 @@ import { mintApiToken } from '../src/apitoken';
 import { TOOLS } from '../src/mcp/registry';
 // Importing the route module is what registers the tools into TOOLS.
 import '../src/mcp';
+import { openedRow } from './helpers/sealed';
 
 const A_USER = 9700;
 const A_PROFILE = 9701;
@@ -104,9 +105,11 @@ describe('cross-user isolation', () => {
   );
 
   it("leaves user A's data completely untouched", async () => {
-    const tx = await env.DB.prepare(
-      'SELECT description, amount, category_id FROM transactions WHERE id = 97001'
-    ).first<{ description: string; amount: number; category_id: number | null }>();
+    const tx = await openedRow<{ description: string; amount: number; category_id: number | null }>(
+      'transactions',
+      A_USER,
+      'SELECT description, amount, category_id, text_enc FROM transactions WHERE id = 97001'
+    );
     expect(tx).toMatchObject({ description: 'A secret', amount: -99, category_id: null });
 
     const counts = await env.DB.prepare(

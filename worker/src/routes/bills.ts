@@ -1,17 +1,20 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { configuredBaseCurrency } from '../base-currency';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { compareBinary, openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 
 // Port of backend/routes/bills.js + backend/repositories/billsRepo.js.
 // Table: bills, LEFT JOINed to categories for name/color. Response shapes are
 // kept identical (snake_case) to the Express backend.
 export const billsRoutes = new Hono<AppEnv>();
 
-interface BillRow {
+// A type alias rather than an interface, so rows satisfy openRows' Record<string, unknown>.
+type BillRow = {
   id: number;
   name: string;
   amount: number;
@@ -28,7 +31,7 @@ interface BillRow {
   autopay: number;
   category_name?: string | null;
   category_color?: string | null;
-}
+};
 
 function billResponse(bill: BillRow) {
   return { ...bill, autopay: bill.autopay === 1 };
@@ -63,19 +66,39 @@ function isBillPaidForCurrentPeriod(bill: BillRow, now: Date): boolean {
   return false;
 }
 
+// bills.name and bills.notes are sealed at rest under the owner's data key (sealed-rows.ts). A
+// request's rows all belong to its user — getProfileId only ever returns that user's profiles —
+// so c.get('userId') is the key owner. Open straight after the query, before any JS reads them.
+function openBills<R extends BillRow>(c: Context<AppEnv>, rows: R[]): Promise<R[]> {
+  return openRows(keyringFor(c), c.get('userId'), 'bills', rows);
+}
+
 billsRoutes.get('/api/bills', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const rows = await db.all<BillRow>(
-    c.env.DB,
-    `
+  const ring = keyringFor(c);
+  // With encryption on, b.name may be ciphertext, so the name half of the sort moves to JS.
+  // Without it every row is plaintext and the query is exactly what it always was.
+  const rows = await openBills(
+    c,
+    await db.all<BillRow>(
+      c.env.DB,
+      `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
       LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id = ?
-      ORDER BY b.is_active DESC, b.name ASC
+      ${ring.enabled ? 'ORDER BY b.is_active DESC, b.id ASC' : 'ORDER BY b.is_active DESC, b.name ASC'}
     `,
-    pid
+      pid
+    )
   );
+  if (ring.enabled) {
+    // is_active DESC (NULL last), then name ASC; the SQL's id order breaks ties (sort is stable).
+    const active = (b: BillRow) => b.is_active ?? -Infinity;
+    rows.sort((a, b) =>
+      active(a) !== active(b) ? (active(a) > active(b) ? -1 : 1) : compareBinary(a.name, b.name)
+    );
+  }
 
   const now = new Date();
 
@@ -108,17 +131,24 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
 
-  const bills = await db.all<BillRow>(
-    c.env.DB,
-    `
+  const ring = keyringFor(c);
+  // The name order is the tiebreak for bills due the same day (the sort below is stable). With
+  // encryption on it is applied in JS after opening; the SQL's id order breaks name ties.
+  const bills = await openBills(
+    c,
+    await db.all<BillRow>(
+      c.env.DB,
+      `
       SELECT b.*, c.name as category_name, c.color as category_color
       FROM bills b
       LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id = ? AND b.is_active = 1
-      ORDER BY b.name ASC
+      ${ring.enabled ? 'ORDER BY b.id ASC' : 'ORDER BY b.name ASC'}
     `,
-    pid
+      pid
+    )
   );
+  if (ring.enabled) bills.sort((a, b) => compareBinary(a.name, b.name));
 
   const upcoming = bills.map((b) => {
     let nextDue: Date | null = null;
@@ -196,17 +226,23 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
 
 billsRoutes.get('/api/bills/summary', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const bills = await db.all<BillRow>(c.env.DB, 'SELECT * FROM bills WHERE profile_id = ?', pid);
+  const bills = await openBills(
+    c,
+    await db.all<BillRow>(c.env.DB, 'SELECT * FROM bills WHERE profile_id = ?', pid)
+  );
   const totalAmount = bills.reduce((s, b) => s + (b.amount || 0), 0);
   return c.json({ totalAmount, activeCount: bills.length, bills });
 });
 
 billsRoutes.get('/api/bills/notifications', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const bills = await db.all<BillRow>(
-    c.env.DB,
-    'SELECT * FROM bills WHERE profile_id = ? ORDER BY due_date ASC',
-    pid
+  const bills = await openBills(
+    c,
+    await db.all<BillRow>(
+      c.env.DB,
+      'SELECT * FROM bills WHERE profile_id = ? ORDER BY due_date ASC',
+      pid
+    )
   );
   const today = new Date();
   const upcoming = bills.filter((b) => {
@@ -245,13 +281,20 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
     days[String(d)] = [];
   }
 
-  const bills = await db.all<BillRow>(
-    c.env.DB,
-    `SELECT b.*, c.name as category_name, c.color as category_color
+  // The calendar shows the name but never the notes: drop notes before opening, so only the
+  // column this path returns is decrypted.
+  const bills = await openBills(
+    c,
+    (
+      await db.all<BillRow>(
+        c.env.DB,
+        `SELECT b.*, c.name as category_name, c.color as category_color
        FROM bills b
        LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
        WHERE b.profile_id = ? AND b.is_active = 1`,
-    pid
+        pid
+      )
+    ).map((b) => ({ ...b, notes: null }))
   );
 
   let totalAmount = 0;
@@ -349,19 +392,23 @@ billsRoutes.post('/api/bills', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Category does not belong to this profile');
   }
-  const res = await db.insert(c.env.DB, 'bills', {
-    profile_id: pid,
-    name,
-    amount,
-    frequency: frequency || 'monthly',
-    day_of_month: day_of_month || null,
-    category_id: category_id || null,
-    account_id: account_id || null,
-    notes: notes || '',
-    type: type || 'bill',
-    due_date: dueDate,
-    autopay: autopay ? 1 : 0,
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'bills',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'bills', {
+      profile_id: pid,
+      name,
+      amount,
+      frequency: frequency || 'monthly',
+      day_of_month: day_of_month || null,
+      category_id: category_id || null,
+      account_id: account_id || null,
+      notes: notes || '',
+      type: type || 'bill',
+      due_date: dueDate,
+      autopay: autopay ? 1 : 0,
+    })
+  );
   return c.json({ id: res.meta.last_row_id });
 });
 
@@ -410,25 +457,32 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Category does not belong to this profile');
   }
-  await db.update(
+  // name and notes are sealed. `x ?? existing.x` used to write the stored value back when the
+  // body left x out — a no-op — so now they are simply left out of the SET (sealedUpdate skips
+  // undefined): the stored form, sealed or plain, is untouched and never has to be opened here.
+  // When the body does carry one, sealedUpdate writes it in whichever form the row is in.
+  await db.batch(
     c.env.DB,
-    'bills',
-    {
-      name: name ?? existing.name,
-      amount: amount ?? existing.amount,
-      frequency: frequency ?? existing.frequency,
-      day_of_month: day_of_month === undefined ? existing.day_of_month : day_of_month,
-      category_id: category_id === undefined ? existing.category_id : category_id,
-      account_id: account_id === undefined ? existing.account_id : account_id,
-      is_active: is_active ?? existing.is_active,
-      notes: notes ?? existing.notes,
-      type: type ?? existing.type,
-      due_date: nextDueDate,
-      autopay: autopay === undefined ? existing.autopay : autopay ? 1 : 0,
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
+    await sealedUpdate(
+      keyringFor(c),
+      c.get('userId'),
+      'bills',
+      {
+        name: name ?? undefined,
+        amount: amount ?? existing.amount,
+        frequency: frequency ?? existing.frequency,
+        day_of_month: day_of_month === undefined ? existing.day_of_month : day_of_month,
+        category_id: category_id === undefined ? existing.category_id : category_id,
+        account_id: account_id === undefined ? existing.account_id : account_id,
+        is_active: is_active ?? existing.is_active,
+        notes: notes ?? undefined,
+        type: type ?? existing.type,
+        due_date: nextDueDate,
+        autopay: autopay === undefined ? existing.autopay : autopay ? 1 : 0,
+      },
+      'id = ? AND profile_id = ?',
+      [id, pid]
+    )
   );
   return c.json({ ok: true });
 });
@@ -442,11 +496,13 @@ billsRoutes.delete('/api/bills/:id', requireAuth, async (c) => {
 billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const bill = await db.first<BillRow>(
-    c.env.DB,
-    'SELECT * FROM bills WHERE id = ? AND profile_id = ?',
-    id,
-    pid
+  const ring = keyringFor(c);
+  const userId = c.get('userId');
+  const [bill] = await openRows(
+    ring,
+    userId,
+    'bills',
+    await db.all<BillRow>(c.env.DB, 'SELECT * FROM bills WHERE id = ? AND profile_id = ?', id, pid)
   );
   if (!bill) throw new HttpError(404, 'Not found');
 
@@ -480,21 +536,29 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   // bill the user entered in their own currency. Same source + default as the recurring cron.
   const baseCurrency = (await configuredBaseCurrency(c.env.DB, pid)) ?? 'EUR';
 
+  // The bill's text is sealed for the bills table; the transaction's is sealed afresh for the
+  // transactions table from the opened plaintext (additional data binds every value to its own
+  // table and column, so ciphertext copied across would never open).
+  const text = await sealForInsert(ring, userId, 'transactions', {
+    description: bill.name,
+    notes: bill.notes || '',
+  });
   stmts.push(
     c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, currency, amount_local)
-       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9, ?10, ?6 WHERE ${guard}`
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, currency, amount_local, text_enc)
+       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9, ?10, ?6, ?11 WHERE ${guard}`
     ).bind(
       id,
       pid,
       todayStr,
       pid,
-      bill.name,
+      text.description,
       bill.amount,
       bill.category_id,
       bill.account_id ?? null,
-      bill.notes || '',
-      baseCurrency
+      text.notes,
+      baseCurrency,
+      text.text_enc
     )
   );
 
@@ -527,11 +591,14 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
 // Registered after the specific /api/bills/* GET routes so it doesn't shadow them.
 billsRoutes.get('/api/bills/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const bill = await db.first<BillRow>(
-    c.env.DB,
-    'SELECT * FROM bills WHERE id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
+  const [bill] = await openBills(
+    c,
+    await db.all<BillRow>(
+      c.env.DB,
+      'SELECT * FROM bills WHERE id = ? AND profile_id = ?',
+      c.req.param('id'),
+      pid
+    )
   );
   if (!bill) throw new HttpError(404, 'Bill not found');
   return c.json(billResponse(bill));

@@ -7,6 +7,8 @@ import * as db from '../db';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
+import { keyringFor } from '../data-keys';
+import { openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 
 // Port of backend/routes/accounts.js + backend/repositories/accountsRepo.js.
 // Accounts are profile-scoped; balance history is keyed by account_id and only
@@ -24,7 +26,7 @@ accountsRoutes.get('/api/accounts', requireAuth, async (c) => {
     `SELECT a.*, COALESCE((SELECT balance FROM account_balance_history bh WHERE bh.account_id = a.id ORDER BY bh.recorded_at DESC LIMIT 1), a.starting_balance, 0) as current_balance FROM accounts a WHERE a.profile_id = ? ORDER BY a.name`,
     pid
   );
-  return c.json(rows);
+  return c.json(await openRows(keyringFor(c), c.get('userId'), 'accounts', rows));
 });
 
 accountsRoutes.post('/api/accounts', requireAuth, async (c) => {
@@ -37,17 +39,21 @@ accountsRoutes.post('/api/accounts', requireAuth, async (c) => {
   const startBalance = Number.isFinite(startBalanceRaw) ? startBalanceRaw : 0;
   const startDate = b.starting_date || null;
   const baseCurrency = await resolveProfileBaseCurrency(c.env.DB, pid, b.currency, true);
-  const res = await db.insert(c.env.DB, 'accounts', {
-    name: String(b.name).trim(),
-    bank_name: b.bank_name || '',
-    type: accountType,
-    currency: baseCurrency,
-    balance: startBalance,
-    notes: b.notes || '',
-    profile_id: pid,
-    starting_balance: startBalance,
-    starting_date: startDate,
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'accounts',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'accounts', {
+      name: String(b.name).trim(),
+      bank_name: b.bank_name || '',
+      type: accountType,
+      currency: baseCurrency,
+      balance: startBalance,
+      notes: b.notes || '',
+      profile_id: pid,
+      starting_balance: startBalance,
+      starting_date: startDate,
+    })
+  );
   return c.json({ id: res.meta.last_row_id, message: 'Account created' });
 });
 
@@ -93,7 +99,7 @@ accountsRoutes.get('/api/accounts/:id', requireAuth, async (c) => {
     pid
   );
   if (!account) throw new HttpError(404, 'Account not found');
-  return c.json(account);
+  return c.json((await openRows(keyringFor(c), c.get('userId'), 'accounts', [account]))[0]);
 });
 
 // Partial update: only the fields the client actually sends are written; everything else
@@ -131,7 +137,17 @@ accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
   if (b.starting_date !== undefined) data.starting_date = b.starting_date || null;
   if (Object.keys(data).length === 0) return c.json({ message: 'No changes' });
 
-  await db.update(c.env.DB, 'accounts', data, 'id = ? AND profile_id = ?', id, pid);
+  await db.batch(
+    c.env.DB,
+    await sealedUpdate(
+      keyringFor(c),
+      c.get('userId'),
+      'accounts',
+      data,
+      'id = ? AND profile_id = ?',
+      [id, pid]
+    )
+  );
   return c.json({ message: 'Account updated' });
 });
 

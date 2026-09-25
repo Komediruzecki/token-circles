@@ -18,18 +18,12 @@
 export {}
 
 import { BUILD_ID_MESSAGE, createServiceWorkerRuntime, UNKNOWN_BUILD_ID } from '@pwa-kit'
+import { BYPASS_PATH_PREFIXES, STANDALONE_DOCUMENTS } from './swRoutes'
 import type { SwPrecacheEntry, SwStaleBuildNotice } from '@pwa-kit'
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: SwPrecacheEntry[]
 }
-
-/**
- * Paths that are their own HTML document, not the app shell. The export templates are opened in
- * their own window and carry their own scripts; substituting the shell for one of them would
- * silently render the app in place of the export the user asked to print.
- */
-const STANDALONE_DOCUMENTS = ['/export.html', '/export-monthly.html']
 
 /**
  * Small, stable files the installed app needs that index.html does not name as a script.
@@ -57,6 +51,7 @@ const runtime = createServiceWorkerRuntime({
   baseUrl: self.location.href,
   cachePrefix: 'tokencircles-assets-',
   standaloneDocumentPaths: STANDALONE_DOCUMENTS,
+  bypassPathPrefixes: BYPASS_PATH_PREFIXES,
   stableShellAssets: STABLE_SHELL_ASSETS,
   env: {
     caches: self.caches,

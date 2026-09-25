@@ -80,6 +80,13 @@ jobs:
         working-directory: worker
         run: pnpm run test
 
+      # The same suite again with field encryption ON, under a throwaway key generated for this run
+      # (test:sealed). The keyless run above proves a deployment with no master key behaves exactly
+      # as before; this one proves no read path forgets to decrypt. docs/plans/field-encryption.md
+      - name: Run worker tests with field encryption on
+        working-directory: worker
+        run: pnpm run test:sealed
+
   lint:
     name: Lint Frontend
     runs-on: ubuntu-latest

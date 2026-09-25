@@ -1,0 +1,7 @@
+# Token Circles security contact (RFC 9116). Served at https://tokencircles.com/.well-known/security.txt;
+# the API host redirects here. Expires is a real deadline: move it forward, at most a year out.
+Contact: https://github.com/Komediruzecki/token-circles/security/advisories/new
+Expires: 2027-09-01T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://tokencircles.com/.well-known/security.txt
+Policy: https://github.com/Komediruzecki/token-circles/security/policy

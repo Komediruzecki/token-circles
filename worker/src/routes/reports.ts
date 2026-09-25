@@ -7,6 +7,8 @@ import { buildReportPdf } from '../pdf';
 import { enforce } from '../ratelimit';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows } from '../sealed-rows';
 
 // Port of backend/routes/reports.js. The JSON/data endpoints (tax-summary,
 // pl-summary, overview, compare, saved/save) and the custom-report CRUD are
@@ -166,24 +168,30 @@ reportsRoutes.get('/api/reports/tax-summary', requireAuth, requireAdvancedReport
   const endStr = `${year}-12-31`;
   const amountSql = normalizedTransactionAmountSql('t');
 
-  const rows = await db.all<{
-    id: number;
-    date: string;
-    description: string;
-    amount: number;
-    currency: string;
-    category_name: string;
-    tax_deductible: number;
-  }>(
-    c.env.DB,
-    `SELECT t.id, t.date, t.description, ${amountSql} AS amount, t.currency, c.name as category_name, c.tax_deductible
+  // description goes into the response, so it is opened; the ORDER BY is on plaintext columns.
+  const rows = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'transactions',
+    await db.all<{
+      id: number;
+      date: string;
+      description: string;
+      amount: number;
+      currency: string;
+      category_name: string;
+      tax_deductible: number;
+    }>(
+      c.env.DB,
+      `SELECT t.id, t.date, t.description, ${amountSql} AS amount, t.currency, c.name as category_name, c.tax_deductible, t.text_enc
        FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ? AND t.type = 'expense'
        ORDER BY c.tax_deductible DESC, c.name, t.date`,
-    ...pids,
-    startStr,
-    endStr
+      ...pids,
+      startStr,
+      endStr
+    )
   );
 
   const taxDeductible = rows.filter((r) => r.tax_deductible);
@@ -275,17 +283,17 @@ reportsRoutes.get('/api/reports/pl-summary', requireAuth, requireAdvancedReports
   const endStr = `${year}-12-31`;
   const amountSql = normalizedTransactionAmountSql('t');
 
+  // No sealed column: description was selected here but never read, so it is no longer fetched.
   const rows = await db.all<{
     id: number;
     date: string;
-    description: string;
     amount: number;
     currency: string;
     type: string;
     category_name: string;
   }>(
     c.env.DB,
-    `SELECT t.id, t.date, t.description, ${amountSql} AS amount, t.currency, t.type, c.name as category_name
+    `SELECT t.id, t.date, ${amountSql} AS amount, t.currency, t.type, c.name as category_name
        FROM transactions t
        JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
        WHERE t.profile_id IN (${inClause}) AND t.date >= ? AND t.date <= ?

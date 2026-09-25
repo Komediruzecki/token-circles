@@ -4,6 +4,8 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 
 // Port of backend/routes/housing.js (repo: backend/repositories/housingRepo.js).
 // Table: housings. The backend file is pure CRUD — there is no mortgage/affordability
@@ -14,11 +16,16 @@ housingRoutes.get('/api/housing', requireAuth, async (c) => {
   const pid = await getProfileId(c);
 
   // Custom ordering by due_date ASC (the repo default is created_at DESC).
-  const housings = await db.all<Record<string, any>>(
-    c.env.DB,
-    `SELECT id, name, type, monthly_amount, due_date, autopay, notes, created_at
-     FROM housings WHERE profile_id = ? ORDER BY due_date ASC`,
-    pid
+  const housings = await openRows(
+    keyringFor(c),
+    c.get('userId'),
+    'housings',
+    await db.all<Record<string, any>>(
+      c.env.DB,
+      `SELECT id, name, type, monthly_amount, due_date, autopay, notes, created_at, text_enc
+       FROM housings WHERE profile_id = ? ORDER BY due_date ASC`,
+      pid
+    )
   );
 
   const totalMonthly = housings.reduce(
@@ -45,15 +52,19 @@ housingRoutes.post('/api/housing', requireAuth, async (c) => {
   const dueDay = (b.due_day || 1).toString().padStart(2, '0');
   const due_date = `${dueMonth}-${dueDay}`;
 
-  const res = await db.insert(c.env.DB, 'housings', {
-    profile_id: pid,
-    name: b.property_name,
-    type: b.type || 'other',
-    monthly_amount: amount,
-    due_date,
-    autopay: b.autopay ? 1 : 0,
-    notes: b.notes || '',
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'housings',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'housings', {
+      profile_id: pid,
+      name: b.property_name,
+      type: b.type || 'other',
+      monthly_amount: amount,
+      due_date,
+      autopay: b.autopay ? 1 : 0,
+      notes: b.notes || '',
+    })
+  );
 
   return c.json({ id: res.meta.last_row_id });
 });
@@ -73,19 +84,22 @@ housingRoutes.put('/api/housing/:id', requireAuth, async (c) => {
 
   const due_date = `${(b.due_month || 1).toString().padStart(2, '0')}-${(b.due_day || 1).toString().padStart(2, '0')}`;
 
-  await db.update(
+  await db.batch(
     c.env.DB,
-    'housings',
-    {
-      name: b.property_name,
-      monthly_amount: parseFloat(b.monthly_amount),
-      due_date,
-      autopay: b.autopay ? 1 : 0,
-      notes: b.notes || '',
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
+    await sealedUpdate(
+      keyringFor(c),
+      c.get('userId'),
+      'housings',
+      {
+        name: b.property_name,
+        monthly_amount: parseFloat(b.monthly_amount),
+        due_date,
+        autopay: b.autopay ? 1 : 0,
+        notes: b.notes || '',
+      },
+      'id = ? AND profile_id = ?',
+      [id, pid]
+    )
   );
 
   return c.json({ success: true });

@@ -7,7 +7,7 @@
  * signals that stop it: an `X-Robots-Tag` on every response, including the ones no handler wrote
  * (404s from notFound, 500s from onError), and a `/robots.txt` that disallows everything.
  */
-import { SELF } from 'cloudflare:test';
+import { env, SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 
 const NOINDEX = 'noindex, nofollow';
@@ -39,6 +39,16 @@ describe('crawler policy', () => {
     expect(body).toMatch(/^User-agent: \*$/m);
     expect(body).toMatch(/^Disallow: \/$/m);
     expect(body).not.toMatch(/^Allow:/m);
+    expect(res.headers.get('x-robots-tag')).toBe(NOINDEX);
+  });
+
+  it('sends a security.txt request to the copy the app serves', async () => {
+    const res = await SELF.fetch('https://example.com/.well-known/security.txt', {
+      redirect: 'manual',
+    });
+    expect(res.status).toBe(301);
+    const appOrigin = (env as unknown as { CORS_ORIGIN: string }).CORS_ORIGIN;
+    expect(res.headers.get('location')).toBe(`${appOrigin}/.well-known/security.txt`);
     expect(res.headers.get('x-robots-tag')).toBe(NOINDEX);
   });
 });

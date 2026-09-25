@@ -3,12 +3,59 @@ import { defineTool, guardSize, MAX_ROWS } from './registry';
 import { HttpError } from '../http';
 import { signCapability, CAPABILITY_TTL_SECONDS } from '../signed-url';
 import * as db from '../db';
+import { keyringFor, type DataKeyring } from '../data-keys';
+import { compareBinary, openRows, SqlSum, textMatches } from '../sealed-rows';
+import type { Context } from 'hono';
+import type { AppEnv } from '../index';
 
 /** Every tool accepts this; rpc.ts reads `profileId` off the parsed args to resolve the profile. */
 import { profileArg, DATE, MONTH } from './args';
 
 // Read tools. Start every session with whoami: it is what turns "the user's account" into ids
 // the other tools can be called with.
+
+// Sealed text (transactions.description/beneficiary/payor/notes, bills.name/notes) is ciphertext
+// in D1 once its owner has a data key, so SQL can no longer search, group or dedupe it. Where this
+// deployment has no master key nobody's rows can be sealed, and every query below keeps its
+// original SQL; with one, the text work moves to JS over opened rows -- which must then handle
+// rows in either form, since the backfill converts them in its own time.
+
+const TX_PAGE_COLUMNS = `t.id, t.date, t.description, t.amount, t.amount_local, t.currency, t.type,
+              t.account_id, t.transfer_account_id, t.category_id, c.name AS category,
+              t.beneficiary, t.payor, t.notes, t.reconciled, t.text_enc`;
+const TX_PAGE_FROM = `FROM transactions t
+         LEFT JOIN categories c ON c.id = t.category_id AND c.profile_id = t.profile_id`;
+
+/** D1 binds at most 100 parameters per statement; one of these is the profile id. */
+const IDS_PER_QUERY = 90;
+
+/** The page's full rows, opened, in the order of `ids`. */
+async function transactionPage(
+  c: Context<AppEnv>,
+  ring: DataKeyring,
+  owner: number,
+  profileId: number,
+  ids: number[]
+): Promise<Record<string, unknown>[]> {
+  const byId = new Map<number, Record<string, unknown>>();
+  for (let i = 0; i < ids.length; i += IDS_PER_QUERY) {
+    const chunk = ids.slice(i, i + IDS_PER_QUERY);
+    const rows = await db.all<Record<string, unknown>>(
+      c.env.DB,
+      `SELECT ${TX_PAGE_COLUMNS} ${TX_PAGE_FROM}
+        WHERE t.profile_id = ? AND t.id IN (${chunk.map(() => '?').join(',')})`,
+      profileId,
+      ...chunk
+    );
+    for (const row of await openRows(ring, owner, 'transactions', rows)) {
+      byId.set(Number(row.id), row);
+    }
+  }
+  // A row deleted between the scan and this read simply drops out of the page.
+  return ids
+    .map((id) => byId.get(id))
+    .filter((row): row is Record<string, unknown> => row !== undefined);
+}
 
 defineTool({
   name: 'whoami',
@@ -79,6 +126,8 @@ defineTool({
     })
     .strict(),
   handler: async (c, args, profileId) => {
+    const ring = keyringFor(c);
+    const owner = c.get('userId');
     const where: string[] = ['t.profile_id = ?'];
     const params: unknown[] = [profileId];
     const add = (sql: string, ...p: unknown[]) => {
@@ -90,7 +139,11 @@ defineTool({
     if (args.type) add('t.type = ?', args.type);
     if (args.minAmount !== undefined) add('t.amount >= ?', args.minAmount);
     if (args.maxAmount !== undefined) add('t.amount <= ?', args.maxAmount);
-    if (args.search) add('t.description LIKE ?', `%${args.search}%`);
+    // With no master key every row is plaintext and the search stays a LIKE. With one, LIKE would
+    // be matching ciphertext: the search runs in JS instead, and the count, cursor and LIMIT that
+    // depend on it go with it. Every other filter stays in SQL to bound the scan.
+    const search = ring.enabled && args.search ? args.search : null;
+    if (args.search && !search) add('t.description LIKE ?', `%${args.search}%`);
     if (args.accountIds?.length) {
       add(`t.account_id IN (${args.accountIds.map(() => '?').join(',')})`, ...args.accountIds);
     }
@@ -98,46 +151,82 @@ defineTool({
       add(`t.category_id IN (${args.categoryIds.map(() => '?').join(',')})`, ...args.categoryIds);
     }
 
-    const total = await db.first<{ n: number }>(
-      c.env.DB,
-      `SELECT COUNT(*) AS n FROM transactions t WHERE ${where.join(' AND ')}`,
-      ...params
-    );
+    let totalCount: number;
+    let rows: Record<string, unknown>[];
+    if (search === null) {
+      const total = await db.first<{ n: number }>(
+        c.env.DB,
+        `SELECT COUNT(*) AS n FROM transactions t WHERE ${where.join(' AND ')}`,
+        ...params
+      );
+      totalCount = total?.n ?? 0;
 
-    // Keyset pagination on (date DESC, id DESC): stable under concurrent inserts, unlike OFFSET.
-    const cursorParams: unknown[] = [];
-    let cursorSql = '';
-    if (args.cursor) {
-      const [date, id] = String(args.cursor).split('|');
-      if (!date || !id) throw new HttpError(400, 'Malformed cursor.');
-      cursorSql = ' AND (t.date < ? OR (t.date = ? AND t.id < ?))';
-      cursorParams.push(date, date, Number(id));
+      // Keyset pagination on (date DESC, id DESC): stable under concurrent inserts, unlike OFFSET.
+      const cursorParams: unknown[] = [];
+      let cursorSql = '';
+      if (args.cursor) {
+        const [date, id] = String(args.cursor).split('|');
+        if (!date || !id) throw new HttpError(400, 'Malformed cursor.');
+        cursorSql = ' AND (t.date < ? OR (t.date = ? AND t.id < ?))';
+        cursorParams.push(date, date, Number(id));
+      }
+
+      const found = await db.all<Record<string, unknown>>(
+        c.env.DB,
+        `SELECT ${TX_PAGE_COLUMNS} ${TX_PAGE_FROM}
+          WHERE ${where.join(' AND ')}${cursorSql}
+          ORDER BY t.date DESC, t.id DESC
+          LIMIT ?`,
+        ...params,
+        ...cursorParams,
+        // One row past the page. Comparing the page against totalCount instead cannot tell a full
+        // last page from a full middle one -- with 18 rows at limit 6, page 3 still saw 18 > 6 and
+        // reported more to come, handing the caller a cursor that returns nothing.
+        args.limit + 1
+      );
+      rows = await openRows(ring, owner, 'transactions', found);
+    } else {
+      let cursor: { date: string; id: number } | null = null;
+      if (args.cursor) {
+        const [date, id] = String(args.cursor).split('|');
+        if (!date || !id) throw new HttpError(400, 'Malformed cursor.');
+        cursor = { date, id: Number(id) };
+      }
+      // Only what the match needs: date and id for the order and the cursor, the description to
+      // match. The page's other columns are fetched and opened for the page alone.
+      const scanned = await db.all<{ id: number; date: string; description: unknown }>(
+        c.env.DB,
+        `SELECT t.id, t.date, t.description, t.text_enc FROM transactions t
+          WHERE ${where.join(' AND ')}
+          ORDER BY t.date DESC, t.id DESC`,
+        ...params
+      );
+      const matched = (await openRows(ring, owner, 'transactions', scanned)).filter((r) =>
+        textMatches(r, ['description'], search)
+      );
+      totalCount = matched.length;
+      const after = cursor
+        ? matched.filter(
+            (r) => r.date < cursor.date || (r.date === cursor.date && r.id < cursor.id)
+          )
+        : matched;
+      // One row past the page, exactly as the SQL path's LIMIT limit + 1.
+      const window = after.slice(0, args.limit + 1);
+      rows = await transactionPage(
+        c,
+        ring,
+        owner,
+        profileId,
+        window.map((r) => r.id)
+      );
     }
-
-    const rows = await db.all<Record<string, unknown>>(
-      c.env.DB,
-      `SELECT t.id, t.date, t.description, t.amount, t.amount_local, t.currency, t.type,
-              t.account_id, t.transfer_account_id, t.category_id, c.name AS category,
-              t.beneficiary, t.payor, t.notes, t.reconciled
-         FROM transactions t
-         LEFT JOIN categories c ON c.id = t.category_id AND c.profile_id = t.profile_id
-        WHERE ${where.join(' AND ')}${cursorSql}
-        ORDER BY t.date DESC, t.id DESC
-        LIMIT ?`,
-      ...params,
-      ...cursorParams,
-      // One row past the page. Comparing the page against totalCount instead cannot tell a full
-      // last page from a full middle one -- with 18 rows at limit 6, page 3 still saw 18 > 6 and
-      // reported more to come, handing the caller a cursor that returns nothing.
-      args.limit + 1
-    );
 
     const hasMore = rows.length > args.limit;
     const page = hasMore ? rows.slice(0, args.limit) : rows;
     const last = page[page.length - 1] as { date?: string; id?: number } | undefined;
     return guardSize({
       rows: page,
-      totalCount: total?.n ?? 0,
+      totalCount,
       truncated: hasMore,
       nextCursor: hasMore && last ? `${last.date}|${last.id}` : null,
     });
@@ -185,9 +274,14 @@ defineTool({
       params.push(args.type);
     }
 
-    const groups = await db.all<{ key: string; total: number; count: number; avg: number }>(
-      c.env.DB,
-      `SELECT ${keyExpr} AS key,
+    const ring = keyringFor(c);
+    type Group = { key: unknown; total: number | null; count: number; avg: number | null };
+    const groups: Group[] =
+      args.groupBy === 'merchant' && ring.enabled
+        ? await merchantGroups(c, ring, where, params, args.limit)
+        : await db.all<Group>(
+            c.env.DB,
+            `SELECT ${keyExpr} AS key,
               SUM(COALESCE(t.amount_local, t.amount)) AS total,
               COUNT(*) AS count,
               AVG(COALESCE(t.amount_local, t.amount)) AS avg
@@ -198,9 +292,9 @@ defineTool({
         GROUP BY ${keyExpr}
         ORDER BY ABS(SUM(COALESCE(t.amount_local, t.amount))) DESC
         LIMIT ?`,
-      ...params,
-      args.limit
-    );
+            ...params,
+            args.limit
+          );
 
     return guardSize({
       groupBy: args.groupBy,
@@ -212,6 +306,70 @@ defineTool({
   },
 });
 
+/**
+ * summarize_spending's merchant grouping over opened text: `COALESCE(NULLIF(beneficiary, ''),
+ * description)` per row, grouped by the exact value (as GROUP BY under BINARY does), then SUM,
+ * COUNT(*) and AVG per group, ranked by ABS(total) descending and cut to `limit`. SQL cannot
+ * group ciphertext: a fresh IV per value would make every sealed row its own merchant.
+ */
+async function merchantGroups(
+  c: Context<AppEnv>,
+  ring: DataKeyring,
+  where: string[],
+  params: unknown[],
+  limit: number
+): Promise<{ key: unknown; total: number | null; count: number; avg: number | null }[]> {
+  const rows = await db.all<{ beneficiary: unknown; description: unknown; amount: unknown }>(
+    c.env.DB,
+    `SELECT t.beneficiary, t.description, t.text_enc, COALESCE(t.amount_local, t.amount) AS amount
+       FROM transactions t
+      WHERE ${where.join(' AND ')}`,
+    ...params
+  );
+  // A row's key is its beneficiary unless that is empty, and emptiness shows without opening
+  // anything ('' and NULL are never sealed). So each row has exactly one column opened: the
+  // description is dropped before openRows wherever the beneficiary already decides the key. One
+  // query, in the same order, so every group sums its rows in the order SQL did.
+  const opened = await openRows(
+    ring,
+    c.get('userId'),
+    'transactions',
+    rows.map((r): Record<string, unknown> => {
+      if (r.beneficiary === null || r.beneficiary === '') return r;
+      const { description: _unused, ...rest } = r;
+      return rest;
+    })
+  );
+  const byKey = new Map<unknown, { sum: SqlSum; count: number }>();
+  for (const r of opened) {
+    const beneficiary = r.beneficiary ?? null;
+    const key = beneficiary !== null && beneficiary !== '' ? beneficiary : (r.description ?? null);
+    let group = byKey.get(key);
+    if (!group) byKey.set(key, (group = { sum: new SqlSum(), count: 0 }));
+    group.sum.add(r.amount);
+    group.count++;
+  }
+  const groups = [...byKey].map(([key, g]) => ({
+    key,
+    total: g.sum.sum,
+    count: g.count,
+    avg: g.sum.avg,
+  }));
+  // ORDER BY ABS(total) DESC puts a NULL total last. Ties have no ORDER BY of their own, and
+  // SQLite hands them back in REVERSE group order, key descending: its sorter breaks ties on the
+  // row sequence and sorts that DESC along with the key. Measured on workerd's D1 and sqlite3 3.53;
+  // under LIMIT it decides which of several equal merchants make the cut.
+  groups.sort((a, b) => {
+    if (a.total === null || b.total === null) {
+      if (a.total !== b.total) return a.total === null ? 1 : -1;
+    } else if (Math.abs(a.total) !== Math.abs(b.total)) {
+      return Math.abs(b.total) - Math.abs(a.total);
+    }
+    return compareBinary(b.key, a.key);
+  });
+  return groups.slice(0, limit);
+}
+
 defineTool({
   name: 'list_reference_data',
   title: 'List reference data',
@@ -221,6 +379,7 @@ defineTool({
   input: z.object({ ...profileArg }).strict(),
   handler: async (c, _args, profileId) => {
     const q = <T>(sql: string) => db.all<T>(c.env.DB, sql, profileId);
+    const ring = keyringFor(c);
     return guardSize({
       accounts: await q<Record<string, unknown>>(
         'SELECT id, name, bank_name, type, currency, balance FROM accounts WHERE profile_id = ? ORDER BY name'
@@ -231,12 +390,41 @@ defineTool({
       tags: await q<Record<string, unknown>>(
         'SELECT id, name, color FROM tags WHERE profile_id = ? ORDER BY name'
       ),
-      counterparties: await q<Record<string, unknown>>(
-        "SELECT DISTINCT beneficiary AS name FROM transactions WHERE profile_id = ? AND beneficiary <> '' ORDER BY name LIMIT 200"
-      ),
+      counterparties: ring.enabled
+        ? await counterparties(c, ring, profileId)
+        : await q<Record<string, unknown>>(
+            "SELECT DISTINCT beneficiary AS name FROM transactions WHERE profile_id = ? AND beneficiary <> '' ORDER BY name LIMIT 200"
+          ),
     });
   },
 });
+
+/**
+ * `SELECT DISTINCT beneficiary ... AND beneficiary <> '' ORDER BY name LIMIT 200` over opened
+ * text. Every clause of it acts on the sealed column, so all of it moves here: the LIMIT can only
+ * apply after the dedupe, which means reading the profile's whole beneficiary column.
+ */
+async function counterparties(
+  c: Context<AppEnv>,
+  ring: DataKeyring,
+  profileId: number
+): Promise<{ name: string }[]> {
+  const rows = await db.all<{ beneficiary: unknown }>(
+    c.env.DB,
+    // `<> ''` is safe on a sealed column: '' and NULL are never sealed, so it drops exactly the
+    // rows the plaintext query drops, before anything is opened.
+    "SELECT beneficiary, text_enc FROM transactions WHERE profile_id = ? AND beneficiary <> ''",
+    profileId
+  );
+  const names = new Set<string>();
+  for (const r of await openRows(ring, c.get('userId'), 'transactions', rows)) {
+    if (typeof r.beneficiary === 'string' && r.beneficiary !== '') names.add(r.beneficiary);
+  }
+  return [...names]
+    .sort(compareBinary)
+    .slice(0, 200)
+    .map((name) => ({ name }));
+}
 
 defineTool({
   name: 'get_overview',
@@ -267,12 +455,17 @@ defineTool({
       month
     );
     const of = (type: string) => totals.find((r) => r.type === type)?.total ?? 0;
-    const bills = await db.all<Record<string, unknown>>(
-      c.env.DB,
-      `SELECT id, name, amount, due_date FROM bills
-        WHERE profile_id = ? AND due_date >= date('now')
-        ORDER BY due_date LIMIT 10`,
-      profileId
+    const bills = await openRows(
+      keyringFor(c),
+      c.get('userId'),
+      'bills',
+      await db.all<Record<string, unknown>>(
+        c.env.DB,
+        `SELECT id, name, amount, due_date, text_enc FROM bills
+          WHERE profile_id = ? AND due_date >= date('now')
+          ORDER BY due_date LIMIT 10`,
+        profileId
+      )
     );
     return guardSize({
       monthKey: month,
@@ -320,10 +513,15 @@ defineTool({
     return guardSize({
       month,
       budgets: budgets.map((b) => ({ ...b, remaining: (b.amount ?? 0) - (b.spent ?? 0) })),
-      savingsGoals: await db.all(
-        c.env.DB,
-        'SELECT * FROM savings_goals WHERE profile_id = ? ORDER BY id',
-        profileId
+      savingsGoals: await openRows(
+        keyringFor(c),
+        c.get('userId'),
+        'savings_goals',
+        await db.all(
+          c.env.DB,
+          'SELECT * FROM savings_goals WHERE profile_id = ? ORDER BY id',
+          profileId
+        )
       ),
       loans: await db.all(
         c.env.DB,
