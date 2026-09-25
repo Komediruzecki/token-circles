@@ -51,7 +51,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
     // Obsidian-style. Email reminders need data on our server, so they are a paid feature (0 here).
     // The API authenticates against account data on our server, which Free does not have, so
     // apiAccess is false here for the same reason cloudSync is — not as an upsell.
-    limits: { receiptsPerProfile: 0, remindersPerMonth: 0, profiles: 2, apiTokens: 0, receiptMaxMb: 0 },
+    limits: {
+      receiptsPerProfile: 0,
+      remindersPerMonth: 0,
+      profiles: 2,
+      apiTokens: 0,
+      receiptMaxMb: 0,
+    },
     features: {
       cloudSync: false,
       emailReminders: false,
@@ -144,7 +150,9 @@ export const SUPPORT_RESPONSE_NOTICE = 'Priority support: a reply within 1-3 wor
 /*
  * Decided but NOT listed, because neither is built (docs/plans/billing-tiers.md):
  *   - Receipt OCR      -> Advanced and up, when it ships.
- *   - End-to-end encryption -> tier still open, Basic or Advanced.
+ *   - End-to-end encryption -> free on every tier, including Free. NOT a plan feature:
+ *     it gets no PlanFeatures flag and no gate. Security is not an upsell, and AGPL
+ *     publishes the implementation anyway. When it ships it is simply on for everyone.
  * A pricing page that lists a feature the product does not have is a misleading commercial
  * practice under the UCPD, so the row appears the day the feature does, not before.
  */

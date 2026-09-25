@@ -99,7 +99,8 @@ list.
   hostage-taking and would undercut the whole pitch.
 - **Bank connectivity** (when it lands) — it will have a real per-connection cost, so it will
   need its own decision rather than being folded in here on the assumption it is Ultimate.
-- **Encryption** (when it lands). Security is not an upsell.
+- **Encryption** (when it lands) — on every tier, including Free. Security is not an
+  upsell, and an AGPL repo publishes the implementation anyway.
 
 ## The card art
 
@@ -162,7 +163,9 @@ Stripe once the login is refreshed.
 ### Two features that are not built yet
 
 - **Receipt OCR** — Advanced and up, when it ships.
-- **End-to-end encryption** — tier still open, Basic or Advanced.
+- **End-to-end encryption** — free on every tier, including Free. Decided 2026-09-10;
+  it is in "Deliberately not gated" above, so it never becomes a paid row and never
+  gets a `PlanFeatures` flag. The only reason it is unlisted is that it is not built.
 
 **Neither goes on the pricing card until it works.** A paid pricing page that lists a feature
 the product does not have is a misleading commercial practice under the EU's UCPD, and this is
