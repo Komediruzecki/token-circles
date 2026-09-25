@@ -17,6 +17,7 @@
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import { asOneWrite } from '../core/dataVersions'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
 
@@ -41,8 +42,6 @@ export interface AutoCategorizeModalProps {
   /** Resolve an account id to its display name for the row's metadata line. */
   accountName?: (id: number) => string | undefined
   onApply: (transactionId: number, categoryId: number) => void | Promise<void>
-  /** Fired once after a batch applies, so the host reloads once rather than per row. */
-  onApplied?: () => void
 }
 
 export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
@@ -103,11 +102,14 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     setApplying(true)
     try {
       // Sequential on purpose: one failed write should stop before the next, and fifty parallel
-      // PUTs against one profile is how optimistic-concurrency conflicts get manufactured.
-      for (const [transactionId, categoryId] of Object.entries(pendingUpdates())) {
-        await props.onApply(Number(transactionId), categoryId)
-      }
-      props.onApplied?.()
+      // PUTs against one profile is how optimistic-concurrency conflicts get manufactured. One
+      // write as far as the data counters go, so everything following them reloads once for the
+      // batch rather than once per row.
+      await asOneWrite(async () => {
+        for (const [transactionId, categoryId] of Object.entries(pendingUpdates())) {
+          await props.onApply(Number(transactionId), categoryId)
+        }
+      })
       props.onClose()
     } finally {
       setApplying(false)

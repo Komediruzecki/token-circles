@@ -9,7 +9,6 @@ export interface ReconciliationModalProps {
   isOpen: () => boolean
   onClose: () => void
   selectedTransactionIds: number[]
-  onReconciled: () => void
 }
 
 export default function ReconciliationModal(props: ReconciliationModalProps) {
@@ -44,7 +43,6 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
       const result = await api.reconcileByIds(props.selectedTransactionIds)
       toast(result.message || `Marked ${result.updated} transactions as reconciled`, 'success')
       await loadSummary()
-      props.onReconciled()
       props.onClose()
     } catch {
       toast('Failed to reconcile transactions', 'error')
@@ -65,7 +63,6 @@ export default function ReconciliationModal(props: ReconciliationModalProps) {
       const result = await api.reconcileByDateRange('2000-01-01', '2099-12-31')
       toast(result.message || `Marked ${result.count} transactions as reconciled`, 'success')
       await loadSummary()
-      props.onReconciled()
       props.onClose()
     } catch {
       toast('Failed to reconcile transactions', 'error')
