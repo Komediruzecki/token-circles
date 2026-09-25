@@ -2,8 +2,11 @@
  * Recurring Insights Card Component
  * Shows insights about recurring transactions
  */
-import { createMemo, createSignal, For, onMount } from 'solid-js'
+import { createMemo, createSignal, For } from 'solid-js'
 import { api, getLocalCurrency } from '../../core/api'
+import { useAppState } from '../../core/appStore'
+import { entityVersion } from '../../core/dataVersions'
+import { refetchOnActive } from '../../core/pageVisibility'
 import styles from './RecurringInsightsCard.module.css'
 
 interface RecurringItem {
@@ -21,7 +24,7 @@ export default function RecurringInsightsCard() {
   const [items, setItems] = createSignal<RecurringItem[]>([])
   const [loading, setLoading] = createSignal(true)
 
-  onMount(async () => {
+  const load = async () => {
     try {
       const data = await api.getRecurring()
       setItems(Array.isArray(data) ? data : [])
@@ -30,7 +33,19 @@ export default function RecurringInsightsCard() {
     } finally {
       setLoading(false)
     }
-  })
+  }
+
+  // It used to load once per session in onMount, so a recurring row added on Transactions, or a
+  // profile switch, never reached it. Now it follows both — and resume — while the Dashboard is
+  // visible, deferring to the next show while it is hidden.
+  const state = useAppState()
+  refetchOnActive(
+    'dashboard',
+    () => [state.profileVersion, entityVersion('recurring')],
+    () => {
+      void load()
+    }
+  )
 
   const upcoming = createMemo(() =>
     items()

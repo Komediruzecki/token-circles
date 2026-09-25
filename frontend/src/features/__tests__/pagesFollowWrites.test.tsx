@@ -12,7 +12,7 @@
  * write, where a leftover manual reload makes it two.
  */
 import { render } from 'solid-js/web'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiDelete, apiPost, apiPut } from '../../core/api'
 import { setPage } from '../../core/appStore'
 import {
@@ -187,6 +187,15 @@ const settle = async () => {
   await flush()
   await flush()
 }
+
+// Loading a page module is the slow part of a mount. Done once up front, so a loaded machine
+// cannot push a page's first test past its timeout — a mount that outlives its test keeps
+// counting reads into the next one.
+beforeAll(async () => {
+  for (const module of new Set([...PAGES, ...OWN_WRITES].map((c) => c.module))) {
+    await import(module)
+  }
+}, 120_000)
 
 beforeEach(() => {
   __resetDataVersionsForTest()

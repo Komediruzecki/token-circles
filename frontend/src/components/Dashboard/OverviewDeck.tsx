@@ -9,6 +9,8 @@
 import { createMemo, createResource, For, Show } from 'solid-js'
 import { apiHouseholdGet, formatCurrency, formatDate, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
+import { entityVersion } from '../../core/dataVersions'
+import { gatedSource } from '../../core/pageVisibility'
 import SankeyChart from '../SankeyChart'
 import styles from './OverviewDeck.module.css'
 import Sparkline from './Sparkline'
@@ -46,9 +48,17 @@ const HOLDING_DOTS = ['#6e9bff', '#f0a860', '#59d2a2', '#c9a0ff', '#4fb3d9']
 export default function OverviewDeck(props: OverviewDeckProps) {
   const state = useAppState()
 
+  // Every deck resource is gated on the Dashboard's visibility (a hidden Dashboard defers and
+  // refetches once on the next show, instead of joining a fan-out across mounted pages), and
+  // follows the writes that change it, from any page and on resume.
+
   // ── Spending heatmap: month × week-of-month intensity for the year ──
   const [heatmap] = createResource(
-    () => ({ year: props.year, pv: state.profileVersion }),
+    gatedSource('dashboard', () => ({
+      year: props.year,
+      pv: state.profileVersion,
+      v: entityVersion('analytics'),
+    })),
     async ({ year }) => {
       const res = await apiHouseholdGet<{ dates: Record<string, number> }>(
         `/api/analytics/daily-heatmap?year=${year}&type=expense`
@@ -70,7 +80,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
 
   // ── Budget radar: total budgeted vs spent (threshold=0 → all budgets) ──
   const [budgets] = createResource(
-    () => ({ pv: state.profileVersion }),
+    gatedSource('dashboard', () => ({ pv: state.profileVersion, v: entityVersion('budgets') })),
     async () => {
       const data = (await apiHouseholdGet<{ alerts: BudgetAlert[] }>(
         '/api/budgets/alerts?threshold=0'
@@ -86,7 +96,7 @@ export default function OverviewDeck(props: OverviewDeckProps) {
 
   // ── Portfolio list ──
   const [portfolio] = createResource(
-    () => ({ pv: state.profileVersion }),
+    gatedSource('dashboard', () => ({ pv: state.profileVersion, v: entityVersion('portfolio') })),
     async () => {
       const holdings = await apiHouseholdGet<Holding[]>('/api/portfolio/holdings')
       const rows = (Array.isArray(holdings) ? holdings : [])
