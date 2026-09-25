@@ -107,11 +107,10 @@ export class ApiClient {
         throw err
       }
 
-      // Anything that wrote data may have earned a badge; achievementsStore listens. Settings
-      // writes are excluded so persisting an unlock does not trigger another evaluation.
-      if (method !== 'GET' && !endpoint.startsWith('/settings') && typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('tc:data-changed', { detail: { endpoint } }))
-      }
+      // The "data changed" announcement used to live here, which meant it fired for this typed
+      // client and for nothing else — the raw apiPost/apiPut/apiDelete helpers below call
+      // apiFetch directly and never reach this function. It now lives in apiFetch, where both
+      // surfaces pass through. See core/dataChangedEvent.ts.
 
       const contentType = response.headers.get('content-type')
       if (contentType === null || !contentType.includes('application/json')) {
