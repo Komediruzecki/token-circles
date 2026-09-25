@@ -13,8 +13,13 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { apiPost, apiPut } from '../../core/api'
 import { setPage } from '../../core/appStore'
-import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
+import {
+  __resetDataVersionsForTest,
+  invalidateEntity,
+  invalidateForRequest,
+} from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 
 type Cat = { id: number; name: string; type: 'income' | 'expense'; color: string }
@@ -25,12 +30,32 @@ let serverCategories: Cat[] = []
 /** Every read of /api/categories, by whichever client surface the page happens to use. */
 const categoryFetches = vi.fn()
 
+/** Every read of Budgets' allocation plan — the table the page is named for. */
+const planFetches = vi.fn()
+
 function getByPath(url: string): unknown {
   if (url.startsWith('/api/categories')) {
     categoryFetches()
     return serverCategories
   }
+  if (url.startsWith('/api/budgets/zero-based?')) planFetches()
   return []
+}
+
+/**
+ * Make the next mocked write behave like the real one: apiFetch bumps the counters for the URL
+ * it wrote to. The module mock replaces the raw helpers wholesale, so without this a page's own
+ * write would look, to the page, as if it had changed nothing.
+ */
+function nextWriteInvalidates(
+  helper: typeof apiPost | typeof apiPut,
+  method: string,
+  body: unknown
+) {
+  vi.mocked(helper).mockImplementationOnce(async (url: string) => {
+    invalidateForRequest(url, method, true)
+    return body as never
+  })
 }
 
 vi.mock('../../core/api', async (importOriginal) => {
@@ -69,6 +94,7 @@ beforeEach(() => {
   __resetDataVersionsForTest()
   serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff' }]
   categoryFetches.mockClear()
+  planFetches.mockClear()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -167,5 +193,74 @@ describe('Budgets renders the refreshed list', () => {
     await settle()
 
     expect(root.textContent).toContain('Utilities')
+  })
+})
+
+describe('Budgets follows every write that moves its figures', () => {
+  // The allocation plan is keyed on categories and totals spending, so a category write and a
+  // transaction write both change it. It used to follow only the focus month and the profile:
+  // a category created on the Categories page never became a row here until the month changed.
+  it('refetches the allocation plan when a transaction is saved elsewhere', async () => {
+    await mountPage('budgets', '../Budgets')
+    expect(planFetches).toHaveBeenCalledTimes(1)
+
+    invalidateForRequest('/api/transactions', 'POST', true)
+    await settle()
+
+    expect(planFetches).toHaveBeenCalledTimes(2)
+  })
+
+  it('refetches the allocation plan when a category is created elsewhere', async () => {
+    await mountPage('budgets', '../Budgets')
+    expect(planFetches).toHaveBeenCalledTimes(1)
+
+    invalidateForRequest('/api/categories', 'POST', true)
+    await settle()
+
+    expect(planFetches).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches the category list once for a write that bumps both counters it tracks', async () => {
+    await mountPage('budgets', '../Budgets')
+    expect(categoryFetches).toHaveBeenCalledTimes(1)
+
+    // A category write bumps `categories` and, through the fan-out, `budgets`. The list tracks
+    // both; if the two bumps arrive as separate updates the page loads everything twice.
+    invalidateForRequest('/api/categories', 'POST', true)
+    await settle()
+
+    expect(categoryFetches).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not reload by hand after its own colour change', async () => {
+    const root = await mountPage('budgets', '../Budgets')
+    expect(categoryFetches).toHaveBeenCalledTimes(1)
+
+    nextWriteInvalidates(apiPut, 'PUT', { ok: true })
+    const swatch = root.querySelector<HTMLButtonElement>('button[title^="#"]')
+    expect(swatch).not.toBeNull()
+    swatch!.click()
+    await settle()
+
+    expect(apiPut).toHaveBeenCalledWith('/api/categories/1', expect.objectContaining({}))
+    // Two: the mount and the write's own bump. A third is a leftover manual loadCategories().
+    expect(categoryFetches).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not refetch by hand after its own bulk action', async () => {
+    const root = await mountPage('budgets', '../Budgets')
+    expect(planFetches).toHaveBeenCalledTimes(1)
+
+    nextWriteInvalidates(apiPost, 'POST', { ok: true, count: 2 })
+    const copyLastMonth = root.querySelector<HTMLButtonElement>(
+      '[title^="Copy the budget amounts"]'
+    )
+    expect(copyLastMonth).not.toBeNull()
+    copyLastMonth!.click()
+    await settle()
+
+    expect(apiPost).toHaveBeenCalledWith('/api/budgets/duplicate-last', expect.anything())
+    // Two: the mount and the write's own bump. A third is a leftover manual refetch.
+    expect(planFetches).toHaveBeenCalledTimes(2)
   })
 })

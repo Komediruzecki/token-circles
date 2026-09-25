@@ -127,7 +127,14 @@ export default function Budgets() {
   const [budgetResource, { refetch: refetchBudget }] = createResource(
     // Gated on visibility: focus-month and profile changes refetch now only while
     // Budgets is visible; hidden, it is deferred and refetched once on the next show.
-    gatedSource('budgets', () => ({ m: month(), pv: state.profileVersion })),
+    // The budgets counter covers every write that moves these figures, wherever it was
+    // made: this page's own actions, a transaction saved anywhere (spent), and a category
+    // created, renamed or deleted (the rows themselves) — see ALSO_INVALIDATES.
+    gatedSource('budgets', () => ({
+      m: month(),
+      pv: state.profileVersion,
+      v: entityVersion('budgets'),
+    })),
     async ({ m }) => {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
         apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
@@ -234,7 +241,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Copied ${result.count} budgets from ${prevMonthLabel()}`, 'success')
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter, which the resource tracks.
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
       }
@@ -256,7 +263,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Set ${result.count} budgets from ${prevMonthLabel()} expenses`, 'success')
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter.
       } else {
         showToast(result.message || 'No expenses found', 'info')
       }
@@ -283,7 +290,7 @@ export default function Budgets() {
           `Backfilled ${result.count} budgets across ${result.months} month${result.months === 1 ? '' : 's'}`,
           'success'
         )
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter.
       } else {
         showToast(result.message || 'Nothing to backfill', 'info')
       }
@@ -299,7 +306,7 @@ export default function Budgets() {
         rollover_enabled: enabled,
       })
       showToast(enabled ? 'Rollover enabled' : 'Rollover disabled', 'success')
-      await refetchBudget()
+      // No refetch here: the PUT bumped the budgets counter.
     } catch {
       showToast('Failed to update rollover', 'error')
     }
@@ -322,7 +329,7 @@ export default function Budgets() {
       showToast('Budget allocated successfully!', 'success')
       setShowAllocateModal(false)
       setAllocateAmount('')
-      refetchBudget()
+      // No refetch here: the POST bumped the budgets counter.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to allocate budget')
       showToast('Failed to allocate budget', 'error')
@@ -438,7 +445,7 @@ export default function Budgets() {
   const updateCategoryColor = async (id: number, color: string) => {
     try {
       await apiPut(`/api/categories/${id}`, { color })
-      loadCategories()
+      // No reload here: the PUT bumped the categories counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to update color:', err)
       showToast('Failed to update color', 'error')
@@ -479,7 +486,7 @@ export default function Budgets() {
       showToast('Budget set successfully', 'success')
       setShowCatBudgetModal(false)
       setSelectedCat(null)
-      loadCategories()
+      // No reload here: the POST bumped the budgets counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to set budget', err)
       showToast('Failed to set budget', 'error')
@@ -500,7 +507,8 @@ export default function Budgets() {
   )
   refetchOnActive(
     'budgets',
-    () => [state.profileVersion, month(), entityVersion('categories')],
+    // The list carries each category's spent/budget summary, so budget writes move it too.
+    () => [state.profileVersion, month(), entityVersion('categories'), entityVersion('budgets')],
     () => {
       loadCategories()
     }
