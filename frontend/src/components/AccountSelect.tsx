@@ -112,7 +112,13 @@ export function AccountSelect(props: AccountSelectProps) {
         }}
       >
         <option value="">Choose account…</option>
-        <For each={props.accounts()}>{(a) => <option value={a.name}>{a.name}</option>}</For>
+        <For each={props.accounts()}>
+          {(a) => (
+            <option value={a.name} selected={!creating() && a.name === props.value()}>
+              {a.name}
+            </option>
+          )}
+        </For>
         <option value={CREATE_SENTINEL}>New account…</option>
       </select>
 

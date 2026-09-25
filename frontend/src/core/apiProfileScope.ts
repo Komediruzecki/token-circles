@@ -12,6 +12,20 @@ export function activeProfileId(storage: Pick<Storage, 'getItem'> = localStorage
   return positiveInteger(storage.getItem(CURRENT_PROFILE_ID_KEY)) ?? 1
 }
 
+/**
+ * The profiles a household-scoped read should cover.
+ *
+ * **The active profile is always included, whatever the stored selection says.** These two values
+ * decide two different things — `currentProfileId` is where a write lands (`X-Profile-Id`), the
+ * selection is what a read returns (`X-Profile-Ids`) — and about ten places across the app write
+ * one or the other. When they diverged, everything the user created went to a profile no read
+ * asked for: the row existed (a duplicate name was still rejected) but appeared nowhere, and a
+ * browser reload could not help because both values are persisted. Unchecking your own profile in
+ * Settings > Household was enough to cause it.
+ *
+ * Enforcing it here rather than at each writer means a future writer that forgets cannot bring
+ * the bug back. The user's own selection is preserved in full; the active profile is added to it.
+ */
 export function householdProfileIds(storage: Pick<Storage, 'getItem'> = localStorage): number[] {
   const active = activeProfileId(storage)
   const raw = storage.getItem(SELECTED_PROFILE_IDS_KEY)
@@ -21,7 +35,8 @@ export function householdProfileIds(storage: Pick<Storage, 'getItem'> = localSto
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return [active]
     const ids = [...new Set(parsed.map(positiveInteger).filter((id): id is number => id !== null))]
-    return ids.length > 0 ? ids : [active]
+    if (ids.length === 0) return [active]
+    return ids.includes(active) ? ids : [active, ...ids]
   } catch {
     return [active]
   }

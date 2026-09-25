@@ -27,12 +27,16 @@ beforeEach(() => {
 })
 
 describe('profile request scopes', () => {
-  it('sanitizes stored profile ids and falls back to the active profile', () => {
+  it('sanitizes stored profile ids and always covers the active profile', () => {
     expect(activeProfileId()).toBe(2)
     expect(householdProfileIds()).toEqual([2, 3])
 
+    // This case previously expected [3] — a household read that omits the active profile 2.
+    // That expectation encoded the bug rather than a requirement: writes carry X-Profile-Id: 2,
+    // so a read of [3] can never return what was just written. See profileScopeConsistency.test.ts
+    // for the user-visible failure that came out of it.
     localStorage.setItem('selectedProfileIds', '[3,"3",0,-1,"bad"]')
-    expect(householdProfileIds()).toEqual([3])
+    expect(householdProfileIds()).toEqual([2, 3])
 
     localStorage.setItem('selectedProfileIds', 'not-json')
     expect(householdProfileIds()).toEqual([2])

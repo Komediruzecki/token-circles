@@ -25,7 +25,7 @@
  * NOT a cache. Reads still go to the network/IndexedDB every time, exactly as before. Request
  * de-duplication and scope-keyed caching are the next step, and they attach at the same seam.
  */
-import { createSignal } from 'solid-js'
+import { batch, createSignal } from 'solid-js'
 import type { Accessor, Setter } from 'solid-js'
 
 /**
@@ -128,7 +128,12 @@ export function invalidateForRequest(path: string, method: string | undefined, o
   if (!ok) return
   const verb = (method ?? 'GET').toUpperCase()
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return
-  for (const tag of tagsForPath(path)) invalidateEntity(tag)
+  // One write is one reactive update, however many counters it bumps. A category write bumps
+  // `categories` and `budgets` together; a page that tracks both would otherwise see two separate
+  // changes and refetch everything twice for one save.
+  batch(() => {
+    for (const tag of tagsForPath(path)) invalidateEntity(tag)
+  })
 }
 
 /**

@@ -47,6 +47,7 @@ import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
+import { entityVersion } from '../core/dataVersions'
 import { gatedSource, refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
@@ -126,7 +127,14 @@ export default function Budgets() {
   const [budgetResource, { refetch: refetchBudget }] = createResource(
     // Gated on visibility: focus-month and profile changes refetch now only while
     // Budgets is visible; hidden, it is deferred and refetched once on the next show.
-    gatedSource('budgets', () => ({ m: month(), pv: state.profileVersion })),
+    // The budgets counter covers every write that moves these figures, wherever it was
+    // made: this page's own actions, a transaction saved anywhere (spent), and a category
+    // created, renamed or deleted (the rows themselves) — see ALSO_INVALIDATES.
+    gatedSource('budgets', () => ({
+      m: month(),
+      pv: state.profileVersion,
+      v: entityVersion('budgets'),
+    })),
     async ({ m }) => {
       const [allocationsRes, summaryRes, forecastDataRaw] = await Promise.all([
         apiGet<ZeroBasedResponse>(`/api/budgets/zero-based?month=${m}`),
@@ -233,7 +241,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Copied ${result.count} budgets from ${prevMonthLabel()}`, 'success')
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter, which the resource tracks.
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
       }
@@ -255,7 +263,7 @@ export default function Budgets() {
       )
       if (result.ok) {
         showToast(`Set ${result.count} budgets from ${prevMonthLabel()} expenses`, 'success')
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter.
       } else {
         showToast(result.message || 'No expenses found', 'info')
       }
@@ -282,7 +290,7 @@ export default function Budgets() {
           `Backfilled ${result.count} budgets across ${result.months} month${result.months === 1 ? '' : 's'}`,
           'success'
         )
-        await refetchBudget()
+        // No refetch here: the POST bumped the budgets counter.
       } else {
         showToast(result.message || 'Nothing to backfill', 'info')
       }
@@ -298,7 +306,7 @@ export default function Budgets() {
         rollover_enabled: enabled,
       })
       showToast(enabled ? 'Rollover enabled' : 'Rollover disabled', 'success')
-      await refetchBudget()
+      // No refetch here: the PUT bumped the budgets counter.
     } catch {
       showToast('Failed to update rollover', 'error')
     }
@@ -321,7 +329,7 @@ export default function Budgets() {
       showToast('Budget allocated successfully!', 'success')
       setShowAllocateModal(false)
       setAllocateAmount('')
-      refetchBudget()
+      // No refetch here: the POST bumped the budgets counter.
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to allocate budget')
       showToast('Failed to allocate budget', 'error')
@@ -414,7 +422,7 @@ export default function Budgets() {
       setShowCatModal(false)
       setEditingCategory(null)
       setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-      loadCategories()
+      // No reload here: the write bumped the categories counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to save category:', err)
       showToast('Failed to save category', 'error')
@@ -426,7 +434,7 @@ export default function Budgets() {
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
-      loadCategories()
+      // No reload here: the DELETE bumped the categories counter.
     } catch (err) {
       console.error('Failed to delete category:', err)
       showToast('Failed to delete category', 'error')
@@ -437,7 +445,7 @@ export default function Budgets() {
   const updateCategoryColor = async (id: number, color: string) => {
     try {
       await apiPut(`/api/categories/${id}`, { color })
-      loadCategories()
+      // No reload here: the PUT bumped the categories counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to update color:', err)
       showToast('Failed to update color', 'error')
@@ -478,14 +486,15 @@ export default function Budgets() {
       showToast('Budget set successfully', 'success')
       setShowCatBudgetModal(false)
       setSelectedCat(null)
-      loadCategories()
+      // No reload here: the POST bumped the budgets counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to set budget', err)
       showToast('Failed to set budget', 'error')
     }
   }
 
-  // Improvements follow the profile; categories follow profile + focus month. Both
+  // Improvements follow the profile; categories follow profile + focus month, and also any
+  // category write made elsewhere — including this page's own Add Category modal. Both
   // gated on visibility — while Budgets is hidden they are deferred and flushed once
   // on the next show. The first run also performs the initial load, so this replaces
   // the old onMount + two effects (which triple-fetched categories on mount).
@@ -498,7 +507,8 @@ export default function Budgets() {
   )
   refetchOnActive(
     'budgets',
-    () => [state.profileVersion, month()],
+    // The list carries each category's spent/budget summary, so budget writes move it too.
+    () => [state.profileVersion, month(), entityVersion('categories'), entityVersion('budgets')],
     () => {
       loadCategories()
     }
@@ -1256,7 +1266,10 @@ export default function Budgets() {
               >
                 <For each={allocations()}>
                   {(a) => (
-                    <option value={a.category_id}>
+                    <option
+                      value={a.category_id}
+                      selected={a.category_id === selectedCategory()?.category_id}
+                    >
                       {a.category_name}
                       {a.is_budgeted ? ` (currently ${formatCurrency(a.allocated)})` : ''}
                     </option>

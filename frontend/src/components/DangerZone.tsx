@@ -100,7 +100,13 @@ export default function DangerZone(props: DangerZoneProps) {
             value={selectedProfileId()}
             onchange={(e) => setSelectedProfileId(parseInt(e.currentTarget.value, 10))}
           >
-            <For each={profiles()}>{(p) => <option value={p.id}>{p.name}</option>}</For>
+            <For each={profiles()}>
+              {(p) => (
+                <option value={p.id} selected={p.id === selectedProfileId()}>
+                  {p.name}
+                </option>
+              )}
+            </For>
           </select>
         </div>
         <p class={styles['danger-zone-selector-hint']}>

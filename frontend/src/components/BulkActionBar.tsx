@@ -192,7 +192,14 @@ export default function BulkActionBar(props: BulkActionBarProps) {
                 >
                   <option value="">No Category</option>
                   <For each={props.categories}>
-                    {(cat) => <option value={String(cat.id)}>{cat.name}</option>}
+                    {(cat) => (
+                      <option
+                        value={String(cat.id)}
+                        selected={String(cat.id) === selectedCategoryId()}
+                      >
+                        {cat.name}
+                      </option>
+                    )}
                   </For>
                 </select>
               </div>

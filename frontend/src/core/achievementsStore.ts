@@ -1,7 +1,8 @@
 /**
  * Runs the evaluator for the current profile and keeps the unlock records in sync with the
  * profile's settings. Refresh happens on profile change and, debounced, after any mutating
- * request (api.ts dispatches DATA_CHANGED_EVENT). Nothing here is server-side.
+ * request (apiFetch dispatches DATA_CHANGED_EVENT for both client surfaces — see
+ * core/dataChangedEvent.ts). Nothing here is server-side.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
@@ -20,7 +21,12 @@ import { addToast } from './toastStore'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
-export const DATA_CHANGED_EVENT = 'tc:data-changed'
+/**
+ * Re-exported so existing importers keep their import path. The constant itself lives in a leaf
+ * module because `apiFetch` dispatches it and this store imports the API client — importing it
+ * from here would close a cycle.
+ */
+export { DATA_CHANGED_EVENT } from './dataChangedEvent'
 
 const OUR_HOSTS = /(^|\.)tokencircles\.com$/i
 

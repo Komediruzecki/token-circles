@@ -2,6 +2,7 @@
  * API Fetch Interceptor
  * Routes API calls to either the real backend (self-hosted) or IndexedDB (serverless)
  */
+import { announceDataChanged } from './dataChangedEvent'
 import { invalidateForRequest } from './dataVersions'
 import { getStorageMode } from './storage/storageFactory'
 import type { StorageMode } from './storage/storageFactory'
@@ -37,12 +38,22 @@ function toApiPath(url: string): string | null {
 }
 
 /**
+ * Everything that must happen after a completed app-API request, in one place so the two storage
+ * branches below cannot drift apart.
+ */
+function announceWrite(apiPath: string, init: RequestInit | undefined, ok: boolean): void {
+  invalidateForRequest(apiPath, init?.method, ok)
+  announceDataChanged(apiPath, init?.method, ok)
+}
+
+/**
  * Replacement for window.fetch that intercepts app-API calls in serverless mode.
  * In self-hosted mode, passes through to the real fetch.
  *
- * This is also where every successful write announces itself: both modes pass through here, so
- * one call to `invalidateForRequest` covers the whole app and cannot be forgotten by a new
- * feature. See core/dataVersions.ts for why that matters.
+ * This is also where every successful write announces itself: both modes pass through here, and
+ * so do both client surfaces (the typed `api.*` client and the raw `apiPost`/`apiPut`/`apiDelete`
+ * helpers). One call site therefore covers the whole app and cannot be forgotten by a new
+ * feature. See core/dataVersions.ts and core/dataChangedEvent.ts for why each matters.
  */
 export async function apiFetch(url: string, init?: RequestInit): Promise<Response> {
   const mode: StorageMode = getStorageMode()
@@ -59,7 +70,7 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
         // and silently drop the cross-origin session cookie.
         credentials: 'include',
       })
-      invalidateForRequest(apiPath, init?.method, response.ok)
+      announceWrite(apiPath, init, response.ok)
       return response
     }
     return fetch(url, init)
@@ -69,7 +80,7 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   if (apiPath) {
     const router = await getLocalRouter()
     const response = await router(apiPath, init)
-    invalidateForRequest(apiPath, init?.method, response.ok)
+    announceWrite(apiPath, init, response.ok)
     return response
   }
 
