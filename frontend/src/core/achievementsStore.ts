@@ -1,7 +1,8 @@
 /**
  * Runs the evaluator for the current profile and keeps the unlock records in sync with the
  * profile's settings. Refresh happens on profile change and, debounced, after any mutating
- * request (api.ts dispatches DATA_CHANGED_EVENT). Nothing here is server-side.
+ * request (apiFetch dispatches DATA_CHANGED_EVENT for both client surfaces — see
+ * core/dataChangedEvent.ts). Nothing here is server-side.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
