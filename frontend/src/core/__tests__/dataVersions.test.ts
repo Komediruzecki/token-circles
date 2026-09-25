@@ -62,6 +62,55 @@ describe('tagsForPath', () => {
       expect.arrayContaining(['dashboard', 'analytics', 'budgets', 'reports', 'accounts'])
     )
   })
+
+  it('carries a completed import into everything it creates', () => {
+    // The import routes are `/api/import/*`, singular. The table was keyed `imports`, a root no
+    // URL ever produced, so a finished import refreshed nothing: not the transaction list, not
+    // the accounts it created, not the dashboard.
+    expect(tagsForPath('/api/import/execute')).toEqual(
+      expect.arrayContaining(['transactions', 'accounts', 'categories', 'dashboard', 'budgets'])
+    )
+  })
+
+  it.each(['/api/bills/3/mark-paid', '/api/recurring/4/populate', '/api/import/execute'])(
+    '%s moves everything a transaction write moves, because it writes transactions',
+    (path) => {
+      // Each of these lists `transactions` in the fan-out table. Copying the transaction entry by
+      // hand dropped views on the way: marking a bill paid never reached the budgets, analytics or
+      // reports, although the payment it records is spending in all three.
+      expect(tagsForPath(path)).toEqual(expect.arrayContaining(tagsForPath('/api/transactions')))
+    }
+  )
+
+  it('moves only the goal when money is put towards it', () => {
+    // A contribution raises the goal's saved amount and nothing else, in the worker and in the
+    // local handler alike: no transaction row, no account balance. The table used to claim both,
+    // which reloaded every transaction-derived view for a change none of them show.
+    expect(tagsForPath('/api/savings-goals/5/contribute')).toEqual(['savings-goals'])
+  })
+
+  it('names each entity once, however many routes through the table reach it', () => {
+    const tags = tagsForPath('/api/import/execute')
+    expect(new Set(tags).size).toBe(tags.length)
+  })
+
+  it.each([
+    '/api/portfolio/prices',
+    '/api/loans/7/calculate',
+    '/api/tags/rules/preview',
+    '/api/import/upload',
+    '/api/import/googlesheet',
+  ])('treats %s as the read it is, although it is sent as a POST', (path) => {
+    // These lookups take a body, so they POST. They change nothing, and each is called from a
+    // page that follows the entity its URL names: counting a price quote as a portfolio write
+    // reloaded the holdings after every quote refresh, and an import preview would refresh every
+    // page the import feeds before a single row was written.
+    expect(tagsForPath(path)).toEqual([])
+  })
+
+  it('still counts the import that writes', () => {
+    expect(tagsForPath('/api/import/execute')).toContain('transactions')
+  })
 })
 
 describe('invalidateForRequest', () => {
