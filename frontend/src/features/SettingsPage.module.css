@@ -273,6 +273,12 @@
   flex: 0 0 auto;
 }
 
+/* The active profile's household box: always included, so it cannot be cleared. */
+.checkbox:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ── Warning boxes (storage switch) ── */
 .warning-box {
   padding: 16px;

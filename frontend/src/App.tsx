@@ -211,19 +211,9 @@ export function App() {
     }
   }
 
+  // Picking one profile makes it the whole selection (clears multi-select).
   const selectProfile = (profileId: number) => {
-    localStorage.setItem('currentProfileId', profileId.toString())
-    // Set only this profile as selected (clears multi-select)
-    localStorage.setItem('selectedProfileIds', JSON.stringify([profileId]))
-    setSelectedProfileIds([profileId])
-    // Shallow-copy from profiles() to avoid store-proxy cross-reference
-    // (setting a proxy from one store path as value at another path can
-    //  cause spurious reactivity that briefly corrupts the profiles list)
-    const found = profiles().find((p) => p.id === profileId)
-    setCurrentProfile(found ? { ...found } : null)
-    setShowDropdown(false)
-    bumpProfileVersion()
-    // State is updated via bumpProfileVersion()
+    applyProfileSelection([profileId])
   }
 
   const getSelectedProfileIds = (): number[] => {
@@ -276,27 +266,34 @@ export function App() {
     })
   }
 
-  const toggleDropdown = () => {
-    const wasOpen = state.showDropdown
-    if (wasOpen) {
-      // Closing dropdown — save and trigger reactive data reload
-      const ids = selectedProfileIds()
-      localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
-      if (ids.length > 0) {
-        // This moves where WRITES land (X-Profile-Id), so the displayed profile has to move with
-        // it. Without the setCurrentProfile below, the header kept showing the old profile while
-        // new rows were filed under ids[0] — the same class of split-brain that made a created
-        // category vanish. selectProfile() has always done both; this path had not.
-        localStorage.setItem('currentProfileId', ids[0].toString())
-        const active = profiles().find((p) => p.id === ids[0])
-        if (active) setCurrentProfile({ ...active })
-      }
-      setShowDropdown(false)
-      bumpProfileVersion()
-      // State is updated via bumpProfileVersion()
-    } else {
-      setShowDropdown(true)
+  /**
+   * Apply a profile selection from the sidebar: the first id becomes the active profile, and the
+   * whole list is the household. Every way of choosing — picking one profile, closing the dropdown,
+   * clicking outside it — goes through here, so they cannot drift apart again.
+   *
+   * This moves where WRITES land (X-Profile-Id), so the displayed profile has to move with it.
+   * Without the setCurrentProfile below, the header kept showing the old profile while new rows
+   * were filed under ids[0] — the same class of split-brain that made a created category vanish.
+   * The toggle got this in #575; the click-outside path kept its own copy and still had not.
+   */
+  const applyProfileSelection = (ids: number[]) => {
+    setSelectedProfileIds(ids)
+    localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
+    if (ids.length > 0) {
+      // Shallow-copy from profiles() to avoid store-proxy cross-reference (setting a proxy from
+      // one store path as value at another path can cause spurious reactivity that briefly
+      // corrupts the profiles list).
+      const active = profiles().find((p) => p.id === ids[0])
+      localStorage.setItem('currentProfileId', ids[0].toString())
+      setCurrentProfile(active ? { ...active } : null)
     }
+    setShowDropdown(false)
+    bumpProfileVersion()
+  }
+
+  const toggleDropdown = () => {
+    if (state.showDropdown) applyProfileSelection(selectedProfileIds())
+    else setShowDropdown(true)
   }
 
   const handleLogin = () => {
@@ -371,15 +368,7 @@ export function App() {
       if (showDropdown()) {
         const target = e.target as HTMLElement
         if (!target.closest(`.${profileStyles.profileDropdown}`)) {
-          // Apply selection and trigger reactive data reload
-          const ids = selectedProfileIds()
-          localStorage.setItem('selectedProfileIds', JSON.stringify(ids))
-          if (ids.length > 0) {
-            localStorage.setItem('currentProfileId', ids[0].toString())
-          }
-          setShowDropdown(false)
-          bumpProfileVersion()
-          // State is updated via bumpProfileVersion()
+          applyProfileSelection(selectedProfileIds())
         }
       }
     }
