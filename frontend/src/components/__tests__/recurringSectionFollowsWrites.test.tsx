@@ -67,7 +67,6 @@ vi.mock('../../core/confirmStore', async (importOriginal) => {
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
-const onRefreshTransactions = vi.fn()
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
 const settle = async () => {
@@ -81,7 +80,6 @@ beforeEach(() => {
   listReads = 0
   writes.deleteRecurring.mockClear()
   writes.populateRecurring.mockClear()
-  onRefreshTransactions.mockClear()
   host = document.createElement('div')
   document.body.appendChild(host)
 })
@@ -95,16 +93,7 @@ afterEach(() => {
 /** The section lives on the Transactions page, and loads only while that page is visible. */
 async function mountSection() {
   setPage('transactions')
-  dispose = render(
-    () => (
-      <RecurringSection
-        categories={[]}
-        accounts={[]}
-        onRefreshTransactions={onRefreshTransactions}
-      />
-    ),
-    host
-  )
+  dispose = render(() => <RecurringSection categories={[]} accounts={[]} />, host)
   await settle()
   // The rows render in the expanded section.
   host.querySelector<HTMLElement>('[class*="sectionHeader"]')!.click()
@@ -176,7 +165,5 @@ describe('the recurring list', () => {
     expect(writes.populateRecurring).toHaveBeenCalledWith(1)
     // Populating advances the rule's next date on the server; the list has to reload to show it.
     expect(listReads).toBe(2)
-    // The transaction list does not follow the counter yet, so it is still told directly.
-    expect(onRefreshTransactions).toHaveBeenCalledTimes(1)
   })
 })

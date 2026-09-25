@@ -50,6 +50,7 @@ export type EntityTag =
   | 'loans'
   | 'portfolio'
   | 'profiles'
+  | 'receipts'
   | 'recurring'
   | 'reports'
   | 'retirement'

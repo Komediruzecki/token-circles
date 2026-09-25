@@ -48,7 +48,7 @@ import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
-import { entityVersion } from '../core/dataVersions'
+import { asOneWrite, entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { fromPill, toRange } from '../utils/period'
@@ -120,14 +120,24 @@ export default function Transactions() {
   const [totalAmount, setTotalAmount] = createSignal(0)
   const [showReconciled, setShowReconciled] = createSignal(true)
 
-  // Reload on profile change — but only while visible; a hidden page defers its
-  // refetch until next shown (keep-alive fan-out guard). The focus period drives a
-  // client-side filter (periodRange), so it needs no refetch here.
+  // The list follows the profile and every write that changes what its endpoint returns — from
+  // this page, any other page, or on resume: the rows themselves, and the category, receipt and
+  // tags that GET /api/transactions (and the local handler mirroring it) joins onto each row.
+  // Writes that create transactions elsewhere — a bill marked paid, a recurring rule populated, an
+  // import and its undo, a quick-add — reach `transactions` through the fan-out in
+  // core/dataVersions.ts. While hidden, the page defers the refetch until it is next shown. The
+  // focus period drives a client-side filter (periodRange), so it needs no refetch here.
   refetchOnActive(
     'transactions',
-    () => state.profileVersion,
+    () => [
+      state.profileVersion,
+      entityVersion('transactions'),
+      entityVersion('categories'),
+      entityVersion('receipts'),
+      entityVersion('tags'),
+    ],
     () => {
-      refreshTransactions()
+      void refreshTransactions()
     }
   )
 
@@ -267,10 +277,9 @@ export default function Transactions() {
       return
 
     try {
+      // The receipt chip leaves the row through the list's `receipts` counter.
       await api.deleteReceipt(receipt.id)
       closeReceiptModal()
-      // Reload transactions to remove the deleted receipt chip
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
       toast('Failed to delete receipt', 'error')
@@ -316,10 +325,10 @@ export default function Transactions() {
             throw error
           }
         }
-        // Drop the row locally instead of re-fetching. The refetch asks for EVERY
-        // transaction in the profile (the list request sends no limit) plus its tags, so it
-        // — not the delete — is the wall-clock cost here, and it grows with the table.
-        // The row also leaves the selection — see the reconciliation effect below.
+        // Drop the row locally as well. The delete's counter refetches the list, but that asks
+        // for EVERY transaction in the profile (the list request sends no limit) plus its tags,
+        // so it grows with the table; the dialog must not wait for it, and neither should the
+        // row. The row also leaves the selection — see the reconciliation effect below.
         setTransactions((prev) => prev.filter((t) => t.id !== transaction.id))
       },
     })
@@ -363,7 +372,6 @@ export default function Transactions() {
         data: { category_id: categoryId },
       })
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk change category:', error)
     }
@@ -375,21 +383,23 @@ export default function Transactions() {
     try {
       await apiPut('/api/transactions/bulk', { ids, action: 'update', data: { type } })
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk change type:', error)
     }
   }
 
   // Add or remove tags across the current selection. Additive per tag (other tags on each row are
-  // left alone); one request per tag keeps the endpoint per-tag and idempotent.
+  // left alone); one request per tag keeps the endpoint per-tag and idempotent, and asOneWrite
+  // keeps them one write, so the list refetches once for the lot.
   const handleBulkApplyTags = async (tagIds: number[], mode: 'add' | 'remove') => {
     const ids = selectedTransactions()
     if (ids.length === 0 || tagIds.length === 0) return
     try {
-      for (const tagId of tagIds) {
-        await api.bulkTagTransactions(tagId, ids, mode)
-      }
+      await asOneWrite(async () => {
+        for (const tagId of tagIds) {
+          await api.bulkTagTransactions(tagId, ids, mode)
+        }
+      })
       const tagWord = tagIds.length === 1 ? 'tag' : 'tags'
       const txWord = ids.length === 1 ? 'transaction' : 'transactions'
       toast(
@@ -399,7 +409,6 @@ export default function Transactions() {
         'success'
       )
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk tag transactions:', error)
       toast('Failed to update tags', 'error')
@@ -618,8 +627,9 @@ export default function Transactions() {
   const reconciledCount = createMemo(() => transactions().filter((t) => t.reconciled).length)
 
   // Auto-categorize handler
-  // One write per call, NO reload here: the modal applies a batch and fires onApplied once at
-  // the end. Reloading the whole list after every row turned "Apply 50" into 50 full refetches.
+  // One write per call, NO reload here: the modal applies its batch as one write (asOneWrite), so
+  // the list follows the counter once at the end. Reloading the whole list after every row turned
+  // "Apply 50" into 50 full refetches.
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
     try {
       await api.updateTransaction(transactionId, { category_id: categoryId })
@@ -631,12 +641,20 @@ export default function Transactions() {
     }
   }
 
-  // Refresh transactions handler
+  // Refetches overlap once every write and every resume triggers one, and their answers can land
+  // in any order. An older answer shown after a newer one would put back a row a later write
+  // removed, so an answer is shown only if nothing asked for after it is on screen already.
+  let listAsked = 0
+  let listShown = 0
+
   // Refresh transactions handler — keeps existing data visible during background
   // re-fetches so mutations feel instant instead of replacing content with a spinner.
   const refreshTransactions = async () => {
+    const asked = ++listAsked
     try {
       const data = (await api.getTransactions()) as any
+      if (asked < listShown) return
+      listShown = asked
       const transactionsData: any[] = Array.isArray(data) ? data : (data?.rows ?? [])
       setTransactions(transactionsData as unknown as Transaction[])
     } catch (error) {
@@ -1075,11 +1093,7 @@ export default function Transactions() {
       />
 
       {/* Recurring Transactions */}
-      <RecurringSection
-        categories={categories()}
-        accounts={accounts()}
-        onRefreshTransactions={refreshTransactions}
-      />
+      <RecurringSection categories={categories()} accounts={accounts()} />
 
       {/* Transaction Modal */}
       <div
@@ -1564,7 +1578,6 @@ export default function Transactions() {
                                 try {
                                   await api.deleteReceipt(existing.id)
                                   setExistingReceipt(null)
-                                  await refreshTransactions()
                                 } catch (error) {
                                   console.error('Failed to delete receipt:', error)
                                   toast('Failed to delete receipt', 'error')
@@ -1671,35 +1684,38 @@ export default function Transactions() {
                 }
 
                 try {
-                  const txId = formId()
-                  let savedId: number
-                  if (txId) {
-                    savedId = parseInt(txId)
-                    await api.updateTransaction(
-                      savedId,
-                      txData as Parameters<typeof api.updateTransaction>[1]
-                    )
-                  } else {
-                    const created = await api.createTransaction(
-                      txData as Parameters<typeof api.createTransaction>[0]
-                    )
-                    savedId = (created as any).id ?? (created as any).transaction_id ?? 0
-                  }
-
-                  const file = selectedFile()
-                  if (file && savedId) {
-                    try {
-                      await api.uploadReceipt(savedId, file)
-                    } catch (receiptErr) {
-                      console.error('Failed to upload receipt:', receiptErr)
+                  // The save and its receipt upload are one write: the list follows the counters
+                  // they bump and refetches once, after both, rather than once for each.
+                  await asOneWrite(async () => {
+                    const txId = formId()
+                    let savedId: number
+                    if (txId) {
+                      savedId = parseInt(txId)
+                      await api.updateTransaction(
+                        savedId,
+                        txData as Parameters<typeof api.updateTransaction>[1]
+                      )
+                    } else {
+                      const created = await api.createTransaction(
+                        txData as Parameters<typeof api.createTransaction>[0]
+                      )
+                      savedId = (created as any).id ?? (created as any).transaction_id ?? 0
                     }
-                  }
+
+                    const file = selectedFile()
+                    if (file && savedId) {
+                      try {
+                        await api.uploadReceipt(savedId, file)
+                      } catch (receiptErr) {
+                        console.error('Failed to upload receipt:', receiptErr)
+                      }
+                    }
+                  })
 
                   // Remember the account for the next quick entry.
                   if (formAccountId() !== null) {
                     localStorage.setItem(lastAccountKey(), String(formAccountId()))
                   }
-                  await refreshTransactions()
                   setTransactionModalOpen(false)
                   setSelectedFile(null)
                   setExistingReceipt(null)
@@ -1927,7 +1943,6 @@ export default function Transactions() {
         categories={categories}
         accountName={(id) => accounts().find((a) => a.id === id)?.name}
         onApply={handleAutoApplyCategory}
-        onApplied={() => void refreshTransactions()}
       />
 
       {/* Reconciliation Modal */}
@@ -1935,7 +1950,6 @@ export default function Transactions() {
         isOpen={isReconciliationModalOpen}
         onClose={() => setReconciliationModalOpen(false)}
         selectedTransactionIds={selectedTransactions()}
-        onReconciled={refreshTransactions}
       />
     </div>
   )
