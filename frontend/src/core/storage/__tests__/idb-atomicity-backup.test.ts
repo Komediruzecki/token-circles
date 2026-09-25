@@ -13,6 +13,7 @@ const ALL_STORES = [
   'accounts',
   'budgets',
   'goals',
+  'retirement_goals',
   'loans',
   'balanceHistory',
   'receipts',
@@ -174,11 +175,13 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     })
     await db.add('balanceHistory', { id: 1, account_id: 1, balance: 123, date: '2026-05-01' })
     await db.add('import_logs', { id: 1, profile_id: 1, source: 'sheet', imported: 1 })
+    await db.add('retirement_goals', { id: 1, profile_id: 1, name: 'Retire', target_amount: 1 })
     await db.put('settings', {
       key: BACKUP_EXTENSION_SETTINGS_KEY,
       value: {
         budgetsZeroBased: [{ id: 1, profile_id: 1, category_id: 1, amount: 50 }],
-        retirementGoals: [{ id: 1, profile_id: 1, name: 'Retire' }],
+        // Retirement goals have a store of their own since v13; nothing is parked here now.
+        retirementGoals: [],
         emergencyFundConfig: [{ id: 1, profile_id: 1, monthly_expenses: 1000 }],
         customReports: [{ id: 1, name: 'Tax' }],
         settingsRows: [{ profile_id: 1, key: 'currency', value: 'EUR' }],
@@ -232,6 +235,7 @@ describe('IndexedDBAdapter — backup completeness (audit D11)', () => {
     expect(await db.getAll('receipts')).toHaveLength(1)
     expect(await db.getAll('balanceHistory')).toHaveLength(1)
     expect(await db.getAll('import_logs')).toHaveLength(1)
+    expect(await db.getAll('retirement_goals')).toHaveLength(1)
     // Account balance history keeps its account linkage.
     const bh = (await db.getAll('balanceHistory'))[0] as { account_id: number }
     expect(bh.account_id).toBe(1)

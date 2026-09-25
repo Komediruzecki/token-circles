@@ -14,6 +14,7 @@ import {
   receiptBytesFrom,
   validateBackupForLocalRestore,
 } from './backup'
+import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
 import type { IDBPDatabase } from 'idb'
 import type {
   Account,
@@ -31,7 +32,7 @@ import type {
 } from '../../types/storage'
 
 const DB_NAME = 'finance-manager'
-const DB_VERSION = 12
+const DB_VERSION = 13
 
 /** Thrown by deleteAccount when transactions still reference the account.
  *  The accounts handler maps this to a 409 JSON response. */
@@ -185,6 +186,14 @@ async function upgradeSchema(
     is.createIndex('by_profile', 'profile_id')
   }
 
+  // v13: retirement goals get a store of their own, as they have a table of their own in the
+  // worker (retirement_goals, apart from savings_goals). Created here, above the first `await`;
+  // the rows that belong in it move at the end of this function.
+  if (oldVersion < 13) {
+    const rg = db.createObjectStore('retirement_goals', { keyPath: 'id', autoIncrement: true })
+    rg.createIndex('by_profile', 'profile_id')
+  }
+
   // v10: unify the account starting-date field name (audit D7). The same concept was
   // written under three names — canonical `starting_date` (read by the UI + worker), plus
   // legacy `starting_balance_date` (demo seed) and `balance_date` (CSV/bank import). Only
@@ -245,6 +254,46 @@ async function upgradeSchema(
     const tagRules = db.createObjectStore('tagRules', { keyPath: 'id', autoIncrement: true })
     tagRules.createIndex('by_profile', 'profile_id')
     tagRules.createIndex('by_tag', 'tag_id')
+  }
+
+  // v13: move the retirement goals into their store. Until now the Retirement page's goals were
+  // filed among the savings goals, where the Goals page listed them; and a backup restore parked
+  // a server backup's retirement goals in the backup extensions, where no page read them. Both
+  // move. A row moves out of `goals` only when it is certainly a retirement goal
+  // (isLegacyRetirementGoal); every savings goal stays exactly as it was. A test database may
+  // lack either source store, so each is checked.
+  //
+  // Everything is copied before anything is removed. idb does not abort the upgrade when this
+  // function throws, so whatever ran before a throw commits: that must never be a removal whose
+  // copy had not been written.
+  if (oldVersion < 13 && oldVersion >= 1 && tx) {
+    const moving: Record<string, unknown>[] = []
+    const movedKeys: IDBValidKey[] = []
+    if (db.objectStoreNames.contains('goals')) {
+      let cursor = await tx.objectStore('goals').openCursor()
+      while (cursor) {
+        const row = cursor.value as Record<string, unknown>
+        if (isLegacyRetirementGoal(row)) {
+          moving.push(asRetirementGoalRow(row))
+          movedKeys.push(cursor.primaryKey)
+        }
+        cursor = await cursor.continue()
+      }
+    }
+    const settings = db.objectStoreNames.contains('settings') ? tx.objectStore('settings') : null
+    const parked = settings ? await settings.get(BACKUP_EXTENSION_SETTINGS_KEY) : undefined
+    const parkedRows = readBackupExtensions(parked?.value).retirementGoals
+    for (const row of parkedRows) {
+      if (row && typeof row === 'object' && !Array.isArray(row)) {
+        moving.push(asRetirementGoalRow(row))
+      }
+    }
+    // The two sources were numbered independently, so their ids can collide.
+    await addKeepingIds(tx.objectStore('retirement_goals'), moving)
+    for (const key of movedKeys) await tx.objectStore('goals').delete(key)
+    if (settings && parkedRows.length > 0) {
+      await settings.put({ ...parked, value: { ...parked.value, retirementGoals: [] } })
+    }
   }
 }
 
@@ -401,6 +450,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'accounts',
       'budgets',
       'goals',
+      'retirement_goals',
       'loans',
       'receipts',
       'portfolioHoldings',
@@ -1161,6 +1211,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       accounts,
       budgets,
       goals,
+      retirementGoals,
       loans,
       portfolioHoldings,
       bills,
@@ -1181,6 +1232,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       db.getAll('accounts'),
       db.getAll('budgets'),
       db.getAll('goals'),
+      db.getAll('retirement_goals'),
       db.getAll('loans'),
       db.getAll('portfolioHoldings'),
       db.getAll('bills'),
@@ -1283,7 +1335,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       balanceHistoryRows: exportedBalanceHistory,
       importLogs: filterByProfile(importLogs),
       budgetsZeroBased: filterExtensionByProfile(extensions.budgetsZeroBased),
-      retirementGoals: filterExtensionByProfile(extensions.retirementGoals),
+      retirementGoals: filterByProfile(retirementGoals),
       emergencyFundConfig: filterExtensionByProfile(extensions.emergencyFundConfig),
       customReports: extensions.customReports,
       settingsRows,
@@ -1326,6 +1378,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'accounts',
       'budgets',
       'goals',
+      'retirement_goals',
       'loans',
       'balanceHistory',
       'receipts',
@@ -1379,7 +1432,21 @@ export class IndexedDBAdapter implements StorageAdapter {
         for (const account of data.accounts) await tx.objectStore('accounts').add(remap(account))
       if (data.budgets)
         for (const budget of data.budgets) await tx.objectStore('budgets').add(remap(budget))
-      if (data.goals) for (const goal of data.goals) await tx.objectStore('goals').add(remap(goal))
+      // A backup made before v13 carries the Retirement page's goals inside `goals`; they are
+      // told apart as the v13 upgrade tells them apart. One from the worker, or from this
+      // adapter since v13, carries them as retirementGoals.
+      const restoredRetirementGoals: Record<string, unknown>[] = []
+      for (const goal of data.goals ?? []) {
+        const row = remap(goal as unknown as Record<string, unknown>)
+        if (isLegacyRetirementGoal(row)) restoredRetirementGoals.push(asRetirementGoalRow(row))
+        else await tx.objectStore('goals').add(row)
+      }
+      for (const goal of backupExtensionsFrom(data).retirementGoals) {
+        restoredRetirementGoals.push(asRetirementGoalRow(remap(goal)))
+      }
+      if (stores.includes('retirement_goals')) {
+        await addKeepingIds(tx.objectStore('retirement_goals'), restoredRetirementGoals)
+      }
       if (data.loans) {
         for (const loan of data.loans) {
           const id = loan.id
@@ -1455,7 +1522,8 @@ export class IndexedDBAdapter implements StorageAdapter {
         key: BACKUP_EXTENSION_SETTINGS_KEY,
         value: {
           budgetsZeroBased: remapExtensionRows(extensions.budgetsZeroBased),
-          retirementGoals: remapExtensionRows(extensions.retirementGoals),
+          // Restored into their own store above; kept as a key for the shape's sake.
+          retirementGoals: [],
           emergencyFundConfig: remapExtensionRows(extensions.emergencyFundConfig),
           customReports: extensions.customReports,
           settingsRows: remapExtensionRows(extensions.settingsRows),
@@ -1485,6 +1553,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       'accounts',
       'budgets',
       'goals',
+      'retirement_goals',
       'loans',
       'balanceHistory',
       'receipts',

@@ -8,6 +8,7 @@ const PROFILE_STORES = [
   'accounts',
   'budgets',
   'goals',
+  'retirement_goals',
   'loans',
   'receipts',
   'portfolioHoldings',
