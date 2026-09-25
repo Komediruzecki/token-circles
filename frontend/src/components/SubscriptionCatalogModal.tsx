@@ -29,7 +29,6 @@ export interface SubscriptionCatalogModalProps {
   isOpen: () => boolean
   onClose: () => void
   categories: () => CatalogCategory[]
-  onAdded: () => void
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -191,7 +190,6 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
       }
       if (ok > 0) {
         showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
-        props.onAdded()
       }
       if (ok < pending.length) showToast('Some subscriptions could not be added', 'error')
       setSelected({})

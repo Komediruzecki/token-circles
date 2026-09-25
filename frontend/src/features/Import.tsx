@@ -37,11 +37,13 @@
  * The onboarding wizard embeds the same flow + components.
  */
 
-import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js'
+import { createSignal, For, onMount, Show } from 'solid-js'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
+import { entityVersion } from '../core/dataVersions'
+import { refetchOnActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
 import { ConnectedSources } from './import/ConnectedSources'
@@ -62,24 +64,34 @@ export default function Import() {
   })
 
   const state = useAppState()
-  // Keep-alive means onMount fires once. Re-load accounts whenever the user
-  // returns to the Import page (e.g. after creating an account elsewhere), so a
-  // freshly created account appears without a full page reload.
-  let skipFirstAccountsReload = true
-  // Accounts are profile-scoped, so a profile switch invalidates them too — not just
-  // navigating away and back.
-  createEffect(
-    on([() => state.page, () => state.profileVersion], ([page]) => {
-      if (skipFirstAccountsReload) {
-        skipFirstAccountsReload = false
-        return
-      }
-      if (page === 'import') void flow.loadBankAccounts()
-    })
+  // Keep-alive: the page mounts once per session, so each list on it follows the writes that
+  // change it — made here, on another page, or by the flow Connected sources drives — and the
+  // profile, and resume. The history and the category suggestions used to load once, in onMount,
+  // and the account pickers on every visit, whether anything had changed or not.
+  refetchOnActive(
+    'import',
+    () => [state.profileVersion, entityVersion('accounts')],
+    () => {
+      void flow.loadBankAccounts()
+    }
+  )
+  refetchOnActive(
+    'import',
+    () => [state.profileVersion, entityVersion('categories')],
+    () => {
+      void flow.loadBankCategories()
+    }
+  )
+  refetchOnActive(
+    'import',
+    () => [state.profileVersion, entityVersion('import-logs')],
+    () => {
+      void flow.loadImportLogs()
+    }
   )
 
   onMount(() => {
-    flow.init()
+    flow.loadBankRules()
   })
 
   return (

@@ -32,6 +32,7 @@ import Toggle from '../components/Toggle'
 import ToggleField from '../components/ToggleField'
 import { apiGet, apiPut, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import { createChartZoom } from './chartZoom'
@@ -385,10 +386,24 @@ export default function RetirementPlanner() {
   // profile switch has to re-ask the server. Pages stay mounted under the keep-alive host
   // (#317), so onMount fires once per session and left the panel showing the old profile's
   // plan. refetchOnActive reloads while visible and defers while hidden.
+  //
+  // The derived figures are read from the accounts, the transactions and a retirement goal's
+  // age, so a write to any of them re-asks too — but never over unsaved edits. A resume bumps
+  // every counter, and a reload would throw away what was typed; saving re-derives on the server
+  // anyway. A profile switch still reloads, since those edits were for the profile that was
+  // left. The panel's own save is not followed: its answer is applied as it arrives.
+  let loadedForProfile = -1
   refetchOnActive(
     'retirement',
-    () => state.profileVersion,
+    () => [
+      state.profileVersion,
+      entityVersion('transactions'),
+      entityVersion('accounts'),
+      entityVersion('retirement-goals'),
+    ],
     () => {
+      if (dirty() && loadedForProfile === state.profileVersion) return
+      loadedForProfile = state.profileVersion
       void load()
     }
   )

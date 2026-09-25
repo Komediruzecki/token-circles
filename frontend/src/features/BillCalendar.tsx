@@ -21,6 +21,7 @@ import { createEffect, createMemo, createResource, createSignal, For, Show } fro
 import PeriodBar from '../components/PeriodBar'
 import { apiHouseholdGet, apiPost, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { toYYYYMM } from '../utils/period'
@@ -55,13 +56,9 @@ interface CalendarData {
   }
 }
 
-interface BillCalendarProps {
-  onRefresh?: () => void
-}
-
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
-const BillCalendar: Component<BillCalendarProps> = (props) => {
+const BillCalendar: Component = () => {
   const state = useAppState()
   const { period } = usePeriod()
 
@@ -82,13 +79,16 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
     setSelectedDay(null)
   })
 
-  const [calendarData, { refetch: refetchCalendar }] = createResource(
+  const [calendarData] = createResource(
     // Rendered inside Bills, so gate on the 'bills' page: while Bills is hidden, a
-    // focus-month or profile change is deferred and refetched once when Bills is shown.
+    // focus-month or profile change, or a bill written anywhere, is deferred and refetched
+    // once when Bills is shown. Marking a bill paid here bumps `bills` through apiFetch,
+    // which reloads this calendar and the Bills list together — neither refetches by hand.
     gatedSource('bills', () => ({
       year: focus().year,
       month: focus().month,
       v: state.profileVersion,
+      bills: entityVersion('bills'),
     })),
     async ({ year, month }) => {
       const data = await apiHouseholdGet<CalendarData>(
@@ -178,9 +178,6 @@ const BillCalendar: Component<BillCalendarProps> = (props) => {
       showToast('Bill marked as paid', 'success')
       // Optimistic update in selected bills
       setSelectedBills((prev) => prev.map((b) => (b.id === billId ? { ...b, paid: true } : b)))
-      // Refresh calendar data
-      await refetchCalendar()
-      props.onRefresh?.()
     } catch (err) {
       console.error('Failed to mark bill as paid:', err)
       showToast('Failed to mark bill as paid', 'error')

@@ -247,7 +247,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       })
       if (!res.ok) return null
       const data = (await res.json()) as { deleted?: number }
-      await loadImportLogs()
+      // No reload here: the delete bumps the history's counter, which the page showing it follows.
       return typeof data.deleted === 'number' ? data.deleted : 0
     } catch {
       return null
@@ -631,7 +631,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const fetchDryRunPreview = async () => {
     setExistingDuplicates(null)
     try {
-      const res = await apiFetch('/api/import/execute', {
+      // `dry_run` in the body is what the server reads. The same flag in the URL is for the
+      // client: apiFetch never sees a body, and without it every preview counted as an import and
+      // invalidated everything a transaction write does (core/dataVersions.ts).
+      const res = await apiFetch('/api/import/execute?dry_run=1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
         body: JSON.stringify({
@@ -788,6 +791,16 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   }
 
   // ---- Bank Imports ----
+  // An account made in place from a statement's account picker. Listed at once, so the picker can
+  // select it straight away: on the Import page the create's own write reloads the list, and
+  // fetching it here as well was a second request for one write; the onboarding wizard does not
+  // follow account writes, and learns of the account this way alone.
+  const addBankAccount = (account: { id: number; name: string }) => {
+    setBankAccounts((list) =>
+      list.some((a) => a.id === account.id) ? list : [...list, { ...account, bank_name: null }]
+    )
+  }
+
   const loadBankAccounts = async () => {
     try {
       const res = await apiFetch('/api/accounts', { headers: profileHeaders() })
@@ -1416,6 +1429,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       // skipped as already imported. Without the latter, a repeat import logged
       // "0 imported, 0 duplicates" and looked like data loss.
       const totalDuplicatesSkipped = alreadyExisted + (mode === 'new' ? dupCount : 0)
+      // Nothing reloads the history after this: the write bumps its counter, which the page showing
+      // the history follows. A reload here as well fetched it twice, and only ever refreshed this
+      // flow's own copy — not the page's, when the import ran in Connected sources' flow.
       apiFetch('/api/import-logs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
@@ -1434,11 +1450,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             rows_with_warnings: Array.isArray(data.warnings) ? data.warnings.length : 0,
           }),
         }),
+      }).catch((e: unknown) => {
+        console.error('Failed to record import log:', e)
       })
-        .then(() => loadImportLogs())
-        .catch((e: unknown) => {
-          console.error('Failed to record import log:', e)
-        })
 
       // Opt-in: set each historical month's budgets to that month's spending so the
       // budget-vs-spent charts aren't empty for imported history.
@@ -1483,8 +1497,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     }
   }
 
-  // One-time data loads for a surface embedding the flow (page onMount / wizard
-  // step open). Sync rule drafts immediately; network loads run in the background.
+  // One-time data loads for a surface embedding the flow that does not follow writes itself (the
+  // onboarding wizard's import step). The Import page loads the same lists through refetchOnActive.
+  // Sync rule drafts immediately; network loads run in the background.
   const init = () => {
     loadBankRules()
     void loadImportLogs()
@@ -1587,7 +1602,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     handleFileSelect,
     handleDragOver,
     handleDrop,
+    addBankAccount,
     loadBankAccounts,
+    loadBankCategories,
     handleBankFileSelect,
     handleBankDrop,
     updateBankFile,

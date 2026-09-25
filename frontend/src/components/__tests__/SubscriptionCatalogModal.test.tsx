@@ -16,14 +16,7 @@ function mountCatalog() {
   host = document.createElement('div')
   document.body.appendChild(host)
   dispose = render(
-    () => (
-      <SubscriptionCatalogModal
-        isOpen={() => true}
-        onClose={vi.fn()}
-        categories={() => []}
-        onAdded={vi.fn()}
-      />
-    ),
+    () => <SubscriptionCatalogModal isOpen={() => true} onClose={vi.fn()} categories={() => []} />,
     host
   )
 

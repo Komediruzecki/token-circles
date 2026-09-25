@@ -534,8 +534,8 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                         onChange={(name) => {
                           flow.updateBankFile(i(), { targetAccount: name })
                         }}
-                        onCreated={async () => {
-                          await flow.loadBankAccounts()
+                        onCreated={(account) => {
+                          flow.addBankAccount(account)
                         }}
                         suggestedName={() =>
                           [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ')

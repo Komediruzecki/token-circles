@@ -5,7 +5,8 @@
  * user reads that silence as "the button does nothing".
  */
 import { render } from 'solid-js/web'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setPage } from '../../../core/appStore'
 
 const source = {
   id: 1,
@@ -77,6 +78,12 @@ async function waitFor(predicate: () => boolean, label: string, turns = 60): Pro
   throw new Error(`timed out waiting for: ${label}`)
 }
 
+// Loading the section (the import flow, the bank adapters) is the slow part of a mount. Done once
+// up front, so a loaded machine cannot push the first test past its 5 s timeout.
+beforeAll(async () => {
+  await import('../ConnectedSources')
+}, 120_000)
+
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
@@ -97,6 +104,9 @@ const syncButton = () =>
   host.querySelector<HTMLButtonElement>('button[aria-label="Auto sync Main"]')
 
 async function mountAndSync() {
+  // The list loads through refetchOnActive, which only fetches while the Import page is the visible
+  // one. In the app the section mounts only there; here we have to say so.
+  setPage('import')
   const { ConnectedSources } = await import('../ConnectedSources')
   dispose = render(() => <ConnectedSources />, host)
   await waitFor(() => syncButton() !== null, 'the saved source to render its Auto sync button')

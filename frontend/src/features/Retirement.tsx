@@ -42,6 +42,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import styles from './RetirementPage.module.css'
 import RetirementPlanner from './RetirementPlanner'
@@ -138,7 +139,6 @@ export default function Retirement() {
         current_age: '',
         retirement_age: '',
       })
-      loadGoals()
     } catch (err) {
       console.error('Failed to save retirement goal', err)
       showToast('Failed to save retirement goal', 'error')
@@ -150,7 +150,6 @@ export default function Retirement() {
     try {
       await apiDelete(`/api/retirement-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
-      loadGoals()
     } catch (err) {
       console.error('Failed to delete retirement goal', err)
       showToast('Failed to delete retirement goal', 'error')
@@ -208,10 +207,12 @@ export default function Retirement() {
 
   // Pages stay mounted since the keep-alive host (#317), so onMount fires once for the
   // life of the session — a profile switch left this list showing the previous profile's
-  // goals until the page was reloaded. Track the profile and reload, deferred while hidden.
+  // goals until the page was reloaded. Track the profile and every goal write (including resume
+  // revalidation) and reload, deferred while hidden. This page's own writes bump
+  // `retirement-goals` through apiFetch, so none of them reloads by hand.
   refetchOnActive(
     'retirement',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('retirement-goals')],
     () => {
       loadGoals()
     }

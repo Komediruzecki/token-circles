@@ -25,6 +25,7 @@ import ExportChartButton from '../components/ExportChartButton'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { apiGet, formatCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import sharedStyles from './CalculatorShared.module.css'
@@ -39,11 +40,13 @@ export default function EmergencyFundCalculator() {
   const [loading, setLoading] = createSignal(false)
 
   // /api/calculator/emergency-fund is profile-scoped (it averages that profile's expenses),
-  // so a profile switch has to re-ask. onMount alone fires once for the whole session.
+  // so a profile switch has to re-ask. onMount alone fires once for the whole session. It is
+  // computed from transactions and account balances, so a write to either — from any page, or
+  // seen on resume — re-asks too.
   const state = useAppState()
   refetchOnActive(
     'emergency',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('transactions'), entityVersion('accounts')],
     () => {
       void loadEmergencyFund()
     }

@@ -120,8 +120,12 @@ export default function Bills() {
     // Gated on visibility: a profile switch refetches now only while this page is
     // visible; hidden, it is marked stale and refetches once on the next show. The
     // categories counter is tracked too, so a category created on any other surface
-    // reaches this page's picker without a browser reload.
-    gatedSource('bills', () => [state.profileVersion, entityVersion('categories')].join('|')),
+    // reaches this page's picker without a browser reload, and so is the bills counter:
+    // a bill written anywhere, this page included, reloads the list through it. That is
+    // why no write on this page refetches by hand.
+    gatedSource('bills', () =>
+      [state.profileVersion, entityVersion('categories'), entityVersion('bills')].join('|')
+    ),
     async () => {
       const [allRes, categoryRes] = await Promise.all([
         apiHouseholdGet<Bill[]>('/api/bills'),
@@ -199,7 +203,6 @@ export default function Bills() {
       // re-submitted computed fields (`paid`, category joins) the update never meant to touch.
       // Both backends treat PUT as partial: the worker falls back `?? existing` per field.
       await apiPut(`/api/bills/${id}`, { is_active: next })
-      await refetchBills()
     } catch {
       showToast(
         next === 0 ? 'Failed to pause subscription' : 'Failed to resume subscription',
@@ -260,7 +263,6 @@ export default function Bills() {
         autopay: false,
         type: 'bill',
       })
-      refetchBills()
     } catch (err) {
       console.error('Failed to save bill:', err)
       showToast('Failed to save bill', 'error')
@@ -299,12 +301,11 @@ export default function Bills() {
     try {
       await apiPost(`/api/bills/${id}/mark-paid`, {})
       showToast('Bill marked as paid', 'success')
-      // Reload to get fresh data from server
-      await refetchBills()
     } catch (err) {
       console.error('Failed to mark bill as paid:', err)
       showToast('Failed to mark bill as paid', 'error')
-      // Revert optimistic update on failure
+      // Revert the optimistic update. A failed write bumps no counter, so this is the one
+      // refetch on this page that has to be asked for.
       await refetchBills()
     } finally {
       const next = new Set(markingPaid())
@@ -318,7 +319,6 @@ export default function Bills() {
     try {
       await apiDelete(`/api/bills/${id}`)
       showToast('Bill deleted successfully', 'success')
-      refetchBills()
     } catch (err) {
       console.error('Failed to delete bill:', err)
       showToast('Failed to delete bill', 'error')
@@ -498,7 +498,7 @@ export default function Bills() {
           Loading bills...
         </div>
       ) : billTab() === 'calendar' ? (
-        <BillCalendar onRefresh={refetchBills} />
+        <BillCalendar />
       ) : billTab() === 'subscriptions' ? (
         <div class={styles.subscriptionView}>
           {/* Subscription Summary Card */}
@@ -1075,18 +1075,9 @@ export default function Bills() {
         isOpen={showCatalog}
         onClose={() => setShowCatalog(false)}
         categories={categories}
-        onAdded={() => {
-          void refetchBills()
-        }}
       />
 
-      <SubscriptionScanModal
-        isOpen={showScan}
-        onClose={() => setShowScan(false)}
-        onAdded={() => {
-          void refetchBills()
-        }}
-      />
+      <SubscriptionScanModal isOpen={showScan} onClose={() => setShowScan(false)} />
     </div>
   )
 }

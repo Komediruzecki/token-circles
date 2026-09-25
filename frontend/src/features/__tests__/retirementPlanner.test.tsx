@@ -12,6 +12,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectRetirement } from '../../../../shared/retirement'
 import { DEFAULT_SETTINGS, settingsToInput } from '../../../../shared/retirementSettings'
 import { bumpProfileVersion, setPage } from '../../core/appStore'
+import {
+  __resetDataVersionsForTest,
+  invalidateAllEntities,
+  invalidateEntity,
+  invalidateForRequest,
+} from '../../core/dataVersions'
 import type { RetirementSettings } from '../../../../shared/retirementSettings'
 
 let serverSettings: Partial<RetirementSettings> = {}
@@ -80,6 +86,7 @@ let dispose: (() => void) | undefined
 const flush = () => new Promise((r) => setTimeout(r, 0))
 
 beforeEach(() => {
+  __resetDataVersionsForTest()
   serverSettings = {}
   serverFilled = []
   serverFilledAfterSave = []
@@ -739,6 +746,128 @@ describe('a profile switch reloads the plan', () => {
     // also what stops a typed-but-unsaved figure being thrown away.
     expect(apiGet).toHaveBeenCalledTimes(1)
     expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('4242')
+  })
+})
+
+/**
+ * What the panel fills in — what the accounts hold, what has moved through them, the age a
+ * retirement goal already knows — is read from the user's data on every load, so a write to any
+ * of it has to reach the panel, and so does a resume after time away. It tracked the profile
+ * alone: a transaction saved on another page left the derived figures as they were until a reload.
+ *
+ * It must not cost the user an edit. A resume after a minute away bumps every counter, and a
+ * reload would replace typed-but-unsaved assumptions with the server's. Those are kept; saving
+ * re-derives on the server anyway. A profile switch still reloads, because the edits belong to
+ * the profile that was left.
+ */
+describe('the plan follows the data it is derived from', () => {
+  /**
+   * Type a figure and move on. A field owns its text while it has focus, so the displayed value
+   * only says what the model holds once the field is left — as it is by any click elsewhere.
+   */
+  async function editNetWorth(root: HTMLElement, value: string) {
+    const input = inputByTestId(root, 'retirement-input-networth')!
+    await type(input, value)
+    input.blur()
+    await flush()
+  }
+
+  it.each(['transactions', 'accounts', 'retirement-goals'])(
+    're-asks the server once when %s is written elsewhere',
+    async (tag) => {
+      serverSettings = { netWorth: 1000 }
+      const root = await mountPlanner()
+
+      serverSettings = { netWorth: 1500 }
+      invalidateEntity(tag)
+      await flush()
+      await flush()
+
+      expect(apiGet).toHaveBeenCalledTimes(2)
+      expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('1500')
+    }
+  )
+
+  it('re-asks once for a transaction, which moves the cashflow and the balances together', async () => {
+    await mountPlanner()
+    invalidateForRequest('/api/transactions', 'POST', true)
+    await flush()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-asks once when the app resumes', async () => {
+    await mountPlanner()
+    invalidateAllEntities()
+    await flush()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not refetch while the page is hidden, and catches up once on return', async () => {
+    await mountPlanner()
+    setPage('dashboard')
+    await flush()
+    invalidateEntity('transactions')
+    invalidateEntity('accounts')
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(1)
+
+    setPage('retirement')
+    await flush()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps unsaved edits when the data changes under them', async () => {
+    const root = await mountPlanner()
+    await editNetWorth(root, '4242')
+
+    serverSettings = { netWorth: 1500 }
+    invalidateAllEntities()
+    await flush()
+    await flush()
+
+    expect(apiGet).toHaveBeenCalledTimes(1)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('4242')
+    expect(buttonByTestId(root, 'retirement-save-settings')!.disabled).toBe(false)
+  })
+
+  it('still reloads on a profile switch while editing', async () => {
+    const root = await mountPlanner()
+    await editNetWorth(root, '4242')
+
+    // The other profile's plan. The typed figure was for the profile that was left.
+    serverSettings = { netWorth: 250000 }
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('250000')
+  })
+
+  it('follows the data again once the edits are saved, without re-asking for its own save', async () => {
+    const root = await mountPlanner()
+    // The save bumps what apiFetch bumps for it, before the handler sees the answer.
+    apiPut.mockImplementationOnce(async (path: string, body: RetirementSettings) => {
+      invalidateForRequest(path, 'PUT', true)
+      return { settings: body, filled: [] }
+    })
+    await editNetWorth(root, '4242')
+    buttonByTestId(root, 'retirement-save-settings')!.click()
+    await flush()
+    await flush()
+    // The save's own answer is applied; asking again would be a second fetch for one write.
+    expect(apiPut).toHaveBeenCalledTimes(1)
+    expect(apiGet).toHaveBeenCalledTimes(1)
+
+    serverSettings = { netWorth: 1500 }
+    invalidateEntity('transactions')
+    await flush()
+    await flush()
+    expect(apiGet).toHaveBeenCalledTimes(2)
+    expect(inputByTestId(root, 'retirement-input-networth')!.value).toBe('1500')
   })
 })
 
