@@ -116,6 +116,7 @@ describe('tagsForPath', () => {
     '/api/tags/rules/preview',
     '/api/import/upload',
     '/api/import/googlesheet',
+    '/api/import/execute?dry_run=1',
   ])('treats %s as the read it is, although it is sent as a POST', (path) => {
     // These lookups take a body, so they POST. They change nothing, and each is called from a
     // page that follows the entity its URL names: counting a price quote as a portfolio write

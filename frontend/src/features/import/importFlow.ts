@@ -631,7 +631,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const fetchDryRunPreview = async () => {
     setExistingDuplicates(null)
     try {
-      const res = await apiFetch('/api/import/execute', {
+      // `dry_run` in the body is what the server reads. The same flag in the URL is for the
+      // client: apiFetch never sees a body, and without it every preview counted as an import and
+      // invalidated everything a transaction write does (core/dataVersions.ts).
+      const res = await apiFetch('/api/import/execute?dry_run=1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
         body: JSON.stringify({
