@@ -48,12 +48,12 @@ import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
-import { entityVersion } from '../core/dataVersions'
+import { asOneWrite, entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
-import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
+import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
   const state = useAppState()
@@ -89,6 +89,11 @@ export default function Transactions() {
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
+  // The tags the transaction in the form will carry, which Save attaches. Its own state: the
+  // filter bar's `selectedTags` further down filters the list behind the form.
+  const [formTags, setFormTags] = createSignal<Tag[]>([])
+  // The ids the row had when the form opened. A save that left them alone sends no tag request.
+  let formTagIdsAtOpen: number[] = []
   // Advanced fields (currency/FX, counterparties, tags, notes, receipt) start hidden.
   const [showAdvanced, setShowAdvanced] = createSignal(false)
   const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
@@ -120,14 +125,24 @@ export default function Transactions() {
   const [totalAmount, setTotalAmount] = createSignal(0)
   const [showReconciled, setShowReconciled] = createSignal(true)
 
-  // Reload on profile change — but only while visible; a hidden page defers its
-  // refetch until next shown (keep-alive fan-out guard). The focus period drives a
-  // client-side filter (periodRange), so it needs no refetch here.
+  // The list follows the profile and every write that changes what its endpoint returns — from
+  // this page, any other page, or on resume: the rows themselves, and the category, receipt and
+  // tags that GET /api/transactions (and the local handler mirroring it) joins onto each row.
+  // Writes that create transactions elsewhere — a bill marked paid, a recurring rule populated, an
+  // import and its undo, a quick-add — reach `transactions` through the fan-out in
+  // core/dataVersions.ts. While hidden, the page defers the refetch until it is next shown. The
+  // focus period drives a client-side filter (periodRange), so it needs no refetch here.
   refetchOnActive(
     'transactions',
-    () => state.profileVersion,
+    () => [
+      state.profileVersion,
+      entityVersion('transactions'),
+      entityVersion('categories'),
+      entityVersion('receipts'),
+      entityVersion('tags'),
+    ],
     () => {
-      refreshTransactions()
+      void refreshTransactions()
     }
   )
 
@@ -267,10 +282,9 @@ export default function Transactions() {
       return
 
     try {
+      // The receipt chip leaves the row through the list's `receipts` counter.
       await api.deleteReceipt(receipt.id)
       closeReceiptModal()
-      // Reload transactions to remove the deleted receipt chip
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to delete receipt:', error)
       toast('Failed to delete receipt', 'error')
@@ -316,10 +330,10 @@ export default function Transactions() {
             throw error
           }
         }
-        // Drop the row locally instead of re-fetching. The refetch asks for EVERY
-        // transaction in the profile (the list request sends no limit) plus its tags, so it
-        // — not the delete — is the wall-clock cost here, and it grows with the table.
-        // The row also leaves the selection — see the reconciliation effect below.
+        // Drop the row locally as well. The delete's counter refetches the list, but that asks
+        // for EVERY transaction in the profile (the list request sends no limit) plus its tags,
+        // so it grows with the table; the dialog must not wait for it, and neither should the
+        // row. The row also leaves the selection — see the reconciliation effect below.
         setTransactions((prev) => prev.filter((t) => t.id !== transaction.id))
       },
     })
@@ -363,7 +377,6 @@ export default function Transactions() {
         data: { category_id: categoryId },
       })
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk change category:', error)
     }
@@ -375,21 +388,23 @@ export default function Transactions() {
     try {
       await apiPut('/api/transactions/bulk', { ids, action: 'update', data: { type } })
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk change type:', error)
     }
   }
 
   // Add or remove tags across the current selection. Additive per tag (other tags on each row are
-  // left alone); one request per tag keeps the endpoint per-tag and idempotent.
+  // left alone); one request per tag keeps the endpoint per-tag and idempotent, and asOneWrite
+  // keeps them one write, so the list refetches once for the lot.
   const handleBulkApplyTags = async (tagIds: number[], mode: 'add' | 'remove') => {
     const ids = selectedTransactions()
     if (ids.length === 0 || tagIds.length === 0) return
     try {
-      for (const tagId of tagIds) {
-        await api.bulkTagTransactions(tagId, ids, mode)
-      }
+      await asOneWrite(async () => {
+        for (const tagId of tagIds) {
+          await api.bulkTagTransactions(tagId, ids, mode)
+        }
+      })
       const tagWord = tagIds.length === 1 ? 'tag' : 'tags'
       const txWord = ids.length === 1 ? 'transaction' : 'transactions'
       toast(
@@ -399,16 +414,15 @@ export default function Transactions() {
         'success'
       )
       setSelectedTransactions([])
-      await refreshTransactions()
     } catch (error) {
       console.error('Failed to bulk tag transactions:', error)
       toast('Failed to update tags', 'error')
     }
   }
 
-  // Create a tag inline from the bulk-tag modal, reflecting it in the local list so its chip
-  // renders and it's immediately selectable.
-  const handleBulkCreateTag = async (
+  // Create a tag inline, from the bulk-tag modal or the transaction form, reflecting it in the local
+  // list so its chip renders and it's immediately selectable.
+  const createTagInline = async (
     name: string
   ): Promise<{ id: number; name: string; color: string } | null> => {
     try {
@@ -423,6 +437,37 @@ export default function Transactions() {
       toast('Failed to create tag', 'error')
       return null
     }
+  }
+
+  const addFormTag = (tag: Tag) => {
+    if (!formTags().some((t) => t.id === tag.id)) setFormTags([...formTags(), tag])
+  }
+  const removeFormTag = (id: number) => setFormTags(formTags().filter((t) => t.id !== id))
+  /** The page's tags the form's transaction does not carry yet, offered to add in one click. */
+  const unpickedTags = createMemo(() =>
+    tags().filter((tag) => !formTags().some((t) => t.id === tag.id))
+  )
+  /** A chip shows the tag as the page's tag list has it now, so a rename elsewhere reaches it. */
+  const currentTag = (tag: Tag): Tag => tags().find((t) => t.id === tag.id) ?? tag
+
+  // Enter in the form's tag box. A name the profile already has attaches that tag, matched
+  // regardless of case, and only a new name creates one: the Worker refuses a second tag of the
+  // same name, and the local store would keep both. For the same reason a held-down Enter, which
+  // repeats while the first create is still out, creates nothing more.
+  let formTagCreating = false
+  const addFormTagByName = async (input: HTMLInputElement) => {
+    const name = input.value.trim()
+    if (!name || formTagCreating) return
+    let tag: Tag | null = tags().find((t) => t.name.toLowerCase() === name.toLowerCase()) ?? null
+    if (!tag) {
+      formTagCreating = true
+      // Never throws: a failed create is reported there, and comes back as null.
+      tag = await createTagInline(name)
+      formTagCreating = false
+    }
+    if (!tag) return
+    addFormTag(tag)
+    input.value = ''
   }
 
   // Handle filter changes
@@ -618,8 +663,9 @@ export default function Transactions() {
   const reconciledCount = createMemo(() => transactions().filter((t) => t.reconciled).length)
 
   // Auto-categorize handler
-  // One write per call, NO reload here: the modal applies a batch and fires onApplied once at
-  // the end. Reloading the whole list after every row turned "Apply 50" into 50 full refetches.
+  // One write per call, NO reload here: the modal applies its batch as one write (asOneWrite), so
+  // the list follows the counter once at the end. Reloading the whole list after every row turned
+  // "Apply 50" into 50 full refetches.
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
     try {
       await api.updateTransaction(transactionId, { category_id: categoryId })
@@ -631,12 +677,20 @@ export default function Transactions() {
     }
   }
 
-  // Refresh transactions handler
+  // Refetches overlap once every write and every resume triggers one, and their answers can land
+  // in any order. An older answer shown after a newer one would put back a row a later write
+  // removed, so an answer is shown only if nothing asked for after it is on screen already.
+  let listAsked = 0
+  let listShown = 0
+
   // Refresh transactions handler — keeps existing data visible during background
   // re-fetches so mutations feel instant instead of replacing content with a spinner.
   const refreshTransactions = async () => {
+    const asked = ++listAsked
     try {
       const data = (await api.getTransactions()) as any
+      if (asked < listShown) return
+      listShown = asked
       const transactionsData: any[] = Array.isArray(data) ? data : (data?.rows ?? [])
       setTransactions(transactionsData as unknown as Transaction[])
     } catch (error) {
@@ -700,6 +754,8 @@ export default function Transactions() {
     setFormAccountId(defaultAccountId())
     setFormTransferAccountId(null)
     setFormAmountLocal('')
+    setFormTags([])
+    formTagIdsAtOpen = []
     setShowAdvanced(false)
     setFormDate(new Date().toISOString().slice(0, 10))
     setSelectedFile(null)
@@ -717,6 +773,7 @@ export default function Transactions() {
       t.notes ||
       t.amount_local ||
       t.receipt_id ||
+      t.tags?.length ||
       (t.currency && t.currency !== getLocalCurrency())
     )
 
@@ -765,6 +822,8 @@ export default function Transactions() {
     setFormMeans(transaction.means_of_payment || '')
     setFormAccountId(transaction.account_id || null)
     setFormTransferAccountId(transaction.transfer_account_id || null)
+    setFormTags(transaction.tags ?? [])
+    formTagIdsAtOpen = (transaction.tags ?? []).map((t) => t.id)
     setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
@@ -788,7 +847,9 @@ export default function Transactions() {
   // Duplicate a row: prefill the add modal from an existing transaction so the user can
   // quickly log a similar one (tweak the amount, keep the rest). This is a NEW record —
   // formId stays null so submit creates instead of updates, and the receipt (which belongs
-  // to the original row) is intentionally not carried over.
+  // to the original row) is intentionally not carried over. Its tags do carry over, like its
+  // category, since they describe the kind of transaction; the copy has none of them until Save
+  // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
     setType(transaction.type)
     setFormId(null)
@@ -805,6 +866,8 @@ export default function Transactions() {
     setFormAccountId(transaction.account_id || null)
     setFormTransferAccountId(transaction.transfer_account_id || null)
     setFormAmountLocal('')
+    setFormTags(transaction.tags ?? [])
+    formTagIdsAtOpen = []
     setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
@@ -1071,15 +1134,11 @@ export default function Transactions() {
         onChangeCategory={handleBulkChangeCategory}
         onChangeType={handleBulkChangeType}
         onApplyTags={handleBulkApplyTags}
-        onCreateTag={handleBulkCreateTag}
+        onCreateTag={createTagInline}
       />
 
       {/* Recurring Transactions */}
-      <RecurringSection
-        categories={categories()}
-        accounts={accounts()}
-        onRefreshTransactions={refreshTransactions}
-      />
+      <RecurringSection categories={categories()} accounts={accounts()} />
 
       {/* Transaction Modal */}
       <div
@@ -1351,27 +1410,78 @@ export default function Transactions() {
                     Tags
                     <InfoTip text="Free-form labels you can attach to any transaction (e.g. tax-deductible, vacation, reimbursable) to slice reports beyond a single category." />
                   </label>
-                  <div class={styles.txTagChips}></div>
+                  <Show when={formTags().length > 0}>
+                    <div class={styles.txTagChips} data-test-id="tx-tag-chips">
+                      <For each={formTags()}>
+                        {(tag) => (
+                          <span class={styles.txTagChip} data-test-id="tx-tag-chip">
+                            <span
+                              class={styles.txTagChipDot}
+                              style={{ background: currentTag(tag).color || 'var(--primary)' }}
+                            />
+                            {currentTag(tag).name}
+                            <button
+                              type="button"
+                              class={styles.txTagChipRemove}
+                              aria-label={`Remove tag ${currentTag(tag).name}`}
+                              title="Remove tag"
+                              onClick={() => removeFormTag(tag.id)}
+                            >
+                              <svg
+                                width="12"
+                                height="12"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                  <Show when={unpickedTags().length > 0}>
+                    <div class={styles.txTagOptions} data-test-id="tx-tag-options">
+                      <For each={unpickedTags()}>
+                        {(tag) => (
+                          <button
+                            type="button"
+                            class={styles.txTagOption}
+                            title="Add tag"
+                            aria-label={`Add tag ${tag.name}`}
+                            onClick={() => {
+                              addFormTag(tag)
+                            }}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M12 5v14M5 12h14" />
+                            </svg>
+                            {tag.name}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                   <div class={styles.txTagInputRow}>
                     <input
                       type="text"
                       class={styles.txTagNewInput}
                       data-test-id="tx-tag-new-input"
-                      placeholder="Type tag name, press Enter to create..."
-                      onKeyDown={async (e) => {
+                      placeholder="Type tag name, press Enter to add..."
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          const input = e.target as HTMLInputElement
-                          const tagName = input.value.trim()
-                          if (tagName) {
-                            try {
-                              const newTag = await api.createTag(tagName, '#6e9bff')
-                              setSelectedTags([...selectedTags(), newTag.id])
-                              input.value = ''
-                            } catch {
-                              // Tag creation failed
-                            }
-                          }
+                          void addFormTagByName(e.currentTarget)
                         }
                       }}
                     />
@@ -1564,7 +1674,6 @@ export default function Transactions() {
                                 try {
                                   await api.deleteReceipt(existing.id)
                                   setExistingReceipt(null)
-                                  await refreshTransactions()
                                 } catch (error) {
                                   console.error('Failed to delete receipt:', error)
                                   toast('Failed to delete receipt', 'error')
@@ -1671,35 +1780,61 @@ export default function Transactions() {
                 }
 
                 try {
-                  const txId = formId()
-                  let savedId: number
-                  if (txId) {
-                    savedId = parseInt(txId)
-                    await api.updateTransaction(
-                      savedId,
-                      txData as Parameters<typeof api.updateTransaction>[1]
-                    )
-                  } else {
-                    const created = await api.createTransaction(
-                      txData as Parameters<typeof api.createTransaction>[0]
-                    )
-                    savedId = (created as any).id ?? (created as any).transaction_id ?? 0
-                  }
-
-                  const file = selectedFile()
-                  if (file && savedId) {
-                    try {
-                      await api.uploadReceipt(savedId, file)
-                    } catch (receiptErr) {
-                      console.error('Failed to upload receipt:', receiptErr)
+                  // The save, its tags and its receipt upload are one write: the list follows the
+                  // counters they bump and refetches once, after all of them, rather than once for
+                  // each.
+                  const tagsSaved = await asOneWrite(async () => {
+                    const txId = formId()
+                    let savedId: number
+                    if (txId) {
+                      savedId = parseInt(txId)
+                      await api.updateTransaction(
+                        savedId,
+                        txData as Parameters<typeof api.updateTransaction>[1]
+                      )
+                    } else {
+                      const created = await api.createTransaction(
+                        txData as Parameters<typeof api.createTransaction>[0]
+                      )
+                      savedId = (created as any).id ?? (created as any).transaction_id ?? 0
                     }
+
+                    // The tags go as the row's whole set, and only when the form changed them, so
+                    // an edit that left them alone is still one request. A failure here does not
+                    // fail the save: the row is saved, and keeping the form open would invite a
+                    // second Save that creates a new row twice.
+                    let tagsOk = true
+                    const tagIds = formTags().map((t) => t.id)
+                    const tagsChanged =
+                      tagIds.length !== formTagIdsAtOpen.length ||
+                      tagIds.some((id) => !formTagIdsAtOpen.includes(id))
+                    if (tagsChanged && savedId) {
+                      try {
+                        await api.setTransactionTags(savedId, tagIds)
+                      } catch (tagErr) {
+                        console.error('Failed to save tags:', tagErr)
+                        tagsOk = false
+                      }
+                    }
+
+                    const file = selectedFile()
+                    if (file && savedId) {
+                      try {
+                        await api.uploadReceipt(savedId, file)
+                      } catch (receiptErr) {
+                        console.error('Failed to upload receipt:', receiptErr)
+                      }
+                    }
+                    return tagsOk
+                  })
+                  if (!tagsSaved) {
+                    toast('Transaction saved, but its tags could not be saved', 'warning')
                   }
 
                   // Remember the account for the next quick entry.
                   if (formAccountId() !== null) {
                     localStorage.setItem(lastAccountKey(), String(formAccountId()))
                   }
-                  await refreshTransactions()
                   setTransactionModalOpen(false)
                   setSelectedFile(null)
                   setExistingReceipt(null)
@@ -1927,7 +2062,6 @@ export default function Transactions() {
         categories={categories}
         accountName={(id) => accounts().find((a) => a.id === id)?.name}
         onApply={handleAutoApplyCategory}
-        onApplied={() => void refreshTransactions()}
       />
 
       {/* Reconciliation Modal */}
@@ -1935,7 +2069,6 @@ export default function Transactions() {
         isOpen={isReconciliationModalOpen}
         onClose={() => setReconciliationModalOpen(false)}
         selectedTransactionIds={selectedTransactions()}
-        onReconciled={refreshTransactions}
       />
     </div>
   )

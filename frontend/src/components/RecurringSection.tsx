@@ -15,7 +15,6 @@ import type { Category, RecurringTransaction } from '../types/models'
 interface RecurringSectionProps {
   categories: Category[]
   accounts: Array<{ id: number; name: string }>
-  onRefreshTransactions: () => void
 }
 
 type RecurringFormData = Pick<
@@ -158,11 +157,11 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
+  // The row this adds reaches the transaction list the way every write does: populating bumps
+  // `recurring`, which moves `transactions`, and the list follows that counter.
   const handlePopulate = async (item: RecurringTransaction) => {
     try {
       await api.populateRecurring(item.id)
-      // The transaction list tracks only the profile, so it still has to be told.
-      props.onRefreshTransactions()
     } catch (error) {
       console.error('Failed to populate recurring:', error)
     }

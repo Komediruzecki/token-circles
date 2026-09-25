@@ -7,6 +7,7 @@ import { createComputed, createRoot } from 'solid-js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   __resetDataVersionsForTest,
+  asOneWrite,
   entityVersion,
   invalidateAllEntities,
   invalidateEntity,
@@ -187,5 +188,85 @@ describe('invalidateAllEntities', () => {
     dispose()
 
     expect(seen).toEqual([0, 2])
+  })
+})
+
+describe('asOneWrite', () => {
+  /** Every value a page tracking these counters would see, one entry per reactive update. */
+  function watch(...tags: string[]) {
+    const seen: number[] = []
+    const dispose = createRoot((dispose) => {
+      createComputed(() => seen.push(tags.reduce((sum, tag) => sum + entityVersion(tag), 0)))
+      return dispose
+    })
+    return { seen, dispose }
+  }
+
+  it('delivers several requests as one update, bumping each counter once', async () => {
+    // Applying auto-categorize picks is one PUT per row; a save with a receipt is the save and
+    // the upload. Delivered per request, the list refetched after every one of them.
+    const { seen, dispose } = watch('transactions', 'receipts')
+
+    await asOneWrite(async () => {
+      invalidateForRequest('/api/transactions', 'POST', true)
+      await Promise.resolve()
+      invalidateForRequest('/api/transactions/9', 'PUT', true)
+      invalidateForRequest('/api/receipts/upload', 'POST', true)
+    })
+    dispose()
+
+    expect(seen).toEqual([0, 2])
+    expect(entityVersion('transactions')).toBe(1)
+    expect(entityVersion('receipts')).toBe(1)
+  })
+
+  it('still delivers what succeeded when a later request fails, and passes the failure on', async () => {
+    const failure = new Error('network down')
+
+    await expect(
+      asOneWrite(async () => {
+        invalidateForRequest('/api/transactions/1', 'PUT', true)
+        throw failure
+      })
+    ).rejects.toBe(failure)
+
+    expect(entityVersion('transactions')).toBe(1)
+  })
+
+  it('stops holding once it has returned, so the next write is delivered at once', async () => {
+    await asOneWrite(async () => {
+      invalidateForRequest('/api/transactions/1', 'PUT', true)
+    })
+    await expect(
+      asOneWrite(async () => {
+        throw new Error('refused')
+      })
+    ).rejects.toThrow('refused')
+
+    invalidateForRequest('/api/transactions/2', 'PUT', true)
+
+    expect(entityVersion('transactions')).toBe(2)
+  })
+
+  it('holds across actions that overlap, and delivers once, when the last one ends', async () => {
+    // apiFetch cannot tell whose request it completed, so the hold is app-wide.
+    let finishFirst = () => {}
+    const first = asOneWrite(async () => {
+      invalidateForRequest('/api/transactions/1', 'PUT', true)
+      await new Promise<void>((resolve) => (finishFirst = resolve))
+    })
+    try {
+      await asOneWrite(async () => {
+        invalidateForRequest('/api/tags/5/transactions', 'POST', true)
+      })
+      expect(entityVersion('transactions')).toBe(0)
+      expect(entityVersion('tags')).toBe(0)
+    } finally {
+      finishFirst()
+      await first
+    }
+
+    expect(entityVersion('transactions')).toBe(1)
+    expect(entityVersion('tags')).toBe(1)
   })
 })
