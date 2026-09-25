@@ -53,7 +53,7 @@ import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
-import type { Category, Receipt, Transaction, TransactionType } from '../types/models'
+import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
 
 export default function Transactions() {
   const state = useAppState()
@@ -89,6 +89,11 @@ export default function Transactions() {
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formAmountLocal, setFormAmountLocal] = createSignal('')
+  // The tags the transaction in the form will carry, which Save attaches. Its own state: the
+  // filter bar's `selectedTags` further down filters the list behind the form.
+  const [formTags, setFormTags] = createSignal<Tag[]>([])
+  // The ids the row had when the form opened. A save that left them alone sends no tag request.
+  let formTagIdsAtOpen: number[] = []
   // Advanced fields (currency/FX, counterparties, tags, notes, receipt) start hidden.
   const [showAdvanced, setShowAdvanced] = createSignal(false)
   const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
@@ -415,9 +420,9 @@ export default function Transactions() {
     }
   }
 
-  // Create a tag inline from the bulk-tag modal, reflecting it in the local list so its chip
-  // renders and it's immediately selectable.
-  const handleBulkCreateTag = async (
+  // Create a tag inline, from the bulk-tag modal or the transaction form, reflecting it in the local
+  // list so its chip renders and it's immediately selectable.
+  const createTagInline = async (
     name: string
   ): Promise<{ id: number; name: string; color: string } | null> => {
     try {
@@ -432,6 +437,37 @@ export default function Transactions() {
       toast('Failed to create tag', 'error')
       return null
     }
+  }
+
+  const addFormTag = (tag: Tag) => {
+    if (!formTags().some((t) => t.id === tag.id)) setFormTags([...formTags(), tag])
+  }
+  const removeFormTag = (id: number) => setFormTags(formTags().filter((t) => t.id !== id))
+  /** The page's tags the form's transaction does not carry yet, offered to add in one click. */
+  const unpickedTags = createMemo(() =>
+    tags().filter((tag) => !formTags().some((t) => t.id === tag.id))
+  )
+  /** A chip shows the tag as the page's tag list has it now, so a rename elsewhere reaches it. */
+  const currentTag = (tag: Tag): Tag => tags().find((t) => t.id === tag.id) ?? tag
+
+  // Enter in the form's tag box. A name the profile already has attaches that tag, matched
+  // regardless of case, and only a new name creates one: the Worker refuses a second tag of the
+  // same name, and the local store would keep both. For the same reason a held-down Enter, which
+  // repeats while the first create is still out, creates nothing more.
+  let formTagCreating = false
+  const addFormTagByName = async (input: HTMLInputElement) => {
+    const name = input.value.trim()
+    if (!name || formTagCreating) return
+    let tag: Tag | null = tags().find((t) => t.name.toLowerCase() === name.toLowerCase()) ?? null
+    if (!tag) {
+      formTagCreating = true
+      // Never throws: a failed create is reported there, and comes back as null.
+      tag = await createTagInline(name)
+      formTagCreating = false
+    }
+    if (!tag) return
+    addFormTag(tag)
+    input.value = ''
   }
 
   // Handle filter changes
@@ -718,6 +754,8 @@ export default function Transactions() {
     setFormAccountId(defaultAccountId())
     setFormTransferAccountId(null)
     setFormAmountLocal('')
+    setFormTags([])
+    formTagIdsAtOpen = []
     setShowAdvanced(false)
     setFormDate(new Date().toISOString().slice(0, 10))
     setSelectedFile(null)
@@ -735,6 +773,7 @@ export default function Transactions() {
       t.notes ||
       t.amount_local ||
       t.receipt_id ||
+      t.tags?.length ||
       (t.currency && t.currency !== getLocalCurrency())
     )
 
@@ -783,6 +822,8 @@ export default function Transactions() {
     setFormMeans(transaction.means_of_payment || '')
     setFormAccountId(transaction.account_id || null)
     setFormTransferAccountId(transaction.transfer_account_id || null)
+    setFormTags(transaction.tags ?? [])
+    formTagIdsAtOpen = (transaction.tags ?? []).map((t) => t.id)
     setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
@@ -806,7 +847,9 @@ export default function Transactions() {
   // Duplicate a row: prefill the add modal from an existing transaction so the user can
   // quickly log a similar one (tweak the amount, keep the rest). This is a NEW record —
   // formId stays null so submit creates instead of updates, and the receipt (which belongs
-  // to the original row) is intentionally not carried over.
+  // to the original row) is intentionally not carried over. Its tags do carry over, like its
+  // category, since they describe the kind of transaction; the copy has none of them until Save
+  // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
     setType(transaction.type)
     setFormId(null)
@@ -823,6 +866,8 @@ export default function Transactions() {
     setFormAccountId(transaction.account_id || null)
     setFormTransferAccountId(transaction.transfer_account_id || null)
     setFormAmountLocal('')
+    setFormTags(transaction.tags ?? [])
+    formTagIdsAtOpen = []
     setShowAdvanced(hasAdvancedData(transaction))
     setSelectedFile(null)
     setExistingReceipt(null)
@@ -1089,7 +1134,7 @@ export default function Transactions() {
         onChangeCategory={handleBulkChangeCategory}
         onChangeType={handleBulkChangeType}
         onApplyTags={handleBulkApplyTags}
-        onCreateTag={handleBulkCreateTag}
+        onCreateTag={createTagInline}
       />
 
       {/* Recurring Transactions */}
@@ -1365,27 +1410,78 @@ export default function Transactions() {
                     Tags
                     <InfoTip text="Free-form labels you can attach to any transaction (e.g. tax-deductible, vacation, reimbursable) to slice reports beyond a single category." />
                   </label>
-                  <div class={styles.txTagChips}></div>
+                  <Show when={formTags().length > 0}>
+                    <div class={styles.txTagChips} data-test-id="tx-tag-chips">
+                      <For each={formTags()}>
+                        {(tag) => (
+                          <span class={styles.txTagChip} data-test-id="tx-tag-chip">
+                            <span
+                              class={styles.txTagChipDot}
+                              style={{ background: currentTag(tag).color || 'var(--primary)' }}
+                            />
+                            {currentTag(tag).name}
+                            <button
+                              type="button"
+                              class={styles.txTagChipRemove}
+                              aria-label={`Remove tag ${currentTag(tag).name}`}
+                              title="Remove tag"
+                              onClick={() => removeFormTag(tag.id)}
+                            >
+                              <svg
+                                width="12"
+                                height="12"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                viewBox="0 0 24 24"
+                              >
+                                <path d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
+                  <Show when={unpickedTags().length > 0}>
+                    <div class={styles.txTagOptions} data-test-id="tx-tag-options">
+                      <For each={unpickedTags()}>
+                        {(tag) => (
+                          <button
+                            type="button"
+                            class={styles.txTagOption}
+                            title="Add tag"
+                            aria-label={`Add tag ${tag.name}`}
+                            onClick={() => {
+                              addFormTag(tag)
+                            }}
+                          >
+                            <svg
+                              width="12"
+                              height="12"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M12 5v14M5 12h14" />
+                            </svg>
+                            {tag.name}
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                   <div class={styles.txTagInputRow}>
                     <input
                       type="text"
                       class={styles.txTagNewInput}
                       data-test-id="tx-tag-new-input"
-                      placeholder="Type tag name, press Enter to create..."
-                      onKeyDown={async (e) => {
+                      placeholder="Type tag name, press Enter to add..."
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
-                          const input = e.target as HTMLInputElement
-                          const tagName = input.value.trim()
-                          if (tagName) {
-                            try {
-                              const newTag = await api.createTag(tagName, '#6e9bff')
-                              setSelectedTags([...selectedTags(), newTag.id])
-                              input.value = ''
-                            } catch {
-                              // Tag creation failed
-                            }
-                          }
+                          void addFormTagByName(e.currentTarget)
                         }
                       }}
                     />
@@ -1684,9 +1780,10 @@ export default function Transactions() {
                 }
 
                 try {
-                  // The save and its receipt upload are one write: the list follows the counters
-                  // they bump and refetches once, after both, rather than once for each.
-                  await asOneWrite(async () => {
+                  // The save, its tags and its receipt upload are one write: the list follows the
+                  // counters they bump and refetches once, after all of them, rather than once for
+                  // each.
+                  const tagsSaved = await asOneWrite(async () => {
                     const txId = formId()
                     let savedId: number
                     if (txId) {
@@ -1702,6 +1799,24 @@ export default function Transactions() {
                       savedId = (created as any).id ?? (created as any).transaction_id ?? 0
                     }
 
+                    // The tags go as the row's whole set, and only when the form changed them, so
+                    // an edit that left them alone is still one request. A failure here does not
+                    // fail the save: the row is saved, and keeping the form open would invite a
+                    // second Save that creates a new row twice.
+                    let tagsOk = true
+                    const tagIds = formTags().map((t) => t.id)
+                    const tagsChanged =
+                      tagIds.length !== formTagIdsAtOpen.length ||
+                      tagIds.some((id) => !formTagIdsAtOpen.includes(id))
+                    if (tagsChanged && savedId) {
+                      try {
+                        await api.setTransactionTags(savedId, tagIds)
+                      } catch (tagErr) {
+                        console.error('Failed to save tags:', tagErr)
+                        tagsOk = false
+                      }
+                    }
+
                     const file = selectedFile()
                     if (file && savedId) {
                       try {
@@ -1710,7 +1825,11 @@ export default function Transactions() {
                         console.error('Failed to upload receipt:', receiptErr)
                       }
                     }
+                    return tagsOk
                   })
+                  if (!tagsSaved) {
+                    toast('Transaction saved, but its tags could not be saved', 'warning')
+                  }
 
                   // Remember the account for the next quick entry.
                   if (formAccountId() !== null) {

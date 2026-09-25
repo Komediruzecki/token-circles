@@ -192,6 +192,64 @@
   gap: 6px;
   margin-bottom: 8px;
 }
+/* A tag the transaction carries. */
+.transactions-page .tx-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.transactions-page .tx-tag-chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.transactions-page .tx-tag-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.transactions-page .tx-tag-chip-remove:hover {
+  color: var(--text);
+  background: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+/* A tag the profile has that the transaction does not carry yet. */
+.transactions-page .tx-tag-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.transactions-page .tx-tag-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+.transactions-page .tx-tag-option:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
 .transactions-page .tx-tag-new-input {
   width: 100%;
   padding: 8px;

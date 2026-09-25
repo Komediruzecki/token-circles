@@ -16,6 +16,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from '../../core/api'
 import { setPage } from '../../core/appStore'
 import {
   __resetDataVersionsForTest,
@@ -60,6 +61,12 @@ const BASE_ROWS = [
 
 /** The server's rows. Mutable, so a write made elsewhere is visible to the next read. */
 let serverRows: Transaction[] = []
+/** The server's tags, mutable like its rows. */
+const BASE_TAGS = [
+  { id: 5, name: 'Holiday', color: '#f97316' },
+  { id: 6, name: 'Work', color: '#3b82f6' },
+]
+let serverTags = BASE_TAGS.map((t) => ({ ...t }))
 /** How many times the page asked for its list. */
 let listReads = 0
 /** While set, each read waits to be answered by hand, in whatever order a test chooses. */
@@ -125,6 +132,19 @@ const writes = {
     wrote(`/api/tags/${tagId}/transactions`, 'POST')
     return { added: 1 }
   }),
+  createTag: vi.fn(async (name: string, color?: string) => {
+    const tag = { id: 7, name, color: color ?? '#6e9bff' }
+    // Stored before the bump, as the server commits before it answers: the refetch the bump
+    // sends has to find the new tag.
+    serverTags = [...serverTags, tag]
+    wrote('/api/tags', 'POST')
+    return tag
+  }),
+  /** Replaces the row's whole tag set (PUT /api/transactions/:id/tags, in both runtimes). */
+  setTransactionTags: vi.fn(async (transactionId: number, _tagIds: number[]) => {
+    wrote(`/api/transactions/${transactionId}/tags`, 'PUT')
+    return { ok: true }
+  }),
   uploadReceipt: vi.fn(async (_transactionId: number, _file: File) => {
     wrote('/api/receipts/upload', 'POST')
     return RECEIPT
@@ -152,10 +172,7 @@ vi.mock('../../core/api', async (importOriginal) => {
     getTransactions: () => readList(),
     getCategories: async () => [{ id: 1, name: 'Groceries', type: 'expense', color: '#22c55e' }],
     getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash' }],
-    getTags: async () => [
-      { id: 5, name: 'Holiday', color: '#f97316' },
-      { id: 6, name: 'Work', color: '#3b82f6' },
-    ],
+    getTags: async () => serverTags.map((t) => ({ ...t })),
     getRecurring: async () => [RULE],
     getCategoryMappings: async () => [],
     getReconciliationSummary: async () => ({
@@ -214,6 +231,8 @@ beforeAll(async () => {
 beforeEach(() => {
   __resetDataVersionsForTest()
   serverRows = BASE_ROWS.map((r) => ({ ...r }))
+  serverTags = BASE_TAGS.map((t) => ({ ...t }))
+  vi.mocked(toast).mockClear()
   listReads = 0
   holdAnswers = false
   heldAnswers = []
@@ -714,5 +733,185 @@ describe('a refetch keeps what the user is doing', () => {
     await settle()
 
     expect(rowFor('Cinema')).toBeDefined()
+  })
+})
+
+describe("the form's tags are the transaction's, not the list filter's", () => {
+  const HOLIDAY = { id: 5, name: 'Holiday', color: '#f97316' }
+  const WORK = { id: 6, name: 'Work', color: '#3b82f6' }
+
+  /**
+   * Tag Books, and clear its local amount: that is the one other field the advanced section holds
+   * that Books has, so after this only its tags can open the section.
+   */
+  const tagBooks = (tags: Array<{ id: number; name: string; color: string }>) => {
+    serverRows = serverRows.map((r) =>
+      r.description === 'Books' ? { ...r, tags, amount_local: null } : r
+    )
+  }
+
+  /** The tags the open form will save, read off its chips. */
+  const formTags = () =>
+    Array.from(host.querySelectorAll('[data-test-id="tx-tag-chip"]')).map((chip) =>
+      chip.textContent?.trim()
+    )
+
+  const formIsOpen = () => byTestId('tx-modal').className.includes('show')
+
+  async function openAdvanced() {
+    byTestId('tx-advanced-toggle').click()
+    await flush()
+  }
+
+  /** Type a tag name into the form and press Enter. */
+  async function enterTag(name: string) {
+    const input = inputById('tx-tag-new-input')
+    typeInto(input, name)
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+  }
+
+  it('creating a tag in the form leaves the list behind it unfiltered', async () => {
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+    await enterTag('Commute')
+
+    expect(writes.createTag).toHaveBeenCalledTimes(1)
+    expect(rows(), 'every row is still listed behind the form').toHaveLength(4)
+    expect(formTags()).toEqual(['Commute'])
+    expect(inputById('tx-tag-new-input').value).toBe('')
+  })
+
+  it('a held-down Enter creates the tag once', async () => {
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+    const input = inputById('tx-tag-new-input')
+    typeInto(input, 'Commute')
+    // Key repeat: the second Enter arrives while the create the first one sent is still out.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await settle()
+
+    expect(writes.createTag).toHaveBeenCalledTimes(1)
+    expect(formTags()).toEqual(['Commute'])
+  })
+
+  it('saving attaches a tag created in the form to the new transaction, as one write', async () => {
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+    await enterTag('Commute')
+    // Creating the tag is a write of its own; the list follows tags, so it refetched for it.
+    expect(listReads).toBe(2)
+
+    button('Save Transaction').click()
+    await settle()
+
+    expect(writes.createTransaction).toHaveBeenCalledTimes(1)
+    expect(writes.setTransactionTags).toHaveBeenCalledTimes(1)
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(99, [7])
+    expect(listReads, 'the save and its tags refetch once, together').toBe(3)
+    expect(formIsOpen()).toBe(false)
+  })
+
+  it('picks an existing tag, by its chip or by typing its name, without creating one', async () => {
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+
+    button('Work', byTestId('tx-tag-options')).click()
+    await flush()
+    await enterTag('holiday')
+
+    expect(writes.createTag).not.toHaveBeenCalled()
+    expect(formTags()).toEqual(['Work', 'Holiday'])
+    // Both are on the transaction now, so neither is still offered.
+    expect(host.querySelector('[data-test-id="tx-tag-options"]')).toBeNull()
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(99, [6, 5])
+  })
+
+  it('editing a tagged row shows its tags, and saving them untouched sends no tag request', async () => {
+    tagBooks([HOLIDAY])
+    await mountTransactions()
+    await openEditor('Books')
+
+    // No click on "Show advanced options": a row's tags are never hidden behind it.
+    expect(formTags()).toEqual(['Holiday'])
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.updateTransaction).toHaveBeenCalledTimes(1)
+    expect(writes.setTransactionTags).not.toHaveBeenCalled()
+    expect(listReads).toBe(2)
+  })
+
+  it('removing a tag from an edited row detaches it on save', async () => {
+    tagBooks([HOLIDAY, WORK])
+    await mountTransactions()
+    await openEditor('Books')
+
+    expect(formTags()).toEqual(['Holiday', 'Work'])
+    const remove = host.querySelector<HTMLButtonElement>(
+      '[data-test-id="tx-tag-chip"] button[aria-label="Remove tag Holiday"]'
+    )
+    expect(remove, 'the Holiday chip has a remove button').not.toBeNull()
+    remove!.click()
+    await flush()
+    expect(formTags()).toEqual(['Work'])
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(2, [6])
+    expect(listReads, 'the edit and its tags refetch once, together').toBe(2)
+  })
+
+  it('duplicating a tagged row gives the copy the same tags', async () => {
+    tagBooks([HOLIDAY])
+    await mountTransactions()
+    rowButton('Books', 'Duplicate transaction').click()
+    await settle()
+
+    expect(formTags()).toEqual(['Holiday'])
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.createTransaction).toHaveBeenCalledTimes(1)
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(99, [5])
+  })
+
+  it('a tag request that fails keeps the saved transaction, closes the form, and says so', async () => {
+    writes.setTransactionTags.mockRejectedValueOnce(new Error('Tag request failed'))
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+    await enterTag('Commute')
+
+    button('Save Transaction').click()
+    await settle()
+
+    // Leaving the form open would invite a second Save, and that would create the row twice.
+    expect(writes.createTransaction).toHaveBeenCalledTimes(1)
+    expect(formIsOpen()).toBe(false)
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringMatching(/tags/i), 'warning')
+    expect(listReads, 'what did save still reaches the list').toBe(3)
+  })
+
+  it('a tag renamed elsewhere renames its chip, and keeps what the form has picked', async () => {
+    tagBooks([HOLIDAY])
+    await mountTransactions()
+    await openEditor('Books')
+    button('Work', byTestId('tx-tag-options')).click()
+    await flush()
+
+    serverTags = serverTags.map((t) => (t.id === 5 ? { ...t, name: 'Vacation' } : t))
+    invalidateForRequest('/api/tags/5', 'PUT', true)
+    await settle()
+
+    expect(formTags()).toEqual(['Vacation', 'Work'])
   })
 })
