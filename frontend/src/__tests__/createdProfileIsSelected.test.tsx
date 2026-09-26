@@ -36,6 +36,10 @@ const net = vi.hoisted(() => ({
   sent: [] as SentRequest[],
   /** The create's response waits on this, so the test controls when the create finishes. */
   createHeld: Promise.resolve(),
+  /** The id the create answered with, whatever the storage mode numbered it. */
+  createdId: null as number | null,
+  /** When set, every read of the profile list after the create fails, as a dropped connection would. */
+  failListAfterCreate: false,
 }))
 
 // Record every request the app makes, with the profile headers it carried, then send it on as
@@ -49,7 +53,14 @@ vi.mock('../core/apiFetch', async (importOriginal) => {
       const method = init.method ?? 'GET'
       const path = url.split('?')[0]
       net.sent.push({ method, path, headers: { ...(init.headers as Record<string, string>) } })
-      if (method === 'POST' && path === '/api/profiles') await net.createHeld
+      if (method === 'POST' && path === '/api/profiles') {
+        await net.createHeld
+        const res = await real.apiFetch(url, init)
+        if (res.ok) net.createdId = ((await res.clone().json()) as { id: number }).id
+        return res
+      }
+      if (method === 'GET' && path === '/api/profiles' && net.failListAfterCreate && net.createdId)
+        return json({ error: 'Service unavailable' }, 503)
       return real.apiFetch(url, init)
     },
   }
@@ -75,6 +86,8 @@ function workerStandIn() {
     if (path === '/api/auth/me') return json({ id: 1, username: 'owner', role: 'admin' })
     if (path === '/api/profiles' && init.method === 'POST') {
       const { name } = JSON.parse(init.body as string) as { name: string }
+      if (profiles.some((p) => p.name === name))
+        return json({ error: 'A profile with this name already exists' }, 400)
       const created = { id: profiles.length + 1, name, created_at: CREATED_AT }
       profiles.push(created)
       return json(created, 201)
@@ -112,6 +125,8 @@ beforeEach(() => {
   localStorage.clear()
   net.sent.length = 0
   net.createHeld = Promise.resolve()
+  net.createdId = null
+  net.failListAfterCreate = false
   // The store outlives each mount; start every test from a closed sidebar and an empty list.
   setShowDropdown(false)
   setIsProfileModalOpen(false)
@@ -214,6 +229,8 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     // Enter submits without a click, so nothing closes the dropdown on the way.
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     const travel = await createFinished('Travel')
+    // Choosing the new profile closes the dropdown, the same as choosing any other profile does.
+    expect(state.showDropdown).toBe(false)
 
     // A dropdown left open re-applies the selection it holds when a click lands outside it.
     document.body.click()
@@ -222,5 +239,45 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     expect(localStorage.getItem('currentProfileId')).toBe(String(travel.id))
     expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([travel.id])
     expect(state.currentProfile?.id).toBe(travel.id)
+  })
+
+  it('moves nothing when the create is refused', async () => {
+    await mountApp(mode)
+    const input = await openCreateModal('Family')
+    const versionBefore = state.profileVersion
+
+    // Enter, so that no click outside the dropdown re-applies the selection on the way.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await vi.waitFor(() => {
+      expect(byTestId('profile-modal')?.textContent).toContain('already exists')
+    }, waitLong)
+    await settle()
+
+    expect(localStorage.getItem('currentProfileId')).toBe('1')
+    expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([1])
+    expect(state.currentProfile?.id).toBe(1)
+    expect(state.profileVersion).toBe(versionBefore)
+  })
+
+  it('stays consistent when the profile list cannot be read after the create', async () => {
+    await mountApp(mode)
+    await openCreateModal('Travel')
+    net.failListAfterCreate = true
+    const versionBefore = state.profileVersion
+
+    byTestId('profile-create-submit')!.click()
+    await vi.waitFor(() => {
+      expect(net.createdId).not.toBeNull()
+      expect(byTestId('profile-modal')).toBeNull()
+    }, waitLong)
+    await settle()
+    const created = net.createdId!
+
+    // The profile exists, so writes and household reads both go to it...
+    expect(localStorage.getItem('currentProfileId')).toBe(String(created))
+    expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([created])
+    expect(state.profileVersion).toBeGreaterThan(versionBefore)
+    // ...and the header never names a profile other than the one writes land in.
+    expect(state.currentProfile?.id ?? created).toBe(created)
   })
 })
