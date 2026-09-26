@@ -992,6 +992,37 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     expect(formTags()).toEqual(['Commute'])
   })
 
+  it('what is typed while a new tag is being made stays in the box', async () => {
+    let answer = () => {}
+    writes.createTag.mockImplementationOnce(
+      (name: string, color?: string) =>
+        new Promise((resolve) => {
+          answer = () => {
+            const tag = { id: 7, name, color: color ?? '#6e9bff' }
+            serverTags = [...serverTags, tag]
+            wrote('/api/tags', 'POST')
+            resolve(tag)
+          }
+        })
+    )
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+    const input = inputById('tx-tag-new-input')
+    typeInto(input, 'Commute')
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flush()
+
+    // The next tag is on its way into the box while the first is still being created.
+    typeInto(input, 'Trai')
+    answer()
+    await settle()
+
+    expect(formTags()).toEqual(['Commute'])
+    expect(inputById('tx-tag-new-input').value).toBe('Trai')
+    expect(document.activeElement).toBe(inputById('tx-tag-new-input'))
+  })
+
   it("a new row keeps the tags an auto-apply rule gave it, and gets the form's on top", async () => {
     // The rule tagged the row as the server created it, so the form never showed that tag.
     readTransactionTags.mockResolvedValueOnce([{ id: 8, name: 'Groceries', color: '#22c55e' }])

@@ -483,7 +483,9 @@ export default function Transactions() {
     }
     if (!tag) return
     addFormTag(tag)
-    input.value = ''
+    // Only the name that was added comes out of the box. A create takes a round trip, and the
+    // user may have typed the next name meanwhile; clearing that would throw it away.
+    if (input.value.trim() === name) input.value = ''
   }
 
   // Handle filter changes
