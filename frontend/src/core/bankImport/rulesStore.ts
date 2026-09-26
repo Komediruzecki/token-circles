@@ -15,9 +15,16 @@ const CAT_KEY = 'bankImportCategoryRules'
 const TRANSFER_KEY = 'bankImportTransferRules'
 const GROUP_KEY = 'bankImportRuleGroup'
 
+/**
+ * The scope the rules are stored under: the active profile. A caller that keeps a copy of them
+ * (the import flow's editable drafts) compares this with the scope it loaded that copy for.
+ */
+export function rulesScope(): string {
+  return localStorage.getItem('currentProfileId') || '1'
+}
+
 function scoped(key: string): string {
-  const profile = localStorage.getItem('currentProfileId') || '1'
-  return `${key}:${profile}`
+  return `${key}:${rulesScope()}`
 }
 
 export function loadCategoryRules(): CategoryRuleSet {

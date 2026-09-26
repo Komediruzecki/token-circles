@@ -21,6 +21,7 @@ import {
   processFiles,
   resetBankImportRules,
   resolveTargetAccount,
+  rulesScope,
   saveCategoryRules,
   saveTransferRules,
   toDetectInput,
@@ -304,6 +305,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const [counterpartDraft, setCounterpartDraft] = createStore<
     { signature: string; account: string }[]
   >([])
+  // The profile the drafts were loaded for. Every surface embedding the flow outlives a profile
+  // switch, and drafts loaded under the previous profile are that profile's rules: shown, they are
+  // the wrong ones, and saved, they land under the new profile's key.
+  let rulesLoadedFor: string | null = null
   // Existing category names — powers the category-rule combobox (datalist).
   const [bankCategories, setBankCategories] = createSignal<string[]>([])
 
@@ -1008,6 +1013,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
 
   // ---- Bank import rules editor ----
   const loadBankRules = () => {
+    rulesLoadedFor = rulesScope()
+    // The mapping group is stored per profile too.
+    setRuleGroup(loadRuleGroup())
     setCategoryRuleDraft(
       reconcile(
         loadCategoryRules().map((r) => ({ category: r.category, keywords: r.keywords.join(', ') }))
@@ -1020,6 +1028,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         Object.entries(t.counterparts).map(([signature, account]) => ({ signature, account }))
       )
     )
+  }
+
+  // Reload the drafts if the active profile is not the one they were loaded for, and only then:
+  // profileVersion also moves on every quick-add, and a reload would discard unsaved edits.
+  const reloadBankRulesIfProfileChanged = () => {
+    if (rulesLoadedFor !== rulesScope()) loadBankRules()
   }
 
   const loadBankCategories = async () => {
@@ -1611,6 +1625,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     removeBankFile,
     processBankFiles,
     loadBankRules,
+    reloadBankRulesIfProfileChanged,
     saveBankRules,
     resetBankRules,
     recalculateBankPreview,

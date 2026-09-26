@@ -94,6 +94,21 @@ export default function Import() {
     flow.loadBankRules()
   })
 
+  // The rule drafts are the active profile's, and the page outlives a profile switch. Checked on
+  // every profile notice, reloaded only when the profile really changed: a quick-add bumps
+  // profileVersion too (App.tsx), and reloading then would throw away unsaved rule edits.
+  // currentProfile is followed as well, because creating a profile makes it the active one
+  // without bumping profileVersion.
+  createEffect(
+    on(
+      [() => state.profileVersion, () => state.currentProfile?.id],
+      () => {
+        flow.reloadBankRulesIfProfileChanged()
+      },
+      { defer: true }
+    )
+  )
+
   return (
     <div class={`${styles.container} ${styles.pageImport}`}>
       <div class={styles.pageHeader}>

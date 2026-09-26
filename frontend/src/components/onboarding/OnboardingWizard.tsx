@@ -255,6 +255,9 @@ export function OnboardingWizard() {
         // Accounts created on the previous step (or on a back-and-forth) must
         // show up in the bank statements' target-account pickers.
         void importFlow.loadBankAccounts()
+        // The wizard stays mounted for the session and can be relaunched on another profile,
+        // so the rule drafts loaded on the first visit may be a different profile's.
+        importFlow.reloadBankRulesIfProfileChanged()
       }
     }
     if (step === 'done') {

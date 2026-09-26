@@ -48,6 +48,7 @@ export {
   loadRuleGroup,
   loadTransferRules,
   resetBankImportRules,
+  rulesScope,
   saveCategoryRules,
   saveRuleGroup,
   saveTransferRules,
