@@ -347,5 +347,8 @@ describe('an account made in place from a statement row', () => {
 
     expect(offered(picker)).toContain('Savings')
     expect(picker.value).toBe('Savings')
+    // Inserted where it was made, not fetched: the one read is the flow's own first load. The
+    // picker used to refetch the whole list after every account it made.
+    expect(readsOf('/api/accounts')).toBe(1)
   })
 })
