@@ -284,7 +284,13 @@ const PAGES: PageCase[] = [
     reads: '/api/retirement-goals',
     follows: ['retirement-goals'],
   },
-  { page: 'goals', module: '../Goals', reads: '/api/savings-goals', follows: ['savings-goals'] },
+  // A goal linked to a category counts that category's transactions, recomputed on every read.
+  {
+    page: 'goals',
+    module: '../Goals',
+    reads: '/api/savings-goals',
+    follows: ['savings-goals', 'transactions'],
+  },
   { page: 'bills', module: '../Bills', reads: '/api/bills', follows: ['bills'] },
   {
     page: 'budgets',

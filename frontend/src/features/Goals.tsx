@@ -289,10 +289,12 @@ export default function Goals() {
   // Load on mount, and reload on a profile change or a goal write from anywhere (including
   // resume revalidation) — but only while visible. A hidden page defers its refetch until it is
   // next shown (keep-alive fan-out guard). This page's own writes, contributions included, bump
-  // `savings-goals` through apiFetch, so none of them reloads by hand.
+  // `savings-goals` through apiFetch, so none of them reloads by hand. A goal linked to a
+  // category counts that category's transactions — the list endpoint recomputes it on every
+  // read, in the worker and the local handler alike — so a transaction write moves it too.
   refetchOnActive(
     'goals',
-    () => [state.profileVersion, entityVersion('savings-goals')],
+    () => [state.profileVersion, entityVersion('savings-goals'), entityVersion('transactions')],
     () => {
       loadGoals()
     }
