@@ -21,6 +21,7 @@
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "test": "vitest run",
+    "test:sealed": "TEST_DATA_KEK=$(node -e \"process.stdout.write(require('crypto').randomBytes(32).toString('base64'))\") vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -606,6 +606,7 @@ export function renderSpendingReport(opts: {
 }
 
 export interface UpcomingBillRow {
+  /** Opened plaintext — bills.name is sealed at rest; reminders.ts opens it before rendering. */
   name: string;
   amount: number;
   due_date: string | null;

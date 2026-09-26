@@ -23,6 +23,15 @@ export default defineConfig(async () => {
           bindings: {
             JWT_SECRET: 'test-jwt-secret-not-for-prod',
             TEST_MIGRATIONS: migrations,
+            // `TEST_DATA_KEK=<base64 of 32 bytes> pnpm exec vitest run` runs the WHOLE suite with
+            // field encryption on: any read path that forgets to decrypt then hands a test
+            // ciphertext where it expected text. Unset, the suite proves a deployment with no
+            // key behaves exactly as before. CI runs both.
+            ...(process.env.TEST_DATA_KEK ? { DATA_KEK_1: process.env.TEST_DATA_KEK } : {}),
+            // What this run is meant to be, checked in test/apply-migrations.ts: wrangler also loads
+            // worker/.dev.vars as secrets, and a DATA_KEK_1 there would quietly make the keyless run
+            // a keyed one.
+            TEST_EXPECT_KEK: process.env.TEST_DATA_KEK ? '1' : '0',
           },
         },
       }),

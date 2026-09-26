@@ -8,6 +8,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { openedRow, openedRows } from './helpers/sealed';
 
 async function reset(): Promise<void> {
   for (const t of [
@@ -283,13 +284,18 @@ describe('worker transactions — bulk update enforces the invariant (audit H-02
     });
     expect(res.status).toBe(400);
     // Atomic + parity with the client: neither row was updated.
-    const validRow = await env.DB.prepare('SELECT notes FROM transactions WHERE id = ?')
-      .bind(valid)
-      .first<{ notes: string }>();
+    const validRow = await openedRow<{ notes: string }>(
+      'transactions',
+      1,
+      'SELECT notes, text_enc FROM transactions WHERE id = ?',
+      valid
+    );
     expect(validRow?.notes).toBe('original');
-    const legacyRow = await env.DB.prepare('SELECT notes FROM transactions WHERE id = 9001').first<{
-      notes: string;
-    }>();
+    const legacyRow = await openedRow<{ notes: string }>(
+      'transactions',
+      1,
+      'SELECT notes, text_enc FROM transactions WHERE id = 9001'
+    );
     expect(legacyRow?.notes).toBe('legacy-note');
   });
 
@@ -305,11 +311,13 @@ describe('worker transactions — bulk update enforces the invariant (audit H-02
       body: JSON.stringify({ ids: [a, b], action: 'update', data: { notes: 'tagged' } }),
     });
     expect(res.status).toBe(200);
-    const rows = await env.DB.prepare(
-      'SELECT notes FROM transactions WHERE id IN (?, ?) ORDER BY id'
-    )
-      .bind(a, b)
-      .all<{ notes: string }>();
-    expect(rows.results.map((r) => r.notes)).toEqual(['tagged', 'tagged']);
+    const rows = await openedRows<{ notes: string }>(
+      'transactions',
+      1,
+      'SELECT notes, text_enc FROM transactions WHERE id IN (?, ?) ORDER BY id',
+      a,
+      b
+    );
+    expect(rows.map((r) => r.notes)).toEqual(['tagged', 'tagged']);
   });
 });

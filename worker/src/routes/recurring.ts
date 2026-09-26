@@ -1,17 +1,20 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
 // kept identical (snake_case) to the Express backend.
 export const recurringRoutes = new Hono<AppEnv>();
 
-interface RecurringRow {
+// A type alias rather than an interface, so rows satisfy openRows' Record<string, unknown>.
+type RecurringRow = {
   id: number;
   description: string;
   amount: number;
@@ -27,20 +30,30 @@ interface RecurringRow {
   category_name?: string | null;
   category_color?: string | null;
   category_type?: string | null;
+};
+
+// recurring_transactions.description and .notes are sealed at rest under the owner's data key
+// (sealed-rows.ts). getProfileId only ever returns the requesting user's profiles, so
+// c.get('userId') is the key owner. Open straight after the query, before any JS reads them.
+function openRecurring(c: Context<AppEnv>, rows: RecurringRow[]): Promise<RecurringRow[]> {
+  return openRows(keyringFor(c), c.get('userId'), 'recurring_transactions', rows);
 }
 
 recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const rows = await db.all<RecurringRow>(
-    c.env.DB,
-    `
+  const rows = await openRecurring(
+    c,
+    await db.all<RecurringRow>(
+      c.env.DB,
+      `
       SELECT r.*, c.name as category_name, c.color as category_color, c.type as category_type
       FROM recurring_transactions r
       LEFT JOIN categories c ON r.category_id = c.id AND c.profile_id = r.profile_id
       WHERE r.profile_id = ? AND r.active = 1
       ORDER BY r.next_date ASC
     `,
-    pid
+      pid
+    )
   );
   return c.json(rows);
 });
@@ -52,16 +65,19 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 30);
 
-  const recurring = await db.all<RecurringRow>(
-    c.env.DB,
-    `
+  const recurring = await openRecurring(
+    c,
+    await db.all<RecurringRow>(
+      c.env.DB,
+      `
       SELECT r.id, r.description, r.amount, r.type, r.frequency, r.day_of_month, r.next_date,
-             c.name as category_name, c.color as category_color
+             r.text_enc, c.name as category_name, c.color as category_color
       FROM recurring_transactions r
       LEFT JOIN categories c ON r.category_id = c.id AND c.profile_id = r.profile_id
       WHERE r.profile_id = ? AND r.active = 1
     `,
-    pid
+      pid
+    )
   );
 
   interface UpcomingItem {
@@ -153,11 +169,14 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
 
 recurringRoutes.get('/api/recurring/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const r = await db.first<RecurringRow>(
-    c.env.DB,
-    'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
+  const [r] = await openRecurring(
+    c,
+    await db.all<RecurringRow>(
+      c.env.DB,
+      'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+      c.req.param('id'),
+      pid
+    )
   );
   if (!r) throw new HttpError(404, 'Not found');
   return c.json(r);
@@ -199,19 +218,23 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
     transfer_account_id: normalizedTransferAccountId,
   });
   if (invariantError) throw new HttpError(400, invariantError);
-  const res = await db.insert(c.env.DB, 'recurring_transactions', {
-    profile_id: pid,
-    description: description || '',
-    amount,
-    type: normalizedType,
-    category_id: category_id || null,
-    account_id: account_id || null,
-    transfer_account_id: normalizedTransferAccountId || null,
-    frequency: frequency || 'monthly',
-    day_of_month: day_of_month || null,
-    next_date: next_date || null,
-    notes: notes || '',
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'recurring_transactions',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'recurring_transactions', {
+      profile_id: pid,
+      description: description || '',
+      amount,
+      type: normalizedType,
+      category_id: category_id || null,
+      account_id: account_id || null,
+      transfer_account_id: normalizedTransferAccountId || null,
+      frequency: frequency || 'monthly',
+      day_of_month: day_of_month || null,
+      next_date: next_date || null,
+      notes: notes || '',
+    })
+  );
   return c.json({ id: res.meta.last_row_id });
 });
 
@@ -226,8 +249,9 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
   );
   if (!existing) throw new HttpError(404, 'Not found');
   const b = (await c.req.json()) as Record<string, any>;
+  // description and notes are sealed and take no part in validation, so they stay out of
+  // `effective` (existing's may be ciphertext) and are handled at the UPDATE below.
   const effective = {
-    description: b.description ?? existing.description,
     amount: b.amount ?? existing.amount,
     type: b.type ?? existing.type,
     category_id: b.category_id === undefined ? existing.category_id : b.category_id,
@@ -237,7 +261,6 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
     frequency: b.frequency ?? existing.frequency,
     day_of_month: b.day_of_month === undefined ? existing.day_of_month : b.day_of_month,
     next_date: b.next_date === undefined ? existing.next_date : b.next_date,
-    notes: b.notes === undefined ? existing.notes : b.notes,
     active: b.active ?? existing.active,
   };
   if (effective.type !== 'transfer') effective.transfer_account_id = null;
@@ -255,25 +278,33 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
   }
   const invariantError = transactionInvariantError(effective);
   if (invariantError) throw new HttpError(400, invariantError);
-  await db.update(
+  // Writing back the stored description/notes when the body leaves them out was a no-op, so they
+  // are left out of the SET instead (sealedUpdate skips undefined) and the stored form, sealed or
+  // plain, is never opened or rewritten here. The one exception keeps the old coercion of a NULL
+  // notes to '' — safe to decide from the raw row, since NULL is never sealed. A value the body
+  // does carry is written by sealedUpdate in whichever form the row is in.
+  await db.batch(
     c.env.DB,
-    'recurring_transactions',
-    {
-      description: effective.description,
-      amount: effective.amount,
-      type: effective.type,
-      category_id: effective.category_id,
-      account_id: effective.account_id,
-      transfer_account_id: effective.transfer_account_id,
-      frequency: effective.frequency,
-      day_of_month: effective.day_of_month,
-      next_date: effective.next_date,
-      notes: effective.notes ?? '',
-      active: effective.active,
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
+    await sealedUpdate(
+      keyringFor(c),
+      c.get('userId'),
+      'recurring_transactions',
+      {
+        description: b.description ?? undefined,
+        amount: effective.amount,
+        type: effective.type,
+        category_id: effective.category_id,
+        account_id: effective.account_id,
+        transfer_account_id: effective.transfer_account_id,
+        frequency: effective.frequency,
+        day_of_month: effective.day_of_month,
+        next_date: effective.next_date,
+        notes: b.notes !== undefined ? (b.notes ?? '') : existing.notes === null ? '' : undefined,
+        active: effective.active,
+      },
+      'id = ? AND profile_id = ?',
+      [id, pid]
+    )
   );
   return c.json({ ok: true });
 });
@@ -297,11 +328,14 @@ recurringRoutes.delete('/api/recurring/:id', requireAuth, async (c) => {
 recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const r = await db.first<RecurringRow>(
-    c.env.DB,
-    'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
-    id,
-    pid
+  const [r] = await openRecurring(
+    c,
+    await db.all<RecurringRow>(
+      c.env.DB,
+      'SELECT * FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+      id,
+      pid
+    )
   );
   if (!r) throw new HttpError(404, 'Not found');
   const invariantError = transactionInvariantError(r);
@@ -355,22 +389,30 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
                    WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3) = 1`;
   const claim = [id, pid, r.next_date ?? null] as const;
 
-  // 1. Insert the transaction, including account_id / transfer_account_id if set.
+  // 1. Insert the transaction, including account_id / transfer_account_id if set. Its text is
+  //    sealed afresh for the transactions table from the rule's opened plaintext: additional data
+  //    binds every value to its own table and column, so the rule's ciphertext would never open
+  //    there. beneficiary and payor stay the literal '' — empty is stored unsealed in either form.
+  const text = await sealForInsert(keyringFor(c), c.get('userId'), 'transactions', {
+    description: r.description,
+    notes: r.notes || '',
+  });
   stmts.push(
     c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local)
-       SELECT ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?5 WHERE ${guard}`
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local, text_enc)
+       SELECT ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?5, ?13 WHERE ${guard}`
     ).bind(
       ...claim,
-      r.description,
+      text.description,
       r.amount,
       r.type,
       r.category_id,
       r.account_id ?? null,
       r.transfer_account_id ?? null,
       date,
-      r.notes || '',
-      baseCurrency
+      text.notes,
+      baseCurrency,
+      text.text_enc
     )
   );
 

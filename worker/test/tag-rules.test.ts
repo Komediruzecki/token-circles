@@ -9,9 +9,14 @@
  * Runs against workerd via Miniflare (D1 from worker/migrations/). Worker deps can't install in
  * the CI sandbox — run locally with `pnpm -C worker test`.
  */
-import { env, SELF } from 'cloudflare:test';
+import { createExecutionContext, env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { normalizeTagRuleCriteria, transactionMatchesTagRule } from '../../shared/tagRules';
 import { issueSessionCookie } from '../src/auth';
+import { DataKeyring } from '../src/data-keys';
+import app from '../src/index';
+import { openRows, sealForInsert } from '../src/sealed-rows';
+import { autoApplyTagRules } from '../src/tag-rules';
 
 const USER = 810;
 const PROFILE = 8100;
@@ -695,5 +700,382 @@ describe('tag summaries', () => {
         })
       ).status
     ).toBe(400);
+  });
+});
+
+// ── Sealed text (field encryption) ───────────────────────────────────────────
+// These force a master key whatever mode the suite runs in, and drive the Worker through
+// app.fetch with it. Their user only ever goes through KEYED. The ledger mixes rows sealed under
+// that user's key with rows still at text_enc 0 (the backfill has not reached them), and every
+// answer is checked against the shared matcher run over the same rows in plaintext.
+describe('tag rules over sealed text', () => {
+  const KEK = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+  const KEYED = { ...env, DATA_KEK_1: KEK };
+  const S_USER = 54000;
+  const S_PROFILE = 54000;
+  const S_SOFTWARE = 54010;
+  const S_FOOD = 54011;
+  let sealedCookie = '';
+
+  interface LedgerRow {
+    sealed: boolean;
+    description: string;
+    beneficiary?: string;
+    payor?: string;
+    notes?: string;
+    category_id?: number;
+    amount?: number;
+    type?: string;
+    date: string;
+  }
+
+  // Newest first with distinct dates, so ledger order is the scan's order (date DESC, id DESC).
+  const LEDGER: LedgerRow[] = [
+    {
+      sealed: true,
+      description: 'AWS invoice',
+      beneficiary: 'Cloud Vendor Inc',
+      notes: 'team account',
+      category_id: S_SOFTWARE,
+      date: '2026-03-09',
+    },
+    {
+      sealed: false,
+      description: 'AWS console credits',
+      category_id: S_SOFTWARE,
+      date: '2026-03-08',
+    },
+    {
+      sealed: true,
+      description: 'Weekly shop',
+      beneficiary: 'Corner Grocer Ltd',
+      notes: 'groceries',
+      category_id: S_FOOD,
+      date: '2026-03-07',
+    },
+    {
+      sealed: false,
+      description: 'Bakery',
+      payor: 'Corner Grocer refund desk',
+      category_id: S_FOOD,
+      date: '2026-03-06',
+    },
+    {
+      sealed: true,
+      description: 'Rent March',
+      beneficiary: 'Example Landlord',
+      amount: 900,
+      date: '2026-03-05',
+    },
+    {
+      sealed: false,
+      description: 'rent deposit back',
+      amount: 50,
+      type: 'income',
+      date: '2026-03-04',
+    },
+    {
+      sealed: true,
+      description: 'Salary',
+      payor: 'Acme Payroll',
+      amount: 3000,
+      type: 'income',
+      date: '2026-03-03',
+    },
+    { sealed: true, description: 'Coffee', date: '2026-03-02' },
+  ];
+
+  function plainOf(row: LedgerRow): Record<string, unknown> {
+    return {
+      profile_id: S_PROFILE,
+      description: row.description,
+      beneficiary: row.beneficiary ?? '',
+      payor: row.payor ?? '',
+      notes: row.notes ?? '',
+      category_id: row.category_id ?? null,
+      amount: row.amount ?? 20,
+      type: row.type ?? 'expense',
+      date: row.date,
+    };
+  }
+
+  async function insertRow(values: Record<string, unknown>): Promise<number> {
+    const cols = Object.keys(values);
+    const res = await env.DB.prepare(
+      `INSERT INTO transactions (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+    )
+      .bind(...cols.map((col) => values[col]))
+      .run();
+    return Number(res.meta.last_row_id);
+  }
+
+  /** Seeds LEDGER: sealed rows through sealForInsert, the rest raw at text_enc 0. */
+  async function seedLedger(): Promise<number[]> {
+    const ring = new DataKeyring(KEYED);
+    const ids: number[] = [];
+    for (const row of LEDGER) {
+      const plain = plainOf(row);
+      ids.push(
+        await insertRow(
+          row.sealed ? await sealForInsert(ring, S_USER, 'transactions', plain) : plain
+        )
+      );
+    }
+    return ids;
+  }
+
+  /** What the shared matcher says over the plaintext ledger, in scan order. */
+  function expectedIds(ids: number[], criteriaList: unknown[]): number[] {
+    const parsed = criteriaList.map(normalizeTagRuleCriteria);
+    return LEDGER.flatMap((row, i) =>
+      parsed.some((criteria) => transactionMatchesTagRule(plainOf(row), criteria)) ? [ids[i]] : []
+    );
+  }
+
+  async function keyedCall(
+    path: string,
+    init: { method?: string; body?: unknown } = {}
+  ): Promise<Response> {
+    return app.fetch(
+      new Request(`https://example.com${path}`, {
+        method: init.method ?? 'GET',
+        headers: {
+          Cookie: sealedCookie,
+          'Content-Type': 'application/json',
+          'X-Profile-Id': String(S_PROFILE),
+        },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      }),
+      KEYED,
+      createExecutionContext()
+    );
+  }
+
+  async function keyedTag(name: string): Promise<number> {
+    const res = await keyedCall('/api/tags', { method: 'POST', body: { name, color: '#6e9bff' } });
+    expect(res.status).toBe(200);
+    return (await res.json<{ id: number }>()).id;
+  }
+
+  async function taggedIds(tagId: number): Promise<number[]> {
+    const { results } = await env.DB.prepare(
+      'SELECT transaction_id FROM transaction_tags WHERE tag_id = ? ORDER BY transaction_id'
+    )
+      .bind(tagId)
+      .all<{ transaction_id: number }>();
+    return results.map((r) => r.transaction_id);
+  }
+
+  interface Preview {
+    matched: number;
+    sample: Record<string, unknown>[];
+    conditions: { key: string; matched: number }[];
+  }
+
+  async function preview(tagId: number, criteria: unknown): Promise<Preview> {
+    const res = await keyedCall('/api/tags/rules/preview', {
+      method: 'POST',
+      body: { tag_id: tagId, criteria },
+    });
+    expect(res.status).toBe(200);
+    return res.json<Preview>();
+  }
+
+  beforeEach(async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'sealed-tags@example.com', 'password', 1)"
+      ).bind(S_USER),
+      env.DB.prepare('INSERT INTO profiles (id, user_id, name) VALUES (?, ?, ?)').bind(
+        S_PROFILE,
+        S_USER,
+        'Sealed'
+      ),
+      env.DB.prepare(
+        "INSERT INTO categories (id, profile_id, name, type, color) VALUES (?, ?, 'Software', 'expense', '#111')"
+      ).bind(S_SOFTWARE, S_PROFILE),
+      env.DB.prepare(
+        "INSERT INTO categories (id, profile_id, name, type, color) VALUES (?, ?, 'Food', 'expense', '#222')"
+      ).bind(S_FOOD, S_PROFILE),
+    ]);
+    sealedCookie = (await issueSessionCookie(S_USER, 'password', env)).split(';')[0];
+  });
+
+  it('previews over a mix of sealed and plaintext rows exactly as over plaintext', async () => {
+    const ids = await seedLedger();
+    for (const [i, row] of LEDGER.entries()) {
+      const stored = await env.DB.prepare(
+        'SELECT description, text_enc FROM transactions WHERE id = ?'
+      )
+        .bind(ids[i])
+        .first<{ description: string; text_enc: number }>();
+      expect(stored!.text_enc).toBe(row.sealed ? 1 : 0);
+      if (row.sealed) expect(stored!.description.startsWith('tc1.')).toBe(true);
+      else expect(stored!.description).toBe(row.description);
+    }
+
+    const tagId = await keyedTag('Sealed preview');
+    const cases: Record<string, unknown>[] = [
+      { description: 'aws' },
+      // Every sealed value starts "tc1." — a matcher handed ciphertext would hit all five.
+      { description: 'tc1' },
+      { description: 'TC1.', descriptionMode: 'starts_with' },
+      { counterparty: 'grocer' },
+      { notes: 'groceries' },
+      { description: 'rent', descriptionMode: 'starts_with' },
+      { description: 'salary', descriptionMode: 'equals' },
+      { description: 'ce', descriptionMode: 'ends_with' },
+      { match: 'any', categoryIds: [S_FOOD], description: 'aws' },
+      { types: ['expense'], description: 'rent' },
+      { amountMin: 100, counterparty: 'landlord' },
+      { match: 'any', amountMin: 1000, notes: 'team' },
+      { categoryIds: [S_SOFTWARE] },
+    ];
+    for (const criteria of cases) {
+      const want = expectedIds(ids, [criteria]);
+      const got = await preview(tagId, criteria);
+      expect({ criteria, matched: got.matched }).toEqual({ criteria, matched: want.length });
+      expect(got.sample.map((row) => row.id)).toEqual(want.slice(0, 10));
+      for (const row of got.sample) {
+        expect(row.description).toBe(LEDGER[ids.indexOf(row.id as number)].description);
+        expect('text_enc' in row).toBe(false);
+      }
+    }
+    expect((await preview(tagId, { description: 'tc1' })).matched).toBe(0);
+    expect((await preview(tagId, { description: 'aws' })).matched).toBe(2);
+  });
+
+  it('applies saved rules OR-ed together, tagging only what plaintext would', async () => {
+    const ids = await seedLedger();
+    const tagId = await keyedTag('Sealed apply');
+    const rules = [
+      { categoryIds: [S_SOFTWARE] },
+      { types: ['expense'], description: 'rent' },
+      { match: 'any', amountMin: 1000, counterparty: 'grocer' },
+      { description: 'tc1' },
+    ];
+    for (const criteria of rules) {
+      const res = await keyedCall('/api/tags/rules', {
+        method: 'POST',
+        body: { tag_id: tagId, criteria },
+      });
+      expect(res.status).toBe(201);
+    }
+    const want = expectedIds(ids, rules);
+    expect(want).toHaveLength(6);
+    const res = await keyedCall(`/api/tags/${tagId}/apply`, { method: 'POST', body: {} });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ matched: 6, tagged: 6 });
+    expect(await taggedIds(tagId)).toEqual([...want].sort((a, b) => a - b));
+
+    // An unsaved rule that only ciphertext could satisfy tags nothing.
+    const probe = await keyedTag('Probe');
+    const probed = await keyedCall(`/api/tags/${probe}/apply`, {
+      method: 'POST',
+      body: { criteria: { description: 'tc1' } },
+    });
+    expect(await probed.json()).toMatchObject({ matched: 0, tagged: 0 });
+    expect(await taggedIds(probe)).toEqual([]);
+  });
+
+  it('explains a 0-match rule with per-condition counts over opened text', async () => {
+    const ids = await seedLedger();
+    const tagId = await keyedTag('Sealed explain');
+    for (const criteria of [
+      { description: 'aws', categoryIds: [S_FOOD] },
+      { counterparty: 'grocer', notes: 'team' },
+    ]) {
+      const got = await preview(tagId, criteria);
+      expect(got.matched).toBe(0);
+      const byKey = Object.fromEntries(got.conditions.map((c) => [c.key, c.matched]));
+      for (const [key, value] of Object.entries(criteria)) {
+        const conditionKey = key === 'categoryIds' ? 'categories' : key;
+        expect(byKey[conditionKey]).toBe(expectedIds(ids, [{ [key]: value }]).length);
+      }
+    }
+    const got = await preview(tagId, { counterparty: 'grocer', notes: 'team' });
+    expect(Object.fromEntries(got.conditions.map((c) => [c.key, c.matched]))).toEqual({
+      counterparty: 2,
+      notes: 1,
+    });
+  });
+
+  it('lists a tag’s transactions with their text opened and no marker', async () => {
+    await seedLedger();
+    const tagId = await keyedTag('Sealed list');
+    await keyedCall(`/api/tags/${tagId}/apply`, {
+      method: 'POST',
+      body: { criteria: { description: 'aws' } },
+    });
+    const res = await keyedCall(`/api/transactions/by-tag/${tagId}`);
+    expect(res.status).toBe(200);
+    const { rows, total } = await res.json<{ rows: Record<string, unknown>[]; total: number }>();
+    expect(total).toBe(2);
+    expect(rows.map((r) => r.description)).toEqual(['AWS invoice', 'AWS console credits']);
+    expect(rows[0]).toMatchObject({
+      beneficiary: 'Cloud Vendor Inc',
+      payor: '',
+      notes: 'team account',
+      category_name: 'Software',
+    });
+    for (const row of rows) expect('text_enc' in row).toBe(false);
+  });
+
+  it('fails closed when a sealed value cannot be opened', async () => {
+    const ids = await seedLedger();
+    const stored = await env.DB.prepare('SELECT description FROM transactions WHERE id = ?')
+      .bind(ids[0])
+      .first<{ description: string }>();
+    const s = stored!.description;
+    const tampered = s.slice(0, 10) + (s[10] === 'A' ? 'B' : 'A') + s.slice(11);
+    await env.DB.prepare('UPDATE transactions SET description = ? WHERE id = ?')
+      .bind(tampered, ids[0])
+      .run();
+
+    const tagId = await keyedTag('Tampered');
+    const previewed = await keyedCall('/api/tags/rules/preview', {
+      method: 'POST',
+      body: { tag_id: tagId, criteria: { description: 'aws' } },
+    });
+    expect(previewed.status).toBe(500);
+    const applied = await keyedCall(`/api/tags/${tagId}/apply`, {
+      method: 'POST',
+      body: { criteria: { description: 'aws' } },
+    });
+    expect(applied.status).toBe(500);
+    expect(await taggedIds(tagId)).toEqual([]);
+  });
+
+  it('auto-apply never matches text that is still sealed', async () => {
+    const ids = await seedLedger();
+    // The rules below are saved through KEYED, so their criteria are sealed under K.
+    const keys = { ring: new DataKeyring(KEYED), owner: S_USER };
+    const probe = await keyedTag('Auto probe');
+    await keyedCall('/api/tags/rules', {
+      method: 'POST',
+      body: { tag_id: probe, criteria: { description: 'tc1' }, auto_apply: true },
+    });
+    const raw = await env.DB.prepare('SELECT * FROM transactions WHERE id = ?')
+      .bind(ids[0])
+      .first<Record<string, unknown>>();
+    expect(String(raw!.description).startsWith('tc1.')).toBe(true);
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], raw!, keys)).toEqual([]);
+    expect(await taggedIds(probe)).toEqual([]);
+
+    // Opened, the same row is matched on its real text.
+    const aws = await keyedTag('Auto AWS');
+    await keyedCall('/api/tags/rules', {
+      method: 'POST',
+      body: { tag_id: aws, criteria: { description: 'aws' }, auto_apply: true },
+    });
+    const [opened] = await openRows(new DataKeyring(KEYED), S_USER, 'transactions', [raw!]);
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, ids[0], opened, keys)).toEqual([aws]);
+
+    // Plaintext that merely starts with "tc1." is text, and matches like any other.
+    const lookalike = await insertRow({ ...plainOf(LEDGER[7]), description: 'tc1. token refill' });
+    const row = await env.DB.prepare('SELECT * FROM transactions WHERE id = ?')
+      .bind(lookalike)
+      .first<Record<string, unknown>>();
+    expect(await autoApplyTagRules(env.DB, S_PROFILE, lookalike, row!, keys)).toEqual([probe]);
   });
 });

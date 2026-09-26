@@ -5,6 +5,8 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { recalcAllGoals, recalcGoalsByCategory } from '../recalc-goals';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
+import { changesOf, openRows, sealForInsert, sealedUpdate } from '../sealed-rows';
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -27,7 +29,7 @@ savingsGoalsRoutes.get('/api/savings-goals', requireAuth, async (c) => {
     `SELECT * FROM savings_goals WHERE profile_id IN (${ph}) ORDER BY id`,
     ...pids
   );
-  return c.json(rows);
+  return c.json(await openRows(keyringFor(c), c.get('userId'), 'savings_goals', rows));
 });
 
 // The frontend sends `target_date`; the column is `deadline`. Accept either.
@@ -49,19 +51,23 @@ savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Category does not belong to this profile');
   }
-  const res = await db.insert(c.env.DB, 'savings_goals', {
-    profile_id: pid,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: readDeadline(b) ?? null,
-    notes: b.notes || '',
-    monthly_contribution: b.monthly_contribution ?? 0,
-    category_id: categoryId,
-    // Category progress counts transactions from this day on; default to today so a
-    // freshly-linked goal starts at 0 rather than inheriting the category's history.
-    tracking_start_date: b.tracking_start_date || today(),
-  });
+  const res = await db.insert(
+    c.env.DB,
+    'savings_goals',
+    await sealForInsert(keyringFor(c), c.get('userId'), 'savings_goals', {
+      profile_id: pid,
+      name: b.name,
+      target_amount: b.target_amount,
+      current_amount: b.current_amount || 0,
+      deadline: readDeadline(b) ?? null,
+      notes: b.notes || '',
+      monthly_contribution: b.monthly_contribution ?? 0,
+      category_id: categoryId,
+      // Category progress counts transactions from this day on; default to today so a
+      // freshly-linked goal starts at 0 rather than inheriting the category's history.
+      tracking_start_date: b.tracking_start_date || today(),
+    })
+  );
   // Compute progress now so a category-linked goal shows the right starting value.
   if (categoryId) await recalcGoalsByCategory(c.env.DB, categoryId, [pid]);
   return c.json({ id: res.meta.last_row_id }, 201);
@@ -104,15 +110,20 @@ savingsGoalsRoutes.put('/api/savings-goals/:id', requireAuth, async (c) => {
     return c.json({ ok: true });
   }
 
-  const res = await db.update(
-    c.env.DB,
-    'savings_goals',
-    fields,
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
+  const changed = changesOf(
+    await db.batch(
+      c.env.DB,
+      await sealedUpdate(
+        keyringFor(c),
+        c.get('userId'),
+        'savings_goals',
+        fields,
+        'id = ? AND profile_id = ?',
+        [c.req.param('id'), pid]
+      )
+    )
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!changed) throw new HttpError(404, 'Not found');
   // Category link or tracking window may have changed — recompute progress.
   const catId =
     fields.category_id !== undefined

@@ -2,6 +2,7 @@ import { resolveHeaderMapping } from '../../shared/importMapping';
 import type { Env } from './index';
 import * as db from './db';
 import { executeImport, fetchGoogleSheetRows } from './routes/imports';
+import { DataKeyring } from './data-keys';
 
 // Daily cron: auto-sync saved Google-Sheet sources flagged schedule='daily' (Ask 3). Each source
 // is fetched server-side, its saved (by-header) mapping resolved against the current header row,
@@ -35,6 +36,9 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
     env.DB,
     "SELECT id, profile_id, kind, config, mapping, category_types FROM import_sources WHERE schedule = 'daily' AND kind = 'google_sheet'"
   );
+  // One keyring for the whole run: each source's owner key is resolved at most once, and none
+  // outlives this invocation.
+  const ring = new DataKeyring(env);
   for (const src of sources) {
     try {
       const config = parseJson(src.config) || {};
@@ -52,6 +56,7 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
 
       const importId = crypto.randomUUID();
       const outcome = await executeImport(env.DB, src.profile_id, {
+        ring,
         rows,
         mapping,
         categoryTypes: parseJson(src.category_types) || undefined,

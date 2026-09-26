@@ -1,6 +1,9 @@
 import type { Env } from './index';
 import { HttpError } from './http';
 import * as db from './db';
+import { DataKeyring } from './data-keys';
+import { openRows, sealForInsert, SEALED_COLUMNS, type SealedTable } from './sealed-rows';
+import { putReceipt, receiptBytes as openedReceiptBytes } from './sealed-objects';
 
 export const BACKUP_VERSION = '3.0.0';
 
@@ -359,8 +362,7 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   return fileByReceipt;
 }
 
-function toBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
+function toBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunkSize = 0x8000;
   for (let offset = 0; offset < bytes.length; offset += chunkSize) {
@@ -369,7 +371,24 @@ function toBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export async function exportBackup(env: Env, userId: number, pids: number[]): Promise<BackupData> {
+/**
+ * A backup file is plaintext by contract, whatever form the rows are stored in: sealed text is
+ * opened under the user's key and the encryption markers (text_enc, receipts.enc) are left out,
+ * so the file restores anywhere — another deployment, another key, no key at all. Every pid must
+ * belong to userId (both callers check), since userId's key is the one that opens them.
+ *
+ * `ring` is optional so callers that have a request keyring can share it; otherwise one is made
+ * for this call, which resolves the user's key once for the whole export.
+ */
+export async function exportBackup(
+  env: Env,
+  userId: number,
+  pids: number[],
+  ring: DataKeyring = new DataKeyring(env),
+  // false: the caller throws receipt bytes away (the v1 snapshot), so check each object exists —
+  // the same skip rules as a backup — but never fetch or open it.
+  opts: { receiptBytes?: boolean } = {}
+): Promise<BackupData> {
   const inClause = pids.map(() => '?').join(',');
   const scoped = (table: string, order = '') =>
     db.all<Row>(
@@ -389,24 +408,24 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
   const [
     profiles,
     categories,
-    transactions,
-    accounts,
+    storedTransactions,
+    storedAccounts,
     budgets,
     budgetsZeroBased,
-    goals,
-    retirementGoals,
+    storedGoals,
+    storedRetirementGoals,
     emergencyFundConfig,
     loans,
     loanRatePeriods,
-    loanPrepayments,
-    portfolioHoldings,
-    bills,
-    recurring,
-    housings,
+    storedLoanPrepayments,
+    storedPortfolioHoldings,
+    storedBills,
+    storedRecurring,
+    storedHousings,
     tags,
-    tagRules,
+    storedTagRules,
     transactionTags,
-    categoryMappings,
+    storedCategoryMappings,
     receipts,
     balanceHistoryRows,
     importLogs,
@@ -452,6 +471,30 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     scoped('settings'),
   ]);
 
+  // Opened before anything below reads them; openRows also drops text_enc from every row. A row
+  // that fails to open fails the export — a backup never carries ciphertext in place of text.
+  const transactions = await openRows(ring, userId, 'transactions', storedTransactions);
+  const bills = await openRows(ring, userId, 'bills', storedBills);
+  const recurring = await openRows(ring, userId, 'recurring_transactions', storedRecurring);
+  const accounts = await openRows(ring, userId, 'accounts', storedAccounts);
+  const goals = await openRows(ring, userId, 'savings_goals', storedGoals);
+  const retirementGoals = await openRows(ring, userId, 'retirement_goals', storedRetirementGoals);
+  const loanPrepayments = await openRows(ring, userId, 'loan_prepayments', storedLoanPrepayments);
+  const portfolioHoldings = await openRows(
+    ring,
+    userId,
+    'portfolio_holdings',
+    storedPortfolioHoldings
+  );
+  const housings = await openRows(ring, userId, 'housings', storedHousings);
+  const tagRules = await openRows(ring, userId, 'tag_rules', storedTagRules);
+  const categoryMappings = await openRows(
+    ring,
+    userId,
+    'category_mappings',
+    storedCategoryMappings
+  );
+
   // One unreadable receipt used to fail the whole export with a 503 — no backup file at all,
   // because one image out of hundreds was missing from storage. That is the worst possible failure
   // mode for a backup: it withholds the data at the exact moment the data is proving fragile, and
@@ -476,17 +519,29 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
       skip(receipt, 'storage_unavailable');
       continue;
     }
-    const object = await env.RECEIPTS.get(String(receipt.storage_path ?? ''));
+    const path = String(receipt.storage_path ?? '');
+    const { enc, ...metadata } = receipt;
+    if (opts.receiptBytes === false) {
+      if (await env.RECEIPTS.head(path)) includedReceipts.push(metadata);
+      else skip(receipt, 'file_missing');
+      continue;
+    }
+    const object = await env.RECEIPTS.get(path);
     if (!object) {
       skip(receipt, 'file_missing');
       continue;
     }
-    includedReceipts.push(receipt);
+    // Opened, not skipped, when sealed: an object that will not open is a key fault or tampering,
+    // and either fails the export rather than shipping ciphertext as if it were the image.
+    const bytes = await openedReceiptBytes(ring, userId, object, enc);
+    includedReceipts.push(metadata);
     receiptFiles.push({
       receipt_id: Number(receipt.id),
+      // A sealed object is stored as application/octet-stream; its real type is the row's.
       content_type:
-        object.httpMetadata?.contentType ?? String(receipt.file_type ?? 'application/octet-stream'),
-      data_base64: toBase64(await object.arrayBuffer()),
+        (enc === 1 ? undefined : object.httpMetadata?.contentType) ??
+        String(receipt.file_type ?? 'application/octet-stream'),
+      data_base64: toBase64(bytes),
     });
   }
 
@@ -560,16 +615,31 @@ async function columnsFor(DB: D1Database, table: string): Promise<Set<string>> {
   return pending;
 }
 
+// Which form a row's sealed text (text_enc) or a receipt's object (enc) is stored in. Never taken
+// from a backup file — the file is plaintext by contract, and a marker copied out of it would
+// describe a form the value is not in. The restore sets them itself, through `markers`.
+const MARKER_COLUMNS = new Set(['text_enc', 'enc']);
+
 async function prepareInsert(
   DB: D1Database,
   table: string,
   row: Row,
-  omit: Set<string> = new Set(['id'])
+  omit: Set<string> = new Set(['id']),
+  markers: Row = {}
 ): Promise<D1PreparedStatement> {
   const allowed = await columnsFor(DB, table);
   const entries = Object.entries(row).filter(
-    ([key, value]) => allowed.has(key) && !omit.has(key) && value !== undefined
+    ([key, value]) =>
+      allowed.has(key) && !omit.has(key) && !MARKER_COLUMNS.has(key) && value !== undefined
   );
+  for (const [key, value] of Object.entries(markers)) {
+    if (!MARKER_COLUMNS.has(key)) throw new Error(`prepareInsert: ${key} is not a marker column`);
+    if (allowed.has(key)) entries.push([key, value]);
+    // A table read without the column (a column cache filled before migration 0031) would store a
+    // sealed row under the DEFAULT 0, and every reader would then take its ciphertext for text.
+    else if (value)
+      throw new Error(`prepareInsert: ${table} has no ${key} column for a sealed row`);
+  }
   if (entries.length === 0) throw new HttpError(422, `No restorable fields for table "${table}"`);
   const columnSql = entries.map(([key]) => `"${key}"`).join(', ');
   const placeholders = entries.map(() => '?').join(', ');
@@ -638,16 +708,103 @@ async function cleanupProfiles(DB: D1Database, profileIds: number[]): Promise<vo
   await DB.batch(statements);
 }
 
+/**
+ * A backup row with its sealed columns sealed under the restoring user's key, and the text_enc that
+ * says so — or plaintext and 0 when there is no key. Values are coerced first exactly as dbValue
+ * would bind them, so a sealed row opens to the text the plaintext insert would have stored.
+ */
+interface SealedRestoreRows {
+  rows: Row[];
+  markers: Row[];
+}
+
+async function sealRestoreRows(
+  ring: DataKeyring,
+  userId: number,
+  table: SealedTable,
+  source: Row[]
+): Promise<SealedRestoreRows> {
+  const rows: Row[] = [];
+  const markers: Row[] = [];
+  for (const row of source) {
+    const values: Row = {};
+    for (const column of SEALED_COLUMNS[table]) {
+      if (row[column] !== undefined) values[column] = dbValue(row[column]);
+    }
+    const { text_enc, ...sealed } = await sealForInsert(ring, userId, table, values);
+    rows.push({ ...row, ...sealed });
+    markers.push({ text_enc });
+  }
+  return { rows, markers };
+}
+
+/**
+ * `ring` is optional, as for exportBackup. Everything restored is sealed under userId's key — the
+ * restoring user, never whoever wrote the file — and the staged profiles have no owner until the
+ * cutover, so nothing here may look the owner up by profile.
+ */
 export async function restoreBackup(
   env: Env,
   userId: number,
-  input: unknown
+  input: unknown,
+  ring: DataKeyring = new DataKeyring(env)
 ): Promise<{ profiles_restored: number; rows_restored: number; first_profile_id: number }> {
   const data = normalizeBackup(input);
   const receiptBytes = validateBackup(data);
   if (data.receipts.length > 0 && !env.RECEIPTS) {
     throw new HttpError(503, 'Receipt storage is unavailable; restore aborted');
   }
+
+  // Sealed before anything is staged: the transforms below are synchronous, and a key fault should
+  // abort the restore before it has written a row.
+  const sealedTransactions = await sealRestoreRows(ring, userId, 'transactions', data.transactions);
+  const sealedBills = await sealRestoreRows(ring, userId, 'bills', data.bills);
+  const sealedRecurring = await sealRestoreRows(
+    ring,
+    userId,
+    'recurring_transactions',
+    data.recurring
+  );
+  const sealedAccounts = await sealRestoreRows(ring, userId, 'accounts', data.accounts);
+  const sealedGoals = await sealRestoreRows(ring, userId, 'savings_goals', data.goals);
+  const sealedRetirementGoals = await sealRestoreRows(
+    ring,
+    userId,
+    'retirement_goals',
+    data.retirementGoals
+  );
+  const sealedLoanPrepayments = await sealRestoreRows(
+    ring,
+    userId,
+    'loan_prepayments',
+    data.loanPrepayments
+  );
+  const sealedPortfolioHoldings = await sealRestoreRows(
+    ring,
+    userId,
+    'portfolio_holdings',
+    data.portfolioHoldings
+  );
+  const sealedHousings = await sealRestoreRows(ring, userId, 'housings', data.housings);
+  const sealedCategoryMappings = await sealRestoreRows(
+    ring,
+    userId,
+    'category_mappings',
+    data.categoryMappings
+  );
+  // Criteria are stored, and sealed, as JSON text. An object from an older file is written as its
+  // JSON, and a rule with no criteria (null or missing) restores as `{}`, which matches nothing:
+  // the column is NOT NULL, so passed through as null the whole restore would fail.
+  const sealedTagRules = await sealRestoreRows(
+    ring,
+    userId,
+    'tag_rules',
+    data.tagRules.map((row) => ({
+      ...row,
+      criteria:
+        typeof row.criteria === 'string' ? row.criteria : JSON.stringify(row.criteria ?? {}),
+    }))
+  );
 
   const DB = env.DB;
   const stagedProfileIds: number[] = [];
@@ -674,11 +831,14 @@ export async function restoreBackup(
     const insertMappedRows = async (
       table: string,
       source: Row[],
-      transform: (row: Row, index: number) => Row
+      transform: (row: Row, index: number) => Row,
+      markers?: Row[]
     ): Promise<Map<number, number>> => {
       if (source.length === 0) return new Map();
       const statements = await Promise.all(
-        source.map((row, index) => prepareInsert(DB, table, transform(row, index)))
+        source.map((row, index) =>
+          prepareInsert(DB, table, transform(row, index), undefined, markers?.[index])
+        )
       );
       const insertedIds = await runChunks(DB, statements, true);
       const result = new Map<number, number>();
@@ -689,15 +849,23 @@ export async function restoreBackup(
     const insertRows = async (
       table: string,
       source: Row[],
-      transform: (row: Row, index: number) => Row
+      transform: (row: Row, index: number) => Row,
+      markers?: Row[]
     ): Promise<void> => {
       if (source.length === 0) return;
       const statements = await Promise.all(
-        source.map((row, index) => prepareInsert(DB, table, transform(row, index)))
+        source.map((row, index) =>
+          prepareInsert(DB, table, transform(row, index), undefined, markers?.[index])
+        )
       );
       await runChunks(DB, statements);
       rowsRestored += source.length;
     };
+    const insertSealed = (
+      table: string,
+      sealed: SealedRestoreRows,
+      transform: (row: Row, index: number) => Row
+    ): Promise<void> => insertRows(table, sealed.rows, transform, sealed.markers);
     const withProfile = (row: Row, context: string): Row => ({
       ...row,
       profile_id: mapped(profileMap, row.profile_id, `${context}.profile_id`, false),
@@ -707,8 +875,11 @@ export async function restoreBackup(
       ...withProfile(row, `categories[${index}]`),
       parent_id: null,
     }));
-    const accountMap = await insertMappedRows('accounts', data.accounts, (row, index) =>
-      withProfile(row, `accounts[${index}]`)
+    const accountMap = await insertMappedRows(
+      'accounts',
+      sealedAccounts.rows,
+      (row, index) => withProfile(row, `accounts[${index}]`),
+      sealedAccounts.markers
     );
     const loanMap = await insertMappedRows('loans', data.loans, (row, index) =>
       withProfile(row, `loans[${index}]`)
@@ -729,7 +900,7 @@ export async function restoreBackup(
 
     const transactionMap = await insertMappedRows(
       'transactions',
-      data.transactions,
+      sealedTransactions.rows,
       (row, index) => ({
         ...withProfile(row, `transactions[${index}]`),
         category_id: mapped(categoryMap, row.category_id, `transactions[${index}].category_id`),
@@ -740,7 +911,8 @@ export async function restoreBackup(
           `transactions[${index}].transfer_account_id`
         ),
         receipt_id: null,
-      })
+      }),
+      sealedTransactions.markers
     );
 
     await insertRows('budgets', data.budgets, (row, index) => ({
@@ -756,11 +928,11 @@ export async function restoreBackup(
         false
       ),
     }));
-    await insertRows('savings_goals', data.goals, (row, index) => ({
+    await insertSealed('savings_goals', sealedGoals, (row, index) => ({
       ...withProfile(row, `goals[${index}]`),
       category_id: mapped(categoryMap, row.category_id, `goals[${index}].category_id`),
     }));
-    await insertRows('retirement_goals', data.retirementGoals, (row, index) =>
+    await insertSealed('retirement_goals', sealedRetirementGoals, (row, index) =>
       withProfile(row, `retirementGoals[${index}]`)
     );
     await insertRows('emergency_fund_config', data.emergencyFundConfig, (row, index) =>
@@ -770,32 +942,42 @@ export async function restoreBackup(
       ...row,
       loan_id: mapped(loanMap, row.loan_id, `loanRatePeriods[${index}].loan_id`, false),
     }));
-    await insertRows('loan_prepayments', data.loanPrepayments, (row, index) => ({
+    await insertSealed('loan_prepayments', sealedLoanPrepayments, (row, index) => ({
       ...row,
       loan_id: mapped(loanMap, row.loan_id, `loanPrepayments[${index}].loan_id`, false),
     }));
-    await insertRows('portfolio_holdings', data.portfolioHoldings, (row, index) =>
+    await insertSealed('portfolio_holdings', sealedPortfolioHoldings, (row, index) =>
       withProfile(row, `portfolioHoldings[${index}]`)
     );
-    await insertRows('bills', data.bills, (row, index) => ({
-      ...withProfile(row, `bills[${index}]`),
-      category_id: mapped(categoryMap, row.category_id, `bills[${index}].category_id`),
-      account_id: mapped(accountMap, row.account_id, `bills[${index}].account_id`),
-    }));
-    await insertRows('recurring_transactions', data.recurring, (row, index) => ({
-      ...withProfile(row, `recurring[${index}]`),
-      category_id: mapped(categoryMap, row.category_id, `recurring[${index}].category_id`),
-      account_id: mapped(accountMap, row.account_id, `recurring[${index}].account_id`),
-      transfer_account_id: mapped(
-        accountMap,
-        row.transfer_account_id,
-        `recurring[${index}].transfer_account_id`
-      ),
-    }));
-    await insertRows('housings', data.housings, (row, index) =>
+    await insertRows(
+      'bills',
+      sealedBills.rows,
+      (row, index) => ({
+        ...withProfile(row, `bills[${index}]`),
+        category_id: mapped(categoryMap, row.category_id, `bills[${index}].category_id`),
+        account_id: mapped(accountMap, row.account_id, `bills[${index}].account_id`),
+      }),
+      sealedBills.markers
+    );
+    await insertRows(
+      'recurring_transactions',
+      sealedRecurring.rows,
+      (row, index) => ({
+        ...withProfile(row, `recurring[${index}]`),
+        category_id: mapped(categoryMap, row.category_id, `recurring[${index}].category_id`),
+        account_id: mapped(accountMap, row.account_id, `recurring[${index}].account_id`),
+        transfer_account_id: mapped(
+          accountMap,
+          row.transfer_account_id,
+          `recurring[${index}].transfer_account_id`
+        ),
+      }),
+      sealedRecurring.markers
+    );
+    await insertSealed('housings', sealedHousings, (row, index) =>
       withProfile(row, `housings[${index}]`)
     );
-    await insertRows('category_mappings', data.categoryMappings, (row, index) => ({
+    await insertSealed('category_mappings', sealedCategoryMappings, (row, index) => ({
       ...withProfile(row, `categoryMappings[${index}]`),
       category_id: mapped(
         categoryMap,
@@ -823,12 +1005,11 @@ export async function restoreBackup(
       ),
       tag_id: mapped(tagMap, row.tag_id, `transactionTags[${index}].tag_id`, false),
     }));
-    await insertRows('tag_rules', data.tagRules, (row, index) => ({
+    // Criteria round-trip as the opaque JSON blob shared/tagRules.ts normalizes on read; they were
+    // made text before sealing, above.
+    await insertSealed('tag_rules', sealedTagRules, (row, index) => ({
       ...withProfile(row, `tagRules[${index}]`),
       tag_id: mapped(tagMap, row.tag_id, `tagRules[${index}].tag_id`, false),
-      // Criteria round-trip as the opaque JSON blob shared/tagRules.ts normalizes on read.
-      criteria:
-        typeof row.criteria === 'string' ? row.criteria : JSON.stringify(row.criteria ?? {}),
     }));
     await insertRows('import_logs', data.importLogs, (row, index) =>
       withProfile(row, `importLogs[${index}]`)
@@ -839,6 +1020,7 @@ export async function restoreBackup(
     }));
 
     const receiptRows: Row[] = [];
+    const receiptMarkers: Row[] = [];
     for (let index = 0; index < data.receipts.length; index++) {
       const receipt = data.receipts[index]!;
       const oldReceiptId = numericId(receipt.id, `receipts[${index}].id`);
@@ -857,10 +1039,10 @@ export async function restoreBackup(
           .replace(/[^a-z0-9]/g, '') || 'bin';
       const key = `${newProfileId}/${crypto.randomUUID()}.${extension}`;
       const file = data.receiptFiles.find((candidate) => candidate.receipt_id === oldReceiptId)!;
-      await env.RECEIPTS!.put(key, bytes, {
-        httpMetadata: { contentType: file.content_type },
-      });
+      // Staged before the put, so a put that fails midway is still cleaned up.
       stagedReceiptKeys.push(key);
+      const enc = await putReceipt(ring, userId, env.RECEIPTS!, key, bytes, file.content_type);
+      receiptMarkers.push({ enc });
       receiptRows.push({
         ...receipt,
         profile_id: newProfileId,
@@ -871,10 +1053,16 @@ export async function restoreBackup(
         ),
         filename: key,
         storage_path: key,
+        // The plaintext size, whatever the stored object's is.
         file_size: bytes.byteLength,
       });
     }
-    const receiptMap = await insertMappedRows('receipts', receiptRows, (row) => row);
+    const receiptMap = await insertMappedRows(
+      'receipts',
+      receiptRows,
+      (row) => row,
+      receiptMarkers
+    );
     const receiptUpdates = data.transactions
       .filter((row) => row.receipt_id !== null && row.receipt_id !== undefined)
       .map((row) =>

@@ -11,6 +11,7 @@ import { parseAttachment } from '../import-email';
 import { executeImport, IMPORT_MAX_BYTES } from './imports';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
+import { keyringFor } from '../data-keys';
 
 // The ingest surface. Authenticated by a short-lived signed capability rather than the bearer
 // token itself, so the model that runs the curl never holds a long-lived credential -- and,
@@ -108,6 +109,7 @@ v1Routes.post('/api/v1/import', async (c) => {
   const categoryTypes = Object.fromEntries([...accountNames].map((n) => [n, 'account']));
 
   const outcome = await executeImport(c.env.DB, cap.profileId, {
+    ring: keyringFor(c),
     rows: table.rows,
     mapping,
     importId,
@@ -278,12 +280,15 @@ v1Routes.get('/api/v1/snapshot', async (c) => {
   const limited = await enforce(c, `snapshot:${cap.userId}`, 10, 300);
   if (limited) return limited;
 
-  const data = await exportBackup(c.env, cap.userId, [cap.profileId]);
-
   // exportBackup base64-embeds every receipt file, which is correct for a backup and wrong
   // here: an agent pulling the ledger to analyse spending gets scans that dwarf the data and
-  // answer none of its questions. Default to the numbers; make the bytes opt-in.
+  // answer none of its questions. Default to the numbers; make the bytes opt-in. Without them
+  // the export never fetches or opens a receipt, so a sealed one that will not open cannot fail
+  // a snapshot that carries no receipt bytes anyway.
   const includeReceiptFiles = c.req.query('includeReceiptFiles') === 'true';
+  const data = await exportBackup(c.env, cap.userId, [cap.profileId], keyringFor(c), {
+    receiptBytes: includeReceiptFiles,
+  });
   const body = includeReceiptFiles
     ? { ...data, receiptFilesOmitted: false }
     : { ...data, receiptFiles: [], receiptFilesOmitted: true };

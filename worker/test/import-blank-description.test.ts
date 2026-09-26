@@ -8,6 +8,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { openedRows } from './helpers/sealed';
 
 let cookie = '';
 
@@ -66,10 +67,12 @@ describe('Worker import accepts rows without a description', () => {
     expect(body.skipped_items ?? []).toEqual([]);
     expect(body.imported).toBe(2);
 
-    const stored = await env.DB.prepare(
-      'SELECT date, description FROM transactions WHERE profile_id = 970 ORDER BY date'
-    ).all();
-    expect(stored.results).toEqual([
+    const stored = await openedRows(
+      'transactions',
+      97,
+      'SELECT date, description, text_enc FROM transactions WHERE profile_id = 970 ORDER BY date'
+    );
+    expect(stored).toEqual([
       { date: '2026-02-05', description: 'Konzum' },
       { date: '2026-02-07', description: '' },
     ]);

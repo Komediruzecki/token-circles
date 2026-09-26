@@ -4,6 +4,8 @@ import { requireAuth } from '../auth'
 import { getProfileId, getProfileIds } from '../profile'
 import { HttpError } from '../http'
 import * as db from '../db'
+import { keyringFor } from '../data-keys'
+import { openRows, sealForInsert, sealedUpdate } from '../sealed-rows'
 
 // Port of backend/routes/portfolio.js + backend/repositories/portfolioRepo.js.
 // Holdings are profile-scoped. Live prices come from Yahoo Finance (external),
@@ -39,17 +41,18 @@ portfolioRoutes.get('/api/portfolio/holdings', requireAuth, async (c) => {
     `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause}) ORDER BY purchase_date DESC`,
     ...pids
   )
-  return c.json(holdings.map(enrich))
+  return c.json((await openRows(keyringFor(c), c.get('userId'), 'portfolio_holdings', holdings)).map(enrich))
 })
 
 portfolioRoutes.get('/api/portfolio/summary', requireAuth, async (c) => {
   const pids = await getProfileIds(c)
   const inClause = pids.map(() => '?').join(',')
-  const holdings = await db.all<Holding>(
+  const stored = await db.all<Holding>(
     c.env.DB,
     `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause})`,
     ...pids
   )
+  const holdings = await openRows(keyringFor(c), c.get('userId'), 'portfolio_holdings', stored)
 
   if (holdings.length === 0) {
     return c.json({
@@ -101,21 +104,31 @@ portfolioRoutes.post('/api/portfolio/holdings', requireAuth, async (c) => {
   if (!b.ticker || !b.shares || !b.purchase_price || !b.purchase_date) {
     throw new HttpError(400, 'ticker, shares, purchase_price, and purchase_date are required')
   }
-  const res = await db.insert(c.env.DB, 'portfolio_holdings', {
-    ticker: String(b.ticker).toUpperCase(),
-    shares: parseFloat(b.shares),
-    purchase_price: parseFloat(b.purchase_price),
-    purchase_date: b.purchase_date,
-    notes: b.notes || '',
-    profile_id: pid,
-  })
-  const holding = await db.first(
+  const ring = keyringFor(c)
+  const res = await db.insert(
     c.env.DB,
-    'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
-    res.meta.last_row_id,
-    pid
+    'portfolio_holdings',
+    await sealForInsert(ring, c.get('userId'), 'portfolio_holdings', {
+      ticker: String(b.ticker).toUpperCase(),
+      shares: parseFloat(b.shares),
+      purchase_price: parseFloat(b.purchase_price),
+      purchase_date: b.purchase_date,
+      notes: b.notes || '',
+      profile_id: pid,
+    })
   )
-  return c.json(holding, 201)
+  const [holding] = await openRows(
+    ring,
+    c.get('userId'),
+    'portfolio_holdings',
+    await db.all(
+      c.env.DB,
+      'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
+      res.meta.last_row_id,
+      pid
+    )
+  )
+  return c.json(holding ?? null, 201)
 })
 
 portfolioRoutes.put('/api/portfolio/holdings/:id', requireAuth, async (c) => {
@@ -129,28 +142,34 @@ portfolioRoutes.put('/api/portfolio/holdings/:id', requireAuth, async (c) => {
     pid
   )
   if (!existing) throw new HttpError(404, 'Holding not found')
-  await db.update(
+  const ring = keyringFor(c)
+  await db.batch(
     c.env.DB,
+    await sealedUpdate(
+      ring,
+      c.get('userId'),
+      'portfolio_holdings',
+      {
+        ticker: String(b.ticker || existing.ticker).toUpperCase(),
+        shares: b.shares !== undefined ? parseFloat(b.shares) : existing.shares,
+        purchase_price: b.purchase_price !== undefined ? parseFloat(b.purchase_price) : existing.purchase_price,
+        purchase_date: b.purchase_date || existing.purchase_date,
+        // Left out of the SET when the body leaves it out. existing.notes is the stored form, which
+        // may be sealed, and writing it back would seal the ciphertext a second time.
+        notes: b.notes,
+        updated_at: new Date().toISOString(),
+      },
+      'id = ? AND profile_id = ?',
+      [id, pid]
+    )
+  )
+  const [holding] = await openRows(
+    ring,
+    c.get('userId'),
     'portfolio_holdings',
-    {
-      ticker: String(b.ticker || existing.ticker).toUpperCase(),
-      shares: b.shares !== undefined ? parseFloat(b.shares) : existing.shares,
-      purchase_price: b.purchase_price !== undefined ? parseFloat(b.purchase_price) : existing.purchase_price,
-      purchase_date: b.purchase_date || existing.purchase_date,
-      notes: b.notes !== undefined ? b.notes : existing.notes,
-      updated_at: new Date().toISOString(),
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
+    await db.all(c.env.DB, 'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?', id, pid)
   )
-  const holding = await db.first(
-    c.env.DB,
-    'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
-    id,
-    pid
-  )
-  return c.json(holding)
+  return c.json(holding ?? null)
 })
 
 portfolioRoutes.delete('/api/portfolio/holdings/:id', requireAuth, async (c) => {
