@@ -16,7 +16,9 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { BillSchema, BudgetSchema, LoanSchema, SavingsGoalSchema } from '../../../schemas/models.js'
+import { SETTINGS_KEY as ACHIEVEMENTS_KEY } from '../../achievements/records.js'
 import { refreshAchievements, snapshot, unlocks } from '../../achievementsStore.js'
+import { addToast } from '../../toastStore.js'
 import { getDB, seedDemoProfiles } from '../idb.js'
 import { routeApiRequest } from '../localApiRouter.js'
 
@@ -92,6 +94,7 @@ async function addProfile(name: string): Promise<{ profileId: number; categoryId
     color: '#F97316',
     icon: '',
     parent_id: null,
+    tax_deductible: false,
     created_at: '2026-01-01T00:00:00.000Z',
     profile_id: profileId,
   })) as number
@@ -130,9 +133,13 @@ describe('the demo seed', () => {
 
   for (const profile of DEMO_PROFILES) {
     for (const { path, schema } of ENTITIES) {
+      // The demo gives its low-income profile no loans: an empty list parses on any build, so
+      // that case would prove nothing.
+      if (profile === 'Example Low Income' && path === '/loans') continue
       it(`${profile}: GET ${path} and GET ${path}/:id parse`, async () => {
         useProfile(await profileNamed(profile))
-        await expectEndpointsParse(path, schema)
+        const rows = await expectEndpointsParse(path, schema)
+        expect(rows.length, `${profile} ${path}`).toBeGreaterThan(0)
       })
     }
   }
@@ -332,6 +339,81 @@ describe('rows the local handlers create', () => {
   })
 })
 
+describe("a goal's date, kept as the Worker keeps it", () => {
+  let profileId: number
+
+  beforeAll(async () => {
+    ;({ profileId } = await addProfile('Goal Dates'))
+  })
+
+  /** The Goals form's body. It always sends target_date, as '' when the field is empty. */
+  const FORM = { target_amount: 5000, monthly_contribution: null, category_id: null }
+
+  async function storedDeadline(id: number): Promise<unknown> {
+    return ((await (await getDB()).get('goals', id)) as Row).deadline
+  }
+
+  async function listedDeadline(id: number): Promise<unknown> {
+    const rows = await expectEndpointsParse('/savings-goals', SavingsGoalSchema)
+    return rows.find((g) => g.id === id)?.deadline
+  }
+
+  it('a goal created without a date has no deadline', async () => {
+    useProfile(profileId)
+    const res = await call('POST', '/savings-goals', { ...FORM, name: 'Someday', target_date: '' })
+    expect(res.status).toBe(201)
+    const { id } = (await res.json()) as { id: number }
+
+    expect(await storedDeadline(id)).toBeNull()
+    expect(await listedDeadline(id)).toBeNull()
+  })
+
+  it('clearing the date of a goal stored under deadline leaves no deadline', async () => {
+    useProfile(profileId)
+    // The Worker's column name, as a goal restored from a cloud backup is stored.
+    const id = (await (
+      await getDB()
+    ).add('goals', {
+      name: 'Holiday',
+      target_amount: 2000,
+      current_amount: 0,
+      deadline: '2027-06-30',
+      notes: '',
+      category_id: null,
+      created_at: '2026-04-01 09:00:00',
+      profile_id: profileId,
+    })) as number
+
+    const res = await call('PUT', `/savings-goals/${id}`, {
+      ...FORM,
+      name: 'Holiday',
+      target_date: '',
+    })
+    expect(res.status).toBe(200)
+
+    expect(await storedDeadline(id)).toBeNull()
+    expect(await listedDeadline(id)).toBeNull()
+  })
+
+  it('clearing the date of a goal an earlier build stored under target_date leaves no deadline', async () => {
+    useProfile(profileId)
+    const id = (await (
+      await getDB()
+    ).add('goals', {
+      ...FORM,
+      name: 'Bike',
+      target_date: '2027-03-31',
+      profile_id: profileId,
+    })) as number
+    expect(await listedDeadline(id)).toBe('2027-03-31')
+
+    await call('PUT', `/savings-goals/${id}`, { ...FORM, name: 'Bike', target_date: '' })
+
+    expect(await storedDeadline(id)).toBeNull()
+    expect(await listedDeadline(id)).toBeNull()
+  })
+})
+
 describe('achievements on a seeded demo profile', () => {
   it('evaluate with every budget, goal, bill and loan in hand', async () => {
     useProfile(await profileNamed('Example Mid Income'))
@@ -353,6 +435,75 @@ describe('achievements on a seeded demo profile', () => {
     expect(snap!.loans.length).toBeGreaterThan(0)
     expect(unlocks().map((u) => u.id)).toEqual(
       expect.arrayContaining(['first-budget', 'goal-in-sight'])
+    )
+  })
+})
+
+describe('the first achievements run over rows an earlier build stored', () => {
+  it('evaluates them, and announces what they earned in one summary toast', async () => {
+    const { profileId, categoryId } = await addProfile('Badges From Before The Fix')
+    useProfile(profileId)
+    const db = await getDB()
+    // Three named entries in one finished month: enough for the history badges.
+    const entries = [
+      ['2026-03-05', 40, 'expense'],
+      ['2026-03-12', 60, 'expense'],
+      ['2026-03-20', 900, 'income'],
+    ] as const
+    for (const [date, amount, type] of entries) {
+      await db.add('transactions', {
+        description: 'Entry',
+        amount,
+        type,
+        category_id: categoryId,
+        date,
+        currency: 'EUR',
+        profile_id: profileId,
+      })
+    }
+    // A budget, a goal and a bill in the shapes the old seed and handlers stored them.
+    await db.add('budgets', {
+      category_id: categoryId,
+      amount: 100,
+      period: 'monthly',
+      start_date: '2026-03-01',
+      profile_id: profileId,
+      rollover_enabled: false,
+      rollover_amount: 0,
+    })
+    await db.add('goals', {
+      name: 'Paid-up goal',
+      target_amount: 500,
+      current_amount: 500,
+      notes: '',
+      profile_id: profileId,
+    })
+    await db.add('bills', {
+      name: 'Rent',
+      amount: 900,
+      due_date: '2026-09-01',
+      recurring: 1,
+      frequency: 'monthly',
+      notes: '',
+      is_active: 1,
+      profile_id: profileId,
+      type: 'bill',
+    })
+    // Nothing unlocked yet: every earlier run failed validation before it could record a badge.
+    await db.delete('settings', ACHIEVEMENTS_KEY)
+    vi.mocked(addToast).mockClear()
+
+    const newly = await refreshAchievements()
+
+    // The old goal reached the evaluation, so its badge is among the first run's.
+    expect(newly.map((u) => u.id)).toEqual(expect.arrayContaining(['first-entry', 'goal-reached']))
+    expect(snapshot()?.goals).toEqual([expect.objectContaining({ name: 'Paid-up goal' })])
+    expect(snapshot()?.budgets).toHaveLength(1)
+    expect(snapshot()?.bills).toHaveLength(1)
+    // achievementsStore's first-run branch: one toast for the lot, not one per badge.
+    expect(addToast).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(addToast).mock.calls[0][0]).toBe(
+      `${newly.length} badges earned from your history so far.`
     )
   })
 })
