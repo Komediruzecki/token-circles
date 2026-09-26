@@ -270,7 +270,7 @@ export function App() {
   /**
    * Apply a profile selection from the sidebar: the first id becomes the active profile, and the
    * whole list is the household. Every way of choosing — picking one profile, closing the dropdown,
-   * clicking outside it — goes through here, so they cannot drift apart again.
+   * clicking outside it, creating a profile — goes through here, so they cannot drift apart again.
    *
    * This moves where WRITES land (X-Profile-Id), so the displayed profile has to move with it.
    * Without the setCurrentProfile below, the header kept showing the old profile while new rows
@@ -1231,9 +1231,11 @@ export function App() {
                 onClose={() => {
                   setIsProfileModalOpen(false)
                 }}
-                onSuccess={() => {
+                onSuccess={async (profileId) => {
                   setIsProfileModalOpen(false)
-                  loadProfiles(true)
+                  // The list has to hold the new profile before it can be shown as active.
+                  await loadProfiles()
+                  applyProfileSelection([profileId])
                 }}
               />
             </Show>

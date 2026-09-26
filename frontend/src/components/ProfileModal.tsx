@@ -5,7 +5,8 @@ import styles from './ProfileModal.module.css'
 
 export interface ProfileModalProps {
   onClose: () => void
-  onSuccess: () => void
+  /** Called with the new profile's id, so the caller can select it. */
+  onSuccess: (profileId: number) => void
 }
 
 export default function ProfileModal(props: ProfileModalProps) {
@@ -29,8 +30,8 @@ export default function ProfileModal(props: ProfileModalProps) {
     setLoading(true)
     setError('')
     try {
-      await api.createProfile(n)
-      props.onSuccess()
+      const created = await api.createProfile(n)
+      props.onSuccess(created.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create profile')
     } finally {
