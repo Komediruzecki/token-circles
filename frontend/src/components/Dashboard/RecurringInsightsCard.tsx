@@ -37,11 +37,12 @@ export default function RecurringInsightsCard() {
 
   // It used to load once per session in onMount, so a recurring row added on Transactions, or a
   // profile switch, never reached it. Now it follows both — and resume — while the Dashboard is
-  // visible, deferring to the next show while it is hidden.
+  // visible, deferring to the next show while it is hidden. Each row's colour is its category's,
+  // joined on the server, so a category write reloads the card as well.
   const state = useAppState()
   refetchOnActive(
     'dashboard',
-    () => [state.profileVersion, entityVersion('recurring')],
+    () => [state.profileVersion, entityVersion('recurring'), entityVersion('categories')],
     () => {
       void load()
     }

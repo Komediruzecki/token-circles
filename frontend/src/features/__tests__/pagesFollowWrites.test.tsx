@@ -276,8 +276,13 @@ const PAGES: PageCase[] = [
     follows: ['portfolio'],
   },
   { page: 'housing', module: '../Housing', reads: '/api/housing', follows: ['housing'] },
-  // The subscriptions panel on Housing is a list of bills.
-  { page: 'housing', module: '../Housing', reads: '/api/bills', follows: ['bills'] },
+  // The subscriptions panel on Housing is a list of bills, each coloured by its category.
+  {
+    page: 'housing',
+    module: '../Housing',
+    reads: '/api/bills',
+    follows: ['bills', 'categories'],
+  },
   {
     page: 'retirement',
     module: '../Retirement',
@@ -600,5 +605,34 @@ describe('Bills marks a bill paid through the counter, not by hand', () => {
     // refetch too, on top of what the counter now does.
     expect(readsOf('/api/bills/calendar')).toBe(2)
     expect(readsOf('/api/bills')).toBe(2)
+  })
+})
+
+describe('the bill calendar', () => {
+  async function openCalendar() {
+    setPeriod({ mode: 'month', year: 2026, month: 9, preset: 'all' })
+    const root = await mountPage('bills', '../Bills')
+    const calendarTab = [...root.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Calendar'
+    )
+    expect(calendarTab).toBeDefined()
+    calendarTab!.click()
+    await settle()
+    expect(readsOf('/api/bills/calendar')).toBe(1)
+  }
+
+  it('refetches once when a bill is written elsewhere', async () => {
+    await openCalendar()
+    invalidateEntity('bills')
+    await settle()
+    expect(readsOf('/api/bills/calendar')).toBe(2)
+  })
+
+  it('refetches once when a category is written elsewhere', async () => {
+    // Each bill on it carries its category's name and colour, joined on the server.
+    await openCalendar()
+    invalidateEntity('categories')
+    await settle()
+    expect(readsOf('/api/bills/calendar')).toBe(2)
   })
 })

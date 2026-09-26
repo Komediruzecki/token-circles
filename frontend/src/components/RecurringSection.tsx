@@ -62,11 +62,12 @@ export default function RecurringSection(props: RecurringSectionProps) {
   // Loads on mount, and again on a profile switch or any recurring write — from anywhere, this
   // section included, and on resume — while Transactions is visible; hidden, it reloads once on
   // the next show. Adding a row to transactions moves the rule's next date on the server, so that
-  // write reloads the list too. None of the writes below reloads it by hand.
+  // write reloads the list too. None of the writes below reloads it by hand. Each rule's colour
+  // is its category's, joined on the server, so a category write reloads the list as well.
   const state = useAppState()
   refetchOnActive(
     'transactions',
-    () => [state.profileVersion, entityVersion('recurring')],
+    () => [state.profileVersion, entityVersion('recurring'), entityVersion('categories')],
     () => {
       void loadItems()
     }

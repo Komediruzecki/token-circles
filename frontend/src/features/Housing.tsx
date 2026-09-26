@@ -216,7 +216,8 @@ export default function HousingForm() {
   // shown (keep-alive fan-out guard). The two lists follow separate entities, so a subscription
   // edited on Bills does not reload the housing costs, and a housing write does not reload the
   // subscriptions. This page's own writes bump `housing` through apiFetch, so none of them
-  // reloads by hand.
+  // reloads by hand. Each subscription's colour is its category's, joined on the server, so a
+  // category write reloads the subscriptions too.
   refetchOnActive(
     'housing',
     () => [state.profileVersion, entityVersion('housing')],
@@ -226,7 +227,7 @@ export default function HousingForm() {
   )
   refetchOnActive(
     'housing',
-    () => [state.profileVersion, entityVersion('bills')],
+    () => [state.profileVersion, entityVersion('bills'), entityVersion('categories')],
     () => {
       void loadSubscriptions()
     }

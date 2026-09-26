@@ -137,7 +137,12 @@ const READERS = [
   { reader: 'the budget radar', key: '/api/budgets/alerts?threshold=0', follows: ['budgets'] },
   { reader: 'the budget alerts', key: '/api/budgets/alerts?threshold=80', follows: ['budgets'] },
   { reader: 'the portfolio list', key: '/api/portfolio/holdings', follows: ['portfolio'] },
-  { reader: 'the recurring card', key: 'api.getRecurring', follows: ['recurring'] },
+  // Each row is coloured by its category, joined on the server.
+  {
+    reader: 'the recurring card',
+    key: 'api.getRecurring',
+    follows: ['recurring', 'categories'],
+  },
 ]
 
 describe.each(READERS)('$reader', ({ key, follows }) => {

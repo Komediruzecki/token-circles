@@ -130,6 +130,14 @@ describe('the recurring list', () => {
     expect(listReads).toBe(2)
   })
 
+  it('refetches once when a category is written elsewhere', async () => {
+    // Each rule is coloured by its category, joined on the server.
+    await mountSection()
+    invalidateEntity('categories')
+    await settle()
+    expect(listReads).toBe(2)
+  })
+
   it('refetches once on a profile switch', async () => {
     await mountSection()
     bumpProfileVersion()

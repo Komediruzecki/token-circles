@@ -84,11 +84,14 @@ const BillCalendar: Component = () => {
     // focus-month or profile change, or a bill written anywhere, is deferred and refetched
     // once when Bills is shown. Marking a bill paid here bumps `bills` through apiFetch,
     // which reloads this calendar and the Bills list together — neither refetches by hand.
+    // Each bill carries its category's name and colour, joined on the server, so a category
+    // renamed or recoloured anywhere reloads it too.
     gatedSource('bills', () => ({
       year: focus().year,
       month: focus().month,
       v: state.profileVersion,
       bills: entityVersion('bills'),
+      categories: entityVersion('categories'),
     })),
     async ({ year, month }) => {
       const data = await apiHouseholdGet<CalendarData>(
