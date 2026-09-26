@@ -343,3 +343,101 @@ describe('badges are per profile', () => {
     expect(calls.updated).toBeUndefined()
   })
 })
+
+describe('a profile switch while an evaluation is running', () => {
+  /** Hold the next settings read until `release` is called, so the switch lands mid-run. */
+  const holdSettings = () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    apiMock.getSettings.mockImplementationOnce(async () => {
+      await gate
+      return { ...settingsStore }
+    })
+    return release
+  }
+  const ownBudget = {
+    profile_id: 2,
+    category_id: 1,
+    amount: 100,
+    period: 'monthly',
+    start_date: `${thisMonth}-01`,
+    end_date: null,
+    created_at: `${thisMonth}-02`,
+  }
+
+  it("does not save the old profile's badges on the new one, or announce them there", async () => {
+    // Cloud mode: the plain key, and the write goes to whichever profile is active when it is sent.
+    env.mode = 'self-hosted'
+    localStorage.setItem('currentProfileId', '2')
+    calls.budgets = [ownBudget]
+    const release = holdSettings()
+
+    const running = refreshAchievements()
+    localStorage.setItem('currentProfileId', '3')
+    release()
+    await running
+
+    expect(calls.writtenAs ?? []).not.toContain('3')
+    expect(toasts).toEqual([])
+    expect(unlocks().map((u) => u.id)).not.toContain('first-budget')
+  })
+
+  it('evaluates the new profile instead of handing it the old run', async () => {
+    localStorage.setItem('currentProfileId', '2')
+    calls.budgets = [ownBudget]
+    const release = holdSettings()
+
+    const old = refreshAchievements()
+    localStorage.setItem('currentProfileId', '3')
+    const fresh = refreshAchievements()
+    release()
+    await Promise.all([old, fresh])
+
+    expect(fresh).not.toBe(old)
+    expect(apiMock.getSettings).toHaveBeenCalledTimes(2)
+    expect(snapshot()!.budgets).toEqual([])
+  })
+
+  it("does not file the old profile's badges under the new one when advice is dismissed", async () => {
+    env.mode = 'self-hosted'
+    localStorage.setItem('currentProfileId', '2')
+    calls.budgets = [ownBudget]
+    await refreshAchievements()
+    expect(unlocks().length).toBeGreaterThan(0)
+    const writes = calls.updated!.length
+
+    // Switched, and the new profile's evaluation has not finished yet.
+    localStorage.setItem('currentProfileId', '3')
+    await dismissAdvice('some-card')
+    await restoreAdvice()
+
+    expect(calls.updated!.length).toBe(writes)
+  })
+
+  it('keeps what the old profile earned, but does not announce it once the switch has happened', async () => {
+    localStorage.setItem('currentProfileId', '2')
+    calls.budgets = [ownBudget]
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    apiMock.updateSettings.mockImplementationOnce(async (data) => {
+      await gate
+      settingsStore = { ...settingsStore, ...data }
+    })
+
+    const running = refreshAchievements()
+    // The switch lands while the record is being saved.
+    await vi.waitFor(() => {
+      expect(apiMock.updateSettings).toHaveBeenCalled()
+    })
+    localStorage.setItem('currentProfileId', '3')
+    release()
+    await running
+
+    expect(parseRecords(settingsStore['achievements:2']).map((r) => r.id)).toContain('first-budget')
+    expect(toasts).toEqual([])
+  })
+})
