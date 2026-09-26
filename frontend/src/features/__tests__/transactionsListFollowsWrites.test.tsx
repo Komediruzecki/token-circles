@@ -67,6 +67,13 @@ const BASE_TAGS = [
   { id: 6, name: 'Work', color: '#3b82f6' },
 ]
 let serverTags = BASE_TAGS.map((t) => ({ ...t }))
+/**
+ * GET /api/transactions/:id/tags: the tags a row carries as stored. An auto-apply tag rule tags a
+ * new row as it is created, in both runtimes, so a row can carry tags the form never showed.
+ */
+const readTransactionTags = vi.fn(
+  async (_transactionId: number): Promise<Array<{ id: number; name: string; color: string }>> => []
+)
 /** How many times the page asked for its list. */
 let listReads = 0
 /** While set, each read waits to be answered by hand, in whatever order a test chooses. */
@@ -173,6 +180,7 @@ vi.mock('../../core/api', async (importOriginal) => {
     getCategories: async () => [{ id: 1, name: 'Groceries', type: 'expense', color: '#22c55e' }],
     getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash' }],
     getTags: async () => serverTags.map((t) => ({ ...t })),
+    getTransactionTags: (id: number) => readTransactionTags(id),
     getRecurring: async () => [RULE],
     getCategoryMappings: async () => [],
     getReconciliationSummary: async () => ({
@@ -237,6 +245,7 @@ beforeEach(() => {
   holdAnswers = false
   heldAnswers = []
   for (const write of Object.values(writes)) write.mockClear()
+  readTransactionTags.mockClear()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -955,6 +964,8 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     button('Save Transaction').click()
     await settle()
     expect(writes.setTransactionTags).toHaveBeenCalledWith(2, [6])
+    // The form showed the row's tags, so its set is the whole set: nothing to read first.
+    expect(readTransactionTags).not.toHaveBeenCalled()
   })
 
   it('a tag the server will not create attaches nothing, and keeps what was typed', async () => {
@@ -976,5 +987,43 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     await settle()
     expect(writes.createTag).toHaveBeenCalledTimes(2)
     expect(formTags()).toEqual(['Commute'])
+  })
+
+  it("a new row keeps the tags an auto-apply rule gave it, and gets the form's on top", async () => {
+    // The rule tagged the row as the server created it, so the form never showed that tag.
+    readTransactionTags.mockResolvedValueOnce([{ id: 8, name: 'Groceries', color: '#22c55e' }])
+    await mountTransactions()
+    await fillNewTransaction('Coffee beans')
+    await openAdvanced()
+    button('Work', byTestId('tx-tag-options')).click()
+    await flush()
+
+    button('Save Transaction').click()
+    await settle()
+
+    expect(readTransactionTags).toHaveBeenCalledWith(99)
+    expect(writes.setTransactionTags).toHaveBeenCalledTimes(1)
+    const [id, tagIds] = writes.setTransactionTags.mock.calls[0]!
+    expect(id).toBe(99)
+    expect([...tagIds].sort((a, b) => a - b)).toEqual([6, 8])
+    expect(listReads, 'the save and its tags refetch once, together').toBe(2)
+  })
+
+  it("a new row whose stored tags cannot be read keeps them, and the form says its tags weren't saved", async () => {
+    readTransactionTags.mockRejectedValueOnce(new Error('Network down'))
+    await mountTransactions()
+    await fillNewTransaction('Coffee beans')
+    await openAdvanced()
+    button('Work', byTestId('tx-tag-options')).click()
+    await flush()
+
+    button('Save Transaction').click()
+    await settle()
+
+    // Replacing the set without knowing it could take off what a rule put on, so nothing is sent.
+    expect(writes.setTransactionTags).not.toHaveBeenCalled()
+    expect(writes.createTransaction).toHaveBeenCalledTimes(1)
+    expect(formIsOpen()).toBe(false)
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringMatching(/tags/i), 'warning')
   })
 })

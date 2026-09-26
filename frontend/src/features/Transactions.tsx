@@ -1810,7 +1810,16 @@ export default function Transactions() {
                       tagIds.some((id) => !formTagIdsAtOpen.includes(id))
                     if (tagsChanged && savedId) {
                       try {
-                        await api.setTransactionTags(savedId, tagIds)
+                        // A new row can already carry tags the form never showed: auto-apply tag
+                        // rules tag it as it is created, in both runtimes. The set replaces the
+                        // row's, so the form's tags go on top of those rather than over them. An
+                        // edit showed the row's tags, so there the form's set is the whole set.
+                        let setIds = tagIds
+                        if (!txId) {
+                          const stored = await api.getTransactionTags(savedId)
+                          setIds = [...new Set([...tagIds, ...stored.map((t) => t.id)])]
+                        }
+                        await api.setTransactionTags(savedId, setIds)
                       } catch (tagErr) {
                         console.error('Failed to save tags:', tagErr)
                         tagsOk = false
