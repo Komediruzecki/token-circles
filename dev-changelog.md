@@ -9,6 +9,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The recorded tier for end-to-end encryption contradicted itself in three places, and the
+  wrong reading was winning.** `docs/plans/billing-tiers.md` listed encryption under
+  "Deliberately not gated" ("Security is not an upsell") and, sixty lines later, as
+  "tier still open, Basic or Advanced" — and only the second of those was mirrored into
+  `worker/src/plans.ts`, which the same document designates as the single source of truth.
+  So anyone implementing it would have read the paid framing and written a plan gate, purely
+  because the free decision was never copied into the file that decides. Settled the other way,
+  in both places: E2EE is free on every tier including Free, gets no `PlanFeatures` flag and no
+  gate, and is simply on for everyone the day it ships. Comment-only in `plans.ts`; no runtime
+  behaviour changes, and nothing is added to the pricing card, which still waits on the feature
+  actually existing.
+
 ## [5.15.1] — 2026-09-09
 
 - **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;
