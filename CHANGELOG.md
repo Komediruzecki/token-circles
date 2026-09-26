@@ -12,7 +12,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **The app now publishes an `llms.txt`.** Token Circles is a single-page app, so anything fetching the site without running JavaScript — an assistant answering a question about it, for instance — saw an empty shell. The file describes what the app does and, deliberately, what it does not: no live bank connection (statements are imported), no financial advice, and neither receipt OCR nor end-to-end encryption, which are decided but not built.
+- **The app now publishes an `llms.txt`.** Token Circles is a single-page app, so anything fetching the site without running JavaScript — an assistant answering a question about it, for instance — saw an empty shell. The file describes what the app does and, deliberately, what it does not: no live bank connection (statements are imported), no financial advice, and no receipt OCR yet.
 
 ### Removed
 

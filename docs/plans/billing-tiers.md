@@ -99,7 +99,8 @@ list.
   hostage-taking and would undercut the whole pitch.
 - **Bank connectivity** (when it lands) — it will have a real per-connection cost, so it will
   need its own decision rather than being folded in here on the assumption it is Ultimate.
-- **Encryption** (when it lands). Security is not an upsell.
+- **Encryption.** The platform's encryption at rest and in transit covers every account on every
+  tier. Security is not an upsell.
 
 ## The card art
 
@@ -159,12 +160,11 @@ Stripe once the login is refreshed.
    what the live Stripe prices already charge.
 7. **Household sharing is not in v1.** Left in the candidates table.
 
-### Two features that are not built yet
+### A feature that is not built yet
 
 - **Receipt OCR** — Advanced and up, when it ships.
-- **End-to-end encryption** — tier still open, Basic or Advanced.
 
-**Neither goes on the pricing card until it works.** A paid pricing page that lists a feature
+**It does not go on the pricing card until it works.** A paid pricing page that lists a feature
 the product does not have is a misleading commercial practice under the EU's UCPD, and this is
 the same account the compliance work was done for; "coming soon" on a page whose whole job is
 taking money does not save it. The tier intent is recorded here and in `plans.ts` comments so

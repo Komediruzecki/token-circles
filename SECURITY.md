@@ -40,6 +40,6 @@ project ships.
 
 ### Data storage & encryption
 
-Data is encrypted at rest by the platform (Cloudflare D1 and R2 use AES-256) and in transit via
-TLS. In the default **local-first** mode, data never leaves the browser (IndexedDB). End-to-end
-(zero-knowledge) encryption of synced data is on the roadmap, not yet implemented; see the docs.
+Synced data is encrypted at rest by the platform: Cloudflare D1 (the database) and R2 (receipt
+files) both store data encrypted with AES-256. Data in transit is encrypted with TLS. In the
+default **local-first** mode, data never leaves the browser (IndexedDB).

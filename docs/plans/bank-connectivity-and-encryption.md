@@ -152,6 +152,12 @@ controller/processor split before storing data.
 
 ## Part B — Encryption audit & plan
 
+**Status (2026-09-27): end-to-end encryption is not planned.** It will not be built for now. The
+security model is the platform's encryption at rest (Cloudflare D1 and R2) plus TLS in transit,
+and in local-first mode the data stays in the browser. The E2EE stages and recommendation below
+are kept as research, not as a plan. Token-at-rest encryption for server-held sync tokens is a
+separate, server-side measure and is not affected.
+
 Most of this is already answered by [`../e2ee-research.md`](../e2ee-research.md)
 (sourced, thorough). This section **audits current state** and adds **what bank
 sync changes**.
@@ -233,6 +239,7 @@ server-side bank aggregation forbids it.
 
 1. Token-at-rest scheme — Workers Secrets KEK + per-user AES-GCM DEK (recommended)
    — approve before storing any OAuth/bank token.
-2. Do we open the E2EE (Stage 1) track now, or after the sync features ship?
+2. ~~Do we open the E2EE (Stage 1) track now, or after the sync features ship?~~ Decided
+   2026-09-27: neither. E2EE is not planned.
 3. Refresh `SECURITY.md` + add security.txt as a standalone quick win now?
 4. Password KDF bump (Argon2id-WASM or PBKDF2 ≥600k) — in scope or later?
