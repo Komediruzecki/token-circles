@@ -107,7 +107,11 @@ export default function Transactions() {
     if (t === 'transfer') return []
     return cats.filter((c) => c.type === t)
   })
-  const [tags, setTags] = createSignal<Array<{ id: number; name: string; color: string }>>([])
+  // `profile_id` comes only from the local store, whose list spans every profile in household
+  // view; the Worker's list is the active profile's alone and leaves it out.
+  const [tags, setTags] = createSignal<
+    Array<{ id: number; name: string; color: string; profile_id?: number }>
+  >([])
   const [selectedCategories, setSelectedCategories] = createSignal<number[]>([])
   const [selectedTags, setSelectedTags] = createSignal<number[]>([])
   const [selectedAccountIds, setSelectedAccountIds] = createSignal<number[]>([])
@@ -443,9 +447,21 @@ export default function Transactions() {
     if (!formTags().some((t) => t.id === tag.id)) setFormTags([...formTags(), tag])
   }
   const removeFormTag = (id: number) => setFormTags(formTags().filter((t) => t.id !== id))
-  /** The page's tags the form's transaction does not carry yet, offered to add in one click. */
+  /**
+   * The tags the form can put on its transaction: the active profile's. The row is written to
+   * that profile, and neither runtime attaches another profile's tag to it, so in household view
+   * another profile's tag is neither offered nor matched by name. A tag with no owner on it is the
+   * active profile's: the Worker lists only those, and one created here has none yet.
+   */
+  const ownTags = createMemo(() => {
+    const active = state.currentProfile?.id
+    return tags().filter(
+      (tag) => active === undefined || tag.profile_id === undefined || tag.profile_id === active
+    )
+  })
+  /** The profile's tags the form's transaction does not carry yet, offered to add in one click. */
   const unpickedTags = createMemo(() =>
-    tags().filter((tag) => !formTags().some((t) => t.id === tag.id))
+    ownTags().filter((tag) => !formTags().some((t) => t.id === tag.id))
   )
   /** A chip shows the tag as the page's tag list has it now, so a rename elsewhere reaches it. */
   const currentTag = (tag: Tag): Tag => tags().find((t) => t.id === tag.id) ?? tag
@@ -458,7 +474,7 @@ export default function Transactions() {
   const addFormTagByName = async (input: HTMLInputElement) => {
     const name = input.value.trim()
     if (!name || formTagCreating) return
-    let tag: Tag | null = tags().find((t) => t.name.toLowerCase() === name.toLowerCase()) ?? null
+    let tag: Tag | null = ownTags().find((t) => t.name.toLowerCase() === name.toLowerCase()) ?? null
     if (!tag) {
       formTagCreating = true
       // Never throws: a failed create is reported there, and comes back as null.

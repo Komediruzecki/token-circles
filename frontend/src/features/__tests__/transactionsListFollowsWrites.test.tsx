@@ -17,7 +17,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from '../../core/api'
-import { setPage } from '../../core/appStore'
+import { setCurrentProfile, setPage } from '../../core/appStore'
 import {
   __resetDataVersionsForTest,
   invalidateAllEntities,
@@ -66,7 +66,9 @@ const BASE_TAGS = [
   { id: 5, name: 'Holiday', color: '#f97316' },
   { id: 6, name: 'Work', color: '#3b82f6' },
 ]
-let serverTags = BASE_TAGS.map((t) => ({ ...t }))
+/** `profile_id` is there only when the local store lists them: the Worker's list leaves it out. */
+let serverTags: Array<{ id: number; name: string; color: string; profile_id?: number }> =
+  BASE_TAGS.map((t) => ({ ...t }))
 /**
  * GET /api/transactions/:id/tags: the tags a row carries as stored. An auto-apply tag rule tags a
  * new row as it is created, in both runtimes, so a row can carry tags the form never showed.
@@ -272,6 +274,7 @@ afterEach(() => {
   dispose = undefined
   host?.remove()
   vi.unstubAllGlobals()
+  setCurrentProfile(null)
 })
 
 /** Mount the page as the visible one — every loader on it is gated on visibility. */
@@ -1025,5 +1028,61 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     expect(writes.createTransaction).toHaveBeenCalledTimes(1)
     expect(formIsOpen()).toBe(false)
     expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringMatching(/tags/i), 'warning')
+  })
+
+  /** The tags the form offers to add in one click. */
+  const offeredTags = () =>
+    Array.from(byTestId('tx-tag-options').querySelectorAll('button')).map((b) =>
+      b.textContent?.trim()
+    )
+
+  it("offers only the active profile's tags, and a name only another profile has makes a new one", async () => {
+    // Household view, local-first: the tag list spans every selected profile, but the row is
+    // written to the active one, and neither runtime attaches another profile's tag to it.
+    setCurrentProfile({ id: 1, name: 'Personal', created_at: '2026-01-01' })
+    serverTags = [
+      { id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 },
+      { id: 9, name: 'Garden', color: '#84cc16', profile_id: 2 },
+    ]
+    await mountTransactions()
+    await fillNewTransaction('Seeds')
+    await openAdvanced()
+
+    expect(offeredTags()).toEqual(['Holiday'])
+
+    await enterTag('garden')
+    expect(writes.createTag).toHaveBeenCalledWith('garden', expect.any(String))
+    expect(formTags()).toEqual(['garden'])
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(99, [7])
+  })
+
+  it('offers every tag while the active profile is not known yet', async () => {
+    // Nothing tells the tags apart until the profiles have loaded, as the table's per-row gate
+    // also finds; hiding all of them meanwhile would leave the form with none to offer.
+    serverTags = [
+      { id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 },
+      { id: 9, name: 'Garden', color: '#84cc16', profile_id: 2 },
+    ]
+    await mountTransactions()
+    await fillNewTransaction('Seeds')
+    await openAdvanced()
+
+    expect(offeredTags()).toEqual(['Holiday', 'Garden'])
+  })
+
+  it("offers and matches the Worker's tags, which carry no owner, with the profile known", async () => {
+    // Cloud mode: the Worker lists the active profile's tags alone, and leaves the owner out.
+    setCurrentProfile({ id: 1, name: 'Personal', created_at: '2026-01-01' })
+    await mountTransactions()
+    await fillNewTransaction('Seeds')
+    await openAdvanced()
+
+    expect(offeredTags()).toEqual(['Holiday', 'Work'])
+    await enterTag('work')
+    expect(writes.createTag).not.toHaveBeenCalled()
+    expect(formTags()).toEqual(['Work'])
   })
 })
