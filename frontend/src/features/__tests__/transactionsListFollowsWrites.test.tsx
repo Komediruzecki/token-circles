@@ -914,4 +914,67 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
 
     expect(formTags()).toEqual(['Vacation', 'Work'])
   })
+
+  /** Click the remove button on the form's chip for `name`. */
+  function removeTag(name: string) {
+    const remove = host.querySelector<HTMLButtonElement>(
+      `[data-test-id="tx-tag-chip"] button[aria-label="Remove tag ${name}"]`
+    )
+    expect(remove, `the ${name} chip has a remove button`).not.toBeNull()
+    remove!.click()
+  }
+
+  it('removing every tag from an edited row clears them on save', async () => {
+    tagBooks([HOLIDAY])
+    await mountTransactions()
+    await openEditor('Books')
+
+    removeTag('Holiday')
+    await flush()
+    expect(formTags()).toEqual([])
+
+    button('Save Transaction').click()
+    await settle()
+    // The set replaces the row's, so an empty one is how the last tag comes off.
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(2, [])
+    expect(listReads).toBe(2)
+  })
+
+  it('swapping a tag for another on an edited row saves the new set', async () => {
+    tagBooks([HOLIDAY])
+    await mountTransactions()
+    await openEditor('Books')
+
+    // As many tags after as before: only which ones changed.
+    removeTag('Holiday')
+    await flush()
+    button('Work', byTestId('tx-tag-options')).click()
+    await flush()
+    expect(formTags()).toEqual(['Work'])
+
+    button('Save Transaction').click()
+    await settle()
+    expect(writes.setTransactionTags).toHaveBeenCalledWith(2, [6])
+  })
+
+  it('a tag the server will not create attaches nothing, and keeps what was typed', async () => {
+    writes.createTag.mockRejectedValueOnce(new Error('Tag already exists'))
+    await mountTransactions()
+    await fillNewTransaction('Train ticket')
+    await openAdvanced()
+
+    await enterTag('Commute')
+
+    expect(formTags()).toEqual([])
+    expect(inputById('tx-tag-new-input').value).toBe('Commute')
+    expect(vi.mocked(toast)).toHaveBeenCalledWith('Failed to create tag', 'error')
+
+    // Nothing is left stuck: Enter again tries again, and this time the tag is made and attached.
+    inputById('tx-tag-new-input').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
+    )
+    await settle()
+    expect(writes.createTag).toHaveBeenCalledTimes(2)
+    expect(formTags()).toEqual(['Commute'])
+  })
 })
