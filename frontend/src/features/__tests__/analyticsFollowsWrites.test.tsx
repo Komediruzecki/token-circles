@@ -200,3 +200,40 @@ describe.each(READERS)('$reader', ({ reads: readsOf, follows }) => {
     expect(readsOf()).toBe(2)
   })
 })
+
+describe('the weeks of the stacked trends month view', () => {
+  const weekReads = () => count((u) => pathOf(u) === '/api/analytics/weeks')
+
+  /** Switch the stacked trends to the month view and pick a month: what loads its weeks. */
+  async function openMonthView() {
+    const view = [...host.querySelectorAll('select')].find((s) =>
+      [...s.options].some((o) => o.textContent === 'Month View')
+    )
+    expect(view, 'no stacked-trends view picker').toBeDefined()
+    view!.value = 'month'
+    view!.dispatchEvent(new Event('change'))
+    await settle()
+    const month = host.querySelector('[data-test-id="analytics-trends-year"]')!
+      .nextElementSibling as HTMLSelectElement
+    month.value = '8'
+    month.dispatchEvent(new Event('change'))
+    await settle()
+  }
+
+  it('reload with the chart when a write moves spending', async () => {
+    await mountAnalytics()
+    await openMonthView()
+    expect(weekReads()).toBe(1)
+
+    invalidateEntity('analytics')
+    await settle()
+    expect(weekReads()).toBe(2)
+  })
+
+  it('are not asked for in the year view', async () => {
+    await mountAnalytics()
+    invalidateEntity('analytics')
+    await settle()
+    expect(weekReads()).toBe(0)
+  })
+})
