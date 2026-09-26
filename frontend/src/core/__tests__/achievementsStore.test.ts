@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Mock } from 'vitest'
 
 const calls: Record<string, unknown[]> = {}
 /** The settings the page reads back: one object, merged by every write, like the real store. */
@@ -9,14 +10,19 @@ vi.mock('../api', () => ({
     getSettings: vi.fn(async () => ({ ...settingsStore })),
     updateSettings: vi.fn(async (data: Record<string, unknown>) => {
       calls.updated = [...(calls.updated ?? []), data]
+      // The profile the write lands on in cloud mode: X-Profile-Id is read when the request is made.
+      calls.writtenAs = [
+        ...(calls.writtenAs ?? []),
+        localStorage.getItem('currentProfileId') ?? '1',
+      ]
       settingsStore = { ...settingsStore, ...data }
     }),
     getTransactions: vi.fn(async () => calls.transactions ?? []),
     getBudgets: vi.fn(async () => calls.budgets ?? []),
     getGoals: vi.fn(async () => calls.goals ?? []),
-    getImportLogs: vi.fn(async () => []),
-    getCategories: vi.fn(async () => [{ id: 1, name: 'Food' }]),
-    getBills: vi.fn(async () => []),
+    getImportLogs: vi.fn(async () => calls.importLogs ?? []),
+    getCategories: vi.fn(async () => calls.categories ?? [{ id: 1, name: 'Food' }]),
+    getBills: vi.fn(async () => calls.bills ?? []),
     getLoans: vi.fn(async () => calls.loans ?? []),
     getLoan: vi.fn(async (id: number) =>
       (calls.loans as Array<{ id: number }>)?.find((l) => l.id === id)
@@ -33,10 +39,15 @@ import {
   dismissAdvice,
   dismissedAdvice,
   refreshAchievements,
+  restoreAdvice,
   snapshot,
   streak,
   unlocks,
 } from '../achievementsStore'
+import { api } from '../api'
+
+/** The mocked client's members as plain mocks, to hold, count and re-stub. */
+const apiMock = api as unknown as Record<'getSettings' | 'updateSettings' | 'getLoan', Mock>
 
 const month = (m: string) =>
   [3, 4, 5].map((d) => ({ date: `${m}-0${d}`, type: 'expense', amount: 10, category_id: 1 }))
@@ -65,6 +76,7 @@ const saved = (n: number) =>
   }
 
 beforeEach(() => {
+  vi.clearAllMocks()
   for (const k of Object.keys(calls)) delete calls[k]
   toasts.length = 0
   settingsStore = {}
@@ -248,5 +260,86 @@ describe('badges are per profile', () => {
     await refreshAchievements()
 
     expect(Object.keys(calls.updated![0] as object)).toEqual(['achievements'])
+  })
+
+  it("counts the active profile's loan, and does not fetch or count another profile's", async () => {
+    householdOfTwoAndThree()
+    // Paid off long ago, so it earns "debt free" for whoever it is counted for.
+    const paidOff = (id: number, profile_id: number) => ({
+      id,
+      profile_id,
+      principal: 12000,
+      start_date: '2020-01-01',
+      term_months: 24,
+      rate_periods: [{ rate: 5, start_month: 1, end_month: null }],
+      prepayments: [],
+    })
+    calls.loans = [paidOff(7, 3)]
+
+    await refreshAchievements()
+
+    expect(apiMock.getLoan).not.toHaveBeenCalled()
+    expect(unlocks().map((u) => u.id)).not.toContain('debt-free')
+
+    calls.loans = [paidOff(7, 3), paidOff(8, 2)]
+    await refreshAchievements()
+
+    expect(apiMock.getLoan).toHaveBeenCalledTimes(1)
+    expect(apiMock.getLoan).toHaveBeenCalledWith(8)
+    expect(unlocks().map((u) => u.id)).toContain('debt-free')
+  })
+
+  it("does not count another profile's imports", async () => {
+    householdOfTwoAndThree()
+    calls.importLogs = [{ id: 1, profile_id: 3, created_at: `${thisMonth}-02T10:00:00Z` }]
+
+    await refreshAchievements()
+
+    expect(unlocks().map((u) => u.id)).not.toContain('first-import')
+  })
+
+  it('keeps only the active profile in the categories and bills the progress page reads', async () => {
+    householdOfTwoAndThree()
+    calls.categories = [
+      { id: 1, name: 'Food', profile_id: 2 },
+      { id: 2, name: 'Rent', profile_id: 3 },
+    ]
+    calls.bills = [
+      { name: 'Power', amount: 40, profile_id: 2 },
+      { name: 'Water', amount: 20, profile_id: 3 },
+    ]
+
+    await refreshAchievements()
+
+    expect(snapshot()!.categories.map((c) => c.name)).toEqual(['Food'])
+    expect(snapshot()!.bills.map((b) => b.name)).toEqual(['Power'])
+  })
+
+  it('restores dismissed advice under the per-profile key', async () => {
+    householdOfTwoAndThree()
+    calls.budgets = [budget(2)]
+    await refreshAchievements()
+    await dismissAdvice('some-card')
+    await restoreAdvice()
+
+    const last = calls.updated![calls.updated!.length - 1] as Record<string, string>
+    expect(Object.keys(last)).toEqual(['achievements:2'])
+    expect(JSON.parse(last['achievements:2']).dismissedAdvice).toEqual([])
+  })
+
+  it('does not adopt the old record for a profile that already has its own', async () => {
+    settingsStore.achievements = JSON.stringify({
+      v: 1,
+      unlocks: [
+        { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
+      ],
+    })
+    settingsStore['achievements:2'] = JSON.stringify({ v: 1, unlocks: [] })
+    localStorage.setItem('currentProfileId', '2')
+
+    await refreshAchievements()
+
+    expect(unlocks()).toEqual([])
+    expect(calls.updated).toBeUndefined()
   })
 })
