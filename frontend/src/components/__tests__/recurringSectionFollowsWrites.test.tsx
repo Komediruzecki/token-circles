@@ -33,13 +33,22 @@ const RULE = {
   notes: null,
 }
 
-/** Each write does what apiFetch does for it: bump the counters its URL names. */
+/**
+ * Whether each write does what apiFetch does for it: bump the counters its URL names. Off, a
+ * write succeeds and bumps nothing, so any reload that follows it is one made by hand.
+ */
+let bumps = true
+
 const writes = {
   deleteRecurring: vi.fn(async (id: number) => {
-    invalidateForRequest(`/api/recurring/${id}`, 'DELETE', true)
+    if (bumps) invalidateForRequest(`/api/recurring/${id}`, 'DELETE', true)
+  }),
+  updateRecurring: vi.fn(async (id: number, data: object) => {
+    if (bumps) invalidateForRequest(`/api/recurring/${id}`, 'PUT', true)
+    return { ...RULE, ...data, id }
   }),
   populateRecurring: vi.fn(async (id: number) => {
-    invalidateForRequest(`/api/recurring/${id}/populate`, 'POST', true)
+    if (bumps) invalidateForRequest(`/api/recurring/${id}/populate`, 'POST', true)
     return { ok: true }
   }),
 }
@@ -55,6 +64,7 @@ vi.mock('../../core/api', async (importOriginal) => {
         return [RULE]
       },
       deleteRecurring: (id: number) => writes.deleteRecurring(id),
+      updateRecurring: (id: number, data: object) => writes.updateRecurring(id, data),
       populateRecurring: (id: number) => writes.populateRecurring(id),
     },
   }
@@ -79,7 +89,9 @@ const settle = async () => {
 beforeEach(() => {
   __resetDataVersionsForTest()
   listReads = 0
+  bumps = true
   writes.deleteRecurring.mockClear()
+  writes.updateRecurring.mockClear()
   writes.populateRecurring.mockClear()
   onRefreshTransactions.mockClear()
   host = document.createElement('div')
@@ -174,6 +186,44 @@ describe('the recurring list', () => {
     expect(writes.deleteRecurring).toHaveBeenCalledWith(1)
     // Two: the mount and the write's own bump. A third is the old manual reload.
     expect(listReads).toBe(2)
+  })
+
+  it('does not reload by hand after its own delete: with the bump withheld, nothing reloads', async () => {
+    await mountSection()
+    bumps = false
+    button('Delete').click()
+    await settle()
+
+    expect(writes.deleteRecurring).toHaveBeenCalledWith(1)
+    expect(listReads).toBe(1)
+  })
+
+  /** Open a rule for editing and save it as it is. */
+  async function saveEditedRule() {
+    button('Edit').click()
+    await settle()
+    const save = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Save')
+    expect(save, 'the edit form has no Save button').toBeDefined()
+    save!.click()
+    await settle()
+  }
+
+  it('reloads once after saving an edited rule', async () => {
+    await mountSection()
+    await saveEditedRule()
+
+    expect(writes.updateRecurring).toHaveBeenCalledWith(1, expect.anything())
+    // Two: the mount and the write's own bump. A third is the old manual reload.
+    expect(listReads).toBe(2)
+  })
+
+  it('does not reload by hand after a save: with the bump withheld, nothing reloads', async () => {
+    await mountSection()
+    bumps = false
+    await saveEditedRule()
+
+    expect(writes.updateRecurring).toHaveBeenCalledWith(1, expect.anything())
+    expect(listReads).toBe(1)
   })
 
   it('shows the moved next date after adding a row to transactions', async () => {

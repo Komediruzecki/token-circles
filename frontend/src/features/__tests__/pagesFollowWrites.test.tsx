@@ -9,7 +9,9 @@
  *
  * Each page also reloaded by hand after its own writes. The write already bumps the counter
  * through apiFetch, so the manual reload is gone and the counts below pin that: one fetch per
- * write, where a leftover manual reload makes it two.
+ * write, where a leftover manual reload makes it two. Each write is also made with its bump
+ * withheld, when it must reload nothing at all: that is what fails if the page reloads by hand,
+ * even where the hand-made reload is the only one.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -111,6 +113,18 @@ function respond(url: string): unknown {
           type: 'bill',
           is_active: 1,
         },
+        {
+          id: 2,
+          name: 'Gym',
+          amount: 30,
+          due_date: '2026-10-05',
+          frequency: 'monthly',
+          category: '',
+          autopay: false,
+          paid: false,
+          type: 'subscription',
+          is_active: 1,
+        },
       ]
     case '/api/bills/calendar':
       return {
@@ -200,9 +214,11 @@ beforeAll(async () => {
 beforeEach(() => {
   __resetDataVersionsForTest()
   reads = []
-  vi.mocked(apiPost).mockClear()
-  vi.mocked(apiPut).mockClear()
-  vi.mocked(apiDelete).mockClear()
+  // Reset, not clear: a one-off bumping implementation a failed test never used must not leak
+  // into the next test's write.
+  vi.mocked(apiPost).mockReset()
+  vi.mocked(apiPut).mockReset()
+  vi.mocked(apiDelete).mockReset()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -394,131 +410,441 @@ describe('one write that moves several entities a page follows is one refetch', 
   })
 })
 
+/** Type into a field the way a person does: the value, then the input event Solid listens for. */
+function typeInto(root: HTMLElement, selector: string, value: string) {
+  const field = root.querySelector<HTMLInputElement>(selector)
+  expect(field, `nothing matches ${selector}`).not.toBeNull()
+  field!.value = value
+  field!.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/** Click the button that reads `text`. The whole document: menus render in a portal. */
+function clickText(text: string) {
+  const button = [...document.querySelectorAll<HTMLElement>('button, [role="menuitem"]')].find(
+    (b) => b.textContent?.trim() === text
+  )
+  expect(button, `no button reads ${text}`).toBeDefined()
+  button!.click()
+}
+
+/**
+ * Submit the form that holds `selector`. Dispatched rather than clicked, so jsdom's constraint
+ * validation stays out of it: what is under test is what the save does, not the form's fields.
+ */
+function submit(root: HTMLElement, selector = 'button[type="submit"]') {
+  const form = root.querySelector(selector)?.closest('form')
+  expect(form, `no form holds ${selector}`).toBeTruthy()
+  form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+}
+
+const WRITE_HELPERS = { apiDelete, apiPost, apiPut }
+
 interface OwnWrite {
+  /** What the user does, as the test names it. */
+  does: string
   page: PageName
   module: string
   reads: string
-  control: string
-  helper: 'apiDelete' | 'apiPut'
+  /** Everything the user does, ending in the write. */
+  act: (root: HTMLElement) => void | Promise<void>
+  helper: keyof typeof WRITE_HELPERS
   method: string
   url: string
 }
 
+/** Open the subscription card's menu on Bills and pick one of its items. */
+async function subscriptionMenu(root: HTMLElement, item: string) {
+  click(root, '[data-test-id="bills-tab-subscriptions"]')
+  await settle()
+  click(root, 'button[aria-label="More actions for Gym"]')
+  await settle()
+  clickText(item)
+}
+
+/** Fill the Portfolio add form with one buy of `ticker` and save it. */
+async function addHolding(root: HTMLElement, ticker: string) {
+  click(root, '[data-test-id="add-holding-btn"]')
+  await settle()
+  typeInto(root, '[data-test-id="portfolio-form-ticker"]', ticker)
+  typeInto(root, '[data-test-id="portfolio-form-shares"]', '1')
+  typeInto(root, '[data-test-id="portfolio-form-price"]', '12')
+  typeInto(root, '[data-test-id="portfolio-form-date"]', '2026-02-01')
+  submit(root, '[data-test-id="portfolio-modal-submit"]')
+}
+
+const ACCOUNT_NAME = 'input[placeholder="e.g., Checking, Savings"]'
+
 const OWN_WRITES: OwnWrite[] = [
   {
+    does: 'creates an account',
     page: 'accounts',
     module: '../Accounts',
     reads: '/api/accounts',
-    control: '[data-test-id="account-delete-btn"]',
+    act: async (root) => {
+      click(root, '[data-test-id="add-account-btn"]')
+      await settle()
+      typeInto(root, ACCOUNT_NAME, 'Savings')
+      submit(root, ACCOUNT_NAME)
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/accounts',
+  },
+  {
+    does: 'edits an account',
+    page: 'accounts',
+    module: '../Accounts',
+    reads: '/api/accounts',
+    act: async (root) => {
+      click(root, '[data-test-id="account-edit-btn"]')
+      await settle()
+      submit(root, ACCOUNT_NAME)
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/accounts/1',
+  },
+  {
+    does: 'deletes an account',
+    page: 'accounts',
+    module: '../Accounts',
+    reads: '/api/accounts',
+    act: (root) => {
+      click(root, '[data-test-id="account-delete-btn"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/accounts/1',
   },
   {
+    does: 'edits a category',
     page: 'categories',
     module: '../Categories',
     reads: '/api/categories',
-    control: 'button[aria-label="Delete category"]',
-    helper: 'apiDelete',
-    method: 'DELETE',
-    url: '/api/categories/1',
-  },
-  {
-    page: 'categories',
-    module: '../Categories',
-    reads: '/api/categories',
-    control: 'button[title^="#"]',
+    act: async (root) => {
+      click(root, '[data-test-id="edit-category-btn"]')
+      await settle()
+      submit(root)
+    },
     helper: 'apiPut',
     method: 'PUT',
     url: '/api/categories/1',
   },
   {
+    does: 'deletes a category',
+    page: 'categories',
+    module: '../Categories',
+    reads: '/api/categories',
+    act: (root) => {
+      click(root, 'button[aria-label="Delete category"]')
+    },
+    helper: 'apiDelete',
+    method: 'DELETE',
+    url: '/api/categories/1',
+  },
+  {
+    does: 'recolours a category',
+    page: 'categories',
+    module: '../Categories',
+    reads: '/api/categories',
+    act: (root) => {
+      click(root, 'button[title^="#"]')
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/categories/1',
+  },
+  {
+    // The budget summary on each card is read with the categories.
+    does: 'sets a category budget',
+    page: 'categories',
+    module: '../Categories',
+    reads: '/api/categories',
+    act: async (root) => {
+      clickText('Budget')
+      await settle()
+      typeInto(root, 'input[placeholder="500.00"]', '250')
+      clickText('Save Budget')
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/budgets',
+  },
+  {
+    does: 'edits a loan',
     page: 'loans',
     module: '../Loans',
     reads: '/api/loans',
-    control: '[data-test-id="loans-item-delete"]',
+    act: async (root) => {
+      click(root, '[data-test-id="loans-item-edit"]')
+      await settle()
+      submit(root)
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/loans/1',
+  },
+  {
+    does: 'deletes a loan',
+    page: 'loans',
+    module: '../Loans',
+    reads: '/api/loans',
+    act: (root) => {
+      click(root, '[data-test-id="loans-item-delete"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/loans/1',
   },
   {
+    does: 'edits a holding',
     page: 'portfolio',
     module: '../Portfolio',
     reads: '/api/portfolio/holdings',
-    control: 'button[title="Delete"]',
+    act: async (root) => {
+      click(root, 'button[title="Edit"]')
+      await settle()
+      submit(root, '[data-test-id="portfolio-modal-submit"]')
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/portfolio/holdings/1',
+  },
+  {
+    // A buy of a ticker already held is merged into that holding, once the user agrees.
+    does: 'merges a buy into the holding it adds to',
+    page: 'portfolio',
+    module: '../Portfolio',
+    reads: '/api/portfolio/holdings',
+    act: (root) => addHolding(root, 'ACME'),
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/portfolio/holdings/1',
+  },
+  {
+    does: 'adds a holding',
+    page: 'portfolio',
+    module: '../Portfolio',
+    reads: '/api/portfolio/holdings',
+    act: (root) => addHolding(root, 'NEWCO'),
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/portfolio/holdings',
+  },
+  {
+    does: 'deletes a holding',
+    page: 'portfolio',
+    module: '../Portfolio',
+    reads: '/api/portfolio/holdings',
+    act: (root) => {
+      click(root, 'button[title="Delete"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/portfolio/holdings/1',
   },
   {
+    does: 'adds a housing cost',
     page: 'housing',
     module: '../Housing',
     reads: '/api/housing',
-    control: '[data-test-id="housing-card-delete"]',
+    act: async (root) => {
+      click(root, '[data-test-id="add-housing-btn"]')
+      await settle()
+      typeInto(root, '[data-test-id="housing-property-input"]', 'Studio')
+      typeInto(root, '[data-test-id="housing-amount-input"]', '400')
+      submit(root, '[data-test-id="housing-submit-btn"]')
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/housing',
+  },
+  {
+    does: 'deletes a housing cost',
+    page: 'housing',
+    module: '../Housing',
+    reads: '/api/housing',
+    act: (root) => {
+      click(root, '[data-test-id="housing-card-delete"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/housing/1',
   },
   {
+    does: 'edits a retirement goal',
     page: 'retirement',
     module: '../Retirement',
     reads: '/api/retirement-goals',
-    control: '[data-test-id="retirement-goal-delete-btn"]',
+    act: async (root) => {
+      click(root, '[data-test-id="retirement-goal-edit-btn"]')
+      await settle()
+      submit(root, '[data-test-id="retirement-modal-submit"]')
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/retirement-goals/1',
+  },
+  {
+    does: 'deletes a retirement goal',
+    page: 'retirement',
+    module: '../Retirement',
+    reads: '/api/retirement-goals',
+    act: (root) => {
+      click(root, '[data-test-id="retirement-goal-delete-btn"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/retirement-goals/1',
   },
   {
+    does: 'edits a goal',
     page: 'goals',
     module: '../Goals',
     reads: '/api/savings-goals',
-    control: '[data-test-id="goal-delete-btn"]',
+    act: async (root) => {
+      click(root, '[data-test-id="goal-edit-btn"]')
+      await settle()
+      submit(root, '[data-test-id="goals-modal-submit"]')
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/savings-goals/1',
+  },
+  {
+    does: 'puts money towards a goal',
+    page: 'goals',
+    module: '../Goals',
+    reads: '/api/savings-goals',
+    act: async (root) => {
+      click(root, '[data-test-id="goal-contribute-btn"]')
+      await settle()
+      typeInto(root, 'input[placeholder="Amount..."]', '50')
+      clickText('Add')
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/savings-goals/1/contribute',
+  },
+  {
+    does: 'deletes a goal',
+    page: 'goals',
+    module: '../Goals',
+    reads: '/api/savings-goals',
+    act: (root) => {
+      click(root, '[data-test-id="goal-delete-btn"]')
+    },
     helper: 'apiDelete',
     method: 'DELETE',
     url: '/api/savings-goals/1',
   },
+  {
+    does: 'edits a bill',
+    page: 'bills',
+    module: '../Bills',
+    reads: '/api/bills',
+    act: async (root) => {
+      click(root, '[data-test-id="bill-edit-btn"]')
+      await settle()
+      submit(root, '[data-test-id="bill-form-submit"]')
+    },
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/bills/1',
+  },
+  {
+    does: 'marks a bill paid',
+    page: 'bills',
+    module: '../Bills',
+    reads: '/api/bills',
+    act: (root) => {
+      click(root, '[data-test-id="bill-mark-paid-btn"]')
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/bills/1/mark-paid',
+  },
+  {
+    does: 'pauses a subscription',
+    page: 'bills',
+    module: '../Bills',
+    reads: '/api/bills',
+    act: (root) => subscriptionMenu(root, 'Pause'),
+    helper: 'apiPut',
+    method: 'PUT',
+    url: '/api/bills/2',
+  },
+  {
+    does: 'deletes a subscription',
+    page: 'bills',
+    module: '../Bills',
+    reads: '/api/bills',
+    act: (root) => subscriptionMenu(root, 'Delete'),
+    helper: 'apiDelete',
+    method: 'DELETE',
+    url: '/api/bills/2',
+  },
+  {
+    does: 'adds a subscription from the catalog',
+    page: 'bills',
+    module: '../Bills',
+    reads: '/api/bills',
+    act: async (root) => {
+      click(root, '[data-test-id="bills-tab-subscriptions"]')
+      await settle()
+      click(root, '[data-test-id="browse-catalog-btn"]')
+      await settle()
+      typeInto(root, 'input[aria-label="Search the catalog"]', 'Netflix')
+      await settle()
+      const row = [...root.querySelectorAll<HTMLElement>('[role="button"]')].find((r) =>
+        r.textContent?.includes('Netflix')
+      )
+      expect(row, 'the catalog offers no Netflix').toBeDefined()
+      row!.click()
+      await settle()
+      clickText('Add 1')
+    },
+    helper: 'apiPost',
+    method: 'POST',
+    url: '/api/bills',
+  },
 ]
 
 describe.each(OWN_WRITES)(
-  '$page does not reload by hand after its own $method',
-  ({ page, module, reads: path, control, helper, method, url }) => {
-    it('loads once for the write, through the counter the write bumps', async () => {
+  '$page, when the user $does',
+  ({ page, module, reads: path, act, helper, method, url }) => {
+    const write = WRITE_HELPERS[helper]
+    const body = helper === 'apiDelete' ? [] : [expect.anything()]
+
+    it('reloads once, through the counter the write bumps', async () => {
       const root = await mountPage(page, module)
       expect(readsOf(path)).toBe(1)
 
-      const write = helper === 'apiDelete' ? apiDelete : apiPut
       nextWriteInvalidates(write, method)
-      click(root, control)
+      await act(root)
       await settle()
 
-      expect(write).toHaveBeenCalledWith(url, ...(helper === 'apiPut' ? [expect.anything()] : []))
+      expect(write).toHaveBeenCalledWith(url, ...body)
       // Two: the mount and the write's own bump. A third is a leftover manual reload.
       expect(readsOf(path)).toBe(2)
+    })
+
+    it('does not reload by hand: with the bump withheld, nothing reloads', async () => {
+      const root = await mountPage(page, module)
+      expect(readsOf(path)).toBe(1)
+
+      // The mocked helper succeeds without bumping anything. The one reload above has to be the
+      // counter's: a page that still reloads after its own write reads a second time here.
+      await act(root)
+      await settle()
+
+      expect(write).toHaveBeenCalledWith(url, ...body)
+      expect(readsOf(path)).toBe(1)
     })
   }
 )
 
 describe('writes that take more than one click', () => {
-  it('Goals: a contribution loads the goals once', async () => {
-    const root = await mountPage('goals', '../Goals')
-    expect(readsOf('/api/savings-goals')).toBe(1)
-
-    click(root, '[data-test-id="goal-contribute-btn"]')
-    await settle()
-    const amount = root.querySelector<HTMLInputElement>('input[placeholder="Amount..."]')
-    expect(amount).not.toBeNull()
-    amount!.value = '50'
-    amount!.dispatchEvent(new Event('input', { bubbles: true }))
-    nextWriteInvalidates(apiPost, 'POST')
-    const add = [...root.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Add')
-    expect(add).toBeDefined()
-    add!.click()
-    await settle()
-
-    expect(apiPost).toHaveBeenCalledWith('/api/savings-goals/1/contribute', { amount: 50 })
-    expect(readsOf('/api/savings-goals')).toBe(2)
-  })
-
   it('Portfolio: refreshing prices does not reload the holdings', async () => {
     const root = await mountPage('portfolio', '../Portfolio')
     expect(readsOf('/api/portfolio/holdings')).toBe(1)
@@ -555,19 +881,6 @@ describe('writes that take more than one click', () => {
 })
 
 describe('Bills marks a bill paid through the counter, not by hand', () => {
-  it('reloads the list once when a bill is marked paid', async () => {
-    const root = await mountPage('bills', '../Bills')
-    expect(readsOf('/api/bills')).toBe(1)
-
-    nextWriteInvalidates(apiPost, 'POST')
-    click(root, '[data-test-id="bill-mark-paid-btn"]')
-    await settle()
-
-    expect(apiPost).toHaveBeenCalledWith('/api/bills/1/mark-paid', {})
-    // Two: the mount and the write's own bump. A third is the old reload after success.
-    expect(readsOf('/api/bills')).toBe(2)
-  })
-
   it('still reloads once to undo the optimistic tick when marking paid fails', async () => {
     const root = await mountPage('bills', '../Bills')
     expect(readsOf('/api/bills')).toBe(1)
@@ -605,6 +918,23 @@ describe('Bills marks a bill paid through the counter, not by hand', () => {
     // refetch too, on top of what the counter now does.
     expect(readsOf('/api/bills/calendar')).toBe(2)
     expect(readsOf('/api/bills')).toBe(2)
+  })
+
+  it('leaves both reloads after paying from the calendar to the counter', async () => {
+    setPeriod({ mode: 'month', year: 2026, month: 9, preset: 'all' })
+    const root = await mountPage('bills', '../Bills')
+    clickText('Calendar')
+    await settle()
+    root.querySelector<HTMLElement>('[role="button"]')!.click()
+    await settle()
+
+    // The mocked write succeeds without bumping anything, so any reload here is one by hand.
+    clickText('Pay')
+    await settle()
+
+    expect(apiPost).toHaveBeenCalledWith('/api/bills/1/mark-paid', {})
+    expect(readsOf('/api/bills/calendar')).toBe(1)
+    expect(readsOf('/api/bills')).toBe(1)
   })
 })
 
