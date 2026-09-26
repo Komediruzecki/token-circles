@@ -13,7 +13,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setPage } from '../../core/appStore'
+import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { ALL_WIDGET_IDS, WIDGET_STORAGE_KEY } from '../../core/dashboardWidgets'
 import {
   __resetDataVersionsForTest,
@@ -171,6 +171,21 @@ describe.each(READERS)('$reader', ({ key, follows }) => {
     await flush()
     for (const tag of follows) invalidateEntity(tag)
     invalidateAllEntities()
+    await settle()
+    expect(readsOf(key)).toHaveLength(1)
+
+    setPage('dashboard')
+    await settle()
+    expect(readsOf(key)).toHaveLength(2)
+  })
+
+  it('defers a profile switch while the Dashboard is hidden, and refetches once on the next show', async () => {
+    // The deck and the budget alerts refetched on a profile switch while hidden, alongside every
+    // other mounted page; the recurring card did not refetch at all.
+    await mountDashboard()
+    setPage('transactions')
+    await flush()
+    bumpProfileVersion()
     await settle()
     expect(readsOf(key)).toHaveLength(1)
 
