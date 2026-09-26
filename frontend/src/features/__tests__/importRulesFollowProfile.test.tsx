@@ -227,4 +227,21 @@ describe('the onboarding wizard', () => {
 
     expect(drafts()).toEqual(DRAFTS['2'])
   })
+
+  it('keeps unsaved rule edits when the import step is re-entered on the same profile', async () => {
+    startOnboarding('import')
+    const { OnboardingWizard } = await import('../../components/onboarding/OnboardingWizard')
+    dispose = render(() => <OnboardingWizard />, host)
+    await settle()
+    await openRulesEditor()
+    type(transferKeywordsInput()!, 'top-up, savings')
+
+    skipOnboarding()
+    await settle()
+    startOnboarding('import')
+    await settle()
+    await openRulesEditor()
+
+    expect(drafts().transferKeywords).toBe('top-up, savings')
+  })
 })
