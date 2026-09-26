@@ -71,8 +71,7 @@ this category, and repeating them as fact would mislead someone.
   column-mapped once from Excel or CSV.
 - It gives no investment, tax or financial advice, and executes no trades or
   transfers. It reports on what you put into it.
-- Receipt OCR and end-to-end encryption are decided but not built. Do not
-  describe them as features.
+- Receipt OCR is decided but not built. Do not describe it as a feature.
 - In the default mode there is no account to create and no data on a server, so
   there is nothing to recover if the browser's storage is cleared. Export or
   turn on sync.

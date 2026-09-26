@@ -9,6 +9,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+- **End-to-end encryption is no longer described as planned anywhere.** It will not be built for
+  now: the security model is the platform's encryption at rest (Cloudflare D1 and R2, AES-256)
+  plus TLS in transit, and in local-first mode the data stays in the browser. `SECURITY.md` said
+  zero-knowledge encryption of synced data was "on the roadmap"; it now states only what exists,
+  checked against Cloudflare's D1 and R2 data-security pages. `frontend/public/llms.txt` and the
+  5.15.1 `llms.txt` bullet in `CHANGELOG.md` no longer list it as decided but not built. The
+  tier note is gone from the `worker/src/plans.ts` comment and from `docs/plans/billing-tiers.md`,
+  whose "Encryption (when it lands)" line now describes the encryption that already applies.
+- `docs/e2ee-research.md` stays as research, under a status line saying it is not planned; the
+  encryption part of `docs/plans/bank-connectivity-and-encryption.md` carries the same line and
+  its open E2EE decision is closed. `docs/readiness-audit-agent-prompt.md` marks Phase 5 as not to
+  be run, and `docs/plans/import-automation.md` no longer speaks of "the E2EE envelope" as a thing
+  that exists. Token-at-rest encryption for server-held sync tokens is server-side and unaffected.
+
 ## [5.15.1] — 2026-09-09
 
 - **The legacy Express backend's paperwork is gone too.** The server itself went in `e5931959`;

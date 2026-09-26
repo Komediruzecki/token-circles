@@ -144,12 +144,17 @@ Produce `docs/architecture-review.md` covering, with evidence from the code:
 1. **Float money → integer cents migration plan**: D1 migration strategy, IndexedDB version bump, API compatibility, rollout order (worker first vs client first), estimated effort.
 2. **Foreign keys are not enforced in D1** (no `PRAGMA foreign_keys=ON`; core tables have no FK at all) — orphan-row risk inventory, whether to enforce via triggers/app-level checks, cleanup migration for existing orphans.
 3. **Dual API implementation** (localApiRouter vs worker routes): drift risk assessment, options (shared spec + contract tests generated from one source; shared TS core executed on both sides), recommendation.
-4. **No real sync**: what device-to-device sync would require (UUID primary keys — note current autoIncrement integer IDs collide across devices; tombstones; `updated_at` cursors; conflict policy), and how that interacts with the E2EE design from Phase 5.
+4. **No real sync**: what device-to-device sync would require (UUID primary keys — note current autoIncrement integer IDs collide across devices; tombstones; `updated_at` cursors; conflict policy).
 5. **D1/Worker scalability**: per-query limits, `transactions.ts` list/filter/summary query plans vs indexes (`0012_transaction_account_indexes.sql`), pagination presence/absence on list endpoints, import chunking (100-row batches), cron reminder fan-out at 10k users, R2 costs.
 6. **Operational readiness**: error_logs review loop, backup/restore story for D1 (export cadence, point-in-time), migration rollback strategy, monitoring/alerting gaps.
 7. Prioritized roadmap: what must land **before** public launch vs after, with effort estimates (S/M/L).
 
 ## Phase 5 — E2E encryption design spike (design doc only)
+
+> Status (2026-09-27): not planned. Do not run this phase. End-to-end encryption will not be built
+> for now; the security model is the platform's encryption at rest (Cloudflare D1 and R2) plus TLS
+> in transit, and in local-first mode the data stays in the browser. The phase is kept as a record
+> of what was once scoped.
 
 Produce `docs/e2ee-design.md`. Constraints: solo-dev budget, Cloudflare Workers/D1/R2, existing features that read plaintext server-side (email reminders with amounts, PDF report generation, receipt storage, cross-device access). Cover:
 

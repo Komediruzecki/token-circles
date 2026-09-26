@@ -316,9 +316,9 @@ can run unattended in the browser.
 
 - **Cloud mode** — the Worker stores the Google **refresh token** per user;
   it must be **encrypted at rest** with a Worker-held key (envelope), because the
-  server has to use it. This is exactly the "sync tokens live outside the E2EE
-  envelope" tension documented in
-  [`../e2ee-research.md`](../e2ee-research.md) and expanded in the companion doc.
+  server has to use it. A token the server must use could never be end-to-end
+  encrypted, as the research in [`../e2ee-research.md`](../e2ee-research.md)
+  notes (E2EE itself is not planned) and the companion doc expands.
 - **Local (serverless) mode** — the token can stay in the browser (IndexedDB),
   never touching a server.
 
