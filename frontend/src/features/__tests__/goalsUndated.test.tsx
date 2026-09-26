@@ -243,3 +243,92 @@ describe('a goal with a target date', () => {
     expect(await storedDate(3)).toBeNull()
   })
 })
+
+/**
+ * Cloud mode. The page is the same code, but what matters there is the request it sends: the
+ * Worker stores whatever date arrives (an empty one as NULL), so a page that fills in today's date
+ * writes that date to D1 for good. These run the page against a stubbed Worker and read the bodies
+ * of its writes.
+ */
+describe('in cloud mode', () => {
+  /** What the Worker's GET /api/savings-goals returns: every goal's date under `deadline`. */
+  const WORKER_ROWS = GOALS.map(({ target_date, ...g }) => ({
+    profile_id: 1,
+    ...g,
+    deadline: (g as { deadline?: string | null }).deadline ?? target_date ?? null,
+  }))
+
+  let writes: { method: string; path: string; body: Record<string, unknown> }[]
+
+  beforeEach(() => {
+    localStorage.setItem('finance_storage_mode', 'self-hosted')
+    writes = []
+    const reply = (data: unknown, status = 200) =>
+      new Response(JSON.stringify(data), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      const path = new URL(url, 'http://localhost').pathname
+      const method = (init?.method ?? 'GET').toUpperCase()
+      if (method !== 'GET') {
+        writes.push({ method, path, body: JSON.parse((init?.body as string) ?? '{}') })
+        return reply(method === 'POST' ? { id: 99 } : { ok: true }, method === 'POST' ? 201 : 200)
+      }
+      if (path === '/api/savings-goals') return reply(WORKER_ROWS)
+      return reply([])
+    })
+  })
+
+  const goalWrite = (method: string) =>
+    writes.find((w) => w.method === method && w.path.startsWith('/api/savings-goals'))
+
+  it('shows a goal the Worker stored without a date as undated', async () => {
+    await mountGoals()
+
+    expect(dateLine('Emergency Fund')).toBe('No target date')
+    expect(dateLine('Rainy Day')).toBe('No target date')
+    expect(dateLine('House')?.startsWith(`${shown('2031-01-15')} • `)).toBe(true)
+  })
+
+  it('does not send a date when an undated goal is renamed', async () => {
+    await mountGoals()
+
+    openEdit('Rainy Day')
+    type(input('goals-form-name'), 'Rainy Day, renamed')
+    await submit()
+
+    const put = goalWrite('PUT')
+    expect(put?.path).toBe('/api/savings-goals/2')
+    expect(put?.body.name).toBe('Rainy Day, renamed')
+    expect(put?.body.target_date || null).toBeNull()
+  })
+
+  it('creates a goal without a date', async () => {
+    await mountGoals()
+
+    host.querySelector<HTMLButtonElement>('[data-test-id="add-goal-btn"]')!.click()
+    const label = input('goals-form-date').parentElement!.querySelector('label')!
+    expect(label.textContent).toBe('Target Date (optional)')
+    type(input('goals-form-name'), 'Someday')
+    type(input('goals-form-target'), '800')
+    await submit()
+
+    const post = goalWrite('POST')
+    expect(post?.body.name).toBe('Someday')
+    expect(post?.body.target_date || null).toBeNull()
+  })
+
+  it('sends an empty date when a date is cleared', async () => {
+    await mountGoals()
+
+    openEdit('House')
+    expect(input('goals-form-date').value).toBe('2031-01-15')
+    type(input('goals-form-date'), '')
+    await submit()
+
+    const put = goalWrite('PUT')
+    expect(put?.path).toBe('/api/savings-goals/4')
+    expect(put?.body.target_date).toBe('')
+  })
+})
