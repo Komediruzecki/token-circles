@@ -103,6 +103,17 @@ describe('marking a bill paid in local-first mode', () => {
     expect(await balance()).toBe(380)
   })
 
+  it('falls back to EUR when no base currency was ever set, as the Worker does', async () => {
+    // worker/test/bills-mark-paid-currency.test.ts: a profile that never saved a currency.
+    localStorage.removeItem('localCurrency')
+    const id = await createBill({ account_id: accountId })
+
+    expect((await pay(id)).status).toBe(200)
+
+    const [row] = await transactions()
+    expect(row).toMatchObject({ currency: 'EUR', amount_local: 120 })
+  })
+
   it('stamps the bill paid on today’s local date', async () => {
     const id = await createBill({ account_id: accountId })
     await pay(id)
