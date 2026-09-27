@@ -80,6 +80,12 @@ export default defineConfig({
       timeout: 120000,
       stdout: 'pipe',
       stderr: 'pipe',
+      // SIGTERM at the end of the run, where Playwright would otherwise SIGKILL this command's
+      // process group. The supervisor stops wrangler from a SIGTERM handler, and a SIGKILL runs no
+      // handler; wrangler lives in a group of its own, so nothing else reaches it. Without this,
+      // every local run left a wrangler holding :8787, and the next run's reuseExistingServer
+      // adopted it, stale code and all. Guarded by src/__tests__/e2eWorkerTeardown.test.ts.
+      gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 },
     },
     {
       command: `npm run dev -- --port ${E2E_PORT} --strictPort`,
