@@ -97,6 +97,13 @@ export function addToast(
   )
 }
 
+/**
+ * The channel of the notice that asks this tab to reload: a deploy landed (appVersion), or another
+ * tab's newer build took the local database (storage/connectionNotices). One channel, so the two
+ * replace each other instead of stacking two Reload buttons.
+ */
+export const UPDATE_TOAST_CHANNEL = 'app-update'
+
 /** True while a toast on this channel is on screen — lets a caller re-announce only after
  *  its previous notice expired instead of restarting a visible one. */
 export function hasToastOnChannel(channel: string): boolean {

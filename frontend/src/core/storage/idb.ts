@@ -14,6 +14,11 @@ import {
   receiptBytesFrom,
   validateBackupForLocalRestore,
 } from './backup'
+import {
+  announceConnectionReleased,
+  announceUpgradeBlocked,
+  clearUpgradeBlocked,
+} from './connectionNotices'
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
 import type { IDBPDatabase } from 'idb'
 import type {
@@ -298,10 +303,57 @@ async function upgradeSchema(
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
+/** Why this tab gave its connection up for another tab, once it has. */
+let releasedFor: 'upgrade' | 'reset' | null = null
+/** This tab's upgrade is waiting for another tab to close its connection. */
+let upgradeBlocked = false
 
+/**
+ * The one connection to the local database.
+ *
+ * Another tab can need this tab out of the way: a newer build upgrading the database, or a reset
+ * deleting it. Neither can start while this connection is open, so it closes when asked
+ * (`blocking`), and the tab asks for a reload: this build cannot open the database again once it
+ * is upgraded or gone. Reads and writes after that wait rather than fail. A failure would reach the
+ * pages as empty lists, which read as lost data, and as error toasts that crowd out the one that
+ * says what to do.
+ *
+ * The other way round, this tab's upgrade waits for older tabs (`blocked`): it says so until they
+ * are closed, as builds before this one never close on their own. A connection the browser closes
+ * by itself (`terminated`, when site data is cleared, for one) is dropped, so the next call opens
+ * a new one instead of failing on the dead handle.
+ */
 export function getDB() {
+  if (releasedFor) announceConnectionReleased(releasedFor)
+  if (upgradeBlocked) announceUpgradeBlocked()
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, { upgrade: upgradeSchema })
+    const opening = openDB(DB_NAME, DB_VERSION, {
+      upgrade: upgradeSchema,
+      blocked() {
+        upgradeBlocked = true
+        announceUpgradeBlocked()
+      },
+      blocking(_currentVersion, nextVersion) {
+        releasedFor = nextVersion === null ? 'reset' : 'upgrade'
+        void opening.then((db) => {
+          db.close()
+        })
+        dbPromise = new Promise<never>(() => {})
+        announceConnectionReleased(releasedFor, true)
+      },
+      terminated() {
+        if (dbPromise === opening) dbPromise = null
+      },
+    })
+    dbPromise = opening
+    void opening.then(
+      () => {
+        if (!upgradeBlocked) return
+        upgradeBlocked = false
+        clearUpgradeBlocked()
+      },
+      () => {}
+    )
   }
   return dbPromise
 }
