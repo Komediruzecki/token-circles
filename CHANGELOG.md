@@ -8,6 +8,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.16.0] — 2026-09-27
+
+### Added
+
+- **The app catches up when you come back.** After a minute or more away, or when your connection returns, the page you are on reloads its data, so a change made on another device or by a scheduled import shows up without a reload.
+
+### Fixed
+
+- **Pages keep up with your changes.** A category, account, budget, goal, bill or transaction you add or edit now shows everywhere it is used, without a reload.
+- **Tags added in the transaction form are saved on the transaction.** Creating one there used to filter the list behind the form instead, and the tag was never attached.
+- **Dropdowns keep what you picked when their list refreshes.** A category could flip to Uncategorized on screen while the form still saved the old one.
+- **New entries always go to the profile you are looking at.** Unticking your own profile in the household list could file new entries where no page showed them. The list now locks the active profile and says why, and creating a profile switches to it.
+- **Import rules stay with their profile.** After a profile switch, the rules editor on the Import page could show, and save over, another profile's rules.
+- **Badges are earned per profile, and right away.** Viewing several profiles together no longer hands one profile's badges to another, and a badge unlocks on the action that earns it.
+- **Goals can be undated.** A goal without a target date showed as due today, and editing it gave it one; the date is now optional.
+- **Local-first mode: badges work, and retirement goals stay off the Savings Goals page.** Budgets, bills, loans and goals stored in the browser were missing details the app checks, which stopped badges from ever being awarded.
+
 ## [5.15.1] — 2026-09-09
 
 ### Added
