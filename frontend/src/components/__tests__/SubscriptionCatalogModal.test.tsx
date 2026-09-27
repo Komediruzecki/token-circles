@@ -7,7 +7,11 @@ const apiMocks = vi.hoisted(() => ({
   showToast: vi.fn(),
 }))
 
-vi.mock('../../core/api', () => apiMocks)
+// The base currency is read for real: the currency tests set it through localStorage.
+vi.mock('../../core/api', async (importOriginal) => ({
+  ...apiMocks,
+  getLocalCurrency: (await importOriginal<Record<string, unknown>>()).getLocalCurrency,
+}))
 
 let host: HTMLDivElement
 let dispose: () => void
@@ -110,5 +114,28 @@ describe('SubscriptionCatalogModal custom prices', () => {
       )
     })
     expect(apiMocks.apiPost).not.toHaveBeenCalled()
+  })
+})
+
+describe('SubscriptionCatalogModal currency', () => {
+  afterEach(() => {
+    localStorage.removeItem('localCurrency')
+  })
+
+  it('shows prices in the base currency, which is the currency the bill is saved in', () => {
+    localStorage.setItem('localCurrency', 'GBP')
+    const catalog = mountCatalog()
+
+    // The price field's prefix, and the running total.
+    expect(catalog.price.previousElementSibling?.textContent).toBe('£')
+    expect(catalog.total().textContent).toBe('1 selected · £13.99/mo')
+  })
+
+  it('shows the code as the prefix where the currency has no shorter symbol', () => {
+    localStorage.setItem('localCurrency', 'CHF')
+    const catalog = mountCatalog()
+
+    expect(catalog.price.previousElementSibling?.textContent).toBe('CHF')
+    expect(catalog.total().textContent).toMatch(/^1 selected · CHF\s13\.99\/mo$/)
   })
 })

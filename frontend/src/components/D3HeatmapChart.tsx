@@ -4,6 +4,7 @@
  * with HTML tooltip and click drill-down
  */
 import { createEffect, onCleanup, onMount } from 'solid-js'
+import { formatCurrency } from '../core/api'
 import { theme } from '../core/theme'
 import type * as D3 from 'd3'
 
@@ -25,10 +26,6 @@ interface Props {
 export default function D3HeatmapChart(props: Props) {
   let containerRef: HTMLDivElement | undefined
   let tooltipEl: HTMLDivElement | undefined
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'EUR' }).format(amount)
-  }
 
   const ensureTooltip = () => {
     if (!tooltipEl || !tooltipEl.parentNode) {
