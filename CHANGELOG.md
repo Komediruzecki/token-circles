@@ -8,6 +8,17 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.16.1] — 2026-09-27
+
+### Fixed
+
+- **Amounts show in your base currency everywhere.** The spending heatmap, the recurring list, the rent-or-buy calculator and the subscription catalog showed euros or dollars whatever your base currency was.
+- **Local-first mode: marking a bill paid records the payment.** It now adds the expense to your transactions and takes it off the bill's account, as cloud mode does, and a double tap pays once.
+- **The profile selection stays where you put it.** A household changed in Settings now shows in the sidebar and survives closing the profile menu, the first profile made in the setup wizard is selected, and a dropped connection no longer empties the profile list.
+- **Tag pickers on Transactions offer only your profile's tags.** In local-first household view the filter and the bulk-tag window listed other profiles' tags, which could not be applied; typing an existing tag's name in the bulk-tag window now picks that tag.
+- **Local-first household view: every profile's transactions show their category, receipt and tags.** Rows from the other selected profiles showed a dash for the category, and no receipt or tags.
+- **Local-first mode: an update no longer stalls silently behind another open tab.** A newer version waiting on an older tab asks you to close it, and a tab that is in the way lets go and offers a reload.
+
 ## [5.16.0] — 2026-09-27
 
 ### Added
