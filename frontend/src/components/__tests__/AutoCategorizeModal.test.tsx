@@ -6,8 +6,14 @@
  * identifiable (metadata, not just a bank-statement description string) and resolvable (a manual
  * pick when no mapping matches, which for a fresh import is most of them).
  */
+import { createComputed, createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  __resetDataVersionsForTest,
+  entityVersion,
+  invalidateForRequest,
+} from '../../core/dataVersions'
 import { AutoCategorizeModal } from '../AutoCategorizeModal'
 import type { AutoCategorizeTransaction } from '../AutoCategorizeModal'
 
@@ -50,7 +56,6 @@ const TXS: AutoCategorizeTransaction[] = [
 function mount(opts: {
   txs?: AutoCategorizeTransaction[]
   onApply?: (id: number, cat: number) => void | Promise<void>
-  onApplied?: () => void
 }) {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -67,7 +72,6 @@ function mount(opts: {
         ]}
         accountName={(id) => ({ 1: 'Erste Current', 2: 'Revolut' })[id]}
         onApply={opts.onApply ?? (() => {})}
-        onApplied={opts.onApplied}
       />
     ),
     host
@@ -76,6 +80,7 @@ function mount(opts: {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  __resetDataVersionsForTest()
 })
 
 afterEach(() => {
@@ -127,27 +132,43 @@ describe('a row with no suggestion', () => {
 })
 
 describe('staging and applying are separate', () => {
-  it('a row click stages without writing; Apply writes each once, then onApplied once', async () => {
+  it('a row click stages without writing; Apply writes each staged row once, as one write', async () => {
     const applied: Array<[number, number]> = []
-    const onApplied = vi.fn()
+    // Every update a list following the transaction counter would see.
+    const seen: number[] = []
+    const stop = createRoot((dispose) => {
+      createComputed(() => seen.push(entityVersion('transactions')))
+      return dispose
+    })
     mount({
-      onApply: (id, cat) => {
+      onApply: async (id, cat) => {
         applied.push([id, cat])
+        // What the host's write does in apiFetch: bump the counters its URL names.
+        invalidateForRequest(`/api/transactions/${id}`, 'PUT', true)
       },
-      onApplied,
     })
     await flush()
 
-    // Stage the matched row via its + button.
+    // Stage the matched row via its + button, and the other one by hand.
     const plus = host.querySelectorAll<HTMLButtonElement>('button[aria-label^="Use "]')
     plus[0]!.click()
+    const select = host.querySelector<HTMLSelectElement>('[data-test-id="auto-cat-manual-select"]')!
+    select.value = '8'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
     await flush()
     expect(applied).toEqual([]) // nothing written yet — the old version wrote here AND on Apply
 
     host.querySelector<HTMLButtonElement>('[data-test-id="auto-cat-apply"]')!.click()
     await flush()
-    expect(applied).toEqual([[11, 7]])
-    expect(onApplied).toHaveBeenCalledTimes(1)
+    stop()
+
+    expect(applied).toEqual([
+      [11, 7],
+      [12, 8],
+    ])
+    // Two PUTs, one update: the list behind the modal refetches once for the whole batch, where it
+    // used to reload after every row.
+    expect(seen).toEqual([0, 1])
   })
 
   it('"Select all matches" stages every matched row in one click', async () => {

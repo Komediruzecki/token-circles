@@ -315,9 +315,10 @@ transactionsRoutes.get('/api/transactions', requireAuth, async (c) => {
   // second full aggregate over the same rows for a number we are already holding.
   //
   // Worth skipping rather than tidying: the app's main list calls this with no window at all and
-  // re-calls it after every mutation (11 sites in Transactions.tsx), so this ran on every
-  // create, edit, delete and bulk action — each time scanning the profile's entire transaction
-  // table to recount what the row query had just counted.
+  // re-calls it after every write that changes what it shows (it follows the client's data
+  // counters, frontend/src/core/dataVersions.ts), so this ran on every create, edit, delete and
+  // bulk action — each time scanning the profile's entire transaction table to recount what the
+  // row query had just counted.
   // The test mirrors the window construction above exactly — `!limit` matches its `if (limit)`,
   // and `hasOffset` is the same value that decided whether an OFFSET clause was emitted. So the
   // count runs whenever a window reached the SQL and never when one did not, including the edge

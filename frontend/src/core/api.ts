@@ -1221,6 +1221,17 @@ export class ApiClient {
     })
   }
 
+  /**
+   * The tags a transaction carries as stored, including any an auto-apply tag rule attached when
+   * it was created. Active profile, like the transaction itself.
+   */
+  getTransactionTags(
+    transactionId: number
+  ): Promise<Array<{ id: number; name: string; color: string }>> {
+    return this.request(`/transactions/${transactionId}/tags`)
+  }
+
+  /** Replace a transaction's whole tag set; an empty list takes every tag off. */
   setTransactionTags(transactionId: number, tagIds: number[]): Promise<{ ok: boolean }> {
     return this.request(`/transactions/${transactionId}/tags`, undefined, {
       method: 'PUT',

@@ -50,6 +50,7 @@ export type EntityTag =
   | 'loans'
   | 'portfolio'
   | 'profiles'
+  | 'receipts'
   | 'recurring'
   | 'reports'
   | 'retirement'
@@ -162,6 +163,10 @@ export function tagsForPath(path: string): string[] {
   return tags
 }
 
+/** How many `asOneWrite` actions are running, and what their requests bumped meanwhile. */
+let actionsRunning = 0
+const heldTags = new Set<string>()
+
 /**
  * The single hook `apiFetch` calls after every request it completes.
  *
@@ -173,12 +178,48 @@ export function invalidateForRequest(path: string, method: string | undefined, o
   if (!ok) return
   const verb = (method ?? 'GET').toUpperCase()
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return
+  const tags = tagsForPath(path)
+  // Part of a larger action: delivered with the rest of it, when it ends. See asOneWrite.
+  if (actionsRunning > 0) {
+    for (const tag of tags) heldTags.add(tag)
+    return
+  }
   // One write is one reactive update, however many counters it bumps. A category write bumps
   // `categories` and `budgets` together; a page that tracks both would otherwise see two separate
   // changes and refetch everything twice for one save.
   batch(() => {
-    for (const tag of tagsForPath(path)) invalidateEntity(tag)
+    for (const tag of tags) invalidateEntity(tag)
   })
+}
+
+/**
+ * Deliver the requests one action makes as one write: every counter they bump is bumped once, in
+ * one update, when the last of them has finished — not once per request.
+ *
+ * Some actions are several requests. Applying fifty auto-categorize picks is fifty PUTs, tagging
+ * a selection with two tags is two POSTs, saving with a receipt is the save and then the upload.
+ * Each request bumps its counters as it completes, so a page following them refetched after every
+ * one: fifty full list reloads for one click of Apply.
+ *
+ * The hold is app-wide, because `apiFetch` cannot tell whose request it has just completed: a
+ * write made elsewhere while an action runs is delivered when the action ends, and overlapping
+ * actions are delivered together when the last one does. Nothing is dropped — a request that
+ * succeeded before a later one failed is still delivered, and the failure is passed on.
+ */
+export async function asOneWrite<T>(work: () => Promise<T>): Promise<T> {
+  actionsRunning += 1
+  try {
+    return await work()
+  } finally {
+    actionsRunning -= 1
+    if (actionsRunning === 0 && heldTags.size > 0) {
+      const tags = [...heldTags]
+      heldTags.clear()
+      batch(() => {
+        for (const tag of tags) invalidateEntity(tag)
+      })
+    }
+  }
 }
 
 /**
@@ -207,4 +248,5 @@ export function trackedEntities(): string[] {
 /** Test-only: forget every counter so one test's bumps cannot leak into the next. */
 export function __resetDataVersionsForTest(): void {
   slots.clear()
+  heldTags.clear()
 }
