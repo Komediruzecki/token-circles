@@ -50,7 +50,8 @@ interface Goal {
   target_amount: number
   current_amount: number
   monthly_contribution: number
-  target_date: string
+  /** The target date, or null: a goal need not have one (savings_goals.deadline is nullable). */
+  target_date: string | null
   tracking_start_date?: string | null
   profile_id: number
   created_at: string
@@ -98,7 +99,7 @@ export default function Goals() {
           target_amount: s.target_amount || 0,
           current_amount: s.current_amount || 0,
           monthly_contribution: s.monthly_contribution || 0,
-          target_date: s.deadline || s.target_date || new Date().toISOString().split('T')[0],
+          target_date: s.deadline || s.target_date || null,
           profile_id: s.profile_id,
           created_at: s.created_at,
           category_id: s.category_id || null,
@@ -252,7 +253,7 @@ export default function Goals() {
     setFormData({
       name: goal.name,
       target_amount: goal.target_amount.toString(),
-      target_date: goal.target_date,
+      target_date: goal.target_date ?? '',
       monthly_contribution: goal.monthly_contribution ? goal.monthly_contribution.toString() : '',
       category_id: goal.category_id ? goal.category_id.toString() : '',
       tracking_start_date: goal.tracking_start_date || '',
@@ -388,7 +389,9 @@ export default function Goals() {
                           {goal.name}
                         </h3>
                         <p data-test-id="goal-date" class={styles.goalDate}>
-                          {formatDate(goal.target_date)} • {daysUntil(goal.target_date)}
+                          {goal.target_date
+                            ? `${formatDate(goal.target_date)} • ${daysUntil(goal.target_date)}`
+                            : 'No target date'}
                           {categoryNameOf(goal) && (
                             <span class={styles.goalCategory}> • {categoryNameOf(goal)}</span>
                           )}
@@ -736,14 +739,13 @@ export default function Goals() {
                 />
               </div>
               <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Target Date</label>
+                <label class={styles.formLabel}>Target Date (optional)</label>
                 <input
                   data-test-id="goals-form-date"
                   type="date"
                   class={styles.formControl}
                   value={formData().target_date}
                   oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
-                  required
                 />
               </div>
               <div class={styles.formGroup}>
