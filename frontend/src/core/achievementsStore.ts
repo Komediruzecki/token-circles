@@ -3,6 +3,10 @@
  * profile's settings. Refresh happens on profile change and, debounced, after any mutating
  * request (apiFetch dispatches DATA_CHANGED_EVENT for both client surfaces — see
  * core/dataChangedEvent.ts). Nothing here is server-side.
+ *
+ * Badges are per profile: they are earned from the active profile's own rows and stored where
+ * only that profile reads them. They used to be judged on the household view, so ticking another
+ * profile into it in Settings earned the active profile that profile's badges, permanently.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { achievementById } from './achievements/definitions'
@@ -15,6 +19,7 @@ import {
   SETTINGS_KEY,
 } from './achievements/records'
 import { api } from './api'
+import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
@@ -81,29 +86,81 @@ export const streak = state.streak
 export const snapshot = state.snapshot
 export const dismissedAdvice = state.dismissedAdvice
 
+/**
+ * Where a profile's badge record is stored.
+ *
+ * The Worker's settings table is keyed by (key, profile_id), so there the plain key is already per
+ * profile. The browser store keeps one row per key for the whole device, so local-first mode puts
+ * the profile in the key — the convention the retirement settings set
+ * (storage/handlers/calculators.ts).
+ */
+export function recordKey(profileId: number): string {
+  return getStorageMode() === 'serverless' ? `${SETTINGS_KEY}:${profileId}` : SETTINGS_KEY
+}
+
+/**
+ * The profile whose badges `state` holds, once an evaluation has finished. Until the evaluation a
+ * profile switch schedules has run, the unlocks on screen are still the previous profile's.
+ */
+let loadedFor: number | null = null
+
+/**
+ * Save the advice cards beside the unlocks. Skipped while the unlocks held are another profile's:
+ * written now, they would be filed as the active profile's badges (in cloud mode the write goes to
+ * whichever profile is active when it is sent).
+ */
+async function saveAdvice(dismissed: string[]): Promise<void> {
+  const profileId = activeProfileId()
+  if (loadedFor !== profileId) return
+  await api.updateSettings({
+    [recordKey(profileId)]: serializeRecords(state.unlocks(), dismissed),
+  })
+}
+
 /** Wave a card away for good. Persisted next to the unlocks, so it survives a reload. */
 export async function dismissAdvice(id: string): Promise<void> {
   if (state.dismissedAdvice().includes(id)) return
   const next = [...state.dismissedAdvice(), id]
   state.setDismissedAdvice(next)
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(state.unlocks(), next) })
+  await saveAdvice(next)
 }
 
 /** Bring every dismissed card back. */
 export async function restoreAdvice(): Promise<void> {
   if (state.dismissedAdvice().length === 0) return
   state.setDismissedAdvice([])
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(state.unlocks(), []) })
+  await saveAdvice([])
 }
 
-let inFlight: Promise<UnlockRecord[]> | null = null
-
-/** Evaluate, persist what is new, toast. Concurrent calls share one run. */
-export function refreshAchievements(): Promise<UnlockRecord[]> {
-  inFlight ??= run().finally(() => {
-    inFlight = null
+/**
+ * Keep the rows that belong to the active profile.
+ *
+ * The list reads cover the household view: the endpoints take the household scope, and in
+ * local-first mode the handlers read the household from storage whatever a request asks for. So
+ * the filter goes here, where it holds in both modes. The schemas require `profile_id` on every
+ * row this is used on; a row that names no profile cannot belong to another one, so it is kept.
+ */
+function ownRows<T extends object>(rows: T[], profileId: number): T[] {
+  return rows.filter((row) => {
+    const owner = (row as { profile_id?: number | null }).profile_id
+    return owner === null || owner === undefined || owner === profileId
   })
-  return inFlight
+}
+
+let inFlight: { profileId: number; run: Promise<UnlockRecord[]> } | null = null
+
+/**
+ * Evaluate, persist what is new, toast. Concurrent calls for the same profile share one run; a
+ * call after a profile switch starts its own, so the new profile is not handed the old one's.
+ */
+export function refreshAchievements(): Promise<UnlockRecord[]> {
+  const profileId = activeProfileId()
+  if (inFlight?.profileId === profileId) return inFlight.run
+  const current = run(profileId).finally(() => {
+    if (inFlight?.run === current) inFlight = null
+  })
+  inFlight = { profileId, run: current }
+  return current
 }
 
 /**
@@ -111,8 +168,8 @@ export function refreshAchievements(): Promise<UnlockRecord[]> {
  * not carry either in server mode, so each loan is fetched once; a profile with no loans makes
  * no extra request at all, and one with a mortgage makes one.
  */
-async function loadLoans(): Promise<EvaluateInput['loans']> {
-  const list = await api.getLoans().catch(() => [])
+async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
+  const list = ownRows(await api.getLoans().catch(() => []), profileId)
   if (list.length === 0) return []
   const details = await Promise.all(
     list.map((l) => api.getLoan(l.id).catch(() => null as unknown as null))
@@ -128,20 +185,39 @@ async function loadLoans(): Promise<EvaluateInput['loans']> {
     }))
 }
 
-async function run(): Promise<UnlockRecord[]> {
-  const [settings, transactions, budgets, goals, importLogs, categories, bills, loans] =
-    await Promise.all([
-      api.getSettings(),
-      api.getTransactions(),
-      api.getBudgets(),
-      api.getGoals(),
-      api.getImportLogs(),
-      api.getCategories(),
-      api.getBills(),
-      loadLoans(),
-    ])
-  const stored = parseRecords(settings[SETTINGS_KEY])
-  const dismissed = parseDismissed(settings[SETTINGS_KEY])
+async function run(profileId: number): Promise<UnlockRecord[]> {
+  const key = recordKey(profileId)
+  const [settings, ...lists] = await Promise.all([
+    api.getSettings(),
+    api.getTransactions(),
+    api.getBudgets(),
+    api.getGoals(),
+    api.getImportLogs(),
+    api.getCategories(),
+    api.getBills(),
+    loadLoans(profileId),
+  ])
+  const transactions = ownRows(lists[0], profileId)
+  const budgets = ownRows(lists[1], profileId)
+  const goals = ownRows(lists[2], profileId)
+  const importLogs = ownRows(lists[3], profileId)
+  const categories = ownRows(lists[4], profileId)
+  const bills = ownRows(lists[5], profileId)
+  const loans = lists[6]
+
+  // The profile changed while the lists loaded. What came back is the old profile's, and so would
+  // the write be: in cloud mode it would land in the new profile's settings, because X-Profile-Id
+  // is read when a request is made. The refresh the switch schedules evaluates the new profile.
+  if (activeProfileId() !== profileId) return []
+
+  // A record saved before badges were per profile sits under the plain key in local-first mode.
+  // The first profile to evaluate adopts it and the old key is emptied: left in place, it would be
+  // handed to every other profile too, which is the behaviour being fixed.
+  const adopting =
+    key !== SETTINGS_KEY && settings[key] === undefined && Boolean(settings[SETTINGS_KEY])
+  const raw = adopting ? settings[SETTINGS_KEY] : settings[key]
+  const stored = parseRecords(raw)
+  const dismissed = parseDismissed(raw)
   const now = new Date()
   const today = now.toISOString().slice(0, 10)
   const evaluation = evaluateAchievements({
@@ -168,9 +244,14 @@ async function run(): Promise<UnlockRecord[]> {
   })
   const { newly, merged } = diffUnlocks(stored, evaluation.earned, now.toISOString())
   state.setUnlocks(merged)
-  if (newly.length === 0) return []
-  await api.updateSettings({ [SETTINGS_KEY]: serializeRecords(merged, dismissed) })
-  announce(newly, stored.length === 0)
+  loadedFor = profileId
+  if (newly.length === 0 && !adopting) return []
+  await api.updateSettings({
+    [key]: serializeRecords(merged, dismissed),
+    ...(adopting ? { [SETTINGS_KEY]: '' } : {}),
+  })
+  // Saved for the profile that earned them either way; not announced on one that did not.
+  if (newly.length > 0 && activeProfileId() === profileId) announce(newly, stored.length === 0)
   return newly
 }
 
