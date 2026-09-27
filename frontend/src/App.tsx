@@ -174,32 +174,39 @@ export function App() {
     })
   })
 
+  /**
+   * Read the profile list. A failed read keeps the list and the selection as they are: it says
+   * nothing about which profiles exist. It used to empty the list, which blanked the sidebar and
+   * the header ("Not Logged In") until the next good read, and the repair below then dropped every
+   * selected profile as gone.
+   */
   const loadProfiles = async (autoSelect = false) => {
+    let data: Profile[]
     try {
-      const data = await api.getProfiles()
-      // Deduplicate profiles by ID (can happen after clear + reseed with stale state)
-      const seen = new Set<number>()
-      const unique = data.filter((p) => {
-        if (seen.has(p.id)) return false
-        seen.add(p.id)
-        return true
-      })
-      setProfiles(unique)
-
-      if (autoSelect && unique.length > 0) {
-        const savedId = localStorage.getItem('currentProfileId')
-        let activeProfile = null
-        if (savedId) {
-          activeProfile = unique.find((p) => p.id === parseInt(savedId))
-        }
-        if (!activeProfile) {
-          activeProfile = unique[0]
-          localStorage.setItem('currentProfileId', activeProfile.id.toString())
-        }
-        setCurrentProfile(activeProfile)
-      }
+      data = await api.getProfiles()
     } catch {
-      setProfiles([])
+      return
+    }
+    // Deduplicate profiles by ID (can happen after clear + reseed with stale state)
+    const seen = new Set<number>()
+    const unique = data.filter((p) => {
+      if (seen.has(p.id)) return false
+      seen.add(p.id)
+      return true
+    })
+    setProfiles(unique)
+
+    if (autoSelect && unique.length > 0) {
+      const savedId = localStorage.getItem('currentProfileId')
+      let activeProfile = null
+      if (savedId) {
+        activeProfile = unique.find((p) => p.id === parseInt(savedId))
+      }
+      if (!activeProfile) {
+        activeProfile = unique[0]
+        localStorage.setItem('currentProfileId', activeProfile.id.toString())
+      }
+      setCurrentProfile(activeProfile)
     }
     // Refresh selected IDs after profile list changes (e.g., after data reset).
     // Persist the repair, don't just hold it in the signal: the request headers are built from
@@ -297,6 +304,20 @@ export function App() {
     else setShowDropdown(true)
   }
 
+  // Settings > Household edits the household without choosing a profile: it writes the stored
+  // selection and bumps profileVersion. Follow it. Otherwise the sidebar kept the old household,
+  // and the next close of the dropdown wrote it back over the one the pages were reading. Not
+  // while the dropdown is open, whose ticks wait here until it closes.
+  createEffect(
+    on(
+      () => state.profileVersion,
+      () => {
+        if (!state.showDropdown) setSelectedProfileIds(getSelectedProfileIds())
+      },
+      { defer: true }
+    )
+  )
+
   const handleLogin = () => {
     // From demo (client-only) mode, "Sign in" means leaving the demo for a real account:
     // switch to server mode and reload into the full login gate (email/password + Google).
@@ -338,6 +359,9 @@ export function App() {
     localStorage.removeItem('currentProfileId')
     setIsAuthenticated(false)
     setCurrentProfile(null)
+    // The list is the signed-out account's. A failed read no longer clears it (loadProfiles), so
+    // sign-out does, before another account signs in on this tab.
+    setProfiles([])
     // Client-only mode reloads its local/demo profiles; server mode falls back to the gate.
     if (!serverMode) {
       await loadProfiles(true)
@@ -1231,11 +1255,15 @@ export function App() {
                 onClose={() => {
                   setIsProfileModalOpen(false)
                 }}
-                onSuccess={async (profileId) => {
+                onSuccess={async (created) => {
                   setIsProfileModalOpen(false)
-                  // The list has to hold the new profile before it can be shown as active.
+                  // The list has to hold the new profile before it can be shown as active. When it
+                  // cannot be read just now, the created row is enough to show it by.
                   await loadProfiles()
-                  applyProfileSelection([profileId])
+                  if (!profiles().some((p) => p.id === created.id)) {
+                    setProfiles([...profiles(), { ...created }])
+                  }
+                  applyProfileSelection([created.id])
                 }}
               />
             </Show>
@@ -1295,7 +1323,7 @@ export function App() {
             </Show>
 
             <Show when={onboardingOpen()}>
-              <OnboardingWizard />
+              <OnboardingWizard selectProfiles={applyProfileSelection} />
             </Show>
 
             <ToastContainer />
