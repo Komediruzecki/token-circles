@@ -40,21 +40,34 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   // Enrich transactions with category name/color and receipt id/name (like the
   // backend SQL JOINs) so the table can render the category cell and receipt chip.
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
-  const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
+  // In household view the rows come from every selected profile, and each is enriched from its
+  // own, as the Worker's joins do (`c.profile_id = t.profile_id`). Looking categories, receipts
+  // and tags up in the active profile's alone left every other profile's rows with none.
+  const pids = adapter.getCurrentProfileIds()
+  const cats = (
+    await Promise.all(pids.map((p) => db.getAllFromIndex('categories', 'by_profile', p)))
+  ).flat()
   const catMap = new Map(cats.map((c) => [c.id, c]))
-  const receipts = await db.getAllFromIndex('receipts', 'by_profile', pid)
+  const receipts = (
+    await Promise.all(pids.map((p) => db.getAllFromIndex('receipts', 'by_profile', p)))
+  ).flat()
+  const receiptKey = (profileId: unknown, transactionId: unknown) => `${profileId}:${transactionId}`
   const receiptByTx = new Map(
-    receipts.filter((r) => typeof r.transaction_id === 'number').map((r) => [r.transaction_id, r])
+    receipts
+      .filter((r) => typeof r.transaction_id === 'number')
+      .map((r) => [receiptKey(r.profile_id, r.transaction_id), r])
   )
   // Resolve tags from `tag_ids` rather than trusting each row's denormalized `tags` copy, so a
   // renamed or recolored tag renders correctly everywhere without a data migration. Rows written
   // before tag_ids existed fall back to whatever copy they carry.
-  const tagRows = (await db.getAllFromIndex('tags', 'by_profile', pid)) as Record<string, any>[]
+  const tagRows = (
+    await Promise.all(pids.map((p) => db.getAllFromIndex('tags', 'by_profile', p)))
+  ).flat() as Record<string, any>[]
   const tagMap = new Map(tagRows.map((tag) => [tag.id as number, tag]))
   const enriched = txns.map((t) => {
-    const cat = catMap.get(t.category_id)
-    const receipt = receiptByTx.get(t.id)
+    const linked = catMap.get(t.category_id)
+    const cat = linked?.profile_id === t.profile_id ? linked : undefined
+    const receipt = receiptByTx.get(receiptKey(t.profile_id, t.id))
     const tagIds = t.tag_ids as number[] | undefined
     const tags = Array.isArray(tagIds)
       ? tagIds
