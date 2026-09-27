@@ -2,11 +2,12 @@ import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
 import { setSettingsTab } from '../core/settingsStore'
 import styles from './ProfileModal.module.css'
+import type { Profile } from '../types/models'
 
 export interface ProfileModalProps {
   onClose: () => void
-  /** Called with the new profile's id, so the caller can select it. */
-  onSuccess: (profileId: number) => void
+  /** Called with the new profile, so the caller can select it and show it by name. */
+  onSuccess: (profile: Profile) => void
 }
 
 export default function ProfileModal(props: ProfileModalProps) {
@@ -31,7 +32,7 @@ export default function ProfileModal(props: ProfileModalProps) {
     setError('')
     try {
       const created = await api.createProfile(n)
-      props.onSuccess(created.id)
+      props.onSuccess(created)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create profile')
     } finally {
