@@ -148,4 +148,24 @@ describe('BulkActionBar — bulk tagging', () => {
     host.querySelector<HTMLButtonElement>('[data-test-id="bulk-tag-apply"]')!.click()
     expect(onApplyTags).toHaveBeenCalledWith([99], 'add')
   })
+
+  it('picks the existing tag when the typed name matches one in any case', async () => {
+    // Creating "company" beside "Company" made a second tag that reads the same; creating
+    // "Company" again was refused by the Worker and reported as a failure.
+    const { setCount, onCreateTag, onApplyTags } = mount()
+    setCount(1)
+    host.querySelector<HTMLButtonElement>('[data-test-id="bulk-tag-btn"]')!.click()
+    const input = host.querySelector<HTMLInputElement>('[data-test-id="bulk-tag-new-input"]')!
+    input.value = ' company '
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    ;[...host.querySelectorAll<HTMLButtonElement>('button')]
+      .find((b) => b.textContent?.trim() === 'Create')!
+      .click()
+    await Promise.resolve()
+
+    expect(onCreateTag).not.toHaveBeenCalled()
+    expect(input.value).toBe('')
+    host.querySelector<HTMLButtonElement>('[data-test-id="bulk-tag-apply"]')!.click()
+    expect(onApplyTags).toHaveBeenCalledWith([1], 'add')
+  })
 })

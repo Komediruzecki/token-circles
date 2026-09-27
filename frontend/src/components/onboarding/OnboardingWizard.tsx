@@ -163,7 +163,15 @@ const icons = {
   ),
 }
 
-export function OnboardingWizard() {
+export interface OnboardingWizardProps {
+  /**
+   * App's one way of choosing profiles: the first id becomes where writes land, the list is the
+   * household, and the header and the sidebar's selection move with them.
+   */
+  selectProfiles: (ids: number[]) => void
+}
+
+export function OnboardingWizard(props: OnboardingWizardProps) {
   const state = useAppState()
 
   // ---- wizard-session results (feed the final summary) ----
@@ -320,13 +328,13 @@ export function OnboardingWizard() {
           bumpProfileVersion()
         }
       } else {
-        // Truly empty workspace (no profile at all): create and select one.
+        // Truly empty workspace (no profile at all): create and select one, through App's one
+        // way of choosing profiles, as a profile created from the sidebar is. This used to write
+        // the two storage keys itself and leave App's copy of the selection on the old one, which
+        // the next close of the sidebar dropdown wrote back.
         const created = await api.createProfile(name)
-        localStorage.setItem('currentProfileId', String(created.id))
-        localStorage.setItem('selectedProfileIds', JSON.stringify([created.id]))
         setProfiles([...getProfiles(), created])
-        setCurrentProfile({ ...created })
-        bumpProfileVersion()
+        props.selectProfiles([created.id])
       }
       nextOnboardingStep()
     } catch (err) {

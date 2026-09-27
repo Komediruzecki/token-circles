@@ -12,16 +12,17 @@ import {
   ok,
 } from './helpers'
 
+/**
+ * The active profile's tags, as the Worker lists them. A tag belongs to one profile everywhere
+ * else too (the Tags page, rules, attaching one to a row), and this list used to span the
+ * household: in household view the Transactions page offered tags that no write there accepts,
+ * and two chips that read the same wherever two profiles had a tag of one name.
+ */
 export async function tagsList(): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
   try {
-    const all: Record<string, unknown>[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('tags', 'by_profile', pid)
-      all.push(...rows)
-    }
-    return json(all)
+    const pid = await adapter.getCurrentProfileId()
+    return json(await db.getAllFromIndex('tags', 'by_profile', pid))
   } catch {
     return json([])
   }
@@ -34,6 +35,11 @@ export async function tagsCreate(body: unknown): Promise<Response> {
   if (!name.trim()) return json({ error: 'Tag name is required' }, 400)
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
+  // The Worker's table is UNIQUE(name, profile_id), so a second tag of one name is refused there.
+  const own = (await db.getAllFromIndex('tags', 'by_profile', pid)) as { name?: unknown }[]
+  if (own.some((tag) => tag.name === name.trim())) {
+    return json({ error: 'Tag already exists' }, 400)
+  }
   const id = await db.add('tags', {
     profile_id: pid,
     name: name.trim(),

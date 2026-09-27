@@ -26,7 +26,7 @@ import { reloadToLatest } from '@pwa-kit'
 import { createSignal } from 'solid-js'
 import { toast } from './api'
 import { isEditableTarget } from './domFocus'
-import { hasToastOnChannel, removeToastsByChannel } from './toastStore'
+import { hasToastOnChannel, removeToastsByChannel, UPDATE_TOAST_CHANNEL } from './toastStore'
 
 export interface VersionInfo {
   version?: string
@@ -36,8 +36,6 @@ export interface VersionInfo {
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000 // 5 minutes
 const FIRST_CHECK_DELAY_MS = 15 * 1000 // let the app settle before the first probe
-/** One toast per category: a re-announcement replaces the previous notice, never stacks. */
-const UPDATE_TOAST_CHANNEL = 'app-update'
 /** Longer than a normal toast because it asks for a decision, but not sticky: ignoring it is a
  *  valid answer — the next in-app navigation applies the update anyway. */
 const UPDATE_TOAST_DURATION_MS = 60 * 1000

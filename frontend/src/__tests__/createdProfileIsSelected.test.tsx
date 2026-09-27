@@ -17,12 +17,14 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  bumpProfileVersion,
   setCurrentProfile,
   setIsProfileModalOpen,
   setProfiles,
   setShowDropdown,
   useAppState,
 } from '../core/appStore'
+import { onboardingMirrorSettled, skipOnboarding, startOnboarding } from '../core/onboardingStore'
 import type { apiFetch as ApiFetch } from '../core/apiFetch'
 import type { StorageMode } from '../core/storage/storageFactory'
 
@@ -79,8 +81,8 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
 /** Cloud mode's Worker: two profiles, a create that adds one, and nothing else stored. */
-function workerStandIn() {
-  const profiles = SEED.map((p) => ({ ...p }))
+function workerStandIn(seed = SEED) {
+  const profiles = seed.map((p) => ({ ...p }))
   return async (url: string, init: RequestInit = {}) => {
     const path = url.split('?')[0]
     if (path === '/api/auth/me') return json({ id: 1, username: 'owner', role: 'admin' })
@@ -98,11 +100,11 @@ function workerStandIn() {
 }
 
 /** Local-first mode: the same two profiles, in IndexedDB. */
-async function seedLocalProfiles() {
+async function seedLocalProfiles(seed = SEED) {
   const { getDB } = await import('../core/storage/idb')
   const db = await getDB()
   await db.clear('profiles')
-  for (const profile of SEED) await db.put('profiles', { ...profile })
+  for (const profile of seed) await db.put('profiles', { ...profile })
 }
 
 const state = useAppState()
@@ -169,6 +171,42 @@ async function mountApp(mode: StorageMode) {
   await vi.waitFor(() => {
     expect(state.currentProfile?.id).toBe(1)
   }, waitLong)
+}
+
+/** Mount the app signed in, to a workspace with no profile at all: a new account's first run. */
+async function mountEmptyApp(mode: StorageMode) {
+  localStorage.setItem('finance_storage_mode', mode)
+  localStorage.setItem('finance_onboarding', 'skipped')
+  // Local-first seeds demo profiles into an empty store only on a device's first run.
+  localStorage.setItem('finance_had_profiles', '1')
+  if (mode === 'serverless') await seedLocalProfiles([])
+  else vi.stubGlobal('fetch', workerStandIn([]))
+
+  const { App } = await import('../App')
+  dispose = render(() => <App />, host)
+  await vi.waitFor(() => {
+    expect(net.sent.some((r) => r.method === 'GET' && r.path === '/api/profiles')).toBe(true)
+  }, waitLong)
+  await settle()
+}
+
+/** The sidebar's profile button, which names the active profile, or every selected one. */
+const header = () => byTestId('profile-dropdown-btn')!.textContent ?? ''
+
+/** The profiles the sidebar dropdown has ticked. */
+const tickedProfiles = () =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-profile-id]'))
+    .filter((row) => row.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked)
+    .map((row) => Number(row.dataset.profileId))
+
+/** Open the sidebar dropdown, then click outside it, which applies what it holds. */
+async function openAndClickAway() {
+  byTestId('profile-dropdown-btn')!.click()
+  await settle()
+  expect(state.showDropdown).toBe(true)
+  document.body.click()
+  await settle()
+  expect(state.showDropdown).toBe(false)
 }
 
 /** Open the sidebar dropdown, choose "Create profile" and type a name, without submitting. */
@@ -277,7 +315,108 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     expect(localStorage.getItem('currentProfileId')).toBe(String(created))
     expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([created])
     expect(state.profileVersion).toBeGreaterThan(versionBefore)
-    // ...and the header never names a profile other than the one writes land in.
-    expect(state.currentProfile?.id ?? created).toBe(created)
+    // ...the header names it, from the row the create answered with, and the profiles already
+    // listed stay listed. A failed read used to empty the list: "Not Logged In", no profiles.
+    expect(state.currentProfile?.id).toBe(created)
+    expect(header()).toContain('Travel')
+    expect(state.profiles.map((p) => p.name)).toEqual(['Personal', 'Family', 'Travel'])
+    expect(tickedProfiles()).toEqual([created])
+  })
+})
+
+describe.each(['serverless', 'self-hosted'] as const)(
+  'a household changed in Settings, in %s mode',
+  (mode) => {
+    it('shows in the sidebar, and a click outside the dropdown does not undo it', async () => {
+      await mountApp(mode)
+
+      // What Settings > Household does when a profile is ticked: store the household, then bump.
+      localStorage.setItem('selectedProfileIds', JSON.stringify([1, 2]))
+      bumpProfileVersion()
+      await settle()
+
+      expect(header()).toContain('Personal & Family')
+      expect(tickedProfiles()).toEqual([1, 2])
+
+      // The sidebar used to keep [1], and closing its dropdown wrote that back.
+      await openAndClickAway()
+      expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([1, 2])
+      expect(localStorage.getItem('currentProfileId')).toBe('1')
+      expect(state.currentProfile?.id).toBe(1)
+    })
+
+    it('waits while the dropdown is open, whose ticks are applied when it closes', async () => {
+      await mountApp(mode)
+      byTestId('profile-dropdown-btn')!.click()
+      await settle()
+      // Tick Family in the dropdown; nothing is applied until it closes.
+      const family = document.querySelector<HTMLInputElement>(
+        '[data-profile-id="2"] input[type="checkbox"]'
+      )!
+      family.click()
+      await settle()
+      expect(tickedProfiles()).toEqual([1, 2])
+
+      // Anything that bumps meanwhile must not reset the ticks to the stored [1].
+      bumpProfileVersion()
+      await settle()
+      expect(tickedProfiles()).toEqual([1, 2])
+
+      document.body.click()
+      await settle()
+      expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([1, 2])
+    })
+  }
+)
+
+describe.each(['serverless', 'self-hosted'] as const)(
+  'the setup wizard creating the first profile, in %s mode',
+  (mode) => {
+    it('selects it the way the sidebar does, and a click outside the dropdown keeps it', async () => {
+      await mountEmptyApp(mode)
+      startOnboarding('space')
+      const name = await vi.waitFor(() => {
+        const el = byTestId('onboarding-profile-name') as HTMLInputElement | null
+        expect(el).not.toBeNull()
+        return el!
+      }, waitLong)
+      name.value = 'Home'
+      name.dispatchEvent(new Event('input', { bubbles: true }))
+      byTestId('onboarding-next')!.click()
+      await vi.waitFor(() => {
+        expect(byTestId('onboarding-step-account')).not.toBeNull()
+      }, waitLong)
+      await settle()
+      const home = state.profiles.find((p) => p.name === 'Home')!
+
+      expect(localStorage.getItem('currentProfileId')).toBe(String(home.id))
+      expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([home.id])
+      expect(state.currentProfile?.id).toBe(home.id)
+      // The sidebar's own copy of the selection moved too. It used to stay empty...
+      expect(tickedProfiles()).toEqual([home.id])
+
+      skipOnboarding()
+      await onboardingMirrorSettled()
+      await settle()
+      // ...and closing the dropdown wrote the empty selection back over the stored one.
+      await openAndClickAway()
+      expect(JSON.parse(localStorage.getItem('selectedProfileIds')!)).toEqual([home.id])
+      expect(state.currentProfile?.id).toBe(home.id)
+    })
+  }
+)
+
+describe('signing out of cloud mode', () => {
+  it('drops the signed-out account’s profile list', async () => {
+    // A failed read of the list no longer empties it, so nothing else would before another
+    // account signs in on this tab.
+    await mountApp('self-hosted')
+    expect(state.profiles.map((p) => p.name)).toEqual(['Personal', 'Family'])
+
+    document.querySelector<HTMLButtonElement>('button[title="Logout"]')!.click()
+
+    await vi.waitFor(() => {
+      expect(state.profiles).toEqual([])
+    }, waitLong)
   })
 })

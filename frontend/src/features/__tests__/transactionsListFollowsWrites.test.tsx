@@ -1068,8 +1068,9 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     )
 
   it("offers only the active profile's tags, and a name only another profile has makes a new one", async () => {
-    // Household view, local-first: the tag list spans every selected profile, but the row is
-    // written to the active one, and neither runtime attaches another profile's tag to it.
+    // A list holding another profile's tag: the local store's did in household view before it
+    // was scoped, and one loaded before a profile switch does until it reloads. The row is
+    // written to the active profile, and neither runtime attaches another profile's tag to it.
     setCurrentProfile({ id: 1, name: 'Personal', created_at: '2026-01-01' })
     serverTags = [
       { id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 },
@@ -1115,5 +1116,44 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     await enterTag('work')
     expect(writes.createTag).not.toHaveBeenCalled()
     expect(formTags()).toEqual(['Work'])
+  })
+})
+
+describe("the filter bar and the bulk-tag modal offer the active profile's tags", () => {
+  // A list holding another profile's tag, as the local store's did in household view before it
+  // was scoped, and as one loaded before a profile switch does until it reloads. Neither picker
+  // can use that tag: both runtimes refuse it for a bulk write, and the page can select only the
+  // active profile's rows.
+  beforeEach(() => {
+    setCurrentProfile({ id: 1, name: 'Personal', created_at: '2026-01-01' })
+    serverTags = [
+      { id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 },
+      { id: 9, name: 'Garden', color: '#84cc16', profile_id: 2 },
+    ]
+  })
+
+  it("the filter bar lists only the active profile's tags", async () => {
+    await mountTransactions()
+    button('All Tags', byTestId('filter-bar')).click()
+    await settle()
+
+    const listed = Array.from(byTestId('filter-bar').querySelectorAll('label')).map((l) =>
+      l.textContent?.trim()
+    )
+    expect(listed).toContain('Holiday')
+    expect(listed).not.toContain('Garden')
+  })
+
+  it("the bulk-tag modal lists only the active profile's tags", async () => {
+    await mountTransactions()
+    tick('Coffee')
+    await settle()
+    byTestId('bulk-tag-btn').click()
+    await settle()
+
+    const chips = Array.from(byTestId('bulk-tag-chips').querySelectorAll('button')).map((b) =>
+      b.textContent?.trim()
+    )
+    expect(chips).toEqual(['Holiday'])
   })
 })

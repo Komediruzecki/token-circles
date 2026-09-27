@@ -9,14 +9,180 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
-- **End-to-end encryption is no longer described as planned anywhere.** It will not be built for
-  now: the security model is the platform's encryption at rest (Cloudflare D1 and R2, AES-256)
-  plus TLS in transit, and in local-first mode the data stays in the browser. `SECURITY.md` said
-  zero-knowledge encryption of synced data was "on the roadmap"; it now states only what exists,
-  checked against Cloudflare's D1 and R2 data-security pages. `frontend/public/llms.txt` and the
-  5.15.1 `llms.txt` bullet in `CHANGELOG.md` no longer list it as decided but not built. The
-  tier note is gone from the `worker/src/plans.ts` comment and from `docs/plans/billing-tiers.md`,
-  whose "Encryption (when it lands)" line now describes the encryption that already applies.
+## [5.16.1] — 2026-09-27
+
+- **Money is formatted in the base currency** everywhere it was hard-coded. `D3HeatmapChart`'s
+  tooltip and `RentBuyCalculator` used euros, `RecurringSection` dollars, and
+  `SubscriptionCatalogModal` euros plus a literal euro prefix on its price field. They use the
+  shared `formatCurrency`, or `getLocalCurrency()` where they format themselves; a recurring rule
+  and a catalog price have no currency of their own, so theirs is the base one.
+  `AutoCategorizeModal` fell back to euros for a row without a currency. The calculator still
+  honours a `currency` prop. New `currencySymbol(code, locale?)` in `core/currencies.ts` gives
+  the catalog its prefix: the symbol where the locale has one, the code (`CHF`) where it does not.
+  The audit found no other literal-currency `Intl.NumberFormat`; the budget allocation alerts'
+  `Over budget by $…` strings (Worker and local) are API text no page renders, left as they are.
+- **Local-first mark-paid records the payment** (`handlers/bills.ts`), as the Worker's batch does:
+  an expense transaction for the bill's amount in the base currency (EUR when none was ever set,
+  as on the Worker; `amount_local = amount`), on
+  its account and category, dated today; the account debited; the bill stamped paid; 409 when it
+  is already paid for its period; `{ ok, transactionId }` back. It used to stamp the bill only.
+  New `IndexedDBAdapter.payBill` runs the check and every write in one IndexedDB transaction, so
+  a second tap or tab runs after the first and gets the 409 with nothing written. Local
+  `billsCreate` still takes no `account_id` (no form sends one); a bill restored from a cloud
+  backup can carry one.
+- **Profile-selection edge paths.** `loadProfiles` keeps the list and the selection when the read
+  fails; it used to empty the list, which read "Not Logged In", and the repair then dropped every
+  selected id. After a sidebar create whose list read failed, App adds the created row
+  (`ProfileModal.onSuccess` now passes the profile, not its id). Sign-out clears the list itself.
+  The setup wizard's first-profile create goes through `applyProfileSelection` (new
+  `selectProfiles` prop) instead of writing the storage keys. App's sidebar selection follows the
+  stored one on a `profileVersion` bump while the dropdown is closed, so a household edited in
+  Settings is no longer written back over by the next dropdown close.
+- **Tags are per profile in local-first lists too.** Local `GET /api/tags` returned every
+  household profile's tags while the Worker returns the active profile's; tags are per profile in
+  every other route. The filter bar and the bulk-tag modal (which 404ed on another profile's tag)
+  now get the active profile's list in both modes, and use the form's `ownTags` for the window
+  after a profile switch. The filter bar keeps no household tags: cloud mode never offered them
+  (the Worker's list is the active profile's), tags are per profile and the filter matches rows by
+  tag id, so a household list would offer one entry per profile for a shared name, and the Tags
+  page links only the active profile's. The bulk-tag create picks an existing tag of
+  the same name in any case, and local `tagsCreate` refuses an exact duplicate in a profile with
+  the Worker's 400, mirroring `UNIQUE(name, profile_id)`.
+- **Household rows are enriched from their own profile** (local `transactionsList`). It read rows
+  from every selected profile but looked categories, receipts and tags up in the active profile's
+  alone, so the other profiles' rows showed a dash for the category and no receipt or tags. It
+  reads them from every selected profile now and, like the Worker's joins
+  (`c.profile_id = t.profile_id`), takes a category or a receipt only from the row's own profile;
+  tags come from every selected profile's rows, as the Worker attaches them.
+- **IndexedDB connection handlers** in `getDB` (`core/storage/idb.ts`, notices in
+  `core/storage/connectionNotices.ts`). `blocking`: close the connection so another tab's upgrade
+  or a delete can run, ask for a reload through `reloadToLatest` on the deploy notice's channel
+  (`UPDATE_TOAST_CHANNEL`, now exported from `core/toastStore.ts`), and leave later calls waiting
+  rather than failing into empty lists. `blocked`: a warning to close the other tabs until the
+  upgrade runs; builds up to 5.16.0 have no `blocking` handler, so this is what a tab upgrading
+  past an old one shows. `terminated`: drop the dead connection so the next call reopens. The v12
+  schema the upgrade tests build is a shared helper now, `__tests__/v12Schema.ts`.
+- **A test that failed under load.** `goalsUndated.test.tsx` loads the local-first router in its
+  `beforeAll`. Its first two tests paid for `apiFetch`'s import of the router inside a one-second
+  `waitFor`, and failed every full run on a loaded machine, on the 5.16.0 base as well.
+
+## [5.16.0] — 2026-09-27
+
+### Data refresh: one invalidation seam
+
+- **Pages follow writes made anywhere** (#570, #572, #578). Since keep-alive page mounting (#317)
+  every visited page stays mounted with the copy of the data it fetched first, so a category
+  created on Categories never reached the add-transaction form until a browser reload. The app
+  had been patching this one consumer at a time. `frontend/src/core/dataVersions.ts` now holds
+  one counter per entity, and `core/apiFetch.ts` bumps the counters a successful non-GET names,
+  in both storage modes. A page follows an entity by adding `entityVersion('<tag>')` to what it
+  already tracks (`refetchOnActive(...)`, or a `gatedSource(...)` resource), and its manual
+  reload after its own write is deleted. #570 converted Transactions; #572 Goals, Bills, Budgets
+  and Tags (and `Goals.loadGoals` no longer refetches every category per load just to build a
+  name map that froze renames); #578 every remaining page.
+- `ALSO_INVALIDATES` is followed transitively (#578): an entry that writes transactions says
+  `transactions` and inherits the rest. Three holes closed on the way: the import entry was keyed
+  `imports` while the routes are `/api/import/*`, so a finished import refreshed nothing; a paid
+  bill or a populated recurring row never reached budgets, reports or accounts; and lookups sent
+  as POST (portfolio prices, loan amortization, tag-rule preview, import previews) counted as
+  writes. They are listed in `READS_SENT_AS_POST` now.
+- **`asOneWrite(work)`** (#579): a multi-request action is one write. Applying fifty
+  auto-categorize picks, tagging a selection with two tags, or a save followed by a receipt
+  upload held the counters while it ran and delivers them once, so a list refetches once per
+  click instead of once per request. The Transactions list follows the seam; its form's tags are
+  the transaction's own, not the list filter's (a tag created in the form used to set the list
+  filter and was never attached), and it offers and matches only the active profile's tags.
+- **Resume revalidation** (#573, audit F-03). `core/dataRevalidation.ts`: after 60 s or more in
+  the background, or on any reconnect, every tracked counter is bumped, so the visible page
+  refetches and hidden pages refetch when next shown. There was no data revalidation of any kind
+  before; the one `visibilitychange` listener checked for a new build. This is the prerequisite
+  for the native shell, where resume is constant.
+- **Selects keep their choice through a refetch** (#576). `<select value={model()}>` is applied
+  only when the model changes; a refetch rebuilt every `<option>` and removing the selected one
+  reset the select to its first entry while the model kept the old id. 19 selects across 13 files
+  now set `selected={...}` per option, and a source guard fails on a new select in the old shape.
+- `App.tsx`'s async `onMount` registered five `onCleanup`s after an `await` (#571), which Solid
+  drops silently: the keydown handlers for the command bar, the shortcuts guide and period
+  stepping, and the disposers of `initPeriodSync()` and `initVersionWatch()`. They are collected
+  in a `lateTeardowns` array registered before the first await; a source-scan test guards the
+  shape.
+
+### Profiles
+
+- **The active profile is always in the household** (#575). `currentProfileId` (X-Profile-Id)
+  decides where a write lands and `selectedProfileIds` (X-Profile-Ids) what a household read
+  returns; Settings let you untick the active profile, after which every new row was filed where
+  no read looked. `householdProfileIds()` in `core/apiProfileScope.ts` enforces the invariant at
+  read time for both storage modes, and the Settings toggle keeps the stored value honest.
+- The household list disables the active profile's box with the reason as a tooltip, and marks it
+  with an "Active" badge (#577). Picking a profile, closing the sidebar dropdown and clicking
+  outside it share one function, `applyProfileSelection`; the click-outside path had moved where
+  writes land without moving the profile the sidebar showed. A source guard fails if `App.tsx`
+  writes `currentProfileId` without `setCurrentProfile`.
+- A profile created from the sidebar becomes the selection (#584). In local-first mode the
+  adapter pointed `currentProfileId` at it but the selection and `profileVersion` stayed put; in
+  cloud mode nothing moved at all. `ProfileModal` hands App the created id, and App reloads the
+  list and routes it through `applyProfileSelection`.
+- The Import page's bank-rules editor follows a profile switch (#582). The flow copied a
+  profile's rules into drafts once, in the page's `onMount` or the wizard's first import step, so
+  after a switch it showed the previous profile's rules and Save wrote them under the new
+  profile's key. `reloadBankRulesIfProfileChanged()` reloads them when the profile moved, and
+  keeps unsaved edits when it did not.
+
+### Achievements
+
+- **Badges are earned and kept per profile** (#580). The evaluator read with the household scope
+  and saved what it found to the active profile, so ticking another profile into the household
+  handed its badges over, permanently. It now keeps only the active profile's rows (after the
+  fetch, since local-first handlers read the household from storage whatever scope a request
+  asks for), and a profile switch during an evaluation cannot file one profile's badges under
+  another.
+- **Badges fire on the write that earns them** (#574). The `tc:data-changed` event achievements
+  listens to was dispatched from the typed client's `request()`, which the raw helpers
+  (`apiGet`/`apiPost`/`apiPut`/`apiDelete`) never pass through. Goals, Bills and Budgets write
+  only through those, so first-budget, goal-in-sight, goal-reached and under-budget-six unlocked
+  on some unrelated later write. The dispatch moved to `apiFetch`.
+
+### Local-first storage
+
+- **Complete rows** (#581). IndexedDB has no columns, so a key no writer set is absent, and zod
+  rejects an absent key even where it accepts null: a plain load of the demo logged "Validation
+  failed" for `/budgets`, `/bills`, `/loans` and `/savings-goals`. The achievements run reads all
+  four in one `Promise.all` and swallowed the rejection, so badges never ran in local-first mode.
+  The seed and the local writers now write every key the Worker's rows carry, and rows stored by
+  earlier builds get them at the response boundary (`handlers/normalize.ts`).
+- **IndexedDB v13: retirement goals in their own `retirement_goals` store** (#581). They were
+  filed among the savings goals, and a restored server backup parked its retirement goals in a
+  settings row no page read. The upgrade copies both kinds into the new store before removing
+  them from the old places. It is one-way: a build from before 5.16.0 cannot open a v13
+  database, so the frontend must not be rolled back past this release.
+- **Undated goals stay undated** (#583). The Goals page filled a missing target date with today's,
+  so an undated goal read "Due today", and saving any edit gave it that date. The date is
+  optional in the form and can be cleared.
+
+### Tooling and dependencies
+
+- The pre-commit hook runs ESLint from inside `frontend/` on the staged frontend paths only
+  (#561). One `worker/`, `shared/`, `packages/` or `scripts/` path in a batch made ESLint 10 abort
+  the whole run for want of a config, and `|| true` printed ok. The dead root `.eslintrc.json`,
+  which nothing loads, is gone (#562).
+- sharp 0.35.2 to 0.35.4 (a scoped override: two miniflare builds pin it exactly) and postcss to
+  a patched release in `worker/pnpm-lock.yaml`, clearing Dependabot alerts #3 (high, libheif) and
+  #1 (medium); both dev-only and transitive (#560). zod 4.6.5 (#566); the worker-deps group,
+  including `@simplewebauthn/server` 14.0.2 and hono 4.13.8 (#567); the dev-tooling group,
+  including ESLint 10.10, Prettier 3.9.8, Vitest 5.0.1 and Playwright 1.63 (#568).
+
+### Documentation
+
+- **End-to-end encryption is no longer described as planned anywhere** (#585). It will not be
+  built for now: the security model is the platform's encryption at rest (Cloudflare D1 and R2,
+  AES-256) plus TLS in transit, and in local-first mode the data stays in the browser.
+  `SECURITY.md` said zero-knowledge encryption of synced data was "on the roadmap"; it now states
+  only what exists, checked against Cloudflare's D1 and R2 data-security pages.
+  `frontend/public/llms.txt` and the 5.15.1 `llms.txt` bullet in `CHANGELOG.md` no longer list it
+  as decided but not built. The tier note is gone from the `worker/src/plans.ts` comment and from
+  `docs/plans/billing-tiers.md`, whose "Encryption (when it lands)" line now describes the
+  encryption that already applies.
 - `docs/e2ee-research.md` stays as research, under a status line saying it is not planned; the
   encryption part of `docs/plans/bank-connectivity-and-encryption.md` carries the same line and
   its open E2EE decision is closed. `docs/readiness-audit-agent-prompt.md` marks Phase 5 as not to

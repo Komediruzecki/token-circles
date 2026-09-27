@@ -2,6 +2,7 @@
  * Bills handlers — IndexedDB-backed implementations
  */
 import { isoDate, parseLocalDate } from '../../../utils/period'
+import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -283,16 +284,28 @@ export async function billsUpcoming(): Promise<Response> {
   }
 }
 
+/**
+ * Pay a bill, as the Worker's mark-paid does: refused when it is already paid for its current
+ * period, and otherwise an expense transaction for its amount, dated today in the base currency,
+ * that moves its account's balance, with the bill stamped paid. Marking paid used to stamp the
+ * bill and nothing else here, so in local-first mode a paid bill never reached the transactions,
+ * the account balance, or anything counted from them.
+ */
 export async function billsPayOrMarkPaid(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
-  const bill = await currentProfileRecord('bills', idParam(params))
-  if (!bill) return notFound('Bill')
+  const pid = await adapter.getCurrentProfileId()
   // A paid date is a wall-clock date, so it must be the user's date. toISOString() gave the UTC
   // one, which east of UTC is still yesterday for the first hours of every local day — so a bill
   // paid at 01:00 on the 1st was stamped with last month and read back as unpaid.
-  const now = isoDate(new Date())
-  bill.last_paid_date = now
-  bill.last_paid = now
-  await db.put('bills', bill)
-  return ok()
+  const now = new Date()
+  const result = await adapter.payBill(
+    idParam(params),
+    pid,
+    { date: isoDate(now), currency: getLocalCurrency(), createdAt: now.toISOString() },
+    (bill) => isBillPaidForCurrentPeriod(bill, now)
+  )
+  if (result === 'missing') return notFound('Bill')
+  if (result === 'already-paid') {
+    return json({ error: 'Bill already paid for current period' }, 409)
+  }
+  return json({ ok: true, transactionId: result.transactionId })
 }

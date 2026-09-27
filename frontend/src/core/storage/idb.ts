@@ -14,6 +14,11 @@ import {
   receiptBytesFrom,
   validateBackupForLocalRestore,
 } from './backup'
+import {
+  announceConnectionReleased,
+  announceUpgradeBlocked,
+  clearUpgradeBlocked,
+} from './connectionNotices'
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
 import type { IDBPDatabase } from 'idb'
 import type {
@@ -298,10 +303,57 @@ async function upgradeSchema(
 }
 
 let dbPromise: ReturnType<typeof openDB> | null = null
+/** Why this tab gave its connection up for another tab, once it has. */
+let releasedFor: 'upgrade' | 'reset' | null = null
+/** This tab's upgrade is waiting for another tab to close its connection. */
+let upgradeBlocked = false
 
+/**
+ * The one connection to the local database.
+ *
+ * Another tab can need this tab out of the way: a newer build upgrading the database, or a reset
+ * deleting it. Neither can start while this connection is open, so it closes when asked
+ * (`blocking`), and the tab asks for a reload: this build cannot open the database again once it
+ * is upgraded or gone. Reads and writes after that wait rather than fail. A failure would reach the
+ * pages as empty lists, which read as lost data, and as error toasts that crowd out the one that
+ * says what to do.
+ *
+ * The other way round, this tab's upgrade waits for older tabs (`blocked`): it says so until they
+ * are closed, as builds before this one never close on their own. A connection the browser closes
+ * by itself (`terminated`, when site data is cleared, for one) is dropped, so the next call opens
+ * a new one instead of failing on the dead handle.
+ */
 export function getDB() {
+  if (releasedFor) announceConnectionReleased(releasedFor)
+  if (upgradeBlocked) announceUpgradeBlocked()
   if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, { upgrade: upgradeSchema })
+    const opening = openDB(DB_NAME, DB_VERSION, {
+      upgrade: upgradeSchema,
+      blocked() {
+        upgradeBlocked = true
+        announceUpgradeBlocked()
+      },
+      blocking(_currentVersion, nextVersion) {
+        releasedFor = nextVersion === null ? 'reset' : 'upgrade'
+        void opening.then((db) => {
+          db.close()
+        })
+        dbPromise = new Promise<never>(() => {})
+        announceConnectionReleased(releasedFor, true)
+      },
+      terminated() {
+        if (dbPromise === opening) dbPromise = null
+      },
+    })
+    dbPromise = opening
+    void opening.then(
+      () => {
+        if (!upgradeBlocked) return
+        upgradeBlocked = false
+        clearUpgradeBlocked()
+      },
+      () => {}
+    )
   }
   return dbPromise
 }
@@ -685,6 +737,58 @@ export class IndexedDBAdapter implements StorageAdapter {
     await this._applyDeltasInTx(t, computeBalanceDeltas(data), data.profile_id)
     await t.done
     return id
+  }
+
+  /**
+   * Pay a bill as the Worker's mark-paid does: an expense transaction for the bill's amount, on its
+   * account and category, and the bill stamped paid on `payment.date`. The check and every write
+   * are one IndexedDB transaction, as they are one batch on the Worker: a second tap, or a second
+   * tab, runs after the first and finds the bill paid, so the money never leaves twice. Nothing
+   * is written for a bill that is missing, another profile's, or `isPaid` for its period.
+   */
+  async payBill(
+    billId: number,
+    profileId: number,
+    payment: { date: string; currency: string; createdAt: string },
+    isPaid: (bill: Record<string, unknown>) => boolean
+  ): Promise<{ transactionId: number } | 'missing' | 'already-paid'> {
+    const db = await getDB()
+    const t = db.transaction(['bills', 'transactions', 'accounts', 'categories'], 'readwrite')
+    const bill = (await t.objectStore('bills').get(billId)) as Record<string, unknown> | undefined
+    if (!bill || bill.profile_id !== profileId) {
+      await t.done
+      return 'missing'
+    }
+    if (isPaid(bill)) {
+      await t.done
+      return 'already-paid'
+    }
+    // A bill has no currency of its own: its amount is in the base currency, so the row says so
+    // and carries amount_local = amount, as the Worker's does.
+    const row = {
+      profile_id: profileId,
+      description: bill.name,
+      amount: bill.amount,
+      type: 'expense',
+      category_id: bill.category_id ?? null,
+      account_id: bill.account_id ?? null,
+      transfer_account_id: null,
+      date: payment.date,
+      notes: bill.notes || '',
+      currency: payment.currency,
+      amount_local: bill.amount,
+      exchange_rate: 1,
+      reconciled: 0,
+      created_at: payment.createdAt,
+    } as unknown as Transaction
+    await this._assertTransactionLinks(t, row)
+    const transactionId = (await t.objectStore('transactions').add(row)) as number
+    await this._applyDeltasInTx(t, computeBalanceDeltas(row), profileId)
+    await t
+      .objectStore('bills')
+      .put({ ...bill, last_paid_date: payment.date, last_paid: payment.date })
+    await t.done
+    return { transactionId }
   }
 
   async updateTransaction(id: number, tx: Partial<Transaction>): Promise<void> {

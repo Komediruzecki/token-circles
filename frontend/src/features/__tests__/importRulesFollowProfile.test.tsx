@@ -212,7 +212,7 @@ describe('the onboarding wizard', () => {
   it('shows the active profile’s rules when relaunched after a profile switch', async () => {
     startOnboarding('import')
     const { OnboardingWizard } = await import('../../components/onboarding/OnboardingWizard')
-    dispose = render(() => <OnboardingWizard />, host)
+    dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
     await settle()
     await openRulesEditor()
     expect(drafts()).toEqual(DRAFTS['1'])
@@ -231,7 +231,7 @@ describe('the onboarding wizard', () => {
   it('keeps unsaved rule edits when the import step is re-entered on the same profile', async () => {
     startOnboarding('import')
     const { OnboardingWizard } = await import('../../components/onboarding/OnboardingWizard')
-    dispose = render(() => <OnboardingWizard />, host)
+    dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
     await settle()
     await openRulesEditor()
     type(transferKeywordsInput()!, 'top-up, savings')

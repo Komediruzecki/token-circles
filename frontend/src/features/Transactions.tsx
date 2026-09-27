@@ -107,8 +107,8 @@ export default function Transactions() {
     if (t === 'transfer') return []
     return cats.filter((c) => c.type === t)
   })
-  // `profile_id` comes only from the local store, whose list spans every profile in household
-  // view; the Worker's list is the active profile's alone and leaves it out.
+  // Both runtimes list the active profile's tags. `profile_id` comes only from the local store;
+  // the Worker leaves it out.
   const [tags, setTags] = createSignal<
     Array<{ id: number; name: string; color: string; profile_id?: number }>
   >([])
@@ -448,10 +448,11 @@ export default function Transactions() {
   }
   const removeFormTag = (id: number) => setFormTags(formTags().filter((t) => t.id !== id))
   /**
-   * The tags the form can put on its transaction: the active profile's. The row is written to
-   * that profile, and neither runtime attaches another profile's tag to it, so in household view
-   * another profile's tag is neither offered nor matched by name. A tag with no owner on it is the
-   * active profile's: the Worker lists only those, and one created here has none yet.
+   * The tags this page offers, in the form, the filter bar and the bulk-tag modal: the active
+   * profile's. A row is written to that profile, and neither runtime attaches another profile's
+   * tag to it. The list is already the active profile's in both runtimes; this also covers the
+   * moment after a profile switch, before the list has reloaded. A tag with no owner on it is the
+   * active profile's: the Worker leaves the owner out, and one created here has none yet.
    */
   const ownTags = createMemo(() => {
     const active = state.currentProfile?.id
@@ -1101,7 +1102,7 @@ export default function Transactions() {
       <FilterBar
         hideDateControls
         categories={categories() as any}
-        tags={tags() as any}
+        tags={ownTags() as any}
         accounts={accounts() as any}
         selectedCategories={selectedCategories()}
         selectedTags={selectedTags()}
@@ -1145,7 +1146,7 @@ export default function Transactions() {
       <BulkActionBar
         selectedCount={selectedTransactions().length}
         categories={categories()}
-        tags={tags()}
+        tags={ownTags()}
         onClearSelection={() => setSelectedTransactions([])}
         onDeleteSelected={handleBulkDelete}
         onReconcileSelected={handleBulkReconcile}
