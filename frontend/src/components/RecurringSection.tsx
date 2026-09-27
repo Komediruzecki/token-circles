@@ -4,7 +4,7 @@
  */
 import { createSignal, For, Show } from 'solid-js'
 import { transactionInvariantError } from '../../../shared/transactionInvariant'
-import { api, toast } from '../core/api'
+import { api, formatCurrency, toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
@@ -166,10 +166,6 @@ export default function RecurringSection(props: RecurringSectionProps) {
     } catch (error) {
       console.error('Failed to populate recurring:', error)
     }
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount)
   }
 
   const formatDate = (dateStr: string | null) => {
