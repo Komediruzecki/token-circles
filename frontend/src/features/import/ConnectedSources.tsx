@@ -8,8 +8,10 @@
  * It owns one hidden import flow (createImportFlow) and drives it; nothing is rebuilt — mapping,
  * preview, dedup and the execute path are the same code the Import page uses.
  */
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
+import { useAppState } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
+import { entityVersion } from '../../core/dataVersions'
 import { autoDetectMapping, mappingToHeaderNames } from '../../core/importMapping'
 import {
   createImportSource,
@@ -18,6 +20,7 @@ import {
   parseSheetUrl,
   updateImportSource,
 } from '../../core/importSources'
+import { refetchOnActive } from '../../core/pageVisibility'
 import { getStorageMode } from '../../core/storage/storageFactory'
 import { addToast } from '../../core/toastStore'
 import importStyles from '../Import.module.css'
@@ -59,7 +62,16 @@ export function ConnectedSources() {
     },
   })
 
-  onMount(() => void refresh())
+  // The Import page mounts once per session, so the list follows the profile and the writes that
+  // change it, and resume picks up what another device or the Worker's daily sync changed.
+  const state = useAppState()
+  refetchOnActive(
+    'import',
+    () => [state.profileVersion, entityVersion('import-sources')],
+    () => {
+      void refresh()
+    }
+  )
 
   async function refresh() {
     setSources(await listImportSources())

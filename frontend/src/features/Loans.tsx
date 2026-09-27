@@ -41,6 +41,7 @@ import { api as _api, formatCurrency } from '../core/api'
 import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import styles from './LoansPage.module.css'
@@ -210,7 +211,6 @@ export default function Loans() {
       setShowAddModal(false)
       setEditingLoan(null)
       setFormData(emptyForm())
-      loadLoans()
     } catch (err) {
       console.error('Failed to save loan:', err)
       showToast('Failed to save loan', 'error')
@@ -222,7 +222,6 @@ export default function Loans() {
     try {
       await apiDelete(`/api/loans/${id}`)
       showToast('Loan deleted successfully', 'success')
-      loadLoans()
     } catch (err) {
       console.error('Failed to delete loan:', err)
       showToast('Failed to delete loan', 'error')
@@ -322,11 +321,13 @@ export default function Loans() {
     return labels[status] || status
   }
 
-  // Load on mount and reload on profile change — but only while visible. A hidden
-  // page defers its refetch until it is next shown (keep-alive fan-out guard).
+  // Load on mount, and reload on a profile change or a loan write from anywhere (including
+  // resume revalidation) — but only while visible. A hidden page defers its refetch until it is
+  // next shown (keep-alive fan-out guard). This page's own loan writes bump `loans` through
+  // apiFetch, so none of them reloads the list by hand.
   refetchOnActive(
     'loans',
-    () => state.profileVersion,
+    () => [state.profileVersion, entityVersion('loans')],
     () => {
       loadLoans()
     }

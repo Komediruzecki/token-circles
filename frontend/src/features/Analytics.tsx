@@ -26,15 +26,7 @@
  * Analytics Component
  * Visualizes financial data with charts and insights
  */
-import {
-  createEffect,
-  createMemo,
-  createResource,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js'
+import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import Chart from '../components/Chart'
 import { compactLegendLabels, mobileXTicks } from '../components/chartMobile'
@@ -48,7 +40,8 @@ import SectionRail from '../components/SectionRail'
 import { api, formatCurrency } from '../core/api'
 import { apiHouseholdGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { gatedSource } from '../core/pageVisibility'
+import { entityVersion } from '../core/dataVersions'
+import { gatedSource, refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { downloadBlob } from '../utils/chartExport'
@@ -110,12 +103,14 @@ export default function Analytics() {
 
   // ── Resources (declarative data fetching, race-condition safe) ──────────
   const [analyticsData] = createResource(
-    // Gated on visibility: period (→ stackedYear) and profile changes refetch now only
-    // while Analytics is visible; hidden, it is deferred and refetched once on show.
+    // Gated on visibility: period (→ stackedYear), profile and data changes refetch now only
+    // while Analytics is visible; hidden, it is deferred and refetched once on show. Every
+    // write that moves spending reaches `analytics` through the fan-out table.
     gatedSource('analytics', () => ({
       year: stackedYear(),
       type: categoryType(),
       pv: state.profileVersion,
+      v: entityVersion('analytics'),
     })),
     async ({ year, type }) => {
       const now = new Date()
@@ -285,9 +280,15 @@ export default function Analytics() {
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
   const [monthlyMonth, setMonthlyMonth] = createSignal(new Date().getMonth() + 1)
 
-  // Monthly stats resource — auto-fetches when year/month change
+  // Monthly stats resource — auto-fetches when year/month change, on a profile switch, and
+  // on any write that moves spending
   const [monthlyStatsResource] = createResource(
-    gatedSource('analytics', () => ({ year: stackedYear(), month: monthlyMonth() })),
+    gatedSource('analytics', () => ({
+      year: stackedYear(),
+      month: monthlyMonth(),
+      pv: state.profileVersion,
+      v: entityVersion('analytics'),
+    })),
     async ({ year, month }) => {
       const mKey = `${year}-${String(month).padStart(2, '0')}`
       const now = new Date()
@@ -311,9 +312,10 @@ export default function Analytics() {
   )
   const monthlyStats = () => monthlyStatsResource.latest ?? null
 
-  // Available years resource — auto-fetches on profile change
+  // Available years resource — auto-fetches on profile change, and on a write that could add a
+  // year (an import of old statements, a back-dated transaction)
   const [yearsResource] = createResource(
-    gatedSource('analytics', () => state.profileVersion),
+    gatedSource('analytics', () => [state.profileVersion, entityVersion('analytics')].join('|')),
     async () => {
       const { years } = await api.getTransactionYears()
       if (years.length > 0) return [...years].sort((a, b) => b - a)
@@ -522,10 +524,27 @@ export default function Analytics() {
     img.src = `data:image/svg+xml;base64,${btoa(binary)}`
   }
 
-  onMount(() => {
-    loadStackedData()
-    loadHeatmapData()
-  })
+  // The imperative charts load on mount and again, while Analytics is visible, on a profile
+  // switch or any write that moves them — spending reaches all of them through the `analytics`
+  // fan-out, and the budget flow also splits it against budgets. Hidden, they are marked stale
+  // and load once on the next show. They used to load once in onMount and afterwards only when
+  // their own controls were touched; the budget flow did not load at all until then.
+  refetchOnActive(
+    'analytics',
+    () => [state.profileVersion, entityVersion('analytics')],
+    () => {
+      void loadStackedData()
+      if (stackedView() === 'month') void loadWeeks()
+      void loadHeatmapData()
+    }
+  )
+  refetchOnActive(
+    'analytics',
+    () => [state.profileVersion, entityVersion('analytics'), entityVersion('budgets')],
+    () => {
+      void loadSankeyData()
+    }
+  )
 
   return (
     <div class={`page page-analytics page-enter instrument-deck ${styles.analyticsPage}`}>

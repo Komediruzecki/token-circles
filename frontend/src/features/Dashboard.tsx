@@ -28,6 +28,7 @@ import {
 } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { loadWidgetPrefs } from '../core/dashboardWidgets'
+import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
@@ -110,9 +111,13 @@ export default function Dashboard() {
   // page is visible. A hidden Dashboard is marked stale and refetches once when next
   // shown, instead of fanning out alongside every other mounted keep-alive page.
   // Month/year modes show the full net-worth trend; range/preset windows filter it.
+  // The figures also follow every write that moves them, from any page and on resume:
+  // `dashboard` is bumped by the writes the fan-out table routes here (transactions,
+  // bills, categories, budgets, imports), and the net worth and account list are
+  // account balances, so an account edit counts too.
   refetchOnActive(
     'dashboard',
-    () => [period(), state.profileVersion],
+    () => [period(), state.profileVersion, entityVersion('dashboard'), entityVersion('accounts')],
     () => {
       void refreshDashboard()
     }
@@ -211,10 +216,18 @@ export default function Dashboard() {
   // Cash-flow Sankey (income → categories) for the selected month — the same
   // instrument as on Analytics, following the dashboard's period navigator.
   const [sankeyData, setSankeyData] = createSignal<SankeyData | null>(null)
-  // Sankey follows the focus month + profile, gated on visibility like the rest.
+  // Sankey follows the focus month + profile, gated on visibility like the rest, and
+  // every write it draws: spending (through the `analytics` fan-out) and the budgets it
+  // splits that spending against.
   refetchOnActive(
     'dashboard',
-    () => [year(), month(), state.profileVersion],
+    () => [
+      year(),
+      month(),
+      state.profileVersion,
+      entityVersion('analytics'),
+      entityVersion('budgets'),
+    ],
     () => {
       const y = year()
       const m = month()

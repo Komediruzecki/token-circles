@@ -39,14 +39,21 @@ import type { Accessor, Setter } from 'solid-js'
  */
 export type EntityTag =
   | 'accounts'
+  | 'analytics'
   | 'bills'
   | 'budgets'
   | 'categories'
   | 'counterparties'
+  | 'dashboard'
+  | 'housing'
+  | 'import'
   | 'loans'
   | 'portfolio'
   | 'profiles'
   | 'recurring'
+  | 'reports'
+  | 'retirement'
+  | 'retirement-goals'
   | 'savings-goals'
   | 'settings'
   | 'tags'
@@ -86,35 +93,73 @@ export function invalidateEntity(tag: string): void {
  * spent-per-budget figures, the reports. Those are separate endpoints, so nothing in the path
  * would otherwise tell their readers to refetch — this is the table that says so. Keep it small
  * and keep it honest: an entry here costs a refetch on every write to the source entity.
+ *
+ * Entries are followed transitively, so list only the direct effect. A write that creates
+ * transactions says `transactions` and inherits everything a transaction write moves; copying the
+ * transaction entry by hand is how marking a bill paid came to skip the budgets and the reports.
  */
 const ALSO_INVALIDATES: Record<string, readonly string[]> = {
   transactions: ['dashboard', 'analytics', 'budgets', 'reports', 'accounts'],
-  // Recurring rows materialise into transactions, so the same derived views move.
-  recurring: ['transactions', 'dashboard', 'analytics'],
-  // Marking a bill paid writes a transaction.
+  // Recurring rows materialise into transactions.
+  recurring: ['transactions'],
+  // Marking a bill paid writes a transaction, and the dashboard lists the upcoming bills.
   bills: ['transactions', 'dashboard'],
-  // A contribution to a goal is a transaction against an account.
-  'savings-goals': ['transactions', 'accounts', 'dashboard'],
   // Renaming or deleting a category re-labels transactions and re-buckets every derived view.
   categories: ['dashboard', 'analytics', 'budgets', 'reports'],
   // Budget allocation changes what the dashboard's budget card reports.
   budgets: ['dashboard'],
-  // Imports create transactions in bulk, and may create accounts and categories on the way.
-  imports: ['transactions', 'accounts', 'categories', 'dashboard', 'analytics', 'budgets'],
+  // Imports create transactions in bulk, and may create accounts and categories on the way. The
+  // routes are `/api/import/*`, singular: keyed `imports`, this entry matched no URL at all.
+  import: ['transactions', 'accounts', 'categories'],
 }
+
+/**
+ * Writes that move another entity where the rest of their own entity's writes do not, so the
+ * per-entity table above cannot carry them. Undoing an import — the DELETE on its log — deletes
+ * the transactions it created and recomputes the balances; recording a log, the POST every import
+ * ends with, touches only the log.
+ */
+const WRITES_THAT_ALSO_MOVE: readonly { path: RegExp; moves: string }[] = [
+  { path: /^\/api\/import-logs\/[^/?]+/, moves: 'transactions' },
+]
+
+/**
+ * Lookups that are sent as POST because they take a body. They change nothing on the server, so
+ * a successful one invalidates nothing — and it must not: each is called from a page that follows
+ * the entity its URL names, so counting a price quote as a portfolio write reloaded the holdings
+ * after every quote refresh. `/api/import/execute` is the import route that writes; the upload
+ * and sheet routes only parse a file for the preview, and the preview's dry run of the import
+ * says so in its URL — the flag the server reads is in the body, which this never sees.
+ */
+const READS_SENT_AS_POST: readonly RegExp[] = [
+  /^\/api\/portfolio\/prices(?:[/?]|$)/,
+  /^\/api\/loans\/[^/?]+\/calculate(?:[/?]|$)/,
+  /^\/api\/tags\/rules\/preview(?:[/?]|$)/,
+  /^\/api\/import\/(?:upload|googlesheet)(?:[/?]|$)/,
+  /^\/api\/import\/execute\?dry_run=1(?:&|$)/,
+]
 
 /**
  * Map an app-API path to the entity names a successful write to it invalidates.
  *
  * `/api/categories`, `/api/categories/5`, `/api/categories/5/merge` and `/api/categories?x=1` all
  * resolve to `categories`. Anything that is not an `/api/<name>` path resolves to nothing, so an
- * unexpected URL is inert rather than invalidating the world.
+ * unexpected URL is inert rather than invalidating the world. The path's own entity comes first,
+ * and each name appears once however many routes through the table reach it.
  */
 export function tagsForPath(path: string): string[] {
+  if (READS_SENT_AS_POST.some((read) => read.test(path))) return []
   const match = /^\/api\/([a-zA-Z][a-zA-Z0-9-]*)/.exec(path)
   if (!match) return []
-  const root = match[1]
-  return [root, ...(ALSO_INVALIDATES[root] ?? [])]
+  const tags: string[] = []
+  const reach = (tag: string) => {
+    if (tags.includes(tag)) return
+    tags.push(tag)
+    for (const next of ALSO_INVALIDATES[tag] ?? []) reach(next)
+  }
+  reach(match[1])
+  for (const write of WRITES_THAT_ALSO_MOVE) if (write.path.test(path)) reach(write.moves)
+  return tags
 }
 
 /**

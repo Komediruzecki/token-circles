@@ -51,7 +51,9 @@ import { confirmBillingActivation, hasManageableSubscription } from '../core/bil
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
+import { entityVersion } from '../core/dataVersions'
 import { startOnboarding } from '../core/onboardingStore'
+import { refetchOnActive } from '../core/pageVisibility'
 import { period } from '../core/periodStore'
 import { isTabVisible, setSettingsTab, settingsTab } from '../core/settingsStore'
 import { setShowShortcuts } from '../core/shortcutsStore'
@@ -88,23 +90,28 @@ function Reports() {
   const [reportLoading, setReportLoading] = createSignal<string | null>(null)
   const [availableYears, setAvailableYears] = createSignal<number[]>([new Date().getFullYear()])
 
-  onMount(() => {
-    const currentYear = new Date().getFullYear()
-    // Use the shared builder rather than reading the two localStorage keys by hand: hand-rolled
-    // copies passed `selectedProfileIds` straight through, so they reproduced the split-brain
-    // (a read set that omits the profile being written to) even after it was fixed at the seam.
-    const headers: Record<string, string> = profileRequestHeaders('household')
-    apiFetch('/api/analytics/distinct-years', { credentials: 'include', headers })
-      .then((r) => r.json())
-      .then((data) => {
-        const years: number[] = data.years || []
-        if (!years.includes(currentYear)) years.unshift(currentYear)
-        setAvailableYears(years.sort((a, b) => b - a))
-      })
-      .catch(() => {
-        setAvailableYears([currentYear])
-      })
-  })
+  // The years come from the transactions table, so any transaction write can add or remove one.
+  refetchOnActive(
+    'settings',
+    () => [getProfileVersion(), entityVersion('transactions')],
+    () => {
+      const currentYear = new Date().getFullYear()
+      // Use the shared builder rather than reading the two localStorage keys by hand: hand-rolled
+      // copies passed `selectedProfileIds` straight through, so they reproduced the split-brain
+      // (a read set that omits the profile being written to) even after it was fixed at the seam.
+      const headers: Record<string, string> = profileRequestHeaders('household')
+      apiFetch('/api/analytics/distinct-years', { credentials: 'include', headers })
+        .then((r) => r.json())
+        .then((data) => {
+          const years: number[] = data.years || []
+          if (!years.includes(currentYear)) years.unshift(currentYear)
+          setAvailableYears(years.sort((a, b) => b - a))
+        })
+        .catch(() => {
+          setAvailableYears([currentYear])
+        })
+    }
+  )
 
   // Rich PDFs (charts) are always composed client-side with jsPDF + Chart.js —
   // the worker cannot render canvas, so its /api/reports/*-pdf endpoints are

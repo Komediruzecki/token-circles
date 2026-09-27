@@ -47,6 +47,7 @@ import {
   showToast,
 } from '../core/api'
 import { useAppState } from '../core/appStore'
+import { entityVersion } from '../core/dataVersions'
 import { parseDecimalInput } from '../core/decimalInput'
 import { gatedSource } from '../core/pageVisibility'
 import { normalizedTransactionAmount } from '../core/transactionAmount'
@@ -69,10 +70,20 @@ export default function Accounts() {
   const state = useAppState()
 
   // Accounts resource — fetches accounts, transactions, and profiles
-  const [accountsResource, { refetch: refetchAccounts }] = createResource(
-    // Gated on visibility: a profile switch refetches this page now only if it is
-    // visible; hidden, it is marked stale and refetches once on the next show.
-    gatedSource('accounts', () => state.profileVersion),
+  const [accountsResource] = createResource(
+    // Follows the profile and every entity the fetcher reads, so a write anywhere in the app —
+    // a transaction moving a balance, a profile renamed in Settings — reaches this page, and so
+    // does resume revalidation. This page's own writes bump `accounts` through apiFetch, which is
+    // why none of them refetches by hand. Gated on visibility: hidden, it is marked stale and
+    // refetches once on the next show.
+    gatedSource('accounts', () =>
+      [
+        state.profileVersion,
+        entityVersion('accounts'),
+        entityVersion('transactions'),
+        entityVersion('profiles'),
+      ].join('|')
+    ),
     async () => {
       const [accountsRes, txRes, profilesRes] = await Promise.all([
         apiGet<Account[]>('/api/accounts'),
@@ -191,7 +202,6 @@ export default function Accounts() {
       await apiPost('/api/accounts', data)
       showToast('Account created successfully', 'success')
       closeModal()
-      refetchAccounts()
     } catch (err) {
       console.error('Failed to save account', err)
       showToast('Failed to create account', 'error')
@@ -230,7 +240,6 @@ export default function Accounts() {
       await apiPut(`/api/accounts/${acct.id}`, body)
       showToast('Account updated successfully', 'success')
       closeModal()
-      refetchAccounts()
     } catch (err) {
       console.error('Failed to update account', err)
       showToast('Failed to update account', 'error')
@@ -242,7 +251,6 @@ export default function Accounts() {
     try {
       await apiDelete(`/api/accounts/${id}`)
       showToast('Account deleted successfully', 'success')
-      refetchAccounts()
     } catch (err) {
       console.error('Failed to delete account', err)
       showToast('Failed to delete account', 'error')

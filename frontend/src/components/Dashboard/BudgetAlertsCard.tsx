@@ -5,6 +5,8 @@
 import { createResource, For } from 'solid-js'
 import { apiHouseholdGet, formatCurrency, getLocalCurrency } from '../../core/api'
 import { useAppState } from '../../core/appStore'
+import { entityVersion } from '../../core/dataVersions'
+import { gatedSource } from '../../core/pageVisibility'
 import styles from './BudgetAlertsCard.module.css'
 
 // Format money in the user's selected currency (not the EUR default of formatCurrency).
@@ -23,8 +25,10 @@ interface BudgetAlert {
 
 export default function BudgetAlertsCard() {
   const state = useAppState()
+  // Gated on the Dashboard's visibility, and follows every budget write — transaction and
+  // category writes reach it through the `budgets` fan-out — from any page and on resume.
   const [alertsResource] = createResource(
-    () => state.profileVersion,
+    gatedSource('dashboard', () => [state.profileVersion, entityVersion('budgets')].join('|')),
     async () => {
       const data = (await apiHouseholdGet<{ alerts: BudgetAlert[] }>(
         '/api/budgets/alerts?threshold=80'
@@ -32,8 +36,10 @@ export default function BudgetAlertsCard() {
       return data?.alerts && Array.isArray(data.alerts) ? data.alerts : []
     }
   )
-  const loading = () => alertsResource.loading
-  const alerts = () => alertsResource() ?? []
+  // `.latest` keeps the previous alerts on screen during a refetch and never re-triggers the
+  // page-level <Suspense>; reading the resource directly flashed the whole page on every one.
+  const loading = () => alertsResource.loading && !alertsResource.latest
+  const alerts = () => alertsResource.latest ?? []
 
   // "ok" carries no modifier: .alertItem already reads as the resting state, and only over
   // and warning tint it.
