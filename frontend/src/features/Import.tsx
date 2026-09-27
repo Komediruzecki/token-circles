@@ -37,7 +37,7 @@
  * The onboarding wizard embeds the same flow + components.
  */
 
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
