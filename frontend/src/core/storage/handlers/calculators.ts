@@ -14,7 +14,8 @@ import {
   settingsToInput,
 } from '../../../../../shared/retirementSettings'
 import { getDB } from '../idb'
-import { adapter, getAmount, idParam, json, ok } from './helpers'
+import { editedRetirementGoal, retirementGoalFields } from '../retirementGoalRows'
+import { adapter, currentProfileRecord, getAmount, idParam, json, notFound, ok } from './helpers'
 import type { CashflowRow } from '../../../../../shared/retirementSettings'
 
 /**
@@ -72,7 +73,26 @@ async function loadSavedRetirementSettings(): Promise<Record<string, unknown>> {
   return asSavedSettings(legacy.value)
 }
 
-/** What the app can observe: account balances, recent cashflow, and any age on a goal. */
+/** SQL's `created_at DESC`: a row without one sorts last, and a worker row restored from a
+ *  backup ('2026-05-01 10:00:00') compares with one written here ('2026-05-01T10:00:00.000Z'). */
+function newestFirst(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const created = (row: Record<string, unknown>) =>
+    typeof row.created_at === 'string' ? row.created_at.replace(' ', 'T') : ''
+  return created(b).localeCompare(created(a)) || Number(b.id) - Number(a.id)
+}
+
+/** The profiles' retirement goals, in the worker's order. */
+async function listRetirementGoals(profileIds: number[]): Promise<Record<string, unknown>[]> {
+  const db = await getDB()
+  const rows: Record<string, unknown>[] = []
+  for (const pid of profileIds) {
+    rows.push(...(await db.getAllFromIndex('retirement_goals', 'by_profile', pid)))
+  }
+  return rows.sort(newestFirst)
+}
+
+/** What the app can observe: account balances, recent cashflow, and the age on the newest
+ *  retirement goal, which the worker reads the same way. */
 async function loadRetirementFacts() {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
@@ -83,7 +103,7 @@ async function loadRetirementFacts() {
 
   const accounts = await db.getAllFromIndex('accounts', 'by_profile', pid)
   const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
-  const goals = await db.getAllFromIndex('goals', 'by_profile', pid)
+  const goals = await listRetirementGoals([pid])
 
   const cashflow: CashflowRow[] = txns
     .filter((t: Record<string, unknown>) => (t.date as string) >= sinceStr)
@@ -427,23 +447,15 @@ export async function retirementSettingsUpdate(body: unknown): Promise<Response>
   }
 }
 
+// Retirement goals have a store of their own, as they have a table of their own in the worker
+// (worker/src/routes/retirement-goals.ts), and these handlers keep to that route's contract.
+// They used to write the savings-goal store, so the Goals page listed retirement goals, and
+// PUT and DELETE here reached any savings goal of any profile.
+
 export async function retirementGoals(): Promise<Response> {
   try {
-    const pid = await adapter.getCurrentProfileId()
-    const db = await getDB()
-
-    const settingsRows = await db.getAll('settings')
-    const settingsRow = settingsRows.find(
-      (s: Record<string, unknown>) => s.key === 'retirement_goals'
-    )
-    const settings = settingsRow ? settingsRow.value : null
-
-    const goals = await db.getAllFromIndex('goals', 'by_profile', pid)
-
-    return json({
-      settings,
-      goals,
-    })
+    const goals = await listRetirementGoals(adapter.getCurrentProfileIds())
+    return json({ goals, settings: await loadSavedRetirementSettings() })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
@@ -451,10 +463,29 @@ export async function retirementGoals(): Promise<Response> {
 
 export async function retirementGoalCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
-  const goal = body as Record<string, unknown>
-  goal.profile_id = await adapter.getCurrentProfileId()
-  const id = await adapter.createGoal(goal as unknown as Parameters<typeof adapter.createGoal>[0])
-  return json({ id, ...goal }, 201)
+  const b = body as Record<string, unknown>
+  if (!b.name || b.target_amount === undefined || b.target_amount === null) {
+    return json({ error: 'Name and target amount are required' }, 400)
+  }
+  const pid = await adapter.getCurrentProfileId()
+  const fields = retirementGoalFields(b)
+  const db = await getDB()
+  const id = (await db.add('retirement_goals', {
+    profile_id: pid,
+    ...fields,
+    // D1's `created_at DEFAULT CURRENT_TIMESTAMP`, which orders the list.
+    created_at: new Date().toISOString(),
+  })) as number
+  // The worker echoes these fields, not the stored row, and answers 200.
+  return json({
+    id,
+    name: b.name,
+    target_amount: b.target_amount,
+    current_amount: fields.current_amount,
+    deadline: fields.deadline,
+    notes: b.notes,
+    profile_id: pid,
+  })
 }
 
 export async function retirementGoalUpdate(
@@ -462,11 +493,17 @@ export async function retirementGoalUpdate(
   body: unknown
 ): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  await adapter.updateGoal(idParam(params), body as Record<string, unknown>)
+  const existing = await currentProfileRecord('retirement_goals', idParam(params))
+  if (!existing) return notFound('Retirement goal')
+  const db = await getDB()
+  await db.put('retirement_goals', editedRetirementGoal(existing, body as Record<string, unknown>))
   return ok()
 }
 
 export async function retirementGoalDelete(params: Record<string, string>): Promise<Response> {
-  await adapter.deleteGoal(idParam(params))
+  const id = idParam(params)
+  if (!(await currentProfileRecord('retirement_goals', id))) return notFound('Retirement goal')
+  const db = await getDB()
+  await db.delete('retirement_goals', id)
   return ok()
 }

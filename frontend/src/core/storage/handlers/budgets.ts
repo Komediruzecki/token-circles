@@ -17,10 +17,11 @@ import {
   ok,
   prevMonth,
 } from './helpers'
+import { normalizeBudget } from './normalize'
 
 export async function budgetsList(): Promise<Response> {
   const budgets = await adapter.listBudgets()
-  return json(budgets)
+  return json(budgets.map(normalizeBudget))
 }
 
 export async function budgetsCreate(body: unknown): Promise<Response> {
@@ -39,7 +40,7 @@ export async function budgetsCreate(body: unknown): Promise<Response> {
 export async function budgetsGet(params: Record<string, string>): Promise<Response> {
   const budget = await currentProfileRecord('budgets', idParam(params))
   if (!budget) return notFound('Budget')
-  return json(budget)
+  return json(normalizeBudget(budget))
 }
 
 export async function budgetsUpdate(
@@ -759,15 +760,18 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
     const tx = db.transaction('budgets', 'readwrite')
     for (const b of existingBudgets) await tx.store.delete(b.id as number)
 
+    const createdAt = new Date().toISOString()
     for (const [catId, total] of entries) {
       await tx.store.add({
         category_id: parseInt(catId),
         amount: total,
         period: 'monthly',
         start_date: currStart,
+        end_date: null,
         profile_id: pid,
         rollover_enabled: false,
         rollover_amount: 0,
+        created_at: createdAt,
       })
     }
     await tx.done
@@ -836,6 +840,7 @@ export async function budgetsBackfillFromSpending(body: unknown): Promise<Respon
     const tx = db.transaction('budgets', 'readwrite')
     for (const bb of existing) await tx.store.delete(bb.id as number)
     let count = 0
+    const createdAt = new Date().toISOString()
     for (const ym of monthsList) {
       for (const [catId, total] of Object.entries(totals[ym])) {
         await tx.store.add({
@@ -843,9 +848,11 @@ export async function budgetsBackfillFromSpending(body: unknown): Promise<Respon
           amount: total,
           period: 'monthly',
           start_date: `${ym}-01`,
+          end_date: null,
           profile_id: pid,
           rollover_enabled: false,
           rollover_amount: 0,
+          created_at: createdAt,
         })
         count++
       }
@@ -898,15 +905,18 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
     const tx = db.transaction('budgets', 'readwrite')
     for (const b of existingBudgets) await tx.store.delete(b.id as number)
 
+    const createdAt = new Date().toISOString()
     for (const b of prevBudgets) {
       await tx.store.add({
         category_id: b.category_id,
         amount: b.amount,
         period: b.period,
         start_date: currStart,
+        end_date: null,
         profile_id: pid,
         rollover_enabled: (b as Record<string, unknown>).rollover_enabled || false,
         rollover_amount: (b as Record<string, unknown>).rollover_amount || 0,
+        created_at: createdAt,
       })
     }
     await tx.done

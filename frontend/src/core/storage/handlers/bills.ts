@@ -12,6 +12,7 @@ import {
   notFound,
   ok,
 } from './helpers'
+import { normalizeBill } from './normalize'
 
 // Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
 function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
@@ -55,7 +56,7 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
 
     const now = new Date()
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
-      ...b,
+      ...normalizeBill(b),
       autopay: b.autopay === 1 || b.autopay === true,
       paid: isBillPaidForCurrentPeriod(b, now),
     }))
@@ -189,6 +190,9 @@ export async function billsCreate(body: unknown): Promise<Response> {
       day_of_month: (b.day_of_month as number) || 1,
       category_id:
         b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+      // NULL on a new Worker row too; BillSchema requires both keys.
+      last_paid_date: null,
+      next_due_date: null,
       recurring: b.recurring !== false ? 1 : 0,
       autopay: b.autopay ? 1 : 0,
       is_active: 1,
@@ -205,7 +209,9 @@ export async function billsCreate(body: unknown): Promise<Response> {
 
 export async function billsGet(params: Record<string, string>): Promise<Response> {
   const b = await currentProfileRecord('bills', idParam(params))
-  return b ? json({ ...b, autopay: b.autopay === 1 || b.autopay === true }) : notFound('Bill')
+  return b
+    ? json({ ...normalizeBill(b), autopay: b.autopay === 1 || b.autopay === true })
+    : notFound('Bill')
 }
 
 export async function billsUpdate(

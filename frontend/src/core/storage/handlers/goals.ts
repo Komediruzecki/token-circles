@@ -12,6 +12,15 @@ import {
   notFound,
   ok,
 } from './helpers'
+import { normalizeSavingsGoal } from './normalize'
+
+// The Goals form sends `target_date`; the contract field, and the Worker's column, is `deadline`.
+// Accept either, as the Worker's readDeadline does, so a local goal keeps the date it was given.
+function readDeadline(b: Record<string, unknown>): string | null | undefined {
+  if (b.deadline !== undefined) return (b.deadline as string) || null
+  if (b.target_date !== undefined) return (b.target_date as string) || null
+  return undefined
+}
 
 // Category-linked goal progress = base-currency sum of that category's transactions
 // dated on/after the goal's tracking_start_date (falling back to its creation day).
@@ -63,13 +72,17 @@ export async function goalsList(): Promise<Response> {
     console.error('recalcAllGoals failed', e)
   }
   const goals = await adapter.listGoals()
-  return json(goals)
+  return json(goals.map(normalizeSavingsGoal))
 }
 
 export async function goalsCreate(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
   const goal = body as Record<string, unknown>
   goal.profile_id = await adapter.getCurrentProfileId()
+  // Mirror the Worker's insert: the form sends no current_amount, and sends its date as
+  // target_date.
+  goal.current_amount = goal.current_amount || 0
+  goal.deadline = readDeadline(goal) ?? null
   if (!(await currentProfileOwns('categories', goal.category_id))) {
     return json({ error: 'Category does not belong to this profile' }, 400)
   }
@@ -82,7 +95,7 @@ export async function goalsCreate(body: unknown): Promise<Response> {
 export async function goalsGet(params: Record<string, string>): Promise<Response> {
   const goal = await currentProfileRecord('goals', idParam(params))
   if (!goal) return notFound('Goal')
-  return json(goal)
+  return json(normalizeSavingsGoal(goal))
 }
 
 export async function goalsUpdate(
@@ -97,6 +110,8 @@ export async function goalsUpdate(
   if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
     return json({ error: 'Category does not belong to this profile' }, 400)
   }
+  const deadline = readDeadline(patch)
+  if (deadline !== undefined) patch.deadline = deadline
   await adapter.updateGoal(id, patch)
   // Recompute for both the old and new category (the link or tracking date may change).
   const b = body as Record<string, unknown>
