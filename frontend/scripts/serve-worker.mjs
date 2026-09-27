@@ -49,7 +49,9 @@ const worker = new WorkerSupervisor({
 })
 
 // The supervisor installs its own SIGINT/SIGTERM cleanup (it kills wrangler's process group and
-// exits), which is exactly what Playwright's teardown needs, so this wrapper adds none of its own.
+// exits), so this wrapper adds none of its own. That cleanup runs at the end of a run only because
+// playwright.config.ts gives this entry `gracefulShutdown` with SIGTERM. Playwright's default is to
+// SIGKILL the group, which runs no handler, and wrangler, in a group of its own, outlived every run.
 
 try {
   await worker.start()
