@@ -17,6 +17,7 @@ The recommended commercial baseline is to keep Stripe for web subscribers, recog
 | [Economics workbook](outputs/native-subscription-economics.xlsx)       | Editable assumptions and formula-driven comparisons; model inputs are not actual revenue      |
 | [Product brief](PRODUCT.md) and [design system](DESIGN.md)             | The fixed product truth and visual identity                                                   |
 | [Visual research](visual-research.md)                                  | Mobbin observations, platform guidance, concept review and gallery production contract        |
+| [Product copy review](copy-review.md)                                  | Shared writing rule and before/after examples from the presentation                           |
 | [Gallery](gallery/index.html)                                          | Phone/tablet concepts and screen review material                                              |
 | [Surface plan](surface-plan.md)                                        | Page-by-page native behavior, parity decisions, empty/error/offline states                    |
 | [Release checklist](release-checklist.md)                              | Device evidence, privacy, billing, review, signing and publication gates                      |

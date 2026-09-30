@@ -23,6 +23,10 @@ No runtime behavior changed, so this pass does not add or claim native behavior 
 
 ## Visual evidence and limits
 
+Copy revision, September 30, 2026: the presentation and three concept boards were revised under the shared product-voice rule. Global Codex/Claude instructions and both skill directories point to the same canonical skill. Its structure validator passed, and an independent editing exercise preserved literal uses, prices and entitlement meaning while rewriting welcome, sales and error copy. The image edits were visually checked; the financial comparison table was unchanged. See [copy review](copy-review.md) and the edit prompts for exact wording. The September 13 source-policy review remains the dated research baseline; this wording pass does not refresh payment-policy conclusions.
+
+The revised gallery returned HTTP 200 and was inspected again at its default 1280-pixel width and a 393 × 852 phone viewport. All concept images loaded and no document-level horizontal overflow was observed. The phone screenshot confirmed the revised introduction fits; the temporary viewport override was reset.
+
 The three original images are design concepts generated with the available ChatGPT image tool, as approved by the owner. The tool does not expose a selectable or verified “2.5” model version. Exact prompts and provenance are in [PROMPTS.md](gallery/PROMPTS.md).
 
 These boards are neither implemented app screenshots nor complete wireframes. Generated text, icons, receipt values, dates and keyboard glyphs need replacement with correct, coherent UI fixtures. Detailed iOS/Android phone and tablet screens, accessibility states and production art follow the composition and scope decisions. Browser viewport checks validate the research page, not VoiceOver, TalkBack, native keyboards, safe areas, back navigation or device performance.

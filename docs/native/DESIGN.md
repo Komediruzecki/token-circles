@@ -1,6 +1,6 @@
 # Token Circles mobile design system
 
-The mobile surface inherits the Orbital Observatory and Dawn identity. It does not inherit the desktop composition. The operating scene is a short, frequent money-management task in varied light, so both light and dark surfaces receive first-class design; the device appearance is the proposed default, with a saved explicit override.
+The mobile app keeps the Orbital Observatory and Dawn identity, with layouts designed for phones and tablets. People will record purchases and check budgets throughout the day, indoors and outside. Design and test both light and dark themes. Following the device appearance is the proposed default, with a saved preference for anyone who chooses a theme.
 
 ## Durable identity
 
@@ -25,7 +25,7 @@ Use the existing orbit mark as an SVG, with thin ring geometry only where it exp
 
 Keep Fraunces for occasional welcome or editorial display because it is a confirmed Token Circles brand face. Use a platform system font for native operating screens; test an Inter alternative as a design decision. Use tabular numerals for amounts, without forcing a monospace face across all content. Never render functional text into an image.
 
-Use restrained opaque operating surfaces, clear large titles and dividing space between row groups. Welcome and onboarding may carry original, cinematic orbit artwork. Artwork recedes completely from transaction entry, authentication, purchase consent and error recovery. No emoji, ornamental currency coins, unexplained scores, oversized dashboard mosaics or desktop navigation scaled into a phone.
+Use opaque backgrounds, large section titles and space between row groups. Welcome and onboarding may carry original, cinematic orbit artwork. Keep artwork out of transaction entry, authentication, purchase consent and error recovery so fields, values and actions have the space they need. No emoji, ornamental currency coins, unexplained scores, oversized dashboard mosaics or desktop navigation scaled into a phone.
 
 ## Interaction contract to validate
 
@@ -39,7 +39,11 @@ Use restrained opaque operating surfaces, clear large titles and dividing space 
 
 ## Composition review
 
-Three image concepts will compare a budget-led daily overview, a transaction-led ledger and an account-led overview. They vary hierarchy, not identity. These are synthetic design studies; generated status bars, small text and controls are not implementation specifications. Selection is pending in the decisions register. Full HTML device frames and native implementation follow approval of a composition.
+Three image concepts compare different first screens: a monthly budget, a transaction list and an account overview. Each uses the Token Circles identity. These are synthetic design studies; generated status bars, small text and controls are not implementation specifications. Selection is pending in the decisions register. Full HTML device frames and native implementation follow approval of a composition.
+
+## Product copy
+
+Apply the shared [product-voice rule](/home/maff/.dotfiles/personal/agentic/skills/product-voice/SKILL.md) to headings, labels, explanations and text inside mockups. Write around the action or result a screen can actually provide. Review the whole output, including generated image text, before presenting it.
 
 ## References
 

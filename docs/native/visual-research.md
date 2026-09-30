@@ -1,6 +1,6 @@
 # Native visual research and gallery contract
 
-Keep Token Circles recognizable through its orbit geometry, Observatory/Dawn colors, and occasional Fraunces display type. Replace desktop topology with a mobile task hierarchy. The native operating surface should be quieter than its welcome artwork: fast amount entry and trustworthy data are the purpose of the design.
+Keep Token Circles recognizable through its orbit geometry, Observatory/Dawn colors, and occasional Fraunces display type. Use mobile navigation and layouts that fit the current task. Reserve orbit artwork for welcome screens; keep amount entry focused on fields, values and actions.
 
 ## Reference gallery structure
 
@@ -56,14 +56,14 @@ At minimum, the first detailed review should cover welcome, storage choice, loca
 
 Generate assets only after the accepted composition shows where they belong. Proposed first production batch:
 
-| Asset                             | Purpose and delivery                                                    | Constraints                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Welcome, Observatory              | Portrait optical orbit sculpture, dark negative space for semantic text | No currency symbols, fake chart values or letters; local-first copy remains live text |
-| Welcome, Dawn                     | Independently composed daylight version, not a color inversion          | Readable foreground and meaningful subject crop on short screens                      |
-| Onboarding: on this device        | Small calm orbit object suggesting a self-contained space               | Do not imply encryption or physical-device backup                                     |
-| Onboarding: optional cloud        | Two orbit planes connected by light, text-free                          | Only use with approved sync language; do not depict people collaborating              |
-| First account / first transaction | Small supportive empty-state illustration                               | Keep the task button and explanation dominant                                         |
-| Tablet welcome                    | Landscape composition with separate content zone                        | Not a cropped phone image                                                             |
+| Asset                             | Purpose and delivery                                                                 | Constraints                                                                           |
+| --------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Welcome, Observatory              | Portrait optical orbit sculpture, dark negative space for semantic text              | No currency symbols, fake chart values or letters; local-first copy remains live text |
+| Welcome, Dawn                     | Independently composed daylight version, not a color inversion                       | Readable foreground and meaningful subject crop on short screens                      |
+| Onboarding: on this device        | A single orbit object inside a defined boundary, illustrating storage on this device | Do not imply encryption or physical-device backup                                     |
+| Onboarding: optional cloud        | Two orbit planes connected by light, text-free                                       | Only use with approved sync language; do not depict people collaborating              |
+| First account / first transaction | Small illustration beside the first-account or first-transaction explanation         | Keep the task button and explanation dominant                                         |
+| Tablet welcome                    | Landscape composition with separate content zone                                     | Not a cropped phone image                                                             |
 
 Additional assets for later onboarding, optional promotional backdrops and store artwork can bring the collection to ten, twenty or more if needed. Keep store screenshots grounded in working app builds. Do not generate a decorative background for every operating page.
 

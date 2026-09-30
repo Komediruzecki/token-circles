@@ -12,6 +12,7 @@ An unchecked item is a proposal or missing input. A recommendation is not an app
 - [x] C06: No timelines or deadline calculations. Work progresses by accepted phases.
 - [x] C07: Use the available built-in ChatGPT image generator; its exact model version is unverified. Confirmed in this planning conversation.
 - [x] C08: Work on a dedicated Token Circles branch. Current branch: `feat/native-app-plan-and-design`.
+- [x] C09: Apply the shared product-voice rule to user-facing copy, including these presentations and generated mockup text. Stock AI wording plus vague sales promises was selected as the first broader batch on September 30, 2026. This wording approval does not select a visual composition or feature scope.
 
 ## Before scaffold and first feature slice
 

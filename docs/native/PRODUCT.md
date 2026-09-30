@@ -1,6 +1,6 @@
 # Token Circles mobile product
 
-Token Circles is a personal finance application for recording transactions, maintaining accounts and budgets, understanding spending, and using financial calculators. Its distinct promise is a useful local-first product with optional managed cloud services or a self-hosted Cloudflare Worker. The mobile application serves the same product through a dedicated iOS and Android interface.
+Token Circles records transactions, tracks accounts and budgets, and includes financial calculators. It works on this device without an account, with optional managed cloud services or a self-hosted Cloudflare Worker. The iOS and Android application will use the same finance features with layouts designed for phones and tablets.
 
 ## Confirmed commitments
 
@@ -19,11 +19,11 @@ Local-first and managed cloud are separate storage modes today. Do not imply tha
 
 ## Usage scenes
 
-A person records a purchase one-handed after paying, checks remaining category budget in daylight, reviews accounts and spending at home, or uses a tablet to reconcile a longer transaction list. The first action must work without a forced subscription or sign-in funnel. Cloud upgrades should explain an actual capability at the point of need.
+A person records a purchase one-handed after paying, checks the remaining grocery budget in daylight, reviews accounts and spending at home, or uses a tablet to reconcile a longer transaction list. Someone choosing local use must be able to start without subscribing or signing in. Explain what a cloud upgrade adds when that capability becomes relevant.
 
 ## Success
 
-Fast, legible entry and correction of money amounts; trustworthy save/error states; transparent storage and backup choices; accessible touch, keyboard and assistive-technology navigation; excellent compact and expanded layouts; existing subscription recognition without accidental duplicate purchases. Native platform conventions determine behavior even where controls are rendered by Solid in a Capacitor WebView.
+Users can enter and correct amounts, tell whether a change was saved, and recover from a failed save. They know where their data is stored and how to back it up. Screens work with touch, keyboards and assistive technology at both compact and expanded widths. Existing subscribers retain their plan without accidentally purchasing it twice. Native platform conventions determine behavior even where controls are rendered by Solid in a Capacitor WebView.
 
 ## Sources
 
