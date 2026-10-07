@@ -97,6 +97,7 @@ test('cloud: a new entry in household view is offered the active profile’s cat
       name: `zz-household-${stamp}`,
     })
   ).id
+  let entry: number | undefined
   try {
     const theirs = await asProfile<{ id: number }>(page, 'POST', '/api/categories', other, {
       name: `zz-theirs-${stamp}`,
@@ -129,8 +130,20 @@ test('cloud: a new entry in household view is offered the active profile’s cat
     expect(sorted(await offered(page, 'tx-account'))).toEqual(sorted(ownAccounts))
 
     // And the one it offers lands.
+    const created = page.waitForResponse(
+      (res) =>
+        new URL(res.url()).pathname === '/api/transactions' && res.request().method() === 'POST'
+    )
     await saveEntry(page, `zz-household-entry-${stamp}`, ownExpense[0])
+    entry = ((await (await created).json()) as { id: number }).id
   } finally {
+    // The fixture account outlives the run: take the entry back out, and the other profile with
+    // its category and account.
+    if (entry !== undefined) {
+      await page.request.delete(`${E2E_BASE}/api/transactions/${entry}`, {
+        headers: { 'X-Profile-Id': String(active) },
+      })
+    }
     await page.request.delete(`${E2E_BASE}/api/profiles/${other}`, {
       headers: { 'X-Profile-Id': String(active) },
     })
