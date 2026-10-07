@@ -31,6 +31,7 @@
  * Manages loans, tracks payments, and calculates remaining balance
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { loanStatus, todayUtc } from '../../../shared/loanSchedule'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
@@ -57,9 +58,38 @@ interface Loan {
   status: 'active' | 'paid' | 'deferred'
   remaining_balance: number
   total_paid: number
-  monthly_payment?: number
+  monthly_payment: number
   next_payment_date?: string
   profile_id: number
+}
+
+/** A row of GET /api/loans, as either storage mode returns it. */
+interface ListedLoan {
+  id: number
+  name: string
+  principal: number
+  interest_rate: number
+  term_months: number
+  start_date: string
+  profile_id?: number
+  /** Local-first rows carry these; the Worker's list does not. */
+  rate_periods?: Array<{ rate: number; start_month: number; end_month?: number | null }>
+  prepayments?: Array<{ month: number; amount: number }>
+  /** Worked out by the list with the shared engine. Missing only from a server older than that. */
+  remaining_balance?: number
+  monthly_payment?: number
+}
+
+/**
+ * What is owed today and the next payment, as the list computed them. A server that predates
+ * those fields gets the same engine run here, on what its row carries: the loan's own rate, plus
+ * rate periods and extra payments where the row has them.
+ */
+function standing(loan: ListedLoan, today: string) {
+  if (typeof loan.remaining_balance === 'number' && typeof loan.monthly_payment === 'number') {
+    return { remaining_balance: loan.remaining_balance, monthly_payment: loan.monthly_payment }
+  }
+  return loanStatus(loan, today)
 }
 
 export default function Loans() {
@@ -108,21 +138,26 @@ export default function Loans() {
   // Load loans
   const loadLoans = async () => {
     try {
-      const data = await apiHouseholdGet<any[]>('/api/loans')
+      const data = await apiHouseholdGet<ListedLoan[]>('/api/loans')
+      const today = todayUtc()
       // Transform Loan data to include missing fields
       setLoans(
-        data.map((l) => ({
-          id: l.id,
-          name: l.name,
-          principal: l.principal,
-          interest_rate: l.interest_rate,
-          term_months: l.term_months,
-          start_date: l.start_date,
-          profile_id: l.profile_id || 1,
-          status: 'active',
-          remaining_balance: l.principal,
-          total_paid: 0,
-        }))
+        data.map((l) => {
+          const { remaining_balance, monthly_payment } = standing(l, today)
+          return {
+            id: l.id,
+            name: l.name,
+            principal: l.principal,
+            interest_rate: l.interest_rate,
+            term_months: l.term_months,
+            start_date: l.start_date,
+            profile_id: l.profile_id || 1,
+            status: 'active',
+            remaining_balance,
+            monthly_payment,
+            total_paid: 0,
+          }
+        })
       )
     } catch (err) {
       console.error('Failed to load loans:', err)
@@ -228,21 +263,6 @@ export default function Loans() {
     }
   }
 
-  // Calculate estimated monthly payment
-  const calculateMonthlyPayment = (
-    principal: number,
-    interestRate: number,
-    termMonths: number
-  ): number => {
-    if (!termMonths || termMonths <= 0) return 0
-    if (interestRate === 0) return principal / termMonths
-    const monthlyRate = interestRate / 100 / 12
-    return (
-      (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
-      (Math.pow(1 + monthlyRate, termMonths) - 1)
-    )
-  }
-
   // Open edit modal
   const editLoan = async (loan: Loan) => {
     setEditingLoan(loan)
@@ -269,17 +289,9 @@ export default function Loans() {
     setShowAddModal(true)
   }
 
-  // Calculate remaining balance
-  const calculateRemaining = (loan: Loan): number => {
-    const monthly =
-      loan.monthly_payment ||
-      calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
-    const monthsPassed = Math.floor(
-      (new Date().getTime() - new Date(loan.start_date).getTime()) / (1000 * 60 * 60 * 24 * 30)
-    )
-    const paidMonths = Math.min(monthsPassed, loan.term_months)
-    return Math.max(0, loan.principal - paidMonths * monthly)
-  }
+  // Remaining balance: the schedule's balance after every payment due by today, interest, extra
+  // payments and rate periods included, as the list worked it out.
+  const calculateRemaining = (loan: Loan): number => loan.remaining_balance
 
   // Progress percentage
   const getProgress = (loan: Loan): number => {
@@ -409,9 +421,7 @@ export default function Loans() {
             <For each={loans()}>
               {(loan) => {
                 const remaining = calculateRemaining(loan)
-                const monthly =
-                  loan.monthly_payment ||
-                  calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+                const monthly = loan.monthly_payment
                 const progress = getProgress(loan)
 
                 return (
