@@ -178,6 +178,27 @@ describe('the transaction form, with two profiles ticked', () => {
     expect(select('tx-account').value).toBe('32')
   })
 
+  // The table opens an edit only for the active profile's own rows, so the two profiles part ways
+  // only when the active one changes while the form is open. The row stays where it is.
+  it('keeps an open edit on its row’s profile through a switch of the active profile', async () => {
+    await mountPage()
+    const coffee = Array.from(host.querySelectorAll('[data-test-id="transactions-row"]')).find(
+      (r) => r.textContent?.includes('Coffee')
+    )!
+    coffee.querySelector<HTMLButtonElement>('button[aria-label="Edit transaction"]')!.click()
+    await settle()
+    localStorage.setItem('currentProfileId', '2')
+    localStorage.setItem('selectedProfileIds', JSON.stringify([2, 1]))
+    setCurrentProfile({ id: 2, name: 'Family' } as never)
+    bumpProfileVersion()
+    await settle()
+
+    expect(offered('tx-category')).toEqual([11])
+    expect(select('tx-category').value).toBe('11')
+    expect(offered('tx-account')).toEqual([31, 32])
+    expect(select('tx-account').value).toBe('32')
+  })
+
   it('follows a switch of the active profile', async () => {
     await mountPage()
     localStorage.setItem('currentProfileId', '2')
