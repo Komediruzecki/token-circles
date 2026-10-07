@@ -56,3 +56,12 @@ export function profileRequestHeaders(
   }
   return headers
 }
+
+/**
+ * The profiles a household read is asked for (X-Profile-Id and X-Profile-Ids), as one comparable
+ * key. A page that reloads a list on every write, switch and resume keeps it beside the list on
+ * screen, to tell an answer for the profiles asked for now from one for those asked for before.
+ */
+export function profileReadScope(storage: Pick<Storage, 'getItem'> = localStorage): string {
+  return JSON.stringify(profileRequestHeaders('household', storage))
+}

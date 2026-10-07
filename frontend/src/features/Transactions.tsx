@@ -44,7 +44,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
-import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
+import { activeProfileId, profileReadScope } from '../core/apiProfileScope'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
@@ -149,8 +149,7 @@ export default function Transactions() {
     if (t === 'transfer') return []
     return formCategories().filter((c) => c.type === t)
   })
-  // Both runtimes list the active profile's tags. `profile_id` comes only from the local store;
-  // the Worker leaves it out.
+  // Both runtimes list the active profile's tags, each with its `profile_id` (see loadTags).
   const [tags, setTags] = createSignal<
     Array<{ id: number; name: string; color: string; profile_id?: number }>
   >([])
@@ -192,17 +191,40 @@ export default function Transactions() {
     }
   )
 
-  /** Load the tag list used by the filter bar and the bulk-tag modal. */
+  // Newest answer wins, as for the category and account lists below: an answer is shown only if
+  // nothing asked for after it is on screen already. `tagsShownFor` is the profile the list on
+  // screen was asked as: both runtimes list the active profile's tags, whatever the household.
+  let tagsAsked = 0
+  let tagsShown = 0
+  let tagsShownFor: number | null = null
+
+  /**
+   * Load the tag list used by the filter bar, the form and the bulk-tag modal. A failed load keeps
+   * the list on screen while it is the one asked for; after a profile switch it is another
+   * profile's, and a failed load clears it. Every tag carries its `profile_id`: a row from a Worker
+   * that answers without one (older than the field) is the profile the request was asked as, since
+   * both runtimes list the active profile's tags alone.
+   */
   const loadTags = async (): Promise<Array<{ id: number; name: string; color: string }>> => {
+    const asked = ++tagsAsked
+    const askedAs = activeProfileId()
     try {
       const tagData = await api.getTags()
-      const list = Array.isArray(tagData)
-        ? (tagData as Array<{ id: number; name: string; color: string }>)
-        : []
+      if (!Array.isArray(tagData)) throw new TypeError('The tag list is not a list')
+      if (asked < tagsShown) return tags()
+      tagsShown = asked
+      tagsShownFor = askedAs
+      const list = (
+        tagData as Array<{ id: number; name: string; color: string; profile_id?: number }>
+      ).map((tag) => (tag.profile_id === undefined ? { ...tag, profile_id: askedAs } : tag))
       setTags(list)
       return list
     } catch {
-      return tags()
+      if (asked < tagsShown || tagsShownFor === askedAs) return tags()
+      tagsShown = asked
+      tagsShownFor = askedAs
+      setTags([])
+      return []
     }
   }
 
@@ -471,9 +493,16 @@ export default function Transactions() {
   const createTagInline = async (
     name: string
   ): Promise<{ id: number; name: string; color: string } | null> => {
+    // Created for the profile it goes out as, which is the one the lists below filter on.
+    const owner = activeId()
     try {
       const created = await api.createTag(name, '#6e9bff')
-      const tag = { id: created.id, name: created.name ?? name, color: created.color ?? '#6e9bff' }
+      const tag = {
+        id: created.id,
+        name: created.name ?? name,
+        color: created.color ?? '#6e9bff',
+        profile_id: owner,
+      }
       if (!tags().some((t) => t.id === tag.id)) setTags([...tags(), tag])
       // Keep the Tags page (and any other consumer) in step with a tag created from here.
       bumpTagsVersion()
@@ -494,12 +523,12 @@ export default function Transactions() {
    * profile's. A row is written to that profile, and neither runtime attaches another profile's
    * tag to it. The list is already the active profile's in both runtimes; this also covers the
    * moment after a profile switch, before the list has reloaded. The active profile is `activeId`,
-   * the one the form writes to, known before the profile record is. A tag with no owner on it is
-   * the active profile's: the Worker leaves the owner out, and one created here has none yet.
+   * the one the form writes to, known before the profile record is. Every tag in the list names
+   * its owner: loadTags sees to that for what it loads, and createTagInline for what it creates.
    */
   const ownTags = createMemo(() => {
     const active = activeId()
-    return tags().filter((tag) => tag.profile_id === undefined || tag.profile_id === active)
+    return tags().filter((tag) => tag.profile_id === active)
   })
   /** The profile's tags the form's transaction does not carry yet, offered to add in one click. */
   const unpickedTags = createMemo(() =>
@@ -1088,11 +1117,9 @@ export default function Transactions() {
   let categoryHashApplied = false
   let accountHashApplied = false
 
-  /** The profiles a read is asked for (X-Profile-Id and X-Profile-Ids), as one comparable key. */
-  const readScope = () => JSON.stringify(profileRequestHeaders('household'))
   /** The profiles a read asks for now. Followed on every profile notice, as activeId is. */
   const scopeNow = createMemo(
-    on([() => state.profileVersion, () => state.currentProfile?.id], () => readScope())
+    on([() => state.profileVersion, () => state.currentProfile?.id], () => profileReadScope())
   )
   /**
    * The profiles the account list on screen is the answer for: null until one has come in. The
@@ -1133,7 +1160,7 @@ export default function Transactions() {
    */
   const loadCategories = async () => {
     const asked = ++categoriesAsked
-    const scope = readScope()
+    const scope = profileReadScope()
     try {
       const cats = await api.getCategories()
       if (!Array.isArray(cats)) throw new TypeError('The category list is not a list')
@@ -1156,7 +1183,7 @@ export default function Transactions() {
   /** Load the account list for the filter bar and the transaction form. See loadCategories. */
   const loadAccounts = async () => {
     const asked = ++accountsAsked
-    const scope = readScope()
+    const scope = profileReadScope()
     try {
       const acctData = await api.getAccounts()
       if (!Array.isArray(acctData)) throw new TypeError('The account list is not a list')

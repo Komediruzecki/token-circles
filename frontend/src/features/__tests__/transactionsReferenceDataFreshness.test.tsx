@@ -31,6 +31,8 @@ type Cat = {
   profile_id: number
 }
 type Acct = { id: number; name: string; currency: string; profile_id: number }
+/** A tag as the Worker answered before it named the owner: no `profile_id`. */
+type Tg = { id: number; name: string; color: string; profile_id?: number }
 
 /** The server's lists. Mutable, so another page's create is visible to the next fetch. */
 let serverCategories: Cat[] = []
@@ -38,8 +40,14 @@ let serverAccounts: Acct[] = []
 
 const getCategories = vi.fn(async () => serverCategories)
 const getAccounts = vi.fn(async () => serverAccounts)
-const getTags = vi.fn(async () => [] as Array<{ id: number; name: string; color: string }>)
+let serverTags: Tg[] = []
+const getTags = vi.fn(async () => serverTags.map((t) => ({ ...t })))
 const createAccount = vi.fn(async () => ({ id: 7 }))
+const createTag = vi.fn(async (name: string, color?: string) => ({
+  id: 77,
+  name,
+  color: color ?? '#6e9bff',
+}))
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -49,6 +57,7 @@ vi.mock('../../core/api', async (importOriginal) => ({
     getTags: () => getTags(),
     getAccounts: () => getAccounts(),
     createAccount: () => createAccount(),
+    createTag: (name: string, color?: string) => createTag(name, color),
   },
   apiPut: vi.fn(async () => ({ ok: true })),
 }))
@@ -64,10 +73,12 @@ beforeEach(() => {
   localStorage.setItem('currentProfileId', '1')
   serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }]
   serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }]
+  serverTags = []
   getCategories.mockClear()
   getAccounts.mockClear()
   getTags.mockClear()
   createAccount.mockClear()
+  createTag.mockClear()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -156,6 +167,29 @@ const filterBarAccounts = (root: HTMLElement) =>
       b.textContent?.includes('All Accounts')
     )!
   )
+const filterBarTags = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button')).find(
+      (b) => b.textContent?.includes('All Tags') || b.textContent?.includes('Selected')
+    )!
+  )
+
+/** The label of the filter bar's tag dropdown: "All Tags", or how many are picked. */
+const tagFilterLabel = (root: HTMLElement) =>
+  Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button'))
+    .map((b) => b.textContent?.trim() ?? '')
+    .find((text) => text === 'All Tags' || text.endsWith(' Selected'))
+
+/** The tags the add form offers to put on the new entry, by name. */
+async function formOffersTags(root: HTMLElement): Promise<string[]> {
+  openTransactionForm(root)
+  await flush()
+  root.querySelector<HTMLElement>('[data-test-id="tx-advanced-toggle"]')!.click()
+  await flush()
+  return Array.from(root.querySelectorAll('[data-test-id="tx-tag-options"] button')).map(
+    (b) => b.getAttribute('aria-label')?.replace('Add tag ', '') ?? ''
+  )
+}
 
 describe('Transactions reference data', () => {
   it('loads categories and accounts once on mount, with no duplicate fetch', async () => {
@@ -469,5 +503,102 @@ describe('a new entry opened before the accounts are in', () => {
 
     expect(root.querySelector('[data-test-id="tx-modal"]')!.className).not.toContain('show')
     expect(toasts().map((t) => t.message)).toEqual([])
+  })
+})
+
+describe('the tag list', () => {
+  it('shows the newest answer when two refreshes cross, not the one that lands last', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316' }]
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('tags')
+    await flush()
+    serverTags = [...serverTags, { id: 6, name: 'Work', color: '#3b82f6' }]
+    invalidateEntity('tags')
+    await flush()
+    await flush()
+    slow.resolve([{ id: 5, name: 'Holiday', color: '#f97316' }])
+    await flush()
+    await flush()
+
+    expect(getTags).toHaveBeenCalledTimes(3)
+    expect(await filterBarTags(root)).toEqual(['Holiday', 'Work'])
+  })
+
+  it('offers none of the other profile’s tags just after a switch, rows with no owner included', async () => {
+    // The Worker's rows: no profile_id. The list on screen is profile 1's until 2's is in.
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316' }]
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+
+    expect(await formOffersTags(root)).toEqual([])
+
+    slow.resolve([{ id: 9, name: 'Garden', color: '#84cc16' }])
+    await flush()
+    await flush()
+    expect(
+      Array.from(root.querySelectorAll('[data-test-id="tx-tag-options"] button')).map((b) =>
+        b.getAttribute('aria-label')
+      )
+    ).toEqual(['Add tag Garden'])
+  })
+
+  it('keeps the tags on screen when a refresh within the profile fails', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 }]
+    const root = await mountTransactions()
+    getTags.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('tags')
+    await flush()
+    await flush()
+
+    expect(getTags).toHaveBeenCalledTimes(2)
+    expect(await filterBarTags(root)).toEqual(['Holiday'])
+  })
+
+  it('drops the other profile’s tags when the refresh after a switch fails', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 }]
+    const root = await mountTransactions()
+    getTags.mockRejectedValueOnce(new Error('network down'))
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    // The Tags page links here with a tag picked. Holiday is profile 1's, unknown to profile 2,
+    // so the link is ignored rather than filtering the list by it.
+    try {
+      window.location.hash = '#transactions?tag=5'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      await flush()
+
+      expect(getTags).toHaveBeenCalledTimes(2)
+      expect(tagFilterLabel(root)).toBe('All Tags')
+    } finally {
+      window.location.hash = ''
+    }
+  })
+
+  it('offers a tag made from the form at once, before the list reloads', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    openTransactionForm(root)
+    await flush()
+    root.querySelector<HTMLElement>('[data-test-id="tx-advanced-toggle"]')!.click()
+    await flush()
+    const box = root.querySelector<HTMLInputElement>('[data-test-id="tx-tag-new-input"]')!
+    box.value = 'Garden'
+    box.dispatchEvent(new Event('input', { bubbles: true }))
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flush()
+    await flush()
+
+    expect(createTag).toHaveBeenCalledTimes(1)
+    expect(await filterBarTags(root)).toEqual(['Garden'])
   })
 })
