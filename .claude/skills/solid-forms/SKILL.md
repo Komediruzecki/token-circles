@@ -149,7 +149,7 @@ const form = createForm({
 ```
 
 ```tsx
-<form novalidate onSubmit={form.submit}>
+<form {...form.attrs}>
   <FormNotice form={form} />
   <Field form={form} name="name" label="Category Name">
     {(control) => (
@@ -161,13 +161,22 @@ const form = createForm({
       />
     )}
   </Field>
+  <SubmitButton busy={form.submitting()} busyLabel="Adding…">
+    Add Category
+  </SubmitButton>
 </form>
 ```
 
-- `novalidate` on the form, `required` kept on the control: the browser stops swallowing the
-  submit, and assistive technology still hears "required".
+- `form.attrs` gives the form `novalidate`, the submit, and `aria-busy` while it sends. With
+  `required` kept on the control, the browser stops swallowing the submit and assistive
+  technology still hears "required".
+- `SubmitButton`, never `disabled={form.submitting()}`: while the form sends it reads "Saving…"
+  (or the form's own verb, `busyLabel`) and is `aria-disabled`, so it keeps focus. A `disabled`
+  button drops a keyboard user at the top of the page.
 - The check is the entity's schema in `shared/`, the one the local-first router and the Worker
   also run, so the form and the server refuse the same values in the same words.
+- An edit checks only what it changes (`checkCategoryEdit(values, opened)`), as the server does:
+  a row saved under older rules has to save with its own values sent back unchanged.
 - The kit marks the field (`aria-invalid`, the message under it via `aria-describedby`), moves
   focus to the first marked field, re-checks a marked field as it changes, and maps the server's
   `fields` onto the same fields. What belongs to no field goes in the `role="alert"` notice.
@@ -214,7 +223,7 @@ Worked examples: `frontend/src/features/__tests__/retirementPlanner.test.tsx`, i
 
 ## Reviewing a diff
 
-Seven greps that catch all of it:
+Eight greps that catch all of it:
 
 ```sh
 grep -n '<For each' <file>            # any editable row in there? -> <Index>
@@ -222,6 +231,7 @@ grep -n 'type="number"' <file>        # -> NumberField
 grep -n 'type="month"\|type="date"' <file>   # -> MonthPicker
 grep -n 'Number(e.currentTarget.value)' <file>  # hand-rolled, always wrong
 grep -n 'step="0.1"' <file>           # will 2dp values live here?
-grep -n '<form' <file>                # -> components/form, with novalidate
+grep -n '<form' <file>                # -> components/form: {...form.attrs}
+grep -n 'disabled={.*ubmitting' <file>  # a busy submit button -> SubmitButton, keeps focus
 grep -n 'err.message\|error.message' <file>  # in a toast? -> the form kit, or plainMessage
 ```

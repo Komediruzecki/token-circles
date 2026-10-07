@@ -1,7 +1,34 @@
 # Form errors: one answer, one schema, one kit
 
 Status: **design, with the first slice (categories) being built on `feat/form-errors`**
-Date: 2026-10-07. Base: PR #599 (`fix/dev-check-polish`, 664fd0c6).
+Date: 2026-10-07, decisions recorded 2026-10-08. Written on PR #599 (`fix/dev-check-polish`,
+664fd0c6); rebased onto main (d92626fe) once #599 and #601 merged.
+
+## Decisions (2026-10-08)
+
+1. **#601 merges first.** Done: this branch is rebased onto main with #599 and #601
+   (`git rebase --onto origin/main 664fd0c6`), and #601's `publicError` and `errorResponse` carry
+   `fields`. `worker/test/category-refusals.test.ts` fails if a refusal's `fields` stop reaching
+   the client, and `error-response.test.ts` pins the answer.
+2. **The refusals stay, with one rule: an edit that sends a field's stored value unchanged is
+   never refused.** Old rows can hold a 3-digit or named colour, a name over 100 characters, a
+   type the app does not read, or two names that differ only in case, and the edit forms send
+   every field they show on every save. So an edit checks only the fields whose value it changes,
+   and the duplicate check runs only when the name changes, compared case-insensitively with the
+   row's own stored name: a case-only rename of itself is allowed. Both runtimes, and the form.
+3. **A parent from another profile is a 400 with `fields.parent_id`** in both runtimes. The Worker
+   used to answer 403.
+4. **One `CategoryDialog` is a follow-up** (Later).
+5. **Placements confirmed**: Retirement and RetirementPlanner in PR 4; Housing, Portfolio and Tags
+   in PR 5; auth and support in PR 6.
+6. **Success toasts quote a name in straight double quotes**, the style the app's visible copy uses
+   most: at the fork point, 19 strings use straight double quotes and 4 use curly ones, and every
+   toast that quotes uses straight ones. #599 standardised on straight apostrophes for the same
+   reason. Goals gaining a success toast is fine.
+7. **The busy state is in the kit**, so every form inherits it: while a save runs the submit button
+   reads "Saving…" or the form's own verb ("Adding…"), the form is `aria-busy`, and the button
+   stays focusable (`aria-disabled`, not `disabled`). Busy labels use the ellipsis character, as
+   39 of the app's 66 busy labels do.
 
 ## Why
 
@@ -164,13 +191,13 @@ A refused body answers **400 `{ error: string, fields?: Record<string, string> }
   form that has no field of that name. It is every field message in order, joined with a space.
   A degraded client therefore still shows "Give the category a name." rather than "Validation
   failed".
-- Other statuses answer `{ error }` in plain words. Unexpected 500s become generic with #601
-  (`worker/src/error-response.ts`, not yet merged; this branch is based on #599 without it).
+- Other statuses answer `{ error }` in plain words. Unexpected 500s are generic since #601
+  (`worker/src/error-response.ts`).
 
-On the Worker, `HttpError` (`worker/src/http.ts`) gains an optional `fields`, and `app.onError`
-sends it. A route turns a failed check into that error with one call (`accept(...)`, below). This
-keeps the existing pattern, a refusal is a throw, and lets PR 2 convert
-`validateTransactionCreate` without changing its callers.
+On the Worker, `HttpError` (`worker/src/http.ts`) gains an optional `fields`, and #601's
+`publicError` and `errorResponse` (the app's `onError`) send it. A route turns a failed check into
+that error with one call (`accept(...)`, below). This keeps the existing pattern, a refusal is a
+throw, and lets PR 2 convert `validateTransactionCreate` without changing its callers.
 
 In the local-first router, `validateBody` answers the same body. Categories go through the shared
 check; every other entity keeps its zod schema until its PR, but its issues are translated into a
@@ -197,7 +224,9 @@ export function refusalOf(fields: FieldErrors): Refusal; // error = every messag
 
 // shared/categorySchema.ts: the category, for the form, the local handler and the Worker route
 export function checkCategoryCreate(body: unknown): Checked<CategoryInput>;
-export function checkCategoryUpdate(body: unknown): Checked<Partial<CategoryInput>>;
+// An edit of a stored row: only the fields whose value the body changes are checked and returned.
+export function checkCategoryEdit(body: unknown, stored: object): Checked<Partial<CategoryInput>>;
+export function renamesCategory(storedName: unknown, name: string): boolean; // not by case alone
 export function categoryNameTaken(name: string): FieldErrors; // the duplicate-name refusal
 export function sameCategoryName(a: string, b: string): boolean;
 ```
@@ -217,8 +246,17 @@ Rules for every entity schema:
 For categories the shared rules settle every disagreement above: the name is required and at most
 100 characters on a create and an edit; a duplicate is case-insensitive in both runtimes, and a
 rename onto an existing name is refused too; type, colour and icon have defaults; an edit that
-leaves out `tax_deductible` or the parent keeps them; unknown keys are dropped. The parent's
-ownership refusal keeps its status in each runtime (Worker 403, local 400); no form sends a parent.
+leaves out `tax_deductible` or the parent keeps them; unknown keys are dropped. A parent from
+another profile is refused at `parent_id` with a 400 in both runtimes; no form sends a parent yet.
+
+**An edit checks only what it changes** (decision 2). A field sent back with the value the row
+holds is neither checked nor written, so a row saved under older rules can still be edited: a
+colour-only edit of a category whose name is over 100 characters saves. What the edit changes is
+checked like anything else. The duplicate check runs only when the name changes other than in case
+or surrounding space. "Unchanged" is strict equality with the stored value, so the comparison needs
+the row: the Worker route and the local handler run `checkCategoryEdit(body, row)` after loading
+it, and the local router has no category PUT entry in `validateBody`. The form runs the same check
+against the values it opened with.
 
 ### 3. One client error type
 
@@ -260,11 +298,12 @@ form.reset(values?)         // open for an edit; drops the answer to a send stil
 form.error('name')          // the field's message, or undefined
 form.notice()               // the form-level message, or undefined
 form.submitting()           // true while send() runs
-form.submit                 // the <form>'s onSubmit
+form.submit                 // what the <form> runs on submit
+form.attrs                  // spread on the <form>: noValidate, onSubmit, aria-busy while sending
 ```
 
 ```tsx
-<form novalidate onSubmit={form.submit}>
+<form class={styles.modalBody} {...form.attrs}>
   <FormNotice form={form} />
   <Field form={form} name="name" label="Category name" class={styles.formGroup}
          labelClass={styles.formLabel}>
@@ -276,6 +315,9 @@ form.submit                 // the <form>'s onSubmit
   <Field form={form} name="color" label="Color" group ...>
     {(control) => <div {...control} class={styles.colorPicker}>...swatches...</div>}
   </Field>
+  <SubmitButton class={styles.btnPrimary} busy={form.submitting()} busyLabel="Adding…">
+    Add Category
+  </SubmitButton>
 </form>
 ```
 
@@ -294,31 +336,41 @@ form.submit                 // the <form>'s onSubmit
 - A marked field is re-checked as it changes, so its message goes as soon as it is fixed. An
   unmarked field is never checked while typing. A server mark (a duplicate name) goes on the first
   change, because the client check cannot know it still holds.
-- `novalidate` on the form, `required` kept on the control: the browser stops swallowing the
-  submit, and assistive technology still hears "required".
+- `novalidate` on the form (from `form.attrs`), `required` kept on the control: the browser stops
+  swallowing the submit, and assistive technology still hears "required".
+- While `send` runs, `form.attrs` sets `aria-busy="true"` on the form and a second submit does
+  nothing. `SubmitButton` reads `busyLabel` ("Saving…" by default) and is `aria-disabled`, not
+  `disabled`: a disabled button loses focus, which drops a keyboard user at the top of the page.
+  A click on it while busy submits nothing. The kit's stylesheet gives it the look a page's own
+  `:disabled` rule would have.
 - It follows solid-forms rules 1 to 4; it renders no list of editable rows and no number field.
 
 The category's form logic lives once, in `features/categoryForm.ts` (the values, the shared check,
 the create or update call, the success toast): `createCategoryForm({ color, editing, onSaved })`
 returns the form plus `open(category?)`, which fills it for a new category or an edit. Each of the
-four places keeps its own markup and look, built from `Field` and `FormNotice`. A create or an
-edit sends only the four fields the dialogs show, so an edit cannot clear a parent or a tax flag.
+four places keeps its own markup and look, built from `Field`, `FormNotice` and `SubmitButton`. A
+create or an edit sends only the four fields the dialogs show, so an edit cannot clear a parent or
+a tax flag. An edit is checked with `checkCategoryEdit` against the values `open` filled in, so a
+row saved under older rules can be edited without its name or colour being refused.
 
 ### 5. Toast policy
 
 A form's errors stay in the form: no failure toast from a converted form. Toasts are for success,
 undo, and work with no form in front of the person (a swatch click, a delete, a background
-reload). Those failure toasts go through `plainMessage`.
+reload). Those failure toasts go through `plainMessage`. A success toast that names what was saved
+quotes it in straight double quotes: `Added "Coffee" to your categories.` (decision 6).
 
 ### 6. Guards
 
 - `frontend/src/__tests__/toastErrorMessages.test.ts` scans `src` for a toast that prints a caught
-  error's `.message`, directly or through a variable assigned from one a few lines above. It
-  allows today's 21 by file and count, fails when a file goes over its count (a new one), and
-  fails when a file goes under (shrink the list). A converted file is not on the list, so it is
-  held at zero. The scanner is tested on samples it must and must not flag.
+  error's `.message`, directly or through a variable assigned from one a few lines above. It allows
+  today's 20 by file and count (21 at the fork point; #599 fixed one in Transactions), fails when a
+  file goes over its count (a new one), and fails when a file goes under (shrink the list). A
+  converted file is not on the list, so it is held at zero. The scanner is tested on samples it must
+  and must not flag.
 - Unit tests for the kit, `ApiError` on both surfaces and in both modes, and the shared schema.
-- Worker tests for the categories routes' refusals and the `fields` passing through `onError`.
+- Worker tests for the categories routes' refusals and the `fields` passing through
+  `errorResponse`.
 - Per-form tests on the real local-first router: a bad submission marks the field and sends
   nothing; a server refusal marks the field; no failure toast.
 - E2E per converted form, cloud and local-first: a bad submission marks the field.
@@ -336,10 +388,11 @@ reload). Those failure toasts go through `plainMessage`.
 3. **Budgets, goals, bills.** Forms 7 and 8, the budget, allocate, rollover and Set Budget modals,
    goal contributions.
 4. **Loans, profiles, settings, import.** Form 9, the rate period and prepayment forms,
-   `ProfileModal` and the sidebar create, Settings, the import flow and its rules. Recommended to
-   add forms 10 and 11 here: they are the retirement settings next to the loans and settings work.
+   `ProfileModal` and the sidebar create, Settings, the import flow and its rules, and forms 10
+   and 11 (Retirement, RetirementPlanner): the retirement settings next to the loans and settings
+   work. Confirmed 2026-10-08.
 
-Recommended additions (the brief does not place them):
+Added to the plan, and confirmed on 2026-10-08:
 
 5. **Housing, portfolio, tags, recurring and subscriptions.** Forms 12-14, `RecurringSection`,
    `SubscriptionCatalogModal`, `SubscriptionScan`, `OnboardingWizard`. Fix the dead housing schema
@@ -359,11 +412,13 @@ Recommended additions (the brief does not place them):
 - **The new Worker refuses what the old one stored**: a type outside the four, a colour that is
   not `#RRGGBB`, a name over 100 characters, a case-insensitive duplicate, a rename onto an
   existing name. Only the app writes categories (no MCP or v1 tool does; the importer inserts its
-  own rows), and the app's forms cannot produce any of them except the two duplicates.
+  own rows), and the app's forms cannot produce any of them except the two duplicates. It refuses
+  them when a create or an edit sets them, never when an edit sends a row's own value back.
 - **Old rows.** Local-first rows written before #599 can have `icon: null`, no `tax_deductible`,
-  or the importer's `account` type; cloud rows can have names over 100 characters or an
-  off-palette colour. An edit sends the form's whole body, so a row with an over-long name now
-  asks for a shorter one on its next save. That is the intended message, at the field. Reads are
+  or the importer's `account` type; cloud rows can have names over 100 characters, an off-palette
+  or 3-digit colour, or a twin that differs only in case. An edit sends the form's whole body, so
+  each runtime compares it with the stored row and checks only what changed (decision 2): an old
+  row saves with its old values, and a case-only rename of one twin is allowed. Reads are
   unchanged: `normalizeCategory` and `CategorySchema` still accept every stored shape.
 - **The two client surfaces.** Anything wired into only one of them drifts (#574 was exactly that).
   `ApiError` is built by one function, `apiErrorFrom`, which both call, and the network case is
@@ -372,33 +427,41 @@ Recommended additions (the brief does not place them):
   `quick-entry-phone.spec.ts` treat a console line containing `Validation failed` in local-first as
   a bug: a write the local schemas refused. The local router keeps logging
   `[routeApiRequest] Validation failed` for every schema refusal, categories included, so those
-  detectors still see one. A form's own client check now stops most bad submissions before they
-  reach the router at all.
-- **#601.** It replaces `app.onError` with `errorResponse` (`error-response.ts`). Whichever of the
-  two PRs merges second must carry `fields` through `publicError` and `errorResponse`. A Worker
-  test on this branch fails if a refusal's `fields` stop reaching the client, so the merge cannot
-  drop them quietly.
+  detectors still see one. A category edit is checked in its handler, against the stored row, so
+  the handler logs `[categoriesUpdate] Validation failed` for the edits it refuses. A form's own
+  client check now stops most bad submissions before they reach the router at all.
+- **#601.** It replaced `app.onError` with `errorResponse` (`error-response.ts`). It merged first,
+  and the rebase carried `fields` through `publicError` and `errorResponse`. A Worker test fails
+  if a refusal's `fields` stop reaching the client, so a later change cannot drop them quietly.
+  Its two D1-leak tests had sent the category edit a null color, which the edit now stores as
+  the default; they send it to a stand-in route that writes the column unchecked.
 
 ## Test strategy
 
 - **Shared schema** (`frontend/src/core/__tests__/categorySchema.test.ts`): every rule and
   default, create and edit, every message, the summary.
 - **Worker** (`worker/test/category-refusals.test.ts`): each refusal's status, `error` and
-  `fields`; the duplicate rules; an edit keeping `tax_deductible` and the parent; defaults stored.
-  Each was run against the old route first and fails there.
+  `fields`; the duplicate rules; an edit keeping `tax_deductible` and the parent; defaults stored;
+  a parent from another profile at `parent_id`; and edits of rows seeded in D1 under older rules
+  (3-digit and named colours, a name over 100 characters, an unreadable type, case twins, a
+  foreign parent), each sending its own values back and saving, while a changed bad value is still
+  refused. Each was run against the old route first and fails there.
 - **Local-first router** (`core/storage/__tests__/categoryRefusals.test.ts`): the same cases
-  through `routeApiRequest`, the generic translation for one other entity, no `details`, the
-  console line kept.
+  through `routeApiRequest`, with the old rows seeded in IndexedDB, the generic translation for one
+  other entity, no `details`, the console line kept.
 - **ApiError** (`core/__tests__/apiError.test.ts`): both surfaces, both modes, 400 with and
   without `fields`, a non-JSON 502, a network failure offline and online, an abort.
 - **Kit** (`components/form/__tests__/`): no message while typing first time, marking and focus on
-  submit, re-checking a marked field, server fields and the notice, `aria-*` wiring, groups.
+  submit, re-checking a marked field, server fields and the notice, `aria-*` wiring, groups, and
+  the busy state: the label, `aria-disabled` without `disabled`, focus kept, `aria-busy`, one send.
 - **Forms** (`features/__tests__/categoryForms.test.tsx`): each of the four forms against the real
   local-first router: an empty name marks the field and stores nothing; a duplicate marks the name
-  with the server's sentence; a blank icon stores `tag`; no failure toast.
+  with the server's sentence; a blank icon stores `tag`; no failure toast; the success toast's
+  words. Categories and Budgets also edit a row saved under older rules.
 - **E2E** (`frontend/tests/category-form-errors.spec.ts`), cloud and local-first: an empty name
   marks the field with its message; a duplicate is marked with the server's message; a blank icon
-  saves as `tag`. The Bills, Goals and Budgets dialogs: an empty name marks the field.
+  saves as `tag`. The Bills, Goals and Budgets dialogs: an empty name marks the field. Signed in,
+  a held save shows the busy button, keeps focus on it, and marks the form `aria-busy`.
 - **Guard**: the toast scan and its sample tests.
 - Every fix of behaviour has a test that fails on the old code; the report lists which.
 
@@ -407,9 +470,9 @@ Recommended additions (the brief does not place them):
 - **Fifteen pages reload through `refetchOnActive` with no newest-answer guard.** Two overlapping
   reloads can land out of order and show the older answer. Moving the guard into the shared helper
   (`core/pageVisibility.ts`) is a data-layer change for its own PR.
-- One category dialog instead of four. Bills and Goals use a native colour input and have no icon
-  field; Budgets has no icon gallery. Merging them is a design decision, so this PR keeps each
-  look and shares only the logic.
+- **One `CategoryDialog` instead of four** (decision 4). Bills and Goals use a native colour input
+  and have no icon field; Budgets has no icon gallery. Merging them is a design decision, so this
+  PR keeps each look and shares only the logic (`categoryForm.ts`).
 - `request()`'s response-schema failure throws "API Response Validation failed for /x", which the
   toasts that print `.message` show as is.
 - A 401 on a write fires `auth:required` from `request()` only; the raw helpers do not.
@@ -417,4 +480,3 @@ Recommended additions (the brief does not place them):
   as the Worker did before #601.
 - A loan's `interest_rate || 5.0` on the Worker stores a 0 % loan as 5 %.
 - The housing schema keys (`/api/housings`) in `validation.ts` never match the route.
-- Parent ownership: the Worker answers 403 and local-first 400 for the same refusal.
