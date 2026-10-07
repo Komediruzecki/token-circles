@@ -18,11 +18,16 @@ import {
 } from './release-helpers'
 import type { Page } from '@playwright/test'
 
-async function addCategory(page: Page, name: string): Promise<void> {
+/**
+ * Categories > Add. An icon is typed in, because saving without one is a separate, known bug in
+ * local-first (see the "without an icon" case below), and the profile cases are not about icons.
+ */
+async function addCategory(page: Page, name: string, icon: string | null = 'cart'): Promise<void> {
   await goPage(page, 'categories', 'categories-header')
   await page.getByTestId('add-category-btn').click()
   const modal = page.getByTestId('category-modal-overlay')
   await modal.getByPlaceholder('e.g., Food, Rent').fill(name)
+  if (icon) await modal.getByPlaceholder('e.g., food, home, car').fill(icon)
   await modal.locator('button[type="submit"]').click()
   await expect(modal).toBeHidden()
 }
@@ -113,6 +118,19 @@ for (const [pass, test] of both) {
       await clickOutsideProfileMenu(page)
       await expect(profileButton(page)).toContainText(name)
       expect(await storedSelection(page)).toEqual({ current: created.id, selected: [created.id] })
+    })
+
+    test('1.2b a category saved without picking an icon @release', async ({ m }) => {
+      // Not a 5.16 regression: prod 5.15.1 has it. The form sends `icon: null` when no icon was
+      // picked; the Worker takes it, the local router's categoryCreateSchema (icon optional
+      // string) refuses it, and the user gets "Failed to save category".
+      test.fail(
+        m.kind === 'local',
+        'local-first: POST /api/categories with icon null fails validation (since 5.15.1)'
+      )
+      const { page } = m
+      await addCategory(page, `zz-noicon${m.suffix}`.slice(0, 40), null)
+      await expect(categoryCards(page, `zz-noicon${m.suffix}`.slice(0, 40))).toHaveCount(1)
     })
 
     test('1.4 the Household view lock and ticks follow a sidebar switch @release', async ({
