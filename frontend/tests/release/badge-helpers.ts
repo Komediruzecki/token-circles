@@ -20,26 +20,35 @@ export interface ToastSeen {
  * for "N toasts" would only ever show the last. A MutationObserver sees each insertion.
  *
  * Plain JavaScript with no closure, so it can go to `context.addInitScript` (installed before
- * the app boots, on every load) as well as to `page.evaluate` (installed now).
+ * the app boots, on every load) as well as to `page.evaluate` (installed now). It observes the
+ * document itself, because an init script can run before there is a `documentElement`, and it
+ * also looks inside inserted subtrees, in case the region mounts with a toast already in it.
  */
 export function installToastRecorder(): void {
   const w = window as unknown as { __tcToasts?: ToastSeen[]; __tcToastObserver?: MutationObserver }
   if (w.__tcToastObserver) return
   const seen: ToastSeen[] = []
   w.__tcToasts = seen
+  const region = '[role="region"][aria-label="Notifications"]'
+  const note = (el: Element) => {
+    seen.push({ text: (el.textContent || '').trim(), at: Date.now() })
+  }
   const observer = new MutationObserver((records) => {
     for (const record of records) {
-      const parent = record.target as Element
-      if (!parent.matches?.('[role="region"][aria-label="Notifications"]')) continue
       record.addedNodes.forEach((node) => {
-        if (!(node instanceof HTMLElement)) return
+        if (!(node instanceof Element)) return
         const role = node.getAttribute('role')
-        if (role !== 'status' && role !== 'alert') return
-        seen.push({ text: (node.textContent || '').trim(), at: Date.now() })
+        if ((role === 'status' || role === 'alert') && node.parentElement?.matches(region)) {
+          note(node)
+          return
+        }
+        node
+          .querySelectorAll(`${region} > [role="status"], ${region} > [role="alert"]`)
+          .forEach(note)
       })
     }
   })
-  observer.observe(document.documentElement, { childList: true, subtree: true })
+  observer.observe(document, { childList: true, subtree: true })
   w.__tcToastObserver = observer
 }
 
@@ -95,4 +104,51 @@ export async function progressEarnedCount(page: Page): Promise<number> {
   const match = /(\d+)\s+of\s+\d+/.exec(text)
   expect(match, `"N of M" in "${text}"`).toBeTruthy()
   return Number((match as RegExpExecArray)[1])
+}
+
+/** Wait for a profile's first evaluation to have stored its record. */
+export async function waitForBadgeRecord(m: Mode, profileId: number): Promise<void> {
+  await expect
+    .poll(() => hasBadgeRecord(m, profileId), {
+      message: `badge record of profile ${profileId}`,
+      timeout: 30_000,
+    })
+    .toBe(true)
+}
+
+/**
+ * The app's own answer to "is this the user's own server" (core/achievementsStore.ts). The cloud
+ * pass runs against a Worker on localhost, which counts, so every cloud profile here earns
+ * "Own the stack" on its first evaluation, data or none. On dev and prod it does not.
+ */
+export async function appIsSelfHosted(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    // A variable specifier: vite serves the source module, and the browser hands back the
+    // instance the app already loaded.
+    const spec = '/src/core/achievementsStore.ts'
+    const store = (await import(/* @vite-ignore */ spec)) as { isSelfHosted: () => boolean }
+    return store.isSelfHosted()
+  })
+}
+
+/** The badges the test environment alone earns a profile (see `appIsSelfHosted`). */
+export async function environmentBadges(page: Page): Promise<string[]> {
+  return (await appIsSelfHosted(page)) ? ['own-the-stack'] : []
+}
+
+/**
+ * Let the badge evaluations a case has set off finish: wait out AchievementsHost's 1.2 s
+ * debounce, then wait for the active profile's run, which `refreshAchievements` joins when one is
+ * in flight. Only for arranging and for after-the-fact checks: an announcement under test must
+ * come from the app's own trigger, never from this call.
+ */
+export async function settleBadges(page: Page): Promise<void> {
+  await page.waitForTimeout(1_500)
+  await page.evaluate(async () => {
+    const spec = '/src/core/achievementsStore.ts'
+    const store = (await import(/* @vite-ignore */ spec)) as {
+      refreshAchievements: () => Promise<unknown>
+    }
+    await store.refreshAchievements()
+  })
 }
