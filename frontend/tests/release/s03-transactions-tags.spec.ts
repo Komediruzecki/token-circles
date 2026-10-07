@@ -216,7 +216,12 @@ for (const [pass, test] of both) {
       const category = await utilities(m)
       await openTransactions(page)
       await openAddForm(page)
-      await fillForm(page, { description: 'Zztagged supper', amount: 18, categoryId: category.id })
+      await fillForm(page, {
+        description: 'Zztagged supper',
+        amount: 18,
+        categoryId: category.id,
+        accountId: await firstAccountId(m, m.a.id),
+      })
       await enterFormTag(page, 'zz-tag')
       await expect(page.getByTestId('tx-tag-chip')).toHaveText(['zz-tag'])
       await saveForm(page)
@@ -235,7 +240,12 @@ for (const [pass, test] of both) {
       const tag = await addTag(m, 'zz-chip')
       await openTransactions(page)
       await openAddForm(page)
-      await fillForm(page, { description: 'Zzchip lunch', amount: 14, categoryId: category.id })
+      await fillForm(page, {
+        description: 'Zzchip lunch',
+        amount: 14,
+        categoryId: category.id,
+        accountId: await firstAccountId(m, m.a.id),
+      })
       await showTagPicker(page)
       expect(await formOffers(page)).toContain('zz-chip')
 
@@ -260,7 +270,12 @@ for (const [pass, test] of both) {
       const tag = await addTag(m, 'zz-tag')
       await openTransactions(page)
       await openAddForm(page)
-      await fillForm(page, { description: 'Zzcase dinner', amount: 16, categoryId: category.id })
+      await fillForm(page, {
+        description: 'Zzcase dinner',
+        amount: 16,
+        categoryId: category.id,
+        accountId: await firstAccountId(m, m.a.id),
+      })
       await enterFormTag(page, 'ZZ-TAG')
       // The chip is the existing tag, under its own name.
       await expect(page.getByTestId('tx-tag-chip')).toHaveText(['zz-tag'])
@@ -355,6 +370,7 @@ for (const [pass, test] of both) {
         description: 'Lantern zzrule supper',
         amount: 19,
         categoryId: category.id,
+        accountId: await firstAccountId(m, m.a.id),
       })
       await pickFormTag(page, 'zz-pick')
       expect(await formChips(page)).toEqual(['zz-pick'])

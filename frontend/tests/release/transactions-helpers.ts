@@ -218,17 +218,20 @@ export async function openEditForm(page: Page, description: string): Promise<voi
   await expect(page.getByTestId('tx-description')).toHaveValue(description)
 }
 
-/** Description, amount, an expense category and (when given) the account. */
+/**
+ * Description, amount, an expense category and the account. The account is picked rather than
+ * left to the form's default: the default is filled from the account list, which under load can
+ * arrive after the form opens, and an empty required Account keeps Save from sending anything.
+ * `selectOption` waits for the option to be there.
+ */
 export async function fillForm(
   page: Page,
-  f: { description: string; amount: number; categoryId: number; accountId?: number }
+  f: { description: string; amount: number; categoryId: number; accountId: number }
 ): Promise<void> {
   await page.getByTestId('tx-description').fill(f.description)
   await page.getByTestId('tx-amount').fill(String(f.amount))
   await page.getByTestId('tx-category').selectOption(String(f.categoryId))
-  if (f.accountId !== undefined) {
-    await page.getByTestId('tx-account').selectOption(String(f.accountId))
-  }
+  await page.getByTestId('tx-account').selectOption(String(f.accountId))
 }
 
 /** Show the advanced section, where the tag picker lives. */
