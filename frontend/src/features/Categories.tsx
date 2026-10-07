@@ -33,14 +33,18 @@
 import { createMemo, createResource, createSignal, For } from 'solid-js'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice } from '../components/form'
 import IconPicker from '../components/IconPicker'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import styles from './CategoriesPage.module.css'
+import { createCategoryForm } from './categoryForm'
+import type { CategoryFormValues } from './categoryForm'
 
 /** Brand "constellation" swatches offered when picking a category color. */
 const COLOR_CHOICES = CATEGORY_PALETTE
@@ -104,39 +108,23 @@ export default function Categories() {
   const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
   const [budgetAmount, setBudgetAmount] = createSignal('')
   const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
-  const [formData, setFormData] = createSignal({
-    name: '',
-    type: 'expense' as 'expense' | 'income',
+
+  // The add/edit dialog. What a save does, and what it says when the save is refused, is
+  // categoryForm.ts, shared with the category dialogs in Budgets, Bills and Goals.
+  const closeCategoryModal = () => {
+    setShowAddModal(false)
+    setShowIconPicker(false)
+    setEditingCategory(null)
+  }
+  const categoryForm = createCategoryForm({
     color: DEFAULT_COLOR,
-    icon: '',
+    editing: editingCategory,
+    onSaved: closeCategoryModal,
   })
-
-  // Handle form submit
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = {
-      name: formData().name,
-      type: formData().type,
-      color: formData().color,
-      icon: formData().icon || null,
-    }
-
-    try {
-      if (editingCategory()) {
-        await apiPut(`/api/categories/${editingCategory()!.id}`, data)
-        showToast('Category updated successfully', 'success')
-      } else {
-        await apiPost('/api/categories', data)
-        showToast('Category created successfully', 'success')
-      }
-      setShowAddModal(false)
-      setShowIconPicker(false)
-      setEditingCategory(null)
-      setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
-    } catch (err) {
-      console.error('Failed to save category:', err)
-      showToast('Failed to save category', 'error')
-    }
+  const openCategoryModal = (category: Category | null) => {
+    setEditingCategory(category)
+    categoryForm.open(category)
+    setShowAddModal(true)
   }
 
   // Delete category
@@ -156,20 +144,13 @@ export default function Categories() {
       await apiPut(`/api/categories/${id}`, { color })
     } catch (err) {
       console.error('Failed to update color:', err)
-      showToast('Failed to update color', 'error')
+      showToast(plainMessage(err, "Couldn't change the color. Try again."), 'error')
     }
   }
 
   // Open edit modal
   const editCategory = (category: Category) => {
-    setEditingCategory(category)
-    setFormData({
-      name: category.name,
-      type: category.type,
-      color: category.color,
-      icon: category.icon || '',
-    })
-    setShowAddModal(true)
+    openCategoryModal(category)
   }
 
   // Open budget modal
@@ -208,9 +189,11 @@ export default function Categories() {
   })
 
   // Live preview of the icon the typed keyword resolves to. This has to be a memo: a Solid
-  // component body runs once, so <CategoryIcon icon={formData().icon}> would render whatever
-  // the field held at mount and never update. The memo re-reads the signal per keystroke.
-  const iconPreview = createMemo(() => getCategorySvg(formData().name, 18, formData().icon))
+  // component body runs once, so <CategoryIcon icon={categoryForm.values.icon}> would render
+  // whatever the field held at mount and never update. The memo re-reads the store per keystroke.
+  const iconPreview = createMemo(() =>
+    getCategorySvg(categoryForm.values.name, 18, categoryForm.values.icon)
+  )
 
   // The gallery is a helper for the icon field, so it opens over the category modal rather
   // than replacing it — the half-filled form behind it has to still be there afterwards.
@@ -227,7 +210,9 @@ export default function Categories() {
             data-test-id="add-category-btn"
             data-tour="categories-add"
             class={styles.addCategoryBtn}
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              openCategoryModal(null)
+            }}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -273,7 +258,12 @@ export default function Categories() {
           <div class={styles.emptyState}>
             <p>No categories yet</p>
             <p>Create your first category to start organizing your transactions.</p>
-            <button class={styles.addCategoryBtn} onClick={() => setShowAddModal(true)}>
+            <button
+              class={styles.addCategoryBtn}
+              onClick={() => {
+                openCategoryModal(null)
+              }}
+            >
               Add Category
             </button>
           </div>
@@ -441,12 +431,7 @@ export default function Categories() {
           class={styles.modalOverlay}
           data-test-id="category-modal-overlay"
           onclick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowAddModal(false)
-              setShowIconPicker(false)
-              setEditingCategory(null)
-              setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
-            }
+            if (e.target === e.currentTarget) closeCategoryModal()
           }}
         >
           <div
@@ -459,125 +444,141 @@ export default function Categories() {
               <h3 class={styles.modalTitle} data-test-id="category-modal-title">
                 {editingCategory() ? 'Edit Category' : 'Add Category'}
               </h3>
-              <button
-                class={styles.modalClose}
-                onClick={() => {
-                  setShowAddModal(false)
-                  setShowIconPicker(false)
-                  setEditingCategory(null)
-                  setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
-                }}
-              >
+              <button class={styles.modalClose} onClick={closeCategoryModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Category Name</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Food, Rent"
-                  value={formData().name}
-                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Category Type</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().type}
-                  oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
-                >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                </select>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Icon</label>
-                <div class={styles.iconField}>
+            <form class={styles.modalBody} novalidate onSubmit={categoryForm.submit}>
+              <FormNotice form={categoryForm} />
+              <Field
+                form={categoryForm}
+                name="name"
+                label="Category Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
+                    {...control}
                     type="text"
                     class={styles.formControl}
-                    placeholder="e.g., food, home, car"
-                    value={formData().icon}
-                    oninput={(e) => setFormData({ ...formData(), icon: e.target.value })}
-                    maxlength="32"
+                    placeholder="e.g., Food, Rent"
+                    value={categoryForm.values.name}
+                    onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
+                    required
                   />
-                  <span class={styles.iconPreview} aria-hidden="true">
-                    {iconPreview()}
-                  </span>
-                  <button
-                    type="button"
-                    class={styles.iconBrowseBtn}
-                    data-test-id="category-icon-browse"
-                    aria-label="Browse icons"
-                    title="Browse icons"
-                    onClick={() => setShowIconPicker(true)}
+                )}
+              </Field>
+              <Field
+                form={categoryForm}
+                name="type"
+                label="Category Type"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formControl}
+                    value={categoryForm.values.type}
+                    onInput={(e) =>
+                      categoryForm.set('type', e.currentTarget.value as CategoryFormValues['type'])
+                    }
                   >
-                    <svg
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      viewBox="0 0 24 24"
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                )}
+              </Field>
+              <Field
+                form={categoryForm}
+                name="icon"
+                label="Icon"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+                hintClass={styles.fieldHint}
+                hint="Type a keyword and we pick the matching icon, or browse the gallery. Leave it blank to choose one from the category name."
+              >
+                {(control) => (
+                  <div class={styles.iconField}>
+                    <input
+                      {...control}
+                      type="text"
+                      class={styles.formControl}
+                      placeholder="e.g., food, home, car"
+                      value={categoryForm.values.icon}
+                      onInput={(e) => categoryForm.set('icon', e.currentTarget.value)}
+                      maxlength="32"
+                    />
+                    <span class={styles.iconPreview} aria-hidden="true">
+                      {iconPreview()}
+                    </span>
+                    <button
+                      type="button"
+                      class={styles.iconBrowseBtn}
+                      data-test-id="category-icon-browse"
+                      aria-label="Browse icons"
+                      title="Browse icons"
+                      onClick={() => setShowIconPicker(true)}
                     >
-                      <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v6H4zM14 15h6v6h-6z" />
-                    </svg>
-                  </button>
-                </div>
-                <span class={styles.fieldHint}>
-                  Type a keyword and we pick the matching icon, or browse the gallery. Leave it
-                  blank to choose one from the category name.
-                </span>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Color</label>
-                <div class={styles.colorPicker}>
-                  <For each={COLOR_CHOICES}>
-                    {(color) => (
-                      <button
-                        type="button"
-                        data-test-id="category-color-swatch"
-                        class={`${styles.colorPickerBtn} ${formData().color === color ? styles.active : ''}`}
-                        style={{ background: color }}
-                        onClick={() => setFormData({ ...formData(), color })}
-                        title={color}
+                      <svg
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        viewBox="0 0 24 24"
                       >
-                        {formData().color === color && (
-                          <svg
-                            width="14"
-                            height="14"
-                            fill="none"
-                            stroke="white"
-                            stroke-width="3"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        )}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
+                        <path d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v6H4zM14 15h6v6h-6z" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
+              </Field>
+              <Field
+                form={categoryForm}
+                name="color"
+                label="Color"
+                group
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <div {...control} class={styles.colorPicker}>
+                    <For each={COLOR_CHOICES}>
+                      {(color) => (
+                        <button
+                          type="button"
+                          data-test-id="category-color-swatch"
+                          class={`${styles.colorPickerBtn} ${categoryForm.values.color === color ? styles.active : ''}`}
+                          style={{ background: color }}
+                          onClick={() => categoryForm.set('color', color)}
+                          title={color}
+                        >
+                          {categoryForm.values.color === color && (
+                            <svg
+                              width="14"
+                              height="14"
+                              fill="none"
+                              stroke="white"
+                              stroke-width="3"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                )}
+              </Field>
               <div class={styles.modalFooter}>
-                <button
-                  type="button"
-                  class={styles.btnSecondary}
-                  onClick={() => {
-                    setShowAddModal(false)
-                    setShowIconPicker(false)
-                    setEditingCategory(null)
-                    setFormData({ name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' })
-                  }}
-                >
+                <button type="button" class={styles.btnSecondary} onClick={closeCategoryModal}>
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
@@ -591,11 +592,11 @@ export default function Categories() {
 
       {showAddModal() && showIconPicker() && (
         <IconPicker
-          value={formData().icon}
+          value={categoryForm.values.icon}
           onPick={(name) => {
             // Straight into the same field the user could have typed into. Closing afterwards is
             // the point of a picker: one click, and you are looking at your form again.
-            setFormData({ ...formData(), icon: name })
+            categoryForm.set('icon', name)
             setShowIconPicker(false)
           }}
           onClose={() => setShowIconPicker(false)}

@@ -37,6 +37,7 @@ import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
+import { Field, FormNotice } from '../components/form'
 import InfoTip from '../components/InfoTip'
 import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
@@ -44,6 +45,7 @@ import SectionRail from '../components/SectionRail'
 import { SkeletonCard } from '../components/Skeleton'
 import { getLocalCurrency } from '../core/api'
 import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { showConfirm } from '../core/confirmStore'
@@ -53,7 +55,9 @@ import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toYYYYMM } from '../utils/period'
 import styles from './BudgetsPage.module.css'
+import { createCategoryForm } from './categoryForm'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
+import type { CategoryFormValues } from './categoryForm'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -192,18 +196,29 @@ export default function Budgets() {
   const [categoryBudgetSummary, setCategoryBudgetSummary] = createSignal<
     Record<number, { spent: number; budget: number; remaining: number; percent_used: number }>
   >({})
-  const [catFormData, setCatFormData] = createSignal({
-    name: '',
-    type: 'expense' as 'expense' | 'income',
+  // The add/edit category dialog. What a save does, and what it says when the save is refused, is
+  // categoryForm.ts, shared with the Categories page and the dialogs in Bills and Goals. No reload
+  // after a save: the write bumped the categories counter, which the effect below tracks.
+  const closeCatModal = () => {
+    setShowCatModal(false)
+    setEditingCategory(null)
+  }
+  const catForm = createCategoryForm({
     color: '#6e9bff',
-    icon: '',
+    editing: editingCategory,
+    onSaved: closeCatModal,
   })
+  const openCatModal = (category: Category | null) => {
+    setEditingCategory(category)
+    catForm.open(category)
+    setShowCatModal(true)
+  }
 
   // Live preview of the icon the typed keyword resolves to. Must be a memo: a Solid
-  // component body runs once, so <CategoryIcon icon={catFormData().icon}> would render
+  // component body runs once, so <CategoryIcon icon={catForm.values.icon}> would render
   // whatever the field held at mount and never update as the user types.
   const catIconPreview = createMemo(() =>
-    getCategorySvg(catFormData().name, 18, catFormData().icon)
+    getCategorySvg(catForm.values.name, 18, catForm.values.icon)
   )
 
   const currentMonthNum = () => parseInt(month().split('-')[1])
@@ -401,34 +416,6 @@ export default function Budgets() {
     }
   }
 
-  // Handle category form submit
-  const handleCatSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = {
-      name: catFormData().name,
-      type: catFormData().type,
-      color: catFormData().color,
-      icon: catFormData().icon || null,
-    }
-
-    try {
-      if (editingCategory()) {
-        await apiPut(`/api/categories/${editingCategory()!.id}`, data)
-        showToast('Category updated successfully', 'success')
-      } else {
-        await apiPost('/api/categories', data)
-        showToast('Category created successfully', 'success')
-      }
-      setShowCatModal(false)
-      setEditingCategory(null)
-      setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-      // No reload here: the write bumped the categories counter, which the effect below tracks.
-    } catch (err) {
-      console.error('Failed to save category:', err)
-      showToast('Failed to save category', 'error')
-    }
-  }
-
   // Delete category
   const deleteCategory = async (id: number) => {
     try {
@@ -448,20 +435,13 @@ export default function Budgets() {
       // No reload here: the PUT bumped the categories counter, which the effect below tracks.
     } catch (err) {
       console.error('Failed to update color:', err)
-      showToast('Failed to update color', 'error')
+      showToast(plainMessage(err, "Couldn't change the color. Try again."), 'error')
     }
   }
 
   // Edit category
   const editCategory = (category: Category) => {
-    setEditingCategory(category)
-    setCatFormData({
-      name: category.name,
-      type: category.type,
-      color: category.color,
-      icon: category.icon || '',
-    })
-    setShowCatModal(true)
+    openCatModal(category)
   }
 
   // Open budget modal for a category
@@ -1037,9 +1017,7 @@ export default function Budgets() {
             <OrbitalAction
               variant="primary"
               onClick={() => {
-                setEditingCategory(null)
-                setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-                setShowCatModal(true)
+                openCatModal(null)
               }}
             >
               Add Category
@@ -1315,11 +1293,7 @@ export default function Budgets() {
           data-test-id="budgets-category-modal"
           class={styles.modalOverlay}
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowCatModal(false)
-              setEditingCategory(null)
-              setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-            }
+            if (e.target === e.currentTarget) closeCatModal()
           }}
         >
           <div
@@ -1330,102 +1304,120 @@ export default function Budgets() {
           >
             <div class={styles.modalHeader}>
               <h3>{editingCategory() ? 'Edit Category' : 'Add Category'}</h3>
-              <button
-                class={styles.modalClose}
-                onClick={() => {
-                  setShowCatModal(false)
-                  setEditingCategory(null)
-                  setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-                }}
-              >
+              <button class={styles.modalClose} onClick={closeCatModal}>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleCatSubmit}>
-              <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Category Name</label>
-                <input
-                  type="text"
-                  class={styles.formInput}
-                  placeholder="e.g., Food, Rent"
-                  value={catFormData().name}
-                  oninput={(e) => setCatFormData({ ...catFormData(), name: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Category Type</label>
-                <select
-                  class={styles.formInput}
-                  value={catFormData().type}
-                  oninput={(e) => setCatFormData({ ...catFormData(), type: e.target.value as any })}
-                >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                </select>
-              </div>
-              <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Icon</label>
-                <div class={styles.iconField}>
+            <form class={styles.modalBody} novalidate onSubmit={catForm.submit}>
+              <FormNotice form={catForm} />
+              <Field
+                form={catForm}
+                name="name"
+                label="Category Name"
+                class={styles.catFormGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
+                    {...control}
                     type="text"
                     class={styles.formInput}
-                    placeholder="e.g., food, home, car"
-                    value={catFormData().icon}
-                    oninput={(e) => setCatFormData({ ...catFormData(), icon: e.target.value })}
-                    maxlength="32"
+                    placeholder="e.g., Food, Rent"
+                    value={catForm.values.name}
+                    onInput={(e) => catForm.set('name', e.currentTarget.value)}
+                    required
                   />
-                  <span class={styles.iconPreview} aria-hidden="true">
-                    {catIconPreview()}
-                  </span>
-                </div>
-                <span class={styles.fieldHint}>
-                  Type a keyword and we pick the matching icon. Leave it blank to choose one from
-                  the category name.
-                </span>
-              </div>
-              <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Color</label>
-                <div class={styles.catColorDots}>
-                  <For each={CATEGORY_PALETTE}>
-                    {(color) => (
-                      <button
-                        type="button"
-                        data-test-id="category-color-swatch"
-                        class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catFormData().color === color ? styles.catColorDotActive : ''}`}
-                        style={{ background: color }}
-                        onClick={() => setCatFormData({ ...catFormData(), color })}
-                        title={color}
-                      >
-                        {catFormData().color === color && (
-                          <svg
-                            width="14"
-                            height="14"
-                            fill="none"
-                            stroke="white"
-                            stroke-width="3"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M20 6L9 17l-5-5" />
-                          </svg>
-                        )}
-                      </button>
-                    )}
-                  </For>
-                </div>
-              </div>
+                )}
+              </Field>
+              <Field
+                form={catForm}
+                name="type"
+                label="Category Type"
+                class={styles.catFormGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formInput}
+                    value={catForm.values.type}
+                    onInput={(e) =>
+                      catForm.set('type', e.currentTarget.value as CategoryFormValues['type'])
+                    }
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                )}
+              </Field>
+              <Field
+                form={catForm}
+                name="icon"
+                label="Icon"
+                class={styles.catFormGroup}
+                labelClass={styles.formLabel}
+                hintClass={styles.fieldHint}
+                hint="Type a keyword and we pick the matching icon. Leave it blank to choose one from the category name."
+              >
+                {(control) => (
+                  <div class={styles.iconField}>
+                    <input
+                      {...control}
+                      type="text"
+                      class={styles.formInput}
+                      placeholder="e.g., food, home, car"
+                      value={catForm.values.icon}
+                      onInput={(e) => catForm.set('icon', e.currentTarget.value)}
+                      maxlength="32"
+                    />
+                    <span class={styles.iconPreview} aria-hidden="true">
+                      {catIconPreview()}
+                    </span>
+                  </div>
+                )}
+              </Field>
+              <Field
+                form={catForm}
+                name="color"
+                label="Color"
+                group
+                class={styles.catFormGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <div {...control} class={styles.catColorDots}>
+                    <For each={CATEGORY_PALETTE}>
+                      {(color) => (
+                        <button
+                          type="button"
+                          data-test-id="category-color-swatch"
+                          class={`${styles.catColorDot} ${styles.catColorDotLarge} ${catForm.values.color === color ? styles.catColorDotActive : ''}`}
+                          style={{ background: color }}
+                          onClick={() => catForm.set('color', color)}
+                          title={color}
+                        >
+                          {catForm.values.color === color && (
+                            <svg
+                              width="14"
+                              height="14"
+                              fill="none"
+                              stroke="white"
+                              stroke-width="3"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M20 6L9 17l-5-5" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                )}
+              </Field>
               <div class={styles.modalFooter}>
-                <button
-                  type="button"
-                  class={styles.btnGhost}
-                  onClick={() => {
-                    setShowCatModal(false)
-                    setEditingCategory(null)
-                    setCatFormData({ name: '', type: 'expense', color: '#6e9bff', icon: '' })
-                  }}
-                >
+                <button type="button" class={styles.btnGhost} onClick={closeCatModal}>
                   Cancel
                 </button>
                 <button type="submit" class={styles.btnPrimary}>
