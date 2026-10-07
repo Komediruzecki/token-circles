@@ -103,6 +103,15 @@ const renameProfile = async (c: Context<AppEnv>) => {
   if (b.name !== undefined) {
     const name = b.name.trim();
     if (!name) throw new HttpError(400, 'Name is required');
+    // profiles(user_id, name) is UNIQUE: answer what the create route answers, before the write.
+    const dup = await db.first(
+      c.env.DB,
+      'SELECT id FROM profiles WHERE user_id = ? AND name = ? AND id != ?',
+      userId,
+      name,
+      pid
+    );
+    if (dup) throw new HttpError(400, 'A profile with this name already exists');
     await db.run(
       c.env.DB,
       'UPDATE profiles SET name = ? WHERE id = ? AND user_id = ?',
