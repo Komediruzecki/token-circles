@@ -1091,6 +1091,21 @@ export default function Transactions() {
 
   /** The profiles a read is asked for (X-Profile-Id and X-Profile-Ids), as one comparable key. */
   const readScope = () => JSON.stringify(profileRequestHeaders('household'))
+  /** The profiles a read asks for now. Followed on every profile notice, as activeId is. */
+  const scopeNow = createMemo(
+    on([() => state.profileVersion, () => state.currentProfile?.id], () => readScope())
+  )
+  /**
+   * The profiles the account list on screen is the answer for: null until one has come in. The
+   * empty list a failed load leaves is not an answer.
+   */
+  const [accountsAnsweredFor, setAccountsAnsweredFor] = createSignal<string | null>(null)
+  /**
+   * Whether the form's empty account list means "no accounts", rather than "not in yet". Only
+   * then does it offer to create a Cash account: while the list loads, or after a switch until
+   * the profile switched to has its own in, it says the accounts are loading.
+   */
+  const accountsAreIn = () => accountsAnsweredFor() === scopeNow()
 
   // The two lists below load the way the transaction list does (listAsked/listShown): refetches
   // overlap once every write, switch and resume triggers one, and an older answer shown after a
@@ -1150,6 +1165,7 @@ export default function Transactions() {
       accountsShown = asked
       accountsShownFor = scope
       setAccounts(acctData as any[])
+      setAccountsAnsweredFor(scope)
       if (!accountHashApplied) {
         accountHashApplied = true
         applyAccountFromHash(acctData as Array<{ id: number }>)
@@ -1515,19 +1531,32 @@ export default function Transactions() {
                 <Show
                   when={formAccounts().length > 0}
                   fallback={
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
-                      <span style="font-size: 13px; color: var(--text-secondary)">
-                        No accounts yet.
-                      </span>
-                      <button
-                        type="button"
-                        data-test-id="tx-create-cash-account"
-                        onClick={createCashAccount}
-                        style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
-                      >
-                        Create a "Cash" account
-                      </button>
-                    </div>
+                    <Show
+                      when={accountsAreIn()}
+                      fallback={
+                        <select
+                          class={styles.formControl}
+                          data-test-id="tx-account-loading"
+                          disabled
+                        >
+                          <option>Loading accounts…</option>
+                        </select>
+                      }
+                    >
+                      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
+                        <span style="font-size: 13px; color: var(--text-secondary)">
+                          No accounts yet.
+                        </span>
+                        <button
+                          type="button"
+                          data-test-id="tx-create-cash-account"
+                          onClick={createCashAccount}
+                          style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                        >
+                          Create a "Cash" account
+                        </button>
+                      </div>
+                    </Show>
                   }
                 >
                   <select

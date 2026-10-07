@@ -387,25 +387,68 @@ describe('a new entry opened before the accounts are in', () => {
     expect(accountSelect(root)!.value).toBe('')
   })
 
-  it('keeps the Cash account the person made from the form while the list was loading', async () => {
-    // Until the list is in, the form offers to create a Cash account.
-    serverAccounts = [{ id: 1, name: 'Main', currency: 'EUR', profile_id: 1 }]
-    const slow = deferred<Acct[]>()
-    getAccounts.mockImplementationOnce(() => slow.promise)
+  it('keeps the Cash account the person made from the form over one that appeared meanwhile', async () => {
+    // The profile has no accounts yet, so the form offers to create a Cash account.
+    serverAccounts = []
     const root = await mountTransactions()
     openTransactionForm(root)
     await flush()
     root.querySelector<HTMLElement>('[data-test-id="tx-create-cash-account"]')!.click()
     await flush()
-    // The create lands as id 7, apiFetch's counter reloads the list, and the slow load ends too.
-    serverAccounts = [...serverAccounts, { id: 7, name: 'Cash', currency: 'EUR', profile_id: 1 }]
+    // The create lands as id 7, and the reload it causes brings an account made elsewhere too.
+    serverAccounts = [
+      { id: 1, name: 'Main', currency: 'EUR', profile_id: 1 },
+      { id: 7, name: 'Cash', currency: 'EUR', profile_id: 1 },
+    ]
     invalidateEntity('accounts')
-    slow.resolve(serverAccounts)
     await flush()
     await flush()
 
     expect(createAccount).toHaveBeenCalledTimes(1)
     expect(accountSelect(root)!.value).toBe('7')
+  })
+
+  it('says the accounts are loading, and offers no Cash account until they are in', async () => {
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-modal"]')!.textContent).not.toContain(
+      'No accounts yet'
+    )
+
+    // In, and there are none: now the shortcut is the right offer.
+    slow.resolve([])
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).not.toBeNull()
+  })
+
+  it('says so after a switch too, until the profile switched to has its accounts in', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    openTransactionForm(root)
+    await flush()
+
+    // The list on screen is still the other profile's, so the form has none of its own yet.
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+
+    slow.resolve([{ id: 9, name: 'Joint', currency: 'EUR', profile_id: 2 }])
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('9')
   })
 
   it('counts the account picked for it as no change of the person’s', async () => {
