@@ -44,7 +44,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
-import { activeProfileId } from '../core/apiProfileScope'
+import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
@@ -884,8 +884,8 @@ export default function Transactions() {
         currency: getLocalCurrency(),
         balance: 0,
       } as unknown as Parameters<typeof api.createAccount>[0])
-      const acctData = await api.getAccounts()
-      if (Array.isArray(acctData)) setAccounts(acctData as any[])
+      // The account list follows the create on its own (apiFetch bumps the accounts counter, and
+      // loadAccounts answers it), so it is not fetched again here, outside that loader.
       setFormAccountId(acc.id)
     } catch (error) {
       console.error('Failed to create Cash account:', error)
@@ -1064,6 +1064,21 @@ export default function Transactions() {
   let categoryHashApplied = false
   let accountHashApplied = false
 
+  /** The profiles a read is asked for (X-Profile-Id and X-Profile-Ids), as one comparable key. */
+  const readScope = () => JSON.stringify(profileRequestHeaders('household'))
+
+  // The two lists below load the way the transaction list does (listAsked/listShown): refetches
+  // overlap once every write, switch and resume triggers one, and an older answer shown after a
+  // newer one would put back a list that a later write or a switch replaced. So an answer is shown
+  // only if nothing asked for after it is on screen already. `…ShownFor` is the scope the list on
+  // screen was asked for.
+  let categoriesAsked = 0
+  let categoriesShown = 0
+  let categoriesShownFor = ''
+  let accountsAsked = 0
+  let accountsShown = 0
+  let accountsShownFor = ''
+
   /**
    * Load the category list backing the filter bar, the bulk-category modal and — the one that
    * mattered — the add/edit transaction form's type dropdown.
@@ -1073,35 +1088,52 @@ export default function Transactions() {
    * on Categories, Budgets, Bills or Goals never appeared here, and neither did the right list
    * after a profile switch; only a browser reload fixed it. It is now driven by the effect below.
    *
-   * On failure the previous list is kept rather than blanked: a dropped refresh should not empty a
-   * dropdown the user is looking at.
+   * A failed load keeps the list on screen while it is the one asked for: a dropped refresh should
+   * not empty a dropdown the user is looking at. After a profile switch the list on screen is
+   * another profile's, and a failed load clears it rather than leave it looking current.
    */
   const loadCategories = async () => {
+    const asked = ++categoriesAsked
+    const scope = readScope()
     try {
       const cats = await api.getCategories()
-      if (!Array.isArray(cats)) return
+      if (!Array.isArray(cats)) throw new TypeError('The category list is not a list')
+      if (asked < categoriesShown) return
+      categoriesShown = asked
+      categoriesShownFor = scope
       setCategories(cats as Category[])
       if (!categoryHashApplied) {
         categoryHashApplied = true
         applyCategoryFromHash(cats as Category[])
       }
     } catch {
-      // Keep whatever is on screen.
+      if (asked < categoriesShown || categoriesShownFor === scope) return
+      categoriesShown = asked
+      categoriesShownFor = scope
+      setCategories([])
     }
   }
 
   /** Load the account list for the filter bar and the transaction form. See loadCategories. */
   const loadAccounts = async () => {
+    const asked = ++accountsAsked
+    const scope = readScope()
     try {
       const acctData = await api.getAccounts()
-      if (!Array.isArray(acctData)) return
+      if (!Array.isArray(acctData)) throw new TypeError('The account list is not a list')
+      if (asked < accountsShown) return
+      accountsShown = asked
+      accountsShownFor = scope
       setAccounts(acctData as any[])
       if (!accountHashApplied) {
         accountHashApplied = true
         applyAccountFromHash(acctData as Array<{ id: number }>)
       }
     } catch {
-      // Keep whatever is on screen.
+      if (asked < accountsShown || accountsShownFor === scope) return
+      accountsShown = asked
+      accountsShownFor = scope
+      setAccounts([])
     }
   }
 

@@ -118,6 +118,40 @@ const offeredCategoryNames = (root: HTMLElement) => optionsOf(root, 'tx-category
 const offersAccount = (root: HTMLElement, name: string) =>
   optionsOf(root, 'tx-account').some((label) => label.includes(name))
 
+/** A request that answers when the test says so. */
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+/**
+ * The names a filter-bar dropdown lists: the household's categories or accounts. Opened by its
+ * button, read, and closed again.
+ */
+async function filterBarNames(root: HTMLElement, opener: () => HTMLElement): Promise<string[]> {
+  opener().click()
+  await flush()
+  const names = Array.from(root.querySelectorAll('[data-test-id="filter-bar"] label'))
+    .map((l) => l.textContent?.trim() ?? '')
+    .filter((name) => name !== '' && !name.startsWith('All '))
+  opener().click()
+  await flush()
+  return names
+}
+const filterBarCategories = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    root.querySelector<HTMLElement>('[data-test-id="transactions-filter-category"]')!
+  )
+const filterBarAccounts = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button')).find((b) =>
+      b.textContent?.includes('All Accounts')
+    )!
+  )
+
 describe('Transactions reference data', () => {
   it('loads categories and accounts once on mount, with no duplicate fetch', async () => {
     await mountTransactions()
@@ -200,6 +234,72 @@ describe('Transactions reference data', () => {
     await flush()
 
     expect(offeredCategoryNames(root)).toContain('Groceries')
+  })
+
+  it('shows the newest category list when two refreshes cross, not the one that lands last', async () => {
+    const root = await mountTransactions()
+    // A refresh that is slow to answer, with the list as it stood when it was asked.
+    const slow = deferred<Cat[]>()
+    getCategories.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('categories')
+    await flush()
+    // A category created meanwhile, and the refresh after it answering at once.
+    serverCategories = [
+      ...serverCategories,
+      { id: 2, name: 'Utilities', type: 'expense', color: '#000', profile_id: 1 },
+    ]
+    invalidateEntity('categories')
+    await flush()
+    await flush()
+    // The slow one lands last.
+    slow.resolve([{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }])
+    await flush()
+    await flush()
+
+    expect(getCategories).toHaveBeenCalledTimes(3)
+    openTransactionForm(root)
+    await flush()
+    expect(offeredCategoryNames(root)).toContain('Utilities')
+  })
+
+  it('shows the newest account list when two refreshes cross, not the one that lands last', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('accounts')
+    await flush()
+    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 }]
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+    slow.resolve([{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }])
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(3)
+    openTransactionForm(root)
+    await flush()
+    expect(offersAccount(root, 'Savings')).toBe(true)
+  })
+
+  it('drops the other profile’s lists when the refresh after a switch fails, instead of showing them as current', async () => {
+    const root = await mountTransactions()
+    expect(await filterBarCategories(root)).toEqual(['Groceries'])
+    expect(await filterBarAccounts(root)).toEqual(['Cash'])
+
+    getCategories.mockRejectedValueOnce(new Error('network down'))
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(getCategories).toHaveBeenCalledTimes(2)
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(await filterBarCategories(root)).toEqual([])
+    expect(root.querySelector('[data-test-id="filter-bar"]')!.textContent).not.toContain(
+      'All Accounts'
+    )
   })
 
   it('does not refetch while the page is hidden, and flushes once when it is shown again', async () => {
