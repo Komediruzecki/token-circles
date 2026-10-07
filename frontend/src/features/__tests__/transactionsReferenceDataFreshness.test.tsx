@@ -74,11 +74,12 @@ beforeEach(() => {
   serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }]
   serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }]
   serverTags = []
-  getCategories.mockClear()
-  getAccounts.mockClear()
-  getTags.mockClear()
-  createAccount.mockClear()
-  createTag.mockClear()
+  // Reset, not cleared: a test that fails half-way must not leave a queued answer to the next.
+  getCategories.mockReset()
+  getAccounts.mockReset()
+  getTags.mockReset()
+  createAccount.mockReset()
+  createTag.mockReset()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -483,6 +484,120 @@ describe('a new entry opened before the accounts are in', () => {
     await flush()
 
     expect(accountSelect(root)!.value).toBe('9')
+  })
+
+  it('says the accounts did not load, with a way to try again, and offers no Cash account', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    const failed = root.querySelector<HTMLElement>('[data-test-id="tx-accounts-failed"]')
+    expect(failed?.textContent).toContain("Accounts didn't load.")
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+
+    // Try again: loading while it reads, then the accounts.
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!.click()
+    await flush()
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('says so again when the retry fails too', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    getAccounts.mockRejectedValueOnce(new Error('still down'))
+    root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!.click()
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+  })
+
+  it('keeps focus in the form when its "Try again" is pressed from the keyboard', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    const retry = root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!
+    getAccounts.mockImplementationOnce(() => deferred<Acct[]>().promise)
+
+    retry.focus()
+    retry.click()
+    await flush()
+
+    // The button has gone; focus is on the account field it sat in, not on the page.
+    expect(retry.isConnected).toBe(false)
+    expect(document.activeElement).not.toBe(document.body)
+    expect(
+      document.activeElement?.contains(root.querySelector('[data-test-id="tx-account-loading"]'))
+    ).toBe(true)
+  })
+
+  it('waits for the newest read when an older one fails meanwhile', async () => {
+    let failOlder!: (error: Error) => void
+    getAccounts.mockImplementationOnce(
+      () => new Promise<Acct[]>((_, reject) => (failOlder = reject))
+    )
+    const newer = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => newer.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    invalidateEntity('accounts')
+    await flush()
+    failOlder(new Error('dropped'))
+    await flush()
+    await flush()
+
+    // The newer read is still out: loading, not failed.
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+
+    newer.resolve(serverAccounts)
+    await flush()
+    await flush()
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('keeps offering the Cash account when a refresh of an empty list fails', async () => {
+    serverAccounts = []
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+  })
+
+  it('a failed refresh after the accounts are in keeps them, with no failure shown', async () => {
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('1')
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
   })
 
   it('counts the account picked for it as no change of the person’s', async () => {

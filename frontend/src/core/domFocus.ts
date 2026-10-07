@@ -80,3 +80,19 @@ export function isActivatableTarget(el: Element | null): boolean {
   const role = el.getAttribute('role')?.toLowerCase()
   return role === 'button' || role === 'link'
 }
+
+/**
+ * Hand focus to `target` when `control` holds it.
+ *
+ * For a control about to leave the page, such as a "Try again" button whose list is loading
+ * again: call this from the `onCleanup` of the Show or Match branch that renders the control.
+ * Solid runs that before it takes the branch's nodes out, while the control still holds focus.
+ * Without it, focus falls to the page itself, and a keyboard or screen-reader user who pressed
+ * the button starts again from the top.
+ */
+export function handFocusTo(
+  target: HTMLElement | null | undefined,
+  control: Element | null | undefined
+): void {
+  if (target && control && document.activeElement === control) target.focus()
+}

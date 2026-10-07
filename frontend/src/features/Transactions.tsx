@@ -30,7 +30,18 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  Show,
+  Switch,
+  untrack,
+} from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -50,12 +61,47 @@ import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
 import { asOneWrite, entityVersion } from '../core/dataVersions'
+import { handFocusTo } from '../core/domFocus'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
+
+/**
+ * The add form's account field when the account list did not load: says so, and offers to read it
+ * again. The retry takes this line away, and when its button held focus (a keyboard press) focus
+ * goes to `focusTarget` rather than falling to the page.
+ */
+function AccountsDidNotLoad(props: {
+  onRetry: () => void
+  focusTarget: () => HTMLElement | undefined
+}) {
+  let retry: HTMLButtonElement | undefined
+  onCleanup(() => {
+    handFocusTo(props.focusTarget(), retry)
+  })
+  return (
+    <div
+      data-test-id="tx-accounts-failed"
+      style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0"
+    >
+      <span style="font-size: 13px; color: var(--text-secondary)">Accounts didn't load.</span>
+      <button
+        ref={retry}
+        type="button"
+        data-test-id="tx-accounts-retry"
+        onClick={() => {
+          props.onRetry()
+        }}
+        style="padding: 6px 12px; background: transparent; color: var(--primary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
 
 /**
  * The toast for a form that a profile switch closed with changes in it: what was lost, and where
@@ -1128,12 +1174,23 @@ export default function Transactions() {
    * empty list a failed load leaves is not an answer.
    */
   const [accountsAnsweredFor, setAccountsAnsweredFor] = createSignal<string | null>(null)
+  /** The profiles the newest account read failed for. Cleared when another read is sent. */
+  const [accountsFailedFor, setAccountsFailedFor] = createSignal<string | null>(null)
   /**
    * Whether the form's empty account list means "no accounts", rather than "not in yet". Only
    * then does it offer to create a Cash account: while the list loads, or after a switch until
    * the profile switched to has its own in, it says the accounts are loading.
    */
   const accountsAreIn = () => accountsAnsweredFor() === scopeNow()
+  /**
+   * The read for the profiles asked for now failed, with nothing of theirs on screen: the form
+   * says the accounts did not load and offers to try again, rather than "Loading accounts…" for as
+   * long as the page stays open. No Cash account is offered then either: the profile may have
+   * accounts that simply did not arrive.
+   */
+  const accountsFailed = () => !accountsAreIn() && accountsFailedFor() === scopeNow()
+  /** The account field, which takes focus when its "Try again" goes while holding it. */
+  let accountField: HTMLDivElement | undefined
 
   // The two lists below load the way the transaction list does (listAsked/listShown): refetches
   // overlap once every write, switch and resume triggers one, and an older answer shown after a
@@ -1186,6 +1243,8 @@ export default function Transactions() {
   const loadAccounts = async () => {
     const asked = ++accountsAsked
     const scope = profileReadScope()
+    // Until this read answers, the field says the accounts are loading, a retry included.
+    setAccountsFailedFor(null)
     try {
       const acctData = await api.getAccounts()
       if (!Array.isArray(acctData)) throw new TypeError('The account list is not a list')
@@ -1199,6 +1258,8 @@ export default function Transactions() {
         applyAccountFromHash(acctData as Array<{ id: number }>)
       }
     } catch {
+      // The newest read failed: an older one's failure says nothing while a newer read is out.
+      if (asked === accountsAsked) setAccountsFailedFor(scope)
       if (asked < accountsShown || accountsShownFor === scope) return
       accountsShown = asked
       accountsShownFor = scope
@@ -1550,7 +1611,7 @@ export default function Transactions() {
                   </div>
                 </Show>
               </div>
-              <div class={styles.formGroup}>
+              <div class={styles.formGroup} ref={accountField} tabindex="-1">
                 <label class={styles.formLabel}>
                   {type() === 'transfer' ? 'From account' : 'Account'}
                   {type() !== 'transfer' && <span style="color: var(--danger, #ef4444)"> *</span>}
@@ -1559,8 +1620,7 @@ export default function Transactions() {
                 <Show
                   when={formAccounts().length > 0}
                   fallback={
-                    <Show
-                      when={accountsAreIn()}
+                    <Switch
                       fallback={
                         <select
                           class={styles.formControl}
@@ -1571,20 +1631,28 @@ export default function Transactions() {
                         </select>
                       }
                     >
-                      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
-                        <span style="font-size: 13px; color: var(--text-secondary)">
-                          No accounts yet.
-                        </span>
-                        <button
-                          type="button"
-                          data-test-id="tx-create-cash-account"
-                          onClick={createCashAccount}
-                          style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
-                        >
-                          Create a "Cash" account
-                        </button>
-                      </div>
-                    </Show>
+                      <Match when={accountsFailed()}>
+                        <AccountsDidNotLoad
+                          onRetry={() => void loadAccounts()}
+                          focusTarget={() => accountField}
+                        />
+                      </Match>
+                      <Match when={accountsAreIn()}>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
+                          <span style="font-size: 13px; color: var(--text-secondary)">
+                            No accounts yet.
+                          </span>
+                          <button
+                            type="button"
+                            data-test-id="tx-create-cash-account"
+                            onClick={createCashAccount}
+                            style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                          >
+                            Create a "Cash" account
+                          </button>
+                        </div>
+                      </Match>
+                    </Switch>
                   }
                 >
                   <select
