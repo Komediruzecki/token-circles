@@ -114,6 +114,30 @@ function watchConsole(page: Page): string[] {
   return seen
 }
 
+const OLD_PENSION = 'Zz Old Pension'
+
+/** Retirement > Add, filled in as a person would. The form's test ids are the same in 5.15.1. */
+async function addRetirementGoal(page: Page, name: string): Promise<void> {
+  await page.evaluate(() => {
+    window.location.hash = 'retirement'
+  })
+  await page.getByTestId('add-retirement-goal-btn').click({ timeout: 20_000 })
+  const modal = page.getByTestId('retirement-modal')
+  await expect(modal).toBeVisible()
+  const inTwentySevenYears = new Date(Date.now() + 27 * 365 * 86_400_000).toISOString().slice(0, 10)
+  await page.getByTestId('retirement-form-name').fill(name)
+  await page.getByTestId('retirement-form-target-amount').fill('300000')
+  await page.getByTestId('retirement-form-current-amount').fill('10000')
+  await page.getByTestId('retirement-form-current-age').fill('40')
+  await page.getByTestId('retirement-form-retirement-age').fill('67')
+  await page.getByTestId('retirement-form-target-date').fill(inTwentySevenYears)
+  await page.getByTestId('retirement-form-monthly-contribution').fill('400')
+  await page.getByTestId('retirement-form-expected-return').fill('5')
+  await page.getByTestId('retirement-modal-submit').click()
+  await expect(modal).toBeHidden()
+  await expect(page.getByTestId('retirement-goal-card').filter({ hasText: name })).toHaveCount(1)
+}
+
 /** Goals split in two at v13 (#581): retirement goals moved to a store of their own. */
 function expectSameRows(before: Record<string, number>, after: Record<string, number>): void {
   for (const [store, n] of Object.entries(before)) {
@@ -173,7 +197,7 @@ test.describe('5.16 local-first upgrade with another tab open', () => {
     await context.close()
   })
 
-  test('7.1 a browser holding v12 loads the candidate: upgraded, nothing lost @release', async ({
+  test('7.1 and 7.2 a browser holding v12 loads the candidate: upgraded, nothing lost, goals apart @release', async ({
     browser,
   }) => {
     let build = 'v5151'
@@ -182,6 +206,9 @@ test.describe('5.16 local-first upgrade with another tab open', () => {
     await serve(page, () => join(BUILDS as string, build))
 
     await openOldTabWithDemo(page)
+    // 7.2 is about data the old build wrote, and 5.15.1 kept retirement goals in the savings-goal
+    // store: add one there, through 5.15.1's own Retirement page.
+    await addRetirementGoal(page, OLD_PENSION)
     const before = await counts(page)
     expect(before.version).toBe(12)
     // Leave the app (a static file holds no connection), then come back on the new build.
@@ -193,6 +220,24 @@ test.describe('5.16 local-first upgrade with another tab open', () => {
     const after = await counts(page)
     expect(after.version).toBe(13)
     expectSameRows(before.rows, after.rows)
+
+    // 7.2: after the upgrade each page lists only its own kind.
+    await page.evaluate(() => {
+      window.location.hash = 'retirement'
+    })
+    const retirement = page.getByTestId('retirement-goals')
+    await expect(
+      retirement.getByTestId('retirement-goal-card').filter({ hasText: OLD_PENSION })
+    ).toHaveCount(1, { timeout: 20_000 })
+    await expect(retirement).not.toContainText('Emergency Fund')
+    await page.evaluate(() => {
+      window.location.hash = 'goals'
+    })
+    const savings = page
+      .getByTestId('goal-card')
+      .filter({ has: page.getByTestId('goal-name').filter({ hasText: 'Emergency Fund' }) })
+    await expect(savings).toHaveCount(1, { timeout: 20_000 })
+    await expect(page.getByTestId('goals-grid')).not.toContainText(OLD_PENSION)
     expect(problems).toEqual([])
     await context.close()
   })
