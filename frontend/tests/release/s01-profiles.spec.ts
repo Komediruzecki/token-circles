@@ -133,6 +133,32 @@ for (const [pass, test] of both) {
       await expect(categoryCards(page, `zz-noicon${m.suffix}`.slice(0, 40))).toHaveCount(1)
     })
 
+    test('1.2c a category made on the page reads back through the typed client @release', async ({
+      m,
+    }) => {
+      // Not a 5.16 regression: the local create handler and normalizeCategory are unchanged since
+      // 5.15.1. The row lacks `tax_deductible`, CategorySchema requires it, and api.getCategories()
+      // throws, which App's quick add, Transactions, Tags and (new in 5.16) local badges all call.
+      test.fail(
+        m.kind === 'local',
+        'local-first: a category created on the Categories page has no tax_deductible (since 5.15.1)'
+      )
+      const { page } = m
+      const name = `zz-typed${m.suffix}`.slice(0, 40)
+      await addCategory(page, name)
+      const typed = await page.evaluate(async () => {
+        const spec = '/src/core/api.ts'
+        const mod = (await import(/* @vite-ignore */ spec)) as {
+          api: { getCategories(): Promise<{ name: string }[]> }
+        }
+        return mod.api.getCategories().then(
+          (list) => list.map((c) => c.name),
+          (err: unknown) => `threw: ${String(err)}`
+        )
+      })
+      expect(typed).toContain(name)
+    })
+
     test('1.4 the Household view lock and ticks follow a sidebar switch @release', async ({
       m,
     }) => {
