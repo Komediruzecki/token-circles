@@ -136,6 +136,13 @@ export default function Transactions() {
   const [formProfileId, setFormProfileId] = createSignal<number>(activeId())
   const formCategories = createMemo(() => rowsOfProfile(categories(), formProfileId()))
   const formAccounts = createMemo(() => rowsOfProfile(accounts(), formProfileId()))
+  /**
+   * The active profile's categories and accounts, for the other writes on this page: a bulk change
+   * of category, whose rows are the active profile's (another profile's cannot be selected, #386),
+   * and a recurring entry, which is written to the active profile. Both refuse another profile's.
+   */
+  const activeCategories = createMemo(() => rowsOfProfile(categories(), activeId()))
+  const activeAccounts = createMemo(() => rowsOfProfile(accounts(), activeId()))
   // Filter categories by the selected transaction type
   const filteredCategories = createMemo(() => {
     const t = type()
@@ -1232,7 +1239,7 @@ export default function Transactions() {
       {/* Bulk Action Bar */}
       <BulkActionBar
         selectedCount={selectedTransactions().length}
-        categories={categories()}
+        categories={activeCategories()}
         tags={ownTags()}
         onClearSelection={() => setSelectedTransactions([])}
         onDeleteSelected={handleBulkDelete}
@@ -1244,7 +1251,7 @@ export default function Transactions() {
       />
 
       {/* Recurring Transactions */}
-      <RecurringSection categories={categories()} accounts={accounts()} />
+      <RecurringSection categories={activeCategories()} accounts={activeAccounts()} />
 
       {/* Transaction Modal */}
       <div

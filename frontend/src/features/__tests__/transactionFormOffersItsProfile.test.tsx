@@ -286,3 +286,60 @@ describe('an open form, when the active profile changes', () => {
     expect(toastMessages()).toEqual([])
   })
 })
+
+/** The ids a select offers, its placeholder left out. */
+const optionIds = (el: HTMLSelectElement) =>
+  Array.from(el.options)
+    .map((o) => o.value)
+    .filter((v) => v !== '')
+    .map(Number)
+
+/** The select beside a label reading exactly `text`, inside `root`. */
+function selectLabelled(root: ParentNode, text: string): HTMLSelectElement {
+  const label = Array.from(root.querySelectorAll('label')).find(
+    (l) => l.textContent?.trim() === text
+  )!
+  return label.parentElement!.querySelector('select')!
+}
+
+const buttonReading = (root: ParentNode, text: string) =>
+  Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+    (b) => b.textContent?.trim() === text
+  )!
+
+describe('the rest of the page, with two profiles ticked', () => {
+  // Only the active profile's rows can be selected (#386), and a recurring entry is written to the
+  // active profile. Both writes refuse another profile's category or account.
+  it('offers a bulk change of category the active profile’s categories', async () => {
+    await mountPage()
+    const coffee = Array.from(host.querySelectorAll('[data-test-id="transactions-row"]')).find(
+      (r) => r.textContent?.includes('Coffee')
+    )!
+    const box = coffee.querySelector<HTMLInputElement>('input[type="checkbox"]')!
+    box.checked = true
+    box.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    buttonReading(
+      host.querySelector('[data-test-id="bulk-action-bar"]')!,
+      'Change Category'
+    ).click()
+    await settle()
+
+    expect(optionIds(selectLabelled(host, 'New Category'))).toEqual([11, 12])
+  })
+
+  it('offers a new recurring entry the active profile’s categories and accounts', async () => {
+    await mountPage()
+    const section = Array.from(host.querySelectorAll('h2')).find(
+      (h) => h.textContent === 'Recurring Transactions'
+    )!.parentElement!
+    buttonReading(section, 'Add').click()
+    await settle()
+    const modal = Array.from(host.querySelectorAll('h3')).find(
+      (h) => h.textContent === 'Add Recurring'
+    )!.parentElement!.parentElement!
+
+    expect(optionIds(selectLabelled(modal, 'Account'))).toEqual([31, 32])
+    expect(optionIds(selectLabelled(modal, 'Category'))).toEqual([11, 12])
+  })
+})
