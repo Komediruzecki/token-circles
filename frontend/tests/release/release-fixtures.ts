@@ -166,6 +166,24 @@ async function listProfiles(request: APIRequestContext): Promise<Profile[]> {
   return Array.isArray(body) ? body : body.profiles
 }
 
+/**
+ * Wait until the local Worker answers. `wrangler dev` crashes now and then under a full run and its
+ * supervisor brings it back within seconds, but Playwright starts the retry at once: without this,
+ * the retry's first request lands in the restart window, gets a 502, and the retry is spent.
+ */
+async function waitForApi(request: APIRequestContext): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        request
+          .get(`${E2E_BASE}/api/health`, { timeout: 5_000 })
+          .then((r) => r.ok())
+          .catch(() => false),
+      { message: 'the local Worker answers /api/health', timeout: 60_000 }
+    )
+    .toBe(true)
+}
+
 async function createProfile(request: APIRequestContext, name: string): Promise<Profile> {
   const res = await request.post(`${E2E_BASE}/api/profiles`, { data: { name } })
   expect(res.ok(), `POST /api/profiles ${name} -> ${res.status()} ${await res.text()}`).toBeTruthy()
@@ -313,6 +331,7 @@ export const test = base.extend<{ cloud: CloudWorld; local: LocalWorld }>({
   cloud: async ({ page, context }, use, testInfo) => {
     const tag = tagFor(testInfo)
     const request = page.request
+    await waitForApi(request)
     const personalProfile = await createProfile(request, `Personal ${tag}`)
     const familyProfile = await createProfile(request, `Family ${tag}`)
     const personal = await seedSmallProfile(new ProfileApi(request, personalProfile))
@@ -422,7 +441,7 @@ export interface Mode {
    * local router in local-first. Writes land in the ACTIVE profile (`currentProfileId`), as the
    * app's do; switch first to write elsewhere. Fails the case on a non-2xx answer.
    */
-   
+
   api<T = Record<string, unknown>>(path: string, init?: ApiInit): Promise<T>
 }
 
