@@ -12,11 +12,11 @@
  * storage modes, and the page shows them. A server that predates the fields gets the same engine
  * run on the page instead.
  *
- * Three more figures on the card were never worked out at all. Next Payment read "Not set" on
- * every loan, because nothing set the date. The amount beside the progress bar read "0.00 paid"
- * next to "44% paid", because it was hard-coded to 0. And every loan was Active, paid off or not,
- * so the Active Loans and Paid Off cards counted every loan as active. The page now shows the
- * list's next_payment_date, the principal repaid, and a status that follows what is still owed.
+ * Three more figures were never worked out at all. Next Payment read "Not set" on every loan,
+ * because nothing set the date. The amount beside the progress bar read "0.00 paid" next to
+ * "44% paid", because it was hard-coded to 0. And every loan was Active, paid off or not. The page
+ * now shows the principal repaid, and an end line that follows what is still owed: "Done in" or
+ * "Paid off in". The next payment's date moves to the loan's own page with the relayout (plan 03).
  * The zone is pinned west of UTC, where a due date formatted in the local zone reads a day early.
  */
 import { render } from 'solid-js/web'
@@ -34,7 +34,12 @@ vi.mock('../../core/api', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   return {
     ...original,
-    apiGet: vi.fn(async () => ({})),
+    // The loan's own read, which the loan's page makes when the list row has no rate periods.
+    apiGet: vi.fn(async (path: string) => {
+      const id = Number(path.split('/').pop())
+      const loan = (listed as { id: number }[]).find((l) => l.id === id)
+      return { rate_periods: [], prepayments: [], ...loan }
+    }),
     apiHouseholdGet: vi.fn(async () => listed),
     apiPost: vi.fn(async () => ({ ok: true })),
     apiPut: vi.fn(async () => ({ ok: true })),
@@ -92,6 +97,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  history.replaceState(null, '', '#')
   dispose?.()
   dispose = undefined
   host?.remove()
@@ -99,7 +105,8 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-async function mount(): Promise<HTMLDivElement> {
+async function mount(hash = '#loans'): Promise<HTMLDivElement> {
+  history.replaceState(null, '', hash)
   setPage('loans')
   const { default: Loans } = await import('../Loans')
   dispose = render(() => <Loans />, host)
@@ -141,8 +148,8 @@ describe('Loans page figures', () => {
     expect(formatCurrency(B60)).toBe(formatCurrency(56204.87))
     expect(text(root, 'loans-item-monthly')).toBe(formatCurrency(A))
     // (100,000 - 56,204.87) / 100,000 = 43.8 %.
-    expect(text(root, 'loans-item-progress-percent')).toBe('44% paid')
-    expect(summary(root, 'Remaining Balance')).toBe(`Remaining Balance${formatCurrency(B60)}`)
+    expect(text(root, 'loans-item-progress-percent')).toBe('44% repaid')
+    expect(summary(root, 'Owed in total')).toBe(`Owed in total${formatCurrency(B60)}`)
   })
 
   it('shows the next payment after a rate change, not the base-rate annuity', async () => {
@@ -170,17 +177,9 @@ describe('Loans page figures', () => {
     expect(text(root, 'loans-item-remaining')).toBe(formatCurrency(expected.remaining_balance))
     expect(text(root, 'loans-item-monthly')).toBe(formatCurrency(expected.monthly_payment))
     expect(expected.next_payment_date).toBe('2026-01-01')
-    expect(text(root, 'loans-item-next-payment')).toBe('Jan 1, 2026')
   })
 
-  it('shows when the next payment is due, on its own date west of UTC', async () => {
-    // A bare 2026-01-01 is midnight UTC; formatted in New York's zone it would read Dec 31, 2025.
-    listed = [LISTED]
-    const root = await mount()
-    expect(text(root, 'loans-item-next-payment')).toBe('Jan 1, 2026')
-  })
-
-  it('says None once a loan is paid off, and Not set when it has no schedule to date', async () => {
+  it('says when a loan was paid off, and that one with no start date has no due dates', async () => {
     // Neither row carries the figures, so the page runs the engine: one loan ended in 2019, the
     // other was saved without a start date.
     listed = [
@@ -188,18 +187,21 @@ describe('Loans page figures', () => {
       { ...LOAN, id: 2, start_date: '' },
     ]
     const root = await mount()
-    expect(texts(root, 'loans-item-next-payment')).toEqual(['None', 'Not set'])
+    expect(texts(root, 'loans-item-payoff')).toEqual([
+      'Paid off in December 2019',
+      'No due dates: the start date cannot be read',
+    ])
   })
 
   it('shows the principal repaid beside the progress bar, what the percentage measures', async () => {
     // 100,000 - 56,204.87 = 43,795.13 repaid: the 44 % the bar shows.
     listed = [LISTED]
     const root = await mount()
-    expect(text(root, 'loans-item-total-paid')).toBe(`${formatCurrency(100000 - B60)} paid`)
+    expect(text(root, 'loans-item-total-paid')).toBe(formatCurrency(100000 - B60))
     expect(formatCurrency(100000 - B60)).toBe(formatCurrency(43795.13))
   })
 
-  it('marks a loan with nothing left to pay Paid Off, and counts it there', async () => {
+  it('marks a loan with nothing left to pay as paid off, and leaves it out of the totals', async () => {
     listed = [
       LISTED,
       {
@@ -213,10 +215,16 @@ describe('Loans page figures', () => {
       },
     ]
     const root = await mount()
-    expect(texts(root, 'loans-item-status')).toEqual(['Active', 'Paid Off'])
-    expect(summary(root, 'Active Loans')).toBe('Active Loans1')
-    expect(summary(root, 'Paid Off')).toBe('Paid Off1')
-    expect(texts(root, 'loans-item-total-paid')[1]).toBe(`${formatCurrency(100000)} paid`)
+    expect(texts(root, 'loans-item-payoff')).toEqual([
+      'Done in December 2030',
+      'Paid off in December 2019',
+    ])
+    expect(summary(root, 'Owed in total')).toBe(`Owed in total${formatCurrency(B60)}`)
+    expect(summary(root, 'Paid each month')).toBe(`Paid each month${formatCurrency(A)}for 1 loan`)
+    expect(summary(root, 'Next to finish')).toBe('Next to finishMortgagein December 2030')
+    expect(texts(root, 'loans-item-total-paid')[1]).toBe(formatCurrency(100000))
+    // Nothing is left to compare on a paid-off loan, so only the open one offers What if.
+    expect(texts(root, 'loans-item-what-if')).toEqual(['What if'])
   })
 
   it('shows a paid-off loan as owing nothing and paying nothing', async () => {
@@ -224,6 +232,6 @@ describe('Loans page figures', () => {
     const root = await mount()
     expect(text(root, 'loans-item-remaining')).toBe(formatCurrency(0))
     expect(text(root, 'loans-item-monthly')).toBe(formatCurrency(0))
-    expect(text(root, 'loans-item-progress-percent')).toBe('100% paid')
+    expect(text(root, 'loans-item-progress-percent')).toBe('100% repaid')
   })
 })
