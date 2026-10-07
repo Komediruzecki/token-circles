@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
-import { calculateLoan } from '../../shared/loanSchedule';
+import { addCalendarMonths, calculateLoan, loanStatus, todayUtc } from '../../shared/loanSchedule';
 import type { LoanInput } from '../../shared/loanSchedule';
 import { PARITY_LOAN } from '../../shared/fixtures/loanParity';
 
@@ -171,6 +171,96 @@ describe('POST /api/loans/:id/calculate', () => {
     const id = await storeLoan(PARITY_LOAN, PARTNER);
     expect((await calculate(id, ME)).status).toBe(404);
     expect((await calculate(id, PARTNER)).status).toBe(200);
+  });
+});
+
+describe('GET /api/loans', () => {
+  type Listed = Record<string, unknown> & {
+    id: number;
+    remaining_balance: number;
+    monthly_payment: number;
+    payoff_date: string | null;
+  };
+
+  async function list(profile = ME): Promise<Listed[]> {
+    const res = await api('GET', '/api/loans', undefined, profile);
+    expect(res.status).toBe(200);
+    return (await res.json()) as Listed[];
+  }
+
+  it('adds where each loan stands today, from the shared engine', async () => {
+    // 100,000 at 5 % over 120 months whose 60th payment fell due today: owed is the balance after
+    // 60 installments, B_60 = P (1+r)^60 - A ((1+r)^60 - 1) / r = 56,204.87. The Loans page used to
+    // subtract 60 whole installments from the principal instead, and showed 36,360.69.
+    const today = todayUtc();
+    const start = addCalendarMonths(today, -59);
+    const r = 0.05 / 12;
+    const A = (100000 * r * (1 + r) ** 120) / ((1 + r) ** 120 - 1);
+    const B60 = 100000 * (1 + r) ** 60 - (A * ((1 + r) ** 60 - 1)) / r;
+    const plain = await storeLoan({
+      principal: 100000,
+      interest_rate: 5,
+      start_date: start,
+      term_months: 120,
+      rate_periods: [],
+    });
+    const busy = await storeLoan({ ...PARITY_LOAN, start_date: addCalendarMonths(today, -20) });
+
+    const rows = await list();
+    const row = rows.find((l) => l.id === plain)!;
+    expect(row.remaining_balance).toBeCloseTo(B60, 6);
+    expect(row.remaining_balance).toBeCloseTo(56204.87, 2);
+    expect(row.monthly_payment).toBeCloseTo(A, 6);
+    expect(row.payoff_date).toBe(addCalendarMonths(start, 119));
+
+    // The loan with a rate period and extra payments gets its own, not another loan's.
+    const other = rows.find((l) => l.id === busy)!;
+    const expected = loanStatus(
+      { ...PARITY_LOAN, start_date: addCalendarMonths(today, -20) },
+      today
+    );
+    expect(other.remaining_balance).toBe(expected.remaining_balance);
+    expect(other.monthly_payment).toBe(expected.monthly_payment);
+    expect(other.payoff_date).toBe(expected.payoff_date);
+  });
+
+  it('keeps every field the list already had, and adds three', async () => {
+    await storeLoan(PARITY_LOAN);
+    const [row] = await list();
+    expect(Object.keys(row)).toEqual([
+      'id',
+      'name',
+      'principal',
+      'interest_rate',
+      'start_date',
+      'term_months',
+      'created_at',
+      'profile_id',
+      'total_prepaid',
+      'prepayment_count',
+      'remaining_balance',
+      'monthly_payment',
+      'payoff_date',
+    ]);
+    expect(row.total_prepaid).toBe(5000);
+    expect(row.prepayment_count).toBe(3);
+  });
+
+  it('owes nothing and pays nothing on a loan already paid off', async () => {
+    await storeLoan({ ...PARITY_LOAN, start_date: '2010-01-31' });
+    const [row] = await list();
+    expect(row.remaining_balance).toBe(0);
+    expect(row.monthly_payment).toBe(0);
+    expect(row.payoff_date).toBe(
+      calculateLoan({ ...PARITY_LOAN, start_date: '2010-01-31' }).summary.payoffDate
+    );
+  });
+
+  it("lists only the active profile's loans", async () => {
+    const mine = await storeLoan(PARITY_LOAN, ME);
+    const theirs = await storeLoan(PARITY_LOAN, PARTNER);
+    expect((await list(ME)).map((l) => l.id)).toEqual([mine]);
+    expect((await list(PARTNER)).map((l) => l.id)).toEqual([theirs]);
   });
 });
 

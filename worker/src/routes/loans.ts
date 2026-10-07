@@ -4,8 +4,8 @@ import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
 import { HttpError } from '../http'
 import * as db from '../db'
-import { calculateLoan } from '../../../shared/loanSchedule'
-import type { LoanPrepayment, LoanRatePeriod } from '../../../shared/loanSchedule'
+import { calculateLoan, loanStatus, todayUtc } from '../../../shared/loanSchedule'
+import type { LoanInput, LoanPrepayment, LoanRatePeriod } from '../../../shared/loanSchedule'
 
 // Port of backend/routes/loans.js + backend/repositories/loansRepo.js.
 // Loans are profile-scoped. Rate periods and prepayments are keyed by loan_id
@@ -13,20 +13,82 @@ import type { LoanPrepayment, LoanRatePeriod } from '../../../shared/loanSchedul
 // profile (the Express routes do the same getById guard before every sub-op).
 export const loansRoutes = new Hono<AppEnv>()
 
-// List loans with prepayment rollups (correlated subqueries, profile-scoped).
+/**
+ * A stored loan as shared/loanSchedule.ts reads it. interest_rate is the base rate the engine
+ * charges in every month no rate period covers; nothing is prepended to the periods.
+ */
+function engineInput(
+  loan: Record<string, any>,
+  ratePeriods: LoanRatePeriod[],
+  prepayments: LoanPrepayment[]
+): LoanInput {
+  return {
+    principal: loan.principal,
+    interest_rate: loan.interest_rate,
+    start_date: loan.start_date,
+    term_months: loan.term_months,
+    rate_periods: ratePeriods,
+    prepayments,
+  }
+}
+
+/** Rows grouped by their loan_id. */
+function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
+  const groups = new Map<number, T[]>()
+  for (const row of rows) {
+    const group = groups.get(row.loan_id)
+    if (group) group.push(row)
+    else groups.set(row.loan_id, [row])
+  }
+  return groups
+}
+
+// List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
+// stands today: remaining_balance (after every payment due by today, extra payments and rate
+// periods included), monthly_payment (the next one due; 0 once paid off) and payoff_date. They come
+// from the shared engine, as in the local-first list, so the Loans page and API clients read the
+// same figures. Rate periods and extra payments are fetched in one query each for all the loans,
+// ordered as the calculate route orders them. Additions only: every column the list had is kept.
 loansRoutes.get('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
-  const rows = await db.all(
-    c.env.DB,
-    `SELECT l.*,
-        (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid,
-        (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
-      FROM loans l
-      WHERE l.profile_id = ?
-      ORDER BY l.created_at DESC`,
-    pid
+  const [rows, ratePeriods, prepayments] = await Promise.all([
+    db.all<Record<string, any>>(
+      c.env.DB,
+      `SELECT l.*,
+          (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid,
+          (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
+        FROM loans l
+        WHERE l.profile_id = ?
+        ORDER BY l.created_at DESC`,
+      pid
+    ),
+    db.all<LoanRatePeriod & { loan_id: number }>(
+      c.env.DB,
+      `SELECT loan_id, rate, start_month, end_month FROM loan_rate_periods
+        WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)
+        ORDER BY start_month, id`,
+      pid
+    ),
+    db.all<LoanPrepayment & { loan_id: number }>(
+      c.env.DB,
+      `SELECT loan_id, month, amount, note FROM loan_prepayments
+        WHERE loan_id IN (SELECT id FROM loans WHERE profile_id = ?)
+        ORDER BY month, id`,
+      pid
+    ),
+  ])
+  const periodsOf = byLoan(ratePeriods)
+  const extrasOf = byLoan(prepayments)
+  const today = todayUtc()
+  return c.json(
+    rows.map((loan) => ({
+      ...loan,
+      ...loanStatus(
+        engineInput(loan, periodsOf.get(loan.id) ?? [], extrasOf.get(loan.id) ?? []),
+        today
+      ),
+    }))
   )
-  return c.json(rows)
 })
 
 loansRoutes.post('/api/loans', requireAuth, async (c) => {
@@ -238,14 +300,5 @@ loansRoutes.post('/api/loans/:id/calculate', requireAuth, async (c) => {
     ),
   ])
 
-  return c.json(
-    calculateLoan({
-      principal: loan.principal,
-      interest_rate: loan.interest_rate,
-      start_date: loan.start_date,
-      term_months: loan.term_months,
-      rate_periods: ratePeriods,
-      prepayments,
-    })
-  )
+  return c.json(calculateLoan(engineInput(loan, ratePeriods, prepayments)))
 })
