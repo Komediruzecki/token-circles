@@ -17,6 +17,7 @@ import {
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { isEditableTarget } from '../core/domFocus'
+import { quickEntrySave } from '../core/quickEntryLists'
 import styles from './GuidedOrbit.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -143,23 +144,26 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     setSubmitting(true)
     const amt = amount()
     try {
-      const tx = await api.createTransaction({
-        description: note() || category()?.name || 'Quick entry',
-        amount: amt,
-        date: date(),
-        beneficiary: '',
-        payor: '',
-        category_id: categoryId(),
-        currency: getLocalCurrency(),
-        amount_local: amt,
-        exchange_rate: 1,
-        type: type(),
-        notes: '',
-        account_id: account()?.id ?? null,
+      // The save closes the orb: the lists read what it changed on the next open, not now.
+      await quickEntrySave(async () => {
+        const tx = await api.createTransaction({
+          description: note() || category()?.name || 'Quick entry',
+          amount: amt,
+          date: date(),
+          beneficiary: '',
+          payor: '',
+          category_id: categoryId(),
+          currency: getLocalCurrency(),
+          amount_local: amt,
+          exchange_rate: 1,
+          type: type(),
+          notes: '',
+          account_id: account()?.id ?? null,
+        })
+        if (account()) localStorage.setItem(lastAccountKey(), String(account()!.id))
+        props.onSave(tx)
+        props.onClose()
       })
-      if (account()) localStorage.setItem(lastAccountKey(), String(account()!.id))
-      props.onSave(tx)
-      props.onClose()
     } catch (err) {
       console.error('Guided orbit create failed:', err)
       toast('Failed to save entry', 'error')

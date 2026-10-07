@@ -17,6 +17,7 @@ import {
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { parseEntry } from '../core/entry/parseEntry'
+import { quickEntrySave } from '../core/quickEntryLists'
 import styles from './CommandBar.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -141,28 +142,31 @@ export function CommandBar(props: CommandBarProps) {
     const amount = eAmount() as number
     setSubmitting(true)
     try {
-      const tx = await api.createTransaction({
-        description: eDescription() || 'Quick entry',
-        amount,
-        date: eDate(),
-        beneficiary: '',
-        payor: '',
-        category_id: eCategoryId(),
-        currency: getLocalCurrency(),
-        amount_local: amount,
-        exchange_rate: 1,
-        type: eType(),
-        notes: '',
-        account_id: accountId(),
+      // Closing, the lists read what the save changed on the next open; kept open, once after it.
+      await quickEntrySave(async () => {
+        const tx = await api.createTransaction({
+          description: eDescription() || 'Quick entry',
+          amount,
+          date: eDate(),
+          beneficiary: '',
+          payor: '',
+          category_id: eCategoryId(),
+          currency: getLocalCurrency(),
+          amount_local: amount,
+          exchange_rate: 1,
+          type: eType(),
+          notes: '',
+          account_id: accountId(),
+        })
+        if (accountId() !== null) localStorage.setItem(lastAccountKey(), String(accountId()))
+        props.onSave(tx)
+        if (keepOpen) {
+          resetDraft()
+          inputRef?.focus()
+        } else {
+          props.onClose()
+        }
       })
-      if (accountId() !== null) localStorage.setItem(lastAccountKey(), String(accountId()))
-      props.onSave(tx)
-      if (keepOpen) {
-        resetDraft()
-        inputRef?.focus()
-      } else {
-        props.onClose()
-      }
     } catch (err) {
       console.error('Command bar create failed:', err)
       toast('Failed to save entry', 'error')

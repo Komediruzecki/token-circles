@@ -22,6 +22,9 @@
  * page does, with "a quick entry is open" standing in for "the page is visible": a change while
  * open reloads now, a change while closed waits for the next open (core/pageVisibility.ts explains
  * why hidden consumers defer). The newest read wins.
+ *
+ * A quick entry's own save is the exception (quickEntrySave below): what it changes is read on the
+ * next open, or once after the save when the entry stays open.
  */
 import { createEffect, createSignal, on, untrack } from 'solid-js'
 import { activeProfileId } from './apiProfileScope'
@@ -76,6 +79,29 @@ export interface QuickEntryListOptions<T> {
 }
 
 const EMPTY: Held<never> = { profileId: null, items: [], status: 'loading' }
+
+/** How many quick-entry saves are under way. See quickEntrySave. */
+const [savesRunning, setSavesRunning] = createSignal(0)
+
+/**
+ * Run a quick entry's save: the request, then App's onSave, then closing the entry or clearing it
+ * for the next one.
+ *
+ * A save reaches the lists twice while its entry is still open: the write bumps `transactions`,
+ * which moves `accounts` (core/dataVersions.ts), and App's onSave then bumps the profile version.
+ * Each read the lists again: three reads for a save whose entry was about to close, where one
+ * read on the next open does. So while a save runs, a change only marks the lists out of date. An
+ * entry that closed reads on its next open; one still open when the save is over (the command
+ * bar's Alt+Enter) reads each list once then.
+ */
+export async function quickEntrySave<T>(save: () => Promise<T>): Promise<T> {
+  setSavesRunning((n) => n + 1)
+  try {
+    return await save()
+  } finally {
+    setSavesRunning((n) => n - 1)
+  }
+}
 
 export function createQuickEntryList<T extends { profile_id: number }>(
   options: QuickEntryListOptions<T>
@@ -136,9 +162,21 @@ export function createQuickEntryList<T extends { profile_id: number }>(
           setHeld(EMPTY)
           return
         }
-        if (untrack(options.isOpen)) load(true)
+        // During a save, wait for it to be over (quickEntrySave).
+        if (untrack(options.isOpen) && untrack(savesRunning) === 0) load(true)
         else stale = true
       }
+    )
+  )
+
+  // A save is over and the entry is still open: read what it changed, once.
+  createEffect(
+    on(
+      savesRunning,
+      (running) => {
+        if (running === 0 && stale && untrack(options.isOpen)) load(true)
+      },
+      { defer: true }
     )
   )
 

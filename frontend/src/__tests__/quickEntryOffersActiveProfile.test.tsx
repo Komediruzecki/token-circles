@@ -293,6 +293,14 @@ const addButton = () =>
 const transactionPosts = () =>
   net.sent.filter((r) => r.method === 'POST' && r.path === '/api/transactions')
 
+/** The reads behind the quick entries' lists, in the order they went out. */
+const listReads = () =>
+  net.sent
+    .filter(
+      (r) => r.method === 'GET' && (r.path === '/api/categories' || r.path === '/api/accounts')
+    )
+    .map((r) => r.path)
+
 // ---- The sidebar ------------------------------------------------------------------------------
 
 async function switchProfile(id: number) {
@@ -500,5 +508,51 @@ describe.each(['serverless', 'self-hosted'] as const)('quick entry in %s mode', 
       expect(optionNames(select)).toContain('Eating out')
     }, waitLong)
     expect(picked(select)).not.toBe('Groceries')
+  })
+
+  // A save bumps `transactions`, which moves `accounts`, and App's onSave then bumps the profile
+  // version. Read while the entry was still open, each read the lists again: three reads for a
+  // save whose entry was about to close.
+  it('reads neither list again for a save that closes the orb', async () => {
+    await mountApp(mode, 1)
+    await openOrbAtCategories()
+    await pickCategory('Groceries')
+    const before = listReads().length
+
+    addButton()!.click()
+    await vi.waitFor(() => {
+      expect(transactionPosts()).toHaveLength(1)
+    }, waitLong)
+    await settle()
+
+    expect(listReads().slice(before)).toEqual([])
+  })
+
+  it('reads neither list again for a save that closes the command bar', async () => {
+    await mountApp(mode, 1)
+    const { input } = await openCommandBar('coffee 5 groceries')
+    const before = listReads().length
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await vi.waitFor(() => {
+      expect(transactionPosts()).toHaveLength(1)
+    }, waitLong)
+    await settle()
+
+    expect(listReads().slice(before)).toEqual([])
+  })
+
+  it('reads each list once after a save that keeps the command bar open', async () => {
+    await mountApp(mode, 1)
+    const { input } = await openCommandBar('coffee 5 groceries')
+    const before = listReads().length
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }))
+    await vi.waitFor(() => {
+      expect(transactionPosts()).toHaveLength(1)
+    }, waitLong)
+    await settle()
+
+    expect(listReads().slice(before).sort()).toEqual(['/api/accounts', '/api/categories'])
   })
 })

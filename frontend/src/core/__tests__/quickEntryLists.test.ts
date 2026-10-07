@@ -8,7 +8,7 @@
  */
 import { createRoot, createSignal } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createQuickEntryList } from '../quickEntryLists'
+import { createQuickEntryList, quickEntrySave } from '../quickEntryLists'
 import type { QuickEntryList } from '../quickEntryLists'
 
 interface Row {
@@ -280,5 +280,52 @@ describe('createQuickEntryList', () => {
     expect(list.profileId()).toBeNull()
     list.reload()
     expect(pending).toHaveLength(2)
+  })
+
+  it('reads nothing for a save that closes the entry, and once on the next open', async () => {
+    setOpen(true)
+    pending[0].answer()
+    await flush()
+
+    await quickEntrySave(async () => {
+      // The write's own bump, App's profile-version bump, then the entry closes.
+      bump()
+      bump()
+      setOpen(false)
+    })
+    expect(pending).toHaveLength(1)
+
+    setOpen(true)
+    expect(pending).toHaveLength(2)
+  })
+
+  it('reads once when a save that keeps the entry open is over, keeping its rows meanwhile', async () => {
+    setOpen(true)
+    pending[0].answer()
+    await flush()
+
+    await quickEntrySave(async () => {
+      bump()
+      bump()
+      expect(pending).toHaveLength(1)
+    })
+
+    expect(pending).toHaveLength(2)
+    expect(names()).toEqual(['Groceries'])
+    expect(list.status()).toBe('ready')
+  })
+
+  it('reads nothing after a save that changed nothing', async () => {
+    setOpen(true)
+    pending[0].answer()
+    await flush()
+
+    await expect(
+      quickEntrySave(async () => {
+        throw new Error('Failed to save entry')
+      })
+    ).rejects.toThrow('Failed to save entry')
+
+    expect(pending).toHaveLength(1)
   })
 })
