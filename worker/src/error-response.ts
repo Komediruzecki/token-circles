@@ -54,13 +54,22 @@ export function reportError(c: Context<AppEnv>, err: unknown): PublicError {
   return answer;
 }
 
-/** The app's onError: reportError, as JSON. */
+/**
+ * The app's onError: reportError, as JSON. An HTTPException that carries its own response
+ * (Hono's basicAuth and bearerAuth build a 401 with WWW-Authenticate) is answered with that
+ * response instead, since rebuilding it as JSON would drop its headers.
+ */
 export function errorResponse(err: Error, c: Context<AppEnv>): Response {
   // The crawler middleware sets this after next(); when next() threw, the response it stamped is
   // the one this handler is about to replace. Say it again here so a 5xx is never the one
   // response on the host without it.
   c.header('X-Robots-Tag', 'noindex, nofollow');
   const { status, message, transient } = reportError(c, err);
+  if (err instanceof HTTPException && err.res) {
+    const res = err.getResponse();
+    res.headers.set('X-Robots-Tag', 'noindex, nofollow');
+    return res;
+  }
   if (transient) c.header('Retry-After', '5');
   return c.json({ error: message }, status as 500);
 }

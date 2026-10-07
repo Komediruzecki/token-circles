@@ -1,6 +1,8 @@
 import { env, SELF } from 'cloudflare:test';
 import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { bearerAuth } from 'hono/bearer-auth';
+import { basicAuth } from 'hono/basic-auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
 import { errorResponse, GENERIC_ERROR } from '../src/error-response';
@@ -143,5 +145,42 @@ describe('errors written for the client', () => {
     const res = await app.request('/gone', {}, env);
     expect(res.status).toBe(410);
     expect(await res.json()).toEqual({ error: 'That export link has expired' });
+  });
+});
+
+describe('an HTTPException that carries its own response', () => {
+  // Hono's basicAuth and bearerAuth throw one with a prepared 401 whose WWW-Authenticate header
+  // is the point of it. Rebuilding it as {error} JSON dropped the header.
+  it('answers with that response, headers and all', async () => {
+    const app = new Hono<AppEnv>();
+    app.onError(errorResponse);
+    app.get('/custom', () => {
+      throw new HTTPException(401, {
+        res: new Response('Sign in first', {
+          status: 401,
+          headers: { 'WWW-Authenticate': 'Bearer realm="tc"', 'Content-Type': 'text/plain' },
+        }),
+      });
+    });
+    const res = await app.request('/custom', {}, env);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toBe('Bearer realm="tc"');
+    expect(await res.text()).toBe('Sign in first');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+  });
+
+  it("keeps bearerAuth's and basicAuth's challenge", async () => {
+    const app = new Hono<AppEnv>();
+    app.onError(errorResponse);
+    app.get('/bearer', bearerAuth({ token: 'not-a-real-token' }), (c) => c.text('in'));
+    app.get('/basic', basicAuth({ username: 'u', password: 'p' }), (c) => c.text('in'));
+
+    const bearer = await app.request('/bearer', {}, env);
+    expect(bearer.status).toBe(401);
+    expect(bearer.headers.get('www-authenticate')).toMatch(/^Bearer/);
+
+    const basic = await app.request('/basic', {}, env);
+    expect(basic.status).toBe(401);
+    expect(basic.headers.get('www-authenticate')).toMatch(/^Basic/);
   });
 });
