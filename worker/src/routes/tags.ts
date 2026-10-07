@@ -495,6 +495,15 @@ tagsRoutes.put('/api/tags/:id', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, any>;
   const name = typeof b.name === 'string' ? b.name.trim() : '';
   if (!name) throw new HttpError(400, 'Tag name is required');
+  // tags(name, profile_id) is UNIQUE: answer what the create route answers, before the write.
+  const dupe = await db.first(
+    c.env.DB,
+    'SELECT id FROM tags WHERE name = ? AND profile_id = ? AND id != ?',
+    name,
+    pid,
+    Number(c.req.param('id'))
+  );
+  if (dupe) throw new HttpError(400, 'Tag already exists');
   const res = await db.update(
     c.env.DB,
     'tags',

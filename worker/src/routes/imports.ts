@@ -273,6 +273,9 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   );
 });
 
+/** A reason fetchGoogleSheetRows writes itself, safe to show in its 501. */
+class SheetUnreadable extends Error {}
+
 // ── fetchGoogleSheetRows — fetch + parse a published sheet as CSV (Workers-safe) ──
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
 // it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
@@ -292,10 +295,10 @@ export async function fetchGoogleSheetRows(
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
       : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
     const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw new SheetUnreadable('HTTP ' + r.status);
     const text = await r.text();
     if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-      throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)');
+      throw new SheetUnreadable('Sheet is not publicly accessible (got HTML instead of CSV)');
     }
     const { headers, rows } = parseCsv(text);
     if (headers.length > 0) {
@@ -309,16 +312,32 @@ export async function fetchGoogleSheetRows(
         },
       };
     }
-    throw new Error('No rows found');
+    throw new SheetUnreadable('No rows found');
   } catch (err) {
     // CSV export failed / returned nothing. The Express fallback parses the XLSX export to
     // enumerate tabs, which the spreadsheet parser can't do on Workers yet.
+    let reason = 'the download did not complete';
+    if (err instanceof SheetUnreadable) {
+      reason = err.message;
+    } else {
+      // Anything else (a network failure, a parser bug) says nothing the user can act on and may
+      // name our internals, so it goes to the logs. No URL: a sheet's share link is its key.
+      const e = err as { message?: string; stack?: string };
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          source: 'google-sheet',
+          message: e?.message ?? String(err),
+          stack: e?.stack ?? null,
+        })
+      );
+    }
     return {
       status: 501,
       body: {
         error:
           'Could not import this Google Sheet via CSV export: ' +
-          (err as Error).message +
+          reason +
           ". Make sure the sheet is shared as 'Anyone with link can view'. " +
           'The XLSX fallback is not available on this deployment yet.',
       },

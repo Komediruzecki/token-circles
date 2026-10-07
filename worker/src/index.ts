@@ -43,8 +43,7 @@ import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
-import { isTransientD1Error } from './db';
-import { logWorkerError } from './errorlog';
+import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
@@ -125,6 +124,9 @@ app.use('*', async (c, next) => {
 });
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
+// A request body that is not JSON answers 400, not 500 (error-response.ts).
+app.use('*', rejectMalformedJson);
+
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means
 // the gate has no secret and every password sign-in on this environment fails closed. It
@@ -187,25 +189,7 @@ app.route('/', mcpRoutes);
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
 
-// Mirrors the Express AppError handler: honor an attached statusCode, else 500.
-app.onError((err, c) => {
-  // The crawler middleware sets this after next(); when next() threw, the response it stamped is
-  // the one this handler is about to replace. Say it again here so a 5xx is never the one
-  // response on the host without it.
-  c.header('X-Robots-Tag', 'noindex, nofollow');
-  // A `d1 export` backup (deploy-worker.yml) or a transient blip briefly locks D1 — and the
-  // in-helper retries (db.ts) were exhausted (or the query bypassed the helpers). Return a
-  // retryable 503 instead of a hard 500, and skip persisting it to the (also-locked) error_logs.
-  if (isTransientD1Error(err)) {
-    c.header('Retry-After', '5');
-    return c.json({ error: 'Service temporarily unavailable, please retry shortly.' }, 503);
-  }
-  const status = (err as { statusCode?: number }).statusCode ?? 500;
-  // Log the failure (structured console.error → Workers Observability; 5xx also persisted to the
-  // error_logs D1 table). Best-effort; never let logging change the response.
-  logWorkerError(c, err, status);
-  return c.json({ error: err.message || 'Internal Server Error' }, status as 500);
-});
+app.onError(errorResponse);
 
 // Object export: the Worker serves HTTP (app.fetch) AND runs cron reminders (scheduled).
 // Cron schedules live in wrangler.jsonc → env.<env>.triggers.crons.
