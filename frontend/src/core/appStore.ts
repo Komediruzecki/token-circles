@@ -4,7 +4,7 @@
  * without prop drilling.
  */
 import { createStore } from 'solid-js/store'
-import type { Category, PageName, Profile } from '../types/models'
+import type { PageName, Profile } from '../types/models'
 
 export interface AppState {
   page: PageName
@@ -17,7 +17,6 @@ export interface AppState {
   isProfileModalOpen: boolean
   isQuickAddOpen: boolean
   sidebarCollapsed: boolean
-  quickAddCategories: Category[]
   profileVersion: number
   tagsVersion: number
 }
@@ -33,7 +32,6 @@ const initialState: AppState = {
   isProfileModalOpen: false,
   isQuickAddOpen: false,
   sidebarCollapsed: true,
-  quickAddCategories: [],
   profileVersion: 0,
   tagsVersion: 0,
 }
@@ -152,16 +150,6 @@ export function setSidebarCollapsed(collapsed: boolean) {
 
 export function toggleSidebar() {
   setState('sidebarCollapsed', (v) => !v)
-}
-
-// ── Quick Add Categories ──
-
-export function getQuickAddCategories() {
-  return state.quickAddCategories
-}
-
-export function setQuickAddCategories(categories: Category[]) {
-  setState('quickAddCategories', categories)
 }
 
 // ── Profile version (incremented on selection change, pages watch to reload data) ──

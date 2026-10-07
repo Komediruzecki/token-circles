@@ -5,16 +5,29 @@
  * category, then a confirm — reusing the same defaults as the command bar
  * (today, currency, last-used account). The gentle face of the same engine.
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { isEditableTarget } from '../core/domFocus'
 import styles from './GuidedOrbit.module.css'
+import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
 
 export interface GuidedOrbitProps {
   isOpen: () => boolean
   onClose: () => void
-  categories: () => Category[]
+  /** The active profile's categories, current when shown (App, core/quickEntryLists.ts). */
+  categories: QuickEntryList<Category>
+  /** The active profile's accounts, from the same place. */
+  accounts: QuickEntryList<Account>
   onSave: (transaction: unknown) => void
 }
 
@@ -29,8 +42,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
   const [amountStr, setAmountStr] = createSignal('')
   const [type, setType] = createSignal<'expense' | 'income'>('expense')
   const [categoryId, setCategoryId] = createSignal<number | null>(null)
-  const [accounts, setAccounts] = createSignal<Account[]>([])
-  const [accountIdx, setAccountIdx] = createSignal(0)
+  /** The account tapped to on the confirm step, if any. */
+  const [accountPick, setAccountPick] = createSignal<number | null>(null)
   const [note, setNote] = createSignal('')
   const [date, setDate] = createSignal(todayIso())
   const [submitting, setSubmitting] = createSignal(false)
@@ -39,38 +52,33 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     const n = parseFloat(amountStr() || '0')
     return Number.isFinite(n) ? n : 0
   }
-  const poolCats = createMemo(() => props.categories().filter((c) => c.type === type()))
-  const category = () => props.categories().find((c) => c.id === categoryId()) || null
-  const account = () => accounts()[accountIdx()] || null
+  const poolCats = createMemo(() => props.categories.items().filter((c) => c.type === type()))
+  const category = () => props.categories.items().find((c) => c.id === categoryId()) || null
+  const accounts = () => props.accounts.items()
+  /** Where the entry goes: the account tapped to, else the last one used here, else the first. */
+  const account = createMemo(() => {
+    const list = accounts()
+    const picked = list.find((a) => a.id === accountPick())
+    if (picked) return picked
+    const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
+    return list.find((a) => a.id === stored) ?? list[0] ?? null
+  })
+  /** Nothing is offered, and nothing can be added, until both lists are in for this profile. */
+  const listsLoading = () =>
+    props.categories.status() === 'loading' || props.accounts.status() === 'loading'
 
   const reset = () => {
     setStep(1)
     setAmountStr('')
     setType('expense')
     setCategoryId(null)
+    setAccountPick(null)
     setNote('')
     setDate(todayIso())
   }
 
-  const loadAccounts = async () => {
-    try {
-      const accs = await api.getAccounts()
-      const list = Array.isArray(accs) ? accs : []
-      setAccounts(list)
-      const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
-      const i = list.findIndex((a) => a.id === stored)
-      setAccountIdx(i >= 0 ? i : 0)
-    } catch {
-      setAccounts([])
-      setAccountIdx(0)
-    }
-  }
-
   createEffect(() => {
-    if (props.isOpen()) {
-      reset()
-      void loadAccounts()
-    }
+    if (props.isOpen()) reset()
   })
 
   // keypad
@@ -111,11 +119,27 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     setStep(3)
   }
   const cycleAccount = () => {
-    if (accounts().length > 1) setAccountIdx((i) => (i + 1) % accounts().length)
+    const list = accounts()
+    if (list.length < 2) return
+    const at = list.findIndex((a) => a.id === account()?.id)
+    setAccountPick(list[(at + 1) % list.length].id)
   }
 
   const submit = async () => {
-    if (submitting() || amount() <= 0 || categoryId() === null) return
+    if (submitting() || listsLoading() || amount() <= 0 || categoryId() === null) return
+    // The save files the entry under the active profile as it is now, and refuses a category or
+    // account of any other. If the lists are no longer that profile's (it was switched in another
+    // tab) or the category has gone, read again and ask for the category again instead.
+    const categoriesCurrent = props.categories.isCurrent()
+    const accountsCurrent = props.accounts.status() !== 'ready' || props.accounts.isCurrent()
+    if (!categoriesCurrent || !category() || !accountsCurrent) {
+      if (!categoriesCurrent) props.categories.reload()
+      if (!accountsCurrent) props.accounts.reload()
+      setCategoryId(null)
+      setStep(2)
+      toast("That category isn't in this profile anymore. Pick one again.", 'error')
+      return
+    }
     setSubmitting(true)
     const amt = amount()
     try {
@@ -287,31 +311,55 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
         {/* STEP 2 — category */}
         <Show when={step() === 2}>
           <div class={styles.body}>
-            <div class={styles.catGrid}>
-              <For each={poolCats()}>
-                {(c) => (
+            <Switch>
+              <Match when={props.categories.status() === 'loading'}>
+                <p class={styles.empty} role="status" data-test-id="orbit-categories-loading">
+                  Loading your categories…
+                </p>
+              </Match>
+              <Match when={props.categories.status() === 'error'}>
+                <div class={styles.empty} role="alert" data-test-id="orbit-categories-error">
+                  Your categories didn't load.
                   <button
                     type="button"
-                    class={styles.catChip}
-                    classList={{ [styles.catOn]: categoryId() === c.id }}
+                    class={styles.retry}
                     onClick={() => {
-                      pickCategory(c.id)
+                      props.categories.reload()
                     }}
                   >
-                    <span
-                      class={styles.catDot}
-                      style={{ background: c.color || 'var(--primary)' }}
-                    />
-                    <span class={styles.catName}>{c.name}</span>
+                    Try again
                   </button>
-                )}
-              </For>
-              <Show when={poolCats().length === 0}>
-                <p class={styles.empty}>
-                  No {type()} categories yet — add one from the Categories page.
-                </p>
-              </Show>
-            </div>
+                </div>
+              </Match>
+              <Match when={props.categories.status() === 'ready'}>
+                <div class={styles.catGrid}>
+                  <For each={poolCats()}>
+                    {(c) => (
+                      <button
+                        type="button"
+                        class={styles.catChip}
+                        classList={{ [styles.catOn]: categoryId() === c.id }}
+                        data-test-id="orbit-category"
+                        onClick={() => {
+                          pickCategory(c.id)
+                        }}
+                      >
+                        <span
+                          class={styles.catDot}
+                          style={{ background: c.color || 'var(--primary)' }}
+                        />
+                        <span class={styles.catName}>{c.name}</span>
+                      </button>
+                    )}
+                  </For>
+                  <Show when={poolCats().length === 0}>
+                    <p class={styles.empty} data-test-id="orbit-categories-empty">
+                      No {type()} categories yet. Add one on the Categories page.
+                    </p>
+                  </Show>
+                </div>
+              </Match>
+            </Switch>
           </div>
         </Show>
 
@@ -332,12 +380,20 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
               <button
                 class={styles.sumRow}
                 type="button"
-                onClick={cycleAccount}
-                disabled={accounts().length <= 1}
+                onClick={() => {
+                  if (props.accounts.status() === 'error') props.accounts.reload()
+                  else cycleAccount()
+                }}
+                disabled={props.accounts.status() !== 'error' && accounts().length <= 1}
               >
                 <span class={styles.sumK}>Account</span>
                 <span class={styles.sumV}>
-                  {account()?.name ?? 'None'}
+                  <Switch fallback={account()?.name ?? 'None'}>
+                    <Match when={props.accounts.status() === 'loading'}>Loading…</Match>
+                    <Match when={props.accounts.status() === 'error'}>
+                      Didn't load. Tap to try again
+                    </Match>
+                  </Switch>
                   <Show when={accounts().length > 1}>
                     <span class={styles.tapHint}>tap to change</span>
                   </Show>
@@ -366,7 +422,7 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
             <button
               class={styles.addBtn}
               onClick={() => void submit()}
-              disabled={submitting()}
+              disabled={submitting() || listsLoading()}
               type="button"
             >
               {submitting() ? 'Adding…' : `Add ${money(amount())}`}

@@ -5,16 +5,29 @@
  * lands it and keeps the bar open for the next one. It replaces the old
  * bare-bones Quick Add and reads its draft from the pure `parseEntry` core.
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+  untrack,
+} from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
 import { parseEntry } from '../core/entry/parseEntry'
 import styles from './CommandBar.module.css'
+import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
 
 export interface CommandBarProps {
   isOpen: () => boolean
   onClose: () => void
-  categories: () => Category[]
+  /** The active profile's categories, current when shown (App, core/quickEntryLists.ts). */
+  categories: QuickEntryList<Category>
+  /** The active profile's accounts, from the same place. */
+  accounts: QuickEntryList<Account>
   onSave: (transaction: unknown) => void
 }
 
@@ -24,17 +37,19 @@ const lastAccountKey = () => `lastAccountId:${localStorage.getItem('currentProfi
 export function CommandBar(props: CommandBarProps) {
   let inputRef: HTMLInputElement | undefined
   const [input, setInput] = createSignal('')
-  const [accounts, setAccounts] = createSignal<Account[]>([])
-  const [accountId, setAccountId] = createSignal<number | null>(null)
+  /** The account picked on its chip, if any. */
+  const [accountPick, setAccountPick] = createSignal<number | null>(null)
   const [typeOverride, setTypeOverride] = createSignal<'income' | 'expense' | null>(null)
   const [categoryOverride, setCategoryOverride] = createSignal<number | 'auto'>('auto')
   const [dateOverride, setDateOverride] = createSignal<string | null>(null)
   const [submitting, setSubmitting] = createSignal(false)
+  /** Enter was pressed before the lists were in: land it (keeping the bar open or not) once they are. */
+  const [pendingSubmit, setPendingSubmit] = createSignal<boolean | null>(null)
 
   const parsed = createMemo(() =>
     parseEntry(input(), {
-      categories: props
-        .categories()
+      categories: props.categories
+        .items()
         .filter((c) => c.type === 'income' || c.type === 'expense')
         .map((c) => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense' })),
       today: todayIso(),
@@ -42,7 +57,7 @@ export function CommandBar(props: CommandBarProps) {
   )
 
   const eType = (): 'income' | 'expense' => typeOverride() ?? parsed().type
-  const poolCats = createMemo(() => props.categories().filter((c) => c.type === eType()))
+  const poolCats = createMemo(() => props.categories.items().filter((c) => c.type === eType()))
   const eCategoryId = createMemo<number | null>(() => {
     const ov = categoryOverride()
     if (ov !== 'auto') return ov
@@ -50,11 +65,29 @@ export function CommandBar(props: CommandBarProps) {
     if (pid === null) return null
     return poolCats().some((c) => c.id === pid) ? pid : null
   })
-  const eCategory = () => props.categories().find((c) => c.id === eCategoryId()) || null
+  const eCategory = () => props.categories.items().find((c) => c.id === eCategoryId()) || null
   const eAmount = () => parsed().amount
   const eDate = () => dateOverride() ?? parsed().date
   const eDescription = () => parsed().description || eCategory()?.name || ''
-  const canSubmit = () => (eAmount() ?? 0) > 0 && eCategoryId() !== null
+  const accounts = () => props.accounts.items()
+  /** Where the entry goes: the account picked here, else the last one used, else the first. */
+  const accountId = createMemo<number | null>(() => {
+    const list = accounts()
+    const picked = accountPick()
+    if (picked !== null && list.some((a) => a.id === picked)) return picked
+    const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
+    if (Number.isFinite(stored) && list.some((a) => a.id === stored)) return stored
+    return list.length ? list[0].id : null
+  })
+  const listsLoading = () =>
+    props.categories.status() === 'loading' || props.accounts.status() === 'loading'
+  const categoryPrompt = () => {
+    const status = props.categories.status()
+    if (status === 'loading') return 'loading categories'
+    if (status === 'error') return "categories didn't load"
+    return 'pick category'
+  }
+  const canSubmit = () => (eAmount() ?? 0) > 0 && eCategoryId() !== null && !listsLoading()
 
   const resetDraft = () => {
     setInput('')
@@ -63,36 +96,46 @@ export function CommandBar(props: CommandBarProps) {
     setDateOverride(null)
   }
 
-  const loadAccounts = async () => {
-    try {
-      const accs = await api.getAccounts()
-      const list = Array.isArray(accs) ? accs : []
-      setAccounts(list)
-      const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
-      if (Number.isFinite(stored) && list.some((a) => a.id === stored)) setAccountId(stored)
-      else setAccountId(list.length ? list[0].id : null)
-    } catch {
-      setAccounts([])
-      setAccountId(null)
-    }
-  }
-
-  // Initialise on each open: fresh accounts, cleared draft, focused input.
+  // Initialise on each open: the last-used account, a cleared draft, a focused input. The lists
+  // themselves are App's, and are read again on open when anything changed.
   createEffect(() => {
     if (props.isOpen()) {
-      void loadAccounts()
+      setAccountPick(null)
       resetDraft()
       setTimeout(() => inputRef?.focus(), 60)
+    } else {
+      setPendingSubmit(null)
     }
   })
 
   const submit = async (keepOpen: boolean) => {
     if (submitting()) return
+    if (listsLoading()) {
+      setPendingSubmit(keepOpen)
+      return
+    }
     if (!canSubmit()) {
+      const categoriesFailed = props.categories.status() === 'error'
       toast(
-        (eAmount() ?? 0) > 0 ? 'Pick a category to land it' : 'Add an amount to land it',
+        (eAmount() ?? 0) <= 0
+          ? 'Add an amount to land it'
+          : categoriesFailed
+            ? "Your categories didn't load. Use retry on the category chip."
+            : 'Pick a category to land it',
         'error'
       )
+      return
+    }
+    // The save files the entry under the active profile as it is now, and refuses a category or
+    // account of any other. If the lists are no longer that profile's (it was switched in another
+    // tab) or the category has gone, read again and ask for the category again instead.
+    const categoriesCurrent = props.categories.isCurrent()
+    const accountsCurrent = props.accounts.status() !== 'ready' || props.accounts.isCurrent()
+    if (!categoriesCurrent || !eCategory() || !accountsCurrent) {
+      if (!categoriesCurrent) props.categories.reload()
+      if (!accountsCurrent) props.accounts.reload()
+      setCategoryOverride('auto')
+      toast("That category isn't in this profile anymore. Pick one again.", 'error')
       return
     }
     const amount = eAmount() as number
@@ -127,6 +170,14 @@ export function CommandBar(props: CommandBarProps) {
       setSubmitting(false)
     }
   }
+
+  // The Enter that came before the lists: now they are in (or failed, which submit reports).
+  createEffect(() => {
+    const keepOpen = pendingSubmit()
+    if (keepOpen === null || listsLoading()) return
+    setPendingSubmit(null)
+    untrack(() => void submit(keepOpen))
+  })
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -228,7 +279,7 @@ export function CommandBar(props: CommandBarProps) {
               }
               aria-label="Category"
             >
-              <option value="">pick category</option>
+              <option value="">{categoryPrompt()}</option>
               <For each={poolCats()}>
                 {(c) => (
                   <option value={String(c.id)} selected={c.id === eCategoryId()}>
@@ -237,6 +288,17 @@ export function CommandBar(props: CommandBarProps) {
                 )}
               </For>
             </select>
+            <Show when={props.categories.status() === 'error'}>
+              <button
+                type="button"
+                class={styles.retry}
+                onClick={() => {
+                  props.categories.reload()
+                }}
+              >
+                retry
+              </button>
+            </Show>
           </span>
 
           {/* account */}
@@ -247,7 +309,7 @@ export function CommandBar(props: CommandBarProps) {
                 class={styles.select}
                 value={accountId() === null ? '' : String(accountId())}
                 onChange={(e) =>
-                  setAccountId(e.currentTarget.value ? Number(e.currentTarget.value) : null)
+                  setAccountPick(e.currentTarget.value ? Number(e.currentTarget.value) : null)
                 }
                 aria-label="Account"
               >

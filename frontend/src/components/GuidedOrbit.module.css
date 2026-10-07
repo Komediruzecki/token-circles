@@ -378,3 +378,21 @@ button.sumRow:disabled {
     transition: none;
   }
 }
+
+/* "Try again" under a list that did not load */
+.retry {
+  display: block;
+  margin: 10px auto 0;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.retry:hover {
+  border-color: color-mix(in oklab, var(--primary) 40%, var(--border));
+}
