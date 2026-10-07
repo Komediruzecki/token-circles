@@ -332,7 +332,7 @@ for (const [pass, test] of both) {
 
     test('2.17b the bill calendar shows a renamed, recoloured category @release', async ({ m }) => {
       // Local-first: as in 2.17, no bill carries its category. billsCalendar
-      // (core/storage/handlers/bills.ts:145) reads `category_name`/`category_color` off the
+      // (core/storage/handlers/bills.ts:147) reads `category_name`/`category_color` off the
       // stored bill row, which no create path writes. Same in v5.15.1.
       test.fail(
         m.kind === 'local',
