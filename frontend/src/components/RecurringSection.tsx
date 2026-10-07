@@ -5,6 +5,7 @@
 import { createSignal, For, Show } from 'solid-js'
 import { transactionInvariantError } from '../../../shared/transactionInvariant'
 import { api, formatCurrency, toast } from '../core/api'
+import { profileReadScope } from '../core/apiProfileScope'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
@@ -49,12 +50,33 @@ export default function RecurringSection(props: RecurringSectionProps) {
   const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formNotes, setFormNotes] = createSignal('')
 
+  // Newest answer wins: the list reloads on every recurring and category write, switch and resume,
+  // and answers can land out of order. One is shown only if nothing asked for after it is on
+  // screen already. `itemsShownFor` is the profiles the rules on screen were asked for.
+  let itemsAsked = 0
+  let itemsShown = 0
+  let itemsShownFor = ''
+
+  /**
+   * Load the rules. A failed load keeps the rules on screen while they are the ones asked for; after
+   * a profile switch they are another profile's, which this profile cannot edit (an edit answers
+   * 404), so a failed load clears them rather than leave them looking current.
+   */
   const loadItems = async () => {
+    const asked = ++itemsAsked
+    const scope = profileReadScope()
     try {
       const data = await api.getRecurring()
-      setItems(Array.isArray(data) ? data : [])
+      if (!Array.isArray(data)) throw new TypeError('The recurring list is not a list')
+      if (asked < itemsShown) return
+      itemsShown = asked
+      itemsShownFor = scope
+      setItems(data)
     } catch {
-      // Recurring items will remain empty
+      if (asked < itemsShown || itemsShownFor === scope) return
+      itemsShown = asked
+      itemsShownFor = scope
+      setItems([])
     }
   }
 
