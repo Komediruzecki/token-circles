@@ -106,6 +106,10 @@ async function earnFirstBudget(
 
 for (const [pass, test] of both) {
   test.describe(`5.16.0 s6 badges [${pass}]`, () => {
+    // One after another, in one worker. Run side by side, these three cases put the cloud pass's
+    // local Worker through bursts of badge evaluations at the same moments, and in every full run
+    // that did so `wrangler dev` crashed under them (workerd: write ... Broken pipe).
+    test.describe.configure({ mode: 'default' })
     test('6.2 a new profile has no badges, and the others keep theirs @release', async ({ m }) => {
       const { page } = m
       await waitForBadgeRecord(m, m.a.id)
