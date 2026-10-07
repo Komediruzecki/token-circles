@@ -15,8 +15,8 @@
  * Three more figures were never worked out at all. Next Payment read "Not set" on every loan,
  * because nothing set the date. The amount beside the progress bar read "0.00 paid" next to
  * "44% paid", because it was hard-coded to 0. And every loan was Active, paid off or not. The page
- * now shows the principal repaid, and an end line that follows what is still owed: "Done in" or
- * "Paid off in". The next payment's date moves to the loan's own page with the relayout (plan 03).
+ * now shows the list's next_payment_date (on the loan's own page since the relayout, plan 03), the
+ * principal repaid, and an end line that follows what is still owed: "Done in" or "Paid off in".
  * The zone is pinned west of UTC, where a due date formatted in the local zone reads a day early.
  */
 import { render } from 'solid-js/web'
@@ -177,6 +177,16 @@ describe('Loans page figures', () => {
     expect(text(root, 'loans-item-remaining')).toBe(formatCurrency(expected.remaining_balance))
     expect(text(root, 'loans-item-monthly')).toBe(formatCurrency(expected.monthly_payment))
     expect(expected.next_payment_date).toBe('2026-01-01')
+    dispose?.()
+    const page = await mount('#loans/1/schedule')
+    expect(text(page, 'loans-detail-next-payment')).toBe('Next payment Jan 1, 2026')
+  })
+
+  it('shows when the next payment is due, on its own date west of UTC', async () => {
+    // A bare 2026-01-01 is midnight UTC; formatted in New York's zone it would read Dec 31, 2025.
+    listed = [LISTED]
+    const root = await mount('#loans/1/schedule')
+    expect(text(root, 'loans-detail-next-payment')).toBe('Next payment Jan 1, 2026')
   })
 
   it('says when a loan was paid off, and that one with no start date has no due dates', async () => {
