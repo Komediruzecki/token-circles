@@ -1,6 +1,6 @@
 /**
- * One loan: its name and where it stands, then three tabs. Compare (what a what-if changes, added
- * next), Month by month (the schedule) and Extra payments (what is saved on the loan).
+ * One loan: its name and where it stands, then three tabs. Compare (what a what-if changes),
+ * Month by month (the schedule) and Extra payments (what is saved on the loan).
  *
  * The page runs the shared engine on the loan as stored, so every figure here is the schedule the
  * calculate route returns. Local-first rows carry their rate periods and extra payments; the
@@ -12,6 +12,7 @@ import { todayUtc } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
 import { apiDelete, apiGet, apiPost, formatCurrency, showToast } from '../../core/api'
 import { refetchOnActive } from '../../core/pageVisibility'
+import LoanCompare from './LoanCompare'
 import { monthLong } from './loanCopy'
 import { engineInput, hasDetails, savedExtras } from './loanData'
 import LoanExtras from './LoanExtras'
@@ -20,7 +21,7 @@ import styles from './Loans.module.css'
 import LoanSchedule, { dayLabel } from './LoanSchedule'
 import type { Formats } from './loanCopy'
 import type { LoanRow, SavedExtra, StoredLoan } from './loanData'
-import type { LoansRoute, LoanTab } from './loanRoute'
+import type { LoansRoute, LoanTab, ScenarioPick } from './loanRoute'
 import type { ListStatus } from './LoansOverview'
 
 type LoanRoute = Extract<LoansRoute, { view: 'loan' }>
@@ -143,6 +144,10 @@ export default function LoanDetail(props: Props) {
     const tab = LOAN_TABS[index]
     go(tab)
     queueMicrotask(() => document.getElementById(`loan-tab-${tab}`)?.focus())
+  }
+
+  const pick = (b: ScenarioPick | null, a: ScenarioPick | null) => {
+    props.navigate({ ...props.route, tab: 'compare', b, a }, { replace: true })
   }
 
   const addExtra = async (extra: { month: number; amount: number; note: string }) => {
@@ -306,6 +311,18 @@ export default function LoanDetail(props: Props) {
                     <div class={styles.skeleton} aria-busy="true">
                       <span class={styles.visuallyHidden}>Loading the loan's payments</span>
                     </div>
+                  </Match>
+                  <Match when={props.route.tab === 'compare'}>
+                    <LoanCompare
+                      loan={input()!}
+                      from={from()}
+                      options={options()}
+                      b={props.route.b}
+                      a={props.route.a}
+                      onPick={pick}
+                      formats={props.formats}
+                      axisMoney={props.axisMoney}
+                    />
                   </Match>
                   <Match when={props.route.tab === 'schedule'}>
                     <div data-test-id="loans-amortization">
