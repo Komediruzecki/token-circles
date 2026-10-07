@@ -139,7 +139,7 @@ declare global {
  * per write" on Goals or Loans would otherwise count the evaluator's read of the same list too.
  * `apiFetch` calls the global `fetch` at call time, so wrapping it here sees every app request.
  */
-async function ensureFetchLog(page: Page): Promise<void> {
+export async function ensureFetchLog(page: Page): Promise<void> {
   await page.evaluate(() => {
     if (window.__tcFetchWrapped) return
     window.__tcFetchWrapped = true
@@ -161,7 +161,7 @@ async function fetchLog(page: Page): Promise<FetchEntry[]> {
 }
 
 /** Wait until the page has started no request for `quietMs`. */
-async function settleFetches(page: Page, quietMs = 1500, timeoutMs = 20_000): Promise<void> {
+export async function settleFetches(page: Page, quietMs = 1500, timeoutMs = 20_000): Promise<void> {
   const end = Date.now() + timeoutMs
   let last = -1
   let since = Date.now()

@@ -163,3 +163,23 @@ export async function commandBarExpense(page: Page, text: string, category: stri
       .filter({ hasText: 'Entry added' })
   ).toBeVisible({ timeout: 15_000 })
 }
+
+/** Categories: rename a category, and pick another colour swatch when given, in its edit form. */
+export async function renameCategory(
+  page: Page,
+  oldName: string,
+  newName: string,
+  color?: string
+): Promise<void> {
+  await goPage(page, 'categories', 'categories-header')
+  await categoryCard(page, oldName).getByTestId('edit-category-btn').click()
+  const modal = page.getByTestId('category-modal-overlay')
+  await expect(modal).toBeVisible()
+  await modal.getByPlaceholder('e.g., Food, Rent').fill(newName)
+  if (color !== undefined) {
+    await modal.locator(`[data-test-id="category-color-swatch"][title="${color}"]`).click()
+  }
+  await modal.getByRole('button', { name: 'Update Category' }).click()
+  await expect(modal).toBeHidden({ timeout: 15_000 })
+  await expect(categoryCard(page, newName)).toHaveCount(1)
+}
