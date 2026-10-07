@@ -3,7 +3,7 @@
  * an input, so a fixture profile always evaluates the same way. Runs over arrays the app already
  * holds; cost is one pass per array.
  */
-import { calculateSchedule, payoffDate } from '../loanCalculator'
+import { amortize, payoffDate } from '../../../../shared/loanSchedule'
 import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS, VOLUME_STEPS } from './definitions'
 import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
@@ -21,9 +21,11 @@ export interface EvaluateInput {
   /**
    * Enough of each loan to run the amortisation: the schedule, not a stored balance, is what
    * says when a loan reached zero, and prepayments are what make that earlier than the term.
+   * interest_rate is the loan's own rate, charged in every month no rate period covers.
    */
   loans: Array<{
     principal: number
+    interest_rate: number
     start_date: string
     term_months: number
     rate_periods: Array<{ rate: number; start_month: number; end_month: number | null }>
@@ -185,16 +187,8 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const debtFreeOn = ((): string | null => {
     const months: string[] = []
     for (const loan of input.loans) {
-      if (loan.principal <= 0 || loan.term_months <= 0) continue
-      const end = payoffDate(
-        calculateSchedule(
-          loan.principal,
-          loan.start_date,
-          loan.term_months,
-          loan.rate_periods,
-          loan.prepayments
-        )
-      )
+      // No schedule (nothing borrowed, no term) has no payoff date.
+      const end = payoffDate(amortize(loan))
       if (end !== null && monthOf(end) <= nowMonth) months.push(monthOf(end))
     }
     return months.sort()[0] ?? null

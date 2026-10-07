@@ -372,6 +372,7 @@ describe('the chased set', () => {
 describe('debt free', () => {
   const loan = (over: Record<string, unknown> = {}) => ({
     principal: 12000,
+    interest_rate: 5,
     start_date: '2020-01-01',
     term_months: 24,
     rate_periods: [{ rate: 5, start_month: 1, end_month: null }],
@@ -403,5 +404,27 @@ describe('debt free', () => {
   it('ignores a loan with no principal', () => {
     const r = evaluateAchievements(input({ loans: [loan({ principal: 0 })] }))
     expect(ids(r)).not.toContain('debt-free')
+  })
+
+  it("charges the loan's own rate in the months no rate period covers", () => {
+    // 12,000 at 24 % over 60 months from 2025-01, no rate periods, 6,000 extra in month 6: the
+    // installment is 345.21 and the loan is paid off in 2027-01. The rate periods used to reach
+    // the schedule without the base rate, so months they did not cover, here all of them, were
+    // charged 0 %: 200 a month, paid off in 2027-06, and no badge yet in March 2027.
+    const r = evaluateAchievements(
+      input({
+        today: '2027-03-15',
+        loans: [
+          loan({
+            interest_rate: 24,
+            start_date: '2025-01-01',
+            term_months: 60,
+            rate_periods: [],
+            prepayments: [{ month: 6, amount: 6000 }],
+          }),
+        ],
+      })
+    )
+    expect(on(r, 'debt-free')).toBe('2027-01-01')
   })
 })
