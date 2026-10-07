@@ -68,6 +68,55 @@ async function calculate(id: number, profile = ME): Promise<Response> {
   return api('POST', `/api/loans/${id}/calculate`, {}, profile);
 }
 
+describe('the base rate POST and PUT /api/loans store', () => {
+  // `b.interest_rate || 5.0` read a 0 % rate as a missing one, so an interest-free loan was saved,
+  // and charged, at 5 %. Only a rate that is not sent at all falls back to 5 %.
+  const LOAN = { name: 'Family loan', principal: 12000, start_date: '2026-01-01', term_months: 24 };
+
+  async function create(body: Record<string, unknown>): Promise<number> {
+    const res = await api('POST', '/api/loans', body);
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { id: number }).id;
+  }
+
+  async function stored(id: number): Promise<Record<string, any>> {
+    const res = await api('GET', `/api/loans/${id}`);
+    expect(res.status).toBe(200);
+    return (await res.json()) as Record<string, any>;
+  }
+
+  async function totalInterest(id: number): Promise<number> {
+    const body = (await (await calculate(id)).json()) as ReturnType<typeof calculateLoan>;
+    return body.summary.totalInterest;
+  }
+
+  it('saves a loan created at 0 % at 0 %, and charges it no interest', async () => {
+    const id = await create({ ...LOAN, interest_rate: 0 });
+    const loan = await stored(id);
+    expect(loan.interest_rate).toBe(0);
+    // The month-1 period a create adds when it is sent none carries the same base rate.
+    expect(loan.rate_periods.map((p: { rate: number }) => p.rate)).toEqual([0]);
+    expect(await totalInterest(id)).toBe(0);
+  });
+
+  it('saves an edit to 0 % as 0 %', async () => {
+    const id = await create({ ...LOAN, interest_rate: 3.5 });
+    const edit = { ...LOAN, interest_rate: 0, rate_periods: [] };
+    expect((await api('PUT', `/api/loans/${id}`, edit)).status).toBe(200);
+    expect((await stored(id)).interest_rate).toBe(0);
+    expect(await totalInterest(id)).toBe(0);
+  });
+
+  it('falls back to 5 % only when no rate is sent', async () => {
+    for (const id of [await create(LOAN), await create({ ...LOAN, interest_rate: null })]) {
+      expect((await stored(id)).interest_rate).toBe(5);
+    }
+    const edited = await create({ ...LOAN, interest_rate: 3.5 });
+    expect((await api('PUT', `/api/loans/${edited}`, LOAN)).status).toBe(200);
+    expect((await stored(edited)).interest_rate).toBe(5);
+  });
+});
+
 describe('POST /api/loans/:id/calculate', () => {
   it('answers exactly what the shared engine computes from the stored loan', async () => {
     const id = await storeLoan(PARITY_LOAN);

@@ -43,6 +43,14 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
   return groups
 }
 
+/**
+ * The base rate a create or an edit stores. 0 % is a rate, an interest-free loan; only a rate that
+ * was not sent at all falls back to the 5 % these routes have always defaulted to.
+ */
+function sentRate(rate: unknown): unknown {
+  return rate === undefined || rate === null || rate === '' ? 5.0 : rate
+}
+
 // List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
 // stands today: remaining_balance (after every payment due by today, extra payments and rate
 // periods included), monthly_payment (the next one due; 0 once paid off) and payoff_date. They come
@@ -94,7 +102,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
 loansRoutes.post('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const b = (await c.req.json()) as Record<string, any>
-  const interestRate = b.interest_rate || 5.0
+  const interestRate = sentRate(b.interest_rate)
   const res = await db.insert(c.env.DB, 'loans', {
     name: b.name,
     principal: b.principal,
@@ -167,7 +175,7 @@ loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
     {
       name: b.name,
       principal: b.principal,
-      interest_rate: b.interest_rate || 5.0,
+      interest_rate: sentRate(b.interest_rate),
       start_date: b.start_date,
       term_months: b.term_months,
     },
