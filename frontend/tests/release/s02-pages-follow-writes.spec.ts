@@ -29,6 +29,17 @@ import {
   unfoldDashboardWidgets,
 } from './follow-helpers'
 import { addBankStatement, importAccountOptions, revolutStatement } from './import-helpers'
+import {
+  calendarDot,
+  calendarPopoverRow,
+  categoryCard,
+  closeCalendarPopover,
+  dueThisMonth,
+  goalCard,
+  openBillCalendar,
+  recurringCard,
+  recurringSection,
+} from './page-handles'
 import { both, expect } from './release-fixtures'
 import { goPage } from './release-helpers'
 import type { Locator, Page } from '@playwright/test'
@@ -46,12 +57,6 @@ const EMERGENCY = /^\/api\/calculator\/emergency-fund/
 // ---------------------------------------------------------------------------------------------
 // Page handles
 // ---------------------------------------------------------------------------------------------
-
-function categoryCard(page: Page, name: string): Locator {
-  return page
-    .getByTestId('category-card')
-    .filter({ has: page.getByTestId('category-name').getByText(name, { exact: true }) })
-}
 
 /** Dashboard > Budget radar: "Budget · €spent of €budget", as numbers. */
 async function radarTotals(page: Page): Promise<{ spent: number; budget: number }> {
@@ -196,73 +201,11 @@ async function addBillUI(
   await expect(modal).toBeHidden({ timeout: 15_000 })
 }
 
-/** Bills > Calendar: the tab after Subscriptions. The calendar is rebuilt each time it opens. */
-async function openBillCalendar(page: Page): Promise<void> {
-  await goPage(page, 'bills', 'bills-header')
-  await page
-    .getByTestId('bills-tab-subscriptions')
-    .locator('xpath=following-sibling::button[1]')
-    .click()
-}
-
-/** A bill's dot on the calendar grid (each dot carries its bill's name as a title). */
-function calendarDot(page: Page, billName: string): Locator {
-  return shownPage(page).locator(`[title="${billName}"]`)
-}
-
-/** Open the calendar day of a bill and return its row in the day's popover. */
-async function calendarPopoverRow(page: Page, billName: string): Promise<Locator> {
-  await calendarDot(page, billName).first().click()
-  const name = shownPage(page).getByText(billName, { exact: true })
-  await expect(name).toBeVisible()
-  // name > info > left > row
-  return name.locator('xpath=../../..')
-}
-
-/** Close the day popover with its own close button (row > body > popover > header). */
-async function closeCalendarPopover(row: Locator): Promise<void> {
-  await row.locator('xpath=../..').locator('h3 + button').click()
-  await expect(row).toBeHidden()
-}
-
-/**
- * The 28th of this month: on the calendar on screen, and a day the local-first demo has no bill
- * on (a day cell shows four dots at most, so a busy day could hide one).
- */
-function dueThisMonth(): string {
-  const now = new Date()
-  return `${String(now.getFullYear())}-${String(now.getMonth() + 1).padStart(2, '0')}-28`
-}
-
-/** The Recurring section on Transactions. */
-function recurringSection(page: Page): Locator {
-  // h2 > header > section
-  return page
-    .getByTestId('page-transactions')
-    .getByRole('heading', { name: 'Recurring Transactions' })
-    .locator('xpath=../..')
-}
-
-/** Dashboard > Recurring Insights. */
-function recurringCard(page: Page): Locator {
-  // title > header > card
-  return page
-    .getByTestId('dashboard-container')
-    .getByText('Recurring Insights', { exact: true })
-    .locator('xpath=../..')
-}
-
 /** Recurring Insights is off by default and folded away: switch it on and reload. */
 async function enableRecurringCard(page: Page): Promise<void> {
   await unfoldDashboardWidgets(page, ['recurring-insights'])
   await reloadOn(page, 'dashboard', 'dashboard-container')
   await expect(recurringCard(page)).toBeVisible({ timeout: 20_000 })
-}
-
-function goalCard(page: Page, name: string): Locator {
-  return page
-    .getByTestId('goal-card')
-    .filter({ has: page.getByTestId('goal-name').getByText(name, { exact: true }) })
 }
 
 async function arrangeAccount(m: Mode, name: string, balance: number): Promise<void> {
@@ -591,6 +534,13 @@ for (const [pass, test] of both) {
         await expect(paying).toContainText('✓')
       })
       expectGets(m, listGets, 1, 'the bill list refetches once for a payment made on the calendar')
+      // The calendar's data follows too (whether its grid redraws is 2.7b).
+      if (listGets) {
+        expect(
+          listGets.gets.filter((p) => /^\/api\/bills\/calendar/.test(p)),
+          `the calendar refetches once for the payment:\n    ${listGets.seen.join('\n    ')}`
+        ).toHaveLength(1)
+      }
       await closeCalendarPopover(paying)
       await page.getByTestId('bills-tab-all').click()
       await expect(billCard(page, 'paid', toPay)).toHaveCount(1)
@@ -606,6 +556,46 @@ for (const [pass, test] of both) {
       await openBillCalendar(page)
       await expect(calendarDot(page, toMark)).toHaveCount(0)
       await expect(calendarDot(page, toPay)).toHaveCount(1)
+    })
+
+    test('2.7b a bill paid on the calendar shows paid on it without reopening it @release', async ({
+      m,
+    }) => {
+      // The payment refetches the calendar (2.7 counts it), but the grid does not redraw.
+      // BillCalendar.tsx:255-257 renders the days with <For each={daysArray()}> over day numbers
+      // and reads `cal()!.days[String(day)]` once, when a day's cell is created. A refetch of the
+      // same month gives the same day numbers, so <For> keeps every cell and the bills it read
+      // first. Only reopening the calendar (a remount) shows the payment. The grid code is the
+      // same in v5.15.1, where nothing refetched an open calendar; #578 added the refetch.
+      test.fail(
+        true,
+        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
+      )
+      const { page } = m
+      const toPay = `zz-pay${m.suffix}`
+      await m.api('/api/bills', {
+        method: 'POST',
+        body: {
+          name: toPay,
+          amount: 20,
+          dueDate: dueThisMonth(),
+          frequency: 'monthly',
+          type: 'bill',
+        },
+      })
+      await reloadOn(page, 'bills', 'bills-header')
+      await openBillCalendar(page)
+      const dot = calendarDot(page, toPay)
+      await expect(dot).toHaveCount(1)
+      await expect(dot).not.toHaveClass(/dotPaid/)
+
+      const row = await calendarPopoverRow(page, toPay)
+      await row.getByRole('button', { name: 'Pay' }).click()
+      await expect(row).toContainText('✓')
+      await closeCalendarPopover(row)
+
+      // Still on the calendar: its dot shows the bill paid.
+      await expect(dot).toHaveClass(/dotPaid/, { timeout: 10_000 })
     })
 
     test('2.8 goals: one refetch per add, contribution and delete @release', async ({ m }) => {

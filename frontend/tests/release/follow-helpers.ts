@@ -182,6 +182,28 @@ function apiPath(url: string): string {
   return u.pathname + u.search
 }
 
+/**
+ * A request as the "one request per endpoint" check sees it: the path with its query parameters
+ * sorted, so the same question asked with its parameters in another order counts as a repeat.
+ */
+function requestKey(path: string): string {
+  const u = new URL(path, E2E_BASE)
+  const params = [...u.searchParams].sort(([a, x], [b, y]) =>
+    a === b ? x.localeCompare(y) : a.localeCompare(b)
+  )
+  const query = new URLSearchParams(params).toString()
+  return query ? `${u.pathname}?${query}` : u.pathname
+}
+
+/** The requests asked more often than `allowed` says, as "path xN" (ordered parameters). */
+function repeats(gets: readonly string[], allowed: readonly RegExp[] = []): string[] {
+  const seen = new Map<string, number>()
+  for (const p of gets) seen.set(requestKey(p), (seen.get(requestKey(p)) ?? 0) + 1)
+  return [...seen]
+    .filter(([p, n]) => n > (allowed.some((a) => a.test(p)) ? 2 : 1))
+    .map(([p, n]) => `${p} x${String(n)}`)
+}
+
 function isBadgeEvaluation(entry: FetchEntry): boolean {
   return /achievements/i.test(entry.stack)
 }
@@ -237,22 +259,23 @@ export function expectGets(m: Mode, count: GetCount | null, n: number, what: str
   if (m.kind !== 'cloud') return
   const log = `\n  requests in the window:\n    ${(count?.seen ?? []).join('\n    ')}`
   expect(count?.n, `${what}${log}`).toBe(n)
-  const seen = new Map<string, number>()
-  for (const p of count?.gets ?? []) seen.set(p, (seen.get(p) ?? 0) + 1)
-  const twice = [...seen].filter(([, k]) => k > 1).map(([p, k]) => `${p} x${String(k)}`)
-  expect(twice, `${what}: no endpoint fetched twice${log}`).toEqual([])
+  expect(repeats(count?.gets ?? []), `${what}: no endpoint fetched twice${log}`).toEqual([])
 }
 
 /**
  * Show a page that was mounted before a write, and check it followed: in cloud, showing it
  * fetched each of `keys` exactly once (it was stale: one refetch, not none and not two) and no
  * endpoint twice. Local-first just shows it; the case then checks what is on it.
+ *
+ * `knownTwice` lists requests a page is known to repeat, each pinned by a case of its own that
+ * expects to fail until the page is fixed: they may come twice here, and no more.
  */
 export async function showFollower(
   m: Mode,
   route: string,
   ready: string | null,
-  keys: readonly RegExp[]
+  keys: readonly RegExp[],
+  knownTwice: readonly RegExp[] = []
 ): Promise<void> {
   const show = async () => {
     if (ready) await goPage(m.page, route, ready)
@@ -273,15 +296,22 @@ export async function showFollower(
     .map(describeFetch)
     .join('\n    ')}`
   for (const key of keys) {
-    expect(
-      gets.filter((p) => key.test(p)),
-      `showing ${route} after the write refetches ${String(key)} once${log}`
-    ).toHaveLength(1)
+    const asked = gets.filter((p) => key.test(p))
+    const what = `showing ${route} after the write refetches ${String(key)} once${log}`
+    if (knownTwice.some((k) => asked.some((p) => k.test(requestKey(p))))) {
+      expect(asked.length, what).toBeGreaterThanOrEqual(1)
+      expect(asked.length, what).toBeLessThanOrEqual(2)
+    } else {
+      expect(asked, what).toHaveLength(1)
+    }
   }
-  const seen = new Map<string, number>()
-  for (const p of gets) seen.set(p, (seen.get(p) ?? 0) + 1)
-  const twice = [...seen].filter(([, n]) => n > 1).map(([p, n]) => `${p} x${String(n)}`)
-  expect(twice, `showing ${route}: no endpoint fetched twice${log}`).toEqual([])
+  expect(repeats(gets, knownTwice), `showing ${route}: no endpoint fetched twice${log}`).toEqual([])
+}
+
+/** In cloud: the page's own GETs in `gets` asked nothing twice. */
+export function expectNoRepeats(m: Mode, gets: readonly string[], what: string): void {
+  if (m.kind !== 'cloud') return
+  expect(repeats(gets), `${what}:\n    ${gets.join('\n    ')}`).toEqual([])
 }
 
 /** Start counting now: returns a function that lists the page's own GETs since. Cloud only. */
@@ -358,6 +388,47 @@ export async function writeElsewhere<T = Record<string, unknown>>(
   return (res.text ? JSON.parse(res.text) : null) as T
 }
 
+/**
+ * A write made by the app running in another tab: that tab's own raw helpers (core/api.ts
+ * apiPost/apiPut/apiDelete), so it carries that tab's profile headers and announces itself there,
+ * exactly as a save on one of its pages would. The tab must have the app loaded.
+ */
+export async function writeInTab<T = Record<string, unknown>>(
+  tab: Page,
+  path: string,
+  init: { method: 'POST' | 'PUT' | 'DELETE'; body?: unknown }
+): Promise<T> {
+  return tab.evaluate(
+    async ([p, i]) => {
+      const spec = '/src/core/api.ts'
+      const mod = (await import(/* @vite-ignore */ spec)) as {
+        apiPost: (url: string, body: unknown) => Promise<unknown>
+        apiPut: (url: string, body: unknown) => Promise<unknown>
+        apiDelete: (url: string) => Promise<unknown>
+      }
+      if (i.method === 'POST') return (await mod.apiPost(p, i.body)) as T
+      if (i.method === 'PUT') return (await mod.apiPut(p, i.body)) as T
+      return (await mod.apiDelete(p)) as T
+    },
+    [path, init] as const
+  )
+}
+
+// ---------------------------------------------------------------------------------------------
+// Colours on screen
+// ---------------------------------------------------------------------------------------------
+
+/** "#e0708a" as the browser reports a computed colour: "rgb(224, 112, 138)". */
+export function rgb(hex: string): string {
+  const n = Number.parseInt(hex.replace('#', ''), 16)
+  return `rgb(${String((n >> 16) & 255)}, ${String((n >> 8) & 255)}, ${String(n & 255)})`
+}
+
+/** The computed background colour of an element (a category dot, a swatch). */
+export async function backgroundOf(locator: Locator): Promise<string> {
+  return locator.evaluate((el) => window.getComputedStyle(el).backgroundColor)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Arranging data through the app's API
 // ---------------------------------------------------------------------------------------------
@@ -376,6 +447,25 @@ function listOf<T>(body: unknown, key: string): T[] {
 /** The active profile's accounts. */
 export async function accountsOf(m: Mode): Promise<(Row & { balance: number; type: string })[]> {
   return listOf(await m.api('/api/accounts'), 'accounts')
+}
+
+/** An account in the active profile, its starting and current balance the same figure. */
+export async function arrangeAccountOf(
+  m: Mode,
+  fields: { name: string; type: 'giro' | 'savings' | 'ib' | 'cash'; balance: number }
+): Promise<number> {
+  const created = await m.api<{ id: number }>('/api/accounts', {
+    method: 'POST',
+    body: {
+      name: fields.name,
+      type: fields.type,
+      currency: 'EUR',
+      bank_name: '',
+      balance: fields.balance,
+      starting_balance: fields.balance,
+    },
+  })
+  return created.id
 }
 
 /** A complete category (a string icon and a boolean tax flag, so every reader accepts it). */
