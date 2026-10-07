@@ -45,6 +45,7 @@ import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
 import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
+import { readTimeZone } from './local-date';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -79,7 +80,13 @@ export interface Env {
 /** Hono generics shared across route modules: bindings + per-request vars. */
 export type AppEnv = {
   Bindings: Env;
-  Variables: { userId: number; sessionId?: string; token?: TokenIdentity };
+  Variables: {
+    userId: number;
+    sessionId?: string;
+    token?: TokenIdentity;
+    /** The IANA zone of the person's calendar, from X-Time-Zone; UTC without one (local-date.ts). */
+    timeZone?: string;
+  };
 };
 
 const app = new Hono<AppEnv>();
@@ -126,6 +133,9 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
 // A request body that is not JSON answers 400, not 500 (error-response.ts).
 app.use('*', rejectMalformedJson);
+
+// The person's calendar: "today" and "this month" are theirs, not the Worker's UTC (local-date.ts).
+app.use('*', readTimeZone);
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means

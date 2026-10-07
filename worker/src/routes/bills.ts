@@ -5,6 +5,7 @@ import { configuredBaseCurrency } from '../base-currency';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { localNow } from '../local-date';
 
 // Port of backend/routes/bills.js + backend/repositories/billsRepo.js.
 // Table: bills, LEFT JOINed to categories for name/color. Response shapes are
@@ -34,7 +35,9 @@ function billResponse(bill: BillRow) {
   return { ...bill, autopay: bill.autopay === 1 };
 }
 
-// Copied faithfully from backend/routes/bills.js.
+// Copied faithfully from backend/routes/bills.js. `now` is the person's wall clock (localNow), so
+// "the current month" is theirs: a stored YYYY-MM-DD parses as UTC midnight and is compared on the
+// same UTC-field calendar.
 function isBillPaidForCurrentPeriod(bill: BillRow, now: Date): boolean {
   if (!bill.last_paid_date) return false;
   const lastPaid = new Date(bill.last_paid_date);
@@ -77,7 +80,7 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
     pid
   );
 
-  const now = new Date();
+  const now = localNow(c);
 
   const billsWithStatus = rows.map((b) => ({
     ...billResponse(b),
@@ -105,7 +108,8 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
 // Registered before /api/bills/:id so it isn't shadowed.
 billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const now = new Date();
+  // Due dates are the person's calendar dates, so "now" is their wall clock.
+  const now = localNow(c);
   const todayStr = now.toISOString().split('T')[0];
 
   const bills = await db.all<BillRow>(
@@ -208,7 +212,7 @@ billsRoutes.get('/api/bills/notifications', requireAuth, async (c) => {
     'SELECT * FROM bills WHERE profile_id = ? ORDER BY due_date ASC',
     pid
   );
-  const today = new Date();
+  const today = localNow(c);
   const upcoming = bills.filter((b) => {
     if (!b.due_date) return false;
     const dueDate = new Date(b.due_date);
@@ -220,7 +224,7 @@ billsRoutes.get('/api/bills/notifications', requireAuth, async (c) => {
 
 billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const now = new Date();
+  const now = localNow(c);
 
   const yearQ = c.req.query('year');
   const monthQ = c.req.query('month');
@@ -452,11 +456,13 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
 
   // Pre-flight, for the message: "already paid this month" is a period question the SQL guard
   // below does not try to answer. It is NOT what makes this safe — see the guard.
-  if (isBillPaidForCurrentPeriod(bill, new Date())) {
+  const now = localNow(c);
+  if (isBillPaidForCurrentPeriod(bill, now)) {
     throw new HttpError(409, 'Bill already paid for current period');
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Paid today on the person's calendar: the date the payment and last_paid_date carry.
+  const todayStr = now.toISOString().split('T')[0];
 
   // Every statement carries the same guard: the bill has not already been marked paid today.
   //

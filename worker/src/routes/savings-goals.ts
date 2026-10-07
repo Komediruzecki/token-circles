@@ -5,8 +5,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import { recalcAllGoals, recalcGoalsByCategory } from '../recalc-goals';
 import * as db from '../db';
-
-const today = (): string => new Date().toISOString().slice(0, 10);
+import { localToday } from '../local-date';
 
 // Reference port of backend/routes/savingsGoals.js. This is the canonical pattern
 // for a profile-scoped CRUD resource: requireAuth -> getProfileId -> async D1.
@@ -58,9 +57,9 @@ savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
     notes: b.notes || '',
     monthly_contribution: b.monthly_contribution ?? 0,
     category_id: categoryId,
-    // Category progress counts transactions from this day on; default to today so a
-    // freshly-linked goal starts at 0 rather than inheriting the category's history.
-    tracking_start_date: b.tracking_start_date || today(),
+    // Category progress counts transactions from this day on; default to today (the person's
+    // date) so a freshly-linked goal starts at 0 rather than inheriting the category's history.
+    tracking_start_date: b.tracking_start_date || localToday(c),
   });
   // Compute progress now so a category-linked goal shows the right starting value.
   if (categoryId) await recalcGoalsByCategory(c.env.DB, categoryId, [pid]);

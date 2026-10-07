@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { localNow } from '../local-date';
 
 // Port of backend/routes/analytics.js — read-only stats/analytics aggregations.
 // All response objects are built by hand with their exact key casing (labels,
@@ -20,8 +21,11 @@ analyticsRoutes.get('/api/stats/monthly', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
   const months = c.req.query('months') ?? '24';
-  const endDate = new Date();
-  const startDate = new Date();
+  // Ends today on the person's calendar. The app dates what they enter with their own date, so a
+  // range ending on the UTC date left out everything entered between local midnight and the UTC
+  // one (00:00-02:00 in CEST) from Monthly Income, Monthly Expense and the savings rate.
+  const endDate = localNow(c);
+  const startDate = new Date(endDate);
   startDate.setMonth(startDate.getMonth() - parseInt(String(months)) + 1);
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
@@ -95,7 +99,7 @@ analyticsRoutes.get('/api/analytics/distinct-years', requireAuth, async (c) => {
     ...pids
   );
   const years = rows.map((r) => parseInt(r.year));
-  const currentYear = new Date().getFullYear();
+  const currentYear = localNow(c).getFullYear();
   if (years.length === 0) years.push(currentYear);
   if (!years.includes(currentYear)) years.unshift(currentYear);
   return c.json({ years });
@@ -137,7 +141,7 @@ analyticsRoutes.get('/api/analytics/weeks', requireAuth, async (c) => {
 analyticsRoutes.get('/api/analytics/category-trends', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const year = parseInt(c.req.query('year') || '') || new Date().getFullYear();
+  const year = parseInt(c.req.query('year') || '') || localNow(c).getFullYear();
   const monthQ = c.req.query('month');
   const month = monthQ ? String(monthQ).padStart(2, '0') : null;
   const week = c.req.query('week') ? parseInt(c.req.query('week')!) : null;
@@ -289,7 +293,7 @@ analyticsRoutes.get('/api/analytics/category-trends', requireAuth, async (c) => 
 analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const year = parseInt(c.req.query('year') || '') || new Date().getFullYear();
+  const year = parseInt(c.req.query('year') || '') || localNow(c).getFullYear();
   const monthQ = c.req.query('month');
   const month = monthQ ? String(monthQ).padStart(2, '0') : null;
 

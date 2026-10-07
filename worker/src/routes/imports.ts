@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import { calendarDateIn } from '../../../shared/calendarDate';
 import { parseImportCsv } from '../../../shared/importCsv';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
@@ -20,6 +21,7 @@ import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
+import { localToday } from '../local-date';
 
 // Parse CSV text into headers + data rows. The implementation moved to shared/ so this and the
 // frontend's copy stop drifting; re-exported under the old name so existing call sites and tests
@@ -96,9 +98,11 @@ function getCategoryIcon(name: string): string {
 //
 // The numeric Excel-serial branch is dropped: it relied on spreadsheetService and only fires for
 // binary-spreadsheet imports, which aren't supported on Workers.
-function parseDateString(dateStr: unknown): string {
+//
+// `todayStr` is the fallback, today on the importing person's calendar (ExecuteImportInput.today).
+function parseDateString(dateStr: unknown, todayStr: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  const today = () => new Date().toISOString().split('T')[0];
+  const today = () => todayStr;
   const inRange = (m: number, d: number) => m >= 1 && m <= 12 && d >= 1 && d <= 31;
   const format = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
   if (dateStr === null || dateStr === undefined || dateStr === '') return today();
@@ -371,6 +375,12 @@ export interface ExecuteImportInput {
   dryRun?: boolean;
   approvedCategories?: any;
   defaultCurrency?: any;
+  /**
+   * Today on the importing person's calendar, YYYY-MM-DD: the date a row without one is given, and
+   * an account's starting-balance date. The UTC date when absent, for the imports nobody is
+   * watching (the sheet-sync cron, email-in).
+   */
+  today?: string;
 }
 
 export async function executeImport(
@@ -403,7 +413,8 @@ export async function executeImport(
     )
   );
 
-  const today = () => new Date().toISOString().split('T')[0];
+  const todayStr = input.today ?? calendarDateIn('UTC');
+  const today = () => todayStr;
 
   // name(lowercased) -> accountId, seeded with the profile(s)' existing accounts.
   const accountIdMap = new Map<string, number>();
@@ -763,7 +774,7 @@ export async function executeImport(
     const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
     const description = pick(row, mapping, 'description') || '';
-    const parsedDate = parseDateString(dateRaw);
+    const parsedDate = parseDateString(dateRaw, todayStr);
     const invariantError = transactionInvariantError({
       type: validatedType,
       amount,
@@ -932,6 +943,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     dryRun: Boolean(b.dry_run ?? b.dryRun),
     approvedCategories: b.approvedCategories ?? b.createCategories,
     defaultCurrency: b.defaultCurrency,
+    today: localToday(c),
   });
   return c.json(body, status as 200);
 });
