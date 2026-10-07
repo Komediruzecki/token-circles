@@ -29,6 +29,20 @@ import type { Accessor } from 'solid-js'
 
 export type QuickEntryListStatus = 'loading' | 'ready' | 'error'
 
+/**
+ * The rows of one profile. A household read answers for every ticked profile, and local-first
+ * answers for the household whatever it is asked, but an entry is written to one profile and its
+ * save refuses a category or an account of any other. The quick entries and the Transactions form
+ * both offer only what this returns.
+ */
+export function rowsOfProfile<T extends { profile_id: number }>(
+  rows: readonly T[] | null | undefined,
+  profileId: number | null
+): T[] {
+  if (profileId === null || !Array.isArray(rows)) return []
+  return rows.filter((row) => row.profile_id === profileId)
+}
+
 export interface QuickEntryList<T> {
   /** The rows to offer: the active profile's, once its answer is in. Empty while loading. */
   items: Accessor<T[]>
@@ -97,8 +111,7 @@ export function createQuickEntryList<T extends { profile_id: number }>(
           if (untrack(options.isOpen)) load(false)
           return
         }
-        const own = (Array.isArray(rows) ? rows : []).filter((row) => row.profile_id === pid)
-        setHeld({ profileId: pid, items: own, status: 'ready' })
+        setHeld({ profileId: pid, items: rowsOfProfile(rows, pid), status: 'ready' })
       },
       () => {
         if (ask !== asked) return

@@ -179,8 +179,10 @@ vi.mock('../../core/api', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   const reads: Record<string, (...args: never[]) => unknown> = {
     getTransactions: () => readList(),
-    getCategories: async () => [{ id: 1, name: 'Groceries', type: 'expense', color: '#22c55e' }],
-    getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash' }],
+    getCategories: async () => [
+      { id: 1, name: 'Groceries', type: 'expense', color: '#22c55e', profile_id: 1 },
+    ],
+    getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash', profile_id: 1 }],
     getTags: async () => serverTags.map((t) => ({ ...t })),
     getTransactionTags: (id: number) => readTransactionTags(id),
     getRecurring: async () => [RULE],

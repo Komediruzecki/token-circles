@@ -22,8 +22,14 @@ import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 
-type Cat = { id: number; name: string; type: 'income' | 'expense'; color: string }
-type Acct = { id: number; name: string; currency: string }
+type Cat = {
+  id: number
+  name: string
+  type: 'income' | 'expense'
+  color: string
+  profile_id: number
+}
+type Acct = { id: number; name: string; currency: string; profile_id: number }
 
 /** The server's lists. Mutable, so another page's create is visible to the next fetch. */
 let serverCategories: Cat[] = []
@@ -51,8 +57,10 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 
 beforeEach(() => {
   __resetDataVersionsForTest()
-  serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff' }]
-  serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR' }]
+  // Every row is the active profile's (1), as a real list's are when one profile is selected.
+  localStorage.setItem('currentProfileId', '1')
+  serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }]
+  serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }]
   getCategories.mockClear()
   getAccounts.mockClear()
   getTags.mockClear()
@@ -133,7 +141,7 @@ describe('Transactions reference data', () => {
     // apiFetch raises the counter for everyone holding a copy.
     serverCategories = [
       ...serverCategories,
-      { id: 2, name: 'Utilities', type: 'expense', color: '#000' },
+      { id: 2, name: 'Utilities', type: 'expense', color: '#000', profile_id: 1 },
     ]
     invalidateEntity('categories')
     await flush()
@@ -149,7 +157,7 @@ describe('Transactions reference data', () => {
     await flush()
     expect(offersAccount(root, 'Savings')).toBe(false)
 
-    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR' }]
+    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 }]
     invalidateEntity('accounts')
     await flush()
     await flush()
@@ -163,8 +171,9 @@ describe('Transactions reference data', () => {
 
     // The switched-to profile owns different rows — categories and accounts are per-profile in the
     // schema, and the worker rejects a foreign category_id with a 400.
-    serverCategories = [{ id: 9, name: 'Rent', type: 'expense', color: '#123' }]
-    serverAccounts = [{ id: 9, name: 'Joint', currency: 'EUR' }]
+    localStorage.setItem('currentProfileId', '2')
+    serverCategories = [{ id: 9, name: 'Rent', type: 'expense', color: '#123', profile_id: 2 }]
+    serverAccounts = [{ id: 9, name: 'Joint', currency: 'EUR', profile_id: 2 }]
     bumpProfileVersion()
     await flush()
     await flush()
@@ -204,7 +213,7 @@ describe('Transactions reference data', () => {
     // each one is the fan-out that keep-alive mounting made possible; pageVisibility defers it.
     serverCategories = [
       ...serverCategories,
-      { id: 3, name: 'Transport', type: 'expense', color: '#0f0' },
+      { id: 3, name: 'Transport', type: 'expense', color: '#0f0', profile_id: 1 },
     ]
     invalidateEntity('categories')
     invalidateEntity('categories')

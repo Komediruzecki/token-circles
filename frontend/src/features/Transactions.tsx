@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -44,6 +44,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
+import { activeProfileId } from '../core/apiProfileScope'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
@@ -51,6 +52,7 @@ import { txBaseValue } from '../core/currency'
 import { asOneWrite, entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
+import { rowsOfProfile } from '../core/quickEntryLists'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
@@ -96,16 +98,31 @@ export default function Transactions() {
   let formTagIdsAtOpen: number[] = []
   // Advanced fields (currency/FX, counterparties, tags, notes, receipt) start hidden.
   const [showAdvanced, setShowAdvanced] = createSignal(false)
-  const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
-    []
-  )
+  // The household's accounts and categories: every ticked profile's, which is what the filter bar
+  // covers. The form offers one profile's of them, below.
+  const [accounts, setAccounts] = createSignal<
+    Array<{ id: number; name: string; type: string; profile_id: number }>
+  >([])
   const [categories, setCategories] = createSignal<Category[]>([])
+  /**
+   * The profile the open form writes to: the edited row's own, or the active profile for a new
+   * entry. A save refuses a category or an account of any other profile ("Category does not belong
+   * to this profile"), so the form offers that profile's alone, also with two profiles ticked.
+   * Another profile's row never opens here: the table disables its controls, because an edit is
+   * scoped to the profile in X-Profile-Id.
+   */
+  const [editingProfileId, setEditingProfileId] = createSignal<number | null>(null)
+  const formProfileId = createMemo(
+    // A switch moves currentProfileId and bumps profileVersion, so a new entry follows it.
+    on([editingProfileId, () => state.profileVersion], ([editing]) => editing ?? activeProfileId())
+  )
+  const formCategories = createMemo(() => rowsOfProfile(categories(), formProfileId()))
+  const formAccounts = createMemo(() => rowsOfProfile(accounts(), formProfileId()))
   // Filter categories by the selected transaction type
   const filteredCategories = createMemo(() => {
     const t = type()
-    const cats = categories()
     if (t === 'transfer') return []
-    return cats.filter((c) => c.type === t)
+    return formCategories().filter((c) => c.type === t)
   })
   // Both runtimes list the active profile's tags. `profile_id` comes only from the local store;
   // the Worker leaves it out.
@@ -746,6 +763,7 @@ export default function Transactions() {
   // Update form values when closing modal
   createEffect(() => {
     if (!isTransactionModalOpen()) {
+      setEditingProfileId(null)
       setFormId(null)
       setFormDescription('')
       setFormAmount('')
@@ -759,6 +777,7 @@ export default function Transactions() {
   })
 
   const openTransactionModal = () => {
+    setEditingProfileId(null)
     setType('expense')
     setFormId(null)
     setFormDescription('')
@@ -802,7 +821,7 @@ export default function Transactions() {
   // Prefill the account for a fresh entry: last-used if it still exists, else the
   // first account (the de-facto primary), else none.
   const defaultAccountId = (): number | null => {
-    const accs = accounts()
+    const accs = formAccounts()
     if (accs.length === 0) return null
     const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
     if (Number.isFinite(stored) && accs.some((a) => a.id === stored)) return stored
@@ -827,6 +846,7 @@ export default function Transactions() {
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
+    setEditingProfileId(transaction.profile_id ?? null)
     setType(transaction.type)
     setFormId(transaction.id.toString())
     setFormDescription(transaction.description)
@@ -870,6 +890,7 @@ export default function Transactions() {
   // category, since they describe the kind of transaction; the copy has none of them until Save
   // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
+    setEditingProfileId(null)
     setType(transaction.type)
     setFormId(null)
     setFormDescription(transaction.description)
@@ -1315,7 +1336,7 @@ export default function Transactions() {
                         }}
                       >
                         <option value="">Select destination...</option>
-                        <For each={accounts()}>
+                        <For each={formAccounts()}>
                           {(acct) => (
                             <option
                               value={String(acct.id)}
@@ -1362,7 +1383,7 @@ export default function Transactions() {
                   <InfoTip text="Which of YOUR accounts the money moved out of (expense / transfer From) or into (income). Links the entry to a real balance so per-account totals and net worth stay accurate. Required for income and expense." />
                 </label>
                 <Show
-                  when={accounts().length > 0}
+                  when={formAccounts().length > 0}
                   fallback={
                     <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
                       <span style="font-size: 13px; color: var(--text-secondary)">
@@ -1389,7 +1410,7 @@ export default function Transactions() {
                     }}
                   >
                     <option value="">Select account...</option>
-                    <For each={accounts()}>
+                    <For each={formAccounts()}>
                       {(acct) => (
                         <option value={String(acct.id)} selected={acct.id === formAccountId()}>
                           {acct.name} ({acct.type})
