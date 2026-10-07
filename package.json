@@ -43,6 +43,9 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "puppeteer"
-    ]
+    ],
+    "overrides": {
+      "fast-uri@<3.1.8": "3.1.8"
+    }
   }
 }
