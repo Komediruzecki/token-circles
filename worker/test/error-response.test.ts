@@ -6,7 +6,7 @@ import { basicAuth } from 'hono/basic-auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
 import { errorResponse, GENERIC_ERROR } from '../src/error-response';
-import { HttpError } from '../src/http';
+import { HttpError, refuse } from '../src/http';
 import type { AppEnv } from '../src/index';
 
 // An unexpected failure used to reach the browser word for word: the onError handler put
@@ -48,11 +48,36 @@ function api(path: string, init: { method: string; body?: unknown }): Promise<Re
   });
 }
 
+/**
+ * A route that lets a raw D1 error escape: it writes `color`, which is NOT NULL, whatever the body
+ * says. The category edit route did exactly this until it checked its body by the shared rules
+ * (shared/categorySchema.ts); any route that does not check yet behaves the same. It answers
+ * through the app's own onError, errorResponse.
+ */
+function leakyEdit(): Promise<Response> {
+  const app = new Hono<AppEnv>();
+  app.onError(errorResponse);
+  app.put('/api/categories/:id', async (c) => {
+    const body = await c.req.json<{ color: unknown }>();
+    await c.env.DB.prepare('UPDATE categories SET color = ? WHERE id = ?')
+      .bind(body.color, c.req.param('id'))
+      .run();
+    return c.json({ ok: true });
+  });
+  return app.request(
+    '/api/categories/9001',
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color: null }),
+    },
+    env
+  );
+}
+
 describe('unexpected errors', () => {
   it('answers a D1 constraint failure with the generic body and none of the internal text', async () => {
-    // `color` is NOT NULL and the edit route writes whatever the body says. Any route that lets a
-    // raw D1 error escape would do; this one is reachable with a plain session.
-    const res = await api('/api/categories/9001', { method: 'PUT', body: { color: null } });
+    const res = await leakyEdit();
     expect(res.status).toBe(500);
     const text = await res.text();
     expect(JSON.parse(text)).toEqual({ error: GENERIC_ERROR });
@@ -63,7 +88,7 @@ describe('unexpected errors', () => {
   });
 
   it('still logs the full error, with method and path, to the console and to error_logs', async () => {
-    await api('/api/categories/9001', { method: 'PUT', body: { color: null } });
+    await leakyEdit();
 
     const lines = consoleError.mock.calls.map((args) => String(args[0]));
     const line = lines.find((l) => l.includes('categories.color'));
@@ -134,6 +159,33 @@ describe('errors written for the client', () => {
     const unavailable = await app.request('/unavailable', {}, env);
     expect(unavailable.status).toBe(503);
     expect(await unavailable.json()).toEqual({ error: 'Imports are paused for maintenance' });
+  });
+
+  it('keeps the fields of a refused body, so a form can mark them', async () => {
+    const app = new Hono<AppEnv>();
+    app.onError(errorResponse);
+    app.post('/refused', () => {
+      throw new HttpError(400, 'Give the category a name.', {
+        name: 'Give the category a name.',
+      });
+    });
+    app.post('/refused-twice', () => {
+      throw refuse({ name: 'Give the category a name.', color: 'Pick another color.' });
+    });
+
+    const res = await app.request('/refused', { method: 'POST' }, env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'Give the category a name.',
+      fields: { name: 'Give the category a name.' },
+    });
+
+    const twice = await app.request('/refused-twice', { method: 'POST' }, env);
+    expect(twice.status).toBe(400);
+    expect(await twice.json()).toEqual({
+      error: 'Give the category a name. Pick another color.',
+      fields: { name: 'Give the category a name.', color: 'Pick another color.' },
+    });
   });
 
   it('keeps an HttpError thrown from a test route', async () => {
