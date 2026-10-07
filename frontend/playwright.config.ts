@@ -61,7 +61,22 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
       dependencies: ['setup'],
+      // The release scope lives in its own project: it runs every case in both storage modes and
+      // seeds a local-first demo per case, which is minutes of work CI should not pay on every push.
+      testIgnore: /release\//,
     },
+    // `pnpm run test:e2e:release`: the manual dev test scope for a release, automated
+    // (tests/release/README.md). Only present when asked for.
+    ...(process.env.E2E_RELEASE
+      ? [
+          {
+            name: 'release',
+            testDir: './tests/release',
+            use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
   ],
 
   webServer: [
