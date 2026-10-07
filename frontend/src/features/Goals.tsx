@@ -33,7 +33,7 @@
 import { createMemo, createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
-import { Field, FormNotice } from '../components/form'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
@@ -865,7 +865,7 @@ export default function Goals() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} novalidate onSubmit={categoryForm.submit}>
+            <form class={styles.modalBody} {...categoryForm.attrs}>
               <FormNotice form={categoryForm} />
               <Field
                 form={categoryForm}
@@ -933,9 +933,13 @@ export default function Goals() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={categoryForm.submitting()}
+                  busyLabel="Adding…"
+                >
                   Add Category
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

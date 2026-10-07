@@ -58,7 +58,7 @@
 
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import ConfirmButton from '../components/ConfirmButton'
-import { Field, FormNotice } from '../components/form'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalAccent from '../components/OrbitalAccent'
 import OrbitalDivider from '../components/OrbitalDivider'
 import SubscriptionCard from '../components/SubscriptionCard'
@@ -1004,7 +1004,7 @@ export default function Bills() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} novalidate onSubmit={categoryForm.submit}>
+            <form class={styles.modalBody} {...categoryForm.attrs}>
               <FormNotice form={categoryForm} />
               <Field
                 form={categoryForm}
@@ -1072,9 +1072,13 @@ export default function Bills() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={categoryForm.submitting()}
+                  busyLabel="Adding…"
+                >
                   Add Category
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

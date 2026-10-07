@@ -33,7 +33,7 @@
 import { createMemo, createResource, createSignal, For } from 'solid-js'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
-import { Field, FormNotice } from '../components/form'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import IconPicker from '../components/IconPicker'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
@@ -450,7 +450,7 @@ export default function Categories() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} novalidate onSubmit={categoryForm.submit}>
+            <form class={styles.modalBody} {...categoryForm.attrs}>
               <FormNotice form={categoryForm} />
               <Field
                 form={categoryForm}
@@ -581,9 +581,13 @@ export default function Categories() {
                 <button type="button" class={styles.btnSecondary} onClick={closeCategoryModal}>
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={categoryForm.submitting()}
+                  busyLabel={editingCategory() ? 'Updating…' : 'Adding…'}
+                >
                   {editingCategory() ? 'Update' : 'Add'} Category
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

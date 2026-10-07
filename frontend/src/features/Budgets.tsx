@@ -37,7 +37,7 @@ import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
-import { Field, FormNotice } from '../components/form'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import InfoTip from '../components/InfoTip'
 import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
@@ -1310,7 +1310,7 @@ export default function Budgets() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} novalidate onSubmit={catForm.submit}>
+            <form class={styles.modalBody} {...catForm.attrs}>
               <FormNotice form={catForm} />
               <Field
                 form={catForm}
@@ -1420,9 +1420,13 @@ export default function Budgets() {
                 <button type="button" class={styles.btnGhost} onClick={closeCatModal}>
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={catForm.submitting()}
+                  busyLabel={editingCategory() ? 'Updating…' : 'Adding…'}
+                >
                   {editingCategory() ? 'Update' : 'Add'} Category
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

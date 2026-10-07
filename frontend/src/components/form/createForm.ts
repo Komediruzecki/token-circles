@@ -12,6 +12,8 @@
  *   the rest in the notice; one without `fields` puts its own words in the notice; anything else
  *   puts `failure` there, because a `TypeError` says nothing a person can act on.
  * - A server's mark goes on the field's next change: only the server knows whether it still holds.
+ * - While `send` runs, the form is `aria-busy` and a second submit does nothing. `SubmitButton`
+ *   says so on the button.
  *
  * `Field` registers each control here, which is how the kit knows which fields this form shows and
  * where to move focus. See docs/plans/2026-10-07-form-errors.md.
@@ -35,6 +37,15 @@ export interface FormOptions<T extends FormValues> {
   failure: string
 }
 
+/** What a kit form's `<form>` element carries. Spread it: `<form class={...} {...form.attrs}>`. */
+export interface FormAttributes {
+  /** The kit says what is wrong, under the field. The browser's own bubbles would say it first. */
+  readonly noValidate: true
+  readonly onSubmit: (event?: Event) => Promise<void>
+  /** 'true' while the form sends, so assistive tech knows its contents are about to change. */
+  readonly 'aria-busy': 'true' | undefined
+}
+
 export interface Form<T extends FormValues> {
   /** The current values, as a store: read them in JSX and they stay current. */
   readonly values: T
@@ -53,6 +64,8 @@ export interface Form<T extends FormValues> {
   submitting: () => boolean
   /** The `<form>`'s `onSubmit`. */
   submit: (event?: Event) => Promise<void>
+  /** Spread on the `<form>`: no browser bubbles, `submit` on submit, `aria-busy` while it sends. */
+  readonly attrs: FormAttributes
   /** For `Field`: this form shows `name` in the control with this id. Returns the undo. */
   register: (name: string, controlId: string) => () => void
 }
@@ -190,6 +203,14 @@ export function createForm<T extends FormValues>(options: FormOptions<T>): Form<
     }
   }
 
+  const attrs: FormAttributes = {
+    noValidate: true,
+    onSubmit: submit,
+    get 'aria-busy'() {
+      return submitting() ? 'true' : undefined
+    },
+  }
+
   return {
     values,
     set,
@@ -198,6 +219,7 @@ export function createForm<T extends FormValues>(options: FormOptions<T>): Form<
     notice,
     submitting,
     submit,
+    attrs,
     register,
   }
 }

@@ -9,7 +9,8 @@
  * server's reason for a taken name under the same field. No failure toast.
  *
  * Every case runs signed in (the Worker) and local-first (the IndexedDB router), because the two
- * answered differently before and the point is that they now answer the same.
+ * answered differently before and the point is that they now answer the same. The one that holds
+ * a save open runs signed in only: local-first sends no request to hold.
  */
 import { expect, test } from '@playwright/test'
 import { gotoServerless, login, navigateToRoute } from './test-helpers'
@@ -183,3 +184,46 @@ for (const mode of MODES) {
     }
   })
 }
+
+test.describe('the category dialog while it saves, cloud @smoke', () => {
+  test.beforeEach(async ({ page }) => {
+    await MODES[0].goto(page, 'categories', 'categories-header')
+    await page.getByTestId('add-category-btn').click()
+    await expect(nameField(page)).toBeVisible()
+  })
+
+  test('the button says so and keeps focus, and the form is busy', async ({ page }) => {
+    const name = `zz-busy-${Date.now().toString(36)}`
+    let release!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await page.route('**/api/categories', async (route) => {
+      if (route.request().method() === 'POST') await held
+      await route.continue()
+    })
+    await nameField(page).fill(name)
+    const button = dialogForm(page).locator('button[type="submit"]')
+
+    // From the keyboard, so focus is on the button when the save starts: a disabled button would
+    // drop it.
+    await button.focus()
+    await button.press('Enter')
+
+    await expect(button).toHaveText('Adding…')
+    await expect(button).toBeFocused()
+    await expect(button).toHaveAttribute('aria-disabled', 'true')
+    await expect(button).not.toHaveAttribute('disabled')
+    await expect(dialogForm(page)).toHaveAttribute('aria-busy', 'true')
+
+    release()
+    await expect(page.getByTestId('category-modal-overlay')).toBeHidden()
+    await expect(
+      page
+        .getByRole('region', { name: 'Notifications' })
+        .getByText(`Added "${name}" to your categories.`)
+    ).toBeVisible()
+    const stored = await storedCategory(page, name)
+    if (stored) await deleteCategory(page, stored.id)
+  })
+})

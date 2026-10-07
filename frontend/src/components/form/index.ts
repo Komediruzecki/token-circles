@@ -4,7 +4,9 @@
  * .claude/skills/solid-forms/SKILL.md.
  */
 export { createForm } from './createForm'
-export type { Form, FormOptions, FormValues } from './createForm'
+export type { Form, FormAttributes, FormOptions, FormValues } from './createForm'
 export { default as Field } from './Field'
 export type { FieldControl, FieldProps } from './Field'
 export { default as FormNotice } from './FormNotice'
+export { default as SubmitButton, SAVING } from './SubmitButton'
+export type { SubmitButtonProps } from './SubmitButton'

@@ -1,5 +1,5 @@
 /**
- * The form kit: `createForm`, `Field` and `FormNotice`.
+ * The form kit: `createForm`, `Field`, `FormNotice` and `SubmitButton`.
  *
  * Every form in the app used to answer a refused save the same way: a toast that said the save
  * failed, from a catch that threw the server's reasons away. A blank icon on local-first was
@@ -12,7 +12,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../core/apiError'
-import { createForm, Field, FormNotice } from '..'
+import { createForm, Field, FormNotice, SAVING, SubmitButton } from '..'
 import type { FieldErrors } from '../../../../../shared/refusal'
 import type { Form } from '..'
 
@@ -44,7 +44,7 @@ afterEach(() => {
 })
 
 /** A form with a text field, a number-ish text field and a group of swatches. */
-function mount(send: (values: Values) => unknown = () => undefined) {
+function mount(send: (values: Values) => unknown = () => undefined, busyLabel?: string) {
   const form = createForm<Values>({
     initial: INITIAL,
     check,
@@ -55,7 +55,7 @@ function mount(send: (values: Values) => unknown = () => undefined) {
   document.body.appendChild(host)
   dispose = render(
     () => (
-      <form novalidate onSubmit={form.submit}>
+      <form {...form.attrs}>
         <FormNotice form={form} />
         <Field form={form} name="name" label="Name" hint="What you call it.">
           {(control) => (
@@ -91,9 +91,9 @@ function mount(send: (values: Values) => unknown = () => undefined) {
             </div>
           )}
         </Field>
-        <button type="submit" disabled={form.submitting()}>
+        <SubmitButton busy={form.submitting()} busyLabel={busyLabel}>
           Save
-        </button>
+        </SubmitButton>
       </form>
     ),
     host
@@ -114,6 +114,30 @@ const describedBy = (el: HTMLElement): string[] =>
     .filter(Boolean)
     .map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`)
 const notice = () => host!.querySelector('[role="alert"]')!
+const submitButton = () => host!.querySelector<HTMLButtonElement>('button[type="submit"]')!
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/** A send that waits until the test lets it finish, or refuses with `error`. */
+function pending() {
+  let finish!: () => void
+  let fail!: (error: unknown) => void
+  const send = vi.fn(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        finish = resolve
+        fail = reject
+      })
+  )
+  return {
+    send,
+    finish: () => {
+      finish()
+    },
+    fail: (error: unknown) => {
+      fail(error)
+    },
+  }
+}
 
 function type(el: HTMLElement, text: string) {
   el.focus()
@@ -183,26 +207,99 @@ describe('submit', () => {
   })
 
   it('is submitting while send runs, and ignores a second submit', async () => {
-    let finish!: () => void
-    const send = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve
-        })
-    )
+    const { send, finish } = pending()
     const form = mount(send)
     type(labelled('Name'), 'Coffee')
     type(labelled('Amount'), '3')
 
     await submit()
     expect(form.submitting()).toBe(true)
-    expect(host!.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true)
     await form.submit()
+    await submit()
     expect(send).toHaveBeenCalledTimes(1)
 
     finish()
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await tick()
     expect(form.submitting()).toBe(false)
+  })
+})
+
+describe('while the form sends', () => {
+  it('leaves the browser’s own bubbles off, so the kit says what is wrong', () => {
+    mount()
+
+    expect(formEl().noValidate).toBe(true)
+  })
+
+  it('says so on the button, which keeps focus and does not send twice', async () => {
+    const { send, finish } = pending()
+    mount(send)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    expect(submitButton().textContent).toBe('Save')
+
+    submitButton().focus()
+    submitButton().click()
+    await tick()
+
+    expect(submitButton().textContent).toBe(SAVING)
+    expect(submitButton().getAttribute('aria-disabled')).toBe('true')
+    expect(submitButton().disabled).toBe(false)
+    expect(document.activeElement).toBe(submitButton())
+    expect(formEl().getAttribute('aria-busy')).toBe('true')
+
+    submitButton().click()
+    await tick()
+    expect(send).toHaveBeenCalledTimes(1)
+
+    finish()
+    await tick()
+    expect(submitButton().textContent).toBe('Save')
+    expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
+    expect(formEl().hasAttribute('aria-busy')).toBe(false)
+  })
+
+  it('a click on the busy button submits nothing', async () => {
+    const { send } = pending()
+    mount(send)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    submitButton().click()
+    await tick()
+
+    const submits = vi.fn()
+    formEl().addEventListener('submit', submits)
+    submitButton().click()
+    await tick()
+
+    expect(submits).not.toHaveBeenCalled()
+  })
+
+  it('says the form’s own verb when it has one', async () => {
+    const { send } = pending()
+    mount(send, 'Adding…')
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+
+    await submit()
+
+    expect(submitButton().textContent).toBe('Adding…')
+  })
+
+  it('stops being busy when the save is refused, and focus goes to the field', async () => {
+    const { send, fail } = pending()
+    mount(send)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    await submit()
+
+    fail(new ApiError(400, 'Rename it.', { name: 'Rename it.' }))
+    await tick()
+
+    expect(submitButton().textContent).toBe('Save')
+    expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
+    expect(formEl().hasAttribute('aria-busy')).toBe(false)
+    expect(document.activeElement).toBe(labelled('Name'))
   })
 })
 
