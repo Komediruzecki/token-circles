@@ -138,6 +138,49 @@ describe('a category row stored before this fix', () => {
   })
 })
 
+describe('a category edited in local-first mode', () => {
+  // The Worker's PUT reset the parent and the tax-deductible flag whenever the body left them out
+  // (worker/test/category-edit-keeps-fields.test.ts). The local router merges the body into the
+  // stored row, so it already kept them: this pins that the two runtimes agree.
+  it('keeps its parent and its tax-deductible flag through the edit form and a swatch', async () => {
+    const db = await getDB()
+    const health = (await db.add('categories', {
+      name: 'Health',
+      type: 'expense',
+      color: '#22c55e',
+      icon: 'heart',
+      parent_id: null,
+      tax_deductible: false,
+      created_at: '2026-01-01T00:00:00.000Z',
+      profile_id: 1,
+    } as never)) as number
+    const pharmacy = (await db.add('categories', {
+      name: 'Pharmacy',
+      type: 'expense',
+      color: '#0ea5e9',
+      icon: 'pill',
+      parent_id: health,
+      tax_deductible: true,
+      created_at: '2026-01-01T00:00:00.000Z',
+      profile_id: 1,
+    } as never)) as number
+
+    const edit = await fetchLocal(`/api/categories/${pharmacy}`, 'PUT', {
+      ...formBody('Pharmacy & drugstore', 'pill'),
+      color: '#0284c7',
+    })
+    const swatch = await fetchLocal(`/api/categories/${pharmacy}`, 'PUT', { color: '#f97316' })
+
+    expect([edit.status, swatch.status]).toEqual([200, 200])
+    expect(await db.get('categories', pharmacy)).toMatchObject({
+      name: 'Pharmacy & drugstore',
+      color: '#f97316',
+      parent_id: health,
+      tax_deductible: true,
+    })
+  })
+})
+
 async function fetchLocal(path: string, method: string, body: unknown): Promise<Response> {
   const { apiFetch } = await import('../../apiFetch')
   return apiFetch(path, {

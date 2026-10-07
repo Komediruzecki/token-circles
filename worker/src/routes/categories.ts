@@ -557,8 +557,16 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
   if (!existing) throw new HttpError(404, 'Category not found');
 
   const b = (await c.req.json()) as Record<string, any>;
-  const parent_id = b.parent_id !== undefined ? b.parent_id : b.parentId || null;
+  // An edit changes what it sends and keeps every stored field it leaves out. The Categories and
+  // Budgets forms send name, type, colour and icon; their swatches send the colour alone. The
+  // parent and the tax-deductible flag used to reset to null and 0 on every such edit, and the tax
+  // reports read the flag.
+  const parentSent = b.parent_id !== undefined || b.parentId !== undefined;
+  const parent_id = parentSent
+    ? (b.parent_id !== undefined ? b.parent_id : b.parentId) || null
+    : (existing.parent_id ?? null);
   if (
+    parentSent &&
     parent_id !== null &&
     !(await db.categoryBelongsToProfile(c.env.DB, Number(parent_id), pid))
   ) {
@@ -572,8 +580,9 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
       color: b.color !== undefined ? b.color : existing.color,
       icon: b.icon !== undefined ? b.icon || DEFAULT_ICON : existing.icon,
       type: b.type !== undefined ? b.type : existing.type,
-      parent_id: parent_id || null,
-      tax_deductible: b.tax_deductible ? 1 : 0,
+      parent_id,
+      tax_deductible:
+        b.tax_deductible !== undefined ? (b.tax_deductible ? 1 : 0) : existing.tax_deductible,
     },
     'id = ? AND profile_id = ?',
     id,
