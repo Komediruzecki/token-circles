@@ -5,7 +5,7 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { monthlyRate as monthlyRateFor } from '../../../shared/retirement';
-import { annuityPayment } from '../../../shared/loanSchedule';
+import { addCalendarMonths, annuityPayment, todayUtc } from '../../../shared/loanSchedule';
 import * as db from '../db';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
@@ -311,22 +311,23 @@ calculatorsRoutes.get('/api/calculators/loans/amortization', requireAuth, async 
 
   let balance = principal;
   const schedule: Array<Record<string, unknown>> = [];
-  const startDate = new Date();
+  // Payment i is due i calendar months after today (UTC), on today's day of the month or the
+  // month's last day, as loan schedules are dated: asked on 31 January, the first is due on
+  // 28 February. Date#setMonth overflowed into March instead.
+  const today = todayUtc();
 
   for (let i = 1; i <= termMonths; i++) {
     const interest = balance * monthlyRate;
     const principalPayment = monthlyPayment - interest;
     balance = Math.max(0, balance - principalPayment);
 
-    const d = new Date(startDate);
-    d.setMonth(d.getMonth() + i);
     schedule.push({
       month: i,
       payment: Math.round(monthlyPayment * 100) / 100,
       principal: Math.round(principalPayment * 100) / 100,
       interest: Math.round(interest * 100) / 100,
       balance: Math.round(balance * 100) / 100,
-      date: d.toISOString().split('T')[0],
+      date: addCalendarMonths(today, i),
     });
   }
 

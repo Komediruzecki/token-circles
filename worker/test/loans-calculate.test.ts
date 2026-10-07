@@ -1,5 +1,5 @@
 import { env, SELF } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
 import { addCalendarMonths, calculateLoan, loanStatus, todayUtc } from '../../shared/loanSchedule';
 import type { LoanInput } from '../../shared/loanSchedule';
@@ -293,6 +293,30 @@ describe('the calculators that share the annuity formula', () => {
     expect(body.monthlyPayment).toBe(1060.66);
     expect(body.schedule).toHaveLength(120);
     expect(body.schedule[119].balance).toBe(0);
+  });
+
+  it('dates the amortization schedule by calendar month from today, the day clamped', async () => {
+    // Asked on 31 January, the first payment is due on 28 February, then 31 March, 30 April and
+    // 31 May. Date#setMonth overflowed instead: 31 February came out as 3 March, and 31 April as
+    // 1 May. Only Date is faked; the cookie from beforeEach is still valid on that day.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-01-31T12:00:00Z'));
+    try {
+      const res = await api(
+        'GET',
+        '/api/calculators/loans/amortization?principal=12000&rate=6&term=4'
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { schedule: { date: string }[] };
+      expect(body.schedule.map((row) => row.date)).toEqual([
+        '2026-02-28',
+        '2026-03-31',
+        '2026-04-30',
+        '2026-05-31',
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('GET /api/calculators/mortgages', async () => {
