@@ -42,14 +42,17 @@ async function enterLocalFirst(page: Page): Promise<void> {
   await expect(page.getByTestId('dashboard-container')).toBeVisible({ timeout: 60_000 })
 }
 
-/** The setup wizard opens over a pristine profile. Leave it, confirming when it asks. */
-async function leaveSetupIfOpen(page: Page): Promise<void> {
-  const wizard = page.getByTestId('onboarding-wizard')
-  if (!(await wizard.isVisible().catch(() => false))) return
-  await page.getByTestId('onboarding-skip').click()
-  const confirm = page.getByRole('button', { name: 'Confirm' })
-  if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
-  await expect(wizard).toBeHidden()
+/**
+ * The setup wizard opens over a pristine profile whenever the app gets round to it, which can be a
+ * moment after the page looks ready, and takes every tap until it is left. Leave it, confirming
+ * when it asks, each time it shows up.
+ */
+async function leaveSetupWheneverItOpens(page: Page): Promise<void> {
+  await page.addLocatorHandler(page.getByTestId('onboarding-wizard'), async () => {
+    await page.getByTestId('onboarding-skip').click()
+    const confirm = page.getByRole('button', { name: 'Confirm' })
+    if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
+  })
 }
 
 const sidebarToggle = (page: Page) => page.getByRole('button', { name: 'Toggle sidebar' })
@@ -115,7 +118,6 @@ async function switchProfile(page: Page, name: string): Promise<void> {
   expect(id, `profile "${name}"`).toBeDefined()
   await inProfileMenu(page, () => page.locator(`[data-profile-id="${id}"] span`).first())
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText(name)
-  await leaveSetupIfOpen(page)
   await closeSidebar(page)
 }
 
@@ -151,8 +153,8 @@ test('the orb offers the active profile’s categories after a create and after 
     if (/Validation failed/.test(msg.text())) validationErrors.push(msg.text())
   })
 
+  await leaveSetupWheneverItOpens(page)
   await enterLocalFirst(page)
-  await leaveSetupIfOpen(page)
 
   // 1. A profile from the sidebar; it becomes the active one.
   await inProfileMenu(page, () => page.getByTestId('profile-create-item'))
@@ -160,7 +162,6 @@ test('the orb offers the active profile’s categories after a create and after 
   await page.getByTestId('profile-create-submit').click()
   await expect(page.getByTestId('profile-modal')).toBeHidden({ timeout: 15_000 })
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Test')
-  await leaveSetupIfOpen(page)
   await closeSidebar(page)
 
   // Budgets: no categories yet, so one is made there.
@@ -181,7 +182,6 @@ test('the orb offers the active profile’s categories after a create and after 
   // 2. Reload, open the orb on another profile, then come back to this one.
   await page.reload({ waitUntil: 'domcontentloaded' })
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Test', { timeout: 60_000 })
-  await leaveSetupIfOpen(page)
   await switchProfile(page, 'Example Mid Income')
   orb = await orbAtCategories(page, '5')
   await expect(chip(orb, 'Housing')).toBeVisible()

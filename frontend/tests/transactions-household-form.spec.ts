@@ -144,6 +144,13 @@ test.describe('local-first', () => {
     page,
   }) => {
     test.setTimeout(120_000)
+    // The setup wizard can open over the demo a moment after the page looks ready, and takes every
+    // click until it is left: leave it each time it shows up.
+    await page.addLocatorHandler(page.getByTestId('onboarding-wizard'), async () => {
+      await page.getByTestId('onboarding-skip').click()
+      const confirm = page.getByRole('button', { name: 'Confirm' })
+      if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
+    })
     await page.goto(`${E2E_BASE}/robots.txt`)
     await page.evaluate(() => {
       localStorage.setItem('finance_storage_mode', 'self-hosted')
@@ -176,12 +183,6 @@ test.describe('local-first', () => {
     expect(other, 'a second demo profile').toBeDefined()
 
     await householdView(page, active, other!)
-    const wizard = page.getByTestId('onboarding-wizard')
-    if (await wizard.isVisible().catch(() => false)) {
-      await page.getByTestId('onboarding-skip').click()
-      const confirm = page.getByRole('button', { name: 'Confirm' })
-      if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
-    }
     await openAddFormLoaded(page)
 
     const categories = await offered(page, 'tx-category')
