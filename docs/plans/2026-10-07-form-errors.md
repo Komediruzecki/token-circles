@@ -255,8 +255,8 @@ const form = createForm({
 })
 
 form.values.name           // a store: read it in JSX
-form.set('name', value)     // re-checks the field only if it is already marked
-form.reset(values?)         // open for an edit, or close
+form.set('name', value)     // returns value; re-checks every field a submit has marked
+form.reset(values?)         // open for an edit; drops the answer to a send still in flight
 form.error('name')          // the field's message, or undefined
 form.notice()               // the form-level message, or undefined
 form.submitting()           // true while send() runs
@@ -299,8 +299,10 @@ form.submit                 // the <form>'s onSubmit
 - It follows solid-forms rules 1 to 4; it renders no list of editable rows and no number field.
 
 The category's form logic lives once, in `features/categoryForm.ts` (the values, the shared check,
-the create or update call, the success toast). Each of the four places keeps its own markup and
-look, built from `Field` and `FormNotice`.
+the create or update call, the success toast): `createCategoryForm({ color, editing, onSaved })`
+returns the form plus `open(category?)`, which fills it for a new category or an edit. Each of the
+four places keeps its own markup and look, built from `Field` and `FormNotice`. A create or an
+edit sends only the four fields the dialogs show, so an edit cannot clear a parent or a tax flag.
 
 ### 5. Toast policy
 
