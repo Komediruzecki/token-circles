@@ -13,6 +13,13 @@ import {
 } from './helpers'
 import { normalizeCategory } from './normalize'
 
+/**
+ * The icon a category is stored with when none was given: left out, null (the Categories form
+ * sends null once its icon field is emptied) or ''. On a create and on an edit alike, as the
+ * Worker does (worker/src/routes/categories.ts).
+ */
+const DEFAULT_ICON = 'tag'
+
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
   const type = query.get('type') as 'income' | 'expense' | undefined
   const cats = await adapter.listCategories(type)
@@ -45,7 +52,7 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
     name,
     type: (cat.type as string | undefined) ?? 'expense',
     color: (cat.color as string | undefined) ?? '#6b7280',
-    icon: (cat.icon as string | null | undefined) || 'tag',
+    icon: (cat.icon as string | null | undefined) || DEFAULT_ICON,
     parent_id: parentId,
     tax_deductible: Boolean(cat.tax_deductible),
     created_at: new Date().toISOString(),
@@ -70,7 +77,8 @@ export async function categoriesUpdate(
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
   if (!(await currentProfileRecord('categories', id))) return notFound('Category')
-  const patch = body as Record<string, unknown>
+  const patch = { ...(body as Record<string, unknown>) }
+  if ('icon' in patch) patch.icon = (patch.icon as string | null | undefined) || DEFAULT_ICON
   if (
     ('parent_id' in patch || 'parentId' in patch) &&
     !(await currentProfileOwns('categories', patch.parent_id ?? patch.parentId))

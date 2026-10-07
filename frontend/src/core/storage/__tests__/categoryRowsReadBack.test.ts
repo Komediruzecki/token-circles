@@ -82,7 +82,7 @@ describe('a category made in local-first mode', () => {
     await expect(api.getCategory(created.id)).resolves.toMatchObject({ name: 'Food' })
   })
 
-  it('can have its icon cleared afterwards', async () => {
+  it('can have its icon cleared afterwards, and stores the default for it as a create does', async () => {
     const created = await apiPost<{ id: number }>('/api/categories', formBody('Food', 'food'))
 
     // The edit form sends the same body, with `icon: null` once the field is emptied.
@@ -91,6 +91,25 @@ describe('a category made in local-first mode', () => {
     expect(res.status).toBe(200)
     const list = await api.getCategories()
     expect(list.map((c) => c.name)).toEqual(['Food'])
+    // What the Worker stores for the same edit (worker/test/category-icon-default.test.ts).
+    expect(list[0].icon).toBe('tag')
+    expect((await (await getDB()).get('categories', created.id))?.icon).toBe('tag')
+  })
+
+  it('stores the default for an icon emptied to an empty string', async () => {
+    const created = await apiPost<{ id: number }>('/api/categories', formBody('Food', 'food'))
+
+    await fetchLocal(`/api/categories/${created.id}`, 'PUT', formBody('Food', ''))
+
+    expect((await (await getDB()).get('categories', created.id))?.icon).toBe('tag')
+  })
+
+  it('keeps the icon through an edit that does not send one', async () => {
+    const created = await apiPost<{ id: number }>('/api/categories', formBody('Food', 'food'))
+
+    await fetchLocal(`/api/categories/${created.id}`, 'PUT', { name: 'Groceries' })
+
+    expect((await (await getDB()).get('categories', created.id))?.icon).toBe('food')
   })
 })
 
