@@ -45,7 +45,9 @@ export const categoryCreateSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['income', 'expense']),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  icon: z.string().optional(),
+  // null when the form's icon field was left blank, as Budgets and Categories invite. The Worker
+  // stores its default for it; refusing it here failed the save in local-first only.
+  icon: z.string().nullable().optional(),
   tax_deductible: z.boolean().optional(),
 })
 

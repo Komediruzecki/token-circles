@@ -52,7 +52,6 @@ line in the PR that fixes it.
 
 | Case       | Mode  | Bug                                                                                                                                  |
 | ---------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| s01 1.2b   | local | A category saved without an icon fails validation (`icon: null`), since 5.15.1                                                       |
 | s02 2.7b   | both  | An open bill calendar keeps a paid bill's "upcoming" dot: its cells read each day once (`BillCalendar.tsx:255`)                      |
 | s02b 2.17b | both  | The same stale cells keep a renamed category's old name and colour; in local-first the calendar has no colour at all                 |
 | s02b 2.17  | local | Local-first bills, subscriptions and recurring rules carry no category name or colour (`handlers/bills.ts`, `handlers/recurring.ts`) |

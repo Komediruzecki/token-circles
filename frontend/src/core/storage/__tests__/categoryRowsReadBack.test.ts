@@ -7,7 +7,9 @@
  * one such category every `api.getCategories()` covering its profile threw a validation error. App's
  * quick entry kept whatever list it had before: "No expense categories yet" straight after making
  * one on Budgets, and after a profile switch, the previous profile's categories (reported on dev,
- * 2026-10-07). Transactions, Tags and the badges read through the same call.
+ * 2026-10-07). Transactions, Tags and the badges read through the same call. A blank icon did not get
+ * that far: the router's body schema refused `icon: null`, which the Worker accepts, and the form
+ * said "Failed to save category".
  *
  * Everything here goes through the real `apiFetch`, local router, handler and zod schema.
  */
@@ -45,6 +47,17 @@ describe('a category made in local-first mode', () => {
     expect(list[0]).toMatchObject({ icon: 'food', tax_deductible: false, profile_id: 1 })
   })
 
+  it('saves and reads back when the icon was left blank', async () => {
+    // Budgets: "Leave it blank to choose one from the category name."
+    await apiPost('/api/categories', formBody('Rent', null))
+
+    const list = await api.getCategories()
+
+    expect(list.map((c) => c.name)).toEqual(['Rent'])
+    // The Worker's default for a blank icon; the renderer reads it as "none chosen".
+    expect(list[0].icon).toBe('tag')
+  })
+
   it('is stored complete, as the Worker stores it', async () => {
     await apiPost('/api/categories', formBody('Food', 'food'))
 
@@ -67,6 +80,17 @@ describe('a category made in local-first mode', () => {
     const created = await apiPost<{ id: number }>('/api/categories', formBody('Food', 'food'))
 
     await expect(api.getCategory(created.id)).resolves.toMatchObject({ name: 'Food' })
+  })
+
+  it('can have its icon cleared afterwards', async () => {
+    const created = await apiPost<{ id: number }>('/api/categories', formBody('Food', 'food'))
+
+    // The edit form sends the same body, with `icon: null` once the field is emptied.
+    const res = await fetchLocal(`/api/categories/${created.id}`, 'PUT', formBody('Food', null))
+
+    expect(res.status).toBe(200)
+    const list = await api.getCategories()
+    expect(list.map((c) => c.name)).toEqual(['Food'])
   })
 })
 
@@ -94,3 +118,12 @@ describe('a category row stored before this fix', () => {
     expect(list.map((c) => c.tax_deductible)).toEqual([false, false])
   })
 })
+
+async function fetchLocal(path: string, method: string, body: unknown): Promise<Response> {
+  const { apiFetch } = await import('../../apiFetch')
+  return apiFetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Profile-Id': '1' },
+    body: JSON.stringify(body),
+  })
+}
