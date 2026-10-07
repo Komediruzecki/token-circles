@@ -30,6 +30,7 @@ import {
   setShowDropdown,
   useAppState,
 } from '../core/appStore'
+import { removeToast, toasts } from '../core/toastStore'
 import type { apiFetch as ApiFetch } from '../core/apiFetch'
 import type { StorageMode } from '../core/storage/storageFactory'
 
@@ -188,7 +189,13 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 const settle = async () => {
   for (let i = 0; i < 8; i++) await flush()
 }
-const waitLong = { timeout: 10_000 }
+/**
+ * Each test mounts the whole App, so it gets more than vitest's default 5 s. Each wait inside it
+ * gives up well before that runs out, and no test waits on more than four things: a behaviour
+ * that is missing fails as the assertion it was waiting for, not as a timeout.
+ */
+const TEST_TIMEOUT = 20_000
+const WAIT = { timeout: 4_000 }
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -228,6 +235,7 @@ afterEach(() => {
   host.remove()
   vi.unstubAllGlobals()
   localStorage.clear()
+  for (const t of toasts()) removeToast(t.id)
 })
 
 async function mountApp(mode: StorageMode, current: number, selected: number[] = [current]) {
@@ -243,7 +251,7 @@ async function mountApp(mode: StorageMode, current: number, selected: number[] =
   dispose = render(() => <App />, host)
   await vi.waitFor(() => {
     expect(state.currentProfile?.id).toBe(current)
-  }, waitLong)
+  }, WAIT)
   await settle()
 }
 
@@ -326,233 +334,301 @@ async function openCommandBar(text: string) {
   return { input, select }
 }
 
+const commandBar = () =>
+  document.querySelector<HTMLElement>('[aria-label="Quick entry command bar"]')!
+const commandBarIsOpen = () => commandBar().parentElement!.className.includes('open')
+const toastMessages = () => toasts().map((t) => t.message)
+
 /** The category chip's options, and the one it has picked. */
 const optionNames = (select: HTMLSelectElement) =>
   Array.from(select.options).map((o) => o.textContent)
 const picked = (select: HTMLSelectElement) => select.options[select.selectedIndex]?.textContent
 
-describe.each(['serverless', 'self-hosted'] as const)('quick entry in %s mode', (mode) => {
-  it('offers the active profile’s categories, not the rest of the household’s', async () => {
-    // Settings > Household with Family ticked as well: reads cover both, entries go to Personal.
-    await mountApp(mode, 1, [1, 2])
+describe.each(['serverless', 'self-hosted'] as const)(
+  'quick entry in %s mode',
+  { timeout: TEST_TIMEOUT },
+  (mode) => {
+    it('offers the active profile’s categories, not the rest of the household’s', async () => {
+      // Settings > Household with Family ticked as well: reads cover both, entries go to Personal.
+      await mountApp(mode, 1, [1, 2])
 
-    await openOrbAtCategories()
+      await openOrbAtCategories()
 
-    expect(offered()).toEqual(['Groceries'])
-  })
-
-  it('offers the active profile’s accounts, not the rest of the household’s', async () => {
-    await mountApp(mode, 1, [1, 2])
-    await openOrbAtCategories()
-    await pickCategory('Groceries')
-
-    // One account to offer, so nothing to cycle through.
-    expect(orb().textContent).toContain('Main')
-    expect(orb().textContent).not.toContain('tap to change')
-  })
-
-  it('offers a category made elsewhere the next time it opens', async () => {
-    await mountApp(mode, 3)
-    await openOrbAtCategories()
-    expect(orb().textContent).toContain('No expense categories yet')
-    await closeOrb()
-
-    // What Budgets sends: an icon typed in, no tax_deductible.
-    const { apiPost } = await import('../core/api')
-    await apiPost('/api/categories', {
-      name: 'Food',
-      type: 'expense',
-      color: '#6e9bff',
-      icon: 'food',
-    })
-    await settle()
-
-    await openOrbAtCategories()
-    expect(offered()).toEqual(['Food'])
-  })
-
-  it('never shows the previous profile’s categories after a switch, and says it is loading', async () => {
-    await mountApp(mode, 1)
-    await openOrbAtCategories()
-    expect(offered()).toEqual(['Groceries'])
-    await closeOrb()
-
-    let release!: () => void
-    net.heldCategoryReads.set(2, new Promise((r) => (release = r)))
-    await switchProfile(2)
-    await openOrbAtCategories()
-
-    expect(offered()).toEqual([])
-    expect(orb().textContent).toContain('Loading your categories')
-    expect(orb().textContent).not.toContain('No expense categories yet')
-
-    release()
-    await vi.waitFor(() => {
-      expect(offered()).toEqual(['Eating out', 'Fuel'])
-    }, waitLong)
-  })
-
-  it('says it is loading the first time, instead of claiming there are no categories', async () => {
-    let release!: () => void
-    net.heldCategoryReads.set(1, new Promise((r) => (release = r)))
-    await mountApp(mode, 1)
-
-    await openOrbAtCategories()
-
-    expect(orb().textContent).toContain('Loading your categories')
-    expect(orb().textContent).not.toContain('No expense categories yet')
-    release()
-    await vi.waitFor(() => {
       expect(offered()).toEqual(['Groceries'])
-    }, waitLong)
-  })
+    })
 
-  it('keeps the newest answer when an older one arrives after it', async () => {
-    await mountApp(mode, 1)
-    let releaseFamily!: () => void
-    net.heldCategoryReads.set(2, new Promise((r) => (releaseFamily = r)))
+    it('offers the active profile’s accounts, not the rest of the household’s', async () => {
+      await mountApp(mode, 1, [1, 2])
+      await openOrbAtCategories()
+      await pickCategory('Groceries')
 
-    // Family's read is still out when the person switches back to Personal and opens again.
-    await switchProfile(2)
-    await openOrbAtCategories()
-    await closeOrb()
-    await switchProfile(1)
-    await openOrbAtCategories()
-    expect(offered()).toEqual(['Groceries'])
+      // One account to offer, so nothing to cycle through.
+      expect(orb().textContent).toContain('Main')
+      expect(orb().textContent).not.toContain('tap to change')
+    })
 
-    releaseFamily()
-    await settle()
-    await settle()
+    it('offers a category made elsewhere the next time it opens', async () => {
+      await mountApp(mode, 3)
+      await openOrbAtCategories()
+      expect(orb().textContent).toContain('No expense categories yet')
+      await closeOrb()
 
-    expect(offered()).toEqual(['Groceries'])
-  })
+      // What Budgets sends: an icon typed in, no tax_deductible.
+      const { apiPost } = await import('../core/api')
+      await apiPost('/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#6e9bff',
+        icon: 'food',
+      })
+      await settle()
 
-  it('says a failed read failed, rather than offering another profile’s categories', async () => {
-    await mountApp(mode, 1)
-    await openOrbAtCategories()
-    expect(offered()).toEqual(['Groceries'])
-    await closeOrb()
+      await openOrbAtCategories()
+      expect(offered()).toEqual(['Food'])
+    })
 
-    net.failingCategoryReads.add(2)
-    await switchProfile(2)
-    await openOrbAtCategories()
+    it('never shows the previous profile’s categories after a switch, and says it is loading', async () => {
+      await mountApp(mode, 1)
+      await openOrbAtCategories()
+      expect(offered()).toEqual(['Groceries'])
+      await closeOrb()
 
-    expect(offered()).toEqual([])
-    expect(orb().textContent).not.toContain('No expense categories yet')
-    expect(orbButton('Try again')).toBeDefined()
+      let release!: () => void
+      net.heldCategoryReads.set(2, new Promise((r) => (release = r)))
+      await switchProfile(2)
+      await openOrbAtCategories()
 
-    net.failingCategoryReads.delete(2)
-    orbButton('Try again')!.click()
-    await vi.waitFor(() => {
-      expect(offered()).toEqual(['Eating out', 'Fuel'])
-    }, waitLong)
-  })
+      expect(offered()).toEqual([])
+      expect(orb().textContent).toContain('Loading your categories')
+      expect(orb().textContent).not.toContain('No expense categories yet')
 
-  it('never sends a category from another profile to the save', async () => {
-    await mountApp(mode, 1)
-    await openOrbAtCategories()
-    await pickCategory('Groceries')
+      release()
+      await vi.waitFor(() => {
+        expect(offered()).toEqual(['Eating out', 'Fuel'])
+      }, WAIT)
+    })
 
-    // Another tab switches to Family while this one sits on the confirm step: the save would be
-    // filed under Family, with Personal's category.
-    localStorage.setItem('currentProfileId', '2')
-    localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
-    addButton()!.click()
-    await settle()
+    it('says it is loading the first time, instead of claiming there are no categories', async () => {
+      let release!: () => void
+      net.heldCategoryReads.set(1, new Promise((r) => (release = r)))
+      await mountApp(mode, 1)
 
-    expect(transactionPosts()).toEqual([])
-    await vi.waitFor(() => {
-      expect(offered()).toEqual(['Eating out', 'Fuel'])
-    }, waitLong)
-  })
+      await openOrbAtCategories()
 
-  it('files an entry under the active profile with its own category and account', async () => {
-    await mountApp(mode, 1, [1, 2])
-    await openOrbAtCategories()
-    await pickCategory('Groceries')
+      expect(orb().textContent).toContain('Loading your categories')
+      expect(orb().textContent).not.toContain('No expense categories yet')
+      release()
+      await vi.waitFor(() => {
+        expect(offered()).toEqual(['Groceries'])
+      }, WAIT)
+    })
 
-    addButton()!.click()
-    await vi.waitFor(() => {
+    it('keeps the newest answer when an older one arrives after it', async () => {
+      await mountApp(mode, 1)
+      let releaseFamily!: () => void
+      net.heldCategoryReads.set(2, new Promise((r) => (releaseFamily = r)))
+
+      // Family's read is still out when the person switches back to Personal and opens again.
+      await switchProfile(2)
+      await openOrbAtCategories()
+      await closeOrb()
+      await switchProfile(1)
+      await openOrbAtCategories()
+      expect(offered()).toEqual(['Groceries'])
+
+      releaseFamily()
+      await settle()
+      await settle()
+
+      expect(offered()).toEqual(['Groceries'])
+    })
+
+    it('says a failed read failed, rather than offering another profile’s categories', async () => {
+      await mountApp(mode, 1)
+      await openOrbAtCategories()
+      expect(offered()).toEqual(['Groceries'])
+      await closeOrb()
+
+      net.failingCategoryReads.add(2)
+      await switchProfile(2)
+      await openOrbAtCategories()
+
+      expect(offered()).toEqual([])
+      expect(orb().textContent).not.toContain('No expense categories yet')
+      expect(orbButton('Try again')).toBeDefined()
+
+      net.failingCategoryReads.delete(2)
+      orbButton('Try again')!.click()
+      await vi.waitFor(() => {
+        expect(offered()).toEqual(['Eating out', 'Fuel'])
+      }, WAIT)
+    })
+
+    it('never sends a category from another profile to the save', async () => {
+      await mountApp(mode, 1)
+      await openOrbAtCategories()
+      await pickCategory('Groceries')
+
+      // Another tab switches to Family while this one sits on the confirm step: the save would be
+      // filed under Family, with Personal's category.
+      localStorage.setItem('currentProfileId', '2')
+      localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
+      addButton()!.click()
+      await settle()
+
+      expect(transactionPosts()).toEqual([])
+      await vi.waitFor(() => {
+        expect(offered()).toEqual(['Eating out', 'Fuel'])
+      }, WAIT)
+    })
+
+    it('files an entry under the active profile with its own category and account', async () => {
+      await mountApp(mode, 1, [1, 2])
+      await openOrbAtCategories()
+      await pickCategory('Groceries')
+
+      addButton()!.click()
+      await vi.waitFor(() => {
+        expect(transactionPosts()).toHaveLength(1)
+      }, WAIT)
+
+      const [save] = transactionPosts()
+      expect(save.headers['x-profile-id']).toBe('1')
+      expect(save.body).toMatchObject({ category_id: 11, account_id: 31, amount: 50 })
+    })
+
+    it('the command bar matches only the active profile’s categories', async () => {
+      await mountApp(mode, 1, [1, 2])
+
+      const { select } = await openCommandBar('dinner 12 eating')
+
+      expect(optionNames(select)).not.toContain('Eating out')
+      expect(optionNames(select)).toContain('Groceries')
+      expect(picked(select)).not.toBe('Eating out')
+    })
+
+    it('the command bar never sends a category from another profile to the save', async () => {
+      await mountApp(mode, 1)
+      const { input, select } = await openCommandBar('coffee 5 groceries')
+      expect(picked(select)).toBe('Groceries')
+
+      // Another tab switches to Family before Enter: the save would be filed under Family, with
+      // Personal's category.
+      localStorage.setItem('currentProfileId', '2')
+      localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await settle()
+
+      expect(transactionPosts()).toEqual([])
+      await vi.waitFor(() => {
+        expect(optionNames(select)).toContain('Eating out')
+      }, WAIT)
+      expect(picked(select)).not.toBe('Groceries')
+    })
+
+    // A save bumps `transactions`, which moves `accounts`, and App's onSave then bumps the profile
+    // version. Read while the entry was still open, each read the lists again: three reads for a
+    // save whose entry was about to close.
+    it('reads neither list again for a save that closes the orb', async () => {
+      await mountApp(mode, 1)
+      await openOrbAtCategories()
+      await pickCategory('Groceries')
+      const before = listReads().length
+
+      addButton()!.click()
+      await vi.waitFor(() => {
+        expect(transactionPosts()).toHaveLength(1)
+      }, WAIT)
+      await settle()
+
+      expect(listReads().slice(before)).toEqual([])
+    })
+
+    it('reads neither list again for a save that closes the command bar', async () => {
+      await mountApp(mode, 1)
+      const { input } = await openCommandBar('coffee 5 groceries')
+      const before = listReads().length
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await vi.waitFor(() => {
+        expect(transactionPosts()).toHaveLength(1)
+      }, WAIT)
+      await settle()
+
+      expect(listReads().slice(before)).toEqual([])
+    })
+
+    it('reads each list once after a save that keeps the command bar open', async () => {
+      await mountApp(mode, 1)
+      const { input } = await openCommandBar('coffee 5 groceries')
+      const before = listReads().length
+
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true })
+      )
+      await vi.waitFor(() => {
+        expect(transactionPosts()).toHaveLength(1)
+      }, WAIT)
+      await settle()
+
+      expect(listReads().slice(before).sort()).toEqual(['/api/accounts', '/api/categories'])
+    })
+
+    // The command bar's own paths: Enter before the lists are in, and a category read that failed.
+    it('the command bar lands an Enter pressed while its lists load, once they are in, as one save', async () => {
+      let release!: () => void
+      net.heldCategoryReads.set(1, new Promise((r) => (release = r)))
+      await mountApp(mode, 1)
+      const { input } = await openCommandBar('coffee 5 groceries')
+
+      // Pressed twice while the categories are still on their way.
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await settle()
+      expect(transactionPosts()).toEqual([])
+
+      release()
+      await vi.waitFor(() => {
+        expect(transactionPosts()).toHaveLength(1)
+      }, WAIT)
+      await settle()
+
       expect(transactionPosts()).toHaveLength(1)
-    }, waitLong)
+      expect(transactionPosts()[0].body).toMatchObject({ category_id: 11, amount: 5 })
+      expect(commandBarIsOpen()).toBe(false)
+    })
 
-    const [save] = transactionPosts()
-    expect(save.headers['x-profile-id']).toBe('1')
-    expect(save.body).toMatchObject({ category_id: 11, account_id: 31, amount: 50 })
-  })
+    it('the command bar offers a retry on the category chip when the read failed, and it reads again', async () => {
+      net.failingCategoryReads.add(1)
+      await mountApp(mode, 1)
+      const { select } = await openCommandBar('coffee 5 groceries')
+      expect(optionNames(select)).toEqual(["categories didn't load"])
 
-  it('the command bar matches only the active profile’s categories', async () => {
-    await mountApp(mode, 1, [1, 2])
+      net.failingCategoryReads.delete(1)
+      commandBar()
+        .querySelector<HTMLButtonElement>('button[aria-label="Retry loading categories"]')!
+        .click()
+      await vi.waitFor(() => {
+        expect(optionNames(select)).toContain('Groceries')
+      }, WAIT)
 
-    const { select } = await openCommandBar('dinner 12 eating')
+      expect(commandBar().querySelector('button[aria-label="Retry loading categories"]')).toBeNull()
+      expect(picked(select)).toBe('Groceries')
+    })
 
-    expect(optionNames(select)).not.toContain('Eating out')
-    expect(optionNames(select)).toContain('Groceries')
-    expect(picked(select)).not.toBe('Eating out')
-  })
+    it('the command bar says the categories did not load when Enter comes after the read failed', async () => {
+      net.failingCategoryReads.add(1)
+      await mountApp(mode, 1)
+      const { input } = await openCommandBar('coffee 5 groceries')
 
-  it('the command bar never sends a category from another profile to the save', async () => {
-    await mountApp(mode, 1)
-    const { input, select } = await openCommandBar('coffee 5 groceries')
-    expect(picked(select)).toBe('Groceries')
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      await settle()
 
-    // Another tab switches to Family before Enter: the save would be filed under Family, with
-    // Personal's category.
-    localStorage.setItem('currentProfileId', '2')
-    localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    await settle()
-
-    expect(transactionPosts()).toEqual([])
-    await vi.waitFor(() => {
-      expect(optionNames(select)).toContain('Eating out')
-    }, waitLong)
-    expect(picked(select)).not.toBe('Groceries')
-  })
-
-  // A save bumps `transactions`, which moves `accounts`, and App's onSave then bumps the profile
-  // version. Read while the entry was still open, each read the lists again: three reads for a
-  // save whose entry was about to close.
-  it('reads neither list again for a save that closes the orb', async () => {
-    await mountApp(mode, 1)
-    await openOrbAtCategories()
-    await pickCategory('Groceries')
-    const before = listReads().length
-
-    addButton()!.click()
-    await vi.waitFor(() => {
-      expect(transactionPosts()).toHaveLength(1)
-    }, waitLong)
-    await settle()
-
-    expect(listReads().slice(before)).toEqual([])
-  })
-
-  it('reads neither list again for a save that closes the command bar', async () => {
-    await mountApp(mode, 1)
-    const { input } = await openCommandBar('coffee 5 groceries')
-    const before = listReads().length
-
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
-    await vi.waitFor(() => {
-      expect(transactionPosts()).toHaveLength(1)
-    }, waitLong)
-    await settle()
-
-    expect(listReads().slice(before)).toEqual([])
-  })
-
-  it('reads each list once after a save that keeps the command bar open', async () => {
-    await mountApp(mode, 1)
-    const { input } = await openCommandBar('coffee 5 groceries')
-    const before = listReads().length
-
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true, bubbles: true }))
-    await vi.waitFor(() => {
-      expect(transactionPosts()).toHaveLength(1)
-    }, waitLong)
-    await settle()
-
-    expect(listReads().slice(before).sort()).toEqual(['/api/accounts', '/api/categories'])
-  })
-})
+      expect(transactionPosts()).toEqual([])
+      expect(toastMessages()).toEqual([
+        "Your categories didn't load. Use retry on the category chip.",
+      ])
+      expect(commandBarIsOpen()).toBe(true)
+    })
+  }
+)
