@@ -25,7 +25,7 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js'
 import Chart from '../components/Chart'
 import ExportChartButton from '../components/ExportChartButton'
-import { formatCurrency } from '../core/api'
+import { formatCurrency, getLocalCurrency } from '../core/api'
 import { theme } from '../core/theme'
 import sharedStyles from './CalculatorShared.module.css'
 import styles from './RentBuyCalculator.module.css'
@@ -46,7 +46,7 @@ interface Props {
 }
 
 export default function RentBuyCalculator(props: Props) {
-  const currency = props.currency || 'EUR'
+  const currency = props.currency || getLocalCurrency()
   const [loading, setLoading] = createSignal(false)
   const chartColors = () => theme.getChartColors()
   const [results, setResults] = createSignal<Result[]>([])

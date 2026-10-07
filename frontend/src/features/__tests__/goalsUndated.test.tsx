@@ -79,8 +79,10 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
 beforeAll(async () => {
-  // The first test would otherwise pay for this import inside its own timeout.
-  await import('../Goals')
+  // The first tests would otherwise pay for these imports inside their own timeouts: the page, and
+  // the local-first router `apiFetch` imports on the page's first request. Under a loaded machine
+  // the router alone outlasted two tests' `waitFor`.
+  await Promise.all([import('../Goals'), import('../../core/storage/localApiRouter')])
 }, 120_000)
 
 beforeEach(async () => {

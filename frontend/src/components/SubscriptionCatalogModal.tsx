@@ -10,8 +10,9 @@
  * batch-add button commits them.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
-import { apiPost, showToast } from '../core/api'
+import { apiPost, getLocalCurrency, showToast } from '../core/api'
 import { paletteColor } from '../core/brandPalette'
+import { currencySymbol } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
@@ -117,10 +118,11 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   const chosen = createMemo(() => Object.keys(selected()))
   const total = createMemo(() => chosen().reduce((sum, name) => sum + priceOf(selected()[name]), 0))
 
+  // Catalog prices are in the user's currency, and a bill added from here is saved in it.
   const money = (n: number) =>
     new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: 'EUR',
+      currency: getLocalCurrency(),
       maximumFractionDigits: 2,
     }).format(n)
 
@@ -264,7 +266,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
                 e.stopPropagation()
               }}
             >
-              <span class={styles.cur}>€</span>
+              <span class={styles.cur}>{currencySymbol(getLocalCurrency())}</span>
               <input
                 class={styles.priceInput}
                 type="text"

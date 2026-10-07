@@ -2,13 +2,12 @@
 import './styles/index.css'
 import { installPwaInstallListeners, registerServiceWorker } from '@pwa-kit'
 import { render } from 'solid-js/web'
-import { App } from './App'
-import { ErrorBoundary } from './components/ErrorBoundary'
 import { noteWaitingBuild } from './core/appVersion'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
 import { consumeEmailVerifyRedirect } from './core/emailVerification'
 import { applyPlanIntentFromUrl } from './core/planIntent'
+import { Root } from './Root'
 
 // Install the stale-chunk recovery listeners before anything renders, so a failed dynamic
 // import after a deploy quietly reloads to the fresh build instead of surfacing a parse error.
@@ -58,14 +57,7 @@ if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   )
 }
 
-render(
-  () => (
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  ),
-  root
-)
+render(() => <Root />, root)
 
 // Signal a successful boot so the pre-JS watchdog in index.html stands down.
 markBooted()

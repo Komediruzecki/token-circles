@@ -9,6 +9,74 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.16.1] — 2026-09-27
+
+- **Money is formatted in the base currency** everywhere it was hard-coded. `D3HeatmapChart`'s
+  tooltip and `RentBuyCalculator` used euros, `RecurringSection` dollars, and
+  `SubscriptionCatalogModal` euros plus a literal euro prefix on its price field. They use the
+  shared `formatCurrency`, or `getLocalCurrency()` where they format themselves; a recurring rule
+  and a catalog price have no currency of their own, so theirs is the base one.
+  `AutoCategorizeModal` fell back to euros for a row without a currency. The calculator still
+  honours a `currency` prop. New `currencySymbol(code, locale?)` in `core/currencies.ts` gives
+  the catalog its prefix: the symbol where the locale has one, the code (`CHF`) where it does not.
+  The audit found no other literal-currency `Intl.NumberFormat`; the budget allocation alerts'
+  `Over budget by $…` strings (Worker and local) are API text no page renders, left as they are.
+- **Local-first mark-paid records the payment** (`handlers/bills.ts`), as the Worker's batch does:
+  an expense transaction for the bill's amount in the base currency (EUR when none was ever set,
+  as on the Worker; `amount_local = amount`), on
+  its account and category, dated today; the account debited; the bill stamped paid; 409 when it
+  is already paid for its period; `{ ok, transactionId }` back. It used to stamp the bill only.
+  New `IndexedDBAdapter.payBill` runs the check and every write in one IndexedDB transaction, so
+  a second tap or tab runs after the first and gets the 409 with nothing written. Local
+  `billsCreate` still takes no `account_id` (no form sends one); a bill restored from a cloud
+  backup can carry one.
+- **Profile-selection edge paths.** `loadProfiles` keeps the list and the selection when the read
+  fails; it used to empty the list, which read "Not Logged In", and the repair then dropped every
+  selected id. After a sidebar create whose list read failed, App adds the created row
+  (`ProfileModal.onSuccess` now passes the profile, not its id). Sign-out clears the list itself.
+  The setup wizard's first-profile create goes through `applyProfileSelection` (new
+  `selectProfiles` prop) instead of writing the storage keys. App's sidebar selection follows the
+  stored one on a `profileVersion` bump while the dropdown is closed, so a household edited in
+  Settings is no longer written back over by the next dropdown close.
+- **Tags are per profile in local-first lists too.** Local `GET /api/tags` returned every
+  household profile's tags while the Worker returns the active profile's; tags are per profile in
+  every other route. The filter bar and the bulk-tag modal (which 404ed on another profile's tag)
+  now get the active profile's list in both modes, and use the form's `ownTags` for the window
+  after a profile switch. The filter bar keeps no household tags: cloud mode never offered them
+  (the Worker's list is the active profile's), tags are per profile and the filter matches rows by
+  tag id, so a household list would offer one entry per profile for a shared name, and the Tags
+  page links only the active profile's. The bulk-tag create picks an existing tag of
+  the same name in any case, and local `tagsCreate` refuses an exact duplicate in a profile with
+  the Worker's 400, mirroring `UNIQUE(name, profile_id)`.
+- **Household rows are enriched from their own profile** (local `transactionsList`). It read rows
+  from every selected profile but looked categories, receipts and tags up in the active profile's
+  alone, so the other profiles' rows showed a dash for the category and no receipt or tags. It
+  reads them from every selected profile now and, like the Worker's joins
+  (`c.profile_id = t.profile_id`), takes a category or a receipt only from the row's own profile;
+  tags come from every selected profile's rows, as the Worker attaches them.
+- **IndexedDB connection handlers** in `getDB` (`core/storage/idb.ts`, notices in
+  `core/storage/connectionNotices.ts`). `blocking`: close the connection so another tab's upgrade
+  or a delete can run, ask for a reload through `reloadToLatest` on the deploy notice's channel
+  (`UPDATE_TOAST_CHANNEL`, now exported from `core/toastStore.ts`), and leave later calls waiting
+  rather than failing into empty lists. `blocked`: a warning to close the other tabs until the
+  upgrade runs; builds up to 5.16.0 have no `blocking` handler, so this is what a tab upgrading
+  past an old one shows. `terminated`: drop the dead connection so the next call reopens. The v12
+  schema the upgrade tests build is a shared helper now, `__tests__/v12Schema.ts`.
+- **The waiting notice is drawn while the app loads.** `blocked` raised its toast as intended, but
+  `<ToastContainer />` lived inside App's `<Show when={!_isLoading()}>`, and the blocked upgrade
+  is what keeps App loading: the tab showed the boot screen and nothing else. The container now
+  renders beside App in the new `Root.tsx`, which `index.tsx` mounts; App has none of its own.
+  `toastsOutsideBootGate.test.tsx` pins both halves, and the release suite's two-tab case
+  (`frontend/tests/release/s15-two-tab-upgrade.spec.ts`) passes on a production build.
+- **An import preview no longer counts as a write for badges.** `announceDataChanged` skipped GET,
+  HEAD, OPTIONS and settings writes but not the lookups sent as POST, so each preview's dry run set
+  off a full badge evaluation (eight reads) after a request that wrote nothing. The list of those
+  lookups moved from `dataVersions.ts` into the leaf module `core/readsSentAsPost.ts`, which both
+  listeners now consult.
+- **A test that failed under load.** `goalsUndated.test.tsx` loads the local-first router in its
+  `beforeAll`. Its first two tests paid for `apiFetch`'s import of the router inside a one-second
+  `waitFor`, and failed every full run on a loaded machine, on the 5.16.0 base as well.
+
 ## [5.16.0] — 2026-09-27
 
 ### Data refresh: one invalidation seam

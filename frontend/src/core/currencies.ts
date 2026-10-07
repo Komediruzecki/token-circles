@@ -29,3 +29,18 @@ export function normalizeCurrencyCode(value: unknown, fallback = 'EUR'): string 
   const fallbackCode = fallback.trim().toUpperCase()
   return /^[A-Z]{3}$/.test(fallbackCode) ? fallbackCode : 'EUR'
 }
+
+/**
+ * The symbol `code` is written with in `locale`: "£" for GBP in English, and the code itself
+ * ("CHF") where the locale has nothing shorter. For a prefix beside an amount input.
+ */
+export function currencySymbol(code: string, locale?: string): string {
+  try {
+    const part = new Intl.NumberFormat(locale, { style: 'currency', currency: code })
+      .formatToParts(0)
+      .find((p) => p.type === 'currency')
+    return part?.value ?? code
+  } catch {
+    return code
+  }
+}

@@ -81,9 +81,12 @@ export default function BulkActionBar(props: BulkActionBarProps) {
   const handleCreateNewTag = async () => {
     const name = newTagName().trim()
     if (!name) return
-    const created = await props.onCreateTag(name)
-    if (created) {
-      setPickedTagIds((prev) => (prev.includes(created.id) ? prev : [...prev, created.id]))
+    // A name the profile already has, in any case, picks that tag. Creating it again is refused
+    // for the exact name, and a different case makes a second tag that reads the same.
+    const existing = props.tags.find((t) => t.name.toLowerCase() === name.toLowerCase())
+    const tag = existing ?? (await props.onCreateTag(name))
+    if (tag) {
+      setPickedTagIds((prev) => (prev.includes(tag.id) ? prev : [...prev, tag.id]))
       setNewTagName('')
     }
   }

@@ -77,4 +77,36 @@ describe('localHandlers - tags', () => {
     expect(txns).toHaveLength(1)
     expect(txns[0].description).toBe('Flight')
   })
+
+  it("lists only the active profile's tags, in household view too", async () => {
+    // The Worker lists the active profile's tags alone. This list used to span the household,
+    // so the Transactions page offered tags no write there accepts.
+    const db = await getDB()
+    await db.add('profiles', { id: 2, name: 'Partner', created_at: '2026-01-01' })
+    localStorage.setItem('selectedProfileIds', JSON.stringify([1, 2]))
+    await db.add('tags', { profile_id: 1, name: 'Holiday', color: '#f97316' })
+    await db.add('tags', { profile_id: 2, name: 'Garden', color: '#84cc16' })
+
+    const names = async () =>
+      ((await (await tagsList()).json()) as { name: string }[]).map((t) => t.name)
+    expect(await names()).toEqual(['Holiday'])
+
+    localStorage.setItem('currentProfileId', '2')
+    expect(await names()).toEqual(['Garden'])
+  })
+
+  it('refuses a second tag of the same name in one profile, as the Worker does', async () => {
+    // The Worker's table is UNIQUE(name, profile_id): exact and case-sensitive.
+    expect((await tagsCreate({ name: 'Groceries' })).status).toBe(201)
+
+    const again = await tagsCreate({ name: ' Groceries ' })
+    expect(again.status).toBe(400)
+    expect(await again.json()).toEqual({ error: 'Tag already exists' })
+    expect((await tagsCreate({ name: 'groceries' })).status).toBe(201)
+
+    const db = await getDB()
+    await db.add('profiles', { id: 2, name: 'Partner', created_at: '2026-01-01' })
+    localStorage.setItem('currentProfileId', '2')
+    expect((await tagsCreate({ name: 'Groceries' })).status).toBe(201)
+  })
 })

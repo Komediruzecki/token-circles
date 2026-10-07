@@ -17,7 +17,9 @@ import {
 import { AutoCategorizeModal } from '../AutoCategorizeModal'
 import type { AutoCategorizeTransaction } from '../AutoCategorizeModal'
 
-vi.mock('../../core/api', () => ({
+vi.mock('../../core/api', async (importOriginal) => ({
+  // Read for real: the currency tests set the base currency through localStorage.
+  getLocalCurrency: (await importOriginal<Record<string, unknown>>()).getLocalCurrency,
   api: {
     getCategoryMappings: vi.fn(() =>
       Promise.resolve([
@@ -100,6 +102,28 @@ describe('identifying an imported row', () => {
     expect(first).toContain('12.99')
     expect(first).toContain('−') // an expense is signed, not a bare number
     expect(first).toContain('Erste Current')
+  })
+})
+
+describe('the currency of an amount', () => {
+  afterEach(() => {
+    localStorage.removeItem('localCurrency')
+  })
+
+  it('is the base currency for a row that carries none', async () => {
+    localStorage.setItem('localCurrency', 'GBP')
+    mount({ txs: [{ ...TXS[0]!, currency: undefined }] })
+    await flush()
+
+    expect(host.querySelector('[data-test-id="auto-cat-meta"]')!.textContent).toContain('−£12.99')
+  })
+
+  it("is the row's own currency when it has one", async () => {
+    localStorage.setItem('localCurrency', 'GBP')
+    mount({ txs: [TXS[0]!] })
+    await flush()
+
+    expect(host.querySelector('[data-test-id="auto-cat-meta"]')!.textContent).toContain('−€12.99')
   })
 })
 

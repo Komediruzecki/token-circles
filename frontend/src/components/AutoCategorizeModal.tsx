@@ -16,7 +16,7 @@
  * lied in both directions.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
-import { api } from '../core/api'
+import { api, getLocalCurrency } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
@@ -139,7 +139,7 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
     try {
       formatted = new Intl.NumberFormat(undefined, {
         style: 'currency',
-        currency: tx.currency || 'EUR',
+        currency: tx.currency || getLocalCurrency(),
         maximumFractionDigits: 2,
       }).format(Math.abs(tx.amount))
     } catch {

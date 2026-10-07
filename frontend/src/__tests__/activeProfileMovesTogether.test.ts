@@ -17,6 +17,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const APP = join(import.meta.dirname, '..', 'App.tsx')
+const WIZARD = join(import.meta.dirname, '..', 'components', 'onboarding', 'OnboardingWizard.tsx')
 
 /** How far after the storage write the matching `setCurrentProfile` may appear. */
 const WINDOW_LINES = 4
@@ -57,5 +58,17 @@ describe('App.tsx moves the write target and the shown profile together', () => 
 
     expect(unpairedWrites(shipped)).toEqual([5])
     expect(unpairedWrites(fixed)).toEqual([])
+  })
+})
+
+describe('the setup wizard chooses a profile through App', () => {
+  it('writes neither selection key itself', () => {
+    // It creates the first profile of an empty workspace. Writing the keys itself moved where
+    // writes land but left App's copy of the selection behind, and the next close of the sidebar
+    // dropdown wrote that copy back. It calls App's applyProfileSelection instead.
+    const source = readFileSync(WIZARD, 'utf8')
+    expect(source).not.toContain("setItem('currentProfileId'")
+    expect(source).not.toContain("setItem('selectedProfileIds'")
+    expect(source).toContain('props.selectProfiles(')
   })
 })
