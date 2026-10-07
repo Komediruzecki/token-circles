@@ -72,6 +72,9 @@ export default defineConfig({
           {
             name: 'release',
             testDir: './tests/release',
+            // The wrangler crash (see webServer below) fails whatever case is mid-request; a retry
+            // absorbs it and the report still lists the case as flaky, so nothing is hidden.
+            retries: 2,
             use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE },
             dependencies: ['setup'],
           },
