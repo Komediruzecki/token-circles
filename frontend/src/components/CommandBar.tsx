@@ -16,6 +16,7 @@ import {
   untrack,
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { handFocusTo } from '../core/domFocus'
 import { parseEntry } from '../core/entry/parseEntry'
 import { quickEntrySave } from '../core/quickEntryLists'
 import styles from './CommandBar.module.css'
@@ -32,11 +33,40 @@ export interface CommandBarProps {
   onSave: (transaction: unknown) => void
 }
 
+/**
+ * The category chip's retry, shown while the categories have failed to load. The retry takes it
+ * away; when it held focus (a keyboard press), focus goes to the category picker beside it rather
+ * than falling to the page.
+ */
+function RetryCategories(props: {
+  onRetry: () => void
+  focusTarget: () => HTMLElement | undefined
+}) {
+  let retry: HTMLButtonElement | undefined
+  onCleanup(() => {
+    handFocusTo(props.focusTarget(), retry)
+  })
+  return (
+    <button
+      ref={retry}
+      type="button"
+      class={styles.retry}
+      aria-label="Retry loading categories"
+      onClick={() => {
+        props.onRetry()
+      }}
+    >
+      retry
+    </button>
+  )
+}
+
 const todayIso = () => new Date().toISOString().slice(0, 10)
 const lastAccountKey = () => `lastAccountId:${localStorage.getItem('currentProfileId') || '1'}`
 
 export function CommandBar(props: CommandBarProps) {
   let inputRef: HTMLInputElement | undefined
+  let categorySelect: HTMLSelectElement | undefined
   const [input, setInput] = createSignal('')
   /** The account picked on its chip, if any. */
   const [accountPick, setAccountPick] = createSignal<number | null>(null)
@@ -276,6 +306,7 @@ export function CommandBar(props: CommandBarProps) {
               style={{ background: eCategory()?.color || 'var(--budget-bar-bg)' }}
             />
             <select
+              ref={categorySelect}
               class={styles.select}
               value={eCategoryId() === null ? '' : String(eCategoryId())}
               onChange={(e) =>
@@ -293,15 +324,12 @@ export function CommandBar(props: CommandBarProps) {
               </For>
             </select>
             <Show when={props.categories.status() === 'error'}>
-              <button
-                type="button"
-                class={styles.retry}
-                onClick={() => {
+              <RetryCategories
+                onRetry={() => {
                   props.categories.reload()
                 }}
-              >
-                retry
-              </button>
+                focusTarget={() => categorySelect}
+              />
             </Show>
           </span>
 

@@ -16,7 +16,7 @@ import {
   Switch,
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
-import { isEditableTarget } from '../core/domFocus'
+import { handFocusTo, isEditableTarget } from '../core/domFocus'
 import { quickEntrySave } from '../core/quickEntryLists'
 import styles from './GuidedOrbit.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
@@ -30,6 +30,36 @@ export interface GuidedOrbitProps {
   /** The active profile's accounts, from the same place. */
   accounts: QuickEntryList<Account>
   onSave: (transaction: unknown) => void
+}
+
+/**
+ * Step 2 when the categories did not load: says so, with a Try again. The retry takes this away;
+ * when its button held focus (a keyboard press), focus goes to `focusTarget` rather than falling
+ * to the page.
+ */
+function CategoriesDidNotLoad(props: {
+  onRetry: () => void
+  focusTarget: () => HTMLElement | undefined
+}) {
+  let retry: HTMLButtonElement | undefined
+  onCleanup(() => {
+    handFocusTo(props.focusTarget(), retry)
+  })
+  return (
+    <div class={styles.empty} data-test-id="orbit-categories-error">
+      Your categories didn't load.
+      <button
+        ref={retry}
+        type="button"
+        class={styles.retry}
+        onClick={() => {
+          props.onRetry()
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  )
 }
 
 const todayIso = () => new Date().toISOString().slice(0, 10)
@@ -48,6 +78,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
   const [note, setNote] = createSignal('')
   const [date, setDate] = createSignal(todayIso())
   const [submitting, setSubmitting] = createSignal(false)
+  /** Step 2's live region: it announces the category states, and takes focus from a retry. */
+  let categoryStatus: HTMLDivElement | undefined
 
   const amount = () => {
     const n = parseFloat(amountStr() || '0')
@@ -64,6 +96,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
     return list.find((a) => a.id === stored) ?? list[0] ?? null
   })
+  /** On the category step with no categories to show yet: loading, or failed. */
+  const categoriesPending = () => step() === 2 && props.categories.status() !== 'ready'
   /** Nothing is offered, and nothing can be added, until both lists are in for this profile. */
   const listsLoading = () =>
     props.categories.status() === 'loading' || props.accounts.status() === 'loading'
@@ -312,58 +346,62 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
           </div>
         </Show>
 
-        {/* STEP 2 — category */}
-        <Show when={step() === 2}>
-          <div class={styles.body}>
+        {/* STEP 2 — category. Its loading and failed states are written into a live region that
+            is always on the page: a screen reader announces a change inside one, not a node that
+            arrives with its text already in it. The chips are outside it: they are not news. */}
+        <div
+          ref={categoryStatus}
+          aria-live="polite"
+          tabindex="-1"
+          data-test-id="orbit-categories-status"
+          classList={{ [styles.body]: categoriesPending() }}
+        >
+          <Show when={categoriesPending()}>
             <Switch>
               <Match when={props.categories.status() === 'loading'}>
-                <p class={styles.empty} role="status" data-test-id="orbit-categories-loading">
+                <p class={styles.empty} data-test-id="orbit-categories-loading">
                   Loading your categories…
                 </p>
               </Match>
               <Match when={props.categories.status() === 'error'}>
-                <div class={styles.empty} role="alert" data-test-id="orbit-categories-error">
-                  Your categories didn't load.
-                  <button
-                    type="button"
-                    class={styles.retry}
-                    onClick={() => {
-                      props.categories.reload()
-                    }}
-                  >
-                    Try again
-                  </button>
-                </div>
-              </Match>
-              <Match when={props.categories.status() === 'ready'}>
-                <div class={styles.catGrid}>
-                  <For each={poolCats()}>
-                    {(c) => (
-                      <button
-                        type="button"
-                        class={styles.catChip}
-                        classList={{ [styles.catOn]: categoryId() === c.id }}
-                        data-test-id="orbit-category"
-                        onClick={() => {
-                          pickCategory(c.id)
-                        }}
-                      >
-                        <span
-                          class={styles.catDot}
-                          style={{ background: c.color || 'var(--primary)' }}
-                        />
-                        <span class={styles.catName}>{c.name}</span>
-                      </button>
-                    )}
-                  </For>
-                  <Show when={poolCats().length === 0}>
-                    <p class={styles.empty} data-test-id="orbit-categories-empty">
-                      No {type()} categories yet. Add one on the Categories page.
-                    </p>
-                  </Show>
-                </div>
+                <CategoriesDidNotLoad
+                  onRetry={() => {
+                    props.categories.reload()
+                  }}
+                  focusTarget={() => categoryStatus}
+                />
               </Match>
             </Switch>
+          </Show>
+        </div>
+        <Show when={step() === 2 && props.categories.status() === 'ready'}>
+          <div class={styles.body}>
+            <div class={styles.catGrid}>
+              <For each={poolCats()}>
+                {(c) => (
+                  <button
+                    type="button"
+                    class={styles.catChip}
+                    classList={{ [styles.catOn]: categoryId() === c.id }}
+                    data-test-id="orbit-category"
+                    onClick={() => {
+                      pickCategory(c.id)
+                    }}
+                  >
+                    <span
+                      class={styles.catDot}
+                      style={{ background: c.color || 'var(--primary)' }}
+                    />
+                    <span class={styles.catName}>{c.name}</span>
+                  </button>
+                )}
+              </For>
+              <Show when={poolCats().length === 0}>
+                <p class={styles.empty} data-test-id="orbit-categories-empty">
+                  No {type()} categories yet. Add one on the Categories page.
+                </p>
+              </Show>
+            </div>
           </div>
         </Show>
 
@@ -388,7 +426,12 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
                   if (props.accounts.status() === 'error') props.accounts.reload()
                   else cycleAccount()
                 }}
-                disabled={props.accounts.status() !== 'error' && accounts().length <= 1}
+                // aria-disabled, not disabled: a tap to try again starts a read that leaves one
+                // account or none to cycle through, and a control that turns disabled drops focus to
+                // the page. A tap with nothing to cycle does nothing (cycleAccount).
+                aria-disabled={
+                  props.accounts.status() !== 'error' && accounts().length <= 1 ? 'true' : undefined
+                }
               >
                 <span class={styles.sumK}>Account</span>
                 <span class={styles.sumV}>

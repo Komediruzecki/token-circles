@@ -251,7 +251,8 @@
 button.sumRow {
   cursor: pointer;
 }
-button.sumRow:disabled {
+button.sumRow:disabled,
+button.sumRow[aria-disabled='true'] {
   cursor: default;
 }
 .sumK {
