@@ -328,6 +328,25 @@ describe('the rest of the page, with two profiles ticked', () => {
     expect(optionIds(selectLabelled(host, 'New Category'))).toEqual([11, 12])
   })
 
+  it('keeps another profile’s rows out of reach while the profile record is still loading', async () => {
+    // The app fills currentProfile in once the profile list arrives (App.tsx). The active profile
+    // is in localStorage from the start, and every write already goes out as it.
+    setCurrentProfile(null)
+    await mountPage()
+    const rowOf = (text: string) =>
+      Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="transactions-row"]')).find(
+        (r) => r.textContent?.includes(text)
+      )!
+    const diesel = rowOf('Diesel')
+
+    expect(diesel.querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true)
+    expect(diesel.querySelector('button[aria-label="Edit transaction"]')).toBeNull()
+    expect(
+      rowOf('Coffee').querySelector<HTMLButtonElement>('button[aria-label="Edit transaction"]')!
+        .disabled
+    ).toBe(false)
+  })
+
   it('offers a new recurring entry the active profile’s categories and accounts', async () => {
     await mountPage()
     const section = Array.from(host.querySelectorAll('h2')).find(

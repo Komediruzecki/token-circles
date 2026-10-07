@@ -2143,7 +2143,8 @@ export default function Transactions() {
           <TransactionTable
             transactions={paginatedTransactions()}
             accounts={accounts()}
-            activeProfileId={state.currentProfile?.id}
+            // The id every write goes out as, so a row is editable here exactly when its save can land.
+            activeProfileId={activeId()}
             selectedTransactions={selectedTransactions()}
             onSelectionChange={handleSelectionChange}
             onSort={handleSortChange}
