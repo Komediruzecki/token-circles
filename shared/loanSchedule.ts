@@ -16,6 +16,12 @@
  *   extra     every extra payment dated month k, added together, paid with the installment and
  *             capped at what is still owed. The balance never goes below zero.
  *
+ * A balance within half a cent of zero counts as repaid. Paying the balance the screen shows,
+ * rounded to the cent, ends the loan that month, and an installment that would leave a fraction
+ * of a cent pays that fraction too, so no loan gets a last month for less than a cent. The end
+ * month an extra payment sets, which a later rate change spreads the balance over, counts the
+ * same way. What is recorded is what was owed, so the totals stay exact.
+ *
  * What moves the installment:
  *
  *   - An extra payment does not. The installment stays the same and the loan ends sooner.
@@ -122,6 +128,12 @@ export interface LoanStatus {
  * amortised month by month for as long as it asks.
  */
 export const MAX_TERM_MONTHS = 1200;
+
+/**
+ * The most that can be left over and still count as repaid: what rounds to zero on a screen
+ * that shows cents. See the module comment.
+ */
+const HALF_CENT = 0.005;
 
 /**
  * The installment that repays `principal` in `months` equal monthly payments at an annual rate
@@ -245,16 +257,21 @@ interface Plan {
 }
 
 /**
- * Installments needed to repay `balance` at `installment` a month, the last one possibly partial:
- * the smallest n with B (1+r)^n <= A ((1+r)^n - 1) / r, which is -ln(1 - rB/A) / ln(1 + r).
- * The 1e-9 keeps floating-point noise on an exact count from adding a month for a fraction of a
- * cent. Infinity when the installment does not cover the interest, which is never the case for
- * an installment set by `annuityPayment`.
+ * Installments needed to repay `balance` at `installment` a month, the last one possibly partial,
+ * by the schedule's own rule that half a cent left counts as repaid: with h = HALF_CENT, the
+ * smallest n with B_n = B (1+r)^n - A ((1+r)^n - 1) / r <= h, which is
+ * ln((A - rh) / (A - rB)) / ln(1 + r), and (B - h) / A at 0 %. The 1e-9 keeps floating-point
+ * noise on an exact count from adding a month.
+ * Infinity when the installment does not cover the interest, which is never the case for an
+ * installment set by `annuityPayment`.
  */
 function installmentsToRepay(balance: number, annualRatePct: number, installment: number): number {
   const r = annualRatePct / 100 / 12;
   const exact =
-    r === 0 ? balance / installment : -Math.log1p((-r * balance) / installment) / Math.log1p(r);
+    r === 0
+      ? (balance - HALF_CENT) / installment
+      : (Math.log1p((-r * HALF_CENT) / installment) - Math.log1p((-r * balance) / installment)) /
+        Math.log1p(r);
   if (!(exact > 0) || !Number.isFinite(exact)) return Infinity;
   return Math.max(1, Math.ceil(exact - 1e-9));
 }
@@ -302,9 +319,9 @@ export function amortize(loan: LoanInput): ScheduleRow[] {
 
     const interest = balance * (rate / 100 / 12);
     const owed = balance + interest;
-    // The last month pays what is owed: in the scheduled end month, or earlier when that is less
-    // than an installment.
-    const last = month >= plan.endMonth || owed <= plan.installment;
+    // The last month pays what is owed: in the scheduled end month, or earlier when that is no
+    // more than an installment and half a cent.
+    const last = month >= plan.endMonth || owed <= plan.installment + HALF_CENT;
     const payment = last ? owed : plan.installment;
     const principalPaid = last ? balance : payment - interest;
     balance = last ? 0 : balance - principalPaid;
@@ -313,8 +330,10 @@ export function amortize(loan: LoanInput): ScheduleRow[] {
     let note = '';
     const extra = extras.get(month);
     if (extra && balance > 0) {
-      prepayment = Math.min(extra.amount, balance);
-      balance = extra.amount >= balance ? 0 : balance - extra.amount;
+      // Within half a cent of the balance pays it off, recorded as the balance it repaid.
+      const paysOff = extra.amount >= balance - HALF_CENT;
+      prepayment = paysOff ? balance : extra.amount;
+      balance = paysOff ? 0 : balance - extra.amount;
       note = extra.notes.join('; ');
       if (balance > 0) plan = afterExtraPayment(plan, balance, month);
     }

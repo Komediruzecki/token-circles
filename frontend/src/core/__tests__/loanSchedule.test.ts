@@ -350,13 +350,73 @@ describe('amortize', () => {
     expect(exact[59].balance).toBe(0)
   })
 
-  it('charges a final month for what an extra payment leaves, however small', () => {
+  it('charges a final month for a cent or more left after an extra payment', () => {
     // One cent short of the balance is still owed, with a month's interest on it.
     const shown = amortize(loan())[59].balance
     const s = amortize(loan({ prepayments: [{ month: 60, amount: shown - 0.01 }] }))
     expect(s).toHaveLength(61)
     expect(s[60].payment).toBeCloseTo(0.01 * (1 + r5), 9)
     expect(s[60].balance).toBe(0)
+  })
+
+  it('pays the loan off with the balance as the screen shows it, rounded to the cent', () => {
+    // After month 1 the balance is 99,356.011514; the table shows 99,356.01, and paying that
+    // must end the loan in month 1, not leave 0.0015 for a month 2 of its own. Months 3 and 4
+    // leave 0.0035 and 0.0016 the same way. What is recorded is the balance repaid, so the
+    // payments still add up to principal plus interest.
+    const plain = amortize(loan())
+    expect(plain[0].balance).toBeCloseTo(99356.011514, 6)
+    for (const month of [1, 3, 4, 60]) {
+      const shown = Math.round(plain[month - 1].balance * 100) / 100
+      const { schedule, summary } = calculateLoan(loan({ prepayments: [{ month, amount: shown }] }))
+      expect(schedule).toHaveLength(month)
+      expect(schedule[month - 1].prepayment).toBe(plain[month - 1].balance)
+      expect(schedule[month - 1].balance).toBe(0)
+      expect(summary.payoffDate).toBe(plain[month - 1].date)
+      expect(summary.monthsSaved).toBe(N - month)
+      expect(summary.totalPaid).toBeCloseTo(P + summary.totalInterest, 6)
+    }
+  })
+
+  /**
+   * The extra payment in month 12 after which 49 more installments leave A + `over` owed in month
+   * 62: B'' = (A + over) / (1+r) after month 61, and B' = (B'' + A ((1+r)^49 - 1) / r) / (1+r)^49.
+   */
+  const extraLeavingInMonth62 = (over: number) => {
+    const g = (1 + r5) ** 49
+    return balanceAfter(P, RATE, A, 12) - ((A + over) / (1 + r5) + (A * (g - 1)) / r5) / g
+  }
+
+  it('pays off in the month what is owed exceeds the installment by under half a cent', () => {
+    // Month 62 pays A + 0.003 and ends the loan, rather than leaving 0.003 for a month 63 of its
+    // own.
+    const extra = extraLeavingInMonth62(0.003)
+    const { schedule, summary } = calculateLoan(
+      loan({ prepayments: [{ month: 12, amount: extra }] })
+    )
+    expect(schedule).toHaveLength(62)
+    expect(schedule[60].payment).toBeCloseTo(A, 6)
+    expect(schedule[61].payment).toBeCloseTo(A + 0.003, 6)
+    expect(schedule[61].balance).toBe(0)
+    expect(summary.totalPaid).toBeCloseTo(P + summary.totalInterest, 6)
+  })
+
+  it('recomputes a rate change to the end month the schedule shows, half-cent rule included', () => {
+    // The same extra payment ends the loan in month 62. A rate change in month 30 spreads what is
+    // left over months 30-62, 33 installments, and still ends it in month 62: the end month the
+    // extra payment set counts the last half cent as repaid, as the schedule does.
+    const extra = extraLeavingInMonth62(0.003)
+    const s = amortize(
+      loan({
+        rate_periods: [{ rate: 6, start_month: 30 }],
+        prepayments: [{ month: 12, amount: extra }],
+      })
+    )
+    const B29 = balanceAfter(balanceAfter(P, RATE, A, 12) - extra, RATE, A, 17)
+    expect(s[28].balance).toBeCloseTo(B29, 6)
+    expect(s[29].payment).toBeCloseTo(annuity(B29, 6, 33), 6)
+    expect(s).toHaveLength(62)
+    expect(s[61].balance).toBe(0)
   })
 
   it("records only what was needed of an extra payment equal to last month's balance", () => {
