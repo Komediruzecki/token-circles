@@ -493,14 +493,13 @@ export default function Transactions() {
    * The tags this page offers, in the form, the filter bar and the bulk-tag modal: the active
    * profile's. A row is written to that profile, and neither runtime attaches another profile's
    * tag to it. The list is already the active profile's in both runtimes; this also covers the
-   * moment after a profile switch, before the list has reloaded. A tag with no owner on it is the
-   * active profile's: the Worker leaves the owner out, and one created here has none yet.
+   * moment after a profile switch, before the list has reloaded. The active profile is `activeId`,
+   * the one the form writes to, known before the profile record is. A tag with no owner on it is
+   * the active profile's: the Worker leaves the owner out, and one created here has none yet.
    */
   const ownTags = createMemo(() => {
-    const active = state.currentProfile?.id
-    return tags().filter(
-      (tag) => active === undefined || tag.profile_id === undefined || tag.profile_id === active
-    )
+    const active = activeId()
+    return tags().filter((tag) => tag.profile_id === undefined || tag.profile_id === active)
   })
   /** The profile's tags the form's transaction does not carry yet, offered to add in one click. */
   const unpickedTags = createMemo(() =>
