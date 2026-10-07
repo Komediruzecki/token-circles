@@ -600,21 +600,32 @@ describe('loanStatus', () => {
     const status = loanStatus(loan({ start_date: '2021-01-01' }), '2025-12-15')
     expect(status.remaining_balance).toBeCloseTo(balanceAfter(P, RATE, A, 60), 6)
     expect(status.monthly_payment).toBeCloseTo(A, 6)
+    expect(status.next_payment_date).toBe('2026-01-01')
     expect(status.payoff_date).toBe('2030-12-01')
   })
 
   it('counts a payment due today as paid', () => {
     const status = loanStatus(loan({ start_date: '2021-01-01' }), '2025-12-01')
     expect(status.remaining_balance).toBeCloseTo(balanceAfter(P, RATE, A, 60), 6)
+    expect(status.next_payment_date).toBe('2026-01-01')
+  })
+
+  it('dates the next payment on the day the schedule gives it, clamped to the month end', () => {
+    // A loan starting 31 January is next due on 28 February, then on 31 March.
+    const terms = loan({ start_date: '2026-01-31' })
+    expect(loanStatus(terms, '2026-02-01').next_payment_date).toBe('2026-02-28')
+    expect(loanStatus(terms, '2026-02-28').next_payment_date).toBe('2026-03-31')
   })
 
   it('owes the whole principal before the first payment, and nothing after the last', () => {
     const before = loanStatus(loan(), '2025-12-31')
     expect(before.remaining_balance).toBe(P)
     expect(before.monthly_payment).toBeCloseTo(A, 6)
+    expect(before.next_payment_date).toBe('2026-01-01')
     const after = loanStatus(loan(), '2036-01-01')
     expect(after.remaining_balance).toBe(0)
     expect(after.monthly_payment).toBe(0)
+    expect(after.next_payment_date).toBeNull()
     expect(after.payoff_date).toBe('2035-12-01')
   })
 
@@ -628,6 +639,7 @@ describe('loanStatus', () => {
     const status = loanStatus(terms, '2025-12-15')
     expect(status.remaining_balance).toBe(s[59].balance)
     expect(status.monthly_payment).toBe(s[60].payment)
+    expect(status.next_payment_date).toBe(s[60].date)
     expect(status.payoff_date).toBe(s[s.length - 1].date)
   })
 
@@ -635,6 +647,7 @@ describe('loanStatus', () => {
     const status = loanStatus(loan({ start_date: '' }), '2030-01-01')
     expect(status.remaining_balance).toBe(P)
     expect(status.monthly_payment).toBeCloseTo(A, 6)
+    expect(status.next_payment_date).toBeNull()
     expect(status.payoff_date).toBeNull()
   })
 
@@ -642,11 +655,13 @@ describe('loanStatus', () => {
     expect(loanStatus(loan({ principal: -1 }), '2030-01-01')).toEqual({
       remaining_balance: 0,
       monthly_payment: 0,
+      next_payment_date: null,
       payoff_date: null,
     })
     expect(loanStatus(loan({ term_months: 0 }), '2030-01-01')).toEqual({
       remaining_balance: P,
       monthly_payment: 0,
+      next_payment_date: null,
       payoff_date: null,
     })
   })

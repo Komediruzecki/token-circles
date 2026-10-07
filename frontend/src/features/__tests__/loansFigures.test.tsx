@@ -11,6 +11,13 @@
  * The list now carries remaining_balance and monthly_payment from the shared engine, in both
  * storage modes, and the page shows them. A server that predates the fields gets the same engine
  * run on the page instead.
+ *
+ * Three more figures on the card were never worked out at all. Next Payment read "Not set" on
+ * every loan, because nothing set the date. The amount beside the progress bar read "0.00 paid"
+ * next to "44% paid", because it was hard-coded to 0. And every loan was Active, paid off or not,
+ * so the Active Loans and Paid Off cards counted every loan as active. The page now shows the
+ * list's next_payment_date, the principal repaid, and a status that follows what is still owed.
+ * The zone is pinned west of UTC, where a due date formatted in the local zone reads a day early.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +25,8 @@ import { loanStatus } from '../../../../shared/loanSchedule'
 import { formatCurrency } from '../../core/api'
 import { setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
+
+process.env.TZ = 'America/New_York'
 
 let listed: unknown[] = []
 
@@ -101,15 +110,32 @@ async function mount(): Promise<HTMLDivElement> {
 const text = (root: HTMLElement, id: string) =>
   root.querySelector(`[data-test-id="${id}"]`)?.textContent ?? ''
 
+/** Every element with the test id, in page order: one per loan card. */
+const texts = (root: HTMLElement, id: string) =>
+  [...root.querySelectorAll(`[data-test-id="${id}"]`)].map((el) => el.textContent ?? '')
+
 /** The summary card whose label is `label`. */
 const summary = (root: HTMLElement, label: string) =>
   [...root.querySelectorAll('[data-test-id="loans-summary-card"]')].find((c) =>
     c.textContent?.startsWith(label)
   )?.textContent ?? ''
 
+/** The example loan as the list returns it on 2025-12-15, its figures worked out. */
+const LISTED = {
+  ...LOAN,
+  remaining_balance: B60,
+  monthly_payment: A,
+  next_payment_date: '2026-01-01',
+  payoff_date: '2030-12-01',
+}
+
 describe('Loans page figures', () => {
+  it('runs west of UTC', () => {
+    expect(new Date('2026-01-01T00:00:00Z').getTimezoneOffset()).not.toBe(0)
+  })
+
   it('shows the remaining balance, payment and progress the list worked out', async () => {
-    listed = [{ ...LOAN, remaining_balance: B60, monthly_payment: A, payoff_date: '2030-12-01' }]
+    listed = [LISTED]
     const root = await mount()
     expect(text(root, 'loans-item-remaining')).toBe(formatCurrency(B60))
     expect(formatCurrency(B60)).toBe(formatCurrency(56204.87))
@@ -143,6 +169,54 @@ describe('Loans page figures', () => {
     const root = await mount()
     expect(text(root, 'loans-item-remaining')).toBe(formatCurrency(expected.remaining_balance))
     expect(text(root, 'loans-item-monthly')).toBe(formatCurrency(expected.monthly_payment))
+    expect(expected.next_payment_date).toBe('2026-01-01')
+    expect(text(root, 'loans-item-next-payment')).toBe('Jan 1, 2026')
+  })
+
+  it('shows when the next payment is due, on its own date west of UTC', async () => {
+    // A bare 2026-01-01 is midnight UTC; formatted in New York's zone it would read Dec 31, 2025.
+    listed = [LISTED]
+    const root = await mount()
+    expect(text(root, 'loans-item-next-payment')).toBe('Jan 1, 2026')
+  })
+
+  it('says None once a loan is paid off, and Not set when it has no schedule to date', async () => {
+    // Neither row carries the figures, so the page runs the engine: one loan ended in 2019, the
+    // other was saved without a start date.
+    listed = [
+      { ...LOAN, id: 1, start_date: '2010-01-01' },
+      { ...LOAN, id: 2, start_date: '' },
+    ]
+    const root = await mount()
+    expect(texts(root, 'loans-item-next-payment')).toEqual(['None', 'Not set'])
+  })
+
+  it('shows the principal repaid beside the progress bar, what the percentage measures', async () => {
+    // 100,000 - 56,204.87 = 43,795.13 repaid: the 44 % the bar shows.
+    listed = [LISTED]
+    const root = await mount()
+    expect(text(root, 'loans-item-total-paid')).toBe(`${formatCurrency(100000 - B60)} paid`)
+    expect(formatCurrency(100000 - B60)).toBe(formatCurrency(43795.13))
+  })
+
+  it('marks a loan with nothing left to pay Paid Off, and counts it there', async () => {
+    listed = [
+      LISTED,
+      {
+        ...LOAN,
+        id: 2,
+        name: 'Car loan',
+        remaining_balance: 0,
+        monthly_payment: 0,
+        next_payment_date: null,
+        payoff_date: '2019-12-01',
+      },
+    ]
+    const root = await mount()
+    expect(texts(root, 'loans-item-status')).toEqual(['Active', 'Paid Off'])
+    expect(summary(root, 'Active Loans')).toBe('Active Loans1')
+    expect(summary(root, 'Paid Off')).toBe('Paid Off1')
+    expect(texts(root, 'loans-item-total-paid')[1]).toBe(`${formatCurrency(100000)} paid`)
   })
 
   it('shows a paid-off loan as owing nothing and paying nothing', async () => {

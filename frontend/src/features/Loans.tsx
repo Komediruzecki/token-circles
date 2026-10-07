@@ -59,7 +59,7 @@ interface Loan {
   remaining_balance: number
   total_paid: number
   monthly_payment: number
-  next_payment_date?: string
+  next_payment_date: string | null
   profile_id: number
 }
 
@@ -78,16 +78,25 @@ interface ListedLoan {
   /** Worked out by the list with the shared engine. Missing only from a server older than that. */
   remaining_balance?: number
   monthly_payment?: number
+  next_payment_date?: string | null
 }
 
 /**
- * What is owed today and the next payment, as the list computed them. A server that predates
- * those fields gets the same engine run here, on what its row carries: the loan's own rate, plus
- * rate periods and extra payments where the row has them.
+ * What is owed today and the next payment, its amount and date, as the list computed them. A
+ * server that predates those fields gets the same engine run here, on what its row carries: the
+ * loan's own rate, plus rate periods and extra payments where the row has them.
  */
 function standing(loan: ListedLoan, today: string) {
-  if (typeof loan.remaining_balance === 'number' && typeof loan.monthly_payment === 'number') {
-    return { remaining_balance: loan.remaining_balance, monthly_payment: loan.monthly_payment }
+  if (
+    typeof loan.remaining_balance === 'number' &&
+    typeof loan.monthly_payment === 'number' &&
+    loan.next_payment_date !== undefined
+  ) {
+    return {
+      remaining_balance: loan.remaining_balance,
+      monthly_payment: loan.monthly_payment,
+      next_payment_date: loan.next_payment_date,
+    }
   }
   return loanStatus(loan, today)
 }
@@ -143,7 +152,7 @@ export default function Loans() {
       // Transform Loan data to include missing fields
       setLoans(
         data.map((l) => {
-          const { remaining_balance, monthly_payment } = standing(l, today)
+          const { remaining_balance, monthly_payment, next_payment_date } = standing(l, today)
           return {
             id: l.id,
             name: l.name,
@@ -152,10 +161,13 @@ export default function Loans() {
             term_months: l.term_months,
             start_date: l.start_date,
             profile_id: l.profile_id || 1,
-            status: 'active',
+            // Not stored (loans has no status column): a loan with nothing left to pay is paid off.
+            status: remaining_balance <= 0 ? 'paid' : 'active',
             remaining_balance,
             monthly_payment,
-            total_paid: 0,
+            next_payment_date,
+            // The principal repaid so far, which is what the "% paid" beside it measures.
+            total_paid: l.principal - remaining_balance,
           }
         })
       )
@@ -299,13 +311,24 @@ export default function Loans() {
     return Math.min(100, Math.round(((loan.principal - remaining) / loan.principal) * 100))
   }
 
-  // Format date
+  // A YYYY-MM-DD due date as written, e.g. "Jan 1, 2026". A bare date is midnight UTC, so it is
+  // formatted in UTC: in the local zone it would read a day early anywhere west of Greenwich.
   const formatDate = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+      timeZone: 'UTC',
     })
+  }
+
+  // The next payment's date. None once the loan is paid off; Not set when the loan has no dated
+  // schedule, which is a loan saved without a start date that can be read.
+  const nextPaymentLabel = (loan: Loan): string => {
+    if (loan.next_payment_date) return formatDate(loan.next_payment_date)
+    return loan.status === 'paid' ? 'None' : 'Not set'
   }
 
   // Format currency
@@ -555,8 +578,8 @@ export default function Loans() {
                       </div>
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Next Payment</span>
-                        <span class={styles.detailValue}>
-                          {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
+                        <span class={styles.detailValue} data-test-id="loans-item-next-payment">
+                          {nextPaymentLabel(loan)}
                         </span>
                       </div>
                     </div>

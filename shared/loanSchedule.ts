@@ -118,6 +118,11 @@ export interface LoanStatus {
   remaining_balance: number;
   /** The next payment due after the day; 0 once the loan is paid off. */
   monthly_payment: number;
+  /**
+   * Date of the next payment due after the day: null once the loan is paid off, and when the
+   * start date cannot be read, so the schedule has no dates.
+   */
+  next_payment_date: string | null;
   /** Date of the last payment, or null when there is no schedule. */
   payoff_date: string | null;
 }
@@ -419,6 +424,7 @@ export function loanStatus(loan: LoanInput, today: string): LoanStatus {
   return {
     remaining_balance: remaining,
     monthly_payment: next ? next.payment : 0,
+    next_payment_date: next && next.date !== '' ? next.date : null,
     payoff_date: payoffDate(schedule),
   };
 }

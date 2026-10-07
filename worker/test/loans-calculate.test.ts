@@ -179,6 +179,7 @@ describe('GET /api/loans', () => {
     id: number;
     remaining_balance: number;
     monthly_payment: number;
+    next_payment_date: string | null;
     payoff_date: string | null;
   };
 
@@ -211,6 +212,7 @@ describe('GET /api/loans', () => {
     expect(row.remaining_balance).toBeCloseTo(B60, 6);
     expect(row.remaining_balance).toBeCloseTo(56204.87, 2);
     expect(row.monthly_payment).toBeCloseTo(A, 6);
+    expect(row.next_payment_date).toBe(addCalendarMonths(start, 60));
     expect(row.payoff_date).toBe(addCalendarMonths(start, 119));
 
     // The loan with a rate period and extra payments gets its own, not another loan's.
@@ -221,10 +223,11 @@ describe('GET /api/loans', () => {
     );
     expect(other.remaining_balance).toBe(expected.remaining_balance);
     expect(other.monthly_payment).toBe(expected.monthly_payment);
+    expect(other.next_payment_date).toBe(expected.next_payment_date);
     expect(other.payoff_date).toBe(expected.payoff_date);
   });
 
-  it('keeps every field the list already had, and adds three', async () => {
+  it('keeps every field the list already had, and adds four', async () => {
     await storeLoan(PARITY_LOAN);
     const [row] = await list();
     expect(Object.keys(row)).toEqual([
@@ -240,6 +243,7 @@ describe('GET /api/loans', () => {
       'prepayment_count',
       'remaining_balance',
       'monthly_payment',
+      'next_payment_date',
       'payoff_date',
     ]);
     expect(row.total_prepaid).toBe(5000);
@@ -251,6 +255,7 @@ describe('GET /api/loans', () => {
     const [row] = await list();
     expect(row.remaining_balance).toBe(0);
     expect(row.monthly_payment).toBe(0);
+    expect(row.next_payment_date).toBeNull();
     expect(row.payoff_date).toBe(
       calculateLoan({ ...PARITY_LOAN, start_date: '2010-01-31' }).summary.payoffDate
     );

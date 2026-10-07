@@ -213,7 +213,7 @@ describe('localHandlers - where each listed loan stands today', () => {
     term_months: 120,
   }
 
-  it('adds remaining_balance, monthly_payment and payoff_date from the shared engine', async () => {
+  it('adds remaining_balance, monthly_payment, next_payment_date and payoff_date from the shared engine', async () => {
     const plain = (await (await loansCreate({ ...example })).json()).id
     const busy = await storeLoan(PARITY_LOAN)
 
@@ -222,6 +222,7 @@ describe('localHandlers - where each listed loan stands today', () => {
     expect(row.remaining_balance).toBeCloseTo(B60, 6)
     expect(row.remaining_balance).toBeCloseTo(56204.87, 2)
     expect(row.monthly_payment).toBeCloseTo(A, 6)
+    expect(row.next_payment_date).toBe('2026-01-01')
     expect(row.payoff_date).toBe('2030-12-01')
     // Fields the list already had are still there.
     expect(row.principal).toBe(100000)
@@ -234,6 +235,7 @@ describe('localHandlers - where each listed loan stands today', () => {
     expect({
       remaining_balance: other.remaining_balance,
       monthly_payment: other.monthly_payment,
+      next_payment_date: other.next_payment_date,
       payoff_date: other.payoff_date,
     }).toEqual(loanStatus(PARITY_LOAN, '2025-12-15'))
     expect(other.total_prepaid).toBe(5000)
@@ -256,6 +258,7 @@ describe('localHandlers - where each listed loan stands today', () => {
     expect({
       remaining_balance: partner.remaining_balance,
       monthly_payment: partner.monthly_payment,
+      next_payment_date: partner.next_payment_date,
       payoff_date: partner.payoff_date,
     }).toEqual(loanStatus({ ...example, principal: 50000, start_date: '2024-06-30' }, '2025-12-15'))
   })
@@ -265,6 +268,7 @@ describe('localHandlers - where each listed loan stands today', () => {
     const [row] = await (await loansList()).json()
     expect(row.remaining_balance).toBe(1200)
     expect(row.monthly_payment).toBe(100)
+    expect(row.next_payment_date).toBeNull()
     expect(row.payoff_date).toBeNull()
   })
 })
