@@ -836,7 +836,9 @@ export default function Transactions() {
     setFormPayor('')
     setFormNotes('')
     setFormMeans('')
-    setFormAccountId(defaultAccountId())
+    const account = defaultAccountId()
+    setFormAccountId(account)
+    accountToPreselect = account === null
     setFormTransferAccountId(null)
     setFormAmountLocal('')
     setFormTags([])
@@ -875,6 +877,26 @@ export default function Transactions() {
     if (Number.isFinite(stored) && accs.some((a) => a.id === stored)) return stored
     return accs[0].id
   }
+  /**
+   * A new entry opened before the accounts were in had nothing to prefill. It gets the account it
+   * would have opened with once they arrive, and only then: not over the Cash account the person
+   * made from the form meanwhile, and not on a later reload, over whatever they picked since. The
+   * form still counts as unchanged with it: the person did not choose it.
+   */
+  let accountToPreselect = false
+  createEffect(
+    on(
+      formAccounts,
+      (accs) => {
+        if (!accountToPreselect || !isTransactionModalOpen() || accs.length === 0) return
+        accountToPreselect = false
+        const account = defaultAccountId()
+        setFormAccountId(account)
+        if (formAtOpen !== null) formAtOpen = { ...formAtOpen, account }
+      },
+      { defer: true }
+    )
+  )
   // Create a starter "Cash" account inline when the user has none, then select it.
   const createCashAccount = async () => {
     try {
@@ -886,6 +908,7 @@ export default function Transactions() {
       } as unknown as Parameters<typeof api.createAccount>[0])
       // The account list follows the create on its own (apiFetch bumps the accounts counter, and
       // loadAccounts answers it), so it is not fetched again here, outside that loader.
+      accountToPreselect = false
       setFormAccountId(acc.id)
     } catch (error) {
       console.error('Failed to create Cash account:', error)
@@ -895,6 +918,7 @@ export default function Transactions() {
 
   const handleEditTransaction = (transaction: Transaction) => {
     setFormProfileId(transaction.profile_id ?? activeId())
+    accountToPreselect = false
     setType(transaction.type)
     setFormId(transaction.id.toString())
     setFormDescription(transaction.description)
@@ -940,6 +964,7 @@ export default function Transactions() {
   // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
     setFormProfileId(activeId())
+    accountToPreselect = false
     setType(transaction.type)
     setFormId(null)
     setFormDescription(transaction.description)

@@ -61,16 +61,16 @@ const formIsOpen = (page: Page) =>
   page.getByTestId('tx-modal').evaluate((el) => el.className.includes('show'))
 
 /**
- * Open the add form once the page's lists are in. The form picks its account as it opens, so it is
- * opened, closed once the options have loaded, and opened again.
+ * Open the add form, and wait for its lists. It may open before they are in: it then picks its
+ * account as they arrive.
  */
-async function openAddFormLoaded(page: Page): Promise<void> {
+async function openAddForm(page: Page): Promise<void> {
   await page.getByTestId('add-transaction-btn').click()
   await expect.poll(async () => (await offered(page, 'tx-category')).length).toBeGreaterThan(0)
   await expect.poll(async () => (await offered(page, 'tx-account')).length).toBeGreaterThan(0)
-  await page.getByTestId('tx-cancel-btn').click()
-  await expect.poll(() => formIsOpen(page)).toBe(false)
-  await page.getByTestId('add-transaction-btn').click()
+  await expect
+    .poll(() => page.getByTestId('tx-modal').getByTestId('tx-account').inputValue())
+    .not.toBe('')
 }
 
 /** Description, amount and the category picked; then Save, which closes the form when it lands. */
@@ -122,7 +122,7 @@ test('cloud: a new entry in household view is offered the active profile’s cat
     ).map((a) => a.id)
 
     await householdView(page, active, other)
-    await openAddFormLoaded(page)
+    await openAddForm(page)
 
     const categories = await offered(page, 'tx-category')
     expect(categories).not.toContain(theirs.id)
@@ -196,7 +196,7 @@ test.describe('local-first', () => {
     expect(other, 'a second demo profile').toBeDefined()
 
     await householdView(page, active, other!)
-    await openAddFormLoaded(page)
+    await openAddForm(page)
 
     const categories = await offered(page, 'tx-category')
     const accounts = await offered(page, 'tx-account')

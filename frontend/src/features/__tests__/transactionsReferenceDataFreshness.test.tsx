@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
+import { removeToast, toasts } from '../../core/toastStore'
 
 type Cat = {
   id: number
@@ -38,6 +39,7 @@ let serverAccounts: Acct[] = []
 const getCategories = vi.fn(async () => serverCategories)
 const getAccounts = vi.fn(async () => serverAccounts)
 const getTags = vi.fn(async () => [] as Array<{ id: number; name: string; color: string }>)
+const createAccount = vi.fn(async () => ({ id: 7 }))
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -46,6 +48,7 @@ vi.mock('../../core/api', async (importOriginal) => ({
     getCategories: () => getCategories(),
     getTags: () => getTags(),
     getAccounts: () => getAccounts(),
+    createAccount: () => createAccount(),
   },
   apiPut: vi.fn(async () => ({ ok: true })),
 }))
@@ -64,6 +67,7 @@ beforeEach(() => {
   getCategories.mockClear()
   getAccounts.mockClear()
   getTags.mockClear()
+  createAccount.mockClear()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -86,6 +90,7 @@ afterEach(() => {
   dispose?.()
   host?.remove()
   vi.unstubAllGlobals()
+  for (const t of toasts()) removeToast(t.id)
 })
 
 async function mountTransactions() {
@@ -328,5 +333,98 @@ describe('Transactions reference data', () => {
     openTransactionForm(host)
     await flush()
     expect(offeredCategoryNames(host)).toContain('Transport')
+  })
+})
+
+describe('a new entry opened before the accounts are in', () => {
+  const accountSelect = (root: HTMLElement) =>
+    root.querySelector<HTMLSelectElement>('[data-test-id="tx-account"]')
+
+  it('gets the account it would have opened with once they arrive', async () => {
+    serverAccounts = [
+      { id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 },
+      { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 },
+    ]
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    expect(accountSelect(root)).toBeNull()
+
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('leaves the account alone once the person has picked, a later reload included', async () => {
+    serverAccounts = [
+      { id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 },
+      { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 },
+    ]
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    // The person clears the pick ("Select account..."), and the list reloads behind the form, as it
+    // does on any account write or on coming back to the tab.
+    const select = accountSelect(root)!
+    select.value = ''
+    select.dispatchEvent(new Event('input', { bubbles: true }))
+    serverAccounts = serverAccounts.map((a) => ({ ...a })) // a fresh answer, as a real one is
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(accountSelect(root)!.value).toBe('')
+  })
+
+  it('keeps the Cash account the person made from the form while the list was loading', async () => {
+    // Until the list is in, the form offers to create a Cash account.
+    serverAccounts = [{ id: 1, name: 'Main', currency: 'EUR', profile_id: 1 }]
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    root.querySelector<HTMLElement>('[data-test-id="tx-create-cash-account"]')!.click()
+    await flush()
+    // The create lands as id 7, apiFetch's counter reloads the list, and the slow load ends too.
+    serverAccounts = [...serverAccounts, { id: 7, name: 'Cash', currency: 'EUR', profile_id: 1 }]
+    invalidateEntity('accounts')
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    expect(createAccount).toHaveBeenCalledTimes(1)
+    expect(accountSelect(root)!.value).toBe('7')
+  })
+
+  it('counts the account picked for it as no change of the person’s', async () => {
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    // A switch closes the form, and names what it lost: here, nothing.
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-modal"]')!.className).not.toContain('show')
+    expect(toasts().map((t) => t.message)).toEqual([])
   })
 })
