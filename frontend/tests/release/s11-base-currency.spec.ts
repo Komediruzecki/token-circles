@@ -43,7 +43,23 @@ async function emptyBooksIn(m: Mode, currency: string): Promise<void> {
     // Settings > Danger zone's reset: every row goes, the profiles stay.
     await m.api('/api/clear-all', { method: 'DELETE' })
   }
+  // Settings, as it mounts, writes the base currency this browser used last to the profile
+  // (Settings.tsx:721) and does not wait for the answer. A pick made before that write is
+  // answered can be lost: the server may finish the older write last, and the profile keeps the
+  // old currency while the page shows the new one. That race is not what section 11 tests, so
+  // pick once the write is answered. Local-first answers it inside the page.
+  const mountWrite =
+    m.kind === 'cloud'
+      ? page.waitForResponse(
+          (res) =>
+            res.request().method() === 'PUT' &&
+            new URL(res.url()).pathname === '/api/settings' &&
+            (res.request().postData() ?? '').includes('"currency"'),
+          { timeout: 20_000 }
+        )
+      : null
   await reloadOn(page, 'settings', 'settings-header')
+  await mountWrite
   await setBaseCurrency(page, currency)
 }
 
