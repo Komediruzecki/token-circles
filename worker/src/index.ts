@@ -43,7 +43,7 @@ import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
-import { errorResponse } from './error-response';
+import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
@@ -123,6 +123,9 @@ app.use('*', async (c, next) => {
   }
 });
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+
+// A request body that is not JSON answers 400, not 500 (error-response.ts).
+app.use('*', rejectMalformedJson);
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means

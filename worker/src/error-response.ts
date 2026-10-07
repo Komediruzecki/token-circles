@@ -1,4 +1,4 @@
-import type { Context } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
@@ -64,3 +64,26 @@ export function errorResponse(err: Error, c: Context<AppEnv>): Response {
   if (transient) c.header('Retry-After', '5');
   return c.json({ error: message }, status as 500);
 }
+
+/** The answer to a request body that is not JSON: the client's mistake, so a 400. */
+export const MALFORMED_JSON = "The request body isn't valid JSON.";
+
+/**
+ * Makes a body that will not parse a 400 instead of a 500, for every route at once. It wraps this
+ * request's c.req.json() so that its SyntaxError, and only that one, becomes an HttpError(400).
+ * A SyntaxError from anywhere else (JSON.parse of a stored value, a token) is still unexpected
+ * and still a generic 500. Routes that read the body with `.catch(() => ({}))` see no difference.
+ */
+export const rejectMalformedJson: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const req = c.req;
+  const parse = req.json.bind(req);
+  req.json = (async () => {
+    try {
+      return await parse();
+    } catch (err) {
+      if (err instanceof SyntaxError) throw new HttpError(400, MALFORMED_JSON);
+      throw err;
+    }
+  }) as typeof req.json;
+  await next();
+};
