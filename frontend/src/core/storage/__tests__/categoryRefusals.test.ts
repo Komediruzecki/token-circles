@@ -142,8 +142,8 @@ describe('creating a category in local-first', () => {
     const body = await refusal(await call('POST', '/api/categories', { name: 'RENT' }))
 
     expect(body).toEqual({
-      error: 'You already have a category called “Rent”. Choose another name.',
-      fields: { name: 'You already have a category called “Rent”. Choose another name.' },
+      error: 'You already have a category called "Rent". Choose another name.',
+      fields: { name: 'You already have a category called "Rent". Choose another name.' },
     })
   })
 
@@ -189,7 +189,7 @@ describe('editing a category in local-first', () => {
     const body = await refusal(await call('PUT', `/api/categories/${FOOD}`, { name: 'rent' }))
 
     expect(body.fields).toEqual({
-      name: 'You already have a category called “Rent”. Choose another name.',
+      name: 'You already have a category called "Rent". Choose another name.',
     })
     expect((await stored(FOOD)).name).toBe('Food')
   })

@@ -67,10 +67,10 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
       const editing = options.editing?.()
       if (editing) {
         await apiPut(`/api/categories/${editing.id}`, body)
-        showToast(`Saved your changes to “${name}”.`, 'success')
+        showToast(`Saved your changes to "${name}".`, 'success')
       } else {
         await apiPost('/api/categories', body)
-        showToast(`Added “${name}” to your categories.`, 'success')
+        showToast(`Added "${name}" to your categories.`, 'success')
       }
       options.onSaved()
     },

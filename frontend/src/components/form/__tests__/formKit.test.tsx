@@ -235,8 +235,8 @@ describe('after a submit', () => {
 describe('a refusal from the server', () => {
   it('marks the fields it names and focuses the first', async () => {
     const send = vi.fn().mockRejectedValue(
-      new ApiError(400, 'You already have a category called “Coffee”. Choose another name.', {
-        name: 'You already have a category called “Coffee”. Choose another name.',
+      new ApiError(400, 'You already have a category called "Coffee". Choose another name.', {
+        name: 'You already have a category called "Coffee". Choose another name.',
       })
     )
     mount(send)
@@ -248,7 +248,7 @@ describe('a refusal from the server', () => {
 
     expect(labelled('Name').getAttribute('aria-invalid')).toBe('true')
     expect(describedBy(labelled('Name'))[0]).toBe(
-      'You already have a category called “Coffee”. Choose another name.'
+      'You already have a category called "Coffee". Choose another name.'
     )
     expect(document.activeElement).toBe(labelled('Name'))
     expect(notice().textContent).toBe('')

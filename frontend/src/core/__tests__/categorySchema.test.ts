@@ -171,7 +171,7 @@ describe('a duplicate name', () => {
 
   it('is refused at the name, quoting the category that already has it', () => {
     expect(categoryNameTaken('Eating out')).toEqual({
-      name: 'You already have a category called “Eating out”. Choose another name.',
+      name: 'You already have a category called "Eating out". Choose another name.',
     })
   })
 })

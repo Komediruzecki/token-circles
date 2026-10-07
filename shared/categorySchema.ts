@@ -40,7 +40,7 @@ export const CATEGORY_MESSAGES = {
 /** The refusal for a name the profile already has, quoting the category that holds it. */
 export function categoryNameTaken(existingName: string): FieldErrors {
   return {
-    name: `You already have a category called “${existingName}”. Choose another name.`,
+    name: `You already have a category called "${existingName}". Choose another name.`,
   };
 }
 

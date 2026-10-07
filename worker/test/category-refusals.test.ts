@@ -146,7 +146,7 @@ describe('creating a category', () => {
     const body = await refusal(await call('POST', '/api/categories', { name: ' food ' }));
 
     expect(body.fields).toEqual({
-      name: 'You already have a category called “Food”. Choose another name.',
+      name: 'You already have a category called "Food". Choose another name.',
     });
     expect(await namesInProfile()).toEqual(['Food', 'Housing', 'Rent', 'Transfers']);
   });
@@ -186,7 +186,7 @@ describe('editing a category', () => {
     const body = await refusal(await call('PUT', `/api/categories/${FOOD}`, { name: 'RENT' }));
 
     expect(body.fields).toEqual({
-      name: 'You already have a category called “Rent”. Choose another name.',
+      name: 'You already have a category called "Rent". Choose another name.',
     });
     expect((await stored(FOOD))?.name).toBe('Food');
   });

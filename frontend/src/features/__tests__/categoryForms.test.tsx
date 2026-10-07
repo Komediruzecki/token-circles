@@ -165,6 +165,10 @@ const storedNames = async (): Promise<string[]> =>
   ((await (await getDB()).getAll('categories')) as { name: string }[]).map((c) => c.name).sort()
 
 const errorToasts = () => toasts().filter((t) => t.type === 'error')
+const successToasts = () =>
+  toasts()
+    .filter((t) => t.type === 'success')
+    .map((t) => t.message)
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
 
@@ -204,7 +208,7 @@ describe.each(SURFACES)('the category dialog on $page', (surface) => {
       expect(nameField().getAttribute('aria-invalid')).toBe('true')
     })
     expect(describedBy(nameField())).toContain(
-      'You already have a category called “Groceries”. Choose another name.'
+      'You already have a category called "Groceries". Choose another name.'
     )
     expect(await storedNames()).toEqual(['Groceries'])
     expect(errorToasts()).toEqual([])
@@ -229,6 +233,6 @@ describe.each(SURFACES)('the category dialog on $page', (surface) => {
       ).toBe(false)
     })
     expect(errorToasts()).toEqual([])
-    expect(toasts().some((t) => t.type === 'success')).toBe(true)
+    expect(successToasts()).toEqual(['Added "Coffee" to your categories.'])
   })
 })

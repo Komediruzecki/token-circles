@@ -121,7 +121,7 @@ for (const mode of MODES) {
 
       await expect(nameField(page)).toHaveAttribute('aria-invalid', 'true')
       await expect(nameField(page)).toHaveAccessibleDescription(
-        `You already have a category called “${EXISTING}”. Choose another name.`
+        `You already have a category called "${EXISTING}". Choose another name.`
       )
       await expect(page.getByTestId('category-modal-overlay')).toBeVisible()
       await expect(errorToasts(page)).toHaveCount(0)
