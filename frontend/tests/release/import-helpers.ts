@@ -7,7 +7,7 @@
  */
 import { expect } from './release-fixtures'
 import { goPage } from './release-helpers'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 export interface StatementRow {
   /** YYYY-MM-DD */
@@ -77,4 +77,99 @@ export async function importAccountOptions(page: Page): Promise<string[]> {
         .map((o) => o.value)
         .filter((v) => v !== '' && v !== '__create-account__')
     )
+}
+
+/**
+ * The statement's account picked, processed, mapped, and on to the preview: the step whose dry run
+ * of the import tells the user what it would skip and create.
+ */
+export async function previewStatement(page: Page, account: string, rows: number): Promise<void> {
+  await page.getByTestId('bank-target-account').first().selectOption(account)
+  await page.getByTestId('bank-process-btn').click()
+  await page.getByTestId('import-continue-preview').click()
+  await expect(page.getByTestId('import-preview-total')).toHaveText(String(rows), {
+    timeout: 20_000,
+  })
+}
+
+/** Import > Recent Imports: one entry per import, newest first. Shown on the upload step. */
+export function recentImports(page: Page): Locator {
+  // h2 > card
+  return page
+    .getByRole('heading', { name: 'Recent Imports', exact: true })
+    .locator('xpath=..')
+    .locator('details')
+}
+
+/** Every data-version counter the app tracks, by entity: what a write bumps, in either mode. */
+export async function dataVersions(page: Page): Promise<Record<string, number>> {
+  return page.evaluate(async () => {
+    const mod = (await import('/src/core/dataVersions.ts' as string)) as {
+      trackedEntities: () => string[]
+      entityVersion: (tag: string) => number
+    }
+    return Object.fromEntries(mod.trackedEntities().map((t) => [t, mod.entityVersion(t)]))
+  })
+}
+
+// ---------------------------------------------------------------------------------------------
+// The categorization rules editor (Import > Bank imports, and the wizard's import step)
+// ---------------------------------------------------------------------------------------------
+
+export interface ShownRule {
+  category: string
+  keywords: string
+}
+
+/**
+ * Store a profile's category keyword rules where the app keeps them: in this browser, per
+ * profile (core/bankImport/rulesStore.ts). They never reach the server, so this is the only way
+ * to arrange them.
+ */
+export async function arrangeImportRules(
+  page: Page,
+  profileId: number,
+  rules: readonly { category: string; keywords: string[] }[]
+): Promise<void> {
+  await page.evaluate(
+    ([pid, value]) => {
+      localStorage.setItem(`bankImportCategoryRules:${pid}`, value)
+    },
+    [String(profileId), JSON.stringify(rules)] as const
+  )
+}
+
+/** A profile's stored category rules, as the app would load them (null: never saved). */
+export async function storedImportRules(
+  page: Page,
+  profileId: number
+): Promise<{ category: string; keywords: string[] }[] | null> {
+  const raw = await page.evaluate(
+    (pid) => localStorage.getItem(`bankImportCategoryRules:${pid}`),
+    String(profileId)
+  )
+  return raw === null ? null : (JSON.parse(raw) as { category: string; keywords: string[] }[])
+}
+
+/** Open the rules editor inside `scope` (the Import page, or the wizard), if it is closed. */
+export async function openRulesEditor(scope: Locator): Promise<void> {
+  const toggle = scope.getByTestId('bank-rules-toggle')
+  await expect(toggle).toBeVisible({ timeout: 20_000 })
+  if ((await toggle.innerText()).startsWith('Edit')) await toggle.click()
+  await expect(toggle).toHaveText(/^Hide categorization/)
+}
+
+/** The category keyword rules the open editor in `scope` shows, row by row. */
+export async function rulesShown(scope: Locator): Promise<ShownRule[]> {
+  const categories = scope.getByPlaceholder('Category (pick or type)')
+  const keywords = scope.getByPlaceholder('keyword1, keyword2, ...')
+  const rows: ShownRule[] = []
+  const n = await categories.count()
+  for (let i = 0; i < n; i++) {
+    rows.push({
+      category: await categories.nth(i).inputValue(),
+      keywords: await keywords.nth(i).inputValue(),
+    })
+  }
+  return rows
 }

@@ -142,3 +142,24 @@ export function dotBeside(name: Locator): Locator {
 export function dotAbove(name: Locator): Locator {
   return name.locator('xpath=../preceding-sibling::span[1]')
 }
+
+/**
+ * Quick add through the command bar (Ctrl+K): the entry typed as "<description> <amount>" and
+ * the category picked from its Category chip. Returns once the save's toast is up: the bar closes
+ * by fading out and stays in the DOM, so its own visibility says nothing.
+ */
+export async function commandBarExpense(page: Page, text: string, category: string): Promise<void> {
+  await page.keyboard.press('Control+k')
+  const bar = page.getByRole('dialog', { name: 'Quick entry command bar' })
+  const entry = bar.getByLabel('Quick entry')
+  await expect(entry).toBeFocused()
+  await entry.fill(text)
+  await bar.getByRole('combobox', { name: 'Category' }).selectOption({ label: category })
+  await entry.press('Enter')
+  await expect(
+    page
+      .getByRole('region', { name: 'Notifications' })
+      .getByRole('status')
+      .filter({ hasText: 'Entry added' })
+  ).toBeVisible({ timeout: 15_000 })
+}

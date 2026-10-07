@@ -116,7 +116,7 @@ export function localIso(days = 0): string {
 // Counting the requests a page makes (cloud only: local-first reads never touch the network)
 // ---------------------------------------------------------------------------------------------
 
-interface FetchEntry {
+export interface FetchEntry {
   url: string
   method: string
   /** Who called fetch. Lets a count leave out the badge evaluator, which is not the page. */

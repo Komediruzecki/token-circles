@@ -36,6 +36,7 @@ import {
   calendarPopoverRow,
   categoryCard,
   closeCalendarPopover,
+  commandBarExpense,
   counterparty,
   dotAbove,
   dotBeside,
@@ -271,20 +272,7 @@ for (const [pass, test] of both) {
       await expect(progress).toContainText(`${money(0)} of ${money(500)}`)
 
       // The command bar (Ctrl+K): an expense of 50 in that category.
-      await page.keyboard.press('Control+k')
-      const bar = page.getByRole('dialog', { name: 'Quick entry command bar' })
-      const entry = bar.getByLabel('Quick entry')
-      await expect(entry).toBeFocused()
-      await entry.fill('zz lunch 50')
-      await bar.getByRole('combobox', { name: 'Category' }).selectOption({ label: cat })
-      await entry.press('Enter')
-      // The bar closes by fading out (it stays in the DOM): the save's toast is the signal.
-      await expect(
-        page
-          .getByRole('region', { name: 'Notifications' })
-          .getByRole('status')
-          .filter({ hasText: 'Entry added' })
-      ).toBeVisible({ timeout: 15_000 })
+      await commandBarExpense(page, 'zz lunch 50', cat)
 
       await expect(progress).toContainText(`${money(50)} of ${money(500)}`, { timeout: 15_000 })
     })
