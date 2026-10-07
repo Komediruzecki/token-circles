@@ -254,7 +254,7 @@ describe('an open form, when the active profile changes', () => {
 
     expect(formIsOpen()).toBe(false)
     expect(toastMessages()).toEqual([
-      'Your changes weren’t saved. Switch back to Personal to edit this entry.',
+      "Your changes weren't saved. Switch back to Personal to edit this entry.",
     ])
   })
 
@@ -266,7 +266,7 @@ describe('an open form, when the active profile changes', () => {
 
     expect(formIsOpen()).toBe(false)
     expect(toastMessages()).toEqual([
-      'Your new entry wasn’t saved. Switch back to Personal to add it.',
+      "Your new entry wasn't saved. Switch back to Personal to add it.",
     ])
   })
 

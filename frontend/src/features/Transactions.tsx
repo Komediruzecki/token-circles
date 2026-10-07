@@ -109,11 +109,11 @@ function AccountsDidNotLoad(props: {
  */
 function unsavedOnSwitch(editing: boolean, profileName: string | undefined): string {
   if (profileName === undefined) {
-    return editing ? 'Your changes to this entry weren’t saved.' : 'Your new entry wasn’t saved.'
+    return editing ? "Your changes to this entry weren't saved." : "Your new entry wasn't saved."
   }
   return editing
-    ? `Your changes weren’t saved. Switch back to ${profileName} to edit this entry.`
-    : `Your new entry wasn’t saved. Switch back to ${profileName} to add it.`
+    ? `Your changes weren't saved. Switch back to ${profileName} to edit this entry.`
+    : `Your new entry wasn't saved. Switch back to ${profileName} to add it.`
 }
 
 export default function Transactions() {

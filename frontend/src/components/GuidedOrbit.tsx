@@ -167,12 +167,23 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
     // tab) or the category has gone, read again and ask for the category again instead.
     const categoriesCurrent = props.categories.isCurrent()
     const accountsCurrent = props.accounts.status() !== 'ready' || props.accounts.isCurrent()
-    if (!categoriesCurrent || !category() || !accountsCurrent) {
+    if (!categoriesCurrent || !category()) {
       if (!categoriesCurrent) props.categories.reload()
       if (!accountsCurrent) props.accounts.reload()
       setCategoryId(null)
       setStep(2)
       toast("That category isn't in this profile anymore. Pick one again.", 'error')
+      return
+    }
+    // The category stands; only the accounts are another profile's. Read them again and stay on
+    // this step, which shows the account the entry would now go to.
+    if (!accountsCurrent) {
+      props.accounts.reload()
+      setAccountPick(null)
+      toast(
+        "That account isn't in this profile anymore. Check the account and add it again.",
+        'error'
+      )
       return
     }
     setSubmitting(true)
@@ -438,7 +449,7 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
                   <Switch fallback={account()?.name ?? 'None'}>
                     <Match when={props.accounts.status() === 'loading'}>Loading…</Match>
                     <Match when={props.accounts.status() === 'error'}>
-                      Didn't load. Tap to try again
+                      Didn't load. Tap to try again.
                     </Match>
                   </Switch>
                   <Show when={accounts().length > 1}>

@@ -162,11 +162,22 @@ export function CommandBar(props: CommandBarProps) {
     // tab) or the category has gone, read again and ask for the category again instead.
     const categoriesCurrent = props.categories.isCurrent()
     const accountsCurrent = props.accounts.status() !== 'ready' || props.accounts.isCurrent()
-    if (!categoriesCurrent || !eCategory() || !accountsCurrent) {
+    if (!categoriesCurrent || !eCategory()) {
       if (!categoriesCurrent) props.categories.reload()
       if (!accountsCurrent) props.accounts.reload()
       setCategoryOverride('auto')
       toast("That category isn't in this profile anymore. Pick one again.", 'error')
+      return
+    }
+    // The category stands; only the accounts are another profile's. Read them again, and let the
+    // person check the account the entry would now go to.
+    if (!accountsCurrent) {
+      props.accounts.reload()
+      setAccountPick(null)
+      toast(
+        "That account isn't in this profile anymore. Check the account and add it again.",
+        'error'
+      )
       return
     }
     const amount = eAmount() as number
