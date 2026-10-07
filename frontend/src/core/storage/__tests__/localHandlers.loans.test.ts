@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { PARITY_LOAN } from '../../../../../shared/fixtures/loanParity'
+import { calculateLoan } from '../../../../../shared/loanSchedule'
 import { getDB } from '../idb.js'
 import {
+  loanPrepaymentAdd,
   loansCalculate,
   loansCreate,
   loansDelete,
@@ -8,6 +11,16 @@ import {
   loansList,
   loansUpdate,
 } from '../localHandlers.js'
+
+/** Store a loan the way the app does: the loan with its rate periods, then each extra payment. */
+async function storeLoan(loan: typeof PARITY_LOAN): Promise<number> {
+  const { prepayments, ...rest } = loan
+  const created = await (await loansCreate({ name: 'Fixture loan', ...rest })).json()
+  for (const p of prepayments) {
+    expect((await loanPrepaymentAdd({ p1: String(created.id) }, { ...p })).status).toBe(201)
+  }
+  return created.id
+}
 
 describe('localHandlers - loans', () => {
   beforeEach(async () => {
@@ -108,5 +121,62 @@ describe('localHandlers - loans', () => {
     expect(schedule.summary).toBeDefined()
     expect(schedule.schedule).toBeDefined()
     expect(Array.isArray(schedule.schedule)).toBe(true)
+  })
+
+  it('calculates exactly what the shared engine computes from the stored loan', async () => {
+    // worker/test/loans-calculate.test.ts stores the same fixture through the Worker and requires
+    // the same answer, so both modes return the same schedule and summary for it.
+    const id = await storeLoan(PARITY_LOAN)
+    const res = await loansCalculate({ p1: String(id) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toEqual(calculateLoan(PARITY_LOAN))
+    // The shape the Worker answers in, key for key.
+    expect(Object.keys(body)).toEqual(['schedule', 'summary', 'comparison'])
+    expect(Object.keys(body.schedule[0])).toEqual([
+      'month',
+      'date',
+      'payment',
+      'principal',
+      'interest',
+      'balance',
+      'prepayment',
+      'rate',
+      'note',
+    ])
+    expect(Object.keys(body.summary)).toEqual([
+      'totalPaid',
+      'totalInterest',
+      'interestSaved',
+      'monthsSaved',
+      'payoffDate',
+      'totalPayments',
+      'avgMonthlyPayment',
+      'maxBalance',
+      'originalTotalInterest',
+      'originalTotalPayments',
+    ])
+  })
+
+  it('charges the base rate outside the rate period and adds up same-month extras', async () => {
+    const id = await storeLoan(PARITY_LOAN)
+    const { schedule } = await (await loansCalculate({ p1: String(id) })).json()
+    expect(schedule[11].rate).toBe(4.5)
+    expect(schedule[12].rate).toBe(6.25)
+    expect(schedule[30].rate).toBe(4.5)
+    expect(schedule[5].prepayment).toBe(2000)
+    expect(schedule[5].note).toBe('bonus; gift')
+  })
+
+  it('calculates a loan saved without a start date instead of failing', async () => {
+    const created = await (
+      await loansCreate({ name: 'Undated', principal: 1200, interest_rate: 0, term_months: 12 })
+    ).json()
+    const res = await loansCalculate({ p1: String(created.id) })
+    expect(res.status).toBe(200)
+    const { schedule, summary } = await res.json()
+    expect(schedule).toHaveLength(12)
+    expect(schedule[0].payment).toBe(100)
+    expect(summary.payoffDate).toBeNull()
   })
 })
