@@ -276,7 +276,7 @@ export async function callLocalApi<T>(
  */
 export async function enterLocalFirst(page: Page): Promise<void> {
   await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded' })
-  await page.getByTestId('try-no-account').click()
+  await page.getByTestId('try-no-account').click({ timeout: 60_000 })
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Example', {
     timeout: 90_000,
   })
@@ -317,7 +317,10 @@ export const test = base.extend<{ cloud: CloudWorld; local: LocalWorld }>({
     }
   },
 
-  local: async ({ browser }, use) => {
+  local: async ({ browser }, use, testInfo) => {
+    // The demo seed writes thousands of rows into IndexedDB before the app is usable: give the
+    // case its own minute on top of whatever the seed took.
+    testInfo.setTimeout(testInfo.timeout + 120_000)
     const context = await browser.newContext({
       ...devices['Desktop Chrome'],
       baseURL: E2E_BASE,

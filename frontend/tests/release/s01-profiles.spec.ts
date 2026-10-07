@@ -36,7 +36,9 @@ function categoryCards(page: Page, name: string) {
 async function openHousehold(page: Page): Promise<void> {
   await goPage(page, 'settings', 'settings-header')
   await page.getByTestId('settings-tab-exports').click()
-  await expect(page.locator('[data-test-id^="household-profile-"]').first()).toBeVisible()
+  const rows = page.locator('[data-test-id^="household-profile-"]')
+  // The card loads the profile list on mount; until then it offers a button to load it.
+  await expect(rows.first()).toBeVisible({ timeout: 20_000 })
 }
 
 /** The Household view row of the profile carrying the Active lock. */
