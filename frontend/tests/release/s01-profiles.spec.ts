@@ -136,13 +136,9 @@ for (const [pass, test] of both) {
     test('1.2c a category made on the page reads back through the typed client @release', async ({
       m,
     }) => {
-      // Not a 5.16 regression: the local create handler and normalizeCategory are unchanged since
-      // 5.15.1. The row lacks `tax_deductible`, CategorySchema requires it, and api.getCategories()
-      // throws, which App's quick add, Transactions, Tags and (new in 5.16) local badges all call.
-      test.fail(
-        m.kind === 'local',
-        'local-first: a category created on the Categories page has no tax_deductible (since 5.15.1)'
-      )
+      // The local create handler used to store the form's body as sent, with no `tax_deductible`,
+      // which CategorySchema requires. api.getCategories() then threw for the whole profile, and
+      // App's quick entry, Transactions, Tags and the local badges all call it.
       const { page } = m
       const name = `zz-typed${m.suffix}`.slice(0, 40)
       await addCategory(page, name)

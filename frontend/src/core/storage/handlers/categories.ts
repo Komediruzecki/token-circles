@@ -26,8 +26,8 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
   if (!name) return json({ error: 'Category name is required' }, 400)
 
   const pid = await adapter.getCurrentProfileId()
-  cat.profile_id = pid
-  if (!(await currentProfileOwns('categories', cat.parent_id ?? cat.parentId))) {
+  const parentId = cat.parent_id ?? cat.parentId ?? null
+  if (!(await currentProfileOwns('categories', parentId))) {
     return json({ error: 'Parent category does not belong to this profile' }, 400)
   }
 
@@ -38,16 +38,29 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
     return json({ error: 'Category name already exists for this profile' }, 400)
   }
 
+  // The row the Worker would store (worker/src/routes/categories.ts), not the body as it came:
+  // the forms send no `tax_deductible`, and `icon: null` for a blank icon, and a row missing
+  // either failed CategorySchema on every typed read of its profile's categories.
+  const row = {
+    name,
+    type: (cat.type as string | undefined) ?? 'expense',
+    color: (cat.color as string | undefined) ?? '#6b7280',
+    icon: (cat.icon as string | null | undefined) || 'tag',
+    parent_id: parentId,
+    tax_deductible: Boolean(cat.tax_deductible),
+    created_at: new Date().toISOString(),
+    profile_id: pid,
+  }
   const id = await adapter.createCategory(
-    cat as unknown as Parameters<typeof adapter.createCategory>[0]
+    row as unknown as Parameters<typeof adapter.createCategory>[0]
   )
-  return json({ id, ...cat }, 201)
+  return json({ id, ...row }, 201)
 }
 
 export async function categoriesGet(params: Record<string, string>): Promise<Response> {
   const cat = await currentProfileRecord('categories', idParam(params))
   if (!cat) return notFound('Category')
-  return json(cat)
+  return json(normalizeCategory(cat))
 }
 
 export async function categoriesUpdate(

@@ -72,8 +72,7 @@ async function earnFirstBudget(
 ): Promise<{ from: number; savedAt: number; created: Profile; env: string[] }> {
   const { page } = m
   const { created, env } = await newProfile(m)
-  // A category to budget for. The local router stores what it is sent, so the body carries
-  // what the Categories form would (`tax_deductible` included, see KNOWN_LOCAL_CONSOLE).
+  // A category to budget for, complete as the Worker would store it.
   await m.api('/api/categories', {
     method: 'POST',
     body: {

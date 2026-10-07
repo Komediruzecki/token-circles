@@ -21,8 +21,20 @@ const LEGACY_ACCOUNT_TYPES: Record<string, string> = {
   retirement: 'ib',
 }
 
+/**
+ * Categories made through the local `POST /api/categories` before it wrote complete rows hold the
+ * form's body as sent: no `tax_deductible`, and `icon: null` when the icon was left blank. Either
+ * one failed CategorySchema, and one such row failed every `api.getCategories()` over its profile.
+ */
 export function normalizeCategory<T>(cat: T): T {
-  return { icon: '', parent_id: null, created_at: '', ...(cat as Row) } as T
+  const row = cat as Row
+  return {
+    ...row,
+    icon: row.icon ?? '',
+    parent_id: row.parent_id ?? null,
+    created_at: row.created_at ?? '',
+    tax_deductible: row.tax_deductible ?? false,
+  } as T
 }
 
 export function normalizeAccount<T>(acct: T): T {
