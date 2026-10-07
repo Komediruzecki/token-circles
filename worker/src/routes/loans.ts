@@ -44,11 +44,12 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
 }
 
 /**
- * The base rate a create or an edit stores. 0 % is a rate, an interest-free loan; only a rate that
- * was not sent at all falls back to the 5 % these routes have always defaulted to.
+ * Whether a create or an edit was sent a base rate. 0 % is a rate, an interest-free loan; a rate
+ * left out, null or empty is not. A create sent none is saved at the 5 % these routes have always
+ * defaulted to, and an edit sent none keeps the stored rate.
  */
-function sentRate(rate: unknown): unknown {
-  return rate === undefined || rate === null || rate === '' ? 5.0 : rate
+function rateSent(rate: unknown): boolean {
+  return rate !== undefined && rate !== null && rate !== ''
 }
 
 // List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
@@ -102,7 +103,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
 loansRoutes.post('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const b = (await c.req.json()) as Record<string, any>
-  const interestRate = sentRate(b.interest_rate)
+  const interestRate = rateSent(b.interest_rate) ? b.interest_rate : 5.0
   const res = await db.insert(c.env.DB, 'loans', {
     name: b.name,
     principal: b.principal,
@@ -135,7 +136,7 @@ loansRoutes.post('/api/loans', requireAuth, async (c) => {
     id: loanId,
     name: b.name,
     principal: b.principal,
-    interest_rate: b.interest_rate,
+    interest_rate: interestRate,
     start_date: b.start_date,
     term_months: b.term_months,
     profile_id: pid,
@@ -175,7 +176,7 @@ loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
     {
       name: b.name,
       principal: b.principal,
-      interest_rate: sentRate(b.interest_rate),
+      ...(rateSent(b.interest_rate) ? { interest_rate: b.interest_rate } : {}),
       start_date: b.start_date,
       term_months: b.term_months,
     },

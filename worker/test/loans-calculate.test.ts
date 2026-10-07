@@ -70,7 +70,8 @@ async function calculate(id: number, profile = ME): Promise<Response> {
 
 describe('the base rate POST and PUT /api/loans store', () => {
   // `b.interest_rate || 5.0` read a 0 % rate as a missing one, so an interest-free loan was saved,
-  // and charged, at 5 %. Only a rate that is not sent at all falls back to 5 %.
+  // and charged, at 5 %. Only a create that is sent no rate falls back to 5 %; an edit sent none
+  // keeps the rate stored, as it keeps the stored rate periods when it is sent none.
   const LOAN = { name: 'Family loan', principal: 12000, start_date: '2026-01-01', term_months: 24 };
 
   async function create(body: Record<string, unknown>): Promise<number> {
@@ -107,13 +108,27 @@ describe('the base rate POST and PUT /api/loans store', () => {
     expect(await totalInterest(id)).toBe(0);
   });
 
-  it('falls back to 5 % only when no rate is sent', async () => {
-    for (const id of [await create(LOAN), await create({ ...LOAN, interest_rate: null })]) {
-      expect((await stored(id)).interest_rate).toBe(5);
+  it('answers a create with the rate it saved, 5 % when it was sent none', async () => {
+    const cases: [Record<string, unknown>, number][] = [
+      [LOAN, 5],
+      [{ ...LOAN, interest_rate: null }, 5],
+      [{ ...LOAN, interest_rate: 0 }, 0],
+    ];
+    for (const [body, rate] of cases) {
+      const res = await api('POST', '/api/loans', body);
+      expect(res.status).toBe(200);
+      const answer = (await res.json()) as { id: number; interest_rate?: unknown };
+      expect(answer.interest_rate).toBe(rate);
+      expect((await stored(answer.id)).interest_rate).toBe(rate);
     }
-    const edited = await create({ ...LOAN, interest_rate: 3.5 });
-    expect((await api('PUT', `/api/loans/${edited}`, LOAN)).status).toBe(200);
-    expect((await stored(edited)).interest_rate).toBe(5);
+  });
+
+  it('keeps the rate stored when an edit sends none', async () => {
+    const id = await create({ ...LOAN, interest_rate: 3.5 });
+    for (const edit of [LOAN, { ...LOAN, interest_rate: null }]) {
+      expect((await api('PUT', `/api/loans/${id}`, edit)).status).toBe(200);
+      expect((await stored(id)).interest_rate).toBe(3.5);
+    }
   });
 });
 
