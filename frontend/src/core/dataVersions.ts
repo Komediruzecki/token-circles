@@ -26,6 +26,7 @@
  * de-duplication and scope-keyed caching are the next step, and they attach at the same seam.
  */
 import { batch, createSignal } from 'solid-js'
+import { isReadSentAsPost } from './readsSentAsPost'
 import type { Accessor, Setter } from 'solid-js'
 
 /**
@@ -125,22 +126,6 @@ const WRITES_THAT_ALSO_MOVE: readonly { path: RegExp; moves: string }[] = [
 ]
 
 /**
- * Lookups that are sent as POST because they take a body. They change nothing on the server, so
- * a successful one invalidates nothing — and it must not: each is called from a page that follows
- * the entity its URL names, so counting a price quote as a portfolio write reloaded the holdings
- * after every quote refresh. `/api/import/execute` is the import route that writes; the upload
- * and sheet routes only parse a file for the preview, and the preview's dry run of the import
- * says so in its URL — the flag the server reads is in the body, which this never sees.
- */
-const READS_SENT_AS_POST: readonly RegExp[] = [
-  /^\/api\/portfolio\/prices(?:[/?]|$)/,
-  /^\/api\/loans\/[^/?]+\/calculate(?:[/?]|$)/,
-  /^\/api\/tags\/rules\/preview(?:[/?]|$)/,
-  /^\/api\/import\/(?:upload|googlesheet)(?:[/?]|$)/,
-  /^\/api\/import\/execute\?dry_run=1(?:&|$)/,
-]
-
-/**
  * Map an app-API path to the entity names a successful write to it invalidates.
  *
  * `/api/categories`, `/api/categories/5`, `/api/categories/5/merge` and `/api/categories?x=1` all
@@ -149,7 +134,7 @@ const READS_SENT_AS_POST: readonly RegExp[] = [
  * and each name appears once however many routes through the table reach it.
  */
 export function tagsForPath(path: string): string[] {
-  if (READS_SENT_AS_POST.some((read) => read.test(path))) return []
+  if (isReadSentAsPost(path)) return []
   const match = /^\/api\/([a-zA-Z][a-zA-Z0-9-]*)/.exec(path)
   if (!match) return []
   const tags: string[] = []

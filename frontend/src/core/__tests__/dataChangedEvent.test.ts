@@ -97,6 +97,21 @@ describe('data-changed announcements', () => {
     expect(events).toEqual([])
   })
 
+  it('does not fire for an import preview, a read sent as POST', async () => {
+    // The preview's dry run writes nothing. Announced as a write, it set off a full badge
+    // evaluation, eight reads, after every preview; data invalidation already skipped it.
+    const { apiPost } = await loadApi()
+    await apiPost('/api/import/execute?dry_run=1', { rows: [] })
+    await apiPost('/api/tags/rules/preview', { pattern: 'coffee' })
+    expect(events).toEqual([])
+  })
+
+  it('still fires for the import itself', async () => {
+    const { apiPost } = await loadApi()
+    await apiPost('/api/import/execute', { rows: [] })
+    expect(events).toEqual(['/api/import/execute'])
+  })
+
   it('does not fire for a settings write, which would evaluate forever', async () => {
     // Persisting an unlock is itself a settings write. Without this exclusion, evaluating
     // achievements schedules another evaluation, and so on.

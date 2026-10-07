@@ -68,6 +68,11 @@ All notable changes to Token Circles are documented here. The format is based on
   renders beside App in the new `Root.tsx`, which `index.tsx` mounts; App has none of its own.
   `toastsOutsideBootGate.test.tsx` pins both halves, and the release suite's two-tab case
   (`frontend/tests/release/s15-two-tab-upgrade.spec.ts`) passes on a production build.
+- **An import preview no longer counts as a write for badges.** `announceDataChanged` skipped GET,
+  HEAD, OPTIONS and settings writes but not the lookups sent as POST, so each preview's dry run set
+  off a full badge evaluation (eight reads) after a request that wrote nothing. The list of those
+  lookups moved from `dataVersions.ts` into the leaf module `core/readsSentAsPost.ts`, which both
+  listeners now consult.
 - **A test that failed under load.** `goalsUndated.test.tsx` loads the local-first router in its
   `beforeAll`. Its first two tests paid for `apiFetch`'s import of the router inside a one-second
   `waitFor`, and failed every full run on a loaded machine, on the 5.16.0 base as well.

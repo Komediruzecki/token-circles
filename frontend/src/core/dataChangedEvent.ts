@@ -10,10 +10,11 @@
  * — only unlocked by accident, whenever some unrelated typed-client write happened later.
  *
  * Moving it to `apiFetch`, the one function both surfaces share, fixes that the same way
- * dataVersions did for staleness. This is a leaf module with no imports of its own precisely so
- * `apiFetch` can use it: achievementsStore imports the API client, so anything that reaches back
- * from apiFetch into achievementsStore would close a cycle.
+ * dataVersions did for staleness. Its one import is another leaf module, precisely so `apiFetch`
+ * can use it: achievementsStore imports the API client, so anything that reaches back from
+ * apiFetch into achievementsStore would close a cycle.
  */
+import { isReadSentAsPost } from './readsSentAsPost'
 
 /** Listened to by components/AchievementsHost.tsx, which debounces before evaluating. */
 export const DATA_CHANGED_EVENT = 'tc:data-changed'
@@ -27,14 +28,16 @@ const EXCLUDED_PREFIX = '/api/settings'
 /**
  * Announce a completed write. Called by `apiFetch` for both storage modes.
  *
- * Same discrimination as `invalidateForRequest`: reads change nothing, and a rejected write left
- * the server's state alone, so neither can have earned a badge.
+ * Same discrimination as `invalidateForRequest`: reads change nothing, including the lookups sent
+ * as POST (an import preview among them), and a rejected write left the server's state alone, so
+ * none of them can have earned a badge.
  */
 export function announceDataChanged(path: string, method: string | undefined, ok: boolean): void {
   if (!ok) return
   const verb = (method ?? 'GET').toUpperCase()
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return
   if (path.startsWith(EXCLUDED_PREFIX)) return
+  if (isReadSentAsPost(path)) return
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT, { detail: { endpoint: path } }))
 }
