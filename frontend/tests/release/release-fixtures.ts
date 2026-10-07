@@ -417,6 +417,18 @@ export interface Mode {
   profileNamed(name: string): Promise<Profile>
   /** Rows of one profile, read from storage (Worker or IndexedDB), never from the screen. */
   rows<T = Record<string, unknown>>(entity: Entity, profileId: number): Promise<T[]>
+  /**
+   * Arrange data a case needs, through the API the app uses: the Worker in cloud, the app's own
+   * local router in local-first. Writes land in the ACTIVE profile (`currentProfileId`), as the
+   * app's do; switch first to write elsewhere. Fails the case on a non-2xx answer.
+   */
+   
+  api<T = Record<string, unknown>>(path: string, init?: ApiInit): Promise<T>
+}
+
+export interface ApiInit {
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  body?: unknown
 }
 
 /** Every row of an IndexedDB store, read on a short-lived connection of its own. */
@@ -472,6 +484,16 @@ async function cloudMode(world: CloudWorld): Promise<Mode> {
       expect(found, `no profile named "${name}"`).toBeTruthy()
       return found as Profile
     },
+    api: async <T>(path: string, init?: ApiInit) => {
+      const current = await page.evaluate(() => Number(localStorage.getItem('currentProfileId')))
+      const client = world.apiFor({ id: current, name: '' })
+      const method = init?.method ?? 'GET'
+      if (method === 'GET') return client.get<T>(path)
+      if (method === 'POST') return client.post<T>(path, init?.body ?? {})
+      if (method === 'PUT' || method === 'PATCH') return client.put<T>(path, init?.body ?? {})
+      await client.del(path)
+      return null as T
+    },
     rows: async <T>(entity: Entity, profileId: number) => {
       const body = await world
         .apiFor({ id: profileId, name: '' })
@@ -504,6 +526,14 @@ async function localMode(world: LocalWorld): Promise<Mode> {
       const found = (await profiles()).find((p) => p.name === name)
       expect(found, `no profile named "${name}"`).toBeTruthy()
       return found as Profile
+    },
+    api: async <T>(path: string, init?: ApiInit) => {
+      const res = await callLocalApi<T>(page, path, init)
+      expect(
+        res.status < 300,
+        `${init?.method ?? 'GET'} ${path} -> ${res.status} ${JSON.stringify(res.body)}`
+      ).toBe(true)
+      return res.body
     },
     rows: async <T>(entity: Entity, profileId: number) =>
       (await localRows<T & { profile_id?: number }>(page, ENTITIES[entity].store)).filter(
