@@ -16,9 +16,10 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { bumpProfileVersion, setCurrentProfile, setPage } from '../../core/appStore'
+import { bumpProfileVersion, setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
+import { removeToast, toasts } from '../../core/toastStore'
 import type { Transaction } from '../../types/models'
 
 // Personal (1) is active; Family (2) is ticked as well. Family's list comes first, and has a
@@ -91,6 +92,10 @@ beforeEach(() => {
   __resetDataVersionsForTest()
   localStorage.setItem('currentProfileId', '1')
   localStorage.setItem('selectedProfileIds', JSON.stringify([1, 2]))
+  setProfiles([
+    { id: 1, name: 'Personal' },
+    { id: 2, name: 'Family' },
+  ] as never)
   setCurrentProfile({ id: 1, name: 'Personal' } as never)
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
@@ -115,6 +120,7 @@ afterEach(() => {
   host.remove()
   vi.unstubAllGlobals()
   localStorage.clear()
+  for (const t of toasts()) removeToast(t.id)
 })
 
 async function mountPage() {
@@ -137,6 +143,35 @@ const offered = (testId: string) =>
     .map((o) => o.value)
     .filter((v) => v !== '')
     .map(Number)
+
+const formIsOpen = () =>
+  host.querySelector<HTMLElement>('[data-test-id="tx-modal"]')!.className.includes('show')
+
+async function editCoffee() {
+  const coffee = Array.from(host.querySelectorAll('[data-test-id="transactions-row"]')).find((r) =>
+    r.textContent?.includes('Coffee')
+  )!
+  coffee.querySelector<HTMLButtonElement>('button[aria-label="Edit transaction"]')!.click()
+  await settle()
+}
+
+/** What typing does to a field: its value, then an input event. */
+function typeInto(testId: string, text: string) {
+  const field = host.querySelector<HTMLInputElement>(`[data-test-id="${testId}"]`)!
+  field.value = text
+  field.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/** A switch the way the profile menu makes one (App.tsx applyProfileSelection). */
+async function switchTo(id: number, name: string) {
+  localStorage.setItem('currentProfileId', String(id))
+  localStorage.setItem('selectedProfileIds', JSON.stringify(id === 1 ? [1, 2] : [2, 1]))
+  setCurrentProfile({ id, name } as never)
+  bumpProfileVersion()
+  await settle()
+}
+
+const toastMessages = () => toasts().map((t) => t.message)
 
 describe('the transaction form, with two profiles ticked', () => {
   it('offers a new entry the active profile’s categories, not the household’s', async () => {
@@ -166,32 +201,7 @@ describe('the transaction form, with two profiles ticked', () => {
 
   it('offers an edit the lists of the row’s own profile, with its picks shown', async () => {
     await mountPage()
-    const coffee = Array.from(host.querySelectorAll('[data-test-id="transactions-row"]')).find(
-      (r) => r.textContent?.includes('Coffee')
-    )!
-    coffee.querySelector<HTMLButtonElement>('button[aria-label="Edit transaction"]')!.click()
-    await settle()
-
-    expect(offered('tx-category')).toEqual([11])
-    expect(select('tx-category').value).toBe('11')
-    expect(offered('tx-account')).toEqual([31, 32])
-    expect(select('tx-account').value).toBe('32')
-  })
-
-  // The table opens an edit only for the active profile's own rows, so the two profiles part ways
-  // only when the active one changes while the form is open. The row stays where it is.
-  it('keeps an open edit on its row’s profile through a switch of the active profile', async () => {
-    await mountPage()
-    const coffee = Array.from(host.querySelectorAll('[data-test-id="transactions-row"]')).find(
-      (r) => r.textContent?.includes('Coffee')
-    )!
-    coffee.querySelector<HTMLButtonElement>('button[aria-label="Edit transaction"]')!.click()
-    await settle()
-    localStorage.setItem('currentProfileId', '2')
-    localStorage.setItem('selectedProfileIds', JSON.stringify([2, 1]))
-    setCurrentProfile({ id: 2, name: 'Family' } as never)
-    bumpProfileVersion()
-    await settle()
+    await editCoffee()
 
     expect(offered('tx-category')).toEqual([11])
     expect(select('tx-category').value).toBe('11')
@@ -221,5 +231,58 @@ describe('the transaction form, with two profiles ticked', () => {
       l.textContent?.trim()
     )
     expect(names).toEqual(['All Categories', 'Groceries', 'Fuel', 'Groceries', 'Salary'])
+  })
+})
+
+describe('an open form, when the active profile changes', () => {
+  // The form writes to the profile it opened for. Saved after a switch, its entry would go out as
+  // the profile switched to, which refuses the entry's category and account, and an edit of the
+  // row would answer 404. So the form closes, and says so when that lost something.
+  it('closes an edit, and names the entry’s profile when it had changes', async () => {
+    await mountPage()
+    await editCoffee()
+    typeInto('tx-description', 'Coffee beans')
+    await switchTo(2, 'Family')
+
+    expect(formIsOpen()).toBe(false)
+    expect(toastMessages()).toEqual([
+      'Your changes weren’t saved. Switch back to Personal to edit this entry.',
+    ])
+  })
+
+  it('closes a new entry, and names the profile it was for', async () => {
+    await mountPage()
+    await openAddForm()
+    typeInto('tx-amount', '12')
+    await switchTo(2, 'Family')
+
+    expect(formIsOpen()).toBe(false)
+    expect(toastMessages()).toEqual([
+      'Your new entry wasn’t saved. Switch back to Personal to add it.',
+    ])
+  })
+
+  it('closes a form nobody changed without a word', async () => {
+    await mountPage()
+    await editCoffee()
+    await switchTo(2, 'Family')
+
+    expect(formIsOpen()).toBe(false)
+    expect(toastMessages()).toEqual([])
+  })
+
+  it('stays open through a profile notice that leaves the active profile as it was', async () => {
+    // profileVersion moves on other writes too, a quick-add among them (App.tsx).
+    await mountPage()
+    await openAddForm()
+    typeInto('tx-description', 'Lunch')
+    bumpProfileVersion()
+    await settle()
+
+    expect(formIsOpen()).toBe(true)
+    expect(host.querySelector<HTMLInputElement>('[data-test-id="tx-description"]')!.value).toBe(
+      'Lunch'
+    )
+    expect(toastMessages()).toEqual([])
   })
 })

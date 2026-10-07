@@ -30,7 +30,7 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -56,6 +56,19 @@ import { rowsOfProfile } from '../core/quickEntryLists'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
+
+/**
+ * The toast for a form that a profile switch closed with changes in it: what was lost, and where
+ * to go to make them again. Without the profile's name, only what was lost.
+ */
+function unsavedOnSwitch(editing: boolean, profileName: string | undefined): string {
+  if (profileName === undefined) {
+    return editing ? 'Your changes to this entry weren’t saved.' : 'Your new entry wasn’t saved.'
+  }
+  return editing
+    ? `Your changes weren’t saved. Switch back to ${profileName} to edit this entry.`
+    : `Your new entry wasn’t saved. Switch back to ${profileName} to add it.`
+}
 
 export default function Transactions() {
   const state = useAppState()
@@ -105,17 +118,22 @@ export default function Transactions() {
   >([])
   const [categories, setCategories] = createSignal<Category[]>([])
   /**
-   * The profile the open form writes to: the edited row's own, or the active profile for a new
-   * entry. A save refuses a category or an account of any other profile ("Category does not belong
-   * to this profile"), so the form offers that profile's alone, also with two profiles ticked.
-   * Another profile's row never opens here: the table disables its controls, because an edit is
-   * scoped to the profile in X-Profile-Id.
+   * The active profile: where a write lands (X-Profile-Id), read where apiFetch reads it. Followed
+   * on every profile notice: a switch bumps profileVersion, and creating a profile makes it the
+   * active one by moving currentProfile alone.
    */
-  const [editingProfileId, setEditingProfileId] = createSignal<number | null>(null)
-  const formProfileId = createMemo(
-    // A switch moves currentProfileId and bumps profileVersion, so a new entry follows it.
-    on([editingProfileId, () => state.profileVersion], ([editing]) => editing ?? activeProfileId())
+  const activeId = createMemo(
+    on([() => state.profileVersion, () => state.currentProfile?.id], () => activeProfileId())
   )
+  /**
+   * The profile the open form writes to, set as it opens: the edited row's own, or the active
+   * profile for a new entry. A save refuses a category or an account of any other profile
+   * ("Category does not belong to this profile"), so the form offers that profile's alone, also
+   * with two profiles ticked. Another profile's row never opens here: the table disables its
+   * controls, because an edit is scoped to the profile in X-Profile-Id. And the form closes when the
+   * active profile changes (below, after handleCopyTransaction).
+   */
+  const [formProfileId, setFormProfileId] = createSignal<number>(activeId())
   const formCategories = createMemo(() => rowsOfProfile(categories(), formProfileId()))
   const formAccounts = createMemo(() => rowsOfProfile(accounts(), formProfileId()))
   // Filter categories by the selected transaction type
@@ -760,10 +778,32 @@ export default function Transactions() {
     setCurrentPage(1)
   }
 
+  /** What the form holds, to tell whether the person changed anything since it opened. */
+  const formFields = () => ({
+    type: type(),
+    date: formDate(),
+    amount: formAmount(),
+    currency: formCurrency(),
+    exchangeRate: formExchangeRate(),
+    category: formCategory(),
+    beneficiary: formBeneficiary(),
+    payor: formPayor(),
+    notes: formNotes(),
+    description: formDescription(),
+    means: formMeans(),
+    account: formAccountId(),
+    transferAccount: formTransferAccountId(),
+    amountLocal: formAmountLocal(),
+    tags: formTags().map((t) => t.id),
+    receipt: selectedFile() !== null,
+  })
+  let formAtOpen: ReturnType<typeof formFields> | null = null
+  const formHasChanges = () =>
+    formAtOpen !== null && JSON.stringify(untrack(formFields)) !== JSON.stringify(formAtOpen)
+
   // Update form values when closing modal
   createEffect(() => {
     if (!isTransactionModalOpen()) {
-      setEditingProfileId(null)
       setFormId(null)
       setFormDescription('')
       setFormAmount('')
@@ -777,7 +817,7 @@ export default function Transactions() {
   })
 
   const openTransactionModal = () => {
-    setEditingProfileId(null)
+    setFormProfileId(activeId())
     setType('expense')
     setFormId(null)
     setFormDescription('')
@@ -799,6 +839,7 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
   }
 
@@ -846,7 +887,7 @@ export default function Transactions() {
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
-    setEditingProfileId(transaction.profile_id ?? null)
+    setFormProfileId(transaction.profile_id ?? activeId())
     setType(transaction.type)
     setFormId(transaction.id.toString())
     setFormDescription(transaction.description)
@@ -867,6 +908,7 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
     // Show the already-attached receipt in the modal (async; modal opens immediately)
     if (typeof transaction.receipt_id === 'number') {
@@ -890,7 +932,7 @@ export default function Transactions() {
   // category, since they describe the kind of transaction; the copy has none of them until Save
   // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
-    setEditingProfileId(null)
+    setFormProfileId(activeId())
     setType(transaction.type)
     setFormId(null)
     setFormDescription(transaction.description)
@@ -912,8 +954,32 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
   }
+
+  /**
+   * A switch of the active profile closes the form. It writes to the profile it opened for, and
+   * saved after a switch it would go out as the profile switched to: refused for the entry's
+   * category and account, and answered 404 for an edit of the row. When that loses changes the
+   * person made, a toast says so and names the profile to go back to. `activeId` changes only when
+   * the active profile does, so the other notices that bump profileVersion (a quick-add saved, a
+   * household edited) leave an open form alone.
+   */
+  createEffect(
+    on(
+      activeId,
+      (active) => {
+        if (!isTransactionModalOpen() || active === formProfileId()) return
+        const lost = formHasChanges()
+        const editing = formId() !== null
+        const owner = state.profiles.find((p) => p.id === formProfileId())?.name
+        setTransactionModalOpen(false)
+        if (lost) toast(unsavedOnSwitch(editing, owner), 'warning')
+      },
+      { defer: true }
+    )
+  )
 
   /**
    * Adopt a `?tag=<id>` filter from the URL hash. The Tags page links here with a tag
