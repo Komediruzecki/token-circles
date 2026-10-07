@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import * as Schemas from '../schemas/models.js'
+import { apiErrorFrom } from './apiError'
 import { apiFetch } from './apiFetch'
 import { profileRequestHeaders } from './apiProfileScope'
 import { normalizeCurrencyCode } from './currencies'
@@ -78,10 +79,10 @@ export class ApiClient {
         if (response.status === 401 && method !== 'GET' && !endpoint.startsWith('/auth/')) {
           window.dispatchEvent(new Event('auth:required'))
         }
-        const errorData = await response.json().catch(() => ({
-          error: `HTTP ${response.status}`,
-        }))
-        const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
+        // The same ApiError the raw helpers throw (core/apiError.ts): the answer's words, its
+        // per-field reasons for a form to show, and its status, so a caller can tell a refusal it
+        // should act on from one it can only report (a 409 means "catch up", not "that failed").
+        const err = await apiErrorFrom(response)
 
         // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
         // A 503 is a transient "retry shortly" (e.g. D1 briefly locked by a backup export) — also
@@ -94,16 +95,11 @@ export class ApiClient {
         if (!expected) {
           logger.error(
             'API Error',
-            { status: response.status, endpoint, message: errorMsg },
+            { status: response.status, endpoint, message: err.message },
             'ApiClient'
           )
         }
-        const err = new Error(errorMsg) as Error & { __handled?: boolean; status?: number }
         err.__handled = true
-        // Carried so a caller can tell a refusal it should act on from one it can only report —
-        // a 409 means "someone else changed this, catch up", which is different advice from
-        // "that did not work".
-        err.status = response.status
         throw err
       }
 
@@ -1380,18 +1376,12 @@ function jsonHeaders(scope: ApiProfileScope, additional?: HeadersInit): Headers 
 }
 
 async function parseJsonResponse<T>(response: Response): Promise<T> {
+  // Any failure, JSON or not (a Cloudflare 502 is an HTML page), is the ApiError `request()`
+  // throws too: one error type from both client surfaces (core/apiError.ts).
+  if (!response.ok) throw await apiErrorFrom(response)
   const contentType = response.headers.get('content-type')
   if (contentType !== null && contentType.includes('application/json')) {
-    const data = (await response.json()) as T
-    if (!response.ok) {
-      const errorData = data as { error?: string } | undefined
-      const err = new Error(
-        errorData?.error || `Request failed with status ${response.status}`
-      ) as Error & { status?: number }
-      err.status = response.status
-      throw err
-    }
-    return data
+    return (await response.json()) as T
   }
   throw new Error('Invalid response format')
 }
