@@ -59,6 +59,9 @@ const LOAN = {
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
+/** Every element asked to scroll into view, and how. jsdom has no scrollIntoView of its own. */
+let scrolled: { chip: string | null; options: unknown }[] = []
+
 const settle = async () => {
   for (let i = 0; i < 6; i++) await new Promise((res) => setTimeout(res, 0))
 }
@@ -82,6 +85,10 @@ beforeEach(() => {
     dispatchEvent: () => false,
   }))
   listed = [structuredClone(LOAN)]
+  scrolled = []
+  Element.prototype.scrollIntoView = function (this: Element, options?: unknown) {
+    scrolled.push({ chip: this.getAttribute('data-test-id'), options })
+  }
   host = document.createElement('div')
   document.body.appendChild(host)
 })
@@ -215,6 +222,54 @@ describe('Compare', () => {
     expect(text(root, 'loans-compare-done')).toBe(
       'This loan is paid off, so there is nothing left to compare.'
     )
+  })
+})
+
+describe('the picked what-if on a phone', () => {
+  // On a phone the chips scroll sideways and a reload starts them at the left end, where the last
+  // one, Rate change, is out of sight. jsdom lays nothing out, so this checks what is asked of the
+  // browser; tests/release/s16-loans.spec.ts measures the chip inside the strip at 390x844.
+  const INTO_VIEW = { block: 'nearest', inline: 'center' }
+
+  it('is brought into view when the page opens on it, at once', async () => {
+    await mount('#loans/1/compare?b=rate-change.1')
+    expect(scrolled).toEqual([
+      { chip: 'loans-template-rate-change', options: { ...INTO_VIEW, behavior: 'auto' } },
+    ])
+  })
+
+  it('glides to a new pick, and stays put for another preset of the same one', async () => {
+    const root = await mount(`#loans/1/compare?b=${ONE_OFF}.shorten`)
+    await click(root, 'loans-template-rate-change')
+    expect(scrolled.slice(1)).toEqual([
+      { chip: 'loans-template-rate-change', options: { ...INTO_VIEW, behavior: 'smooth' } },
+    ])
+
+    const points = el(root, 'loans-preset-points') as HTMLSelectElement
+    points.value = [...points.options].map((o) => o.value).find((v) => v !== points.value)!
+    points.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    expect(query().get('b')).not.toBe('rate-change.1')
+    expect(scrolled).toHaveLength(2)
+  })
+
+  it('jumps instead of gliding when motion is turned down', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    }))
+    const root = await mount(`#loans/1/compare?b=${ONE_OFF}.shorten`)
+    await click(root, 'loans-template-rate-change')
+    expect(scrolled.map((s) => s.options)).toEqual([
+      { ...INTO_VIEW, behavior: 'auto' },
+      { ...INTO_VIEW, behavior: 'auto' },
+    ])
   })
 })
 

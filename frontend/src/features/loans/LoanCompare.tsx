@@ -7,7 +7,7 @@
  * Nothing here is stored: the picks live in the address (decision R7), so the page only reports
  * them upward and renders whatever the address says.
  */
-import { createMemo, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import {
   applyWhatIf,
   buildWhatIf,
@@ -286,6 +286,26 @@ export default function LoanCompare(props: Props) {
     props.onPick({ choice: option.first, mode }, props.a)
   }
 
+  // On a phone the chips scroll sideways and the strip starts at its left end, so a pick past the
+  // edge, Rate change after a reload, would sit out of sight. The picked chip is brought into view
+  // when the strip appears and whenever another template is picked; another preset of the same
+  // template leaves the strip where it is. At once when the strip appears or motion is turned
+  // down, gliding otherwise.
+  const [strip, setStrip] = createSignal<HTMLDivElement>()
+  const pickedTemplate = createMemo(() => props.b?.choice.template)
+  createEffect(
+    on([strip, pickedTemplate], ([el], before) => {
+      const chip = el?.querySelector<HTMLElement>('[aria-pressed="true"]')
+      const glide =
+        before?.[0] === el && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      chip?.scrollIntoView({
+        block: 'nearest',
+        inline: 'center',
+        behavior: glide ? 'smooth' : 'auto',
+      })
+    })
+  )
+
   const setField = (key: string, value: number) => {
     if (!props.b) return
     props.onPick(
@@ -365,7 +385,13 @@ export default function LoanCompare(props: Props) {
           </p>
         }
       >
-        <div class={styles.chips} role="group" aria-label="What if" data-test-id="loans-templates">
+        <div
+          ref={setStrip}
+          class={styles.chips}
+          role="group"
+          aria-label="What if"
+          data-test-id="loans-templates"
+        >
           <For each={props.options}>
             {(option) => (
               <button

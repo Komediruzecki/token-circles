@@ -2,7 +2,8 @@
  * Release scope 5.17.0, section 16: the Loans page after its relayout (plan 03 of the brand
  * redesign). A loan added through the form; What if on it; each mode of an extra payment; both
  * modes side by side; the comparison surviving a reload, because it lives in the address; Use as
- * A; and an extra payment saved on Extra payments moving A. Every case runs in both storage modes.
+ * A; an extra payment saved on Extra payments moving A; and on a phone, the picked what-if still in
+ * view after a reload. Every case runs in both storage modes.
  *
  * The loan is plan 03's example: 100,000 at 5 % over 120 months, first payment due on the first
  * of the month after next, so the next payment is the first one whatever today is. In payment
@@ -16,6 +17,19 @@ import { both, expect } from './release-fixtures'
 import { goPage } from './release-helpers'
 import type { Locator, Page } from '@playwright/test'
 import type { Mode } from './release-fixtures'
+
+type Box = { x: number; y: number; width: number; height: number }
+
+/** Whether `inner` lies wholly inside `outer`. */
+function inside(inner: Box | null, outer: Box | null): boolean {
+  if (!inner || !outer) return false
+  return (
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
+  )
+}
 
 /** The first of the month after next, as YYYY-MM-DD: always ahead of today, in any zone. */
 function startDate(): string {
@@ -209,6 +223,27 @@ for (const [pass, test] of both) {
       await expect(page.getByTestId('loans-compare-side-a')).toContainText(
         'With your saved extra payment'
       )
+    })
+
+    test('16.5 on a phone, a reload keeps the picked what-if in view @release', async ({ m }) => {
+      const { page } = m
+      const name = `zz-phone${m.suffix}`
+      await arrangeLoan(m, name)
+      await loanCard(page, name).getByTestId('loans-item-what-if').click()
+      // Rate change is the last chip. At 390 px the chips scroll sideways, and a reload starts
+      // them at the left end, where it is out of sight.
+      await page.getByTestId('loans-template-rate-change').click()
+      await expect.poll(() => pick(page, 'b')).toMatch(/^rate-change\./)
+      const route = (await page.evaluate(() => window.location.hash)).slice(1)
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await reloadOn(page, route, 'loans-templates')
+      const chip = page.getByTestId('loans-template-rate-change')
+      await expect(chip).toHaveAttribute('aria-pressed', 'true')
+      const strip = page.getByTestId('loans-templates')
+      await expect
+        .poll(async () => inside(await chip.boundingBox(), await strip.boundingBox()))
+        .toBe(true)
     })
   })
 }
