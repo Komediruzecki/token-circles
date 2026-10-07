@@ -175,8 +175,10 @@ export async function tagFilterOffers(page: Page): Promise<string[]> {
     .locator('xpath=..')
   await expect(list).toBeVisible()
   const names = (await list.locator('label').allInnerTexts()).map((t) => t.trim())
-  // Close it again: the same button toggles.
-  await unfilteredTagButton(page).click()
+  // Close it again, as a click outside does. The open dropdown lays a transparent backdrop over
+  // the whole page (FilterBar's `dropdownBackdrop`), and that is what such a click lands on.
+  await page.locator('[class*="dropdownBackdrop"]').dispatchEvent('click')
+  await expect(list).toBeHidden()
   return names.filter((n) => n !== 'All Tags')
 }
 
