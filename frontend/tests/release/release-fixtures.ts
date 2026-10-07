@@ -273,8 +273,16 @@ export async function callLocalApi<T>(
  * The sign-in screen, then "Continue with no account": the path a new visitor takes. The app
  * reloads into local-first mode and seeds the demo. Ready when the header names a demo profile
  * and the dashboard is up.
+ *
+ * A deployed build defaults a new browser to the sign-in screen (VITE_DEFAULT_STORAGE=sqlite).
+ * The vite dev server has no such default and would drop a new browser straight into local-first,
+ * skipping the button this case is about, so the deployed default is set first.
  */
 export async function enterLocalFirst(page: Page): Promise<void> {
+  await page.goto(`${E2E_BASE}/robots.txt`)
+  await page.evaluate(() => {
+    localStorage.setItem('finance_storage_mode', 'self-hosted')
+  })
   await page.goto(`${E2E_BASE}/`, { waitUntil: 'domcontentloaded' })
   await page.getByTestId('try-no-account').click({ timeout: 60_000 })
   await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Example', {
