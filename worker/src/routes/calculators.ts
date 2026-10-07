@@ -5,6 +5,7 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { monthlyRate as monthlyRateFor } from '../../../shared/retirement';
+import { annuityPayment } from '../../../shared/loanSchedule';
 import * as db from '../db';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
@@ -81,14 +82,6 @@ calculatorsRoutes.post('/api/calculator/compound-interest', requireAuth, async (
   });
 });
 
-// Monthly payment for a principal at an annual rate over a number of months.
-// Ported verbatim from backend/models/loanCalculator.js (calcMonthlyPayment).
-function calcMonthlyPayment(principal: number, annualRate: number, months: number): number {
-  if (annualRate === 0) return principal / months;
-  const r = annualRate / 100 / 12;
-  return (principal * (r * Math.pow(1 + r, months))) / (Math.pow(1 + r, months) - 1);
-}
-
 // ── Loan Payment Calculator ──────────────────────────────────────────
 calculatorsRoutes.get('/api/calculators/loans', requireAuth, async (c) => {
   const principal = parseFloat(c.req.query('principal') ?? '');
@@ -101,7 +94,7 @@ calculatorsRoutes.get('/api/calculators/loans', requireAuth, async (c) => {
   if (isNaN(term) || term < 1 || !Number.isInteger(term))
     throw new HttpError(400, 'Term must be a positive integer');
 
-  const monthlyPayment = calcMonthlyPayment(principal, rate, term);
+  const monthlyPayment = annuityPayment(principal, rate, term);
   const totalPayment = monthlyPayment * term;
   const totalInterest = totalPayment - principal;
 
@@ -138,7 +131,7 @@ calculatorsRoutes.get('/api/calculators/mortgages', requireAuth, async (c) => {
 
   const loanAmount = principal - effectiveDown;
   const termMonths = term;
-  const monthlyPayment = calcMonthlyPayment(loanAmount, rate, termMonths);
+  const monthlyPayment = annuityPayment(loanAmount, rate, termMonths);
 
   // PMI: typically 0.5-1% of loan annually if down payment < 20%
   let pmi = 0;
@@ -314,11 +307,7 @@ calculatorsRoutes.get('/api/calculators/loans/amortization', requireAuth, async 
 
   const monthlyRate = rate / 100 / 12;
   const termMonths = term; // term is already in months for amortization
-  const monthlyPayment =
-    rate === 0
-      ? principal / termMonths
-      : (principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths))) /
-        (Math.pow(1 + monthlyRate, termMonths) - 1);
+  const monthlyPayment = annuityPayment(principal, rate, termMonths);
 
   let balance = principal;
   const schedule: Array<Record<string, unknown>> = [];
