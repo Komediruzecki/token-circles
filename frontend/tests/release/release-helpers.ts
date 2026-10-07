@@ -81,16 +81,27 @@ export async function clickOutsideProfileMenu(page: Page): Promise<void> {
   await expect.poll(() => profileMenuIsOpen(page), { message: 'profile menu closes' }).toBe(false)
 }
 
+/**
+ * Click something inside the profile menu. Opening and clicking are retried as a pair: under
+ * load, an async profile-list refresh after a switch can re-render the menu shut between the two,
+ * and the click then lands on a clipped row. Playwright refuses such a click (the hit test fails),
+ * so a retry never double-clicks.
+ */
+export async function clickInProfileMenu(page: Page, target: Locator): Promise<void> {
+  await expect(async () => {
+    await openProfileMenu(page)
+    await target.click({ timeout: 3000 })
+  }).toPass({ timeout: 30_000 })
+}
+
 /** Make a profile the primary one: click its name in the menu. */
 export async function switchProfile(page: Page, id: number): Promise<void> {
-  await openProfileMenu(page)
-  await profileRow(page, id).locator('span').first().click()
+  await clickInProfileMenu(page, profileRow(page, id).locator('span').first())
 }
 
 /** Tick or untick a profile for the household view, from the menu's checkbox. */
 export async function tickProfile(page: Page, id: number): Promise<void> {
-  await openProfileMenu(page)
-  await profileRow(page, id).locator('input[type="checkbox"]').click()
+  await clickInProfileMenu(page, profileRow(page, id).locator('input[type="checkbox"]'))
 }
 
 export async function isTicked(page: Page, id: number): Promise<boolean> {
@@ -104,8 +115,7 @@ export async function createProfileFromSidebar(
   name: string,
   submit: 'button' | 'enter' = 'button'
 ): Promise<void> {
-  await openProfileMenu(page)
-  await page.getByTestId('profile-create-item').click()
+  await clickInProfileMenu(page, page.getByTestId('profile-create-item'))
   await expect(page.getByTestId('profile-modal')).toBeVisible()
   const input = page.getByTestId('profile-name-input')
   await input.fill(name)

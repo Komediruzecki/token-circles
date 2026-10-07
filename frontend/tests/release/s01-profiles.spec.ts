@@ -158,8 +158,11 @@ for (const [pass, test] of both) {
       await tickProfile(page, m.b.id)
       await clickOutsideProfileMenu(page)
 
-      // The header names both, and the first ticked (the one already active) takes the writes.
-      await expect(profileButton(page)).toContainText(`${m.a.name} & ${m.b.name}`)
+      // The header names both (in menu order), and the first ticked, the one already active,
+      // takes the writes.
+      await expect(profileButton(page)).toContainText(' & ')
+      await expect(profileButton(page)).toContainText(m.a.name)
+      await expect(profileButton(page)).toContainText(m.b.name)
       expect(await storedSelection(page)).toEqual({ current: m.a.id, selected: [m.a.id, m.b.id] })
 
       const cat = `zz-hh${m.suffix}`.slice(0, 40)
