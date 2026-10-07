@@ -38,6 +38,29 @@ function toApiPath(url: string): string | null {
 }
 
 /**
+ * The IANA zone the browser keeps its calendar in ("Europe/Zagreb"), sent to the Worker as
+ * X-Time-Zone on every app-API request. The Worker's clock is UTC, so this is how it knows which
+ * day "today" is for the person asking: what is due, what this month is, which date a write
+ * without one gets (worker/src/local-date.ts). Undefined when the browser cannot say; the Worker
+ * then uses the UTC calendar.
+ */
+function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The caller's headers, in whatever shape they came, plus the person's zone unless one is set. */
+function withTimeZone(headers: HeadersInit | undefined): Headers {
+  const merged = new Headers(headers)
+  const zone = browserTimeZone()
+  if (zone && !merged.has('X-Time-Zone')) merged.set('X-Time-Zone', zone)
+  return merged
+}
+
+/**
  * Everything that must happen after a completed app-API request, in one place so the two storage
  * branches below cannot drift apart.
  */
@@ -66,6 +89,7 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
     if (apiPath) {
       const response = await fetch(`${API_ORIGIN}${apiPath}`, {
         ...init,
+        headers: withTimeZone(init?.headers),
         // Pin credentials last so a caller's own `init.credentials` can't override it
         // and silently drop the cross-origin session cookie.
         credentials: 'include',

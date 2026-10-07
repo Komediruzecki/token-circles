@@ -1,6 +1,7 @@
 /**
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
+import { localMonth } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -408,7 +409,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
 
 export async function budgetsZeroBased(query: URLSearchParams): Promise<Response> {
   try {
-    const month = query.get('month') || new Date().toISOString().slice(0, 7)
+    const month = query.get('month') || localMonth()
     const startOfMonth = `${month}-01`
     const endOfMonth = endOfNextMonth(startOfMonth)
 
@@ -501,7 +502,7 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
   try {
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
-    const month = query.get('month') || new Date().toISOString().slice(0, 7)
+    const month = query.get('month') || localMonth()
     const startOfMonth = `${month}-01`
     const endOfMonth = endOfNextMonth(startOfMonth)
 
@@ -624,7 +625,7 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
       return json({ error: 'Category ID and amount are required' }, 400)
     }
 
-    const month = query.get('month') || new Date().toISOString().slice(0, 7)
+    const month = query.get('month') || localMonth()
     const start_date = `${month}-01`
     const budgetPeriod = (period as string) || 'monthly'
 
@@ -931,7 +932,7 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
 
 export async function budgetsForecast(query: URLSearchParams): Promise<Response> {
   try {
-    const month = query.get('month') || new Date().toISOString().slice(0, 7)
+    const month = query.get('month') || localMonth()
 
     // Multi-profile (household) selection, mirroring budgetsList.
     const budgets = (await getAllForProfiles('budgets'))
@@ -1003,7 +1004,9 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
     for (let i = 1; i <= 6; i++) {
       const date = new Date(now.getFullYear(), now.getMonth() + i, 1)
       forecastMonths.push({
-        month: date.toISOString().slice(0, 7),
+        // Local midnight on the 1st, so the local month: toISOString() is the UTC one, which east
+        // of UTC is the month before and named this month as the first month ahead.
+        month: localMonth(date),
         label: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
       })
     }
@@ -1053,7 +1056,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
     }
 
     const historyMonths = Object.keys(histMap)
-      .filter((mo) => mo <= now.toISOString().slice(0, 7))
+      .filter((mo) => mo <= localMonth(now))
       .sort()
       .reverse()
       .slice(0, 6)

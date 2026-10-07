@@ -2,7 +2,7 @@
  * Recurring handlers — IndexedDB-backed implementations
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
-import { isoDate } from '../../../utils/period'
+import { isoDate, localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
@@ -141,10 +141,9 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   )
   if (invariantError) return json({ error: invariantError }, 400)
 
-  // Local-calendar today (isoDate uses getFullYear/Month/Date), NOT toISOString which
-  // shifts to UTC and can roll the date to the previous day/month near midnight for a
-  // user in a negative-offset timezone (audit M-02).
-  const todayStr = isoDate(new Date())
+  // Today on the person's calendar, NOT toISOString, which is the UTC date and is a day off near
+  // midnight in every zone but UTC (audit M-02).
+  const todayStr = localToday()
   // Idempotency guard — mirrors the worker: once next_date is in the future the
   // current period is already populated, so a repeat call must not create another
   // transaction (and, now that balances move, must not double-count).

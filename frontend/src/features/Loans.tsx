@@ -31,7 +31,7 @@
  * Manages loans, tracks payments, and calculates remaining balance
  */
 import { createMemo, createSignal, For } from 'solid-js'
-import { loanStatus, todayUtc } from '../../../shared/loanSchedule'
+import { loanStatus } from '../../../shared/loanSchedule'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
@@ -45,6 +45,7 @@ import { paletteColor } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { localToday } from '../utils/period'
 import styles from './LoansPage.module.css'
 import type { LoanDetail, LoanPrepayment } from '../types/models'
 
@@ -148,7 +149,7 @@ export default function Loans() {
   const loadLoans = async () => {
     try {
       const data = await apiHouseholdGet<ListedLoan[]>('/api/loans')
-      const today = todayUtc()
+      const today = localToday()
       // Transform Loan data to include missing fields
       setLoans(
         data.map((l) => {

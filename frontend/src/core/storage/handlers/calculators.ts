@@ -9,10 +9,10 @@ import { projectRetirement } from '../../../../../shared/retirement'
 import {
   buildFacts,
   deriveSettings,
-  monthOf,
   normalizeSettings,
   settingsToInput,
 } from '../../../../../shared/retirementSettings'
+import { localMonth, localToday } from '../../../utils/period'
 import { getDB } from '../idb'
 import { editedRetirementGoal, retirementGoalFields } from '../retirementGoalRows'
 import { adapter, currentProfileRecord, getAmount, idParam, json, notFound, ok } from './helpers'
@@ -97,9 +97,10 @@ async function loadRetirementFacts() {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
 
+  // Twelve months back from today on the person's calendar, which in the browser is the local one.
   const since = new Date()
-  since.setUTCMonth(since.getUTCMonth() - FACT_WINDOW_MONTHS)
-  const sinceStr = since.toISOString().split('T')[0]
+  since.setMonth(since.getMonth() - FACT_WINDOW_MONTHS)
+  const sinceStr = localToday(since)
 
   const accounts = await db.getAllFromIndex('accounts', 'by_profile', pid)
   const txns = await db.getAllFromIndex('transactions', 'by_profile', pid)
@@ -234,7 +235,7 @@ export async function retirementCalculate(body: unknown): Promise<Response> {
       return json({ error: 'Retirement age must be greater than current age' }, 400)
     }
 
-    const today = monthOf(new Date())
+    const today = localMonth()
     const accumulate = (returnPct: number) =>
       projectRetirement({
         startMonth: today,
@@ -336,7 +337,7 @@ export async function emergencyFund(): Promise<Response> {
 
     const twelveMonthsAgo = new Date()
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-    const dateStr = twelveMonthsAgo.toISOString().split('T')[0]
+    const dateStr = localToday(twelveMonthsAgo)
 
     const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
       (t: Record<string, unknown>) => t.type === 'expense' && (t.date as string) >= dateStr
@@ -400,7 +401,7 @@ export async function emergencyFund(): Promise<Response> {
 export async function retirementProjection(): Promise<Response> {
   try {
     const [saved, facts] = await Promise.all([loadSavedRetirementSettings(), loadRetirementFacts()])
-    const today = monthOf(new Date())
+    const today = localMonth()
     const { settings, filled, missing } = deriveSettings(saved, facts, today)
     const projection = projectRetirement(settingsToInput(settings, today))
     return json({ settings, filled, missing, projection })
@@ -413,7 +414,7 @@ export async function retirementProjection(): Promise<Response> {
 export async function retirementSettingsGet(): Promise<Response> {
   try {
     const [saved, facts] = await Promise.all([loadSavedRetirementSettings(), loadRetirementFacts()])
-    const today = monthOf(new Date())
+    const today = localMonth()
     const { settings, filled, missing } = deriveSettings(saved, facts, today)
     return json({ settings, facts, filled, missing, startMonth: today })
   } catch (err) {
@@ -436,7 +437,7 @@ export async function retirementSettingsUpdate(body: unknown): Promise<Response>
     // back empty by construction. `missing` does not: it reports what the user's data
     // cannot answer at all, which a save does not change.
     const facts = await loadRetirementFacts()
-    const derived = deriveSettings(settings, facts, monthOf(new Date()))
+    const derived = deriveSettings(settings, facts, localMonth())
     return json({
       settings: derived.settings,
       filled: derived.filled,

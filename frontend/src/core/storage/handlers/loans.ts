@@ -1,7 +1,8 @@
 /**
  * Loans handlers — IndexedDB-backed implementations
  */
-import { calculateLoan, loanStatus, todayUtc } from '../../../../../shared/loanSchedule'
+import { calculateLoan, loanStatus } from '../../../../../shared/loanSchedule'
+import { localToday } from '../../../utils/period'
 import { getDB } from '../idb'
 import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 import { normalizeLoan } from './normalize'
@@ -10,11 +11,12 @@ import type { LoanInput } from '../../../../../shared/loanSchedule'
 /**
  * Every loan of the selected profiles, with its prepayment rollups and where it stands today:
  * remaining_balance, monthly_payment and payoff_date, from the shared engine, as the Worker's list
- * returns them. "Today" is the UTC date in both runtimes.
+ * returns them. "Today" is the person's date in both runtimes: the browser's local one here, the
+ * zone the app sends in the Worker (worker/src/local-date.ts).
  */
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
-  const today = todayUtc()
+  const today = localToday()
   const enriched = loans.map((l) => {
     const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
