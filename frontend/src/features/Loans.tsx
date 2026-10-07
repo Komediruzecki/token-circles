@@ -31,6 +31,7 @@
  * Manages loans, tracks payments, and calculates remaining balance
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { loanStatus, todayUtc } from '../../../shared/loanSchedule'
 import Badge from '../components/Badge'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
@@ -57,9 +58,47 @@ interface Loan {
   status: 'active' | 'paid' | 'deferred'
   remaining_balance: number
   total_paid: number
-  monthly_payment?: number
-  next_payment_date?: string
+  monthly_payment: number
+  next_payment_date: string | null
   profile_id: number
+}
+
+/** A row of GET /api/loans, as either storage mode returns it. */
+interface ListedLoan {
+  id: number
+  name: string
+  principal: number
+  interest_rate: number
+  term_months: number
+  start_date: string
+  profile_id?: number
+  /** Local-first rows carry these; the Worker's list does not. */
+  rate_periods?: Array<{ rate: number; start_month: number; end_month?: number | null }>
+  prepayments?: Array<{ month: number; amount: number }>
+  /** Worked out by the list with the shared engine. Missing only from a server older than that. */
+  remaining_balance?: number
+  monthly_payment?: number
+  next_payment_date?: string | null
+}
+
+/**
+ * What is owed today and the next payment, its amount and date, as the list computed them. A
+ * server that predates those fields gets the same engine run here, on what its row carries: the
+ * loan's own rate, plus rate periods and extra payments where the row has them.
+ */
+function standing(loan: ListedLoan, today: string) {
+  if (
+    typeof loan.remaining_balance === 'number' &&
+    typeof loan.monthly_payment === 'number' &&
+    loan.next_payment_date !== undefined
+  ) {
+    return {
+      remaining_balance: loan.remaining_balance,
+      monthly_payment: loan.monthly_payment,
+      next_payment_date: loan.next_payment_date,
+    }
+  }
+  return loanStatus(loan, today)
 }
 
 export default function Loans() {
@@ -108,21 +147,29 @@ export default function Loans() {
   // Load loans
   const loadLoans = async () => {
     try {
-      const data = await apiHouseholdGet<any[]>('/api/loans')
+      const data = await apiHouseholdGet<ListedLoan[]>('/api/loans')
+      const today = todayUtc()
       // Transform Loan data to include missing fields
       setLoans(
-        data.map((l) => ({
-          id: l.id,
-          name: l.name,
-          principal: l.principal,
-          interest_rate: l.interest_rate,
-          term_months: l.term_months,
-          start_date: l.start_date,
-          profile_id: l.profile_id || 1,
-          status: 'active',
-          remaining_balance: l.principal,
-          total_paid: 0,
-        }))
+        data.map((l) => {
+          const { remaining_balance, monthly_payment, next_payment_date } = standing(l, today)
+          return {
+            id: l.id,
+            name: l.name,
+            principal: l.principal,
+            interest_rate: l.interest_rate,
+            term_months: l.term_months,
+            start_date: l.start_date,
+            profile_id: l.profile_id || 1,
+            // Not stored (loans has no status column): a loan with nothing left to pay is paid off.
+            status: remaining_balance <= 0 ? 'paid' : 'active',
+            remaining_balance,
+            monthly_payment,
+            next_payment_date,
+            // The principal repaid so far, which is what the "% paid" beside it measures.
+            total_paid: l.principal - remaining_balance,
+          }
+        })
       )
     } catch (err) {
       console.error('Failed to load loans:', err)
@@ -228,21 +275,6 @@ export default function Loans() {
     }
   }
 
-  // Calculate estimated monthly payment
-  const calculateMonthlyPayment = (
-    principal: number,
-    interestRate: number,
-    termMonths: number
-  ): number => {
-    if (!termMonths || termMonths <= 0) return 0
-    if (interestRate === 0) return principal / termMonths
-    const monthlyRate = interestRate / 100 / 12
-    return (
-      (principal * monthlyRate * Math.pow(1 + monthlyRate, termMonths)) /
-      (Math.pow(1 + monthlyRate, termMonths) - 1)
-    )
-  }
-
   // Open edit modal
   const editLoan = async (loan: Loan) => {
     setEditingLoan(loan)
@@ -269,17 +301,9 @@ export default function Loans() {
     setShowAddModal(true)
   }
 
-  // Calculate remaining balance
-  const calculateRemaining = (loan: Loan): number => {
-    const monthly =
-      loan.monthly_payment ||
-      calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
-    const monthsPassed = Math.floor(
-      (new Date().getTime() - new Date(loan.start_date).getTime()) / (1000 * 60 * 60 * 24 * 30)
-    )
-    const paidMonths = Math.min(monthsPassed, loan.term_months)
-    return Math.max(0, loan.principal - paidMonths * monthly)
-  }
+  // Remaining balance: the schedule's balance after every payment due by today, interest, extra
+  // payments and rate periods included, as the list worked it out.
+  const calculateRemaining = (loan: Loan): number => loan.remaining_balance
 
   // Progress percentage
   const getProgress = (loan: Loan): number => {
@@ -287,13 +311,24 @@ export default function Loans() {
     return Math.min(100, Math.round(((loan.principal - remaining) / loan.principal) * 100))
   }
 
-  // Format date
+  // A YYYY-MM-DD due date as written, e.g. "Jan 1, 2026". A bare date is midnight UTC, so it is
+  // formatted in UTC: in the local zone it would read a day early anywhere west of Greenwich.
   const formatDate = (dateStr: string): string => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const date = new Date(dateStr)
+    if (Number.isNaN(date.getTime())) return '-'
+    return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+      timeZone: 'UTC',
     })
+  }
+
+  // The next payment's date. None once the loan is paid off; Not set when the loan has no dated
+  // schedule, which is a loan saved without a start date that can be read.
+  const nextPaymentLabel = (loan: Loan): string => {
+    if (loan.next_payment_date) return formatDate(loan.next_payment_date)
+    return loan.status === 'paid' ? 'None' : 'Not set'
   }
 
   // Format currency
@@ -409,9 +444,7 @@ export default function Loans() {
             <For each={loans()}>
               {(loan) => {
                 const remaining = calculateRemaining(loan)
-                const monthly =
-                  loan.monthly_payment ||
-                  calculateMonthlyPayment(loan.principal, loan.interest_rate, loan.term_months)
+                const monthly = loan.monthly_payment
                 const progress = getProgress(loan)
 
                 return (
@@ -545,8 +578,8 @@ export default function Loans() {
                       </div>
                       <div class={styles.detailRow}>
                         <span class={styles.detailLabel}>Next Payment</span>
-                        <span class={styles.detailValue}>
-                          {loan.next_payment_date ? formatDate(loan.next_payment_date) : 'Not set'}
+                        <span class={styles.detailValue} data-test-id="loans-item-next-payment">
+                          {nextPaymentLabel(loan)}
                         </span>
                       </div>
                     </div>

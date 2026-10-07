@@ -568,7 +568,7 @@ const routes: RouteDef[] = [
     handler: dispatch({ GET: (ctx) => h.accountsReconciliationSummary(ctx.params) }),
   },
 
-  // Loans: calculate (ported from backend loanCalculator)
+  // Loans: calculate (shared/loanSchedule.ts, the engine the Worker route runs too)
   {
     pattern: /^\/loans\/(\d+)\/calculate$/,
     methods: ['POST'],

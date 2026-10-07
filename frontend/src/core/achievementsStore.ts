@@ -178,6 +178,7 @@ async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
     .filter((d): d is NonNullable<typeof d> => d !== null)
     .map((d) => ({
       principal: d.principal,
+      interest_rate: d.interest_rate,
       start_date: d.start_date,
       term_months: d.term_months,
       rate_periods: d.rate_periods ?? [],

@@ -269,6 +269,7 @@ describe('badges are per profile', () => {
       id,
       profile_id,
       principal: 12000,
+      interest_rate: 5,
       start_date: '2020-01-01',
       term_months: 24,
       rate_periods: [{ rate: 5, start_month: 1, end_month: null }],
@@ -287,6 +288,29 @@ describe('badges are per profile', () => {
     expect(apiMock.getLoan).toHaveBeenCalledTimes(1)
     expect(apiMock.getLoan).toHaveBeenCalledWith(8)
     expect(unlocks().map((u) => u.id)).toContain('debt-free')
+  })
+
+  it("hands each loan's own rate to the badge, for the months no rate period covers", async () => {
+    householdOfTwoAndThree()
+    // 12,000 at 24 % over 60 months, no rate periods, 6,000 extra in month 6: paid off 24 months
+    // after the first payment at its own rate. Charged 0 %, which is what leaving the rate out
+    // did, it runs 29. Started 25 months ago, it was paid off last month, or 4 months from now.
+    calls.loans = [
+      {
+        id: 9,
+        profile_id: 2,
+        principal: 12000,
+        interest_rate: 24,
+        start_date: `${monthsAgo(25)}-01`,
+        term_months: 60,
+        rate_periods: [],
+        prepayments: [{ month: 6, amount: 6000 }],
+      },
+    ]
+
+    await refreshAchievements()
+
+    expect(unlocks().find((u) => u.id === 'debt-free')?.earnedOn).toBe(`${monthsAgo(1)}-01`)
   })
 
   it("does not count another profile's imports", async () => {

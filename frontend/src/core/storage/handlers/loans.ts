@@ -1,18 +1,30 @@
 /**
  * Loans handlers — IndexedDB-backed implementations
  */
-import { calculateSchedule, getSummary } from '../../loanCalculator'
+import { calculateLoan, loanStatus, todayUtc } from '../../../../../shared/loanSchedule'
 import { getDB } from '../idb'
 import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
 import { normalizeLoan } from './normalize'
+import type { LoanInput } from '../../../../../shared/loanSchedule'
 
+/**
+ * Every loan of the selected profiles, with its prepayment rollups and where it stands today:
+ * remaining_balance, monthly_payment and payoff_date, from the shared engine, as the Worker's list
+ * returns them. "Today" is the UTC date in both runtimes.
+ */
 export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
+  const today = todayUtc()
   const enriched = loans.map((l) => {
     const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
     const prepayment_count = prepayments?.length || 0
-    return { ...normalizeLoan(l), total_prepaid, prepayment_count }
+    return {
+      ...normalizeLoan(l),
+      total_prepaid,
+      prepayment_count,
+      ...loanStatus(loanInput(l as Record<string, any>), today),
+    }
   })
   return json(enriched)
 }
@@ -144,57 +156,28 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
   return notFound('Prepayment')
 }
 
-// Loan amortization calculate (ported from backend/models/loanCalculator.js)
+/**
+ * A stored loan as the shared engine reads it. The record carries its own rate periods and extra
+ * payments, and its interest_rate is the base rate the engine charges where no period applies.
+ */
+function loanInput(loan: Record<string, any>): LoanInput {
+  return {
+    principal: loan.principal,
+    interest_rate: loan.interest_rate,
+    start_date: loan.start_date,
+    term_months: loan.term_months,
+    rate_periods: loan.rate_periods ?? [],
+    prepayments: loan.prepayments ?? [],
+  }
+}
+
+// Loan amortization: shared/loanSchedule.ts, the same engine the Worker's route calls, so both
+// modes return the same schedule and summary for the same loan.
 export async function loansCalculate(params: Record<string, string>): Promise<Response> {
   try {
     const loan = await currentProfileRecord('loans', idParam(params))
     if (!loan) return notFound('Loan')
-
-    const ratePeriods = (loan.rate_periods || []) as Array<{
-      rate: number
-      start_month: number
-      end_month?: number | null
-    }>
-    const prepayments = (loan.prepayments || []) as Array<{
-      month: number
-      amount: number
-      note?: string
-    }>
-
-    // Prepend the loan's initial rate as the first rate period
-    const initialRatePeriod = {
-      rate: (loan.interest_rate as number) || 0,
-      start_month: 1,
-      end_month: null as number | null,
-    }
-    const allRatePeriods = [initialRatePeriod, ...ratePeriods]
-
-    const scheduleWithPrepayments = calculateSchedule(
-      loan.principal as number,
-      loan.start_date as string,
-      loan.term_months as number,
-      allRatePeriods,
-      prepayments
-    )
-
-    const scheduleNoPrepayments = calculateSchedule(
-      loan.principal as number,
-      loan.start_date as string,
-      loan.term_months as number,
-      allRatePeriods,
-      []
-    )
-
-    const summary = getSummary(scheduleWithPrepayments, scheduleNoPrepayments)
-
-    return json({
-      schedule: scheduleWithPrepayments,
-      summary,
-      comparison: {
-        withPrepayments: summary,
-        withoutPrepayments: getSummary(scheduleNoPrepayments, scheduleNoPrepayments),
-      },
-    })
+    return json(calculateLoan(loanInput(loan)))
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

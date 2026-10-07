@@ -3,6 +3,7 @@
  * Displays detailed amortization schedule for a loan
  */
 import { createEffect, createSignal, For, on, onMount } from 'solid-js'
+import { addCalendarMonths } from '../../../shared/loanSchedule'
 import Chart from '../components/Chart'
 import { api as _api, apiPost, formatCurrency, showToast } from '../core/api'
 import { theme } from '../core/theme'
@@ -145,13 +146,13 @@ export default function LoanAmortizationTable(props: Props) {
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <For each={props.loan.prepayments}>
                     {(p) => {
-                      const loanStart = new Date(props.loan.start_date)
-                      const prepayDate = new Date(loanStart)
-                      prepayDate.setMonth(prepayDate.getMonth() + p.month - 1)
+                      // Month p.month is due p.month - 1 calendar months after the start, the
+                      // date the schedule gives that month.
+                      const prepayDate = addCalendarMonths(props.loan.start_date, p.month - 1)
                       return (
                         <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
                           <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
-                            {formatDate(prepayDate.toISOString().split('T')[0])}
+                            {formatDate(prepayDate)}
                           </span>
                           <span style={{ 'font-weight': 600, color: 'var(--success)' }}>
                             +{formatCurrency(p.amount)}
@@ -182,13 +183,11 @@ export default function LoanAmortizationTable(props: Props) {
                 <div style="display: flex; flex-direction: column; gap: 8px;">
                   <For each={props.loan.rate_periods}>
                     {(rp) => {
-                      const loanStart = new Date(props.loan.start_date)
-                      const rateDate = new Date(loanStart)
-                      rateDate.setMonth(rateDate.getMonth() + rp.start_month - 1)
+                      const rateDate = addCalendarMonths(props.loan.start_date, rp.start_month - 1)
                       return (
                         <div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg); border-radius: var(--radius);">
                           <span style={{ 'font-size': '12px', color: 'var(--text-secondary)' }}>
-                            {formatDate(rateDate.toISOString().split('T')[0])}
+                            {formatDate(rateDate)}
                           </span>
                           <span style={{ 'font-size': '11px', color: 'var(--text-secondary)' }}>
                             ({rp.start_month}
@@ -711,7 +710,6 @@ function generateDetailedRows(
   formatCurrency: (val: number) => string
 ): any[] {
   const data: any[] = []
-  const startDate = new Date(schedule[0]?.date || new Date())
   let cumulativeInterest = 0
   let cumulativePrincipal = 0
 
@@ -719,12 +717,9 @@ function generateDetailedRows(
     cumulativeInterest += row.interest
     cumulativePrincipal += row.principal
 
-    const paymentDate = new Date(startDate)
-    paymentDate.setMonth(paymentDate.getMonth() + row.month - 1)
-
     data.push({
       month: row.month,
-      date: formatDate(paymentDate.toISOString().split('T')[0]),
+      date: formatDate(row.date),
       payment: formatCurrency(row.payment + (row.prepayment || 0)),
       principal: formatCurrency(row.principal),
       interest: formatCurrency(row.interest),
@@ -740,10 +735,17 @@ function generateDetailedRows(
   return data
 }
 
+/**
+ * A YYYY-MM-DD due date as written, e.g. "Feb 28, 2026". `new Date('2026-02-28')` is midnight UTC,
+ * so it is formatted in UTC: in the local zone it would read Feb 27 anywhere west of Greenwich.
+ */
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  const date = new Date(dateStr)
+  if (Number.isNaN(date.getTime())) return '-'
+  return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
+    timeZone: 'UTC',
   })
 }
