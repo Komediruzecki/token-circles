@@ -1,0 +1,61 @@
+/*
+ * The form kit's own rules. A page's stylesheet still lays its fields out; these add only the
+ * marked state, which no page had, so they win over a page's plain and focused control rules.
+ */
+
+.field :is(input, select, textarea)[aria-invalid='true'],
+.field :is(input, select, textarea)[aria-invalid='true']:hover {
+  border-color: var(--danger);
+}
+
+.field :is(input, select, textarea)[aria-invalid='true']:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 22%, transparent);
+}
+
+/* A row of swatches has no border of its own to colour. */
+.field [role='group'][aria-invalid='true'] {
+  outline: 1px solid var(--danger);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+/* --danger-text, not --danger: the message is small text, and --danger is under 4.5:1 on a
+   modal's surface in both themes. */
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--danger-text);
+}
+
+.error svg,
+.notice svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger-outline);
+  border-radius: 8px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  font-size: 14px;
+  line-height: 1.45;
+}
