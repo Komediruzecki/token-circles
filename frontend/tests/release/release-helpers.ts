@@ -52,10 +52,23 @@ export function profileRow(page: Page, id: number): Locator {
   return page.locator(`[data-profile-id="${id}"]`)
 }
 
+/**
+ * Is the menu open? Not `isVisible()` on an item: the closed menu clips its rows with
+ * `max-height: 0; overflow: hidden`, and Playwright still calls a clipped row visible. The menu
+ * box itself is what has no height when closed.
+ */
+export async function profileMenuIsOpen(page: Page): Promise<boolean> {
+  return page
+    .getByTestId('profile-create-item')
+    .evaluate((el) => (el.parentElement?.getBoundingClientRect().height ?? 0) > 20)
+    .catch(() => false)
+}
+
 export async function openProfileMenu(page: Page): Promise<void> {
-  const create = page.getByTestId('profile-create-item')
-  if (!(await create.isVisible().catch(() => false))) await profileButton(page).click()
-  await expect(create).toBeVisible()
+  if (!(await profileMenuIsOpen(page))) await profileButton(page).click()
+  await expect.poll(() => profileMenuIsOpen(page), { message: 'profile menu opens' }).toBe(true)
+  // Let the max-height transition finish, so a row is not still moving under the click.
+  await page.waitForTimeout(250)
 }
 
 /**
@@ -65,7 +78,7 @@ export async function openProfileMenu(page: Page): Promise<void> {
  */
 export async function clickOutsideProfileMenu(page: Page): Promise<void> {
   await page.mouse.click(900, 30)
-  await expect(page.getByTestId('profile-create-item')).toBeHidden()
+  await expect.poll(() => profileMenuIsOpen(page), { message: 'profile menu closes' }).toBe(false)
 }
 
 /** Make a profile the primary one: click its name in the menu. */
