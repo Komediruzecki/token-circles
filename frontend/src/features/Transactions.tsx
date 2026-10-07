@@ -139,7 +139,8 @@ export default function Transactions() {
   /**
    * The active profile's categories and accounts, for the other writes on this page: a bulk change
    * of category, whose rows are the active profile's (another profile's cannot be selected, #386),
-   * and a recurring entry, which is written to the active profile. Both refuse another profile's.
+   * a recurring entry, which is written to the active profile, and Auto Categorize, which edits the
+   * active profile's rows. Each refuses another profile's.
    */
   const activeCategories = createMemo(() => rowsOfProfile(categories(), activeId()))
   const activeAccounts = createMemo(() => rowsOfProfile(accounts(), activeId()))
@@ -711,16 +712,23 @@ export default function Transactions() {
     return filtered
   })
 
-  // Get uncategorized transactions.
+  // The active profile's uncategorized transactions, for Auto Categorize.
   //
   // Transfers are excluded: a transfer has no category BY DESIGN — money moving between two of
   // your own accounts is not spending — so listing them here filled the modal with rows that
   // could not, and should not, be categorized. Only imports create genuinely uncategorized rows
   // (a gated category name imports with category_id null); the app itself will not.
+  //
+  // So are other profiles' rows. With two profiles ticked the list covers the household, but an
+  // edit is scoped to the profile in X-Profile-Id: another profile's row answers 404, as its
+  // category would be refused for this one's.
   const uncategorizedTransactions = createMemo(() => {
-    const allTransactions = transactions()
-    return allTransactions.filter(
-      (tx) => (tx.category_id === undefined || tx.category_id === null) && tx.type !== 'transfer'
+    const active = activeId()
+    return transactions().filter(
+      (tx) =>
+        (tx.category_id === undefined || tx.category_id === null) &&
+        tx.type !== 'transfer' &&
+        tx.profile_id === active
     )
   })
 
@@ -755,15 +763,9 @@ export default function Transactions() {
   // One write per call, NO reload here: the modal applies its batch as one write (asOneWrite), so
   // the list follows the counter once at the end. Reloading the whole list after every row turned
   // "Apply 50" into 50 full refetches.
+  /** One Auto Categorize pick. A refusal is the modal's to report: it says how many did not save. */
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
-    try {
-      await api.updateTransaction(transactionId, { category_id: categoryId })
-    } catch (error) {
-      console.error('Failed to apply category:', error)
-      if (errorStatus(error) === 409) {
-        toast(error instanceof Error ? error.message : 'That transaction changed', 'error')
-      }
-    }
+    await api.updateTransaction(transactionId, { category_id: categoryId })
   }
 
   // Refetches overlap once every write and every resume triggers one, and their answers can land
@@ -2294,7 +2296,7 @@ export default function Transactions() {
         isOpen={isAutoCategorizeModalOpen}
         onClose={() => setAutoCategorizeModalOpen(false)}
         uncategorizedTransactions={uncategorizedTransactions}
-        categories={categories}
+        categories={activeCategories}
         accountName={(id) => accounts().find((a) => a.id === id)?.name}
         onApply={handleAutoApplyCategory}
       />

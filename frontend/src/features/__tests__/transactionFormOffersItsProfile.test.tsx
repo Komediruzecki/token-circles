@@ -57,7 +57,13 @@ const row = (id: number, description: string, extra: Partial<Transaction>): Tran
 const ROWS = [
   row(1, 'Coffee', { profile_id: 1, category_id: 11, account_id: 32 }),
   row(2, 'Diesel', { profile_id: 2, category_id: 22, account_id: 41 }),
+  // Imported with no category: one in each profile.
+  row(3, 'Bakery', { profile_id: 1, category_id: null, account_id: 31 }),
+  row(4, 'Toll', { profile_id: 2, category_id: null, account_id: 41 }),
 ]
+
+/** The page's category edits. Set per test to refuse one, the way the server does. */
+const updateTransaction = vi.fn(async (_id: number, _data: unknown) => ({}))
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -68,6 +74,7 @@ vi.mock('../../core/api', async (importOriginal) => ({
       getCategories: async () => CATEGORIES.map((c) => ({ ...c })),
       getAccounts: async () => ACCOUNTS.map((a) => ({ ...a })),
       getTags: async () => [],
+      updateTransaction: (id: number, data: unknown) => updateTransaction(id, data),
     } as Record<string, unknown>,
     // Anything else the page's children ask the typed client for gets an empty list.
     { get: (target, name: string) => target[name] ?? (async () => []) }
@@ -90,6 +97,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   __resetDataVersionsForTest()
+  updateTransaction.mockClear()
   localStorage.setItem('currentProfileId', '1')
   localStorage.setItem('selectedProfileIds', JSON.stringify([1, 2]))
   setProfiles([
@@ -360,5 +368,57 @@ describe('the rest of the page, with two profiles ticked', () => {
 
     expect(optionIds(selectLabelled(modal, 'Account'))).toEqual([31, 32])
     expect(optionIds(selectLabelled(modal, 'Category'))).toEqual([11, 12])
+  })
+})
+
+describe('Auto Categorize, with two profiles ticked', () => {
+  // An edit is scoped to the profile in X-Profile-Id: another profile's row answers 404, and a
+  // category of another profile is refused for this one's rows.
+  const modal = () =>
+    Array.from(host.querySelectorAll('h2')).find((h) => h.textContent === 'Auto Categorize')!
+      .parentElement!.parentElement!.parentElement!
+  const modalIsOpen = () => modal().className.includes('isOpen')
+  const modalRows = () =>
+    Array.from(modal().querySelectorAll('[data-test-id="auto-cat-row"]')).map(
+      (r) => r.querySelector('p')!.textContent
+    )
+
+  async function openAutoCategorize() {
+    buttonReading(host, 'Auto').click()
+    await settle()
+  }
+
+  it('lists the active profile’s uncategorized rows, and offers its categories', async () => {
+    await mountPage()
+    await openAutoCategorize()
+
+    expect(modalRows()).toEqual(['Bakery'])
+    const pick = modal().querySelector<HTMLSelectElement>(
+      '[data-test-id="auto-cat-manual-select"]'
+    )!
+    expect(optionIds(pick)).toEqual([11])
+  })
+
+  it('says so when a pick does not save, and keeps it to try again', async () => {
+    updateTransaction.mockRejectedValueOnce(
+      Object.assign(new Error('Transaction not found'), { status: 404 })
+    )
+    await mountPage()
+    await openAutoCategorize()
+    const pick = modal().querySelector<HTMLSelectElement>(
+      '[data-test-id="auto-cat-manual-select"]'
+    )!
+    pick.value = '11'
+    pick.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    modal().querySelector<HTMLButtonElement>('[data-test-id="auto-cat-apply"]')!.click()
+    await settle()
+
+    expect(updateTransaction).toHaveBeenCalledWith(3, { category_id: 11 })
+    expect(toastMessages()).toEqual(["Couldn't categorize 1 of 1. Try again."])
+    expect(modalIsOpen()).toBe(true)
+    expect(modal().querySelector('[data-test-id="auto-cat-apply"]')!.textContent?.trim()).toBe(
+      'Apply 1'
+    )
   })
 })
