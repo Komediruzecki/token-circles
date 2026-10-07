@@ -263,15 +263,6 @@ for (const [pass, test] of both) {
     test('2.17 a renamed, recoloured category reaches the recurring lists and Housing @release', async ({
       m,
     }) => {
-      // Not a 5.16 regression: v5.15.1 has the same handlers. In local-first nothing joins a
-      // recurring row or a subscription to its category: recurringList returns the stored rows
-      // and billsList (core/storage/handlers/bills.ts:48) the stored bill, and no create path
-      // writes `category_name`/`category_color` onto either. So these views never show a
-      // category's colour, before a rename or after it.
-      test.fail(
-        m.kind === 'local',
-        'local-first: recurring rows and subscriptions carry no category colour (since 5.15.1)'
-      )
       const { page } = m
       const oldName = `zz-old${m.suffix}`
       const newName = `zz-new${m.suffix}`
@@ -312,6 +303,16 @@ for (const [pass, test] of both) {
       const housingDot = () => dotAbove(shownPage(page).getByText(sub, { exact: true }))
 
       // Each shows the category as it is now.
+      // Not a 5.16 regression: v5.15.1 has the same handlers. In local-first nothing joins a
+      // recurring row or a subscription to its category: recurringList returns the stored rows
+      // and billsList (core/storage/handlers/bills.ts:48) the stored bill, and no create path
+      // writes `category_name`/`category_color` onto either. So these views never show a
+      // category's colour, before a rename or after it.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      test.fail(
+        m.kind === 'local',
+        'local-first: recurring rows and subscriptions carry no category colour (since 5.15.1)'
+      )
       await expect.poll(() => backgroundOf(cardDot)).toBe(rgb(before))
       await goPage(page, 'transactions', 'transactions-header')
       await recurringSection(page).getByRole('heading', { name: 'Recurring Transactions' }).click()
@@ -331,24 +332,6 @@ for (const [pass, test] of both) {
     })
 
     test('2.17b the bill calendar shows a renamed, recoloured category @release', async ({ m }) => {
-      // Local-first: as in 2.17, no bill carries its category. billsCalendar
-      // (core/storage/handlers/bills.ts:147) reads `category_name`/`category_color` off the
-      // stored bill row, which no create path writes. Same in v5.15.1.
-      test.fail(
-        m.kind === 'local',
-        'local-first: bills carry no category name or colour (since 5.15.1)'
-      )
-      // Cloud: the calendar refetches on the category write (it tracks `categories` since #578,
-      // and the refetched month carries the new name and colour), but the grid does not redraw.
-      // BillCalendar.tsx:255-257 renders the days with <For each={daysArray()}> over day numbers
-      // and reads `cal()!.days[String(day)]` once, when a day's cell is created; a refetch of the
-      // same month gives the same day numbers, so every cell keeps the bills it read first, and
-      // the day popover is opened with that same array. Reopening the calendar shows the new
-      // data. The grid code is the same in v5.15.1, where nothing refetched an open calendar.
-      test.fail(
-        m.kind === 'cloud',
-        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
-      )
       const { page } = m
       const oldName = `zz-old${m.suffix}`
       const newName = `zz-new${m.suffix}`
@@ -368,6 +351,14 @@ for (const [pass, test] of both) {
       })
       await reloadOn(page, 'bills', 'bills-header')
       await openBillCalendar(page)
+      // Local-first: as in 2.17, no bill carries its category. billsCalendar
+      // (core/storage/handlers/bills.ts:147) reads `category_name`/`category_color` off the
+      // stored bill row, which no create path writes. Same in v5.15.1.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      test.fail(
+        m.kind === 'local',
+        'local-first: bills carry no category name or colour (since 5.15.1)'
+      )
       await expect.poll(() => backgroundOf(calendarDot(page, bill))).toBe(rgb(before))
       const row = await calendarPopoverRow(page, bill)
       await expect(row).toContainText(oldName)
@@ -377,6 +368,18 @@ for (const [pass, test] of both) {
 
       // Back on Bills, the calendar still open: its dot and its popover follow.
       await showFollower(m, 'bills', 'bills-header', [/^\/api\/bills\/calendar/])
+      // Cloud: the calendar refetches on the category write (it tracks `categories` since #578,
+      // and the refetched month carries the new name and colour), but the grid does not redraw.
+      // BillCalendar.tsx:255-257 renders the days with <For each={daysArray()}> over day numbers
+      // and reads `cal()!.days[String(day)]` once, when a day's cell is created; a refetch of the
+      // same month gives the same day numbers, so every cell keeps the bills it read first, and
+      // the day popover is opened with that same array. Reopening the calendar shows the new
+      // data. The grid code is the same in v5.15.1, where nothing refetched an open calendar.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      test.fail(
+        m.kind === 'cloud',
+        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
+      )
       await expect.poll(() => backgroundOf(calendarDot(page, bill))).toBe(rgb(after))
       const renamed = await calendarPopoverRow(page, bill)
       await expect(renamed).toContainText(newName)
@@ -479,17 +482,6 @@ cloudTest.describe('5.16.0 s2 pages follow writes [cloud]', () => {
   cloudTest(
     '2.14b Analytics asks for each thing once when it follows a transaction @release',
     async ({ m }) => {
-      // Three loaders of Analytics.tsx overlap. The analyticsData resource (:105) fetches
-      // category-trends?type&year (:121) and stats/monthly?months=24 (:124); monthlyStatsResource
-      // (:285) fetches the same stats/monthly URL again (:297); loadStackedData, run by
-      // refetchOnActive (:532), fetches category-trends with the same year and type in the other
-      // order (:442). The overlap is older (v5.15.1 runs all three on mount), but #578 made all
-      // three follow every write, so each write that reaches Analytics now asks both twice. Not
-      // in section 9; the double fetches it lists are a tag, a cash account and quick add.
-      cloudTest.fail(
-        true,
-        'Analytics fetches stats/monthly and category-trends twice per refresh (Analytics.tsx:124, :297, :442)'
-      )
       const { page } = m
       const category = await arrangeCategory(m, `zz-an${m.suffix}`)
       await reloadOn(page, 'analytics', 'analytics-header')
@@ -516,6 +508,18 @@ cloudTest.describe('5.16.0 s2 pages follow writes [cloud]', () => {
       const since = await countFrom(page)
       await goPage(page, 'analytics', 'analytics-header')
       await expect.poll(() => analyticsMonthExpense(page)).toBeCloseTo(expense0 + 60, 2)
+      // Three loaders of Analytics.tsx overlap. The analyticsData resource (:105) fetches
+      // category-trends?type&year (:121) and stats/monthly?months=24 (:124); monthlyStatsResource
+      // (:285) fetches the same stats/monthly URL again (:297); loadStackedData, run by
+      // refetchOnActive (:532), fetches category-trends with the same year and type in the other
+      // order (:442). The overlap is older (v5.15.1 runs all three on mount), but #578 made all
+      // three follow every write, so each write that reaches Analytics now asks both twice. Not
+      // in section 9; the double fetches it lists are a tag, a cash account and quick add.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      cloudTest.fail(
+        true,
+        'Analytics fetches stats/monthly and category-trends twice per refresh (Analytics.tsx:124, :297, :442)'
+      )
       expectNoRepeats(m, await since(), 'showing Analytics after one expense')
     }
   )

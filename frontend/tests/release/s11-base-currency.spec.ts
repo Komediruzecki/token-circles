@@ -231,17 +231,6 @@ for (const [pass, test] of both) {
     test('11.4b price fields picked before a switch to CHF read CHF after it @release', async ({
       m,
     }) => {
-      // The catalog lives on the Bills page, which stays mounted, and it keeps its picks when it
-      // closes; only adding them clears it. A picked service's prefix is
-      // {currencySymbol(getLocalCurrency())} (SubscriptionCatalogModal.tsx:269) and the footer is
-      // money(total()) (:405, formatting with getLocalCurrency() at :125). getLocalCurrency reads
-      // localStorage, which nothing tracks, so both keep the currency they were drawn in: after a
-      // switch to CHF the open fields still read £, and the total only changes when total() does.
-      // Part of the 5.16.1 fix (ab49792d), which replaced a literal € prefix; nothing older.
-      test.fail(
-        true,
-        'the catalog keeps the currency a price field was drawn in (SubscriptionCatalogModal.tsx:269, :405)'
-      )
       const { page } = m
       await emptyBooksIn(m, 'GBP')
       const catalog = await openCatalog(page)
@@ -253,6 +242,19 @@ for (const [pass, test] of both) {
       await setBaseCurrency(page, 'CHF')
       const again = await openCatalog(page)
       // The same two, still picked: their fields and the total read CHF.
+      // The catalog lives on the Bills page, which stays mounted, and it keeps its picks when it
+      // closes; only adding them clears it. A picked service's prefix is
+      // {currencySymbol(getLocalCurrency())} (SubscriptionCatalogModal.tsx:269) and the footer is
+      // money(total()) (:405, formatting with getLocalCurrency() at :125). getLocalCurrency reads
+      // localStorage, which nothing tracks, so both keep the currency they were drawn in: after a
+      // switch to CHF the open fields still read £, and the total only changes when total() does.
+      // The list's own prices (:257, :334) are drawn the same way. Part of the 5.16.1 fix
+      // (ab49792d), which replaced a fixed EUR (a literal € prefix); nothing older.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      test.fail(
+        true,
+        'the catalog keeps the currency a price field was drawn in (SubscriptionCatalogModal.tsx:269, :405)'
+      )
       for (const service of picked) await expect(catalogPrefix(again, service)).toHaveText('CHF')
       await expect(again).toContainText(/2 selected · CHF\s?[\d.,]+\/mo/)
     })

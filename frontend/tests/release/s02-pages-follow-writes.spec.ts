@@ -561,16 +561,6 @@ for (const [pass, test] of both) {
     test('2.7b a bill paid on the calendar shows paid on it without reopening it @release', async ({
       m,
     }) => {
-      // The payment refetches the calendar (2.7 counts it), but the grid does not redraw.
-      // BillCalendar.tsx:255-257 renders the days with <For each={daysArray()}> over day numbers
-      // and reads `cal()!.days[String(day)]` once, when a day's cell is created. A refetch of the
-      // same month gives the same day numbers, so <For> keeps every cell and the bills it read
-      // first. Only reopening the calendar (a remount) shows the payment. The grid code is the
-      // same in v5.15.1, where nothing refetched an open calendar; #578 added the refetch.
-      test.fail(
-        true,
-        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
-      )
       const { page } = m
       const toPay = `zz-pay${m.suffix}`
       await m.api('/api/bills', {
@@ -594,7 +584,18 @@ for (const [pass, test] of both) {
       await expect(row).toContainText('✓')
       await closeCalendarPopover(row)
 
-      // Still on the calendar: its dot shows the bill paid.
+      // Still on the calendar: its dot shows the bill paid. The payment refetches the calendar
+      // (2.7 counts it), but the grid does not redraw. BillCalendar.tsx:255-257 renders the days
+      // with <For each={daysArray()}> over day numbers and reads `cal()!.days[String(day)]` once,
+      // when a day's cell is created. A refetch of the same month gives the same day numbers, so
+      // <For> keeps every cell and the bills it read first. Only reopening the calendar (a
+      // remount) shows the payment. The grid code is the same in v5.15.1, where nothing refetched
+      // an open calendar; #578 added the refetch.
+      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
+      test.fail(
+        true,
+        'the open bill calendar keeps its old bills after a refetch (BillCalendar.tsx:257)'
+      )
       await expect(dot).toHaveClass(/dotPaid/, { timeout: 10_000 })
     })
 
