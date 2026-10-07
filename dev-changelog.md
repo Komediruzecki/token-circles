@@ -62,6 +62,12 @@ All notable changes to Token Circles are documented here. The format is based on
   upgrade runs; builds up to 5.16.0 have no `blocking` handler, so this is what a tab upgrading
   past an old one shows. `terminated`: drop the dead connection so the next call reopens. The v12
   schema the upgrade tests build is a shared helper now, `__tests__/v12Schema.ts`.
+- **The waiting notice is drawn while the app loads.** `blocked` raised its toast as intended, but
+  `<ToastContainer />` lived inside App's `<Show when={!_isLoading()}>`, and the blocked upgrade
+  is what keeps App loading: the tab showed the boot screen and nothing else. The container now
+  renders beside App in the new `Root.tsx`, which `index.tsx` mounts; App has none of its own.
+  `toastsOutsideBootGate.test.tsx` pins both halves, and the release suite's two-tab case
+  (`frontend/tests/release/s15-two-tab-upgrade.spec.ts`) passes on a production build.
 - **A test that failed under load.** `goalsUndated.test.tsx` loads the local-first router in its
   `beforeAll`. Its first two tests paid for `apiFetch`'s import of the router inside a one-second
   `waitFor`, and failed every full run on a loaded machine, on the 5.16.0 base as well.

@@ -31,7 +31,6 @@ import profileStyles from './components/Profile.module.css'
 import ProfileModal from './components/ProfileModal'
 import ResetPassword from './components/ResetPassword'
 import Spotlight from './components/Spotlight'
-import ToastContainer from './components/ToastContainer'
 import TourSelectionModal from './components/TourSelectionModal'
 import { VerifyEmailBanner } from './components/VerifyEmailBanner'
 import { api, toast } from './core/api.js'
@@ -1326,7 +1325,6 @@ export function App() {
               <OnboardingWizard selectProfiles={applyProfileSelection} />
             </Show>
 
-            <ToastContainer />
             <PasskeyNudge />
             <ConfirmDialog />
           </Suspense>
