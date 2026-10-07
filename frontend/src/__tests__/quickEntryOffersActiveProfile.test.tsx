@@ -303,6 +303,26 @@ async function switchProfile(id: number) {
   expect(localStorage.getItem('currentProfileId')).toBe(String(id))
 }
 
+// ---- The command bar (Ctrl/Cmd+K) -------------------------------------------------------------
+
+/** Ctrl+K and an entry typed in. */
+async function openCommandBar(text: string) {
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
+  await settle()
+  const bar = document.querySelector<HTMLElement>('[aria-label="Quick entry command bar"]')!
+  const input = bar.querySelector<HTMLInputElement>('input[aria-label="Quick entry"]')!
+  input.value = text
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  await settle()
+  const select = bar.querySelector<HTMLSelectElement>('select[aria-label="Category"]')!
+  return { input, select }
+}
+
+/** The category chip's options, and the one it has picked. */
+const optionNames = (select: HTMLSelectElement) =>
+  Array.from(select.options).map((o) => o.textContent)
+const picked = (select: HTMLSelectElement) => select.options[select.selectedIndex]?.textContent
+
 describe.each(['serverless', 'self-hosted'] as const)('quick entry in %s mode', (mode) => {
   it('offers the active profile’s categories, not the rest of the household’s', async () => {
     // Settings > Household with Family ticked as well: reads cover both, entries go to Personal.
@@ -456,18 +476,29 @@ describe.each(['serverless', 'self-hosted'] as const)('quick entry in %s mode', 
   it('the command bar matches only the active profile’s categories', async () => {
     await mountApp(mode, 1, [1, 2])
 
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
-    await settle()
-    const bar = document.querySelector<HTMLElement>('[aria-label="Quick entry command bar"]')!
-    const input = bar.querySelector<HTMLInputElement>('input[aria-label="Quick entry"]')!
-    input.value = 'dinner 12 eating'
-    input.dispatchEvent(new Event('input', { bubbles: true }))
+    const { select } = await openCommandBar('dinner 12 eating')
+
+    expect(optionNames(select)).not.toContain('Eating out')
+    expect(optionNames(select)).toContain('Groceries')
+    expect(picked(select)).not.toBe('Eating out')
+  })
+
+  it('the command bar never sends a category from another profile to the save', async () => {
+    await mountApp(mode, 1)
+    const { input, select } = await openCommandBar('coffee 5 groceries')
+    expect(picked(select)).toBe('Groceries')
+
+    // Another tab switches to Family before Enter: the save would be filed under Family, with
+    // Personal's category.
+    localStorage.setItem('currentProfileId', '2')
+    localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await settle()
 
-    const select = bar.querySelector<HTMLSelectElement>('select[aria-label="Category"]')!
-    const options = Array.from(select.options).map((o) => o.textContent)
-    expect(options).not.toContain('Eating out')
-    expect(options).toContain('Groceries')
-    expect(select.options[select.selectedIndex]?.textContent).not.toBe('Eating out')
+    expect(transactionPosts()).toEqual([])
+    await vi.waitFor(() => {
+      expect(optionNames(select)).toContain('Eating out')
+    }, waitLong)
+    expect(picked(select)).not.toBe('Groceries')
   })
 })
