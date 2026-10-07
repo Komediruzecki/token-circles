@@ -1,6 +1,11 @@
 /**
- * Runtime validation schemas using Zod
- * Validates API request bodies before passing to handlers.
+ * The local-first router's body checks: what a write must look like before a handler runs.
+ *
+ * A refused body answers 400 `{ error, fields }`, the Worker's answer (shared/refusal.ts): a plain
+ * sentence per field for the form to show, and their summary for anything that cannot place them.
+ * An entity with a shared schema (categories) runs exactly the Worker's rules. The rest are still
+ * zod schemas until their own PR moves them (docs/plans/2026-10-07-form-errors.md), and their
+ * issues are put into plain words here rather than passed on in zod's.
  */
 // Import the Zod JIT-disable config BEFORE this module's schema definitions:
 // the JIT capability probe (a CSP unsafe-eval violation) fires at schema-
@@ -8,6 +13,9 @@
 // always evaluate before its body, making this chunk-order-independent.
 import './zodConfig'
 import { z } from 'zod/v4'
+import { checkCategoryCreate, checkCategoryUpdate } from '../../../shared/categorySchema'
+import { refusalOf } from '../../../shared/refusal'
+import type { Checked, FieldErrors } from '../../../shared/refusal'
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/)
 
@@ -34,24 +42,13 @@ const transactionBaseSchema = z.object({
 // on create. Updates are guarded in the handler against the merged old+new state.
 export const transactionCreateSchema = transactionBaseSchema.refine(
   (t) => t.type !== 'transfer' || typeof t.transfer_account_id === 'number',
-  { message: 'A transfer must have a destination account', path: ['transfer_account_id'] }
+  { message: 'Choose the account the transfer goes to.', path: ['transfer_account_id'] }
 )
 
 export const transactionUpdateSchema = transactionBaseSchema.partial()
 
 // ── Category ───────────────────────────────────────────────────────────────────
-
-export const categoryCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(['income', 'expense']),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  // null when the form's icon field was left blank, as Budgets and Categories invite. The Worker
-  // stores its default for it; refusing it here failed the save in local-first only.
-  icon: z.string().nullable().optional(),
-  tax_deductible: z.boolean().optional(),
-})
-
-export const categoryUpdateSchema = categoryCreateSchema.partial()
+// Not a zod schema: shared/categorySchema.ts, which the Worker route runs too.
 
 // ── Account ────────────────────────────────────────────────────────────────────
 
@@ -102,7 +99,7 @@ const billBaseSchema = z.object({
 })
 
 export const billCreateSchema = billBaseSchema.refine((b) => b.due_date || b.dueDate, {
-  message: 'due date is required',
+  message: 'Pick a due date.',
   path: ['due_date'],
 })
 
@@ -213,11 +210,14 @@ export const counterpartyCreateSchema = z.object({
 
 // ── Route-to-schema mapping ────────────────────────────────────────────────────
 
-const schemaMap: Record<string, z.ZodType> = {
+/** A shared schema's own check, or a zod schema whose issues are put into words below. */
+type BodyRule = z.ZodType | ((body: unknown) => Checked<unknown>)
+
+const schemaMap: Record<string, BodyRule> = {
   'POST:/api/transactions': transactionCreateSchema,
   'PUT:/api/transactions': transactionUpdateSchema,
-  'POST:/api/categories': categoryCreateSchema,
-  'PUT:/api/categories': categoryUpdateSchema,
+  'POST:/api/categories': checkCategoryCreate,
+  'PUT:/api/categories': checkCategoryUpdate,
   'POST:/api/accounts': accountCreateSchema,
   'PUT:/api/accounts': accountUpdateSchema,
   'POST:/api/budgets': budgetCreateSchema,
@@ -244,27 +244,88 @@ const schemaMap: Record<string, z.ZodType> = {
   'PUT:/api/counterparties': counterpartyCreateSchema.partial(),
 }
 
+/** A body field as a person says it: `category_id` is "category", `dueDate` is "due date". */
+function spoken(field: string): string {
+  return field
+    .replace(/(_id|Id)$/, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .toLowerCase()
+    .trim()
+}
+
 /**
- * Validates request body against the schema for the given method+path.
- * Returns null if validation passes, or a 400 Response with field-level errors.
+ * One zod issue in plain words, for an entity whose schema has not moved to shared/ yet. The
+ * label under the field gives it context, so the sentence only has to say what to do.
+ */
+function plainIssue(issue: z.core.$ZodIssue, key: string, given: unknown): string {
+  const field = spoken(key) || 'details'
+  const missing = given === undefined || given === null || given === ''
+  // An id points at something the person picks from a list, whatever the number did wrong.
+  if (/(_id|Id)$/.test(key) && issue.code !== 'custom') {
+    return missing ? `Choose the ${field}.` : `Choose the ${field} from the list.`
+  }
+  switch (issue.code) {
+    case 'invalid_type':
+      return missing ? `Fill in the ${field}.` : `Enter a valid ${field}.`
+    case 'too_small':
+      if (issue.origin === 'string') return `Fill in the ${field}.`
+      if (issue.origin === 'number' || issue.origin === 'int') {
+        if (Number(issue.minimum) !== 0) return `Make the ${field} at least ${issue.minimum}.`
+        return issue.inclusive
+          ? `The ${field} can't be negative.`
+          : `Make the ${field} more than zero.`
+      }
+      return `Check the ${field}.`
+    case 'too_big':
+      if (issue.origin === 'string') {
+        return `Keep the ${field} to ${issue.maximum} characters or fewer.`
+      }
+      if (issue.origin === 'number' || issue.origin === 'int') {
+        return `Make the ${field} ${issue.maximum} or less.`
+      }
+      return `Check the ${field}.`
+    case 'invalid_value':
+      return `Choose the ${field} from the list.`
+    case 'invalid_format':
+      return `Enter a valid ${field}.`
+    case 'custom':
+      // A refine's message is written for people where it is defined.
+      return issue.message
+    default:
+      return `Check the ${field}.`
+  }
+}
+
+/** A zod schema run as a check: the first plain sentence for each top-level field it refuses. */
+function zodCheck(schema: z.ZodType, body: unknown): Checked<unknown> {
+  const result = schema.safeParse(body)
+  if (result.success) return { ok: true, value: result.data }
+  const record = body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : {}
+  const fields: FieldErrors = {}
+  for (const issue of result.error.issues) {
+    const key = issue.path.length > 0 ? String(issue.path[0]) : ''
+    // A refusal of the body as a whole has no field to stand under; the summary covers it.
+    if (key === '' || fields[key] !== undefined) continue
+    fields[key] = plainIssue(issue, key, record[key])
+  }
+  return { ok: false, fields }
+}
+
+/**
+ * Checks a request body against the rule for its method and path. Returns null when it passes,
+ * or the 400 refusal to answer with: `{ error, fields }`, as the Worker answers.
  * Strips numeric path segments progressively to match parametrized routes.
  */
 export function validateBody(method: string, path: string, body: unknown): Response | null {
   // Try exact match first, then progressively strip trailing numeric segments
   let candidate = path
   for (let i = 0; i < 3; i++) {
-    const schema = schemaMap[`${method}:${candidate}`]
-    if (schema) {
-      const result = schema.safeParse(body)
-      if (result.success) return null
-
-      const issues: z.core.$ZodIssue[] = 'error' in result ? result.error.issues : []
-      const errors = issues.map((issue) => ({
-        field: issue.path.join('.') || '(root)',
-        message: issue.message,
-      }))
-
-      return new Response(JSON.stringify({ error: 'Validation failed', details: errors }), {
+    const rule = schemaMap[`${method}:${candidate}`]
+    if (rule) {
+      const checked = typeof rule === 'function' ? rule(body) : zodCheck(rule, body)
+      if (checked.ok) return null
+      return new Response(JSON.stringify(refusalOf(checked.fields)), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })

@@ -1,6 +1,12 @@
 /**
  * Categories handlers — IndexedDB-backed implementations
  */
+import {
+  categoryNameTaken,
+  checkCategoryCreate,
+  checkCategoryUpdate,
+  clashingCategoryName,
+} from '../../../../../shared/categorySchema'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -10,15 +16,9 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 import { normalizeCategory } from './normalize'
-
-/**
- * The icon a category is stored with when none was given: left out, null (the Categories form
- * sends null once its icon field is emptied) or ''. On a create and on an edit alike, as the
- * Worker does (worker/src/routes/categories.ts).
- */
-const DEFAULT_ICON = 'tag'
 
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
   const type = query.get('type') as 'income' | 'expense' | undefined
@@ -27,37 +27,25 @@ export async function categoriesList(query: URLSearchParams): Promise<Response> 
 }
 
 export async function categoriesCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid category data' }, 400)
-  const cat = body as Record<string, unknown>
-  const name = ((cat.name as string) || '').trim()
-  if (!name) return json({ error: 'Category name is required' }, 400)
+  // The Worker's rules and words (shared/categorySchema.ts). The router has already run this
+  // check on the way in; a direct call (tests, other handlers) gets the same answer.
+  const checked = checkCategoryCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const input = checked.value
 
   const pid = await adapter.getCurrentProfileId()
-  const parentId = cat.parent_id ?? cat.parentId ?? null
-  if (!(await currentProfileOwns('categories', parentId))) {
+  if (!(await currentProfileOwns('categories', input.parent_id))) {
     return json({ error: 'Parent category does not belong to this profile' }, 400)
   }
 
-  // Check for duplicate name within the same profile
   const db = await getDB()
   const existing = await db.getAllFromIndex('categories', 'by_profile', pid)
-  if (existing.some((c) => (c.name as string).toLowerCase().trim() === name.toLowerCase())) {
-    return json({ error: 'Category name already exists for this profile' }, 400)
-  }
+  const clash = clashingCategoryName(existing as { id: unknown; name: unknown }[], input.name)
+  if (clash !== null) return refuse(categoryNameTaken(clash))
 
-  // The row the Worker would store (worker/src/routes/categories.ts), not the body as it came:
-  // the forms send no `tax_deductible`, and `icon: null` for a blank icon, and a row missing
-  // either failed CategorySchema on every typed read of its profile's categories.
-  const row = {
-    name,
-    type: (cat.type as string | undefined) ?? 'expense',
-    color: (cat.color as string | undefined) ?? '#6b7280',
-    icon: (cat.icon as string | null | undefined) || DEFAULT_ICON,
-    parent_id: parentId,
-    tax_deductible: Boolean(cat.tax_deductible),
-    created_at: new Date().toISOString(),
-    profile_id: pid,
-  }
+  // The row the Worker stores, not the body as it came: the check filled in every default, so no
+  // row can miss a field CategorySchema needs on the next typed read.
+  const row = { ...input, created_at: new Date().toISOString(), profile_id: pid }
   const id = await adapter.createCategory(
     row as unknown as Parameters<typeof adapter.createCategory>[0]
   )
@@ -74,18 +62,27 @@ export async function categoriesUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('categories', id))) return notFound('Category')
-  const patch = { ...(body as Record<string, unknown>) }
-  if ('icon' in patch) patch.icon = (patch.icon as string | null | undefined) || DEFAULT_ICON
-  if (
-    ('parent_id' in patch || 'parentId' in patch) &&
-    !(await currentProfileOwns('categories', patch.parent_id ?? patch.parentId))
-  ) {
+  const current = await currentProfileRecord('categories', id)
+  if (!current) return notFound('Category')
+  // Only the category fields the body names, checked as the Worker checks them. A field it leaves
+  // out keeps its value; keys that are not category fields are not written into the row.
+  const checked = checkCategoryUpdate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const patch = checked.value
+  if (patch.parent_id !== undefined && !(await currentProfileOwns('categories', patch.parent_id))) {
     return json({ error: 'Parent category does not belong to this profile' }, 400)
   }
-  await adapter.updateCategory(id, patch)
+  // A rename may not land on another category's name; an unchanged name is not checked.
+  if (patch.name !== undefined && patch.name !== current.name) {
+    const db = await getDB()
+    const others = await db.getAllFromIndex('categories', 'by_profile', current.profile_id)
+    const clash = clashingCategoryName(others as { id: unknown; name: unknown }[], patch.name, id)
+    if (clash !== null) return refuse(categoryNameTaken(clash))
+  }
+  if (Object.keys(patch).length > 0) {
+    await adapter.updateCategory(id, patch as Parameters<typeof adapter.updateCategory>[1])
+  }
   return ok()
 }
 
