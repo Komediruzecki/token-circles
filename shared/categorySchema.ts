@@ -133,9 +133,36 @@ export function checkCategoryCreate(body: unknown): Checked<CategoryInput> {
   return check(body, false) as Checked<CategoryInput>;
 }
 
-/** An edit: only the fields the body names, defaults for the blank ones, or why not. */
-export function checkCategoryUpdate(body: unknown): Checked<Partial<CategoryInput>> {
-  return check(body, true);
+/**
+ * An edit of a stored category: only the fields whose value the body changes, defaults for the
+ * blank ones, or why not.
+ *
+ * A field sent with the value the row already holds is neither checked nor written. Rows saved
+ * under older, looser rules hold values these rules refuse: a 3-digit or named color, a name over
+ * 100 characters, a type the app does not read. The edit forms send every field they show on
+ * every save, so a color-only edit of such a row would otherwise be refused for its name. What
+ * the edit changes is checked like anything else.
+ *
+ * `stored` is the row as either runtime holds it, or the values a form opened with.
+ */
+export function checkCategoryEdit(body: unknown, stored: object): Checked<Partial<CategoryInput>> {
+  const record = asRecord(body);
+  const row = stored as Readonly<Record<string, unknown>>;
+  const changed: Record<string, unknown> = {};
+  for (const field of FIELDS) {
+    const raw = rawField(record, field);
+    if (raw !== undefined && raw !== row[field]) changed[field] = raw;
+  }
+  return check(changed, true);
+}
+
+/**
+ * Whether an edit that sets `name` renames the category it edits, so the name has to be checked
+ * against the profile's other names. A change of case or surrounding space is not a rename: a
+ * profile that holds "Coffee" and "coffee" from before the check can still tidy either one.
+ */
+export function renamesCategory(storedName: unknown, name: string): boolean {
+  return !(typeof storedName === 'string' && sameCategoryName(storedName, name));
 }
 
 /** Whether two names are the same category name: case and surrounding space do not count. */

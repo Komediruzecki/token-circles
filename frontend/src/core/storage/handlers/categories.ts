@@ -2,10 +2,12 @@
  * Categories handlers — IndexedDB-backed implementations
  */
 import {
+  CATEGORY_MESSAGES,
   categoryNameTaken,
   checkCategoryCreate,
-  checkCategoryUpdate,
+  checkCategoryEdit,
   clashingCategoryName,
+  renamesCategory,
 } from '../../../../../shared/categorySchema'
 import { getDB } from '../idb'
 import {
@@ -34,8 +36,9 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
   const input = checked.value
 
   const pid = await adapter.getCurrentProfileId()
+  // A parent from another profile is refused at that field, as the Worker refuses it.
   if (!(await currentProfileOwns('categories', input.parent_id))) {
-    return json({ error: 'Parent category does not belong to this profile' }, 400)
+    return refuse({ parent_id: CATEGORY_MESSAGES.parent })
   }
 
   const db = await getDB()
@@ -65,16 +68,25 @@ export async function categoriesUpdate(
   const id = idParam(params)
   const current = await currentProfileRecord('categories', id)
   if (!current) return notFound('Category')
-  // Only the category fields the body names, checked as the Worker checks them. A field it leaves
-  // out keeps its value; keys that are not category fields are not written into the row.
-  const checked = checkCategoryUpdate(body)
-  if (!checked.ok) return refuse(checked.fields)
+  // Only the category fields the body changes, checked as the Worker checks them. A field it
+  // leaves out keeps its value, and so does one it sends back unchanged: that one is not checked
+  // either, so a row saved under older rules (a 3-digit color, a long name) can still be edited.
+  // Keys that are not category fields are not written into the row.
+  const checked = checkCategoryEdit(body, current)
+  if (!checked.ok) {
+    // The router logs this for every body its checks refuse, and the release suite fails a
+    // local-first run that shows one (tests/release/release-fixtures.ts). An edit is checked here,
+    // against the stored row, so it is said here.
+    console.error('[categoriesUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
+  }
   const patch = checked.value
   if (patch.parent_id !== undefined && !(await currentProfileOwns('categories', patch.parent_id))) {
-    return json({ error: 'Parent category does not belong to this profile' }, 400)
+    return refuse({ parent_id: CATEGORY_MESSAGES.parent })
   }
-  // A rename may not land on another category's name; an unchanged name is not checked.
-  if (patch.name !== undefined && patch.name !== current.name) {
+  // A rename may not land on another category's name. A name the edit leaves alone, or changes
+  // in case only, is not checked.
+  if (patch.name !== undefined && renamesCategory(current.name, patch.name)) {
     const db = await getDB()
     const others = await db.getAllFromIndex('categories', 'by_profile', current.profile_id)
     const clash = clashingCategoryName(others as { id: unknown; name: unknown }[], patch.name, id)

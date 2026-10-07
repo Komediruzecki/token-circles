@@ -9,6 +9,9 @@
  *
  * Now the dialog checks the values with the rules both runtimes run, marks the field in its own
  * words, and puts a server's reason (a name already taken) under the same field. No failure toast.
+ *
+ * The two dialogs that edit (Categories and Budgets) check only what an edit changes, as both
+ * runtimes do, so a category saved under older rules can still be edited.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -24,6 +27,8 @@ interface Surface {
   module: string
   /** Opens the category dialog from wherever this page offers it. */
   open: () => Promise<void>
+  /** Opens the dialog to edit the one category on the page, where this page offers that. */
+  edit?: () => Promise<void>
 }
 
 let host: HTMLDivElement
@@ -49,11 +54,14 @@ const SURFACES: Surface[] = [
     module: '../Categories',
     open: () =>
       clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="add-category-btn"]')),
+    edit: () =>
+      clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="edit-category-btn"]')),
   },
   {
     page: 'budgets',
     module: '../Budgets',
     open: () => clickWhenThere(() => byText('Add Category')),
+    edit: () => clickWhenThere(() => host.querySelector<HTMLElement>('button[title="Edit"]')),
   },
   {
     page: 'bills',
@@ -124,13 +132,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function mount(surface: Surface): Promise<void> {
+async function mount(surface: Surface, open = surface.open): Promise<void> {
   setPage(surface.page)
   const { default: Page } = (await import(/* @vite-ignore */ surface.module)) as {
     default: Component
   }
   dispose = render(() => <Page />, host)
-  await surface.open()
+  await open()
 }
 
 /** The category dialog's name field, found by its label as a person would. */
@@ -142,7 +150,18 @@ function nameField(): HTMLInputElement {
   return label.parentElement!.querySelector('input')!
 }
 
+/** The control a dialog's label names, through the label's `for`. */
+function labelled(text: string): HTMLInputElement {
+  const label = Array.from(host.querySelectorAll('label')).find(
+    (l) => l.textContent?.trim() === text
+  )
+  if (!label) throw new Error(`no ${text} field on the page`)
+  return document.getElementById(label.htmlFor) as HTMLInputElement
+}
+
 const dialogForm = () => nameField().closest('form')!
+const dialogOpen = () =>
+  Array.from(host.querySelectorAll('label')).some((l) => l.textContent?.trim() === 'Category Name')
 
 function type(el: HTMLInputElement, value: string): void {
   el.focus()
@@ -226,13 +245,69 @@ describe.each(SURFACES)('the category dialog on $page', (surface) => {
     const rows = (await (await getDB()).getAll('categories')) as { name: string; icon: string }[]
     expect(rows.find((r) => r.name === 'Coffee')?.icon).toBe('tag')
     await vi.waitFor(() => {
-      expect(
-        Array.from(host.querySelectorAll('label')).some(
-          (l) => l.textContent?.trim() === 'Category Name'
-        )
-      ).toBe(false)
+      expect(dialogOpen()).toBe(false)
     })
     expect(errorToasts()).toEqual([])
     expect(successToasts()).toEqual(['Added "Coffee" to your categories.'])
+  })
+})
+
+// A name over 100 characters and a 3-digit color: both refused on a new category, both stored by
+// older versions. The edit dialog sends every field it shows back on each save.
+const LONG_NAME = 'Allotment '.repeat(12).trim()
+
+describe.each(SURFACES.filter((s) => s.edit))('editing on $page', (surface) => {
+  beforeEach(async () => {
+    const db = await getDB()
+    await db.clear('categories')
+    await db.add('categories', {
+      id: 2,
+      profile_id: 1,
+      name: LONG_NAME,
+      type: 'expense',
+      color: '#fff',
+      icon: 'tag',
+      parent_id: null,
+      tax_deductible: false,
+      created_at: '2026-01-01T00:00:00.000Z',
+    })
+  })
+
+  it('saves a category kept under older rules, checking only what changed', async () => {
+    await mount(surface, surface.edit)
+    await vi.waitFor(() => {
+      expect(nameField().value).toBe(LONG_NAME)
+    })
+
+    type(labelled('Icon'), 'shovel')
+    submitDialog()
+
+    await vi.waitFor(async () => {
+      expect(await (await getDB()).get('categories', 2)).toMatchObject({
+        name: LONG_NAME,
+        color: '#fff',
+        icon: 'shovel',
+      })
+    })
+    await vi.waitFor(() => {
+      expect(dialogOpen()).toBe(false)
+    })
+    expect(errorToasts()).toEqual([])
+    expect(successToasts()).toEqual([`Saved your changes to "${LONG_NAME}".`])
+  })
+
+  it('still marks a name the edit blanks', async () => {
+    await mount(surface, surface.edit)
+    await vi.waitFor(() => {
+      expect(nameField().value).toBe(LONG_NAME)
+    })
+
+    type(nameField(), ' ')
+    submitDialog()
+    await settle()
+
+    expect(nameField().getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(nameField())).toContain('Give the category a name.')
+    expect(((await (await getDB()).get('categories', 2)) as { name: string }).name).toBe(LONG_NAME)
   })
 })

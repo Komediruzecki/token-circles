@@ -13,7 +13,7 @@
 // always evaluate before its body, making this chunk-order-independent.
 import './zodConfig'
 import { z } from 'zod/v4'
-import { checkCategoryCreate, checkCategoryUpdate } from '../../../shared/categorySchema'
+import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { refusalOf } from '../../../shared/refusal'
 import type { Checked, FieldErrors } from '../../../shared/refusal'
 
@@ -217,7 +217,8 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/transactions': transactionCreateSchema,
   'PUT:/api/transactions': transactionUpdateSchema,
   'POST:/api/categories': checkCategoryCreate,
-  'PUT:/api/categories': checkCategoryUpdate,
+  // No PUT entry for categories: an edit is checked by its handler against the stored row, since
+  // a value the row already holds is never refused (checkCategoryEdit in shared/categorySchema.ts).
   'POST:/api/accounts': accountCreateSchema,
   'PUT:/api/accounts': accountUpdateSchema,
   'POST:/api/budgets': budgetCreateSchema,

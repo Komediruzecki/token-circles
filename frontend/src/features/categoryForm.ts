@@ -11,8 +11,12 @@
  * The check is the one the local-first router and the Worker run (shared/categorySchema.ts), so a
  * blank name is caught here, in the same words, before anything is sent. A name that is already
  * taken needs the list, so the server answers it, and the kit puts its words under the name.
+ *
+ * An edit checks only what it changes, as the server does: a category saved under older rules (a
+ * 3-digit color, a name over 100 characters) can still have its icon changed without its name
+ * being refused.
  */
-import { checkCategoryCreate } from '../../../shared/categorySchema'
+import { checkCategoryCreate, checkCategoryEdit } from '../../../shared/categorySchema'
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { createForm } from '../components/form'
 import { apiPost, apiPut, showToast } from '../core/api'
@@ -50,10 +54,13 @@ export type CategoryForm = Form<CategoryFormValues> & {
 
 export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
   const blank: CategoryFormValues = { name: '', type: 'expense', color: options.color, icon: '' }
+  /** What an edit opened with: a value still the same is not checked. Null for a new category. */
+  let opened: CategoryFormValues | null = null
 
   const form = createForm<CategoryFormValues>({
     initial: blank,
-    check: (values) => fieldErrorsOf(checkCategoryCreate(values)),
+    check: (values) =>
+      fieldErrorsOf(opened ? checkCategoryEdit(values, opened) : checkCategoryCreate(values)),
     send: async (values) => {
       const name = values.name.trim()
       // Only the fields this form shows: an edit must not clear a parent or a tax flag it never
@@ -78,16 +85,15 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
   })
 
   const open = (category?: EditableCategory | null) => {
-    form.reset(
-      category
-        ? {
-            name: category.name,
-            type: category.type as CategoryFormValues['type'],
-            color: category.color,
-            icon: category.icon ?? '',
-          }
-        : blank
-    )
+    opened = category
+      ? {
+          name: category.name,
+          type: category.type as CategoryFormValues['type'],
+          color: category.color,
+          icon: category.icon ?? '',
+        }
+      : null
+    form.reset(opened ?? blank)
   }
 
   return Object.assign(form, { open })

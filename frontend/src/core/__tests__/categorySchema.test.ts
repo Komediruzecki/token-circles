@@ -8,8 +8,9 @@ import {
   CATEGORY_MESSAGES,
   categoryNameTaken,
   checkCategoryCreate,
-  checkCategoryUpdate,
+  checkCategoryEdit,
   clashingCategoryName,
+  renamesCategory,
   sameCategoryName,
 } from '../../../../shared/categorySchema'
 import {
@@ -120,34 +121,90 @@ describe('a new category', () => {
 })
 
 describe('an edit to a category', () => {
-  it('checks and returns only the fields the body names', () => {
-    expect(checkCategoryUpdate({ color: '#59d2a2' })).toEqual({
+  // The row as storage holds it: tax_deductible is the 0 or 1 D1 keeps.
+  const stored = {
+    id: 7,
+    name: 'Groceries',
+    type: 'expense',
+    color: '#59d2a2',
+    icon: 'cart',
+    parent_id: 4,
+    tax_deductible: 0,
+  }
+  const edit = (body: unknown) => checkCategoryEdit(body, stored)
+
+  it('checks and returns only the fields the body changes', () => {
+    expect(edit({ color: '#112233' })).toEqual({ ok: true, value: { color: '#112233' } })
+    expect(edit({ ...stored, color: '#112233' })).toEqual({
       ok: true,
-      value: { color: '#59d2a2' },
+      value: { color: '#112233' },
     })
-    expect(checkCategoryUpdate({})).toEqual({ ok: true, value: {} })
+    expect(edit({})).toEqual({ ok: true, value: {} })
   })
 
   it('refuses a name it blanks, and a null one', () => {
-    expect(fieldErrorsOf(checkCategoryUpdate({ name: ' ' }))).toEqual({
-      name: CATEGORY_MESSAGES.name,
-    })
-    expect(fieldErrorsOf(checkCategoryUpdate({ name: null }))).toEqual({
-      name: CATEGORY_MESSAGES.name,
-    })
+    expect(fieldErrorsOf(edit({ name: ' ' }))).toEqual({ name: CATEGORY_MESSAGES.name })
+    expect(fieldErrorsOf(edit({ name: null }))).toEqual({ name: CATEGORY_MESSAGES.name })
   })
 
   it('gives a blank icon the default, the way a cleared icon field means it', () => {
-    expect(checkCategoryUpdate({ icon: null })).toEqual({ ok: true, value: { icon: 'tag' } })
-    expect(checkCategoryUpdate({ icon: '' })).toEqual({ ok: true, value: { icon: 'tag' } })
+    expect(edit({ icon: null })).toEqual({ ok: true, value: { icon: 'tag' } })
+    expect(edit({ icon: '' })).toEqual({ ok: true, value: { icon: 'tag' } })
   })
 
   it('clears the parent only when the body says so', () => {
-    expect(checkCategoryUpdate({ parent_id: null })).toEqual({
-      ok: true,
-      value: { parent_id: null },
+    expect(edit({ parent_id: null })).toEqual({ ok: true, value: { parent_id: null } })
+    expect(edit({ name: 'Food' })).toEqual({ ok: true, value: { name: 'Food' } })
+  })
+
+  describe('of a row saved under older rules', () => {
+    const legacy = {
+      id: 8,
+      name: 'Allotment '.repeat(12).trim(),
+      type: 'savings',
+      color: '#fff',
+      icon: '',
+      parent_id: 99,
+      tax_deductible: 0,
+    }
+
+    it('does not check a value the row already holds', () => {
+      expect(legacy.name.length).toBeGreaterThan(100)
+      const sentBack = {
+        name: legacy.name,
+        type: legacy.type,
+        color: legacy.color,
+        icon: legacy.icon,
+        parentId: legacy.parent_id,
+      }
+      expect(checkCategoryEdit(sentBack, legacy)).toEqual({ ok: true, value: {} })
+      expect(checkCategoryEdit({ ...sentBack, color: '#112233' }, legacy)).toEqual({
+        ok: true,
+        value: { color: '#112233' },
+      })
     })
-    expect(checkCategoryUpdate({ name: 'Food' })).toEqual({ ok: true, value: { name: 'Food' } })
+
+    it('still checks what the edit changes', () => {
+      expect(fieldErrorsOf(checkCategoryEdit({ ...legacy, color: '#ffff' }, legacy))).toEqual({
+        color: CATEGORY_MESSAGES.color,
+      })
+      expect(fieldErrorsOf(checkCategoryEdit({ name: `${legacy.name}s` }, legacy))).toEqual({
+        name: CATEGORY_MESSAGES.nameLength,
+      })
+    })
+  })
+})
+
+describe('a rename', () => {
+  it('is a new name, not a change of case or of the spaces around it', () => {
+    expect(renamesCategory('Coffee', 'Tea')).toBe(true)
+    expect(renamesCategory('Coffee', 'coffee')).toBe(false)
+    expect(renamesCategory('Coffee', ' Coffee ')).toBe(false)
+  })
+
+  it('is any name for a row that holds none', () => {
+    expect(renamesCategory(null, 'Coffee')).toBe(true)
+    expect(renamesCategory(undefined, 'Coffee')).toBe(true)
   })
 })
 
