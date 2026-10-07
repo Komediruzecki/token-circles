@@ -50,11 +50,17 @@ A confirmed bug that the release does not fix is recorded with `test.fail(condit
 stays green while the bug exists and turns red, "expected to fail, but passed", the day it is fixed. Remove the
 line in the PR that fixes it.
 
-| Case                | Mode  | Bug                                                                                                   |
-| ------------------- | ----- | ----------------------------------------------------------------------------------------------------- |
-| s01 1.2b            | local | A category saved without an icon fails validation (`icon: null`), since 5.15.1                        |
-| s01 1.2c            | local | A category created on the page has no `tax_deductible`, so `api.getCategories()` throws, since 5.15.1 |
-| s15 prod first load | local | 5.16.1's "Close your other Token Circles tabs" notice is queued but never drawn during boot           |
+| Case                | Mode  | Bug                                                                                                                                  |
+| ------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| s01 1.2b            | local | A category saved without an icon fails validation (`icon: null`), since 5.15.1                                                       |
+| s01 1.2c            | local | A category created on the page has no `tax_deductible`, so `api.getCategories()` throws, since 5.15.1                                |
+| s02 2.7b            | both  | An open bill calendar keeps a paid bill's "upcoming" dot: its cells read each day once (`BillCalendar.tsx:255`)                      |
+| s02b 2.17b          | both  | The same stale cells keep a renamed category's old name and colour; in local-first the calendar has no colour at all                 |
+| s02b 2.17           | local | Local-first bills, subscriptions and recurring rules carry no category name or colour (`handlers/bills.ts`, `handlers/recurring.ts`) |
+| s02b 2.14b          | cloud | Analytics fetches `stats/monthly` and `category-trends` twice per refresh                                                            |
+| s04 4.2b            | cloud | An import preview sets off a badge evaluation: `announceDataChanged` does not skip `READS_SENT_AS_POST` (new in 5.16)                |
+| s11 11.4b           | both  | The subscription catalog keeps the currency it was first drawn in (5.16.1's fix is incomplete)                                       |
+| s15 prod first load | local | 5.16.1's "Close your other Token Circles tabs" notice is queued but never drawn during boot                                          |
 
 ## Conventions
 
