@@ -34,9 +34,11 @@ export const tagsRoutes = new Hono<AppEnv>();
 
 tagsRoutes.get('/api/tags', requireAuth, async (c) => {
   const pid = await getProfileId(c);
+  // `profile_id` names each tag's owner, as the local store's rows do: a page holding a list from
+  // before a profile switch tells the other profile's tags apart by it.
   const rows = await db.all(
     c.env.DB,
-    'SELECT id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name',
+    'SELECT id, profile_id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name',
     pid
   );
   return c.json(rows);

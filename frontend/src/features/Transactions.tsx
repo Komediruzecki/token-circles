@@ -30,7 +30,18 @@
  * Transactions Component
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  on,
+  onCleanup,
+  Show,
+  Switch,
+  untrack,
+} from 'solid-js'
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
@@ -44,16 +55,66 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
+import { activeProfileId, profileReadScope } from '../core/apiProfileScope'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
 import { asOneWrite, entityVersion } from '../core/dataVersions'
+import { handFocusTo } from '../core/domFocus'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
+import { rowsOfProfile } from '../core/quickEntryLists'
 import { fromPill, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
+
+/**
+ * The add form's account field when the account list did not load: says so, and offers to read it
+ * again. The retry takes this line away, and when its button held focus (a keyboard press) focus
+ * goes to `focusTarget` rather than falling to the page.
+ */
+function AccountsDidNotLoad(props: {
+  onRetry: () => void
+  focusTarget: () => HTMLElement | undefined
+}) {
+  let retry: HTMLButtonElement | undefined
+  onCleanup(() => {
+    handFocusTo(props.focusTarget(), retry)
+  })
+  return (
+    <div
+      data-test-id="tx-accounts-failed"
+      style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0"
+    >
+      <span style="font-size: 13px; color: var(--text-secondary)">Accounts didn't load.</span>
+      <button
+        ref={retry}
+        type="button"
+        data-test-id="tx-accounts-retry"
+        onClick={() => {
+          props.onRetry()
+        }}
+        style="padding: 6px 12px; background: transparent; color: var(--primary); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+      >
+        Try again
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The toast for a form that a profile switch closed with changes in it: what was lost, and where
+ * to go to make them again. Without the profile's name, only what was lost.
+ */
+function unsavedOnSwitch(editing: boolean, profileName: string | undefined): string {
+  if (profileName === undefined) {
+    return editing ? "Your changes to this entry weren't saved." : "Your new entry wasn't saved."
+  }
+  return editing
+    ? `Your changes weren't saved. Switch back to ${profileName} to edit this entry.`
+    : `Your new entry wasn't saved. Switch back to ${profileName} to add it.`
+}
 
 export default function Transactions() {
   const state = useAppState()
@@ -96,19 +157,46 @@ export default function Transactions() {
   let formTagIdsAtOpen: number[] = []
   // Advanced fields (currency/FX, counterparties, tags, notes, receipt) start hidden.
   const [showAdvanced, setShowAdvanced] = createSignal(false)
-  const [accounts, setAccounts] = createSignal<Array<{ id: number; name: string; type: string }>>(
-    []
-  )
+  // The household's accounts and categories: every ticked profile's, which is what the filter bar
+  // covers. The form offers one profile's of them, below.
+  const [accounts, setAccounts] = createSignal<
+    Array<{ id: number; name: string; type: string; profile_id: number }>
+  >([])
   const [categories, setCategories] = createSignal<Category[]>([])
+  /**
+   * The active profile: where a write lands (X-Profile-Id), read where apiFetch reads it. Followed
+   * on every profile notice: a switch bumps profileVersion, and creating a profile makes it the
+   * active one by moving currentProfile alone.
+   */
+  const activeId = createMemo(
+    on([() => state.profileVersion, () => state.currentProfile?.id], () => activeProfileId())
+  )
+  /**
+   * The profile the open form writes to, set as it opens: the edited row's own, or the active
+   * profile for a new entry. A save refuses a category or an account of any other profile
+   * ("Category does not belong to this profile"), so the form offers that profile's alone, also
+   * with two profiles ticked. Another profile's row never opens here: the table disables its
+   * controls, because an edit is scoped to the profile in X-Profile-Id. And the form closes when the
+   * active profile changes (below, after handleCopyTransaction).
+   */
+  const [formProfileId, setFormProfileId] = createSignal<number>(activeId())
+  const formCategories = createMemo(() => rowsOfProfile(categories(), formProfileId()))
+  const formAccounts = createMemo(() => rowsOfProfile(accounts(), formProfileId()))
+  /**
+   * The active profile's categories and accounts, for the other writes on this page: a bulk change
+   * of category, whose rows are the active profile's (another profile's cannot be selected, #386),
+   * a recurring entry, which is written to the active profile, and Auto Categorize, which edits the
+   * active profile's rows. Each refuses another profile's.
+   */
+  const activeCategories = createMemo(() => rowsOfProfile(categories(), activeId()))
+  const activeAccounts = createMemo(() => rowsOfProfile(accounts(), activeId()))
   // Filter categories by the selected transaction type
   const filteredCategories = createMemo(() => {
     const t = type()
-    const cats = categories()
     if (t === 'transfer') return []
-    return cats.filter((c) => c.type === t)
+    return formCategories().filter((c) => c.type === t)
   })
-  // Both runtimes list the active profile's tags. `profile_id` comes only from the local store;
-  // the Worker leaves it out.
+  // Both runtimes list the active profile's tags, each with its `profile_id` (see loadTags).
   const [tags, setTags] = createSignal<
     Array<{ id: number; name: string; color: string; profile_id?: number }>
   >([])
@@ -150,17 +238,40 @@ export default function Transactions() {
     }
   )
 
-  /** Load the tag list used by the filter bar and the bulk-tag modal. */
+  // Newest answer wins, as for the category and account lists below: an answer is shown only if
+  // nothing asked for after it is on screen already. `tagsShownFor` is the profile the list on
+  // screen was asked as: both runtimes list the active profile's tags, whatever the household.
+  let tagsAsked = 0
+  let tagsShown = 0
+  let tagsShownFor: number | null = null
+
+  /**
+   * Load the tag list used by the filter bar, the form and the bulk-tag modal. A failed load keeps
+   * the list on screen while it is the one asked for; after a profile switch it is another
+   * profile's, and a failed load clears it. Every tag carries its `profile_id`: a row from a Worker
+   * that answers without one (older than the field) is the profile the request was asked as, since
+   * both runtimes list the active profile's tags alone.
+   */
   const loadTags = async (): Promise<Array<{ id: number; name: string; color: string }>> => {
+    const asked = ++tagsAsked
+    const askedAs = activeProfileId()
     try {
       const tagData = await api.getTags()
-      const list = Array.isArray(tagData)
-        ? (tagData as Array<{ id: number; name: string; color: string }>)
-        : []
+      if (!Array.isArray(tagData)) throw new TypeError('The tag list is not a list')
+      if (asked < tagsShown) return tags()
+      tagsShown = asked
+      tagsShownFor = askedAs
+      const list = (
+        tagData as Array<{ id: number; name: string; color: string; profile_id?: number }>
+      ).map((tag) => (tag.profile_id === undefined ? { ...tag, profile_id: askedAs } : tag))
       setTags(list)
       return list
     } catch {
-      return tags()
+      if (asked < tagsShown || tagsShownFor === askedAs) return tags()
+      tagsShown = asked
+      tagsShownFor = askedAs
+      setTags([])
+      return []
     }
   }
 
@@ -429,9 +540,16 @@ export default function Transactions() {
   const createTagInline = async (
     name: string
   ): Promise<{ id: number; name: string; color: string } | null> => {
+    // Created for the profile it goes out as, which is the one the lists below filter on.
+    const owner = activeId()
     try {
       const created = await api.createTag(name, '#6e9bff')
-      const tag = { id: created.id, name: created.name ?? name, color: created.color ?? '#6e9bff' }
+      const tag = {
+        id: created.id,
+        name: created.name ?? name,
+        color: created.color ?? '#6e9bff',
+        profile_id: owner,
+      }
       if (!tags().some((t) => t.id === tag.id)) setTags([...tags(), tag])
       // Keep the Tags page (and any other consumer) in step with a tag created from here.
       bumpTagsVersion()
@@ -451,14 +569,13 @@ export default function Transactions() {
    * The tags this page offers, in the form, the filter bar and the bulk-tag modal: the active
    * profile's. A row is written to that profile, and neither runtime attaches another profile's
    * tag to it. The list is already the active profile's in both runtimes; this also covers the
-   * moment after a profile switch, before the list has reloaded. A tag with no owner on it is the
-   * active profile's: the Worker leaves the owner out, and one created here has none yet.
+   * moment after a profile switch, before the list has reloaded. The active profile is `activeId`,
+   * the one the form writes to, known before the profile record is. Every tag in the list names
+   * its owner: loadTags sees to that for what it loads, and createTagInline for what it creates.
    */
   const ownTags = createMemo(() => {
-    const active = state.currentProfile?.id
-    return tags().filter(
-      (tag) => active === undefined || tag.profile_id === undefined || tag.profile_id === active
-    )
+    const active = activeId()
+    return tags().filter((tag) => tag.profile_id === active)
   })
   /** The profile's tags the form's transaction does not carry yet, offered to add in one click. */
   const unpickedTags = createMemo(() =>
@@ -641,16 +758,23 @@ export default function Transactions() {
     return filtered
   })
 
-  // Get uncategorized transactions.
+  // The active profile's uncategorized transactions, for Auto Categorize.
   //
   // Transfers are excluded: a transfer has no category BY DESIGN — money moving between two of
   // your own accounts is not spending — so listing them here filled the modal with rows that
   // could not, and should not, be categorized. Only imports create genuinely uncategorized rows
   // (a gated category name imports with category_id null); the app itself will not.
+  //
+  // So are other profiles' rows. With two profiles ticked the list covers the household, but an
+  // edit is scoped to the profile in X-Profile-Id: another profile's row answers 404, as its
+  // category would be refused for this one's.
   const uncategorizedTransactions = createMemo(() => {
-    const allTransactions = transactions()
-    return allTransactions.filter(
-      (tx) => (tx.category_id === undefined || tx.category_id === null) && tx.type !== 'transfer'
+    const active = activeId()
+    return transactions().filter(
+      (tx) =>
+        (tx.category_id === undefined || tx.category_id === null) &&
+        tx.type !== 'transfer' &&
+        tx.profile_id === active
     )
   })
 
@@ -685,15 +809,9 @@ export default function Transactions() {
   // One write per call, NO reload here: the modal applies its batch as one write (asOneWrite), so
   // the list follows the counter once at the end. Reloading the whole list after every row turned
   // "Apply 50" into 50 full refetches.
+  /** One Auto Categorize pick. A refusal is the modal's to report: it says how many did not save. */
   const handleAutoApplyCategory = async (transactionId: number, categoryId: number) => {
-    try {
-      await api.updateTransaction(transactionId, { category_id: categoryId })
-    } catch (error) {
-      console.error('Failed to apply category:', error)
-      if (errorStatus(error) === 409) {
-        toast(error instanceof Error ? error.message : 'That transaction changed', 'error')
-      }
-    }
+    await api.updateTransaction(transactionId, { category_id: categoryId })
   }
 
   // Refetches overlap once every write and every resume triggers one, and their answers can land
@@ -743,6 +861,29 @@ export default function Transactions() {
     setCurrentPage(1)
   }
 
+  /** What the form holds, to tell whether the person changed anything since it opened. */
+  const formFields = () => ({
+    type: type(),
+    date: formDate(),
+    amount: formAmount(),
+    currency: formCurrency(),
+    exchangeRate: formExchangeRate(),
+    category: formCategory(),
+    beneficiary: formBeneficiary(),
+    payor: formPayor(),
+    notes: formNotes(),
+    description: formDescription(),
+    means: formMeans(),
+    account: formAccountId(),
+    transferAccount: formTransferAccountId(),
+    amountLocal: formAmountLocal(),
+    tags: formTags().map((t) => t.id),
+    receipt: selectedFile() !== null,
+  })
+  let formAtOpen: ReturnType<typeof formFields> | null = null
+  const formHasChanges = () =>
+    formAtOpen !== null && JSON.stringify(untrack(formFields)) !== JSON.stringify(formAtOpen)
+
   // Update form values when closing modal
   createEffect(() => {
     if (!isTransactionModalOpen()) {
@@ -759,6 +900,7 @@ export default function Transactions() {
   })
 
   const openTransactionModal = () => {
+    setFormProfileId(activeId())
     setType('expense')
     setFormId(null)
     setFormDescription('')
@@ -770,7 +912,9 @@ export default function Transactions() {
     setFormPayor('')
     setFormNotes('')
     setFormMeans('')
-    setFormAccountId(defaultAccountId())
+    const account = defaultAccountId()
+    setFormAccountId(account)
+    accountToPreselect = account === null
     setFormTransferAccountId(null)
     setFormAmountLocal('')
     setFormTags([])
@@ -780,6 +924,7 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
   }
 
@@ -802,12 +947,32 @@ export default function Transactions() {
   // Prefill the account for a fresh entry: last-used if it still exists, else the
   // first account (the de-facto primary), else none.
   const defaultAccountId = (): number | null => {
-    const accs = accounts()
+    const accs = formAccounts()
     if (accs.length === 0) return null
     const stored = parseInt(localStorage.getItem(lastAccountKey()) || '', 10)
     if (Number.isFinite(stored) && accs.some((a) => a.id === stored)) return stored
     return accs[0].id
   }
+  /**
+   * A new entry opened before the accounts were in had nothing to prefill. It gets the account it
+   * would have opened with once they arrive, and only then: not over the Cash account the person
+   * made from the form meanwhile, and not on a later reload, over whatever they picked since. The
+   * form still counts as unchanged with it: the person did not choose it.
+   */
+  let accountToPreselect = false
+  createEffect(
+    on(
+      formAccounts,
+      (accs) => {
+        if (!accountToPreselect || !isTransactionModalOpen() || accs.length === 0) return
+        accountToPreselect = false
+        const account = defaultAccountId()
+        setFormAccountId(account)
+        if (formAtOpen !== null) formAtOpen = { ...formAtOpen, account }
+      },
+      { defer: true }
+    )
+  )
   // Create a starter "Cash" account inline when the user has none, then select it.
   const createCashAccount = async () => {
     try {
@@ -817,8 +982,9 @@ export default function Transactions() {
         currency: getLocalCurrency(),
         balance: 0,
       } as unknown as Parameters<typeof api.createAccount>[0])
-      const acctData = await api.getAccounts()
-      if (Array.isArray(acctData)) setAccounts(acctData as any[])
+      // The account list follows the create on its own (apiFetch bumps the accounts counter, and
+      // loadAccounts answers it), so it is not fetched again here, outside that loader.
+      accountToPreselect = false
       setFormAccountId(acc.id)
     } catch (error) {
       console.error('Failed to create Cash account:', error)
@@ -827,6 +993,8 @@ export default function Transactions() {
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
+    setFormProfileId(transaction.profile_id ?? activeId())
+    accountToPreselect = false
     setType(transaction.type)
     setFormId(transaction.id.toString())
     setFormDescription(transaction.description)
@@ -847,6 +1015,7 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
     // Show the already-attached receipt in the modal (async; modal opens immediately)
     if (typeof transaction.receipt_id === 'number') {
@@ -870,6 +1039,8 @@ export default function Transactions() {
   // category, since they describe the kind of transaction; the copy has none of them until Save
   // attaches them.
   const handleCopyTransaction = (transaction: Transaction) => {
+    setFormProfileId(activeId())
+    accountToPreselect = false
     setType(transaction.type)
     setFormId(null)
     setFormDescription(transaction.description)
@@ -891,8 +1062,32 @@ export default function Transactions() {
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
+    formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
   }
+
+  /**
+   * A switch of the active profile closes the form. It writes to the profile it opened for, and
+   * saved after a switch it would go out as the profile switched to: refused for the entry's
+   * category and account, and answered 404 for an edit of the row. When that loses changes the
+   * person made, a toast says so and names the profile to go back to. `activeId` changes only when
+   * the active profile does, so the other notices that bump profileVersion (a quick-add saved, a
+   * household edited) leave an open form alone.
+   */
+  createEffect(
+    on(
+      activeId,
+      (active) => {
+        if (!isTransactionModalOpen() || active === formProfileId()) return
+        const lost = formHasChanges()
+        const editing = formId() !== null
+        const owner = state.profiles.find((p) => p.id === formProfileId())?.name
+        setTransactionModalOpen(false)
+        if (lost) toast(unsavedOnSwitch(editing, owner), 'warning')
+      },
+      { defer: true }
+    )
+  )
 
   /**
    * Adopt a `?tag=<id>` filter from the URL hash. The Tags page links here with a tag
@@ -970,6 +1165,45 @@ export default function Transactions() {
   let categoryHashApplied = false
   let accountHashApplied = false
 
+  /** The profiles a read asks for now. Followed on every profile notice, as activeId is. */
+  const scopeNow = createMemo(
+    on([() => state.profileVersion, () => state.currentProfile?.id], () => profileReadScope())
+  )
+  /**
+   * The profiles the account list on screen is the answer for: null until one has come in. The
+   * empty list a failed load leaves is not an answer.
+   */
+  const [accountsAnsweredFor, setAccountsAnsweredFor] = createSignal<string | null>(null)
+  /** The profiles the newest account read failed for. Cleared when another read is sent. */
+  const [accountsFailedFor, setAccountsFailedFor] = createSignal<string | null>(null)
+  /**
+   * Whether the form's empty account list means "no accounts", rather than "not in yet". Only
+   * then does it offer to create a Cash account: while the list loads, or after a switch until
+   * the profile switched to has its own in, it says the accounts are loading.
+   */
+  const accountsAreIn = () => accountsAnsweredFor() === scopeNow()
+  /**
+   * The read for the profiles asked for now failed, with nothing of theirs on screen: the form
+   * says the accounts did not load and offers to try again, rather than "Loading accounts…" for as
+   * long as the page stays open. No Cash account is offered then either: the profile may have
+   * accounts that simply did not arrive.
+   */
+  const accountsFailed = () => !accountsAreIn() && accountsFailedFor() === scopeNow()
+  /** The account field, which takes focus when its "Try again" goes while holding it. */
+  let accountField: HTMLDivElement | undefined
+
+  // The two lists below load the way the transaction list does (listAsked/listShown): refetches
+  // overlap once every write, switch and resume triggers one, and an older answer shown after a
+  // newer one would put back a list that a later write or a switch replaced. So an answer is shown
+  // only if nothing asked for after it is on screen already. `…ShownFor` is the scope the list on
+  // screen was asked for.
+  let categoriesAsked = 0
+  let categoriesShown = 0
+  let categoriesShownFor = ''
+  let accountsAsked = 0
+  let accountsShown = 0
+  let accountsShownFor = ''
+
   /**
    * Load the category list backing the filter bar, the bulk-category modal and — the one that
    * mattered — the add/edit transaction form's type dropdown.
@@ -979,35 +1213,57 @@ export default function Transactions() {
    * on Categories, Budgets, Bills or Goals never appeared here, and neither did the right list
    * after a profile switch; only a browser reload fixed it. It is now driven by the effect below.
    *
-   * On failure the previous list is kept rather than blanked: a dropped refresh should not empty a
-   * dropdown the user is looking at.
+   * A failed load keeps the list on screen while it is the one asked for: a dropped refresh should
+   * not empty a dropdown the user is looking at. After a profile switch the list on screen is
+   * another profile's, and a failed load clears it rather than leave it looking current.
    */
   const loadCategories = async () => {
+    const asked = ++categoriesAsked
+    const scope = profileReadScope()
     try {
       const cats = await api.getCategories()
-      if (!Array.isArray(cats)) return
+      if (!Array.isArray(cats)) throw new TypeError('The category list is not a list')
+      if (asked < categoriesShown) return
+      categoriesShown = asked
+      categoriesShownFor = scope
       setCategories(cats as Category[])
       if (!categoryHashApplied) {
         categoryHashApplied = true
         applyCategoryFromHash(cats as Category[])
       }
     } catch {
-      // Keep whatever is on screen.
+      if (asked < categoriesShown || categoriesShownFor === scope) return
+      categoriesShown = asked
+      categoriesShownFor = scope
+      setCategories([])
     }
   }
 
   /** Load the account list for the filter bar and the transaction form. See loadCategories. */
   const loadAccounts = async () => {
+    const asked = ++accountsAsked
+    const scope = profileReadScope()
+    // Until this read answers, the field says the accounts are loading, a retry included.
+    setAccountsFailedFor(null)
     try {
       const acctData = await api.getAccounts()
-      if (!Array.isArray(acctData)) return
+      if (!Array.isArray(acctData)) throw new TypeError('The account list is not a list')
+      if (asked < accountsShown) return
+      accountsShown = asked
+      accountsShownFor = scope
       setAccounts(acctData as any[])
+      setAccountsAnsweredFor(scope)
       if (!accountHashApplied) {
         accountHashApplied = true
         applyAccountFromHash(acctData as Array<{ id: number }>)
       }
     } catch {
-      // Keep whatever is on screen.
+      // The newest read failed: an older one's failure says nothing while a newer read is out.
+      if (asked === accountsAsked) setAccountsFailedFor(scope)
+      if (asked < accountsShown || accountsShownFor === scope) return
+      accountsShown = asked
+      accountsShownFor = scope
+      setAccounts([])
     }
   }
 
@@ -1145,7 +1401,7 @@ export default function Transactions() {
       {/* Bulk Action Bar */}
       <BulkActionBar
         selectedCount={selectedTransactions().length}
-        categories={categories()}
+        categories={activeCategories()}
         tags={ownTags()}
         onClearSelection={() => setSelectedTransactions([])}
         onDeleteSelected={handleBulkDelete}
@@ -1157,7 +1413,7 @@ export default function Transactions() {
       />
 
       {/* Recurring Transactions */}
-      <RecurringSection categories={categories()} accounts={accounts()} />
+      <RecurringSection categories={activeCategories()} accounts={activeAccounts()} />
 
       {/* Transaction Modal */}
       <div
@@ -1315,7 +1571,7 @@ export default function Transactions() {
                         }}
                       >
                         <option value="">Select destination...</option>
-                        <For each={accounts()}>
+                        <For each={formAccounts()}>
                           {(acct) => (
                             <option
                               value={String(acct.id)}
@@ -1355,28 +1611,48 @@ export default function Transactions() {
                   </div>
                 </Show>
               </div>
-              <div class={styles.formGroup}>
+              <div class={styles.formGroup} ref={accountField} tabindex="-1">
                 <label class={styles.formLabel}>
                   {type() === 'transfer' ? 'From account' : 'Account'}
                   {type() !== 'transfer' && <span style="color: var(--danger, #ef4444)"> *</span>}
                   <InfoTip text="Which of YOUR accounts the money moved out of (expense / transfer From) or into (income). Links the entry to a real balance so per-account totals and net worth stay accurate. Required for income and expense." />
                 </label>
                 <Show
-                  when={accounts().length > 0}
+                  when={formAccounts().length > 0}
                   fallback={
-                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
-                      <span style="font-size: 13px; color: var(--text-secondary)">
-                        No accounts yet.
-                      </span>
-                      <button
-                        type="button"
-                        data-test-id="tx-create-cash-account"
-                        onClick={createCashAccount}
-                        style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
-                      >
-                        Create a "Cash" account
-                      </button>
-                    </div>
+                    <Switch
+                      fallback={
+                        <select
+                          class={styles.formControl}
+                          data-test-id="tx-account-loading"
+                          disabled
+                        >
+                          <option>Loading accounts…</option>
+                        </select>
+                      }
+                    >
+                      <Match when={accountsFailed()}>
+                        <AccountsDidNotLoad
+                          onRetry={() => void loadAccounts()}
+                          focusTarget={() => accountField}
+                        />
+                      </Match>
+                      <Match when={accountsAreIn()}>
+                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
+                          <span style="font-size: 13px; color: var(--text-secondary)">
+                            No accounts yet.
+                          </span>
+                          <button
+                            type="button"
+                            data-test-id="tx-create-cash-account"
+                            onClick={createCashAccount}
+                            style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                          >
+                            Create a "Cash" account
+                          </button>
+                        </div>
+                      </Match>
+                    </Switch>
                   }
                 >
                   <select
@@ -1389,7 +1665,7 @@ export default function Transactions() {
                     }}
                   >
                     <option value="">Select account...</option>
-                    <For each={accounts()}>
+                    <For each={formAccounts()}>
                       {(acct) => (
                         <option value={String(acct.id)} selected={acct.id === formAccountId()}>
                           {acct.name} ({acct.type})
@@ -2049,7 +2325,8 @@ export default function Transactions() {
           <TransactionTable
             transactions={paginatedTransactions()}
             accounts={accounts()}
-            activeProfileId={state.currentProfile?.id}
+            // The id every write goes out as, so a row is editable here exactly when its save can land.
+            activeProfileId={activeId()}
             selectedTransactions={selectedTransactions()}
             onSelectionChange={handleSelectionChange}
             onSort={handleSortChange}
@@ -2087,7 +2364,7 @@ export default function Transactions() {
         isOpen={isAutoCategorizeModalOpen}
         onClose={() => setAutoCategorizeModalOpen(false)}
         uncategorizedTransactions={uncategorizedTransactions}
-        categories={categories}
+        categories={activeCategories}
         accountName={(id) => accounts().find((a) => a.id === id)?.name}
         onApply={handleAutoApplyCategory}
       />

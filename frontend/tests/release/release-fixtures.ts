@@ -253,16 +253,10 @@ const LOCAL_PROBLEM = /Validation failed|VersionError/
 /**
  * Known local-first bugs that log a `Validation failed`, each pinned by an expected-failure case
  * of its own. Allowed here so they do not fail every unrelated case; when a fix lands, its own
- * case starts passing unexpectedly, and the entry comes out of this list.
+ * case starts passing unexpectedly, and the entry comes out of this list. Empty while none is
+ * pinned.
  */
-export const KNOWN_LOCAL_CONSOLE: { pattern: RegExp; pinnedBy: string }[] = [
-  {
-    // A category made on the Categories page has no `tax_deductible`; normalizeCategory does not
-    // default it and CategorySchema requires it, so every typed `api.getCategories()` throws.
-    pattern: /\[ApiClient\] Validation failed for \/categories/,
-    pinnedBy: 's01-profiles.spec.ts 1.2c',
-  },
-]
+export const KNOWN_LOCAL_CONSOLE: { pattern: RegExp; pinnedBy: string }[] = []
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters -- the caller names the JSON it expects
 export async function callLocalApi<T>(
@@ -369,6 +363,7 @@ export const test = base.extend<{ cloud: CloudWorld; local: LocalWorld }>({
     })
     const page = await context.newPage()
     const problems: string[] = []
+    // eslint-disable-next-line sonarjs/no-empty-collection -- empty while no local-first bug is pinned; a pin adds one
     const allowed: RegExp[] = KNOWN_LOCAL_CONSOLE.map((k) => k.pattern)
     const watch = (p: Page) => {
       p.on('console', (msg) => {

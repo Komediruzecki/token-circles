@@ -135,6 +135,16 @@
   color: var(--text);
   background: var(--card-bg);
 }
+.retry {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0 2px;
+}
 .date {
   background: transparent;
   border: 0;

@@ -15,16 +15,17 @@ import {
   ok,
 } from './helpers'
 
+/**
+ * The active profile's rules, as the Worker lists them. This used to read every ticked profile
+ * (Settings > Household) while every other route here, like the Worker's, answers for the active
+ * profile alone: the Recurring section offered Edit, Delete and "Add to transactions" on another
+ * profile's rules, and each answered 404.
+ */
 export async function recurringList(): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
+  const pid = await adapter.getCurrentProfileId()
   try {
-    const all: Record<string, unknown>[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
-      all.push(...rows)
-    }
-    return json(all)
+    return json(await db.getAllFromIndex('recurring', 'by_profile', pid))
   } catch {
     return json([])
   }

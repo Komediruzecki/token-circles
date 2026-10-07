@@ -390,11 +390,13 @@ export class ApiClient {
   // ============ CATEGORIES ============
 
   /**
-   * Get all categories
+   * Get all categories: the household's by default. Pass 'active' for the ones an entry can be
+   * filed under. Local-first answers for the household either way, so a caller that needs the
+   * active profile's alone also filters on `profile_id` (core/quickEntryLists.ts does).
    */
-  async getCategories(): Promise<Models.Category[]> {
+  async getCategories(profileScope: ApiProfileScope = 'household'): Promise<Models.Category[]> {
     return this.request<Models.Category[]>('/categories', z.array(Schemas.CategorySchema), {
-      profileScope: 'household',
+      profileScope,
     })
   }
 
@@ -480,11 +482,12 @@ export class ApiClient {
   // ============ ACCOUNTS ============
 
   /**
-   * Get all accounts
+   * Get all accounts: the household's by default, or the active profile's with 'active' (the same
+   * local-first caveat as getCategories).
    */
-  async getAccounts(): Promise<Models.Account[]> {
+  async getAccounts(profileScope: ApiProfileScope = 'household'): Promise<Models.Account[]> {
     return this.request<Models.Account[]>('/accounts', z.array(Schemas.AccountSchema), {
-      profileScope: 'household',
+      profileScope,
     })
   }
 

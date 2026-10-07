@@ -13,6 +13,13 @@ import {
 } from './helpers'
 import { normalizeCategory } from './normalize'
 
+/**
+ * The icon a category is stored with when none was given: left out, null (the Categories form
+ * sends null once its icon field is emptied) or ''. On a create and on an edit alike, as the
+ * Worker does (worker/src/routes/categories.ts).
+ */
+const DEFAULT_ICON = 'tag'
+
 export async function categoriesList(query: URLSearchParams): Promise<Response> {
   const type = query.get('type') as 'income' | 'expense' | undefined
   const cats = await adapter.listCategories(type)
@@ -26,8 +33,8 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
   if (!name) return json({ error: 'Category name is required' }, 400)
 
   const pid = await adapter.getCurrentProfileId()
-  cat.profile_id = pid
-  if (!(await currentProfileOwns('categories', cat.parent_id ?? cat.parentId))) {
+  const parentId = cat.parent_id ?? cat.parentId ?? null
+  if (!(await currentProfileOwns('categories', parentId))) {
     return json({ error: 'Parent category does not belong to this profile' }, 400)
   }
 
@@ -38,16 +45,29 @@ export async function categoriesCreate(body: unknown): Promise<Response> {
     return json({ error: 'Category name already exists for this profile' }, 400)
   }
 
+  // The row the Worker would store (worker/src/routes/categories.ts), not the body as it came:
+  // the forms send no `tax_deductible`, and `icon: null` for a blank icon, and a row missing
+  // either failed CategorySchema on every typed read of its profile's categories.
+  const row = {
+    name,
+    type: (cat.type as string | undefined) ?? 'expense',
+    color: (cat.color as string | undefined) ?? '#6b7280',
+    icon: (cat.icon as string | null | undefined) || DEFAULT_ICON,
+    parent_id: parentId,
+    tax_deductible: Boolean(cat.tax_deductible),
+    created_at: new Date().toISOString(),
+    profile_id: pid,
+  }
   const id = await adapter.createCategory(
-    cat as unknown as Parameters<typeof adapter.createCategory>[0]
+    row as unknown as Parameters<typeof adapter.createCategory>[0]
   )
-  return json({ id, ...cat }, 201)
+  return json({ id, ...row }, 201)
 }
 
 export async function categoriesGet(params: Record<string, string>): Promise<Response> {
   const cat = await currentProfileRecord('categories', idParam(params))
   if (!cat) return notFound('Category')
-  return json(cat)
+  return json(normalizeCategory(cat))
 }
 
 export async function categoriesUpdate(
@@ -57,7 +77,8 @@ export async function categoriesUpdate(
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
   if (!(await currentProfileRecord('categories', id))) return notFound('Category')
-  const patch = body as Record<string, unknown>
+  const patch = { ...(body as Record<string, unknown>) }
+  if ('icon' in patch) patch.icon = (patch.icon as string | null | undefined) || DEFAULT_ICON
   if (
     ('parent_id' in patch || 'parentId' in patch) &&
     !(await currentProfileOwns('categories', patch.parent_id ?? patch.parentId))

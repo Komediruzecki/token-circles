@@ -14,6 +14,11 @@ import { deleteProfileCategory, resetProfileCategories } from '../profileData';
 // registered before the /:id routes so 'mappings' is never captured as an :id.
 export const categoriesRoutes = new Hono<AppEnv>();
 
+// The icon a category is stored with when none was given: left out, null (the Categories form
+// sends null once its icon field is emptied) or ''. The same on a create and on an edit, since
+// `icon` is NOT NULL: an edit that wrote the form's null failed with a 500.
+const DEFAULT_ICON = 'tag';
+
 // ── Categories: list (listFull, with parent_name join) ────────────────────────
 categoriesRoutes.get('/api/categories', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
@@ -52,7 +57,7 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
     throw new HttpError(400, 'Category name is required');
   }
   const color = b.color ?? '#6b7280';
-  const icon = b.icon ?? 'tag';
+  const icon = b.icon || DEFAULT_ICON;
   const type = b.type ?? 'expense';
   const parent_id = b.parent_id !== undefined ? b.parent_id : b.parentId || null;
   if (
@@ -73,7 +78,7 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
   const res = await db.insert(c.env.DB, 'categories', {
     name: name.trim(),
     color: color.trim(),
-    icon: icon || 'tag',
+    icon,
     type: type.trim(),
     parent_id,
     tax_deductible: b.tax_deductible ? 1 : 0,
@@ -552,8 +557,16 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
   if (!existing) throw new HttpError(404, 'Category not found');
 
   const b = (await c.req.json()) as Record<string, any>;
-  const parent_id = b.parent_id !== undefined ? b.parent_id : b.parentId || null;
+  // An edit changes what it sends and keeps every stored field it leaves out. The Categories and
+  // Budgets forms send name, type, colour and icon; their swatches send the colour alone. The
+  // parent and the tax-deductible flag used to reset to null and 0 on every such edit, and the tax
+  // reports read the flag.
+  const parentSent = b.parent_id !== undefined || b.parentId !== undefined;
+  const parent_id = parentSent
+    ? (b.parent_id !== undefined ? b.parent_id : b.parentId) || null
+    : (existing.parent_id ?? null);
   if (
+    parentSent &&
     parent_id !== null &&
     !(await db.categoryBelongsToProfile(c.env.DB, Number(parent_id), pid))
   ) {
@@ -565,10 +578,11 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
     {
       name: b.name !== undefined ? b.name : existing.name,
       color: b.color !== undefined ? b.color : existing.color,
-      icon: b.icon !== undefined ? b.icon : existing.icon,
+      icon: b.icon !== undefined ? b.icon || DEFAULT_ICON : existing.icon,
       type: b.type !== undefined ? b.type : existing.type,
-      parent_id: parent_id || null,
-      tax_deductible: b.tax_deductible ? 1 : 0,
+      parent_id,
+      tax_deductible:
+        b.tax_deductible !== undefined ? (b.tax_deductible ? 1 : 0) : existing.tax_deductible,
     },
     'id = ? AND profile_id = ?',
     id,

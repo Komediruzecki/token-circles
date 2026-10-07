@@ -17,8 +17,8 @@ import { setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 
-type Cat = { id: number; name: string; type: string; color: string }
-type Account = { id: number; name: string; currency: string }
+type Cat = { id: number; name: string; type: string; color: string; profile_id: number }
+type Account = { id: number; name: string; currency: string; profile_id: number }
 
 let serverCategories: Cat[] = []
 let serverAccounts: Account[] = []
@@ -48,12 +48,12 @@ let dispose: (() => void) | undefined
 beforeEach(() => {
   __resetDataVersionsForTest()
   serverCategories = [
-    { id: 1, name: 'Groceries', type: 'expense', color: '#fff' },
-    { id: 2, name: 'Utilities', type: 'expense', color: '#000' },
+    { id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 },
+    { id: 2, name: 'Utilities', type: 'expense', color: '#000', profile_id: 1 },
   ]
   serverAccounts = [
-    { id: 1, name: 'Cash', currency: 'EUR' },
-    { id: 2, name: 'Checking', currency: 'EUR' },
+    { id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 },
+    { id: 2, name: 'Checking', currency: 'EUR', profile_id: 1 },
   ]
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({

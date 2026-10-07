@@ -179,8 +179,10 @@ vi.mock('../../core/api', async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>()
   const reads: Record<string, (...args: never[]) => unknown> = {
     getTransactions: () => readList(),
-    getCategories: async () => [{ id: 1, name: 'Groceries', type: 'expense', color: '#22c55e' }],
-    getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash' }],
+    getCategories: async () => [
+      { id: 1, name: 'Groceries', type: 'expense', color: '#22c55e', profile_id: 1 },
+    ],
+    getAccounts: async () => [{ id: 1, name: 'Cash', type: 'cash', profile_id: 1 }],
     getTags: async () => serverTags.map((t) => ({ ...t })),
     getTransactionTags: (id: number) => readTransactionTags(id),
     getRecurring: async () => [RULE],
@@ -1091,9 +1093,10 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     expect(writes.setTransactionTags).toHaveBeenCalledWith(99, [7])
   })
 
-  it('offers every tag while the active profile is not known yet', async () => {
-    // Nothing tells the tags apart until the profiles have loaded, as the table's per-row gate
-    // also finds; hiding all of them meanwhile would leave the form with none to offer.
+  it("offers only the active profile's tags while the profile record is still loading", async () => {
+    // The record (currentProfile) comes in with the profile list, but the active profile is known
+    // before it: the id every write goes out as (currentProfileId, 1 when unset), which the table
+    // gates rows on too. A tag of another profile is no more attachable in that window than after.
     serverTags = [
       { id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 },
       { id: 9, name: 'Garden', color: '#84cc16', profile_id: 2 },
@@ -1102,7 +1105,7 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
     await fillNewTransaction('Seeds')
     await openAdvanced()
 
-    expect(offeredTags()).toEqual(['Holiday', 'Garden'])
+    expect(offeredTags()).toEqual(['Holiday'])
   })
 
   it("offers and matches the Worker's tags, which carry no owner, with the profile known", async () => {
