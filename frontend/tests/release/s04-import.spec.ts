@@ -176,7 +176,7 @@ for (const [pass, test] of both) {
           requests.filter((r) => r.method === 'POST' && /\/api\/import\/execute\?/.test(r.url)),
           `the preview dry-runs the import once:\n    ${log}`
         ).toHaveLength(1)
-        // The badge evaluator's reads may follow here: 4.2b pins them.
+        // The badge evaluator's reads are 4.2b's to check.
         expect(
           requests
             .filter((r) => !IMPORT_OWN.test(r.stack) && !BADGES.test(r.stack))
@@ -322,18 +322,9 @@ cloudTest.describe('5.16.0 s4 import [cloud]', () => {
     '4.2b nothing follows a preview but Import’s own requests, badge evaluation included @release',
     async ({ m }) => {
       const requests = await previewRequests(m)
-      // The preview's dry run is a POST. apiFetch announces every successful non-GET as a write
-      // (announceWrite, core/apiFetch.ts), and announceDataChanged (core/dataChangedEvent.ts:33)
-      // only leaves out /api/settings: it does not share dataVersions' READS_SENT_AS_POST
-      // (core/dataVersions.ts:135), which is why the counters stay put. So AchievementsHost
-      // re-evaluates every badge after a preview: eight reads in cloud, for a write that never
-      // happened. New in 5.16: #574 moved the event from the typed client's request(), which the
-      // import flow never calls, into apiFetch. Not in section 9.
-      // Marked here, not at the top: a failure before this point is retried, not taken for the bug.
-      cloudTest.fail(
-        true,
-        'a preview sets off a badge evaluation (dataChangedEvent.ts:33 skips only /api/settings)'
-      )
+      // The preview's dry run is a POST that writes nothing, so neither data invalidation nor the
+      // badge announcement may treat it as a write (core/readsSentAsPost.ts). Until the 5.16.1 fix,
+      // AchievementsHost re-evaluated every badge after a preview: eight reads in cloud.
       const log = requests.map(describeFetch).join('\n    ')
       expect(
         requests.filter((r) => !IMPORT_OWN.test(r.stack)).map(describeFetch),

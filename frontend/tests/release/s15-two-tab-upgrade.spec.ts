@@ -165,13 +165,9 @@ test.describe('5.16 local-first upgrade with another tab open', () => {
   test('15 (prod first load): a 5.15.1 tab is open, the 5.16.1 tab says why it waits @release', async ({
     browser,
   }) => {
-    // RELEASE BLOCKER for the 5.16.1 promise. The `blocked` handler (core/storage/idb.ts, getDB)
-    // queues the notice as a toast, but <ToastContainer /> is mounted inside App's
-    // `<Show when={!_isLoading()}>` (App.tsx:825, container at :1329), and boot is exactly what
-    // the blocked open holds up. The tab shows "Preparing your orbit…" and nothing else, as
-    // 5.16.0 does. Fix: render toasts outside the loading gate (mounting <ToastContainer /> beside
-    // <App /> in index.tsx was verified to pass this case). Remove this line with the fix.
-    test.fail(true, 'the notice is queued but never drawn: toasts mount only after boot')
+    // The notice is a toast, so it shows only because the toast container renders beside App
+    // (Root.tsx), outside App's loading gate: the blocked upgrade is what keeps App loading. Until
+    // that fix in 5.16.1 the notice was queued and never drawn.
     const context = await offlineContext(browser)
     const oldTab = await openOldTabWithDemo(await tabOn(context, 'v5151'))
     const before = await counts(oldTab)
