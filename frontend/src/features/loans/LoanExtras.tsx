@@ -2,18 +2,28 @@
  * Extra payments: the ones saved on the loan, each changed or removed in place, a form to add one,
  * and the loan's rate periods. Saved extra payments always finish the loan sooner; paying less each
  * month is something Compare shows, not something saved yet.
+ *
+ * Adding one and changing one are `createExtraPaymentForm` (extraPaymentForm.ts) on the form kit:
+ * a refused save is said under the field it is about, and what belongs to no field in the notice
+ * above the fields. Saving goes through apiFetch, which bumps the `loans` data version, so the page
+ * reloads the loan on its own.
  */
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
 import { addCalendarMonths } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
-import NumberField from '../../components/NumberField'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
+import { createExtraPaymentForm } from './extraPaymentForm'
 import styles from './Loans.module.css'
 import { dayLabel } from './LoanSchedule'
+import type { ExtraPaymentForm } from './extraPaymentForm'
 import type { Formats } from './loanCopy'
 import type { SavedExtra, StoredRatePeriod } from './loanData'
 
 interface Props {
+  loanId: number
   loanName: string
+  /** The loan's term: an extra payment goes with one of its payments. */
+  termMonths: number
   startDate: string
   baseRate: number
   extras: SavedExtra[]
@@ -26,28 +36,44 @@ interface Props {
   ownerName: string
   compareHref: string
   formats: Formats
-  onAdd: (extra: { month: number; amount: number; note: string }) => Promise<boolean>
-  onUpdate: (
-    extra: SavedExtra,
-    next: { month: number; amount: number; note: string }
-  ) => Promise<boolean>
   onDelete: (extra: SavedExtra) => Promise<void>
   onEditRates: () => void
 }
 
-export default function LoanExtras(props: Props) {
-  const [month, setMonth] = createSignal(props.nextMonth)
-  const [amount, setAmount] = createSignal<number | null>(null)
-  const [note, setNote] = createSignal('')
-  const [saving, setSaving] = createSignal(false)
+/** The test ids of one form's fields. */
+interface FieldIds {
+  month: string
+  amount: string
+  note: string
+}
 
-  // The saved extra payment being changed in place, by its ref, and the form's values. They live
-  // here rather than in the row, so a list that reloads under the form keeps what was typed.
+export default function LoanExtras(props: Props) {
+  const loan = () => ({ id: props.loanId, name: props.loanName, term_months: props.termMonths })
+  const money = (amount: number) => props.formats.money(amount)
+
+  // After an add, the form starts over with the same payment picked, for the next one.
+  const addForm = createExtraPaymentForm({
+    mode: 'add',
+    loan,
+    money,
+    onSaved: () => {
+      addForm.start(Number(addForm.values.month))
+    },
+  })
+  addForm.start(props.nextMonth)
+
+  // The saved extra payment being changed in place, by its ref. The form's values live here rather
+  // than in the row, so a list that reloads under the form keeps what was typed.
   const [editing, setEditing] = createSignal<number | null>(null)
-  const [editMonth, setEditMonth] = createSignal(1)
-  const [editAmount, setEditAmount] = createSignal<number | null>(null)
-  const [editNote, setEditNote] = createSignal('')
-  const [editSaving, setEditSaving] = createSignal(false)
+  const editForm = createExtraPaymentForm({
+    mode: 'change',
+    loan,
+    money,
+    onSaved: () => {
+      const ref = editing()
+      if (ref !== null) stopEdit(ref)
+    },
+  })
 
   // A payment removed while its change is open, here or in another tab, closes the change. Left
   // open, it would wait on the id, and local-first gives a removed last payment's id to the next
@@ -76,53 +102,72 @@ export default function LoanExtras(props: Props) {
     return from ? `${span} (from ${dayLabel(from)})` : span
   }
 
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    const value = amount()
-    if (value === null || value <= 0 || saving()) return
-    setSaving(true)
-    const ok = await props.onAdd({
-      month: month(),
-      amount: Math.round(value * 100) / 100,
-      note: note().trim(),
-    })
-    setSaving(false)
-    if (ok) {
-      setAmount(null)
-      setNote('')
-    }
-  }
-
   const focusIn = (selector: string) => {
     queueMicrotask(() => list?.querySelector<HTMLElement>(selector)?.focus())
   }
 
   const startEdit = (extra: SavedExtra) => {
-    setEditMonth(extra.month)
-    setEditAmount(extra.amount)
-    setEditNote(extra.note)
+    editForm.open(extra)
     setEditing(extra.ref)
     focusIn('[data-test-id="loans-extra-edit-amount"]')
   }
 
-  const stopEdit = (ref: number) => {
+  function stopEdit(ref: number) {
     setEditing(null)
     focusIn(`[data-test-id="loans-extra-edit"][data-ref="${ref}"]`)
   }
 
-  const saveEdit = async (e: Event, extra: SavedExtra) => {
-    e.preventDefault()
-    const value = editAmount()
-    if (value === null || value <= 0 || editSaving()) return
-    setEditSaving(true)
-    const ok = await props.onUpdate(extra, {
-      month: editMonth(),
-      amount: Math.round(value * 100) / 100,
-      note: editNote().trim(),
-    })
-    setEditSaving(false)
-    if (ok) stopEdit(extra.ref)
-  }
+  /** The fields both forms have: the payment it goes with, the amount and a note. */
+  const fields = (form: ExtraPaymentForm, offered: () => number[], ids: FieldIds) => (
+    <>
+      <Field form={form} name="month" label="When" class={styles.field}>
+        {(control) => (
+          <select
+            {...control}
+            class={styles.select}
+            data-test-id={ids.month}
+            value={form.values.month}
+            onChange={(e) => form.set('month', e.currentTarget.value)}
+          >
+            <For each={offered()}>
+              {(m) => (
+                <option value={String(m)} selected={String(m) === form.values.month}>
+                  {whenLabel(m)}
+                </option>
+              )}
+            </For>
+          </select>
+        )}
+      </Field>
+      <Field form={form} name="amount" label="Amount" class={styles.field}>
+        {(control) => (
+          <input
+            {...control}
+            type="text"
+            inputmode="decimal"
+            class={styles.input}
+            data-test-id={ids.amount}
+            placeholder="1000.00"
+            value={form.values.amount}
+            onInput={(e) => form.set('amount', e.currentTarget.value)}
+          />
+        )}
+      </Field>
+      <Field form={form} name="note" label="Note (optional)" class={styles.field}>
+        {(control) => (
+          <input
+            {...control}
+            type="text"
+            class={styles.input}
+            data-test-id={ids.note}
+            placeholder="Bonus, gift, savings"
+            value={form.values.note}
+            onInput={(e) => form.set('note', e.currentTarget.value)}
+          />
+        )}
+      </Field>
+    </>
+  )
 
   const deleteButton = (extra: SavedExtra) => (
     <span data-test-id="loans-extra-delete">
@@ -228,70 +273,43 @@ export default function LoanExtras(props: Props) {
                       class={styles.form}
                       data-test-id="loans-extra-edit-form"
                       aria-label={`Change the extra payment with payment ${extra.month}`}
-                      onSubmit={(e) => {
-                        void saveEdit(e, extra)
-                      }}
+                      {...editForm.attrs}
                       onKeyDown={(e) => {
                         if (e.key !== 'Escape') return
                         e.preventDefault()
                         stopEdit(extra.ref)
                       }}
                     >
-                      <label class={styles.field}>
-                        When
-                        <select
-                          class={styles.select}
-                          data-test-id="loans-extra-edit-month"
-                          value={String(editMonth())}
-                          onChange={(e) => setEditMonth(Number(e.currentTarget.value))}
-                        >
-                          <For each={monthsUpTo(Math.max(props.lastMonth, extra.month))}>
-                            {(m) => <option value={String(m)}>{whenLabel(m)}</option>}
-                          </For>
-                        </select>
-                      </label>
-                      <label class={styles.field}>
-                        Amount
-                        <NumberField<null>
-                          class={styles.input}
-                          testId="loans-extra-edit-amount"
-                          step="0.01"
-                          min="0.01"
-                          required
-                          value={editAmount()}
-                          emptyValue={null}
-                          onChange={setEditAmount}
-                        />
-                      </label>
-                      <label class={styles.field}>
-                        Note (optional)
-                        <input
-                          class={styles.input}
-                          type="text"
-                          data-test-id="loans-extra-edit-note"
-                          value={editNote()}
-                          onInput={(e) => setEditNote(e.currentTarget.value)}
-                        />
-                      </label>
-                      <div class={styles.formActions}>
-                        <button
-                          type="submit"
-                          class={styles.buttonPrimary}
-                          data-test-id="loans-extra-save"
-                          disabled={editSaving()}
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          class={styles.button}
-                          data-test-id="loans-extra-cancel"
-                          onClick={() => {
-                            stopEdit(extra.ref)
-                          }}
-                        >
-                          Cancel
-                        </button>
+                      <FormNotice form={editForm} testId="loans-extra-edit-notice" />
+                      <div class={styles.formFields}>
+                        {fields(
+                          editForm,
+                          () => monthsUpTo(Math.max(props.lastMonth, extra.month)),
+                          {
+                            month: 'loans-extra-edit-month',
+                            amount: 'loans-extra-edit-amount',
+                            note: 'loans-extra-edit-note',
+                          }
+                        )}
+                        <div class={styles.formActions}>
+                          <SubmitButton
+                            class={styles.buttonPrimary}
+                            data-test-id="loans-extra-save"
+                            busy={editForm.submitting()}
+                          >
+                            Save
+                          </SubmitButton>
+                          <button
+                            type="button"
+                            class={styles.button}
+                            data-test-id="loans-extra-cancel"
+                            onClick={() => {
+                              stopEdit(extra.ref)
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     </form>
                   </li>
@@ -310,53 +328,25 @@ export default function LoanExtras(props: Props) {
             </p>
           }
         >
-          <form class={styles.form} onSubmit={submit} data-test-id="loans-extra-form">
-            <label class={styles.field}>
-              When
-              <select
-                class={styles.select}
-                data-test-id="loans-extra-month"
-                value={String(month())}
-                onChange={(e) => setMonth(Number(e.currentTarget.value))}
-              >
-                <For each={months()}>
-                  {(m) => <option value={String(m)}>{whenLabel(m)}</option>}
-                </For>
-              </select>
-            </label>
-            <label class={styles.field}>
-              Amount
-              <NumberField<null>
-                class={styles.input}
-                testId="loans-extra-amount"
-                step="0.01"
-                min="0.01"
-                placeholder="1000.00"
-                required
-                value={amount()}
-                emptyValue={null}
-                onChange={setAmount}
-              />
-            </label>
-            <label class={styles.field}>
-              Note (optional)
-              <input
-                class={styles.input}
-                type="text"
-                data-test-id="loans-extra-note"
-                placeholder="Bonus, gift, savings"
-                value={note()}
-                onInput={(e) => setNote(e.currentTarget.value)}
-              />
-            </label>
-            <button
-              type="submit"
-              class={styles.buttonPrimary}
-              data-test-id="loans-extra-add"
-              disabled={saving()}
-            >
-              Add extra payment
-            </button>
+          <form class={styles.form} data-test-id="loans-extra-form" {...addForm.attrs}>
+            <FormNotice form={addForm} testId="loans-extra-notice" />
+            <div class={styles.formFields}>
+              {fields(addForm, months, {
+                month: 'loans-extra-month',
+                amount: 'loans-extra-amount',
+                note: 'loans-extra-note',
+              })}
+              <div class={styles.formActions}>
+                <SubmitButton
+                  class={styles.buttonPrimary}
+                  data-test-id="loans-extra-add"
+                  busy={addForm.submitting()}
+                  busyLabel="Adding…"
+                >
+                  Add extra payment
+                </SubmitButton>
+              </div>
+            </div>
           </form>
         </Show>
       </section>

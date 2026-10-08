@@ -472,7 +472,7 @@ describe('the loan page', () => {
     expect(root.textContent).toContain('With your saved extra payment')
   })
 
-  it('says a failed add in plain words, and keeps what was typed', async () => {
+  it('says a failed add in plain words in the form, and keeps what was typed', async () => {
     vi.mocked(showToast).mockClear()
     vi.mocked(apiPost).mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
     const root = await mount('#loans/1/extras')
@@ -485,10 +485,43 @@ describe('the loan page', () => {
     )
     await settle()
 
-    expect(vi.mocked(showToast).mock.calls).toEqual([
-      ["Couldn't save the extra payment. Try again.", 'error'],
-    ])
+    expect(text(root, 'loans-extra-notice')).toBe("Couldn't save the extra payment. Try again.")
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
     expect((el(root, 'loans-extra-amount') as HTMLInputElement).value).toBe('10000')
+  })
+
+  it('marks the field the runtime refuses, under it, and sends nothing it can tell is wrong', async () => {
+    vi.mocked(showToast).mockClear()
+    vi.mocked(apiPost).mockClear()
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(400, 'Enter an amount above zero.', { amount: 'Enter an amount above zero.' })
+    )
+    const root = await mount('#loans/1/extras')
+    const amount = el(root, 'loans-extra-amount') as HTMLInputElement
+    const submit = () =>
+      el(root, 'loans-extra-form')!.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true })
+      )
+
+    // Checked before sending: nothing goes out.
+    submit()
+    await settle()
+    expect(amount.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(amount)
+    expect(vi.mocked(apiPost)).not.toHaveBeenCalled()
+
+    // Refused by the runtime: marked the same way.
+    amount.value = '10'
+    amount.dispatchEvent(new Event('input', { bubbles: true }))
+    submit()
+    await settle()
+    expect(vi.mocked(apiPost)).toHaveBeenCalledTimes(1)
+    expect(amount.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(amount.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Enter an amount above zero.'
+    )
+    expect(text(root, 'loans-extra-notice')).toBe('')
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
   })
 
   it('changes a saved extra payment in place', async () => {
@@ -527,7 +560,7 @@ describe('the loan page', () => {
     expect(text(root, 'loans-extra-item')).toBe('Payment 24, Dec 1, 2027Bonus€5,000.00')
   })
 
-  it('says a refused change in plain words, and keeps the form open', async () => {
+  it('says a refused change in plain words in the form, and keeps it open', async () => {
     listed = [
       {
         ...structuredClone(LOAN),
@@ -541,16 +574,19 @@ describe('the loan page', () => {
       .mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
     const root = await mount('#loans/1/extras')
     await click(root, 'loans-extra-edit')
+    const notices: string[] = []
     for (let i = 0; i < 2; i++) {
       el(root, 'loans-extra-edit-form')!.dispatchEvent(
         new Event('submit', { bubbles: true, cancelable: true })
       )
       await settle()
+      notices.push(text(root, 'loans-extra-edit-notice'))
     }
-    expect(vi.mocked(showToast).mock.calls).toEqual([
-      ['Enter an amount above zero.', 'error'],
-      ["Couldn't update the extra payment. Try again.", 'error'],
+    expect(notices).toEqual([
+      'Enter an amount above zero.',
+      "Couldn't update the extra payment. Try again.",
     ])
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
     expect(el(root, 'loans-extra-edit-form')).not.toBeNull()
   })
 

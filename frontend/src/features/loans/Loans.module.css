@@ -970,14 +970,24 @@
 }
 
 .form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  gap: 12px;
-  align-items: end;
   padding: 16px;
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+
+/* The fields side by side, under the form's notice. Each lines up at its top, so a message under
+   one control moves nothing beside it; the buttons sit one label lower, level with the controls
+   (a 12px label at the page's 1.5 line height, then the field's 4px gap). */
+.form-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.form-fields > .form-actions {
+  margin-top: 22px;
 }
 
 .form .input,

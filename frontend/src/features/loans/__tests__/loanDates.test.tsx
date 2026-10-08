@@ -64,7 +64,9 @@ describe('loan dates', () => {
   it('dates an extra payment in month 2 of a loan starting 31 January on 28 February', () => {
     const root = mount(() => (
       <LoanExtras
+        loanId={LOAN.id}
         loanName={LOAN.name}
+        termMonths={LOAN.term_months}
         startDate={LOAN.start_date}
         baseRate={LOAN.interest_rate}
         extras={savedExtras(LOAN)}
@@ -75,8 +77,6 @@ describe('loan dates', () => {
         ownerName="Me"
         compareHref="#loans/1/compare"
         formats={f}
-        onAdd={async () => true}
-        onUpdate={async () => true}
         onDelete={async () => {}}
         onEditRates={() => {}}
       />

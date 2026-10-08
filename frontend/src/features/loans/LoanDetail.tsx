@@ -9,7 +9,7 @@
 import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js'
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
 import ConfirmButton from '../../components/ConfirmButton'
-import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../../core/api'
+import { apiDelete, apiGet, formatCurrency, showToast } from '../../core/api'
 import { plainMessage } from '../../core/apiError'
 import { refetchOnActive } from '../../core/pageVisibility'
 import { localToday } from '../../utils/period'
@@ -150,35 +150,6 @@ export default function LoanDetail(props: Props) {
 
   const pick = (b: ScenarioPick | null, a: ScenarioPick | null) => {
     props.navigate({ ...props.route, tab: 'compare', b, a }, { replace: true })
-  }
-
-  const addExtra = async (extra: { month: number; amount: number; note: string }) => {
-    const row = props.row
-    if (!row) return false
-    try {
-      await apiPost(`/api/loans/${row.id}/prepayments`, extra)
-      showToast('Extra payment saved', 'success')
-      return true
-    } catch (err) {
-      showToast(plainMessage(err, "Couldn't save the extra payment. Try again."), 'error')
-      return false
-    }
-  }
-
-  const updateExtra = async (
-    extra: SavedExtra,
-    next: { month: number; amount: number; note: string }
-  ) => {
-    const row = props.row
-    if (!row) return false
-    try {
-      await apiPut(`/api/loans/${row.id}/prepayments/${extra.ref}`, next)
-      showToast('Extra payment updated', 'success')
-      return true
-    } catch (err) {
-      showToast(plainMessage(err, "Couldn't update the extra payment. Try again."), 'error')
-      return false
-    }
   }
 
   const deleteExtra = async (extra: SavedExtra) => {
@@ -354,7 +325,9 @@ export default function LoanDetail(props: Props) {
                   </Match>
                   <Match when={props.route.tab === 'extras'}>
                     <LoanExtras
+                      loanId={row().id}
                       loanName={row().name}
+                      termMonths={row().term_months}
                       startDate={input()!.start_date}
                       baseRate={row().interest_rate}
                       extras={extras()}
@@ -365,8 +338,6 @@ export default function LoanDetail(props: Props) {
                       ownerName={props.ownerName}
                       compareHref={hrefFor('compare')}
                       formats={props.formats}
-                      onAdd={addExtra}
-                      onUpdate={updateExtra}
                       onDelete={deleteExtra}
                       onEditRates={() => {
                         props.onEdit(row(), true)
