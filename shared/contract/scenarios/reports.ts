@@ -166,8 +166,14 @@ export const reports = [
     });
     // DIFFERENCE custom-report
     if (api.runtime === 'worker') {
-      expect(reply.body).toMatchObject({
+      // Saved: the report reads back by its id with the settings it was given. (The answer to the
+      // POST repeats its body, so it proves nothing stored.)
+      const saved = await api.get(`/api/reports/custom/${reply.body.reportId}`);
+      expectOk(expect, saved, 'GET /api/reports/custom/:id');
+      expect(saved.body).toMatchObject({
         id: reply.body.reportId,
+        name: 'Q1 groceries',
+        type: 'custom',
         date_from: '2025-01-01',
         date_to: '2025-03-31',
         category_id: food,
