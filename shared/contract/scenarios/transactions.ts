@@ -196,6 +196,20 @@ export const transactions = [
   ),
 
   scenario(
+    'the list comes newest first, the last entered first within a day',
+    async (api, expect) => {
+      const { move, bigBakery, bakery, salary, market } = await ledger(api, expect);
+      expect(idsOf(await listTransactions(api, expect))).toEqual([
+        move,
+        bigBakery,
+        bakery,
+        salary,
+        market,
+      ]);
+    }
+  ),
+
+  scenario(
     'a bulk edit recategorises and retypes rows, and a bulk delete removes them',
     async (api, expect) => {
       const acct = await account(api, expect, 'Everyday', 1000);

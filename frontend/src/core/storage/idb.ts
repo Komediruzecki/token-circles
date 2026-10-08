@@ -720,7 +720,10 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
 
-    return txns.sort((a, b) => b.date.localeCompare(a.date))
+    // Newest first, and within one day the last entered first: the Worker's
+    // `ORDER BY t.date DESC, t.id DESC`. Sorting on the date alone kept a day's rows in key order,
+    // oldest entry first, so a row just added landed below the ones from earlier that day.
+    return txns.sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0))
   }
 
   async createTransaction(tx: Transaction): Promise<number> {
