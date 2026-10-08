@@ -378,12 +378,26 @@ describe('an amount of your own', () => {
   })
 
   it('stops round up at the first amount that pays anything more', async () => {
-    const root = await mount('#loans/1/compare?b=round-up.1100.shorten')
+    const root = await mount('#loans/1/compare?b=round-up.1100')
     expect(el(root, 'loans-step-down-target')?.hasAttribute('disabled')).toBe(true)
     await click(root, 'loans-step-up-target')
-    expect(query().get('b')).toBe('round-up.1200.shorten')
+    expect(query().get('b')).toBe('round-up.1200')
     await click(root, 'loans-step-down-target')
-    expect(query().get('b')).toBe('round-up.1100.shorten')
+    expect(query().get('b')).toBe('round-up.1100')
+  })
+
+  it('pays the round up amount every month, so it offers no way to pay less each month', async () => {
+    const root = await mount('#loans/1/compare?b=round-up.1100.lower')
+    expect(root.querySelector('[aria-label="What the extra payments do"]')).toBeNull()
+    await click(root, 'loans-step-up-target')
+    expect(query().get('b')).toBe('round-up.1200')
+  })
+
+  it('says why a round up that does not go over the installment changes nothing', async () => {
+    const root = await mount('#loans/1/compare?b=round-up.900')
+    expect(el(root, 'loans-compare-sentence')?.textContent).toBe(
+      '€900 a month does not go over the €1,060.66 installment, so nothing extra goes to the loan.'
+    )
   })
 })
 

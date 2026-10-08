@@ -11,7 +11,7 @@ const PICKS: [ScenarioPick, string][] = [
     { choice: { template: 'more-each-month', amount: 50 }, mode: 'shorten' },
     'more-each-month.50.shorten',
   ],
-  [{ choice: { template: 'round-up', target: 1100 }, mode: 'lower' }, 'round-up.1100.lower'],
+  [{ choice: { template: 'round-up', target: 1100 }, mode: 'shorten' }, 'round-up.1100'],
   [
     { choice: { template: 'one-payment', amount: 10000, inMonths: 12 }, mode: 'lower' },
     'one-payment.10000.12.lower',
@@ -175,5 +175,19 @@ describe('loansHash', () => {
       loansHash({ view: 'loan', loanId: 2, tab: 'compare', b: PICKS[0][0], a: null }, keep)
     ).toBe('#loans/2/compare?b=more-each-month.50.shorten&period=2026-10')
     expect(loansHash({ view: 'overview' }, keep)).toBe('#loans?period=2026-10')
+  })
+})
+
+describe('round up in the address', () => {
+  it('reads a mode an older address wrote as finishing sooner: round up pays what it names', () => {
+    for (const mode of ['shorten', 'lower', 'both']) {
+      expect(parsePick(`round-up.1100.${mode}`)).toEqual({
+        choice: { template: 'round-up', target: 1100 },
+        mode: 'shorten',
+      })
+    }
+    expect(formatPick({ choice: { template: 'round-up', target: 1100 }, mode: 'lower' })).toBe(
+      'round-up.1100'
+    )
   })
 })

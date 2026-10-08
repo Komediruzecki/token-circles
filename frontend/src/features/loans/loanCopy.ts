@@ -187,6 +187,22 @@ const changesNothing = (cmp: { interest: number; extra: number; months: number }
   Math.abs(cmp.interest) < 0.005 && Math.abs(cmp.extra) < 0.005 && cmp.months === 0
 
 /**
+ * Round up names the amount paid each month. One that does not go over the installment as it
+ * stands adds nothing, and the comparison would otherwise blame the loan's end for that. Null for
+ * every other what-if.
+ */
+export function roundUpAddsNothing(
+  choice: WhatIfChoice,
+  installment: number | null,
+  f: Formats
+): string | null {
+  if (choice.template !== 'round-up' || installment === null || choice.target > installment) {
+    return null
+  }
+  return `${f.wholeMoney(choice.target)} a month does not go over the ${f.money(installment)} installment, so nothing extra goes to the loan.`
+}
+
+/**
  * What B changes against A, in a sentence or two: what it costs, then when the loan ends or what
  * the installment becomes. A loan that is never repaid says so instead.
  */

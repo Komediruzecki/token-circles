@@ -588,10 +588,9 @@ describe('templateOptions', () => {
     expect(templateOptions(loan({ principal: 0 }), 1)).toEqual([])
   })
 
-  it('takes a mode in every template but done-by and rate-change', () => {
+  it('takes a mode in every template but done-by, rate-change and round-up', () => {
     expect(TEMPLATE_IDS.filter(templateTakesMode)).toEqual([
       'more-each-month',
-      'round-up',
       'one-payment',
       'yearly-bonus',
       'extra-installment',

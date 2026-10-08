@@ -29,6 +29,7 @@ import {
   monthOfYearName,
   monthShort,
   pointsLabel,
+  roundUpAddsNothing,
   span,
   TEMPLATE_NAMES,
   yearsEarlierLabel,
@@ -237,8 +238,11 @@ export default function LoanCompare(props: Props) {
     const pair = both()
     if (pair) return bothModesSentence(A(), pair.sooner, pair.lower, from(), f())
     const b = B()
-    if (b)
+    if (b) {
+      const nothing = props.b ? roundUpAddsNothing(props.b.choice, installmentNow(), f()) : null
+      if (nothing) return nothing
       return compareSentence({ a: A(), b, from: from(), aIsPlan: !props.a, never: never() }, f())
+    }
     const a = A()
     if (a.payoffMonth === null)
       return 'As planned this loan is never repaid: the installment no longer covers the interest.'

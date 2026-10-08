@@ -354,9 +354,13 @@ export function stepAmount(value: number, step: number, direction: 1 | -1, floor
   return Math.max(floor, next * step);
 }
 
-/** Whether the template's extra payments can pay less each month: all but done-by and rate-change. */
+/**
+ * Whether the template's extra payments can pay less each month: all but done-by, rate-change and
+ * round-up. Round up names the amount paid each month. Paying less each month would lower the
+ * installment under it, and the person would pay less than the amount it names.
+ */
 export function templateTakesMode(template: TemplateId): boolean {
-  return template !== 'done-by' && template !== 'rate-change';
+  return template !== 'done-by' && template !== 'rate-change' && template !== 'round-up';
 }
 
 const MONTHS_OF_YEAR = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
