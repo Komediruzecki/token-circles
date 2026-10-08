@@ -69,6 +69,25 @@ function days(length: number, filled: Record<number, number>): number[] {
   return Array.from({ length }, (_, i) => filled[i + 1] ?? 0);
 }
 
+/** A link of the budget flow, each end named with its kind as both runtimes name them. */
+function link(source: string, target: string, value: number) {
+  const kind = (name: string) =>
+    ({ 'Total Budget': 'budget', 'Total Actual': 'actual', 'Unused Budget': 'savings' })[name] ??
+    'category';
+  return { source, target, value, sourceCategory: kind(source), targetCategory: kind(target) };
+}
+
+/** The flow's nodes and links in one order: each runtime adds them in its own. */
+function sorted(flow: Json) {
+  const key = (x: Json) => `${x.source ?? ''}>${x.target ?? x.name}`;
+  const byKey = (a: Json, b: Json) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0);
+  return {
+    nodes: [...flow.nodes].sort(byKey),
+    links: [...flow.links].sort(byKey),
+    hasBudgets: flow.hasBudgets,
+  };
+}
+
 export const analytics = [
   scenario('a year of spending, by category, by month and by week', async (api, expect) => {
     await year2025(api, expect);
@@ -207,6 +226,87 @@ export const analytics = [
       });
     }
   ),
+
+  scenario("a month's budgets against its spending", async (api, expect) => {
+    const food = await category(api, expect, 'Food', '#2e7d32');
+    const rent = await category(api, expect, 'Rent', '#1565c0');
+    const fun = await category(api, expect, 'Fun', '#8e24aa');
+    // The Budgets page keeps one row per category and month.
+    for (const [start, amount] of [
+      ['2025-02-01', 90],
+      ['2025-03-01', 100],
+      ['2025-04-01', 110],
+    ] as const) {
+      await added(api, expect, '/api/budgets', {
+        category_id: food,
+        amount,
+        period: 'monthly',
+        start_date: start,
+      });
+    }
+    await added(api, expect, '/api/budgets', {
+      category_id: fun,
+      amount: 50,
+      period: 'monthly',
+      start_date: '2025-03-01',
+    });
+    const spend = (description: string, amount: number, date: string, category_id: number) =>
+      addTransaction(api, expect, { description, amount, date, category_id });
+    await spend('Rent', 800, '2025-03-01', rent);
+    await spend('Groceries', 45.5, '2025-03-10', food);
+    await spend('Market', 35, '2025-03-22', food);
+    await spend('Groceries in April', 99, '2025-04-02', food);
+    await addTransaction(api, expect, { description: 'Cash', amount: 20, date: '2025-03-15' });
+    const fuel = await category(api.other, expect, 'Fuel', '#6d4c41');
+    await addTransaction(api.other, expect, {
+      description: 'Fuel',
+      amount: 60,
+      date: '2025-03-10',
+      category_id: fuel,
+    });
+
+    // March: Food has its March budget, Fun a budget and no spending, Rent spending and no
+    // budget, which the flow counts as budgeted at what was spent.
+    const flow = await read(api, expect, '/api/analytics/sankey?year=2025&month=3');
+    // DIFFERENCE sankey-uncategorised
+    const uncategorised = api.runtime === 'local';
+    expect(sorted(flow)).toEqual(
+      sorted({
+        nodes: [
+          { name: 'Total Budget', category: 'budget' },
+          { name: 'Food', category: 'category', color: '#2e7d32' },
+          { name: 'Fun', category: 'category', color: '#8e24aa' },
+          { name: 'Rent', category: 'category', color: '#1565c0' },
+          ...(uncategorised ? [{ name: 'Uncategorized', category: 'category' }] : []),
+          { name: 'Total Actual', category: 'actual' },
+          { name: 'Unused Budget', category: 'savings' },
+        ],
+        links: [
+          link('Total Budget', 'Food', 100),
+          link('Total Budget', 'Fun', 50),
+          link('Total Budget', 'Rent', 800),
+          link('Food', 'Total Actual', 80.5),
+          link('Rent', 'Total Actual', 800),
+          ...(uncategorised
+            ? [link('Total Budget', 'Uncategorized', 20), link('Uncategorized', 'Total Actual', 20)]
+            : []),
+          link('Total Budget', 'Unused Budget', 69.5),
+        ],
+        hasBudgets: true,
+      })
+    );
+
+    // No month asked for, or a month with nothing in it.
+    expect(await read(api, expect, '/api/analytics/sankey?year=2025')).toEqual({
+      nodes: [],
+      links: [],
+    });
+    expect(await read(api, expect, '/api/analytics/sankey?year=2024&month=3')).toEqual({
+      nodes: [],
+      links: [],
+      hasBudgets: false,
+    });
+  }),
 
   scenario('income and expense, month by month', async (api, expect) => {
     const lastMonth = monthStart(-1).slice(0, 7);
