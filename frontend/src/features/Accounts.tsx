@@ -35,22 +35,15 @@ import { createEffect, createMemo, createResource, createSignal, For, Show } fro
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { accountActivityPresentation } from '../core/accountActivity'
-import {
-  apiDelete,
-  apiGet,
-  apiPost,
-  apiPut,
-  formatCurrency,
-  getLocalCurrency,
-  showToast,
-} from '../core/api'
+import { apiDelete, apiGet, formatCurrency, getLocalCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
-import { parseDecimalInput } from '../core/decimalInput'
 import { gatedSource } from '../core/pageVisibility'
 import { normalizedTransactionAmount } from '../core/transactionAmount'
+import { createAccountForm } from './accountForm'
 import styles from './AccountsPage.module.css'
 
 interface Account {
@@ -107,47 +100,23 @@ export default function Accounts() {
   createEffect(() => {
     if (!accountsResource.loading) setInitialLoad(false)
   })
-  const emptyForm = () => ({
-    name: '',
-    type: 'giro',
-    bank_name: '',
-    balance: '',
-    // Default to the user's base currency (Settings; EUR by default), not USD.
-    currency: getLocalCurrency(),
-    starting_balance: '',
-    starting_date: '',
-  })
-  // null = closed; 'add' = create; 'edit' = update the account held in editingAccount().
+  // null = closed; 'add' = create; 'edit' = update the account the form opened with.
   const [modalMode, setModalMode] = createSignal<'add' | 'edit' | null>(null)
-  const [editingAccount, setEditingAccount] = createSignal<Account | null>(null)
-  const [formData, setFormData] = createSignal(emptyForm())
+  const closeModal = () => {
+    setModalMode(null)
+  }
+  // The dialog's values, field errors and notice (components/form), and its save
+  // (features/accountForm.ts). A refused save is said in the dialog, under the field it is about.
+  const accountForm = createAccountForm({ onSaved: closeModal })
 
   const openAddModal = () => {
-    setEditingAccount(null)
-    setFormData(emptyForm())
+    accountForm.open(null)
     setModalMode('add')
   }
 
   const openEditModal = (account: Account) => {
-    setEditingAccount(account)
-    setFormData({
-      name: account.name,
-      type: account.type,
-      bank_name: account.bank_name || '',
-      // The Current Balance field is prefilled with the derived balance; changing it
-      // adjusts the starting balance under the hood (see handleEditSubmit).
-      balance: String(account.balance ?? ''),
-      currency: getLocalCurrency(),
-      starting_balance: String(account.starting_balance ?? ''),
-      starting_date: account.starting_date || '',
-    })
+    accountForm.open(account)
     setModalMode('edit')
-  }
-
-  const closeModal = () => {
-    setModalMode(null)
-    setEditingAccount(null)
-    setFormData(emptyForm())
   }
 
   const profileNameMap = createMemo(() => {
@@ -176,75 +145,6 @@ export default function Accounts() {
       accounts: accts,
     }))
   })
-
-  // Handle form submit
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const balance = formData().balance.trim() ? parseDecimalInput(formData().balance) : 0
-    const startingBalance = formData().starting_balance.trim()
-      ? parseDecimalInput(formData().starting_balance)
-      : balance
-    if (balance === null || startingBalance === null) {
-      showToast('Enter a valid balance using a comma or dot for cents', 'error')
-      return
-    }
-    const data: Record<string, unknown> = {
-      name: formData().name,
-      type: formData().type,
-      bank_name: formData().bank_name,
-      balance,
-      currency: formData().currency,
-      starting_balance: startingBalance,
-      starting_date: formData().starting_date || null,
-    }
-
-    try {
-      await apiPost('/api/accounts', data)
-      showToast('Account created successfully', 'success')
-      closeModal()
-    } catch (err) {
-      console.error('Failed to save account', err)
-      showToast('Failed to create account', 'error')
-    }
-  }
-
-  // Handle edit submit. Info fields (name/type/bank/currency/starting date) update directly.
-  // The Current Balance field is a correction: because balance is derived (starting_balance +
-  // the ledger), we shift starting_balance by the delta and send the matching balance so the
-  // fix survives a recompute and future transactions apply on top of it — rather than writing
-  // an absolute balance that the next recompute would silently revert.
-  const handleEditSubmit = async (e: Event) => {
-    e.preventDefault()
-    const acct = editingAccount()
-    if (!acct) return
-    const body: Record<string, unknown> = {
-      name: formData().name,
-      type: formData().type,
-      bank_name: formData().bank_name,
-      currency: formData().currency,
-      starting_date: formData().starting_date || null,
-    }
-    const parsedCurrent = parseDecimalInput(formData().balance)
-    if (parsedCurrent === null) {
-      showToast('Enter a valid balance using a comma or dot for cents', 'error')
-      return
-    }
-    const desiredCurrent = Math.round(parsedCurrent * 100) / 100
-    if (Math.abs(desiredCurrent - (acct.balance ?? 0)) > 0.005) {
-      const ledger = (acct.balance ?? 0) - (acct.starting_balance ?? 0)
-      body.starting_balance = Math.round((desiredCurrent - ledger) * 100) / 100
-      body.balance = desiredCurrent
-    }
-
-    try {
-      await apiPut(`/api/accounts/${acct.id}`, body)
-      showToast('Account updated successfully', 'success')
-      closeModal()
-    } catch (err) {
-      console.error('Failed to update account', err)
-      showToast('Failed to update account', 'error')
-    }
-  }
 
   // Delete account
   const deleteAccount = async (id: number) => {
@@ -579,88 +479,129 @@ export default function Accounts() {
                 </svg>
               </button>
             </div>
-            <form
-              class={styles.modalBody}
-              onSubmit={modalMode() === 'edit' ? handleEditSubmit : handleSubmit}
-            >
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Account Name</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Checking, Savings"
-                  value={formData().name}
-                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Account Type</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().type}
-                  oninput={(e) => setFormData({ ...formData(), type: e.target.value as any })}
-                >
-                  <option value="giro">Giro / Checking</option>
-                  <option value="savings">Savings</option>
-                  <option value="ib">Investment / Brokerage</option>
-                  <option value="cash">Cash</option>
-                </select>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Bank / Institution</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Chase, Bank of America"
-                  value={formData().bank_name || ''}
-                  oninput={(e) => setFormData({ ...formData(), bank_name: e.target.value })}
-                />
-              </div>
-              <Show when={modalMode() === 'add'}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Starting Balance ({getLocalCurrency()})</label>
+            <form class={styles.modalBody} {...accountForm.attrs}>
+              <FormNotice form={accountForm} testId="account-form-notice" />
+              <Field
+                form={accountForm}
+                name="name"
+                label="Account Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., Checking, Savings"
+                    value={accountForm.values.name}
+                    onInput={(e) => accountForm.set('name', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={accountForm}
+                name="type"
+                label="Account Type"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formControl}
+                    value={accountForm.values.type}
+                    onInput={(e) => accountForm.set('type', e.currentTarget.value)}
+                  >
+                    <option value="giro">Giro / Checking</option>
+                    <option value="savings">Savings</option>
+                    <option value="ib">Investment / Brokerage</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                )}
+              </Field>
+              <Field
+                form={accountForm}
+                name="bank_name"
+                label="Bank / Institution"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., Chase, Bank of America"
+                    value={accountForm.values.bank_name}
+                    onInput={(e) => accountForm.set('bank_name', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Show when={modalMode() === 'add'}>
+                <Field
+                  form={accountForm}
+                  name="starting_balance"
+                  label={`Starting Balance (${getLocalCurrency()})`}
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="0.00"
+                      value={accountForm.values.starting_balance}
+                      onInput={(e) => accountForm.set('starting_balance', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </Show>
+              <Field
+                form={accountForm}
+                name="starting_date"
+                label="Starting Date"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="date"
+                    class={styles.formControl}
+                    value={accountForm.values.starting_date}
+                    onInput={(e) => accountForm.set('starting_date', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field
+                form={accountForm}
+                name="balance"
+                label={`Current Balance (${getLocalCurrency()})`}
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+                hintClass={styles.formHint}
+                hint={
+                  modalMode() === 'edit'
+                    ? 'Correcting this adjusts the starting balance so your transaction history stays intact.'
+                    : undefined
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
                     type="text"
                     inputmode="decimal"
                     class={styles.formControl}
                     placeholder="0.00"
-                    value={formData().starting_balance}
-                    oninput={(e) =>
-                      setFormData({
-                        ...formData(),
-                        starting_balance: e.currentTarget.value,
-                      })
-                    }
+                    value={accountForm.values.balance}
+                    onInput={(e) => accountForm.set('balance', e.currentTarget.value)}
                   />
-                </div>
-              </Show>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Starting Date</label>
-                <input
-                  type="date"
-                  class={styles.formControl}
-                  value={formData().starting_date}
-                  oninput={(e) => setFormData({ ...formData(), starting_date: e.target.value })}
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Current Balance ({getLocalCurrency()})</label>
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  class={styles.formControl}
-                  placeholder="0.00"
-                  value={formData().balance}
-                  oninput={(e) => setFormData({ ...formData(), balance: e.currentTarget.value })}
-                />
-                <Show when={modalMode() === 'edit'}>
-                  <p class={styles.formHint}>
-                    Correcting this adjusts the starting balance so your transaction history stays
-                    intact.
-                  </p>
-                </Show>
-              </div>
+                )}
+              </Field>
               <div class={styles.formGroup}>
                 <label class={styles.formLabel}>Balance Currency</label>
                 <input
@@ -682,9 +623,13 @@ export default function Accounts() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={`${styles.btn} ${styles.btnPrimary}`}>
+                <SubmitButton
+                  class={`${styles.btn} ${styles.btnPrimary}`}
+                  busy={accountForm.submitting()}
+                  busyLabel={modalMode() === 'edit' ? 'Saving…' : 'Adding…'}
+                >
                   {modalMode() === 'edit' ? 'Save Changes' : 'Add Account'}
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>
