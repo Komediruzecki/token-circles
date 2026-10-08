@@ -315,8 +315,6 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
     'A single goal read, for api.getGoal, which nothing in the app calls: the Goals page reads the list, in both modes.',
   'GET ^\\/loans\\/(\\d+)\\/rate-periods$':
     "For api.getLoanRatePeriods, which nothing in the app calls: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
-  'PUT ^\\/loans\\/(\\d+)\\/rate$':
-    "For api.updateLoanRate, which nothing in the app calls; it answers 404 for every loan. The Loans page saves a loan's rate periods with the loan itself (POST and PUT /api/loans).",
   'GET ^\\/loans\\/(\\d+)\\/rates$':
     "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'POST ^\\/loans\\/(\\d+)\\/prepayment$':

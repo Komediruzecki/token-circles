@@ -440,11 +440,6 @@ const routes: RouteDef[] = [
     handler: dispatch({ GET: (ctx) => h.loanRates(ctx.params) }),
   },
   {
-    pattern: /^\/loans\/(\d+)\/rate$/,
-    methods: ['PUT'],
-    handler: dispatch({ PUT: (ctx) => h.loanRateUpdate(ctx.params, ctx.body) }),
-  },
-  {
     pattern: /^\/loans\/(\d+)\/rates$/,
     methods: ['GET', 'POST'],
     handler: dispatch({

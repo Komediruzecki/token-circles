@@ -705,21 +705,6 @@ export class ApiClient {
   }
 
   /**
-   * Update loan rate
-   */
-  async updateLoanRate(
-    id: number,
-    rate: number,
-    startMonth: number,
-    endMonth: number | null
-  ): Promise<void> {
-    await this.request(`/loans/${id}/rate`, undefined, {
-      method: 'PUT',
-      body: { rate, start_month: startMonth, end_month: endMonth },
-    })
-  }
-
-  /**
    * Add prepayment
    */
   async addLoanPrepayment(id: number, month: number, amount: number, note?: string): Promise<void> {
