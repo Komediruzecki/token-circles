@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDB } from '../idb.js'
-import { dashboardCharts } from '../localHandlers.js'
+import { budgetsForecast, dashboardCharts } from '../localHandlers.js'
 
 const FOOD = 1
 
@@ -43,7 +43,14 @@ beforeEach(async () => {
   localStorage.clear()
   localStorage.setItem('currentProfileId', '1')
   const db = await getDB()
-  for (const store of ['profiles', 'transactions', 'categories', 'accounts', 'recurring']) {
+  for (const store of [
+    'profiles',
+    'transactions',
+    'categories',
+    'accounts',
+    'budgets',
+    'recurring',
+  ]) {
     await db.clear(store)
   }
   await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
@@ -70,5 +77,26 @@ describe('the cash-flow chart on 31 October (Zagreb)', () => {
     const months = monthly as Array<{ month: string; expense: number }>
     expect(months[0]?.month).toBe('2025-11')
     expect(months.find((m) => m.month === '2025-11')?.expense).toBe(40)
+  })
+})
+
+describe('the budget forecast', () => {
+  it('counts the budgets that start in the month it is asked for', async () => {
+    at('Europe/Zagreb', -120, '2026-10-15T12:00:00Z')
+    const db = await getDB()
+    await db.add('budgets', {
+      profile_id: 1,
+      category_id: FOOD,
+      amount: 300,
+      period: 'monthly',
+      start_date: '2026-10-01',
+    })
+
+    const queries: Record<string, string>[] = [{ month: '2026-10' }, {}]
+    for (const query of queries) {
+      const forecast = await (await budgetsForecast(new URLSearchParams(query))).json()
+      expect(forecast.total_budget, JSON.stringify(query)).toBe(300)
+      expect(forecast.forecast, JSON.stringify(query)).toHaveLength(6)
+    }
   })
 })

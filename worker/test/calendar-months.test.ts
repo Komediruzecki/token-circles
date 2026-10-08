@@ -112,3 +112,20 @@ describe('twelve months of totals', () => {
     expect(monthly.find((m) => m.month === '2025-10')).toBeUndefined();
   });
 });
+
+describe('the budget forecast', () => {
+  it('counts the budgets that start in the month it is asked for', async () => {
+    await at('2026-10-15T12:00:00Z');
+    await env.DB.prepare(
+      "INSERT INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, 300, 'monthly', '2026-10-01')"
+    )
+      .bind(PROFILE, FOOD)
+      .run();
+
+    for (const path of ['/api/budgets/forecast?month=2026-10', '/api/budgets/forecast']) {
+      const forecast = await get<{ total_budget: number; forecast: unknown[] }>(path);
+      expect(forecast.total_budget, path).toBe(300);
+      expect(forecast.forecast, path).toHaveLength(6);
+    }
+  });
+});

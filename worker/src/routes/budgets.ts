@@ -579,12 +579,15 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
   const inClause = pids.map(() => '?').join(',');
   const month = c.req.query('month') || localMonth(c);
 
+  // Every budget up to and including `month`. start_date is a date and `month` a month, so they
+  // are compared as months: as strings, '2026-10-01' sorts after '2026-10', and the budgets that
+  // start in the month asked for, every budget the app makes for this month, were left out.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color
        FROM budgets b
        JOIN categories c ON c.id = b.category_id AND c.profile_id = b.profile_id
-       WHERE b.profile_id IN (${inClause}) AND b.start_date <= ?
+       WHERE b.profile_id IN (${inClause}) AND substr(b.start_date, 1, 7) <= ?
        ORDER BY b.start_date DESC`,
     ...pids,
     month
