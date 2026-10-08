@@ -82,3 +82,8 @@ export function samplePaths(key: RouteKey): string[] {
 export function methodOf(key: RouteKey): Method {
   return patternOf(key).method;
 }
+
+/** The ids a source file's `DIFFERENCE <id>` comments name (shared/contract/differences.ts). */
+export function namedDifferences(source: string): string[] {
+  return [...source.matchAll(/DIFFERENCE ([a-z0-9][a-z0-9-]*)/g)].map((m) => m[1]);
+}

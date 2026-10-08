@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { samplePaths, unsent } from '../../../../../shared/contract/guard'
+import { DIFFERENCES } from '../../../../../shared/contract/differences'
+import { namedDifferences, samplePaths, unsent } from '../../../../../shared/contract/guard'
 import { CONTRACT_ROUTES, LOCAL_ONLY, UNCOVERED } from '../../../../../shared/contract/routes'
 import { SCENARIOS } from '../../../../../shared/contract/scenarios'
 import { getDB } from '../idb.js'
@@ -105,5 +106,27 @@ describe('contract: every route', () => {
         .map((m) => `${m} ${r.pattern.source}`)
     )
     expect(unlisted, 'routes on no list in shared/contract/routes.ts').toEqual([])
+  })
+
+  it('pins every difference it lists, and lists every difference it pins', () => {
+    const sources = import.meta.glob('../../../../../shared/contract/**/*.ts', {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }) as Record<string, string>
+    const named = new Set(
+      Object.entries(sources)
+        .filter(([path]) => !path.endsWith('/differences.ts'))
+        .flatMap(([, source]) => namedDifferences(source))
+    )
+    expect(named.size, 'the scenario sources were read').toBeGreaterThan(0)
+    expect(
+      [...named].filter((id) => !(id in DIFFERENCES)),
+      'DIFFERENCE comments with no entry in shared/contract/differences.ts'
+    ).toEqual([])
+    expect(
+      Object.keys(DIFFERENCES).filter((id) => !named.has(id)),
+      'entries in shared/contract/differences.ts that no scenario names'
+    ).toEqual([])
   })
 })
