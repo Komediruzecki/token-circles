@@ -1,3 +1,4 @@
+import { addCalendarMonths } from '../../calendarMonths';
 import { addCategory, balanceOf, expectMoney, isoDay, listTransactions } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -36,10 +37,12 @@ async function populate(api: ContractApi, expect: Expect, id: number) {
   return reply.body;
 }
 
-/** `YYYY-MM-DD` a month after another, as both runtimes advance a monthly rule. */
+/**
+ * `YYYY-MM-DD` a month after another, as both runtimes advance a monthly rule: on the same day, or
+ * on the last day of a shorter month (shared/calendarMonths.ts).
+ */
 function monthAfter(day: string): string {
-  const [y, m, d] = day.split('-').map(Number);
-  return isoDay(new Date(Date.UTC(y, m, d)));
+  return addCalendarMonths(day, 1);
 }
 
 export const recurring = [
