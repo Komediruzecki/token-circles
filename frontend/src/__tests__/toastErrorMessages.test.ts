@@ -38,7 +38,7 @@ const KNOWN: Record<string, number> = {
   'features/CompoundInterestCalculator.tsx': 1,
   'features/EmergencyFundCalculator.tsx': 1,
   'features/Loans.tsx': 2,
-  'features/Settings.tsx': 5,
+  'features/Settings.tsx': 4,
   'features/Tags.tsx': 6,
 }
 

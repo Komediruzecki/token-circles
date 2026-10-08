@@ -16,6 +16,7 @@ const { server, calls } = vi.hoisted(() => ({
     email: 'me@example.com',
     pendingEmail: null as string | null,
     resendStatus: 200,
+    putStatus: 200,
   },
   calls: [] as { url: string; method: string; body?: Record<string, unknown> }[],
 }))
@@ -33,6 +34,9 @@ vi.mock('../../core/apiFetch', () => ({
         status,
         headers: { 'content-type': 'application/json' },
       })
+    if (url === '/api/notifications/settings' && method === 'PUT' && server.putStatus === 409) {
+      return reply({ error: 'That email is already in use' }, 409)
+    }
     if (url === '/api/notifications/settings' && method === 'PUT') {
       const asked = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
       if (!asked || asked === server.email) return reply({ ok: true })
@@ -80,6 +84,7 @@ beforeEach(() => {
   server.email = 'me@example.com'
   server.pendingEmail = null
   server.resendStatus = 200
+  server.putStatus = 200
   calls.length = 0
   for (const t of toasts()) removeToast(t.id)
   localStorage.clear()
@@ -153,6 +158,19 @@ describe('an email change that is waiting', () => {
     expect(field()!.value).toBe('me@example.com')
     expect(lastToast()).toMatchObject({ type: 'success' })
     expect(lastToast()!.message).toContain('new@example.com')
+  })
+
+  it('says why a refused save was refused, in the words of the answer', async () => {
+    server.putStatus = 409
+    await openSettings()
+
+    field()!.value = 'someone-else@example.com'
+    field()!.dispatchEvent(new Event('input', { bubbles: true }))
+    button('settings-notifications-save')!.click()
+    await settle()
+
+    expect(lastToast()).toMatchObject({ type: 'error', message: 'That email is already in use' })
+    expect(pending()).toBeNull()
   })
 
   it('Send again asks for a fresh link and says where it went', async () => {

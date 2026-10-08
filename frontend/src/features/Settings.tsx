@@ -692,8 +692,8 @@ export default function Settings() {
           billsReminders: n.billsReminders,
         }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not save')
+      if (!res.ok) throw await apiErrorFrom(res)
+      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
       if (data.pendingEmail) {
         // The account keeps its address until the new one opens the link, so the field goes back
         // to it and the new address shows as waiting.
@@ -706,7 +706,7 @@ export default function Settings() {
         toast('Notification settings saved.', 'success')
       }
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not save', 'error')
+      toast(plainMessage(e, 'Could not save your settings. Try again.'), 'error')
     } finally {
       setNotifBusy(false)
     }
