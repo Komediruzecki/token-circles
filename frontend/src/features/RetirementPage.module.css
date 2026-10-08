@@ -345,11 +345,25 @@
 .retirement-page .form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  column-gap: 12px;
   /* A label that wraps to two lines must not push its own input out of line with the
      one beside it. Aligning on the end edge keeps the controls on one row whatever the
      labels do. */
   align-items: end;
+}
+
+/* A field marked by the form kit (components/form/Field.tsx) says why under its control. Each
+   field in a row shares three rows with the one beside it, its label, its control and its
+   message, so a message under one control moves neither control out of line, any more than a
+   label that wraps does. */
+.retirement-page .form-row > .form-group {
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+}
+
+.retirement-page .form-row > .form-group > :first-child {
+  align-self: end;
 }
 
 /* modal */
@@ -550,6 +564,13 @@
 
   .retirement-page .form-row {
     grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  /* One field to a line: nothing beside it to line up with. */
+  .retirement-page .form-row > .form-group {
+    display: block;
+    grid-row: auto;
   }
 
   .retirement-page .goals-grid {
@@ -706,25 +727,55 @@
   padding: 0 6px;
 }
 
-/* Repeated rows (pay steps, spending periods, lifestyles). The controls share the
-   width evenly and the remove button takes only what it needs. */
+/* Repeated rows (pay steps, spending periods, lifestyles). The fields share the
+   width evenly and the remove button takes only what it needs. The row lines its fields up
+   along their tops, so a message under one of them does not move the others. */
 .list-row {
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-start;
   /* A spending period is two month pickers, an amount and a button. In a side rail they
      cannot all share one line, and shrinking them to fit is what left the selects too
      narrow to show a month name. Wrap instead. */
   flex-wrap: wrap;
 }
 
-.list-row input {
+/* One field of a row: its control fills it, and its message, when it has one, sits under it. */
+.row-field {
   flex: 1 1 0;
   min-width: 0;
 }
 
+/* A spending period carries two month pickers plus an amount and a button. Give each picker a
+   width it can actually render "September" in and let the row wrap when they do not fit,
+   rather than dividing the rail into slivers. */
+.row-field-month {
+  flex: 1 1 13rem;
+}
+
+/* Level with the controls beside it: a 28px button on a 40px control. */
 .list-row button {
   flex: 0 0 auto;
+  margin-top: 6px;
+}
+
+/* A row's field is named for assistive tech; on screen the row reads as one line under its
+   legend. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The save row spaces its own items. */
+.save-row .save-notice {
+  margin: 0;
 }
 
 .save-row {
@@ -811,13 +862,6 @@
   flex: 1.5 1 0;
 }
 
-/* A spending period carries two of these plus an amount and a button. Give each picker a
-   width it can actually render "September" in and let the row wrap when they do not fit,
-   rather than dividing the rail into slivers. */
-.list-row .month-picker {
-  flex: 1 1 13rem;
-}
-
 @media (max-width: 900px) {
   .planner-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -834,13 +878,14 @@
     gap: 6px;
   }
 
-  .list-row input,
-  .list-row .month-picker {
+  .row-field,
+  .row-field-month {
     flex: 1 1 100%;
   }
 
   .list-row button {
     align-self: flex-end;
+    margin-top: 0;
   }
 
   .sub-section {

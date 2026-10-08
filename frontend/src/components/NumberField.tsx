@@ -31,6 +31,10 @@ export interface NumberFieldProps<E extends number | null = number> {
   max?: string
   class?: string
   ariaLabel?: string
+  /** 'true' while a form marks the field (`Field`'s `aria-invalid`). */
+  ariaInvalid?: 'true'
+  /** The ids of the message and hint that describe the field (`Field`'s `aria-describedby`). */
+  ariaDescribedBy?: string
   testId?: string
   id?: string
   disabled?: boolean
@@ -63,6 +67,8 @@ export default function NumberField<E extends number | null = number>(props: Num
       class={props.class}
       data-test-id={props.testId}
       aria-label={props.ariaLabel}
+      aria-invalid={props.ariaInvalid}
+      aria-describedby={props.ariaDescribedBy}
       disabled={props.disabled}
       placeholder={props.placeholder}
       required={props.required}
