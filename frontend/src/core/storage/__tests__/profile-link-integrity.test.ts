@@ -185,6 +185,7 @@ describe('IndexedDB profile-link integrity', () => {
         await billsCreate({
           name: 'Bill',
           amount: 10,
+          dueDate: '2026-02-01',
           category_id: 222,
         })
       ).status

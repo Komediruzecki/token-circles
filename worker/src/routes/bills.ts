@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../shared/billSchema';
 import { addCalendarMonths, addDays } from '../../../shared/calendarMonths';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { configuredBaseCurrency } from '../base-currency';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localNow } from '../local-date';
 
@@ -314,54 +315,34 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
   });
 });
 
+// The rules and their words are shared/billSchema.ts, which local-first and the Bills dialog run
+// too: a refused body answers 400 { error, fields }. A category or an account of another profile
+// is a 400 at its field; both were a 403 with no field.
 billsRoutes.post('/api/bills', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const {
-    name,
-    amount,
-    frequency,
-    day_of_month,
-    category_id,
-    account_id,
-    notes,
-    type,
-    dueDate,
-    autopay,
-  } = b;
-  if (!name || amount === undefined) throw new HttpError(400, 'Name and amount are required');
-  if (!dueDate) throw new HttpError(400, 'Due date is required');
-  if (isNaN(Date.parse(dueDate))) throw new HttpError(400, 'Invalid due date format');
-  if (parseFloat(amount) <= 0) throw new HttpError(400, 'Amount must be positive');
-  // Validate account ownership before accepting account_id from client input.
+  const bill = accept(checkBillCreate(await c.req.json()));
   if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+    bill.account_id !== null &&
+    !(await db.accountBelongsToProfile(c.env.DB, bill.account_id, pid))
   ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
+    throw refuse({ account_id: BILL_MESSAGES.account });
   }
   if (
-    category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
+    bill.category_id !== null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, bill.category_id, pid))
   ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
+    throw refuse({ category_id: BILL_MESSAGES.category });
   }
   const res = await db.insert(c.env.DB, 'bills', {
     profile_id: pid,
-    name,
-    amount,
-    frequency: frequency || 'monthly',
-    day_of_month: day_of_month || null,
-    category_id: category_id || null,
-    account_id: account_id || null,
-    notes: notes || '',
-    type: type || 'bill',
-    due_date: dueDate,
-    autopay: autopay ? 1 : 0,
+    ...bill,
+    autopay: bill.autopay ? 1 : 0,
   });
   return c.json({ id: res.meta.last_row_id });
 });
 
+// An edit checks and writes only the fields whose value it changes (decision 2), so a bill an
+// older version stored under other rules can still be renamed or paused.
 billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
@@ -372,67 +353,34 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
     pid
   );
   if (!existing) throw new HttpError(404, 'Not found');
-  const b = (await c.req.json()) as Record<string, any>;
-  const {
-    name,
-    amount,
-    frequency,
-    day_of_month,
-    category_id,
-    account_id,
-    is_active,
-    notes,
-    type,
-    dueDate,
-    due_date,
-    autopay,
-  } = b;
-  const nextDueDate = dueDate ?? due_date ?? existing.due_date;
-  if (nextDueDate && isNaN(Date.parse(nextDueDate))) {
-    throw new HttpError(400, 'Invalid due date format');
-  }
-  if (amount !== undefined && parseFloat(amount) <= 0) {
-    throw new HttpError(400, 'Amount must be positive');
-  }
-  // Validate account ownership if account_id is being changed.
+  const edit = accept(checkBillEdit(await c.req.json(), existing));
   if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
+    edit.account_id != null &&
+    !(await db.accountBelongsToProfile(c.env.DB, edit.account_id, pid))
   ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
+    throw refuse({ account_id: BILL_MESSAGES.account });
   }
   if (
-    category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
+    edit.category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, edit.category_id, pid))
   ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
+    throw refuse({ category_id: BILL_MESSAGES.category });
   }
-  await db.update(
-    c.env.DB,
-    'bills',
-    {
-      name: name ?? existing.name,
-      amount: amount ?? existing.amount,
-      frequency: frequency ?? existing.frequency,
-      day_of_month: day_of_month === undefined ? existing.day_of_month : day_of_month,
-      category_id: category_id === undefined ? existing.category_id : category_id,
-      account_id: account_id === undefined ? existing.account_id : account_id,
-      is_active: is_active ?? existing.is_active,
-      notes: notes ?? existing.notes,
-      type: type ?? existing.type,
-      due_date: nextDueDate,
-      autopay: autopay === undefined ? existing.autopay : autopay ? 1 : 0,
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
-  );
+  const data: Record<string, unknown> = { ...edit };
+  if (edit.autopay !== undefined) data.autopay = edit.autopay ? 1 : 0;
+  if (edit.is_active !== undefined) data.is_active = edit.is_active ? 1 : 0;
+  if (Object.keys(data).length > 0) {
+    await db.update(c.env.DB, 'bills', data, 'id = ? AND profile_id = ?', id, pid);
+  }
   return c.json({ ok: true });
 });
 
+// A bill the profile does not have is a 404, as in local-first: it answered 200 and deleted
+// nothing (the contract's `delete-missing`).
 billsRoutes.delete('/api/bills/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  await db.del(c.env.DB, 'bills', 'id = ? AND profile_id = ?', c.req.param('id'), pid);
+  const res = await db.del(c.env.DB, 'bills', 'id = ? AND profile_id = ?', c.req.param('id'), pid);
+  if (!res.meta.changes) throw new HttpError(404, 'Not found');
   return c.json({ ok: true });
 });
 

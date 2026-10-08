@@ -2,6 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { issueSessionCookie } from '../src/auth';
+import { BILL_MESSAGES } from '../../shared/billSchema';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 import { GOAL_MESSAGES } from '../../shared/goalSchema';
 
@@ -162,16 +163,6 @@ describe('Worker profile-link integrity', () => {
   it('rejects foreign category/account links in dependent resources', async () => {
     expect(
       (
-        await post('/api/bills', {
-          name: 'Bill',
-          amount: 10,
-          dueDate: '2026-02-01',
-          category_id: 9222,
-        })
-      ).status
-    ).toBe(403);
-    expect(
-      (
         await post('/api/recurring', {
           description: 'Recurring',
           amount: 10,
@@ -200,6 +191,16 @@ describe('Worker profile-link integrity', () => {
     expect(goal.status).toBe(400);
     expect(((await goal.json()) as { fields: object }).fields).toEqual({
       category_id: GOAL_MESSAGES.category,
+    });
+    const bill = await post('/api/bills', {
+      name: 'Bill',
+      amount: 10,
+      dueDate: '2026-02-01',
+      category_id: 9222,
+    });
+    expect(bill.status).toBe(400);
+    expect(((await bill.json()) as { fields: object }).fields).toEqual({
+      category_id: BILL_MESSAGES.category,
     });
     expect(
       (

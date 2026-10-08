@@ -1,6 +1,7 @@
 /**
  * Bills handlers — IndexedDB-backed implementations
  */
+import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../../../shared/billSchema'
 import { isoDate, parseLocalDate } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
@@ -12,6 +13,7 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 import { normalizeBill } from './normalize'
 
@@ -191,50 +193,32 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   })
 }
 
+// The rules and their words are shared/billSchema.ts, which the Worker and the Bills dialog run
+// too. Only the checked fields are stored. A bill without a day of the month stores none, as on the
+// Worker: it stored 1, so the same bill fell due on different days (`day-of-month-default`).
 export async function billsCreate(body: unknown): Promise<Response> {
-  try {
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const b = body as Record<string, unknown>
-    const name = ((b.name as string) || '').trim()
-    const amount = parseFloat(String((b.amount as string | number) || 0))
-    if (!name || isNaN(amount) || amount <= 0) {
-      return json({ error: 'Name and a valid amount are required' }, 400)
-    }
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
-    if (!(await currentProfileOwns('categories', b.category_id))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
-    }
-    if (!(await currentProfileOwns('accounts', b.account_id))) {
-      return json({ error: 'Account does not belong to this profile' }, 400)
-    }
-    const record = {
-      profile_id: pid,
-      name,
-      amount,
-      frequency: (b.frequency as string) || 'monthly',
-      // The Bills form (and the worker API) send camelCase `dueDate`; internal callers use snake.
-      due_date: ((b.due_date ?? b.dueDate) as string) || '',
-      day_of_month: (b.day_of_month as number) || 1,
-      category_id:
-        b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
-      // The account a payment comes out of: mark-paid moves its balance, as on the Worker.
-      account_id: b.account_id !== null && b.account_id !== undefined ? Number(b.account_id) : null,
-      // NULL on a new Worker row too; BillSchema requires both keys.
-      last_paid_date: null,
-      next_due_date: null,
-      recurring: b.recurring !== false ? 1 : 0,
-      autopay: b.autopay ? 1 : 0,
-      is_active: 1,
-      notes: (b.notes as string) || '',
-      type: (b.type as string) || 'bill',
-      created_at: new Date().toISOString(),
-    }
-    const id = await db.add('bills', record)
-    return json({ id }, 201)
-  } catch (err) {
-    return json({ error: `Failed to create bill: ${(err as Error).message}` }, 500)
+  const checked = checkBillCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const bill = checked.value
+  if (!(await currentProfileOwns('categories', bill.category_id))) {
+    return refuse({ category_id: BILL_MESSAGES.category })
   }
+  if (!(await currentProfileOwns('accounts', bill.account_id))) {
+    return refuse({ account_id: BILL_MESSAGES.account })
+  }
+  const record = {
+    profile_id: await adapter.getCurrentProfileId(),
+    ...bill,
+    autopay: bill.autopay ? 1 : 0,
+    // The Worker's column defaults; BillSchema requires each key.
+    last_paid_date: null,
+    next_due_date: null,
+    recurring: 1,
+    is_active: 1,
+    created_at: new Date().toISOString(),
+  }
+  const id = await (await getDB()).add('bills', record)
+  return json({ id }, 201)
 }
 
 export async function billsGet(params: Record<string, string>): Promise<Response> {
@@ -251,30 +235,26 @@ export async function billsUpdate(
   const db = await getDB()
   const bill = await currentProfileRecord('bills', idParam(params))
   if (!bill) return notFound('Bill')
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>
-    if ('category_id' in b && !(await currentProfileOwns('categories', b.category_id))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
-    }
-    if ('account_id' in b && !(await currentProfileOwns('accounts', b.account_id))) {
-      return json({ error: 'Account does not belong to this profile' }, 400)
-    }
-    if (b.name !== undefined) bill.name = b.name
-    if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
-    if (b.frequency !== undefined) bill.frequency = b.frequency
-    if (b.due_date !== undefined || b.dueDate !== undefined) bill.due_date = b.due_date ?? b.dueDate
-    if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
-    if (b.category_id !== undefined)
-      bill.category_id = b.category_id !== null ? Number(b.category_id) : null
-    if (b.account_id !== undefined)
-      bill.account_id = b.account_id !== null ? Number(b.account_id) : null
-    if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
-    if (b.autopay !== undefined) bill.autopay = b.autopay ? 1 : 0
-    if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0
-    if (b.notes !== undefined) bill.notes = b.notes
-    if (b.type !== undefined) bill.type = b.type
+  // Only the fields whose value the edit changes are checked and written (decision 2).
+  const checked = checkBillEdit(body, bill)
+  if (!checked.ok) {
+    console.error('[billsUpdate] Validation failed', { id: bill.id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  await db.put('bills', bill)
+  const edit = checked.value
+  if (
+    edit.category_id !== undefined &&
+    !(await currentProfileOwns('categories', edit.category_id))
+  ) {
+    return refuse({ category_id: BILL_MESSAGES.category })
+  }
+  if (edit.account_id !== undefined && !(await currentProfileOwns('accounts', edit.account_id))) {
+    return refuse({ account_id: BILL_MESSAGES.account })
+  }
+  const row: Record<string, unknown> = { ...bill, ...edit }
+  if (edit.autopay !== undefined) row.autopay = edit.autopay ? 1 : 0
+  if (edit.is_active !== undefined) row.is_active = edit.is_active ? 1 : 0
+  await db.put('bills', row)
   return ok()
 }
 

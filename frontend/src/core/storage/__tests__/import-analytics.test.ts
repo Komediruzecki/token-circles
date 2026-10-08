@@ -471,7 +471,13 @@ describe('Import → Analytics flow', () => {
       } as any)
 
       const { billsCreate, billsList } = await import('../localHandlers.js')
-      await billsCreate({ name: 'Internet', amount: 45, frequency: 'monthly', day_of_month: 1 })
+      await billsCreate({
+        name: 'Internet',
+        amount: 45,
+        dueDate: '2026-05-01',
+        frequency: 'monthly',
+        day_of_month: 1,
+      })
 
       const listRes = await billsList()
       const body = (await listRes.json()) as unknown[]
@@ -482,7 +488,13 @@ describe('Import → Analytics flow', () => {
     it('billsList from other profile not returned', async () => {
       // Create a bill under profile 1 (current profile)
       const { billsCreate } = await import('../localHandlers.js')
-      await billsCreate({ name: 'Rent', amount: 1200, frequency: 'monthly', day_of_month: 1 })
+      await billsCreate({
+        name: 'Rent',
+        amount: 1200,
+        dueDate: '2026-05-01',
+        frequency: 'monthly',
+        day_of_month: 1,
+      })
 
       // Verify profile 1 bill exists
       const bills = Array.from(mockStores['bills']?.values() ?? [])
