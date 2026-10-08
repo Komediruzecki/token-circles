@@ -192,6 +192,15 @@ describe('the confirm link’s outcome', () => {
     expect(toasts[0].message).toBe('That confirmation link is no longer valid')
   })
 
+  it('answers a reason it does not know with its own fixed words', async () => {
+    bootResult = { ok: false, error: 'a_reason_added_later' }
+    await mount()
+
+    expect(toasts).toEqual([
+      { message: 'That confirmation link is no longer valid', type: 'error' },
+    ])
+  })
+
   it('says nothing when the user simply opened the app', async () => {
     await mount()
 
@@ -232,6 +241,15 @@ describe('the email change link’s outcome', () => {
         message: 'Another account uses that address now, so your email stays as it was.',
         type: 'error',
       },
+    ])
+  })
+
+  it('answers a reason it does not know with its own fixed words', async () => {
+    bootResult = { ok: false, error: 'a_reason_added_later', change: true }
+    await mount()
+
+    expect(toasts).toEqual([
+      { message: 'That confirmation link is no longer valid', type: 'error' },
     ])
   })
 })
