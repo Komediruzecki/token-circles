@@ -8,6 +8,7 @@ import {
   checkRollover,
 } from '../../../shared/budgetSchema';
 import { addCalendarMonths } from '../../../shared/calendarMonths';
+import { toCents } from '../../../shared/money';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
@@ -120,8 +121,9 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     startDate,
     endDate
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  for (const s of spent) spentMap[s.category_id] = s.total;
+  for (const s of spent) spentMap[s.category_id] = toCents(s.total);
 
   // Automatic rollover from the previous month.
   const prevY = m === 1 ? y - 1 : y;
@@ -156,17 +158,17 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     prevEnd
   );
   const prevSpentMap: Record<number, number> = {};
-  for (const s of prevSpent) prevSpentMap[s.category_id] = s.total;
+  for (const s of prevSpent) prevSpentMap[s.category_id] = toCents(s.total);
 
   const prevUnusedMap: Record<number, { unused: number; rollover_enabled: number }> = {};
   for (const pb of prevBudgets) {
-    const unused = Math.max(0, pb.budget_amount - (prevSpentMap[pb.category_id] || 0));
+    const unused = Math.max(0, toCents(pb.budget_amount - (prevSpentMap[pb.category_id] || 0)));
     prevUnusedMap[pb.category_id] = { unused, rollover_enabled: pb.rollover_enabled };
   }
 
   const summary = budgets.map((b) => {
     const spentAmt = spentMap[b.category_id] || 0;
-    const baseRemaining = b.amount - spentAmt;
+    const baseRemaining = toCents(b.amount - spentAmt);
 
     let rollover_contribution = 0;
     let auto_rollover = 0;
@@ -176,11 +178,13 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
       if (prevInfo && prevInfo.rollover_enabled) {
         auto_rollover = prevInfo.unused;
       }
-      rollover_contribution = (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0);
+      rollover_contribution = toCents(
+        (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0)
+      );
     }
 
-    const effective_budget = b.amount + Math.max(0, rollover_contribution);
-    const effective_remaining = effective_budget - spentAmt;
+    const effective_budget = toCents(b.amount + Math.max(0, rollover_contribution));
+    const effective_remaining = toCents(effective_budget - spentAmt);
 
     return {
       ...b,
@@ -410,8 +414,9 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  for (const s of spent) spentMap[s.category_id] = Math.abs(s.total);
+  for (const s of spent) spentMap[s.category_id] = toCents(Math.abs(s.total));
 
   const incomeRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -422,12 +427,12 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const income = incomeRow?.total || 0;
+  const income = toCents(incomeRow?.total || 0);
 
-  const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
-  const totalSpent = Object.values(spentMap).reduce((sum, val) => sum + val, 0);
-  const remaining = totalBudget - totalSpent;
-  const zero_based_remaining = income - totalBudget;
+  const totalBudget = toCents(budgets.reduce((sum, b) => sum + b.amount, 0));
+  const totalSpent = toCents(Object.values(spentMap).reduce((sum, val) => sum + val, 0));
+  const remaining = toCents(totalBudget - totalSpent);
+  const zero_based_remaining = toCents(income - totalBudget);
 
   const summary: Array<
     Record<string, unknown> & { percent_used: number; remaining: number; alerts: string[] }
@@ -439,7 +444,7 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     category_icon: b.category_icon,
     allocated: b.amount,
     spent: spentMap[b.category_id] || 0,
-    remaining: b.amount - (spentMap[b.category_id] || 0),
+    remaining: toCents(b.amount - (spentMap[b.category_id] || 0)),
     percent_used: b.amount > 0 ? ((spentMap[b.category_id] || 0) / b.amount) * 100 : 0,
     status: (spentMap[b.category_id] || 0) > b.amount ? 'over' : 'ok',
     is_fully_allocated: b.amount > 0 && (spentMap[b.category_id] || 0) <= b.amount,
@@ -529,8 +534,9 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  spent.forEach((s) => (spentMap[s.category_id] = Math.abs(s.total)));
+  spent.forEach((s) => (spentMap[s.category_id] = toCents(Math.abs(s.total))));
 
   const incomeRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -541,7 +547,7 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const remaining = incomeRow?.total || 0;
+  const remaining = toCents(incomeRow?.total || 0);
 
   const alreadyBudgetedRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -551,14 +557,14 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const alreadyBudgeted = alreadyBudgetedRow?.total ?? 0;
+  const alreadyBudgeted = toCents(alreadyBudgetedRow?.total ?? 0);
 
-  const unassignedBudget = Math.max(0, remaining - alreadyBudgeted);
+  const unassignedBudget = Math.max(0, toCents(remaining - alreadyBudgeted));
 
   const allocations = categories.map((cat) => {
     const budget = budgetMap[cat.id];
     const spentAmt = spentMap[cat.id] || 0;
-    const remainingBudget = budget ? budget.amount - spentAmt : 0;
+    const remainingBudget = budget ? toCents(budget.amount - spentAmt) : 0;
     const percentUsed = budget && budget.amount > 0 ? (spentAmt / budget.amount) * 100 : 0;
 
     return {

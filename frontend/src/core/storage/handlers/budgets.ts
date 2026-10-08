@@ -9,6 +9,7 @@ import {
   checkBudgetMonth,
   checkRollover,
 } from '../../../../../shared/budgetSchema'
+import { toCents } from '../../../../../shared/money'
 import { localMonth } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
@@ -412,11 +413,15 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
     )
 
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    for (const cid of Object.keys(prevSpentMap)) prevSpentMap[+cid] = toCents(prevSpentMap[+cid]!)
+
     const prevUnusedMap: Record<number, { unused: number; rollover_enabled: boolean }> = {}
     for (const pb of prevBudgets) {
       const unused = Math.max(
         0,
-        (pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0)
+        toCents((pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0))
       )
       prevUnusedMap[pb.category_id as number] = {
         unused,
@@ -430,7 +435,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
 
     const summary = budgets.map((b: Record<string, unknown>) => {
       const spentAmt = spentMap[b.category_id as number] || 0
-      const baseRemaining = (b.amount as number) - spentAmt
+      const baseRemaining = toCents((b.amount as number) - spentAmt)
       const cat = catMap[b.category_id as number]
 
       let rollover_contribution = 0
@@ -442,14 +447,15 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         if (prevInfo && prevInfo.rollover_enabled) {
           auto_rollover = prevInfo.unused
         }
-        rollover_contribution =
+        rollover_contribution = toCents(
           (((b as Record<string, unknown>).rollover_amount as number) || 0) +
-          auto_rollover -
-          (((b as Record<string, unknown>).rollover_used as number) || 0)
+            auto_rollover -
+            (((b as Record<string, unknown>).rollover_used as number) || 0)
+        )
       }
 
-      const effective_budget = (b.amount as number) + Math.max(0, rollover_contribution)
-      const effective_remaining = effective_budget - spentAmt
+      const effective_budget = toCents((b.amount as number) + Math.max(0, rollover_contribution))
+      const effective_remaining = toCents(effective_budget - spentAmt)
 
       return {
         ...b,
@@ -509,18 +515,23 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
       }
     }
 
-    const income = txns
-      .filter(
-        (t: Record<string, unknown>) =>
-          t.type === 'income' &&
-          (t.date as string) >= startOfMonth &&
-          (t.date as string) < endOfMonth
-      )
-      .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    const income = toCents(
+      txns
+        .filter(
+          (t: Record<string, unknown>) =>
+            t.type === 'income' &&
+            (t.date as string) >= startOfMonth &&
+            (t.date as string) < endOfMonth
+        )
+        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    )
 
     let alreadyBudgeted = 0
     for (const b of budgets) alreadyBudgeted += (b.amount as number) || 0
-    const unassignedBudget = Math.max(0, income - alreadyBudgeted)
+    alreadyBudgeted = toCents(alreadyBudgeted)
+    const unassignedBudget = Math.max(0, toCents(income - alreadyBudgeted))
 
     // A category without a budget has none: an amount of 0 and nothing used, as on the Worker. Its
     // spending was given as its budget, 100% used, so the Budgets page called it near its limit in
@@ -529,7 +540,7 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
       const budget = budgetMap[cat.id as number]
       const spentAmt = spentMap[cat.id as number] || 0
       const budgetAmount = (budget?.amount as number) || 0
-      const remainingBudget = budget ? budgetAmount - spentAmt : 0
+      const remainingBudget = budget ? toCents(budgetAmount - spentAmt) : 0
       const percentUsed = budget && budgetAmount > 0 ? (spentAmt / budgetAmount) * 100 : 0
 
       return {
@@ -594,26 +605,34 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
       }
     }
 
-    const income = txns
-      .filter(
-        (t: Record<string, unknown>) =>
-          t.type === 'income' &&
-          (t.date as string) >= startOfMonth &&
-          (t.date as string) < endOfMonth
-      )
-      .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    const income = toCents(
+      txns
+        .filter(
+          (t: Record<string, unknown>) =>
+            t.type === 'income' &&
+            (t.date as string) >= startOfMonth &&
+            (t.date as string) < endOfMonth
+        )
+        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    )
 
     const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
     const catMap: Record<number, Record<string, unknown>> = {}
     for (const c of cats) catMap[c.id as number] = c
 
-    const totalBudget = budgets.reduce(
-      (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
-      0
+    const totalBudget = toCents(
+      budgets.reduce(
+        (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
+        0
+      )
     )
-    const totalSpent = Object.values(spentMap).reduce((sum: number, val: number) => sum + val, 0)
-    const remaining = totalBudget - totalSpent
-    const zero_based_remaining = income - totalBudget
+    const totalSpent = toCents(
+      Object.values(spentMap).reduce((sum: number, val: number) => sum + val, 0)
+    )
+    const remaining = toCents(totalBudget - totalSpent)
+    const zero_based_remaining = toCents(income - totalBudget)
 
     const summary = budgets.map((b: Record<string, unknown>) => {
       const cat = catMap[b.category_id as number]
@@ -628,7 +647,7 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
         category_icon: cat?.icon,
         allocated: amt,
         spent: s,
-        remaining: amt - s,
+        remaining: toCents(amt - s),
         percent_used: pct,
         status: s > amt ? 'over' : 'ok',
         is_fully_allocated: amt > 0 && s <= amt,
