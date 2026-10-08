@@ -945,7 +945,8 @@ export async function budgetsBackfillFromSpending(body: unknown): Promise<Respon
       for (const [catId, total] of Object.entries(totals[ym])) {
         await tx.store.add({
           category_id: parseInt(catId),
-          amount: total,
+          // To the cent: 0.1 + 0.2 is 0.30000000000000004, which Allocate would refuse to save back.
+          amount: toCents(total),
           period: 'monthly',
           start_date: `${ym}-01`,
           end_date: null,

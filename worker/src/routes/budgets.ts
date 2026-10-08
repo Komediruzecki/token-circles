@@ -939,12 +939,14 @@ budgetsRoutes.post('/api/budgets/backfill-from-spending', requireAuth, async (c)
     toEnd
   );
 
+  // Each budget to the cent: SUM over 0.1 and 0.2 is 0.30000000000000004, which the Allocate
+  // dialog's cents rule would refuse to save back.
   const months = new Set<string>();
   const stmts = rows.map((r) => {
     months.add(r.ym);
     return c.env.DB.prepare(
       'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
-    ).bind(r.category_id, r.total, 'monthly', `${r.ym}-01`, pid);
+    ).bind(r.category_id, toCents(r.total), 'monthly', `${r.ym}-01`, pid);
   });
   for (let i = 0; i < stmts.length; i += 50) {
     await c.env.DB.batch(stmts.slice(i, i + 50));

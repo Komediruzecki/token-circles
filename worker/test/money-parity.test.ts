@@ -3,9 +3,9 @@
  * frontend/src/core/storage/__tests__/moneyParity.test.ts, with the same rows made the same way
  * (every one POSTed, as the app makes them) and the same figures expected.
  *
- * Paying a bill, adding to a goal, allocating, rolling a budget over, copying a month and setting
- * a month from last month's spending each answer an amount that a person reads as money: 739.65,
- * not 739.6500000000001.
+ * Paying a bill, adding to a goal, allocating, rolling a budget over, copying a month, setting a
+ * month from last month's spending and backfilling months from spending each answer an amount that
+ * a person reads as money: 739.65, not 739.6500000000001.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -243,6 +243,32 @@ describe("setting a month from last month's spending", () => {
       await get<{ category_id: number; amount: number; start_date: string }[]>('/api/budgets');
     expect(budgets.map((b) => [b.category_id, b.amount, b.start_date])).toEqual([
       [food, 0.6, '2026-07-01'],
+    ]);
+  });
+});
+
+describe('backfilling budgets from spending', () => {
+  it("sets each month's budget to what was spent, to the cent", async () => {
+    const food = await category('Food');
+    await spend(food, '2026-05-03', 0.1);
+    await spend(food, '2026-05-10', 0.2);
+    await spend(food, '2026-06-03', 0.1);
+    await spend(food, '2026-06-10', 0.2);
+
+    await post('/api/budgets/backfill-from-spending', {
+      from_month: '2026-05',
+      to_month: '2026-06',
+    });
+
+    const budgets =
+      await get<{ category_id: number; amount: number; start_date: string }[]>('/api/budgets');
+    expect(
+      budgets
+        .map((b) => [b.category_id, b.amount, b.start_date])
+        .sort((a, b) => String(a[2]).localeCompare(String(b[2])))
+    ).toEqual([
+      [food, 0.3, '2026-05-01'],
+      [food, 0.3, '2026-06-01'],
     ]);
   });
 });
