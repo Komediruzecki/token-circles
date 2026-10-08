@@ -8,13 +8,14 @@
  * it moved into range without a word: a withdrawal rate of 0 % was saved as 0.1 %, a lifestyle
  * costing nothing was dropped. Now both check with the rules both runtimes run
  * (shared/retirementGoalSchema.ts, shared/retirementPlanSchema.ts), mark the field in its own
- * words, a lifestyle's under the field of its row, focus it, and send nothing.
+ * words, a lifestyle's under the field of its row, focus it, and send nothing. A goal another tab
+ * deleted is said in the dialog, in the same words from either runtime.
  *
  * Every case runs signed in (the Worker) and local-first (the IndexedDB router). Pull requests run
- * the `@smoke` ones, in both modes; main runs them all.
+ * the `@smoke` ones; main runs them all.
  */
 import { expect, test } from '@playwright/test'
-import { gotoServerless, isNetworkNoise, login, navigateToRoute } from './test-helpers'
+import { E2E_BASE, gotoServerless, isNetworkNoise, login, navigateToRoute } from './test-helpers'
 import type { Locator, Page } from '@playwright/test'
 
 interface Mode {
@@ -128,7 +129,33 @@ async function storedPlan(page: Page): Promise<Plan> {
   return (await viaApp<{ settings: Plan }>(page, 'GET', '/api/retirement/settings')).settings
 }
 
+/**
+ * Deletes a row behind the page's back, as another tab would: the page's own client is not used,
+ * so the page is not told.
+ */
+async function deleteElsewhere(page: Page, mode: Mode, url: string): Promise<void> {
+  if (mode.name === 'cloud') {
+    const profileId = await page.evaluate(() => localStorage.getItem('currentProfileId'))
+    const res = await page.request.delete(`${E2E_BASE}${url}`, {
+      headers: { 'X-Profile-Id': String(profileId) },
+    })
+    expect(res.ok(), `DELETE ${url}: ${res.status()}`).toBeTruthy()
+    return
+  }
+  await page.evaluate(async (path) => {
+    const spec = '/src/core/storage/localApiRouter.ts'
+    const mod = (await import(/* @vite-ignore */ spec)) as {
+      routeApiRequest: (url: string, init?: RequestInit) => Promise<Response>
+    }
+    const res = await mod.routeApiRequest(path, { method: 'DELETE' })
+    if (!res.ok) throw new Error(`DELETE ${path}: ${res.status}`)
+  }, url)
+}
+
 for (const mode of MODES) {
+  // Pull requests run the cases tagged `@smoke`, and the ones tagged `cloudSmoke` signed in only:
+  // a case that sends nothing runs the same code in both modes. Main runs every case in both.
+  const cloudSmoke = mode.name === 'cloud' ? ' @smoke' : ''
   test.describe(`the retirement goal dialog and plan, ${mode.name}`, () => {
     /** In the name of every goal a case makes, so the sweep can find it. */
     let stamp = ''
@@ -170,7 +197,7 @@ for (const mode of MODES) {
     test.describe('the plan', () => {
       test.describe.configure({ mode: 'default' })
 
-      test('a plan value outside its range is marked at its field, level with the one beside it, and nothing is saved until it is fixed @smoke', async ({
+      test(`a plan value outside its range is marked at its field, level with the one beside it, and nothing is saved until it is fixed${cloudSmoke}`, async ({
         page,
       }) => {
         await keepPlan(page)
@@ -323,6 +350,44 @@ for (const mode of MODES) {
 
       await expect(toasts(page).getByText('Goal deleted successfully')).toBeVisible()
       await expect(card(page, `${name}-renamed`)).toHaveCount(0)
+      await expect(errorToasts(page)).toHaveCount(0)
+      expect(errors).toEqual([])
+    })
+
+    test('a goal another tab deleted is said in the dialog, which keeps what was typed @smoke', async ({
+      page,
+    }) => {
+      const errors = watchErrors(page)
+      const name = `zz-gone-${stamp}`
+      await page.getByTestId('add-retirement-goal-btn').click()
+      await field(page, 'Goal Name').fill(name)
+      await field(page, 'Target Amount').fill('500000')
+      await field(page, 'Current Age').fill('40')
+      await field(page, 'Retirement Age').fill('67')
+      await field(page, 'Expected Annual Return (%)').fill('5')
+      await submitGoal(page)
+      await expect(card(page, name)).toBeVisible()
+      const goals = (
+        await viaApp<{ goals: { id: number; name: string }[] }>(
+          page,
+          'GET',
+          '/api/retirement-goals'
+        )
+      ).goals
+      const id = goals.find((goal) => goal.name === name)?.id
+      expect(id, 'the goal just added').toBeDefined()
+
+      await card(page, name).getByTestId('retirement-goal-edit-btn').click()
+      await field(page, 'Goal Name').fill(`${name}-renamed`)
+      await deleteElsewhere(page, mode, `/api/retirement-goals/${id}`)
+      await submitGoal(page)
+
+      // The same words from either runtime, in the dialog, which stays open on what was typed.
+      await expect(page.getByTestId('retirement-form-notice')).toHaveText(
+        'Retirement goal not found'
+      )
+      await expect(dialog(page)).toBeVisible()
+      await expect(field(page, 'Goal Name')).toHaveValue(`${name}-renamed`)
       await expect(errorToasts(page)).toHaveCount(0)
       expect(errors).toEqual([])
     })

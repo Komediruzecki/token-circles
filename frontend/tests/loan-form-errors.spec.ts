@@ -6,13 +6,14 @@
  * The dialog said "The loan was not saved. Check your connection and try again." in a toast for
  * every refusal, with nothing marked, and an extra payment's refusal was a toast too. Now both
  * check with the rules both runtimes run (shared/loanSchema.ts), mark the field in its own words,
- * a rate period's under the field of its row, focus it, and send nothing.
+ * a rate period's under the field of its row, focus it, and send nothing. What only the runtime can
+ * tell, like a payment past the end of a loan another tab shortened, is marked the same way.
  *
  * Every case runs signed in (the Worker) and local-first (the IndexedDB router). Pull requests run
- * the `@smoke` ones, in both modes; main runs them all.
+ * the `@smoke` ones; main runs them all.
  */
 import { expect, test } from '@playwright/test'
-import { gotoServerless, isNetworkNoise, login, navigateToRoute } from './test-helpers'
+import { E2E_BASE, gotoServerless, isNetworkNoise, login, navigateToRoute } from './test-helpers'
 import type { Locator, Page } from '@playwright/test'
 
 interface Mode {
@@ -139,6 +140,36 @@ async function loanNamed(page: Page, name: string): Promise<StoredLoan | undefin
 }
 
 /**
+ * Changes a loan behind the page's back, as another tab would: the page's own client is not used,
+ * so the page is not told.
+ */
+async function changeElsewhere(page: Page, mode: Mode, url: string, body: unknown): Promise<void> {
+  if (mode.name === 'cloud') {
+    const profileId = await page.evaluate(() => localStorage.getItem('currentProfileId'))
+    const res = await page.request.put(`${E2E_BASE}${url}`, {
+      headers: { 'X-Profile-Id': String(profileId) },
+      data: body,
+    })
+    expect(res.ok(), `PUT ${url}: ${res.status()}`).toBeTruthy()
+    return
+  }
+  await page.evaluate(
+    async (req) => {
+      const spec = '/src/core/storage/localApiRouter.ts'
+      const mod = (await import(/* @vite-ignore */ spec)) as {
+        routeApiRequest: (url: string, init?: RequestInit) => Promise<Response>
+      }
+      const res = await mod.routeApiRequest(req.url, {
+        method: 'PUT',
+        body: JSON.stringify(req.body),
+      })
+      if (!res.ok) throw new Error(`PUT ${req.url}: ${res.status}`)
+    },
+    { url, body }
+  )
+}
+
+/**
  * Takes out of the Worker's database the loans a case made, whether or not the case got that far:
  * the fixture profile is shared by every spec and outlives a local run. Local-first keeps
  * everything in the test's own browser, which goes with it.
@@ -152,6 +183,9 @@ async function sweep(page: Page, mode: Mode, stamp: string): Promise<void> {
 }
 
 for (const mode of MODES) {
+  // Pull requests run the cases tagged `@smoke`, and the ones tagged `cloudSmoke` signed in only:
+  // a case that sends nothing runs the same code in both modes. Main runs every case in both.
+  const cloudSmoke = mode.name === 'cloud' ? ' @smoke' : ''
   test.describe(`the Loans dialog and extra payments, ${mode.name}`, () => {
     /** In the name of every loan a case makes, so `sweep` can find it. */
     let stamp = ''
@@ -168,7 +202,7 @@ for (const mode of MODES) {
       await sweep(page, mode, stamp)
     })
 
-    test('a loan without its figures is marked at each field, a rate period at its row, and nothing is sent @smoke', async ({
+    test(`a loan without its figures is marked at each field, a rate period at its row, and nothing is sent${cloudSmoke}`, async ({
       page,
     }) => {
       const writes = watchLoanWrites(page)
@@ -298,7 +332,7 @@ for (const mode of MODES) {
       expect(errors).toEqual([])
     })
 
-    test('an extra payment is marked at its amount, then added, changed and removed, each step said @smoke', async ({
+    test('an extra payment is marked at its amount, then added, changed and removed, each step said', async ({
       page,
     }) => {
       const errors = watchErrors(page)
@@ -368,6 +402,45 @@ for (const mode of MODES) {
       await expect(toasts(page).getByText('Extra payment removed')).toBeVisible()
       await expect(page.getByTestId('loans-extras-empty')).toBeVisible()
       await expect(errorToasts(page)).toHaveCount(0)
+      expect(errors).toEqual([])
+    })
+
+    test('an extra payment past the end of a loan another tab shortened is marked at When, and nothing is added @smoke', async ({
+      page,
+    }) => {
+      const errors = watchErrors(page)
+      const name = `zz-short-${stamp}`
+      const loan = await viaApp<{ id: number }>(page, 'POST', '/api/loans', {
+        name,
+        principal: 20000,
+        interest_rate: 5,
+        term_months: 60,
+        start_date: '2026-03-01',
+      })
+      await page.evaluate((hash) => {
+        location.hash = hash
+      }, `#loans/${loan.id}/extras`)
+      await expect(page.getByTestId('loans-detail-name')).toHaveText(name, { timeout: 20_000 })
+
+      const form = page.getByTestId('loans-extra-form')
+      const when = form.getByTestId('loans-extra-month')
+      await when.selectOption('48')
+      await form.getByTestId('loans-extra-amount').fill('100')
+      // Another tab cut the loan to 24 payments. The page still offers the 60 it opened with, so
+      // only the runtime can tell that payment 48 is gone: its refusal is marked at the field.
+      await changeElsewhere(page, mode, `/api/loans/${loan.id}`, { term_months: 24 })
+      await form.getByTestId('loans-extra-add').click()
+
+      await expect(when).toHaveAttribute('aria-invalid', 'true')
+      await expect(when).toHaveAccessibleDescription(
+        'Choose which payment the extra payment goes with.'
+      )
+      await expect(when).toBeFocused()
+      await expect(page.getByTestId('loans-extra-notice')).toHaveText('')
+      await expect(page.getByTestId('loans-extra-item')).toHaveCount(0)
+      await expect(errorToasts(page)).toHaveCount(0)
+      const stored = await viaApp<{ prepayments: unknown[] }>(page, 'GET', `/api/loans/${loan.id}`)
+      expect(stored.prepayments).toEqual([])
       expect(errors).toEqual([])
     })
   })
