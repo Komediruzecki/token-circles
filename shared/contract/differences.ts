@@ -47,6 +47,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/recurring/upcoming answers { transactions, byCategory, totalMonthly, currency }, every occurrence of the next 30 days, on the Worker, and the active rules themselves in local-first; nothing in the app calls it. Slice 5 (recurring).',
   'recurring-pause':
     "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
+  'loan-total-prepaid-none':
+    'GET /api/loans answers total_prepaid null for a loan with no extra payments on the Worker (SUM over no rows) and 0 in local-first; the Loans page does not read it. Slice 4 (loans).',
   'bills-upcoming':
     'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset), rolling a bill due today to next month, on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
   'category-apply-mappings':

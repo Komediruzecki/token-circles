@@ -3,6 +3,7 @@ import { accounts } from './accounts';
 import { bills } from './bills';
 import { budgets } from './budgets';
 import { categories } from './categories';
+import { loanScenarios } from './loans';
 import { recurring } from './recurring';
 import { tags } from './tags';
 import { transactions } from './transactions';
@@ -13,6 +14,7 @@ export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   bills,
   budgets,
   categories,
+  loans: loanScenarios,
   recurring,
   tags,
   transactions,
