@@ -18,6 +18,19 @@ import {
 } from '../auth';
 import { sendMail } from '../email';
 import {
+  applyEmailChange,
+  cancelEmailChange,
+  pendingEmailChange,
+  sendEmailChangeLink,
+} from '../email-change';
+import {
+  createEmailVerification,
+  randomToken,
+  sha256Hex,
+  verifyLink,
+  VERIFY_TOKEN_TTL_HOURS,
+} from '../email-verification';
+import {
   renderAccountExists,
   renderEmailVerification,
   renderPasswordReset,
@@ -41,62 +54,6 @@ const DUMMY_PASSWORD_HASH = `pbkdf2$100000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
 // How long a password-reset magic link stays valid. Tune freely (a few hours is the
 // safe default; raise toward 24–72h if you want links to survive longer email delays).
 const RESET_TOKEN_TTL_HOURS = 2;
-
-// 256-bit URL-safe token (hex). The raw token goes in the email link; only its hash is stored.
-function randomToken(): string {
-  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
-    b.toString(16).padStart(2, '0')
-  ).join('');
-}
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ── Email verification (password signups) ──────────────────────────────────────────────────────
-//
-// A password account starts unverified and works anyway: the confirm link is a soft gate, so
-// nothing is blocked on it — the app shows a banner until it is clicked. Google accounts arrive
-// with Google's own email_verified claim and never see any of this.
-//
-// The link stays valid long enough to survive a night in a spam folder. It is longer than the
-// password-reset TTL on purpose: a reset link is a live credential, a confirm link is not.
-const VERIFY_TOKEN_TTL_HOURS = 24;
-
-/**
- * Mint a single-use confirm token for `userId`, superseding any link already outstanding, and
- * store only its hash. Returns the raw token for the email.
- */
-async function createEmailVerification(
-  db: D1Database,
-  userId: number,
-  email: string
-): Promise<string> {
-  await db
-    .prepare('DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL')
-    .bind(userId)
-    .run();
-  const token = randomToken();
-  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
-  await db
-    .prepare(
-      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at) VALUES (?, ?, ?, ?)'
-    )
-    .bind(userId, email, await sha256Hex(token), expiresAt)
-    .run();
-  return token;
-}
-
-/**
- * The confirm link. It points at this worker rather than the app because there is nothing for
- * the user to fill in — one GET does the whole job and bounces them back to the app.
- */
-function verifyLink(apiOrigin: string, token: string, returnTo: string): string {
-  return (
-    `${apiOrigin}/api/auth/verify-email?token=${encodeURIComponent(token)}` +
-    `&returnTo=${encodeURIComponent(returnTo)}`
-  );
-}
 
 // Google Sign-In (server-side code flow) + session endpoints. The token is set as
 // an httpOnly cookie, so the browser never handles it directly.
@@ -457,6 +414,10 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // The emailed confirm link. A top-level navigation, so the outcome comes back to the app as a
 // fragment (#everified=1 / #everified_error=…) the way the Google callback does — there is no
 // page to render here and nothing for the user to type.
+//
+// Two kinds of link land here (migration 0031): one confirms the address the account has, the
+// other moves the account to the address it was mailed to. The second adds `change=1` to every
+// answer that names its outcome, so the app can say which happened.
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -465,7 +426,8 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   const returnTo = isAllowedReturnTo(requested, c.env) ? requested : base;
   const back = (fragment: string) =>
     new Response(null, { status: 302, headers: { Location: `${returnTo}/#${fragment}` } });
-  const fail = (reason: string) => back(`everified_error=${encodeURIComponent(reason)}`);
+  const fail = (reason: string, change = false) =>
+    back(`everified_error=${encodeURIComponent(reason)}${change ? '&change=1' : ''}`);
 
   const token = c.req.query('token') ?? '';
   if (!token) return fail('missing_token');
@@ -473,10 +435,10 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   // whether it is still spendable. Checking `used_at` here as well would let the read say yes
   // while the write says no.
   const row = await c.env.DB.prepare(
-    'SELECT id, user_id, email, expires_at FROM email_verifications WHERE token_hash = ?'
+    'SELECT id, user_id, email, expires_at, purpose FROM email_verifications WHERE token_hash = ?'
   )
     .bind(await sha256Hex(token))
-    .first<{ id: number; user_id: number; email: string; expires_at: string }>();
+    .first<{ id: number; user_id: number; email: string; expires_at: string; purpose: string }>();
   // One message for an unknown token and one for an already-used one would let a caller probe
   // token state, so both land here.
   if (!row) return fail('invalid_or_used');
@@ -490,19 +452,35 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
     .bind(row.id)
     .run();
   if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
-  if (Date.parse(row.expires_at) < Date.now()) return fail('expired');
-  const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
-    .bind(row.user_id)
-    .first<{ email: string | null }>();
-  // The address has to still be the one this link was sent to. Otherwise changing the address
-  // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
-  if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
-    return fail('invalid_or_used');
+  const change = row.purpose === 'change';
+  if (Date.parse(row.expires_at) < Date.now()) return fail('expired', change);
+  // The link is spent. Whatever goes wrong from here goes back to the app as a reason: the person
+  // arrived by opening a link in a mail, so an error page would leave them nowhere.
+  try {
+    if (change) {
+      // The account moves to the address this link was mailed to, unless another account has it
+      // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
+      const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
+      if (outcome === 'taken') return fail('email_taken', true);
+      if (outcome === 'gone') return fail('invalid_or_used');
+      return back('everified=1&change=1');
+    }
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
+      .bind(row.user_id)
+      .first<{ email: string | null }>();
+    // The address has to still be the one this link was sent to. Otherwise changing the address
+    // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
+    if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
+      return fail('invalid_or_used');
+    }
+    await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
+      .bind(row.user_id)
+      .run();
+    return back('everified=1');
+  } catch (e) {
+    console.error('An email link failed after it was spent:', e);
+    return fail('server_error', change);
   }
-  await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
-    .bind(row.user_id)
-    .run();
-  return back('everified=1');
 });
 
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
@@ -530,6 +508,25 @@ authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
     assetOrigin: base,
   });
   await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });
+  return c.json({ ok: true });
+});
+
+// Send the link for the account's waiting email change again (email-change.ts). A fresh link,
+// which retires the earlier one; it shares its limits with asking for the change, and sends
+// nothing once another account has the address (409).
+authRoutes.post('/api/auth/email-change/resend', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const pendingEmail = await pendingEmailChange(c.env.DB, userId);
+  if (!pendingEmail) return c.json({ error: 'No email change is waiting to be confirmed' }, 404);
+  const limited = await sendEmailChangeLink(c, userId, pendingEmail);
+  if (limited) return limited;
+  return c.json({ ok: true, pendingEmail });
+});
+
+// Cancel the account's waiting email change: its link stops working and the address stays.
+// Nothing waiting is not an error; the outcome is the same.
+authRoutes.delete('/api/auth/email-change', requireAuth, async (c) => {
+  await cancelEmailChange(c.env.DB, c.get('userId'));
   return c.json({ ok: true });
 });
 

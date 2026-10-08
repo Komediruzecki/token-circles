@@ -43,6 +43,7 @@ import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
+import { apiErrorFrom, plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import { bumpProfileVersion, getProfileVersion, setPage } from '../core/appStore'
@@ -359,6 +360,11 @@ const IconBell = () => (
     <path d="M10 21a2 2 0 004 0" />
   </Svg>
 )
+const IconX = () => (
+  <Svg>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </Svg>
+)
 
 // Shared card header: halo icon + title + optional description / move tag.
 function CardHead(props: { icon: JSX.Element; title: string; desc?: string; tag?: string }) {
@@ -647,16 +653,27 @@ export default function Settings() {
   // ── Email reminders (server mode only; the worker exposes /api/notifications/*) ──
   const [notif, setNotif] = createSignal<{
     email: string
+    // A new address waiting for the link mailed to it to be opened. Until then the account keeps
+    // `email`, and saving a different address only starts this wait.
+    pendingEmail?: string | null
     emailNotifications: boolean
     budgetAlerts: boolean
     spendingReport: boolean
     billsReminders: boolean
   } | null>(null)
+  // The account's address as last loaded; the field can hold an edit that is not saved yet.
+  const [accountEmail, setAccountEmail] = createSignal('')
   const [notifBusy, setNotifBusy] = createSignal(false)
+  const [emailChangeBusy, setEmailChangeBusy] = createSignal(false)
+  // Send again found that another account has the waiting address now: the change cannot finish.
+  const [pendingTaken, setPendingTaken] = createSignal(false)
   const loadNotifications = async () => {
     try {
       const res = await apiFetch('/api/notifications/settings', { credentials: 'include' })
-      setNotif(res.ok ? await res.json() : null)
+      const data = res.ok ? await res.json() : null
+      setNotif(data)
+      setAccountEmail(data?.email ?? '')
+      setPendingTaken(false)
     } catch {
       setNotif(null)
     }
@@ -670,15 +687,78 @@ export default function Settings() {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(n),
+        body: JSON.stringify({
+          email: n.email,
+          emailNotifications: n.emailNotifications,
+          budgetAlerts: n.budgetAlerts,
+          spendingReport: n.spendingReport,
+          billsReminders: n.billsReminders,
+        }),
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not save')
-      toast('Notification settings saved.', 'success')
+      if (!res.ok) throw await apiErrorFrom(res)
+      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
+      if (data.pendingEmail) {
+        // The account keeps its address until the new one opens the link, so the field goes back
+        // to it and the new address shows as waiting.
+        await loadNotifications()
+        toast(
+          `Saved. Open the link we sent to ${data.pendingEmail} to finish the change.`,
+          'success'
+        )
+      } else {
+        toast('Notification settings saved.', 'success')
+      }
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not save', 'error')
+      toast(plainMessage(e, 'Could not save your settings. Try again.'), 'error')
     } finally {
       setNotifBusy(false)
+    }
+  }
+  const resendEmailChange = async () => {
+    setEmailChangeBusy(true)
+    try {
+      const res = await apiFetch('/api/auth/email-change/resend', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        // Nothing waits any more: the link expired, or was opened or canceled somewhere else.
+        if (res.status === 404) setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
+        // Another account has the address now. The waiting block says so and offers Cancel.
+        if (res.status === 409) {
+          setPendingTaken(true)
+          return
+        }
+        throw await apiErrorFrom(res)
+      }
+      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
+      toast(`Link sent again to ${data.pendingEmail ?? notif()?.pendingEmail}.`, 'success')
+    } catch (e) {
+      toast(plainMessage(e, 'Could not send the link. Try again.'), 'error')
+    } finally {
+      setEmailChangeBusy(false)
+    }
+  }
+  const cancelEmailChange = async () => {
+    setEmailChangeBusy(true)
+    try {
+      const res = await apiFetch('/api/auth/email-change', {
+        method: 'DELETE',
+        credentials: 'include',
+      })
+      if (!res.ok) throw await apiErrorFrom(res)
+      setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
+      setPendingTaken(false)
+      toast(
+        accountEmail()
+          ? `Email change canceled. Your account keeps ${accountEmail()}.`
+          : 'Email change canceled.',
+        'success'
+      )
+    } catch (e) {
+      toast(plainMessage(e, 'Could not cancel the change. Try again.'), 'error')
+    } finally {
+      setEmailChangeBusy(false)
     }
   }
   const sendTestEmail = async (type: 'basic' | 'spending' | 'budget' | 'bills' = 'basic') => {
@@ -1403,11 +1483,58 @@ export default function Settings() {
                     <input
                       class={styles.formControl}
                       type="email"
+                      data-test-id="settings-email-input"
                       value={notif()!.email}
                       onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
                       placeholder="you@example.com"
                       style="max-width: 340px;"
                     />
+                    {/* Outside the plan-locked actions below: a change already waiting can always
+                        be sent again or canceled. */}
+                    <Show when={notif()?.pendingEmail}>
+                      {(pending) => (
+                        <div class={styles.pendingEmail} data-test-id="settings-email-pending">
+                          <Show
+                            when={!pendingTaken()}
+                            fallback={
+                              <p>
+                                Another account uses <strong>{pending()}</strong> now, so this
+                                change can't finish. Cancel it, or save a different address.
+                              </p>
+                            }
+                          >
+                            <p>
+                              We sent a link to <strong>{pending()}</strong>. Your sign-in address
+                              changes when you open it.
+                            </p>
+                          </Show>
+                          <div class={styles.pendingEmailActions}>
+                            <Show when={!pendingTaken()}>
+                              <button
+                                class={styles.iconAction}
+                                data-test-id="settings-email-resend"
+                                onclick={() => void resendEmailChange()}
+                                disabled={emailChangeBusy()}
+                                title={`Send the link to ${pending()} again`}
+                              >
+                                <IconSend />
+                                Send again
+                              </button>
+                            </Show>
+                            <button
+                              class={styles.iconAction}
+                              data-test-id="settings-email-cancel"
+                              onclick={() => void cancelEmailChange()}
+                              disabled={emailChangeBusy()}
+                              title="Keep your current address and stop the link from working"
+                            >
+                              <IconX />
+                              Cancel change
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </Show>
                   </div>
                   <div class={styles.row}>
                     <span class={styles.rowLabel}>Enable email notifications</span>
@@ -1460,6 +1587,7 @@ export default function Settings() {
                   >
                     <button
                       class={`${styles.iconAction} ${styles.iconActionPrimary}`}
+                      data-test-id="settings-notifications-save"
                       onclick={() => void saveNotifications()}
                       disabled={notifBusy()}
                       title="Save notification settings"

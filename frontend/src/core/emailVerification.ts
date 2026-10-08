@@ -6,12 +6,17 @@
  * with `#everified=1` or `#everified_error=<reason>`. There is no page to render: the fragment
  * is read once at boot and turned into a notification.
  *
+ * The link that moves an account to a new address (asked for in Settings) goes through the same
+ * route, and its answer adds `&change=1`, so the message can talk about the change instead.
+ *
  * The gate is soft by design. The account works unverified; the only consequence is the banner
  * in <VerifyEmailBanner/>. Nothing here blocks anything.
  */
 import { apiFetch } from './apiFetch'
 
-export type EmailVerifyResult = { ok: true } | { ok: false; error: string }
+/** `change` is set when the link was the one that moves the account to a new address. */
+export type EmailVerifyResult =
+  { ok: true; change?: true } | { ok: false; error: string; change?: true }
 
 let pending: EmailVerifyResult | null = null
 
@@ -26,10 +31,11 @@ export function consumeEmailVerifyRedirect(): void {
   const hash = window.location.hash
   if (!hash.startsWith('#everified')) return
   const params = new URLSearchParams(hash.slice(1))
+  const change = params.get('change') === '1' ? ({ change: true } as const) : {}
   pending =
     params.get('everified') === '1'
-      ? { ok: true }
-      : { ok: false, error: params.get('everified_error') ?? 'unknown' }
+      ? { ok: true, ...change }
+      : { ok: false, error: params.get('everified_error') ?? 'unknown', ...change }
   history.replaceState(null, '', window.location.pathname + window.location.search)
 }
 

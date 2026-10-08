@@ -3,7 +3,8 @@
  *
  * A soft gate: the account works unverified, so this asks rather than blocks. It also reports
  * the outcome of the emailed confirm link, which arrives as a `#everified…` fragment consumed
- * at boot (see core/emailVerification.ts).
+ * at boot (see core/emailVerification.ts), and of the link that moves the account to a new
+ * address, which comes back the same way.
  *
  * Self-checking. It asks /api/auth/me itself and re-asks whenever the session changes, so it can
  * be dropped into the shell without threading account state through it — and it shows nothing at
@@ -62,6 +63,22 @@ export const VerifyEmailBanner: Component = () => {
   onMount(() => {
     const result = takeEmailVerifyResult()
     if (result === null) return
+    if (result.change) {
+      if (result.ok) {
+        toast('Email changed. Your account uses the new address from now on.', 'success')
+      } else if (result.error === 'expired') {
+        // A change that expired no longer waits in Settings, so there is nothing to resend.
+        toast(
+          'That email change link has expired. Save the new address in Settings to get a fresh one.',
+          'error'
+        )
+      } else if (result.error === 'email_taken') {
+        toast('Another account uses that address now, so your email stays as it was.', 'error')
+      } else {
+        toast('That confirmation link is no longer valid', 'error')
+      }
+      return
+    }
     if (result.ok) {
       toast('Email confirmed — your account is all set', 'success')
     } else if (result.error === 'expired') {

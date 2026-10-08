@@ -261,6 +261,82 @@ export function renderEmailVerification(opts: {
   };
 }
 
+/**
+ * The link that moves an account to a new address, sent to that address. Opening it is the
+ * change: until then the account keeps the address it has.
+ */
+export function renderEmailChange(opts: {
+  link: string;
+  ttlHours: number;
+  assetOrigin?: string;
+}): RenderedEmail {
+  const ttl = opts.ttlHours === 1 ? '1 hour' : `${opts.ttlHours} hours`;
+  const subject = `Confirm your new ${BRAND} email address`;
+  const footerReason = `Sent because this address was entered as the new email for a ${BRAND} account.`;
+  const body = `
+    ${h1('Confirm your new email')}
+    ${p(`Open the link below to make this the email address of your ${BRAND} account. From then on, mail about your account comes here.`)}
+    <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm new email')}</div>
+    ${p(`The link works once and expires in ${ttl}. Until you open it, nothing changes.`, `font-size:12.5px;color:${C.faint}`)}
+    ${p(`If you didn't ask for this, ignore this email.`, `font-size:12.5px;color:${C.faint}`)}
+    ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: `Open the link to use this address for your account. It expires in ${ttl}.`,
+      body,
+      footerReason,
+      orbit: false,
+      assetOrigin: opts.assetOrigin,
+    }),
+    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}):\n${opts.link}\n\nFrom then on, mail about your account comes here. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
+  };
+}
+
+/**
+ * Sent to an account's current address when a change to `newEmail` is asked for. It carries no
+ * link that makes the change: it tells the owner, who can cancel the change from Settings.
+ * `newEmail` is null when the notice should not name it (the current address is unconfirmed).
+ */
+export function renderEmailChangeNotice(opts: {
+  newEmail: string | null;
+  appUrl?: string;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const subject = `A new email address was requested for your ${BRAND} account`;
+  const footerReason = 'Sent because a new email address was requested for your account.';
+  const ifNotYou = `If this was you, there's nothing more to do. If it wasn't, sign in, cancel the change in Settings, and choose Sign out on all devices under Settings, About.`;
+  const named = opts.newEmail;
+  const asked = named
+    ? `asked to change its email address to <strong style="color:${C.text}">${escapeHtml(named)}</strong>.`
+    : 'asked to change its email address.';
+  const askedText = named
+    ? `asked to change its email address to ${named}.`
+    : 'asked to change its email address.';
+  const until = `Nothing changes unless ${named ? 'that' : 'the new'} address confirms it, with the link we sent there. Until then, you keep signing in with this one.`;
+  const body = `
+    ${h1('Email change requested')}
+    ${p(`Someone signed in to your ${BRAND} account ${asked}`)}
+    ${p(until)}
+    <div style="padding:8px 0 12px">${btn(`${app}/#settings`, 'Open Settings')}</div>
+    ${p(ifNotYou, `font-size:12.5px;color:${C.faint}`)}
+  `;
+  return {
+    subject,
+    html: shell({
+      title: subject,
+      preheader: `Nothing changes unless ${named ?? 'the new address'} confirms it.`,
+      body,
+      footerReason,
+      orbit: false,
+      assetOrigin: opts.appUrl,
+    }),
+    text: `${subject}\n\nSomeone signed in to your ${BRAND} account ${askedText}\n\n${until}\n\n${ifNotYou}\nOpen Settings: ${app}/#settings${textFooter(footerReason)}`,
+  };
+}
+
 /** Anti-enumeration notice: someone tried to register an existing address. */
 export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;

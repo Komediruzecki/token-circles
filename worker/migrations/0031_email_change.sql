@@ -1,0 +1,14 @@
+-- A new account email takes effect once the new address confirms it (migration 0031).
+--
+-- A change of address is a row in email_verifications (0022), like the link that confirms the
+-- address an account already has, and the same GET /api/auth/verify-email spends it. `purpose`
+-- tells the two apart:
+--   'confirm' marks the account's current address verified, when it is still the row's `email`;
+--   'change'  moves the account to the row's `email` and marks it verified.
+-- An unused, unexpired 'change' row is all a pending change is. users.email and
+-- users.email_verified stay as they are until its link is opened, so a pending address is not
+-- held: anyone may still sign up with it, and opening the link then changes nothing.
+--
+-- A column, not a table, so there is no new name to check against 0001_init. Rows written before
+-- this migration are confirm links, which is what the default says.
+ALTER TABLE email_verifications ADD COLUMN purpose TEXT NOT NULL DEFAULT 'confirm';
