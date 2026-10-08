@@ -173,7 +173,7 @@ export default function Bills() {
     const bill = editingBill()
     const id = bill?.category_id
     if (!id || list.some((c) => c.id === id)) return list
-    return [...list, { id, name: bill?.category_name ?? 'This bill’s category' }]
+    return [...list, { id, name: bill?.category_name ?? "This bill's category" }]
   })
   // The "+ Add Category" dialog over the bill form. What a save does, and what it says when the
   // save is refused, is categoryForm.ts, shared with Categories, Budgets and Goals. No refetch

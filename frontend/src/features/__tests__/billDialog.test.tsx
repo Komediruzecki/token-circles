@@ -352,6 +352,16 @@ describe('editing a bill', () => {
     })
   })
 
+  it("names a category it cannot find This bill's category", async () => {
+    await (await getDB()).put('bills', { ...(await rent()), category_id: 99 })
+    await mountPage()
+    await openEdit('Rent')
+
+    const category = field('Category') as unknown as HTMLSelectElement
+    expect(category.value).toBe('99')
+    expect(category.selectedOptions[0]?.textContent?.trim()).toBe("This bill's category")
+  })
+
   it('takes the category off when No category is chosen', async () => {
     await mountPage()
     await openEdit('Rent')
