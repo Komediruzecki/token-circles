@@ -57,6 +57,9 @@ vi.mock('../../core/apiFetch', () => ({
       if (server.resendStatus === 429) {
         return reply({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
       }
+      if (server.resendStatus === 409) {
+        return reply({ error: 'That email is already in use' }, 409)
+      }
       if (server.resendStatus === 404) {
         return reply({ error: 'No email change is waiting to be confirmed' }, 404)
       }
@@ -203,6 +206,38 @@ describe('an email change that is waiting', () => {
       message: 'Too many attempts. Please try again in about 40 minutes.',
     })
     expect(button('settings-email-resend')!.disabled).toBe(false)
+  })
+
+  it('says in the waiting block when another account has the address now, and keeps Cancel', async () => {
+    server.pendingEmail = 'new@example.com'
+    server.resendStatus = 409
+    await openSettings()
+
+    button('settings-email-resend')!.click()
+    await settle()
+
+    expect(pending()!.textContent).toContain(
+      "Another account uses new@example.com now, so this change can't finish. Cancel it, or save a different address."
+    )
+    expect(pending()!.textContent).not.toContain('We sent a link')
+    expect(button('settings-email-resend')).toBeNull()
+    expect(button('settings-email-cancel')).not.toBeNull()
+  })
+
+  it('goes back to the usual waiting block once a different address is saved', async () => {
+    server.pendingEmail = 'new@example.com'
+    server.resendStatus = 409
+    await openSettings()
+    button('settings-email-resend')!.click()
+    await settle()
+
+    field()!.value = 'another@example.com'
+    field()!.dispatchEvent(new Event('input', { bubbles: true }))
+    button('settings-notifications-save')!.click()
+    await settle()
+
+    expect(pending()!.textContent).toContain('We sent a link to another@example.com.')
+    expect(button('settings-email-resend')).not.toBeNull()
   })
 
   it('drops the waiting address when Send again finds nothing waiting', async () => {

@@ -665,12 +665,15 @@ export default function Settings() {
   const [accountEmail, setAccountEmail] = createSignal('')
   const [notifBusy, setNotifBusy] = createSignal(false)
   const [emailChangeBusy, setEmailChangeBusy] = createSignal(false)
+  // Send again found that another account has the waiting address now: the change cannot finish.
+  const [pendingTaken, setPendingTaken] = createSignal(false)
   const loadNotifications = async () => {
     try {
       const res = await apiFetch('/api/notifications/settings', { credentials: 'include' })
       const data = res.ok ? await res.json() : null
       setNotif(data)
       setAccountEmail(data?.email ?? '')
+      setPendingTaken(false)
     } catch {
       setNotif(null)
     }
@@ -721,6 +724,11 @@ export default function Settings() {
       if (!res.ok) {
         // Nothing waits any more: the link expired, or was opened or canceled somewhere else.
         if (res.status === 404) setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
+        // Another account has the address now. The waiting block says so and offers Cancel.
+        if (res.status === 409) {
+          setPendingTaken(true)
+          return
+        }
         throw await apiErrorFrom(res)
       }
       const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
@@ -740,6 +748,7 @@ export default function Settings() {
       })
       if (!res.ok) throw await apiErrorFrom(res)
       setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
+      setPendingTaken(false)
       toast(
         accountEmail()
           ? `Email change canceled. Your account keeps ${accountEmail()}.`
@@ -1485,21 +1494,33 @@ export default function Settings() {
                     <Show when={notif()?.pendingEmail}>
                       {(pending) => (
                         <div class={styles.pendingEmail} data-test-id="settings-email-pending">
-                          <p>
-                            We sent a link to <strong>{pending()}</strong>. Your sign-in address
-                            changes when you open it.
-                          </p>
+                          <Show
+                            when={!pendingTaken()}
+                            fallback={
+                              <p>
+                                Another account uses <strong>{pending()}</strong> now, so this
+                                change can't finish. Cancel it, or save a different address.
+                              </p>
+                            }
+                          >
+                            <p>
+                              We sent a link to <strong>{pending()}</strong>. Your sign-in address
+                              changes when you open it.
+                            </p>
+                          </Show>
                           <div class={styles.pendingEmailActions}>
-                            <button
-                              class={styles.iconAction}
-                              data-test-id="settings-email-resend"
-                              onclick={() => void resendEmailChange()}
-                              disabled={emailChangeBusy()}
-                              title={`Send the link to ${pending()} again`}
-                            >
-                              <IconSend />
-                              Send again
-                            </button>
+                            <Show when={!pendingTaken()}>
+                              <button
+                                class={styles.iconAction}
+                                data-test-id="settings-email-resend"
+                                onclick={() => void resendEmailChange()}
+                                disabled={emailChangeBusy()}
+                                title={`Send the link to ${pending()} again`}
+                              >
+                                <IconSend />
+                                Send again
+                              </button>
+                            </Show>
                             <button
                               class={styles.iconAction}
                               data-test-id="settings-email-cancel"
