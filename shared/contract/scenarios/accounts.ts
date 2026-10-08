@@ -1,4 +1,4 @@
-import { balanceOf, expectMoney, isoDay } from '../helpers';
+import { balanceOf, expectMoney, isoDay, rowsOf } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect } from '../types';
 
@@ -63,7 +63,7 @@ export const accounts = [
 
     expectOk(expect, await api.delete(`/api/accounts/${id}`), 'DELETE the account');
     expect((await api.get(`/api/accounts/${id}`)).status).toBe(404);
-    expect((await api.get('/api/accounts')).body).not.toContainEqual(
+    expect(await rowsOf(api, expect, '/api/accounts')).not.toContainEqual(
       expect.objectContaining({ id })
     );
   }),
@@ -119,7 +119,7 @@ export const accounts = [
     });
     const other = api.other;
     expect((await other.get(`/api/accounts/${id}`)).status).toBe(404);
-    expect((await other.get('/api/accounts')).body).not.toContainEqual(
+    expect(await rowsOf(other, expect, '/api/accounts')).not.toContainEqual(
       expect.objectContaining({ id })
     );
     expect(

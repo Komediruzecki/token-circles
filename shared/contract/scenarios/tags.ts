@@ -1,4 +1,4 @@
-import { expectMoney, listTransactions } from '../helpers';
+import { expectMoney, listTransactions, rowsOf } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
@@ -52,7 +52,9 @@ export const tags = [
     );
 
     expectOk(expect, await api.delete(`/api/tags/${id}`), 'DELETE the tag');
-    expect((await api.get('/api/tags')).body).not.toContainEqual(expect.objectContaining({ id }));
+    expect(await rowsOf(api, expect, '/api/tags')).not.toContainEqual(
+      expect.objectContaining({ id })
+    );
   }),
 
   scenario(
@@ -60,7 +62,7 @@ export const tags = [
     async (api, expect) => {
       const id = await tag(api, expect, 'Mine');
       const other = api.other;
-      expect((await other.get('/api/tags')).body).not.toContainEqual(
+      expect(await rowsOf(other, expect, '/api/tags')).not.toContainEqual(
         expect.objectContaining({ id })
       );
       expect(

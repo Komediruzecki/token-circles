@@ -1,4 +1,4 @@
-import { addTransaction } from '../helpers';
+import { addTransaction, rowsOf } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { billForm } from './bills';
@@ -49,7 +49,7 @@ export const categories = [
 
     expectOk(expect, await api.delete(`/api/categories/${id}`), 'DELETE the category');
     expect((await api.get(`/api/categories/${id}`)).status).toBe(404);
-    expect((await api.get('/api/categories')).body).not.toContainEqual(
+    expect(await rowsOf(api, expect, '/api/categories')).not.toContainEqual(
       expect.objectContaining({ id })
     );
   }),
@@ -134,7 +134,7 @@ export const categories = [
     });
     const other = api.other;
     expect((await other.get(`/api/categories/${id}`)).status).toBe(404);
-    expect((await other.get('/api/categories')).body).not.toContainEqual(
+    expect(await rowsOf(other, expect, '/api/categories')).not.toContainEqual(
       expect.objectContaining({ id })
     );
     expect(

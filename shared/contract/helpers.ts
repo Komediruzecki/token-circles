@@ -33,6 +33,20 @@ export function expectMoney(expect: Expect, actual: unknown, cents: number, what
 }
 
 /**
+ * The rows a list route answered: a 2xx answer whose body is a list. A check on what a list lacks
+ * (`not.toContainEqual`) passes on an error body such as `{ error }`, so it reads the rows first.
+ */
+export async function rowsOf(api: ContractApi, expect: Expect, path: string): Promise<Json[]> {
+  const reply = await api.get(path);
+  expectOk(expect, reply, `GET ${path}`);
+  expect(
+    Array.isArray(reply.body),
+    `GET ${path} answers a list: ${JSON.stringify(reply.body)}`
+  ).toBe(true);
+  return reply.body as Json[];
+}
+
+/**
  * The rows of `GET /api/transactions`.
  *
  * DIFFERENCE transactions-list-shape: the Worker answers `{ rows, total, limit, offset }`, local-first
