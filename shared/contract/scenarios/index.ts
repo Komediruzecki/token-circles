@@ -6,6 +6,7 @@ import { bills } from './bills';
 import { budgets } from './budgets';
 import { calculators } from './calculators';
 import { categories } from './categories';
+import { counterparties } from './counterparties';
 import { dashboard } from './dashboard';
 import { goalScenarios } from './goals';
 import { housing } from './housing';
@@ -31,6 +32,7 @@ export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   budgets,
   calculators,
   categories,
+  counterparties,
   dashboard,
   goals: goalScenarios,
   housing,
