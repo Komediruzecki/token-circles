@@ -45,6 +45,10 @@ function call(method: string, path: string, body?: unknown, withCookie = true) {
 
 /** What the Settings page sends when its address field is saved. */
 const save = (email: string) => call('PUT', '/api/notifications/settings', { email });
+const resend = (withCookie = true) =>
+  call('POST', '/api/auth/email-change/resend', undefined, withCookie);
+const cancel = (withCookie = true) =>
+  call('DELETE', '/api/auth/email-change', undefined, withCookie);
 const settings = async () =>
   (await (await call('GET', '/api/notifications/settings')).json()) as Record<string, unknown>;
 const signIn = (email: string) => call('POST', '/api/auth/login', { email, password: PASSWORD });
@@ -444,5 +448,109 @@ describe('the current address', () => {
     expect(sent.map((m) => m.to)).toEqual([NEW]);
     await open(latestLinkTo(NEW));
     expect(await account()).toEqual({ email: NEW, email_verified: 1 });
+  });
+});
+
+describe('sending the link again', () => {
+  it('mails a fresh link to the waiting address and retires the earlier one', async () => {
+    await seed(1);
+    await save(NEW);
+    const first = latestLinkTo(NEW);
+
+    const res = await resend();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, pendingEmail: NEW });
+    expect(mailsTo(NEW)).toHaveLength(2);
+    // The link only: the current address heard about this change when it was asked for.
+    expect(mailsTo(OLD)).toHaveLength(1);
+    expect((await open(first)).headers.get('Location')).toBe(
+      `${APP}/#everified_error=invalid_or_used`
+    );
+    expect((await open(latestLinkTo(NEW))).headers.get('Location')).toBe(
+      `${APP}/#everified=1&change=1`
+    );
+    expect(await account()).toEqual({ email: NEW, email_verified: 1 });
+  });
+
+  it('shares the three-an-hour limit with the request', async () => {
+    await seed(1);
+    await save(NEW);
+    expect((await resend()).status).toBe(200);
+    expect((await resend()).status).toBe(200);
+
+    const fourth = await resend();
+
+    expect(fourth.status).toBe(429);
+    expect(mailsTo(NEW)).toHaveLength(3);
+  });
+
+  it('says so when no change is waiting', async () => {
+    await seed(1);
+
+    const res = await resend();
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: 'No email change is waiting to be confirmed' });
+    expect(sent).toEqual([]);
+  });
+
+  it('sends nothing once another account has the address', async () => {
+    await seed(1);
+    await save(NEW);
+    await call('POST', '/api/auth/register', { email: NEW, password: 'theirs-now' }, false);
+    const before = mailsTo(NEW).length;
+
+    const res = await resend();
+
+    expect(res.status).toBe(409);
+    expect(mailsTo(NEW)).toHaveLength(before);
+  });
+
+  it('needs a session', async () => {
+    expect((await resend(false)).status).toBe(401);
+  });
+});
+
+describe('cancelling', () => {
+  it('ends the waiting change: its link stops working and the address stays', async () => {
+    await seed(1);
+    await save(NEW);
+    const link = latestLinkTo(NEW);
+
+    const res = await cancel();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect((await settings()).pendingEmail).toBeNull();
+    expect((await open(link)).headers.get('Location')).toBe(
+      `${APP}/#everified_error=invalid_or_used`
+    );
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+  });
+
+  it('leaves the link that confirms the current address working', async () => {
+    await seed(0);
+    await call('POST', '/api/auth/resend-verification');
+    const confirmCurrent = latestLinkTo(OLD);
+    await save(NEW);
+
+    await cancel();
+
+    expect((await open(confirmCurrent)).headers.get('Location')).toBe(`${APP}/#everified=1`);
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+  });
+
+  it('is fine with nothing to cancel', async () => {
+    await seed(1);
+
+    const res = await cancel();
+
+    expect(res.status).toBe(200);
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+  });
+
+  it('needs a session', async () => {
+    expect((await cancel(false)).status).toBe(401);
   });
 });

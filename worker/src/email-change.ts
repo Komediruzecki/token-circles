@@ -62,12 +62,21 @@ async function limitEmailChange(
   );
 }
 
-/** Mint the link that moves `userId` to `email`, replacing any change still waiting, and mail it. */
-async function mailEmailChangeLink(
+/**
+ * Mail `email` the link that moves `userId` to it, replacing any change still waiting. Asking for
+ * a change and sending its link again both come here. Throws 409 when another account has the
+ * address, since that link could not work, and returns the 429 past the limits above.
+ */
+export async function sendEmailChangeLink(
   c: Context<AppEnv>,
   userId: number,
   email: string
-): Promise<void> {
+): Promise<Response | null> {
+  if (await emailInUse(c.env.DB, email, userId)) {
+    throw new HttpError(409, 'That email is already in use');
+  }
+  const limited = await limitEmailChange(c, userId, email);
+  if (limited) return limited;
   const base = appBase(c);
   const token = await createEmailVerification(c.env.DB, userId, email, 'change');
   const mail = renderEmailChange({
@@ -76,6 +85,7 @@ async function mailEmailChangeLink(
     assetOrigin: base,
   });
   await sendMail(c.env, email, mail.subject, mail.html, { text: mail.text });
+  return null;
 }
 
 /**
@@ -110,16 +120,21 @@ export async function requestEmailChange(
   if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
     throw new HttpError(400, 'A valid email is required');
   }
-  if (await emailInUse(c.env.DB, email, userId)) {
-    throw new HttpError(409, 'That email is already in use');
-  }
-  const limited = await limitEmailChange(c, userId, email);
+  const limited = await sendEmailChangeLink(c, userId, email);
   if (limited) return limited;
-  await mailEmailChangeLink(c, userId, email);
   // An account with no address yet (a Google sign-up whose address Google had not confirmed) has
   // nobody to tell.
   if (current) await mailEmailChangeNotice(c, current, email);
   return null;
+}
+
+/** End the change waiting for `userId`, if there is one. The confirm link for the current address stays. */
+export async function cancelEmailChange(d1: D1Database, userId: number): Promise<void> {
+  await db.run(
+    d1,
+    "DELETE FROM email_verifications WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL",
+    userId
+  );
 }
 
 /**

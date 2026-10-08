@@ -17,7 +17,12 @@ import {
   TOKEN_TTL_SECONDS,
 } from '../auth';
 import { sendMail } from '../email';
-import { applyEmailChange } from '../email-change';
+import {
+  applyEmailChange,
+  cancelEmailChange,
+  pendingEmailChange,
+  sendEmailChangeLink,
+} from '../email-change';
 import {
   createEmailVerification,
   randomToken,
@@ -496,6 +501,25 @@ authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
     assetOrigin: base,
   });
   await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });
+  return c.json({ ok: true });
+});
+
+// Send the link for the account's waiting email change again (email-change.ts). A fresh link,
+// which retires the earlier one; it shares its limits with asking for the change, and sends
+// nothing once another account has the address (409).
+authRoutes.post('/api/auth/email-change/resend', requireAuth, async (c) => {
+  const userId = c.get('userId');
+  const pendingEmail = await pendingEmailChange(c.env.DB, userId);
+  if (!pendingEmail) return c.json({ error: 'No email change is waiting to be confirmed' }, 404);
+  const limited = await sendEmailChangeLink(c, userId, pendingEmail);
+  if (limited) return limited;
+  return c.json({ ok: true, pendingEmail });
+});
+
+// Cancel the account's waiting email change: its link stops working and the address stays.
+// Nothing waiting is not an error; the outcome is the same.
+authRoutes.delete('/api/auth/email-change', requireAuth, async (c) => {
+  await cancelEmailChange(c.env.DB, c.get('userId'));
   return c.json({ ok: true });
 });
 
