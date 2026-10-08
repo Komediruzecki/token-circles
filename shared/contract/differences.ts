@@ -23,4 +23,12 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
     'A new transaction with no destination account is linked to the account named like its category (and with no source account, to the one named like its means of payment) on the Worker only, so on the Worker that account then counts it and cannot be deleted. Slice 2 (transactions).',
+  'transactions-by-tag':
+    'GET /api/transactions/by-tag/:tagId orders rows newest first and honours startDate, endDate, category_ids, type, limit and offset on the Worker, but answers every tagged row in key order, unfiltered, in local-first; nothing in the app calls it. Slice 5 (tags).',
+  'tag-default-colour':
+    'A tag created without a colour gets the next colour of a twelve-colour palette (#3b82f6 first) on the Worker and #6e9bff in local-first; both forms always send one. Slice 5 (tags).',
+  'tag-edit-without-colour':
+    'A tag edit that leaves out the colour resets it to #6b7280 on the Worker and keeps it in local-first; the Tags page always sends it. Slice 5 (tags).',
+  'tag-rename-duplicate':
+    "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
 };

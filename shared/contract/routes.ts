@@ -317,23 +317,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/stats/monthly',
   'GET /api/storage-mode',
   'POST /api/storage-mode',
-  'GET /api/tags',
-  'POST /api/tags',
-  'DELETE /api/tags/:id',
-  'PUT /api/tags/:id',
-  'POST /api/tags/:id/apply',
-  'GET /api/tags/:id/summary',
-  'POST /api/tags/:id/transactions',
-  'GET /api/tags/rules',
-  'POST /api/tags/rules',
-  'DELETE /api/tags/rules/:ruleId',
-  'PUT /api/tags/rules/:ruleId',
-  'POST /api/tags/rules/preview',
-  'GET /api/tags/summary',
-  'GET /api/transactions/:id/tags',
-  'POST /api/transactions/:id/tags',
-  'PUT /api/transactions/:id/tags',
-  'GET /api/transactions/by-tag/:tagId',
 ];
 
 export const WORKER_ONLY: Readonly<Record<string, string>> = {
