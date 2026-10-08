@@ -134,7 +134,19 @@ describe('localHandlers - analytics and reports', () => {
   })
 
   it('sankey reflects an explicit budget (planned vs actual + unused)', async () => {
-    await budgetsCreate({ category_id: catId, amount: 80, period: 'monthly' })
+    // A month's budgets are the rows that start in it (D13): April's does not plan May.
+    await budgetsCreate({
+      category_id: catId,
+      amount: 500,
+      period: 'monthly',
+      start_date: '2026-04-01',
+    })
+    await budgetsCreate({
+      category_id: catId,
+      amount: 80,
+      period: 'monthly',
+      start_date: '2026-05-01',
+    })
     const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
     const sankey = (await res.json()) as SankeyResult
     expect(sankey.hasBudgets).toBe(true)
