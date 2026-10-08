@@ -3,8 +3,9 @@
  * against them at the end of its run (shared/contract/guard.ts):
  *
  * - CONTRACT_ROUTES: both runtimes serve it, and a scenario must send it and get a 2xx answer.
- * - WORKER_ONLY and LOCAL_ONLY: one runtime serves it, with the reason the other does not. A route
- *   the Worker keeps only to answer 410 Gone counts as one it does not serve.
+ * - WORKER_ONLY and LOCAL_ONLY: one runtime serves it, with the reason the other does not. A
+ *   handler that only answers 410 Gone, or a stub the app cannot reach in that mode, does not count
+ *   as serving the route; the route is then on both lists, each saying why.
  *
  * A route added to either runtime fails that runtime's guard until it is placed here. A reason
  * that starts with OPEN is a question still to answer: if the app calls the route in the mode
@@ -28,7 +29,6 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'GET /api/analytics/distinct-years',
   'GET /api/analytics/sankey',
   'GET /api/analytics/weeks',
-  'POST /api/auth/login',
   'POST /api/auth/logout',
   'GET /api/auth/me',
   'GET /api/bills',
@@ -194,15 +194,11 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/analytics/distinct-years',
   'GET /api/analytics/sankey',
   'GET /api/analytics/weeks',
-  'POST /api/auth/login',
-  'POST /api/auth/logout',
-  'GET /api/auth/me',
   'GET /api/counterparties',
   'GET /api/dashboard',
   'GET /api/dashboard/charts',
   'GET /api/dashboard/net-worth',
   'GET /api/dashboard/summary',
-  'GET /api/health',
   'GET /api/reports/annual-pdf',
   'POST /api/reports/custom',
   'GET /api/reports/monthly-pdf',
@@ -224,6 +220,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'DELETE /api/account/api-tokens/:id':
     'API tokens authenticate against the Worker; local-first has no API.',
   'POST /api/auth/forgot-password': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/login':
+    'Signing in. Local-first has no account to sign in to; Sign in there switches to cloud mode and reloads before it shows a form (App.tsx handleLogin).',
   'GET /api/auth/google/callback': 'Signing in. Local-first has no account to sign in to.',
   'GET /api/auth/google/start': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/logout-all': 'Signing in. Local-first has no account to sign in to.',
@@ -316,6 +314,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
 /** Keyed by method and the local router's pattern source, as `routes` in localApiRouter.ts has it. */
 export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'GET ^\\/app-info$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
+  'POST ^\\/auth\\/login$':
+    'A stub of the cloud sign-in that answers a fixed admin user for any username. Nothing in local-first calls it: Sign in switches to cloud mode and reloads first (App.tsx handleLogin).',
   'GET ^\\/auth\\/check$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'GET ^\\/profiles\\/(\\d+)$':

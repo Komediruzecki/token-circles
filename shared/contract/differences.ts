@@ -79,6 +79,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/storage-mode answers { mode: 'self-hosted', type: 'sqlite' } on the Worker and the browser's own mode in local-first; POST /api/storage-mode and POST /api/settings/set-storage only acknowledge on the Worker, but switch the browser's mode in local-first and answer it. Settings sends only POST /api/storage-mode, and sets the mode itself after. Slice 4 (settings).",
   'receipt-answers':
     'A receipt upload answers 201 with the stored row on the Worker and 200 with the row and a url in local-first; GET /api/receipts/transaction/:id answers the receipt on the Worker and a list of it in local-first; DELETE /api/receipts/:id answers { message } on the Worker and { ok: true } in local-first. The app finds a receipt through its transaction row, and reads none of these. Slice 2 (transactions).',
+  'auth-local-user':
+    "GET /api/auth/me answers the signed-in account on the Worker and a fixed local user ({ id: 1, username: 'local', role: 'admin' }) in local-first, which has no accounts; POST /api/auth/logout ends the Worker's session and changes nothing in local-first. Slice 6 (auth).",
+  'health-answer':
+    "GET /api/health answers { ok, env, captcha } on the Worker and { status: 'ok', timestamp } in local-first; nothing in the app reads it. Slice 6 (auth and support).",
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':
