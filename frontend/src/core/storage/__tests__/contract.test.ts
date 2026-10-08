@@ -265,6 +265,16 @@ describe('contract: every route', () => {
     expect(unlisted, 'routes on no list in shared/contract/routes.ts').toEqual([])
   })
 
+  it('lists no route it does not serve', () => {
+    const served = new Set(
+      localRoutes.flatMap((r) => r.methods.map((m) => `${m} ${r.pattern.source}`))
+    )
+    expect(
+      Object.keys(LOCAL_ONLY).filter((k) => !served.has(k)),
+      'routes LOCAL_ONLY lists that local-first does not serve'
+    ).toEqual([])
+  })
+
   it('pins every difference it lists, and lists every difference it pins', () => {
     const sources = import.meta.glob('../../../../../shared/contract/**/*.ts', {
       query: '?raw',

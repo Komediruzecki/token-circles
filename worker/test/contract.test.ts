@@ -274,4 +274,12 @@ describe('contract: every route', () => {
       'routes on no list in shared/contract/routes.ts'
     ).toEqual([]);
   });
+
+  it('lists no route it does not serve', () => {
+    const { served } = workerRoutes();
+    expect(
+      Object.keys(WORKER_ONLY).filter((k) => !served.has(k)),
+      'routes WORKER_ONLY lists that the Worker does not serve'
+    ).toEqual([]);
+  });
 });
