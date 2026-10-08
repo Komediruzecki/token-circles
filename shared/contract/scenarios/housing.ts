@@ -104,6 +104,33 @@ export const housing = [
     ]);
   }),
 
+  scenario(
+    'housing expenses are listed by due date, with their monthly total',
+    async (api, expect) => {
+      const december = await addHousing(api, expect, {
+        property_name: 'Insurance',
+        monthly_amount: 30.25,
+        due_month: 12,
+        due_day: 1,
+      });
+      const march = await addHousing(api, expect, {
+        property_name: 'Rent',
+        due_month: 3,
+        due_day: 5,
+      });
+      const january = await addHousing(api, expect, {
+        property_name: 'Parking',
+        monthly_amount: 60,
+        due_month: 1,
+        due_day: 20,
+      });
+      const listed = await housingList(api, expect);
+      expect(listed.housings.map((h: Json) => h.id)).toEqual([january, march, december]);
+      // 850.50 + 30.25 + 60, rounded to the unit.
+      expect(listed.total_monthly).toBe(941);
+    }
+  ),
+
   scenario('a housing expense sent without a due month', async (api, expect) => {
     const id = await addHousing(api, expect, { due_month: undefined, due_day: 15 });
     const row = (await housingList(api, expect)).housings.find((h: Json) => h.id === id);
