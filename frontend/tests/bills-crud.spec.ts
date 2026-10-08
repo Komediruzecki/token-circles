@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute, getByTestId } from './test-helpers'
+import { login, navigateToRoute, getByTestId, isNetworkNoise } from './test-helpers'
 
 test.describe('Bills CRUD Operations @smoke', () => {
   test.beforeEach(async ({ page }) => {
@@ -59,9 +59,7 @@ test.describe('Bills CRUD Operations @smoke', () => {
     await navigateToRoute(page, 'bills')
     await page.waitForTimeout(500)
 
-    const criticalErrors = errors.filter(
-      (msg) => msg.includes('Error') && !msg.includes('Failed to fetch')
-    )
+    const criticalErrors = errors.filter((msg) => msg.includes('Error') && !isNetworkNoise(msg))
     expect(criticalErrors.length).toBeLessThan(3)
   })
 
