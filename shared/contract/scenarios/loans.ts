@@ -3,7 +3,7 @@ import { expectMoney } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
-/** The body the Loans form saves (features/Loans.tsx, handleSubmit). */
+/** The body the Loans dialog saves (features/loans/loanForm.ts, loanBody). */
 export function loanForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Car',
@@ -11,7 +11,6 @@ export function loanForm(fields: Record<string, unknown> = {}) {
     interest_rate: 4.5,
     term_months: 60,
     start_date: '2026-01-15',
-    status: 'active',
     rate_periods: [],
     ...fields,
   };

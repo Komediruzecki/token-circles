@@ -2,38 +2,18 @@
  * Add a loan or edit one: its name, amount, rate, term, first due date and rate periods. Saving
  * goes through apiFetch, which bumps the `loans` data version, so the page reloads its list on its
  * own: nothing here reloads anything by hand.
+ *
+ * The form is `createLoanForm` (loanForm.ts) on the form kit: a refused save is said under the
+ * field it is about, a rate period's under the field of its row, and what belongs to no field in
+ * the notice at the top.
  */
-import { createEffect, createSignal, Index, on, onCleanup, onMount, Show } from 'solid-js'
-import NumberField from '../../components/NumberField'
-import { apiGet, apiPost, apiPut, showToast } from '../../core/api'
+import { createEffect, Index, on, onCleanup, onMount, Show } from 'solid-js'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
+import { apiGet } from '../../core/api'
+import { createLoanForm } from './loanForm'
 import pageStyles from './LoanForm.module.css'
 import styles from './Loans.module.css'
 import type { LoanRow, StoredLoan } from './loanData'
-
-interface RatePeriodDraft {
-  /** Text, so a decimal comma can be typed. */
-  rate: string
-  start_month: number | null
-  end_month: number | null
-}
-
-interface Draft {
-  name: string
-  principal: number | null
-  interest_rate: string
-  term_months: number | null
-  start_date: string
-  rate_periods: RatePeriodDraft[]
-}
-
-const EMPTY: Draft = {
-  name: '',
-  principal: null,
-  interest_rate: '',
-  term_months: null,
-  start_date: '',
-  rate_periods: [],
-}
 
 interface Props {
   /** The loan being edited, or null to add one. */
@@ -43,28 +23,13 @@ interface Props {
   onClose: () => void
 }
 
-const parseRate = (text: string) => Number.parseFloat(text.replace(',', '.')) || 0
-
-const periodDraft = (p: { rate: number; start_month: number; end_month?: number | null }) => ({
-  rate: String(p.rate),
-  start_month: p.start_month,
-  end_month: p.end_month || null,
-})
-
 export default function LoanForm(props: Props) {
-  const [draft, setDraft] = createSignal<Draft>({ ...EMPTY })
-  const [saving, setSaving] = createSignal(false)
-  /** Whether the loan's rate periods are in the draft: 'loading' and 'failed' leave them out. */
-  const [periods, setPeriods] = createSignal<'ready' | 'loading' | 'failed'>('ready')
+  const form = createLoanForm({
+    onSaved: () => {
+      props.onClose()
+    },
+  })
   let ratesRef: HTMLDivElement | undefined
-
-  const update = <K extends keyof Draft>(key: K, value: Draft[K]) =>
-    setDraft((d) => ({ ...d, [key]: value }))
-  const updatePeriod = (i: number, patch: Partial<RatePeriodDraft>) =>
-    setDraft((d) => ({
-      ...d,
-      rate_periods: d.rate_periods.map((p, j) => (j === i ? { ...p, ...patch } : p)),
-    }))
 
   // Fill the form from the loan being edited, at once: it is typed into straight away. Its rate
   // periods come with a local-first row; in cloud mode they come from the loan's own read, which
@@ -74,29 +39,27 @@ export default function LoanForm(props: Props) {
       () => props.loan,
       async (loan) => {
         if (!loan) {
-          setDraft({ ...EMPTY })
-          setPeriods('ready')
+          form.open(null)
           return
         }
         const known = loan.listed.rate_periods
-        setDraft({
+        form.open({
+          id: loan.id,
           name: loan.name,
           principal: loan.principal,
-          interest_rate: String(loan.interest_rate),
+          interest_rate: loan.interest_rate,
           term_months: loan.term_months,
-          start_date: (loan.start_date ?? '').slice(0, 10),
-          rate_periods: (known ?? []).map(periodDraft),
+          start_date: loan.start_date,
+          rate_periods: known,
         })
-        setPeriods(known ? 'ready' : 'loading')
         if (props.focusRates) queueMicrotask(() => ratesRef?.scrollIntoView({ block: 'center' }))
         if (known) return
         try {
           const read = await apiGet<StoredLoan>(`/api/loans/${loan.id}`)
           if (props.loan?.id !== loan.id) return
-          setDraft((d) => ({ ...d, rate_periods: (read.rate_periods ?? []).map(periodDraft) }))
-          setPeriods('ready')
+          form.periodsRead(read.rate_periods ?? [])
         } catch {
-          if (props.loan?.id === loan.id) setPeriods('failed')
+          if (props.loan?.id === loan.id) form.periodsFailed()
         }
       }
     )
@@ -111,47 +74,6 @@ export default function LoanForm(props: Props) {
       document.removeEventListener('keydown', onKey)
     })
   })
-
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    const d = draft()
-    const body = {
-      name: d.name.trim(),
-      principal: d.principal ?? 0,
-      interest_rate: parseRate(d.interest_rate),
-      term_months: d.term_months ?? 0,
-      start_date: d.start_date,
-      // Left out until the loan's own periods are in the draft: an update without them keeps the
-      // stored ones, where an empty list would delete them.
-      ...(periods() === 'ready'
-        ? {
-            rate_periods: d.rate_periods
-              .filter((p) => p.start_month !== null && p.start_month >= 1)
-              .map((p) => ({
-                rate: parseRate(p.rate),
-                start_month: p.start_month,
-                end_month: p.end_month,
-              })),
-          }
-        : {}),
-    }
-    setSaving(true)
-    try {
-      if (props.loan) {
-        await apiPut(`/api/loans/${props.loan.id}`, body)
-        showToast('Loan saved', 'success')
-      } else {
-        await apiPost('/api/loans', body)
-        showToast('Loan added', 'success')
-      }
-      props.onClose()
-    } catch (err) {
-      console.error('Failed to save loan:', err)
-      showToast('The loan was not saved. Check your connection and try again.', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div
@@ -189,145 +111,196 @@ export default function LoanForm(props: Props) {
             </svg>
           </button>
         </div>
-        <form class={pageStyles.modalBody} onSubmit={submit}>
-          <label class={pageStyles.formGroup}>
-            <span class={pageStyles.formLabel}>Name</span>
-            <input
-              type="text"
-              class={pageStyles.formControl}
-              placeholder="e.g., Auto Loan, Student Loan"
-              value={draft().name}
-              onInput={(e) => update('name', e.currentTarget.value)}
-              autofocus
-              required
-            />
-          </label>
-          <label class={pageStyles.formGroup}>
-            <span class={pageStyles.formLabel}>Amount borrowed</span>
-            <NumberField<null>
-              class={pageStyles.formControl}
-              step="0.01"
-              min="0.01"
-              placeholder="15000.00"
-              required
-              value={draft().principal}
-              emptyValue={null}
-              onChange={(v) => update('principal', v)}
-            />
-          </label>
-          <label class={pageStyles.formGroup}>
-            <span class={pageStyles.formLabel}>Interest rate (%)</span>
-            <input
-              type="text"
-              inputmode="decimal"
-              pattern="[0-9]*[.,]?[0-9]*"
-              class={pageStyles.formControl}
-              placeholder="5.5"
-              value={draft().interest_rate}
-              onInput={(e) => update('interest_rate', e.currentTarget.value)}
-              required
-            />
-          </label>
-          <label class={pageStyles.formGroup}>
-            <span class={pageStyles.formLabel}>Term (months)</span>
-            <NumberField<null>
-              class={pageStyles.formControl}
-              testId="loans-form-term"
-              step="1"
-              min="1"
-              max="1200"
-              placeholder="60"
-              required
-              value={draft().term_months}
-              emptyValue={null}
-              onChange={(v) => update('term_months', v)}
-            />
-          </label>
-          <label class={pageStyles.formGroup}>
-            <span class={pageStyles.formLabel}>First payment due</span>
-            <input
-              data-test-id="loans-form-start-date"
-              type="date"
-              class={pageStyles.formControl}
-              value={draft().start_date}
-              onInput={(e) => update('start_date', e.currentTarget.value)}
-              required
-            />
-          </label>
+        <form class={pageStyles.modalBody} {...form.attrs}>
+          <FormNotice form={form} testId="loans-form-notice" />
+          <Field
+            form={form}
+            name="name"
+            label="Name"
+            class={pageStyles.formGroup}
+            labelClass={pageStyles.formLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                class={pageStyles.formControl}
+                placeholder="e.g., Auto Loan, Student Loan"
+                value={form.values.name}
+                onInput={(e) => form.set('name', e.currentTarget.value)}
+                autofocus
+                required
+              />
+            )}
+          </Field>
+          <Field
+            form={form}
+            name="principal"
+            label="Amount borrowed"
+            class={pageStyles.formGroup}
+            labelClass={pageStyles.formLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                inputmode="decimal"
+                class={pageStyles.formControl}
+                placeholder="15000.00"
+                value={form.values.principal}
+                onInput={(e) => form.set('principal', e.currentTarget.value)}
+                required
+              />
+            )}
+          </Field>
+          <Field
+            form={form}
+            name="interest_rate"
+            label="Interest rate (%)"
+            class={pageStyles.formGroup}
+            labelClass={pageStyles.formLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                inputmode="decimal"
+                class={pageStyles.formControl}
+                placeholder="5.5"
+                value={form.values.interest_rate}
+                onInput={(e) => form.set('interest_rate', e.currentTarget.value)}
+                required
+              />
+            )}
+          </Field>
+          <Field
+            form={form}
+            name="term_months"
+            label="Term (months)"
+            class={pageStyles.formGroup}
+            labelClass={pageStyles.formLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                inputmode="numeric"
+                class={pageStyles.formControl}
+                data-test-id="loans-form-term"
+                placeholder="60"
+                value={form.values.term_months}
+                onInput={(e) => form.set('term_months', e.currentTarget.value)}
+                required
+              />
+            )}
+          </Field>
+          <Field
+            form={form}
+            name="start_date"
+            label="First payment due"
+            class={pageStyles.formGroup}
+            labelClass={pageStyles.formLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                data-test-id="loans-form-start-date"
+                type="date"
+                class={pageStyles.formControl}
+                value={form.values.start_date}
+                onInput={(e) => form.set('start_date', e.currentTarget.value)}
+                required
+              />
+            )}
+          </Field>
 
           <div class={pageStyles.formGroup} ref={ratesRef}>
             <span class={pageStyles.formLabel}>Rate periods</span>
-            <p class={styles.hint} style={{ 'font-size': '12px', margin: '0 0 8px' }}>
+            <p class={pageStyles.periodsHint}>
               A different rate for some of the payments, such as a fixed rate that ends. Leave the
-              last month empty to keep the rate to the end.
+              last payment empty to keep the rate to the end.
             </p>
-            <Show when={periods() !== 'ready'}>
-              <p
-                class={styles.hint}
-                style={{ 'font-size': '12px', margin: '0 0 8px' }}
-                data-test-id="loans-form-periods-pending"
-              >
-                {periods() === 'loading'
+            <Show when={form.periods() !== 'ready'}>
+              <p class={pageStyles.periodsHint} data-test-id="loans-form-periods-pending">
+                {form.periods() === 'loading'
                   ? "Loading this loan's rate periods."
                   : "This loan's rate periods did not load. Saving keeps them as they are."}
               </p>
             </Show>
-            <div style={{ display: 'grid', gap: '8px', 'margin-bottom': '8px' }}>
-              <Index each={draft().rate_periods}>
+            <div class={pageStyles.periods}>
+              <Index each={form.values.rate_periods}>
                 {(period, i) => (
-                  <div
-                    style={{
-                      display: 'flex',
-                      'flex-wrap': 'wrap',
-                      'align-items': 'center',
-                      gap: '8px',
-                      'font-size': '14px',
-                    }}
-                    data-test-id="loans-form-rate-period"
-                  >
-                    <input
-                      type="text"
-                      inputmode="decimal"
-                      pattern="[0-9]*[.,]?[0-9]*"
-                      class={styles.input}
-                      style={{ width: '72px' }}
-                      aria-label="Rate (%)"
-                      placeholder="Rate %"
-                      value={period().rate}
-                      onInput={(e) => updatePeriod(i, { rate: e.currentTarget.value })}
-                    />
-                    <span>% from payment</span>
-                    <NumberField<null>
-                      class={styles.input}
-                      ariaLabel="First payment at this rate"
-                      step="1"
-                      min="1"
-                      placeholder="1"
-                      value={period().start_month}
-                      emptyValue={null}
-                      onChange={(v) => updatePeriod(i, { start_month: v })}
-                    />
-                    <span>to</span>
-                    <NumberField<null>
-                      class={styles.input}
-                      ariaLabel="Last payment at this rate, empty for the end"
-                      step="1"
-                      min="1"
-                      placeholder="end"
-                      value={period().end_month}
-                      emptyValue={null}
-                      onChange={(v) => updatePeriod(i, { end_month: v })}
-                    />
+                  <div class={pageStyles.period} data-test-id="loans-form-rate-period">
+                    <Field
+                      form={form}
+                      name={`rate_periods.${i}.rate`}
+                      label="Rate (%)"
+                      class={pageStyles.periodField}
+                      labelClass={pageStyles.periodLabel}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          type="text"
+                          inputmode="decimal"
+                          class={styles.input}
+                          placeholder="Rate %"
+                          value={period().rate}
+                          onInput={(e) => {
+                            form.setPeriod(i, 'rate', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      form={form}
+                      name={`rate_periods.${i}.start_month`}
+                      label="From payment"
+                      class={pageStyles.periodField}
+                      labelClass={pageStyles.periodLabel}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          type="text"
+                          inputmode="numeric"
+                          class={styles.input}
+                          placeholder="1"
+                          value={period().start_month}
+                          onInput={(e) => {
+                            form.setPeriod(i, 'start_month', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      form={form}
+                      name={`rate_periods.${i}.end_month`}
+                      label="To payment"
+                      class={pageStyles.periodField}
+                      labelClass={pageStyles.periodLabel}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          type="text"
+                          inputmode="numeric"
+                          class={styles.input}
+                          placeholder="end"
+                          value={period().end_month}
+                          onInput={(e) => {
+                            form.setPeriod(i, 'end_month', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
                     <button
                       type="button"
-                      class={styles.buttonQuiet}
+                      class={`${styles.buttonQuiet} ${pageStyles.periodRemove}`}
                       aria-label="Remove this rate period"
-                      onClick={() =>
-                        setDraft((d) => ({
-                          ...d,
-                          rate_periods: d.rate_periods.filter((_, j) => j !== i),
-                        }))
-                      }
+                      onClick={() => {
+                        form.removePeriod(i)
+                      }}
                     >
                       <svg
                         width="14"
@@ -348,16 +321,10 @@ export default function LoanForm(props: Props) {
             <button
               type="button"
               class={styles.button}
-              disabled={periods() !== 'ready'}
-              onClick={() =>
-                setDraft((d) => ({
-                  ...d,
-                  rate_periods: [
-                    ...d.rate_periods,
-                    { rate: d.interest_rate, start_month: 1, end_month: null },
-                  ],
-                }))
-              }
+              disabled={form.periods() !== 'ready'}
+              onClick={() => {
+                form.addPeriod()
+              }}
             >
               Add a rate period
             </button>
@@ -373,9 +340,13 @@ export default function LoanForm(props: Props) {
             >
               Cancel
             </button>
-            <button type="submit" class={styles.buttonPrimary} disabled={saving()}>
+            <SubmitButton
+              class={styles.buttonPrimary}
+              busy={form.submitting()}
+              busyLabel={props.loan ? undefined : 'Adding…'}
+            >
               {props.loan ? 'Save changes' : 'Add loan'}
-            </button>
+            </SubmitButton>
           </div>
         </form>
       </div>
