@@ -489,12 +489,41 @@ Goal opened as Edit Goal after a backdrop close; the Dashboard said "Due in Due 
 weekly bill could not be paid on the day it fell due again; and a field marked in a closed section
 of a form was said twice.
 
-Open for the owner: the next due date of an unpaid bill whose day has passed stays that day
-(overdue) rather than rolling to next month; the Dashboard's Upcoming Bills leaves overdue and
-paused bills out; a bill's frequency is one of four, so a stored `daily` bill opens with a blank
-frequency; a budget of zero is allowed where a goal target must be more than zero; "Over budget
-by $" names dollars whatever the currency; the Bills dialog has no account field, so a payment
-moves no balance unless an API client set one; there is no way to remove a budget on the page.
+After review (#607), each with a test that failed before:
+
+- A budget stored with a float error (0.6000000000000001) opened in Allocate and Set Budget as that
+  text, which the cents rule refused, so it could not be saved untouched. The dialogs open on the
+  amount to the cent, and Backfill from Spending stores each month's sum to the cent in both
+  runtimes.
+- A weekly or biweekly bill falls due on its own weekday, its first due date plus whole weeks,
+  whenever it is paid: paid two days late, a Monday bill is still due next Monday. A payment up to
+  one step before the first due date pays that date. A bill stored as `daily` falls due every day.
+- Allocate, in both runtimes, and the MCP tool `upsert_budget` change the month's budget whatever
+  day it starts, instead of adding a second one, and `upsert_budget` runs the budget checks.
+- The reminder emails and the MCP read tools use the same rules: the bills reminder lists what the
+  Bills page calls overdue or due within a week, on the dates they fall due; the budget alert and
+  `get_budgets_and_goals` read the month's budgets only; `get_overview` lists the Dashboard's
+  Upcoming Bills. `GET /api/bills/notifications` has no caller and is left for the PR that removes
+  dead routes.
+- Local-first checks a bill's account before its category, as the Worker does; the subscription
+  scan and catalog say which entry was refused and why; deleting a bill another tab deleted drops
+  it instead of failing.
+
+Two contributions to a goal sent at once both count, in both runtimes. The code already added in
+one write; the new tests fail when it reads the goal and writes the sum back.
+
+Open for the owner: whether an unpaid bill stays overdue until it is paid (each occurrence
+tracked) or, as coded, until its period ends, when it falls due again with nothing said about the
+missed one; whether a payment should cover the earliest unpaid occurrence, accepted up to one
+period early (it needs a stored "paid through" date); whether to merge, with a one-off migration,
+the second budgets main's Set Budget wrote for a category and month; whether Backfill from
+Spending should fill only the months and categories without a budget, as from-expenses and Copy
+last month now do, rather than replace its range; the Dashboard's Upcoming Bills leaves overdue
+and paused bills out; a bill's frequency is one of four, so a stored `daily` bill opens with a
+blank frequency; a budget of zero is allowed where a goal target must be more than zero; "Over
+budget by $" names dollars whatever the currency; the Bills dialog has no account field, so a
+payment moves no balance unless an API client set one; there is no way to remove a budget on the
+page. Follow-up: the bill calendar draws every bill once a month, whatever its frequency.
 
 ## Rollout, one PR each
 
