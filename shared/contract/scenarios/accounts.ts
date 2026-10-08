@@ -190,10 +190,7 @@ export const accounts = [
     const timeline = await api.get('/api/accounts/history/timeline');
     expectOk(expect, timeline, 'GET the timeline');
     expect(timeline.body).toHaveLength(1);
-    // DIFFERENCE account-timeline-date
-    const day = String(timeline.body[0].date);
-    if (api.runtime === 'worker') expect(day.slice(0, 10)).toBe(isoDay(new Date()));
-    else expect(day).toBe(isoDay(new Date()));
+    expect(timeline.body[0].date).toBe(isoDay(new Date()));
     expectMoney(expect, timeline.body[0].net_worth, 1000, 'net worth');
   }),
 

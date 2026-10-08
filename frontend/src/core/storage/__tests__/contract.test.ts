@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { DIFFERENCES } from '../../../../../shared/contract/differences'
 import { namedDifferences, samplePaths, unsent } from '../../../../../shared/contract/guard'
 import { CONTRACT_ROUTES, LOCAL_ONLY, UNCOVERED } from '../../../../../shared/contract/routes'
@@ -12,6 +12,17 @@ import type { ContractApi, Expect, Method, Reply } from '../../../../../shared/c
 // IndexedDB (fake-indexeddb, src/test-setup.ts). The Worker runs the same scenarios in
 // worker/test/contract.test.ts. The last block checks that the scenarios sent every contract
 // route, and that every route local-first serves is on a list.
+
+// The browser's calendar is local-first's "today" and "this month" (#603). The Worker runner sends
+// no X-Time-Zone, so the Worker's calendar is UTC's; local-first runs on UTC too, so both runtimes
+// read one calendar whatever the machine's zone. A date bug that only shows in some zone is pinned
+// by a test of its own in that zone (endOfNextMonth.test.ts, forecastHistoryLabels.test.ts).
+const hostZone = process.env.TZ
+process.env.TZ = 'UTC'
+afterAll(() => {
+  if (hostZone === undefined) delete process.env.TZ
+  else process.env.TZ = hostZone
+})
 
 const hits: Hit[] = []
 let ran = 0

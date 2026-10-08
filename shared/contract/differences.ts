@@ -13,8 +13,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/transactions answers { rows, total, limit, offset } on the Worker and a bare array in local-first; the app reads both through listRows(). Slice 2 (transactions).',
   'account-history-shape':
     'A recorded balance is stored with recorded_at and answered 200 { id, balance, recorded_at } on the Worker, but stored with date and answered 201 { id, account_id, balance, date } in local-first; no screen reads the history yet. Slice 2 (accounts).',
-  'account-timeline-date':
-    "GET /api/accounts/history/timeline dates each day with one of that day's full recorded_at timestamps on the Worker and with YYYY-MM-DD in local-first. Slice 2 (accounts).",
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
   'foreign-link-status':
