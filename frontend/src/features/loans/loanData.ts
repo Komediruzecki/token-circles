@@ -132,8 +132,10 @@ export function engineInput(loan: StoredLoan): LoanInput {
 }
 
 /**
- * A saved extra payment, with what removing it takes: the Worker deletes by id, the local-first
- * store by its place in the loan's list. Listed by month.
+ * A saved extra payment, with the id that changes or removes it: the Worker's row id, or the one
+ * local-first stores with it (core/storage/handlers/loans.ts, giveIds). Both runtimes answer every
+ * extra payment with an id; its place in the list stands in only for one answered without. Listed
+ * by month.
  */
 export interface SavedExtra {
   ref: number
