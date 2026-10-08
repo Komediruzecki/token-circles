@@ -187,16 +187,11 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'GET /api/transactions/summary',
 ];
 
-/** Contract routes no scenario sends yet. The list only shrinks: empty is the goal. */
-export const UNCOVERED: readonly RouteKey[] = [
-  'GET /api/reports/annual-pdf',
-  'POST /api/reports/custom',
-  'GET /api/reports/monthly-pdf',
-  'GET /api/reports/pl-summary',
-  'GET /api/reports/pl-summary-pdf',
-  'GET /api/reports/tax-summary',
-  'GET /api/reports/tax-summary-pdf',
-];
+/**
+ * Contract routes no scenario sends yet. Empty: every contract route is sent, so a route added to
+ * the contract comes with its scenario.
+ */
+export const UNCOVERED: readonly RouteKey[] = [];
 
 export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'DELETE /api/account': 'Deletes the cloud account itself.',

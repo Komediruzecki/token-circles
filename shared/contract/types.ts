@@ -20,6 +20,8 @@ export interface Reply {
   status: number;
   /** The answer's JSON, or its text when it is not JSON. */
   body: Json;
+  /** The answer's media type, as its Content-Type header names it ('' when it names none). */
+  type: string;
 }
 
 /**

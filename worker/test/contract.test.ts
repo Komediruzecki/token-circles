@@ -73,7 +73,7 @@ function apiFor(
       // Not JSON: the scenario gets the text.
     }
     hits.push({ method, path, status: res.status });
-    return { status: res.status, body: parsed };
+    return { status: res.status, body: parsed, type: res.headers.get('Content-Type') ?? '' };
   };
   const api: ContractApi = {
     runtime: 'worker',

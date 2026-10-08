@@ -97,6 +97,12 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/dashboard/charts answers byCategory over all time with uncategorised spending left out, the currency of a local_currency setting nothing writes (so EUR, whatever the base currency), and monthly rows that also carry the running total, on the Worker; byCategory over the months charted with uncategorised spending included, and the base currency, in local-first. The Dashboard reads only the monthly rows' month, income and expense. Slice 2 (transactions), whose data it reads.",
   'counterparties-from-description':
     'GET /api/counterparties names only the beneficiaries of expenses and the payors of income on the Worker, but falls back to the description of a transaction that has neither in local-first, so the Counterparties page lists every such description as a counterparty in local-first only. Slice 2 (transactions).',
+  'year-summaries':
+    "GET /api/reports/tax-summary and GET /api/reports/pl-summary leave uncategorised transactions out on the Worker and count them under 'Unknown' in local-first, and the tax summary lists each category's transactions on the Worker but none in local-first; nothing in the app calls either. Slice 2 (transactions), whose data they read.",
+  'monthly-pdf-month':
+    'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
+  'custom-report':
+    "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':

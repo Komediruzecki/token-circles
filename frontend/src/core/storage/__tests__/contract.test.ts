@@ -43,6 +43,40 @@ afterAll(() => {
   vi.restoreAllMocks()
 })
 
+// jsdom decodes no images and runs no Web Workers, and local-first's PDF reports draw their charts
+// with both (clientPdfReports.ts). Here an image fails to decode and the chart worker answers with
+// no chart, so a report is made without its charts, as a browser that cannot draw one makes it.
+// jsdom's Blob is not the Response's, so a report's bytes do not survive: scenarios read its type.
+class UndecodableImage {
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  set src(_url: string) {
+    setTimeout(() => this.onerror?.(), 0)
+  }
+}
+class BlankChartWorker {
+  private listeners: ((event: MessageEvent) => void)[] = []
+  addEventListener(_type: string, listener: (event: MessageEvent) => void) {
+    this.listeners.push(listener)
+  }
+  removeEventListener(_type: string, listener: (event: MessageEvent) => void) {
+    this.listeners = this.listeners.filter((l) => l !== listener)
+  }
+  postMessage(request: { id: number }) {
+    setTimeout(() => {
+      for (const listener of [...this.listeners])
+        listener({ data: { id: request.id } } as MessageEvent)
+    }, 0)
+  }
+}
+beforeAll(() => {
+  vi.stubGlobal('Image', UndecodableImage)
+  vi.stubGlobal('Worker', BlankChartWorker)
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
+
 const hits: Hit[] = []
 let ran = 0
 const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0)
@@ -75,7 +109,7 @@ function apiFor(profile: number, partner: () => ContractApi, scope: Scope = 'act
       // Not JSON: the scenario gets the text.
     }
     hits.push({ method, path, status: res.status })
-    return { status: res.status, body: parsed }
+    return { status: res.status, body: parsed, type: res.headers.get('Content-Type') ?? '' }
   }
   const api: ContractApi = {
     runtime: 'local',
