@@ -200,6 +200,19 @@ describe('a monthly rule on the 31st', () => {
     ]);
   });
 
+  it('lists an overdue rule once today, then on its own day', async () => {
+    // Populate writes 31 August and 30 September, and 31 October is the rule's next date.
+    const id = await rule({ next_date: '2026-08-31', day_of_month: 31 });
+    await at('2026-10-20T12:00:00Z');
+    const { transactions } = await get<{ transactions: { id: number; next_date: string }[] }>(
+      '/api/recurring/upcoming'
+    );
+    expect(transactions.filter((t) => t.id === id).map((t) => t.next_date)).toEqual([
+      '2026-10-20',
+      '2026-10-31',
+    ]);
+  });
+
   it('refuses a next date it cannot read, and writes nothing', async () => {
     // A date an API client wrote in its own format. It sorts before today, so it passes the
     // already-populated check and reaches the step.

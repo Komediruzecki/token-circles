@@ -83,12 +83,25 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
 
   const upcoming: UpcomingItem[] = [];
   for (const r of recurring) {
-    // From the rule's next date, or from today once that has passed. Each step is the one populate
-    // takes, so the list shows the dates populate will write. The monthly step here used to be
-    // setMonth() and then the day, and setMonth() overflows first: a rule on the 31st went from
-    // January to March, and February was never listed.
-    let cursor = r.next_date && r.next_date > todayStr ? r.next_date : todayStr;
+    // From the rule's next date. A rule whose next date has passed is listed once on today, for
+    // what populate has not written yet, and after today on its own dates, stepped from its next
+    // date and not from today's day. Each step is the one populate takes, so the list shows the
+    // dates populate will write. The monthly step here used to be setMonth() and then the day,
+    // and setMonth() overflows first: a rule on the 31st went from January to March, and February
+    // was never listed.
+    const dates: string[] = [];
+    let cursor = r.next_date || todayStr;
+    if (cursor <= todayStr) {
+      dates.push(todayStr);
+      while (cursor && cursor <= todayStr) {
+        cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
+      }
+    }
     while (cursor && cursor <= endStr) {
+      dates.push(cursor);
+      cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
+    }
+    for (const date of dates) {
       upcoming.push({
         id: r.id,
         description: r.description,
@@ -96,11 +109,10 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
         type: r.type,
         frequency: r.frequency,
         day_of_month: r.day_of_month,
-        next_date: cursor,
+        next_date: date,
         category_name: r.category_name,
         category_color: r.category_color,
       });
-      cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
     }
   }
 
