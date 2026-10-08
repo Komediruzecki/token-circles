@@ -62,7 +62,7 @@ export const bills = [
       last_paid_date: null,
     });
     expectMoney(expect, one.body.amount, 40.25);
-    // DIFFERENCE bill-day-of-month: the form sends no day of the month.
+    // DIFFERENCE day-of-month-default: the form sends no day of the month.
     expect(one.body.day_of_month).toBe(api.runtime === 'worker' ? null : 1);
     expect(await billsList(api, expect)).toContainEqual(
       expect.objectContaining({ id, name: 'Water', paid: false })
@@ -116,7 +116,7 @@ export const bills = [
     expect(await billsList(other, expect)).toEqual([]);
     expect((await other.put(`/api/bills/${id}`, billForm({ name: 'Theirs' }))).status).toBe(404);
     expect((await other.post(`/api/bills/${id}/mark-paid`, {})).status).toBe(404);
-    // DIFFERENCE bill-delete-missing
+    // DIFFERENCE delete-missing
     const removed = await other.delete(`/api/bills/${id}`);
     expect(removed.status).toBe(api.runtime === 'worker' ? 200 : 404);
 

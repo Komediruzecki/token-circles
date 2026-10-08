@@ -37,10 +37,16 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
   'budget-trend-spending':
     "The months of GET /api/budgets/improvements and of the forecast's history count only the spending of budgeted categories on the Worker, but every expense of the month, unbudgeted and uncategorised included, in local-first, so the Budgets page's trend and average adherence differ between modes. Slice 3 (budgets).",
-  'bill-day-of-month':
-    'A bill added without a day of the month (the Bills form sends none) stores day_of_month NULL on the Worker and 1 in local-first. Slice 3 (bills).',
-  'bill-delete-missing':
-    "DELETE /api/bills/:id answers 200 { ok: true } on the Worker when there is no such bill of the profile, another profile's included, and 404 in local-first; neither deletes anything. Slice 3 (bills).",
+  'day-of-month-default':
+    'A bill or a recurring rule saved without a day of the month (neither form requires one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. Slices 3 (bills) and 5 (recurring).',
+  'delete-missing':
+    "DELETE /api/bills/:id and DELETE /api/recurring/:id answer 200 { ok: true } on the Worker when the profile has no such row, another profile's included, and 404 in local-first; neither deletes anything. Slices 3 (bills) and 5 (recurring).",
+  'recurring-populate-answer':
+    'POST /api/recurring/:id/populate answers { ok, transactionId, next_date } on the Worker and { ok } in local-first; the Recurring section reads neither. Slice 5 (recurring).',
+  'recurring-upcoming':
+    'GET /api/recurring/upcoming answers { transactions, byCategory, totalMonthly, currency }, every occurrence of the next 30 days, on the Worker, and the active rules themselves in local-first; nothing in the app calls it. Slice 5 (recurring).',
+  'recurring-pause':
+    "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
   'bills-upcoming':
     'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset), rolling a bill due today to next month, on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
   'category-apply-mappings':
