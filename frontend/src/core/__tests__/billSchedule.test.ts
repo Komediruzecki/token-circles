@@ -28,14 +28,18 @@ describe("a bill's day of the month", () => {
 })
 
 describe('the period a payment settles', () => {
-  it('is the month, the year, or the last 7 or 14 days, today included', () => {
-    expect(paidFrom('monthly', '2026-10-08')).toBe('2026-10-01')
-    expect(paidFrom('yearly', '2026-10-08')).toBe('2026-01-01')
-    expect(paidFrom('weekly', '2026-10-08')).toBe('2026-10-02')
-    expect(paidFrom('biweekly', '2026-10-08')).toBe('2026-09-25')
+  it('is the month, the year, or the date a weekly or biweekly bill last fell due', () => {
+    expect(paidFrom({ frequency: 'monthly' }, '2026-10-08')).toBe('2026-10-01')
+    expect(paidFrom({ frequency: 'yearly' }, '2026-10-08')).toBe('2026-01-01')
+    // Mondays from 7 September: on Thursday 8 October, the Monday before; on a Monday, that day.
+    const mondays = { frequency: 'weekly', due_date: '2026-09-07' }
+    expect(paidFrom(mondays, '2026-10-08')).toBe('2026-10-05')
+    expect(paidFrom(mondays, '2026-10-12')).toBe('2026-10-12')
+    expect(paidFrom({ ...mondays, frequency: 'biweekly' }, '2026-10-08')).toBe('2026-10-05')
+    expect(paidFrom({ ...mondays, frequency: 'biweekly' }, '2026-10-18')).toBe('2026-10-05')
     // A frequency no screen offers is read as monthly, as the next due date reads it.
-    expect(paidFrom('quarterly', '2026-10-08')).toBe('2026-10-01')
-    expect(paidFrom(null, '2026-10-08')).toBe('2026-10-01')
+    expect(paidFrom({ frequency: 'quarterly' }, '2026-10-08')).toBe('2026-10-01')
+    expect(paidFrom({ frequency: null }, '2026-10-08')).toBe('2026-10-01')
   })
 
   it('pays a bill up with a payment on or after its start', () => {
@@ -131,10 +135,26 @@ describe('the next due date of a weekly or biweekly bill', () => {
     )
   })
 
-  it('is a week, or two, after the last payment', () => {
+  // Its dates are its first due date plus whole weeks, whenever it is paid. It was due a week after
+  // the payment, so a Monday bill paid on a Wednesday became a Wednesday bill, and a payment two
+  // days late still counted on the next Monday, which then could not be paid.
+  it('is the date after the one the payment paid, on its own weekday', () => {
+    const cleaner = { frequency: 'weekly', due_date: '2026-10-05', last_paid_date: '2026-10-07' }
+    expect(nextDueDate(cleaner, '2026-10-08')).toBe('2026-10-12')
+    expect(isPaidUp(cleaner, '2026-10-11')).toBe(true)
+    expect(nextDueDate(cleaner, '2026-10-12')).toBe('2026-10-12')
+    expect(isPaidUp(cleaner, '2026-10-12')).toBe(false)
+    expect(nextDueDate(cleaner, '2026-10-14')).toBe('2026-10-12')
+
     const gym = { frequency: 'weekly', due_date: '2026-10-01', last_paid_date: '2026-10-09' }
-    expect(nextDueDate(gym, '2026-10-10')).toBe('2026-10-16')
-    expect(nextDueDate(gym, '2026-10-20')).toBe('2026-10-16')
+    expect(nextDueDate(gym, '2026-10-10')).toBe('2026-10-15')
+    expect(nextDueDate(gym, '2026-10-20')).toBe('2026-10-15')
+    expect(
+      nextDueDate(
+        { frequency: 'biweekly', due_date: '2026-10-01', last_paid_date: '2026-10-04' },
+        '2026-10-10'
+      )
+    ).toBe('2026-10-15')
     expect(
       nextDueDate(
         { frequency: 'biweekly', due_date: '2026-10-01', last_paid_date: '2026-10-01' },

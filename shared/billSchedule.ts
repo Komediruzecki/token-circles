@@ -14,17 +14,19 @@
  * - Local-first asked "is the payment in this month?" where the Worker asks "on or after the start
  *   of this period?", the question that holds across two calendars (bills-paid-across-zones).
  * - A weekly bill counted a payment from 7 days back, 14 for a biweekly one, as paying it up, so on
- *   the day it fell due again it could not be paid: only once it was overdue.
+ *   the day it fell due again it could not be paid: only once it was overdue. And it fell due a
+ *   week after each payment, so a Monday bill paid on a Wednesday became a Wednesday bill.
  *
  * A bill's day of the month is its due date's day: the Bills form saves no other. `day_of_month`
  * counts only for a bill with no due date the calendar can read. Monthly and yearly bills fall
  * due on that day (or the month's last, when it is shorter), weekly and biweekly ones every seven
- * or fourteen days.
+ * or fourteen days from their first due date, whenever they are paid.
  *
  * Paid up means a payment on or after the start of the current period: the first of this month
- * for a monthly bill, 1 January for a yearly one, the last 7 or 14 days for a weekly or biweekly
- * one. The next due date is the current period's when the bill is not paid up (in the past, it is
- * overdue), and the next period's when it is. Never before the bill's own first due date.
+ * for a monthly bill, 1 January for a yearly one, the date a weekly or biweekly one last fell due.
+ * The next due date is the current period's when the bill is not paid up (in the past, it is
+ * overdue until the period ends), and the next period's when it is. Never before the bill's own
+ * first due date.
  *
  * GET /api/bills/upcoming answers every active bill this way, the most overdue first; the
  * Dashboard lists the ones due from today through the next 30 days.
@@ -76,22 +78,40 @@ export function billDay(bill: BillTiming): number {
 }
 
 /**
- * The first day of the period `today` is in, for `frequency`: a payment dated on or after it has
- * paid the bill up. Two clients on different calendars agree on it, whichever stamped the
- * payment (worker/test/bills-paid-across-zones.test.ts).
+ * Where a weekly or biweekly bill's dates count from: its first due date, else its last payment
+ * (a row an older version stored without a date), else today.
  */
-export function paidFrom(frequency: unknown, today: string): string {
-  const known = frequencyOf({ frequency });
-  const step = STEP_DAYS.get(known);
-  if (step !== undefined) return addDays(today, -(step - 1));
-  if (known === 'yearly') return `${today.slice(0, 4)}-01-01`;
+function anchorOf(bill: BillTiming, today: string): string {
+  return dateOf(bill.due_date) ?? dateOf(bill.last_paid_date) ?? today;
+}
+
+/** The weekly or biweekly bill's date on or before `date`: `anchor` plus whole steps. */
+function stepOnOrBefore(anchor: string, step: number, date: string): string {
+  return addDays(anchor, Math.floor(daysFrom(anchor, date) / step) * step);
+}
+
+/**
+ * The first day of the period `today` is in, for the bill: a payment dated on or after it has
+ * paid the bill up. The first of the month, 1 January, or the date a weekly or biweekly bill last
+ * fell due. Two clients on different calendars agree on it, whichever stamped the payment
+ * (worker/test/bills-paid-across-zones.test.ts).
+ */
+export function paidFrom(bill: BillTiming, today: string): string {
+  const frequency = frequencyOf(bill);
+  const step = STEP_DAYS.get(frequency);
+  if (step !== undefined) {
+    const anchor = anchorOf(bill, today);
+    // Before its first due date: the last 7 or 14 days, today included.
+    return today >= anchor ? stepOnOrBefore(anchor, step, today) : addDays(today, -(step - 1));
+  }
+  if (frequency === 'yearly') return `${today.slice(0, 4)}-01-01`;
   return `${today.slice(0, 7)}-01`;
 }
 
 /** Whether the bill is paid up for the period `today` is in. */
 export function isPaidUp(bill: BillTiming, today: string): boolean {
   const paid = dateOf(bill.last_paid_date);
-  return paid !== null && paid >= paidFrom(bill.frequency, today);
+  return paid !== null && paid >= paidFrom(bill, today);
 }
 
 /** The date a monthly or yearly bill falls due in the month of `date`. */
@@ -111,16 +131,16 @@ export function nextDueDate(bill: BillTiming, today: string): string {
 
   const step = STEP_DAYS.get(frequency);
   if (step !== undefined) {
+    const anchor = anchorOf(bill, today);
     const paid = dateOf(bill.last_paid_date);
-    if (paid !== null && (first === null || paid >= first)) {
-      // Due a week (or two) after the last payment: today at the earliest when it is paid up.
-      next = addDays(paid, step);
-    } else if (first !== null && first < today) {
-      // Never paid since it began: its latest date on or before today.
-      const days = Math.round((Date.parse(today) - Date.parse(first)) / 86_400_000);
-      next = addDays(first, days - (days % step));
+    if (paidUp && paid !== null && paid >= anchor) {
+      // The date after the one the payment paid, on the bill's own weekday: paid two days late,
+      // a Monday bill is still due next Monday, not next Wednesday.
+      next = addDays(stepOnOrBefore(anchor, step, paid), step);
     } else {
-      next = first ?? today;
+      // Not paid since its last date: that date, overdue once it has passed. Before its first
+      // due date, that one.
+      next = today >= anchor ? stepOnOrBefore(anchor, step, today) : anchor;
     }
   } else if (frequency === 'yearly') {
     // Its due date's month, or January for a bill with only a day of the month.

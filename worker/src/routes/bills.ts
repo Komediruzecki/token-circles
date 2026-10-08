@@ -336,9 +336,9 @@ export function markPaidStatements(
   // so the two before it still see the pre-state.
   //
   // "Since its period began" is shared/billSchedule.ts's paidFrom: the first of the month, 1 January,
-  // or the last 7 or 14 days with today included, so a weekly bill paid a week ago is due, and
-  // payable, today. It counted 8 and 15 days, so a weekly bill could be paid only once overdue.
-  const periodStart = paidFrom(bill.frequency, todayStr);
+  // or the date a weekly or biweekly bill last fell due, so a weekly bill is payable on the day it
+  // falls due again. It counted 8 and 15 days, so a weekly bill could be paid only once overdue.
+  const periodStart = paidFrom(bill, todayStr);
   const guard = (param: number) => `(SELECT COUNT(*) FROM bills
                    WHERE id = ?1 AND profile_id = ?2
                      AND (last_paid_date IS NULL OR last_paid_date < ?${param})) = 1`;

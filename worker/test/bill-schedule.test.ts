@@ -251,4 +251,27 @@ describe('a weekly bill', () => {
       .first<{ balance: number }>();
     expect(balance?.balance).toBe(950);
   });
+
+  // Its dates are Mondays from its first due date, whenever it is paid: a payment two days late
+  // pays that Monday, and the next Monday is due, and payable, on the day. It was due a week after
+  // the payment, a Wednesday, and next Monday's payment answered 409.
+  it('falls due on its own weekday after a late payment, and can be paid that day', async () => {
+    await on('2026-10-05');
+    const id = await bill('Cleaner', { dueDate: '2026-10-05', frequency: 'weekly', amount: 25 });
+    await on('2026-10-07');
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+    await on('2026-10-08');
+    expect((await upcoming())[0]).toMatchObject({
+      next_due_date: '2026-10-12',
+      days_until: 4,
+      paid: true,
+    });
+    await on('2026-10-12');
+    expect((await upcoming())[0]).toMatchObject({
+      next_due_date: '2026-10-12',
+      days_until: 0,
+      paid: false,
+    });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+  });
 });
