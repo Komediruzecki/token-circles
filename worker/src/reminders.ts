@@ -404,11 +404,16 @@ export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<b
  * actual layouts can be previewed on demand from Settings. Budget alerts use a
  * threshold of 0 here so the preview has content even when nothing is over 80%.
  * Returns null when the user's data produces no content at all.
+ *
+ * `now` is the requester's wall clock (local-date.ts localNow), so "today" and "this month"
+ * are theirs. The scheduled sends have no requester and stay on UTC: they fire between 08:00
+ * and 10:00 UTC, when only zones from UTC-9 westward are still on the previous day.
  */
 export async function composeReminderPreview(
   env: Env,
   userId: number,
-  type: 'budget' | 'spending' | 'bills'
+  type: 'budget' | 'spending' | 'bills',
+  now: Date = new Date()
 ): Promise<RenderedEmail | null> {
   const u = await db.first<UserRow>(
     env.DB,
@@ -432,7 +437,6 @@ export async function composeReminderPreview(
     `SELECT MAX(date) AS d FROM transactions WHERE profile_id IN (${inClause})`,
     ...pids
   );
-  const now = new Date();
   let asOf = now;
   if (latest?.d) {
     const latestDate = new Date(latest.d);
@@ -462,7 +466,7 @@ export async function composeReminderPreview(
 
   if (type === 'bills') {
     const all: UpcomingBillRow[] = [];
-    for (const pid of pids) all.push(...(await getUpcomingBills(env, pid)));
+    for (const pid of pids) all.push(...(await getUpcomingBills(env, pid, now)));
     return renderBillsReminder({
       bills: all.sort((a, b) => a.daysUntilDue - b.daysUntilDue),
       currency,

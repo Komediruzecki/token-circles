@@ -131,6 +131,22 @@ describe('achievementsStore.refreshAchievements', () => {
     expect(snapshot()!.today).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
+  it('dates the snapshot with the person’s today, not the UTC one', async () => {
+    // 00:30 on 8 October in Zagreb; UTC is still on the 7th.
+    const hostZone = process.env.TZ
+    process.env.TZ = 'Europe/Zagreb'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-07T22:30:00Z'))
+    try {
+      await refreshAchievements()
+      expect(snapshot()!.today).toBe('2026-10-08')
+    } finally {
+      vi.useRealTimers()
+      if (hostZone === undefined) delete process.env.TZ
+      else process.env.TZ = hostZone
+    }
+  })
+
   it('persists a dismissed advice id beside the unlocks, not in a key of its own', async () => {
     calls.transactions = month(thisMonth)
     await refreshAchievements()

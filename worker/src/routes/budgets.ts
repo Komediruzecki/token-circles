@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { localMonth, localNow } from '../local-date';
 
 // Port of backend/routes/budgets.js + backend/repositories/budgetsRepo.js.
 // Both the CRUD routes and the analytical/zero-based/forecast endpoints are
@@ -77,8 +78,9 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
   const inClause = pids.map(() => '?').join(',');
   const year = c.req.query('year');
   const month = c.req.query('month');
-  const y = year ? Number(year) : new Date().getFullYear();
-  const m = month ? Number(month) : new Date().getMonth() + 1;
+  const now = localNow(c);
+  const y = year ? Number(year) : now.getFullYear();
+  const m = month ? Number(month) : now.getMonth() + 1;
   const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
   const nextM = m === 12 ? 1 : m + 1;
   const nextY = m === 12 ? y + 1 : y;
@@ -307,7 +309,7 @@ budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => {
     const nextY = m === 12 ? y + 1 : y;
     endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
   } else {
-    const now = new Date();
+    const now = localNow(c);
     startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
     const nextM = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
     const nextY = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
@@ -366,7 +368,7 @@ budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => {
 // Registered before /api/budgets/zero-based so the longer static path resolves first.
 budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
+  const month = c.req.query('month') || localMonth(c);
   const startOfMonth = `${month}-01`;
   const nextMonth = new Date(
     new Date(month + '-01').setMonth(new Date(month + '-01').getMonth() + 1)
@@ -478,7 +480,7 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
   // Multi-profile (household) selection, matching GET /api/budgets.
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
+  const month = c.req.query('month') || localMonth(c);
   const startOfMonth = `${month}-01`;
   const nextMonth = new Date(
     new Date(month + '-01').setMonth(new Date(month + '-01').getMonth() + 1)
@@ -575,7 +577,7 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
   // Multi-profile (household) selection, matching GET /api/budgets.
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
+  const month = c.req.query('month') || localMonth(c);
 
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
@@ -639,9 +641,9 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     }
   }
 
-  // Forecast for the next 6 months.
+  // Forecast for the next 6 months, counted from the person's month.
   const forecastMonths: Array<{ month: string; label: string }> = [];
-  const now = new Date();
+  const now = localNow(c);
   for (let i = 1; i <= 6; i++) {
     const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
     forecastMonths.push({
@@ -664,7 +666,7 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     // crosses into next year (e.g. Dec → Feb) isn't computed as a negative diff (which would
     // zero out the inflation factor).
     const fd = new Date(fm.month + '-01');
-    const nd = new Date();
+    const nd = now;
     const monthsDiff = (fd.getFullYear() - nd.getFullYear()) * 12 + (fd.getMonth() - nd.getMonth());
     const inflationFactor = Math.pow(1.03, Math.max(0, monthsDiff));
 
@@ -750,7 +752,7 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
 
   const budgetPeriod = period || 'monthly';
 
-  const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
+  const month = c.req.query('month') || localMonth(c);
   const start_date = `${month}-01`;
 
   // budgetsRepo.getByCategoryForMonth
@@ -810,8 +812,10 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
   const body = (await c.req.json()) as Record<string, any>;
   const { year, month } = body;
 
-  let prevYear = year || new Date().getFullYear();
-  let prevMonth = (month || new Date().getMonth() + 1) - 1;
+  // The month these default to is the person's, not the Worker's UTC one.
+  const now = localNow(c);
+  let prevYear = year || now.getFullYear();
+  let prevMonth = (month || now.getMonth() + 1) - 1;
   if (prevMonth === 0) {
     prevMonth = 12;
     prevYear--;
@@ -836,8 +840,8 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
     return c.json({ ok: false, message: 'No expenses found for previous month' });
   }
 
-  const currYear = year || new Date().getFullYear();
-  const currMonth = month || new Date().getMonth() + 1;
+  const currYear = year || now.getFullYear();
+  const currMonth = month || now.getMonth() + 1;
   const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
 
   // budgetsRepo.deleteByDateRange — clear existing budgets for the current month.
@@ -938,8 +942,10 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
   const body = (await c.req.json()) as Record<string, any>;
   const { year, month } = body;
 
-  let prevYear = year || new Date().getFullYear();
-  let prevMonth = (month || new Date().getMonth() + 1) - 1;
+  // The month these default to is the person's, not the Worker's UTC one.
+  const now = localNow(c);
+  let prevYear = year || now.getFullYear();
+  let prevMonth = (month || now.getMonth() + 1) - 1;
   if (prevMonth === 0) {
     prevMonth = 12;
     prevYear--;
@@ -961,8 +967,8 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
     return c.json({ ok: false, message: 'No budgets found for previous month' });
   }
 
-  const currYear = year || new Date().getFullYear();
-  const currMonth = month || new Date().getMonth() + 1;
+  const currYear = year || now.getFullYear();
+  const currMonth = month || now.getMonth() + 1;
 
   // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match,
   // then INSERT OR REPLACE into the current-month start_date.

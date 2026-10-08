@@ -14,6 +14,8 @@ export interface PdfReport {
   title: string
   subtitle?: string
   sections: PdfSection[]
+  /** The footer's "Generated" date, YYYY-MM-DD: today on the reader's calendar. UTC when absent. */
+  generatedOn?: string
 }
 
 const A4: [number, number] = [595.28, 841.89]
@@ -68,6 +70,6 @@ export async function buildReportPdf(report: PdfReport): Promise<Uint8Array> {
   }
 
   newPageIfNeeded(20)
-  left(`Generated ${new Date().toISOString().slice(0, 10)}`, 8, font, muted)
+  left(`Generated ${report.generatedOn ?? new Date().toISOString().slice(0, 10)}`, 8, font, muted)
   return doc.save()
 }

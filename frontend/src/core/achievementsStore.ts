@@ -9,6 +9,7 @@
  * profile into it in Settings earned the active profile that profile's badges, permanently.
  */
 import { createRoot, createSignal } from 'solid-js'
+import { localToday } from '../utils/period'
 import { achievementById } from './achievements/definitions'
 import { evaluateAchievements } from './achievements/evaluate'
 import {
@@ -220,7 +221,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
   const stored = parseRecords(raw)
   const dismissed = parseDismissed(raw)
   const now = new Date()
-  const today = now.toISOString().slice(0, 10)
+  const today = localToday(now)
   const evaluation = evaluateAchievements({
     transactions,
     budgets,

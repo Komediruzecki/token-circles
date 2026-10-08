@@ -147,3 +147,64 @@ describe('apiFetch write invalidation', () => {
     expect(dataVersions.entityVersion('accounts')).toBe(1)
   })
 })
+
+/**
+ * The person's time zone rides on every API request.
+ *
+ * The Worker's clock is UTC, so on its own it cannot tell what "today" is for the person asking:
+ * east of UTC its date is still yesterday for the first hours of every day, and Monthly Income and
+ * Expense left out everything entered since local midnight. The header is how it knows
+ * (worker/src/local-date.ts), so it has to be on every request, which is why it is added here,
+ * at the one place every request passes through.
+ */
+describe('apiFetch sends the person’s time zone', () => {
+  const sentHeaders = (fetchSpy: { mock: { calls: unknown[][] } }, call = 0): Headers =>
+    new Headers((fetchSpy.mock.calls[call]?.[1] as RequestInit | undefined)?.headers)
+
+  afterEach(() => {
+    delete process.env.TZ
+  })
+
+  it('as X-Time-Zone, the IANA zone the browser keeps its calendar in', async () => {
+    process.env.TZ = 'Asia/Tokyo'
+    const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
+    await apiFetch('/api/stats/monthly?months=24')
+    expect(sentHeaders(fetchSpy).get('X-Time-Zone')).toBe('Asia/Tokyo')
+  })
+
+  it('beside the headers the caller set, whichever shape they came in', async () => {
+    process.env.TZ = 'America/Los_Angeles'
+    const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
+    await apiFetch(`${API}/api/transactions`, {
+      method: 'POST',
+      headers: { 'X-Profile-Id': '7', 'Content-Type': 'application/json' },
+      body: '{}',
+    })
+    await apiFetch('/api/categories', { headers: new Headers({ 'X-Profile-Ids': '[7,8]' }) })
+    await apiFetch('/api/accounts', { headers: [['X-Profile-Id', '8']] })
+
+    const first = sentHeaders(fetchSpy, 0)
+    expect(first.get('X-Profile-Id')).toBe('7')
+    expect(first.get('Content-Type')).toBe('application/json')
+    expect(first.get('X-Time-Zone')).toBe('America/Los_Angeles')
+    expect(sentHeaders(fetchSpy, 1).get('X-Profile-Ids')).toBe('[7,8]')
+    expect(sentHeaders(fetchSpy, 1).get('X-Time-Zone')).toBe('America/Los_Angeles')
+    expect(sentHeaders(fetchSpy, 2).get('X-Profile-Id')).toBe('8')
+    expect(sentHeaders(fetchSpy, 2).get('X-Time-Zone')).toBe('America/Los_Angeles')
+  })
+
+  it('unless the caller named a zone itself, which is sent as it was given', async () => {
+    process.env.TZ = 'Asia/Tokyo'
+    const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
+    await apiFetch('/api/reports/monthly-pdf', { headers: { 'x-time-zone': 'Europe/Zagreb' } })
+    const sent = sentHeaders(fetchSpy)
+    expect(sent.get('X-Time-Zone')).toBe('Europe/Zagreb')
+  })
+
+  it('and never to anyone but the app’s API', async () => {
+    process.env.TZ = 'Asia/Tokyo'
+    const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
+    await apiFetch('https://fonts.googleapis.com/css2?family=Inter')
+    expect(sentHeaders(fetchSpy).has('X-Time-Zone')).toBe(false)
+  })
+})

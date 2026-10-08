@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { normalizeAmount, parseEntry } from '../parseEntry'
 import type { ParseCategory } from '../parseEntry'
 
@@ -104,5 +104,31 @@ describe('parseEntry — description', () => {
     const r = parseEntry('netflix 15.99 monthly', ctx)
     expect(r.recurring).toBe('monthly')
     expect(r.description.toLowerCase()).toBe('netflix')
+  })
+})
+
+describe('parseEntry without a today', () => {
+  const hostZone = process.env.TZ
+  afterEach(() => {
+    vi.useRealTimers()
+    if (hostZone === undefined) delete process.env.TZ
+    else process.env.TZ = hostZone
+  })
+
+  const at = (zone: string, instant: string) => {
+    process.env.TZ = zone
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(instant))
+  }
+
+  it('dates an entry with the person’s today east of UTC after midnight', () => {
+    at('Europe/Zagreb', '2026-10-07T22:30:00Z')
+    expect(parseEntry('coffee 4.50 food', { categories: CATS }).date).toBe('2026-10-08')
+    expect(parseEntry('coffee 4.50 yesterday', { categories: CATS }).date).toBe('2026-10-07')
+  })
+
+  it('and west of UTC in the evening', () => {
+    at('America/Los_Angeles', '2026-10-08T03:30:00Z')
+    expect(parseEntry('coffee 4.50 food', { categories: CATS }).date).toBe('2026-10-07')
   })
 })

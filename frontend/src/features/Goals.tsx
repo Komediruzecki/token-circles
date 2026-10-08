@@ -43,6 +43,7 @@ import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { localToday } from '../utils/period'
 import { createCategoryForm } from './categoryForm'
 import styles from './GoalsPage.module.css'
 import type { CategoryFormValues } from './categoryForm'
@@ -157,8 +158,7 @@ export default function Goals() {
     if (catId) {
       data.category_id = catId
       // Category goals track from this date on; default to today when unset.
-      data.tracking_start_date =
-        formData().tracking_start_date || new Date().toISOString().split('T')[0]
+      data.tracking_start_date = formData().tracking_start_date || localToday()
     } else {
       data.category_id = null
     }
@@ -795,7 +795,7 @@ export default function Goals() {
                   <input
                     type="date"
                     class={styles.formControl}
-                    value={formData().tracking_start_date || new Date().toISOString().split('T')[0]}
+                    value={formData().tracking_start_date || localToday()}
                     oninput={(e) =>
                       setFormData({ ...formData(), tracking_start_date: e.currentTarget.value })
                     }

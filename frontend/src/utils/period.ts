@@ -113,6 +113,23 @@ export function isoDate(d: Date): string {
 }
 
 /**
+ * Today on the person's calendar, `YYYY-MM-DD`.
+ *
+ * The browser's local zone is the person's, so this is their date. `toISOString().slice(0, 10)` is
+ * the UTC one: east of UTC it is still yesterday for the first hours of every day (00:00-02:00 in
+ * CEST), west of UTC it is already tomorrow every evening. The Worker answers with the same date
+ * from the zone the app sends it (worker/src/local-date.ts), so the two storage modes agree.
+ */
+export function localToday(now: Date = new Date()): string {
+  return isoDate(now)
+}
+
+/** This month on the person's calendar, `YYYY-MM`. */
+export function localMonth(now: Date = new Date()): string {
+  return localToday(now).slice(0, 7)
+}
+
+/**
  * The inverse of `isoDate`: read a stored `YYYY-MM-DD` back as LOCAL midnight.
  *
  * `new Date('2026-09-01')` is specified to parse a bare date as *UTC* midnight, so west of UTC its

@@ -5,6 +5,7 @@ import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { localNow, localToday } from '../local-date';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
@@ -48,8 +49,9 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
 // IMPORTANT: /upcoming must come before /:id to avoid :id capturing "upcoming".
 recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const now = new Date();
-  const endDate = new Date();
+  // The next 30 days from today on the person's calendar: next_date is one of their dates.
+  const now = localNow(c);
+  const endDate = new Date(now);
   endDate.setDate(endDate.getDate() + 30);
 
   const recurring = await db.all<RecurringRow>(
@@ -307,7 +309,9 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   const invariantError = transactionInvariantError(r);
   if (invariantError) throw new HttpError(400, invariantError);
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Today on the person's calendar. On the UTC one a payment that fell due today was still
+  // "tomorrow" for the first hours of a day east of UTC, and the guard below refused it.
+  const todayStr = localToday(c);
 
   // Pre-flight, for the message. It is NOT what makes this safe: reading next_date and then
   // writing leaves a window in which another request does the same, and both then populate the

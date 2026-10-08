@@ -5,6 +5,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { localNow } from '../local-date';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { projectRetirement } from '../../../shared/retirement';
 import {
@@ -62,7 +63,8 @@ async function loadFacts(c: Context<AppEnv>) {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
 
-  const since = new Date();
+  // The window ends today on the person's calendar.
+  const since = localNow(c);
   since.setUTCMonth(since.getUTCMonth() - FACT_WINDOW_MONTHS);
   const sinceStr = since.toISOString().split('T')[0];
 
@@ -217,7 +219,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
   if (monthsToRetirement <= 0)
     throw new HttpError(400, 'Retirement age must be greater than current age');
 
-  const today = monthOf(new Date());
+  const today = monthOf(localNow(c));
   const accumulate = (returnPct: number, horizonMonths: number) =>
     projectRetirement({
       startMonth: today,
@@ -311,8 +313,10 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
 // so the page can show its working instead of passing guesses off as entered figures.
 retirementGoalsRoutes.get('/api/retirement/settings', requireAuth, async (c) => {
   const [saved, facts] = await Promise.all([loadSavedSettings(c), loadFacts(c)]);
-  const { settings, filled, missing } = deriveSettings(saved, facts, monthOf(new Date()));
-  return c.json({ settings, facts, filled, missing, startMonth: monthOf(new Date()) });
+  // The projection starts in the person's month (monthOf reads the wall clock's UTC fields).
+  const startMonth = monthOf(localNow(c));
+  const { settings, filled, missing } = deriveSettings(saved, facts, startMonth);
+  return c.json({ settings, facts, filled, missing, startMonth });
 });
 
 retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => {
@@ -335,7 +339,7 @@ retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => 
   // back empty by construction. `missing` does not: it reports what the user's data cannot
   // answer at all, which a save does not change, so it is worth the extra read.
   const facts = await loadFacts(c);
-  const derived = deriveSettings(settings, facts, monthOf(new Date()));
+  const derived = deriveSettings(settings, facts, monthOf(localNow(c)));
   return c.json({ settings: derived.settings, filled: derived.filled, missing: derived.missing });
 });
 
@@ -344,7 +348,7 @@ retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => 
 // cannot, and is the reason the two can be checked against each other at all.
 retirementGoalsRoutes.get('/api/retirement/projection', requireAuth, async (c) => {
   const [saved, facts] = await Promise.all([loadSavedSettings(c), loadFacts(c)]);
-  const today = monthOf(new Date());
+  const today = monthOf(localNow(c));
   const { settings, filled, missing } = deriveSettings(saved, facts, today);
   const projection = projectRetirement(settingsToInput(settings, today));
   return c.json({ settings, filled, missing, projection });

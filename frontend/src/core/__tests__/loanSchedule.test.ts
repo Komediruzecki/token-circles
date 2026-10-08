@@ -31,7 +31,6 @@ import {
   MAX_TERM_MONTHS,
   payoffDate,
   summarize,
-  todayUtc,
 } from '../../../../shared/loanSchedule'
 import type { LoanInput, ScheduleRow } from '../../../../shared/loanSchedule'
 
@@ -676,11 +675,6 @@ describe('calendar helpers', () => {
     expect(addCalendarMonths('2026-01-15', -13)).toBe('2024-12-15')
     expect(addCalendarMonths('not a date', 1)).toBe('')
     expect(addCalendarMonths('2026-13-01', 1)).toBe('')
-  })
-
-  it('takes today as the UTC calendar date', () => {
-    expect(todayUtc(new Date('2026-03-01T03:30:00Z'))).toBe('2026-03-01')
-    expect(todayUtc(new Date('2026-02-28T23:30:00-05:00'))).toBe('2026-03-01')
   })
 })
 

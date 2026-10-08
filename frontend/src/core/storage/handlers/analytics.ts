@@ -1,6 +1,7 @@
 /**
  * Analytics handlers — IndexedDB-backed implementations
  */
+import { isoDate } from '../../../utils/period'
 import { seedDefaultCategories } from '../idb'
 import { adapter, getAmount, json } from './helpers'
 
@@ -41,7 +42,7 @@ export async function analyticsWeeks(query: URLSearchParams): Promise<Response> 
       we.setDate(ws.getDate() + 6)
       weeks.push({
         week: w,
-        label: `Week ${w} (${ws.toISOString().slice(0, 10)} - ${we.toISOString().slice(0, 10)})`,
+        label: `Week ${w} (${isoDate(ws)} - ${isoDate(we)})`,
       })
       current.setDate(current.getDate() + 7)
       w++

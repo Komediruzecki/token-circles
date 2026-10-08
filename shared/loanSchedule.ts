@@ -153,11 +153,6 @@ export function annuityPayment(principal: number, annualRatePct: number, months:
   return (principal * r) / -Math.expm1(-months * Math.log1p(r));
 }
 
-/** UTC calendar date, YYYY-MM-DD: the "today" both runtimes measure a loan against. */
-export function todayUtc(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
 interface CalendarDate {
   year: number;
   month: number;

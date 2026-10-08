@@ -3,6 +3,7 @@ import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileIds } from '../profile'
 import * as db from '../db'
+import { localNow } from '../local-date'
 
 // Port of backend/routes/dashboard.js — read-only aggregations over
 // transactions / accounts / budgets / bills. Every response object is built by
@@ -48,8 +49,10 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
   const allTime = c.req.query('all') === 'true'
   let startDate: string
   let endDate: string
-  const year = parseInt(c.req.query('year') || '') || new Date().getFullYear()
-  const month = parseInt(c.req.query('month') || '') || new Date().getMonth() + 1
+  // "This month" and "today" on the person's calendar, not the Worker's UTC one.
+  const now = localNow(c)
+  const year = parseInt(c.req.query('year') || '') || now.getFullYear()
+  const month = parseInt(c.req.query('month') || '') || now.getMonth() + 1
   if (allTime) {
     startDate = '0000-01-01'
     endDate = '9999-12-31'
@@ -130,7 +133,7 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
   const balance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0)
 
   // Upcoming bills (next 30 days).
-  const today = new Date()
+  const today = now
   const upcomingBills = await db.all(
     c.env.DB,
     `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
@@ -166,7 +169,7 @@ dashboardRoutes.get('/api/dashboard/summary', requireAuth, async (c) => {
   // a string when it comes from the query; `m` (monthPart) is a string. The
   // backend's `m === 12`/`m + 1` comparisons therefore behave loosely — the SQL
   // date strings below reproduce that exact behavior (e.g. m + 1 concatenates).
-  const y: number | string = year || new Date().getFullYear()
+  const y: number | string = year || localNow(c).getFullYear()
   const m: string | null = monthPart
   let startDate: string
   let endDate: string
@@ -290,8 +293,9 @@ dashboardRoutes.get('/api/dashboard/charts', requireAuth, async (c) => {
   const pids = await getProfileIds(c)
   const inClause = pids.map(() => '?').join(',')
   const months = c.req.query('months') ?? '12'
-  const endDate = new Date()
-  const startDate = new Date()
+  // Ends today on the person's calendar (see /api/stats/monthly).
+  const endDate = localNow(c)
+  const startDate = new Date(endDate)
   startDate.setMonth(startDate.getMonth() - parseInt(String(months)) + 1)
   const startStr = startDate.toISOString().split('T')[0]
   const endStr = endDate.toISOString().split('T')[0]

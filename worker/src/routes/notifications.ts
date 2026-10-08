@@ -15,6 +15,7 @@ import {
 import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
 import { requireFeature } from '../plan';
+import { localNow } from '../local-date';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -106,7 +107,7 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
     assetOrigin: c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || undefined,
   });
   if (type === 'spending' || type === 'budget' || type === 'bills') {
-    const preview = await composeReminderPreview(c.env, c.get('userId'), type);
+    const preview = await composeReminderPreview(c.env, c.get('userId'), type, localNow(c));
     if (!preview) {
       throw new HttpError(
         400,

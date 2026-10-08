@@ -8,6 +8,7 @@ import { HttpError } from '../http';
 import { verifyCapability } from '../signed-url';
 import { assessImport } from '../import-gate';
 import { parseAttachment } from '../import-email';
+import { localToday } from '../local-date';
 import { executeImport, IMPORT_MAX_BYTES } from './imports';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
@@ -116,6 +117,8 @@ v1Routes.post('/api/v1/import', async (c) => {
     // An empty approved list is not "no opinion" -- it is the gate that imports rows
     // uncategorized instead of minting a taxonomy out of a bank's memo column.
     ...(autoCreateCategories ? {} : { approvedCategories: [] }),
+    // UTC unless the uploader sent X-Time-Zone; a curl upload usually does not.
+    today: localToday(c),
   });
   if (outcome.status >= 400) return c.json(outcome.body, outcome.status as 400);
 

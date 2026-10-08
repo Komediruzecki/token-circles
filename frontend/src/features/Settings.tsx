@@ -66,7 +66,7 @@ import {
 import { theme } from '../core/theme'
 import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
-import { toYYYYMM } from '../utils/period'
+import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
@@ -901,7 +901,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `finance-backup-all-profiles-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `finance-backup-all-profiles-${localToday()}.json`
       a.click()
       URL.revokeObjectURL(url)
 
@@ -935,7 +935,7 @@ export default function Settings() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${type}-${profileFileLabel()}-${new Date().toISOString().split('T')[0]}.${fmt}`
+      a.download = `${type}-${profileFileLabel()}-${localToday()}.${fmt}`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

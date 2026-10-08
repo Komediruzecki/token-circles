@@ -4,7 +4,8 @@ import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
 import { HttpError } from '../http'
 import * as db from '../db'
-import { calculateLoan, loanStatus, todayUtc } from '../../../shared/loanSchedule'
+import { localToday } from '../local-date'
+import { calculateLoan, loanStatus } from '../../../shared/loanSchedule'
 import type { LoanInput, LoanPrepayment, LoanRatePeriod } from '../../../shared/loanSchedule'
 
 // Port of backend/routes/loans.js + backend/repositories/loansRepo.js.
@@ -49,6 +50,7 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
 // from the shared engine, as in the local-first list, so the Loans page and API clients read the
 // same figures. Rate periods and extra payments are fetched in one query each for all the loans,
 // ordered as the calculate route orders them. Additions only: every column the list had is kept.
+// "Today" is the person's date (local-date.ts), as it is in the local-first list.
 loansRoutes.get('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const [rows, ratePeriods, prepayments] = await Promise.all([
@@ -79,7 +81,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
   ])
   const periodsOf = byLoan(ratePeriods)
   const extrasOf = byLoan(prepayments)
-  const today = todayUtc()
+  const today = localToday(c)
   return c.json(
     rows.map((loan) => ({
       ...loan,

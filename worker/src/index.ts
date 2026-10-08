@@ -45,6 +45,7 @@ import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
 import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
+import { readTimeZone } from './local-date';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -79,7 +80,13 @@ export interface Env {
 /** Hono generics shared across route modules: bindings + per-request vars. */
 export type AppEnv = {
   Bindings: Env;
-  Variables: { userId: number; sessionId?: string; token?: TokenIdentity };
+  Variables: {
+    userId: number;
+    sessionId?: string;
+    token?: TokenIdentity;
+    /** The IANA zone of the person's calendar, from X-Time-Zone; UTC without one (local-date.ts). */
+    timeZone?: string;
+  };
 };
 
 const app = new Hono<AppEnv>();
@@ -87,7 +94,13 @@ const app = new Hono<AppEnv>();
 // CORS — origin comes from the env var. credentials:true is required so the browser sends the
 // session cookie cross-origin; with credentials, `*` is invalid anyway, so fail CLOSED (allow
 // nothing cross-origin) rather than reflect `*` when CORS_ORIGIN is unset/misconfigured.
-app.use('*', (c, next) => cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true })(c, next));
+//
+// maxAge: the app sends X-Time-Zone on every request (local-date.ts), and a custom header makes the
+// browser ask with a preflight first, including for the GETs that used to be simple requests. Two
+// hours is the longest Chromium caches the answer for (Firefox allows a day, Safari less).
+app.use('*', (c, next) =>
+  cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true, maxAge: 7200 })(c, next)
+);
 
 // Security headers on every response (audit S2). The API returns JSON plus a few inline-styled
 // transactional HTML pages (password-reset landing, unsubscribe), so the CSP allows inline styles
@@ -126,6 +139,9 @@ app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
 
 // A request body that is not JSON answers 400, not 500 (error-response.ts).
 app.use('*', rejectMalformedJson);
+
+// The person's calendar: "today" and "this month" are theirs, not the Worker's UTC (local-date.ts).
+app.use('*', readTimeZone);
 
 // Public health check (no auth) — handy for uptime checks and the deploy smoke test.
 // `captcha` is here so a deploy can be checked without attempting a sign-in: "missing" means

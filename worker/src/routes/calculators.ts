@@ -5,8 +5,9 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { monthlyRate as monthlyRateFor } from '../../../shared/retirement';
-import { addCalendarMonths, annuityPayment, todayUtc } from '../../../shared/loanSchedule';
+import { addCalendarMonths, annuityPayment } from '../../../shared/loanSchedule';
 import * as db from '../db';
+import { localNow, localToday } from '../local-date';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
 // the emergency-fund calc, which reads transactions + accounts for the active
@@ -311,10 +312,10 @@ calculatorsRoutes.get('/api/calculators/loans/amortization', requireAuth, async 
 
   let balance = principal;
   const schedule: Array<Record<string, unknown>> = [];
-  // Payment i is due i calendar months after today (UTC), on today's day of the month or the
-  // month's last day, as loan schedules are dated: asked on 31 January, the first is due on
-  // 28 February. Date#setMonth overflowed into March instead.
-  const today = todayUtc();
+  // Payment i is due i calendar months after today (the person's date), on today's day of the
+  // month or the month's last day, as loan schedules are dated: asked on 31 January, the first is
+  // due on 28 February. Date#setMonth overflowed into March instead.
+  const today = localToday(c);
 
   for (let i = 1; i <= termMonths; i++) {
     const interest = balance * monthlyRate;
@@ -428,7 +429,8 @@ calculatorsRoutes.get('/api/calculators/units', requireAuth, async (c) => {
 calculatorsRoutes.get('/api/calculator/emergency-fund', requireAuth, async (c) => {
   const pid = await getProfileId(c);
 
-  const twelveMonthsAgo = new Date();
+  // Twelve months back from today on the person's calendar.
+  const twelveMonthsAgo = localNow(c);
   twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
   const dateStr = twelveMonthsAgo.toISOString().split('T')[0];
 

@@ -18,6 +18,7 @@ import {
 import { api, getLocalCurrency, toast } from '../core/api'
 import { handFocusTo, isEditableTarget } from '../core/domFocus'
 import { quickEntrySave } from '../core/quickEntryLists'
+import { localToday } from '../utils/period'
 import styles from './GuidedOrbit.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -62,7 +63,7 @@ function CategoriesDidNotLoad(props: {
   )
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => localToday()
 const lastAccountKey = () => `lastAccountId:${localStorage.getItem('currentProfileId') || '1'}`
 const STEPS = 3
 const R = 40

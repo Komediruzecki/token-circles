@@ -3,6 +3,7 @@ import { defineTool, guardSize, MAX_ROWS } from './registry';
 import { HttpError } from '../http';
 import { signCapability, CAPABILITY_TTL_SECONDS } from '../signed-url';
 import * as db from '../db';
+import { localMonth, localToday } from '../local-date';
 
 /** Every tool accepts this; rpc.ts reads `profileId` off the parsed args to resolve the profile. */
 import { profileArg, DATE, MONTH } from './args';
@@ -251,7 +252,7 @@ defineTool({
     })
     .strict(),
   handler: async (c, args, profileId) => {
-    const month = args.month ?? new Date().toISOString().slice(0, 7);
+    const month = args.month ?? localMonth(c);
     const accounts = await db.all<{ id: number; name: string; currency: string; balance: number }>(
       c.env.DB,
       'SELECT id, name, currency, balance FROM accounts WHERE profile_id = ? ORDER BY name',
@@ -267,12 +268,14 @@ defineTool({
       month
     );
     const of = (type: string) => totals.find((r) => r.type === type)?.total ?? 0;
+    // Due today or later on the caller's calendar; SQLite's date('now') is the UTC one.
     const bills = await db.all<Record<string, unknown>>(
       c.env.DB,
       `SELECT id, name, amount, due_date FROM bills
-        WHERE profile_id = ? AND due_date >= date('now')
+        WHERE profile_id = ? AND due_date >= ?
         ORDER BY due_date LIMIT 10`,
-      profileId
+      profileId,
+      localToday(c)
     );
     return guardSize({
       monthKey: month,
@@ -292,7 +295,7 @@ defineTool({
   scope: 'read',
   input: z.object({ ...profileArg, month: z.string().regex(MONTH).optional() }).strict(),
   handler: async (c, args, profileId) => {
-    const month = args.month ?? new Date().toISOString().slice(0, 7);
+    const month = args.month ?? localMonth(c);
     const budgets = await db.all<{
       id: number;
       category_id: number;
