@@ -9,6 +9,7 @@
  * of them, let the message go as soon as the field is fixed, and put a server's per-field reasons
  * on the same fields.
  */
+import { createSignal, Show } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../core/apiError'
@@ -519,6 +520,133 @@ describe('after a save', () => {
 
     expect(saved).not.toHaveBeenCalled()
     expect(form.submitting()).toBe(false)
+  })
+})
+
+/**
+ * A field inside a section the person has closed ("Show advanced options"): the kit cannot put its
+ * message under a field that is not on the page, so the notice says it. It used to stay in the
+ * notice after the section was opened, said a second time under the field, and stay there after
+ * the field was fixed, until the next Save.
+ */
+describe('a field inside a closed section', () => {
+  function mountWithSection(send: (values: Values) => unknown = () => undefined) {
+    const [open, setOpen] = createSignal(false)
+    const form = createForm<Values>({
+      initial: INITIAL,
+      check,
+      send,
+      failure: "Couldn't save it. Try again.",
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form {...form.attrs}>
+          <FormNotice form={form} />
+          <Field form={form} name="name" label="Name">
+            {(control) => (
+              <input
+                {...control}
+                value={form.values.name}
+                onInput={(e) => form.set('name', e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Show when={open()}>
+            <Field form={form} name="amount" label="Amount">
+              {(control) => (
+                <input
+                  {...control}
+                  value={form.values.amount}
+                  onInput={(e) => form.set('amount', e.currentTarget.value)}
+                />
+              )}
+            </Field>
+          </Show>
+          <SubmitButton busy={form.submitting()}>Save</SubmitButton>
+        </form>
+      ),
+      host
+    )
+    return { form, open: () => setOpen(true), close: () => setOpen(false) }
+  }
+
+  it('is said in the notice while the section is closed', async () => {
+    mountWithSection()
+    type(labelled('Name'), 'Coffee')
+
+    await submit()
+
+    expect(notice().textContent).toBe('Make the amount more than zero.')
+  })
+
+  it('moves under the field when the section opens, and is said once', async () => {
+    const { open } = mountWithSection()
+    type(labelled('Name'), 'Coffee')
+    await submit()
+
+    open()
+
+    expect(labelled('Amount').getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(labelled('Amount'))).toEqual(['Make the amount more than zero.'])
+    expect(notice().textContent).toBe('')
+  })
+
+  it('goes from the field and the notice as soon as the field is fixed', async () => {
+    const { open } = mountWithSection()
+    type(labelled('Name'), 'Coffee')
+    await submit()
+    open()
+
+    type(labelled('Amount'), '3')
+
+    expect(labelled('Amount').getAttribute('aria-invalid')).toBeNull()
+    expect(notice().textContent).toBe('')
+  })
+
+  it('goes from the notice when it is fixed with the section still closed', async () => {
+    const { form } = mountWithSection()
+    type(labelled('Name'), 'Coffee')
+    await submit()
+
+    form.set('amount', '3')
+
+    expect(notice().textContent).toBe('')
+  })
+
+  it('goes back to the notice when the section is closed again', async () => {
+    const { open, close } = mountWithSection()
+    type(labelled('Name'), 'Coffee')
+    await submit()
+    open()
+
+    close()
+
+    expect(notice().textContent).toBe('Make the amount more than zero.')
+  })
+
+  it('takes a server’s refusal of it the same way', async () => {
+    const { form, open } = mountWithSection(
+      vi.fn().mockRejectedValue(
+        new ApiError(400, 'Use at most two decimal places.', {
+          amount: 'Use at most two decimal places.',
+        })
+      )
+    )
+    type(labelled('Name'), 'Coffee')
+    form.set('amount', '3.333')
+    await submit()
+    expect(notice().textContent).toBe('Use at most two decimal places.')
+
+    open()
+
+    expect(describedBy(labelled('Amount'))).toEqual(['Use at most two decimal places.'])
+    expect(notice().textContent).toBe('')
+
+    type(labelled('Amount'), '3.33')
+    expect(labelled('Amount').getAttribute('aria-invalid')).toBeNull()
+    expect(notice().textContent).toBe('')
   })
 })
 
