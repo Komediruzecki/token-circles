@@ -1,4 +1,4 @@
-import { addCategory, listTransactions } from '../helpers';
+import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -74,6 +74,54 @@ export const imports = [
     expect(names).not.toContain('Fun');
     expect(names).not.toContain('Salary');
   }),
+
+  scenario(
+    'an import creates the accounts and categories its rows name, and moves the balances',
+    async (api, expect) => {
+      const everyday = await account(api, expect, 'Everyday', 1000);
+      const food = await addCategory(api, expect, 'Food');
+
+      // The run, with the categories the preview offered confirmed.
+      const ran = await execute(api, expect, {
+        importId: 'contract-import-1',
+        approvedCategories: ['Salary', 'Fun'],
+      });
+      expect(ran).toMatchObject({
+        imported: 4,
+        skipped: 0,
+        duplicates: 0,
+        accounts_created: 1,
+        categories_created: 2,
+        // As the sheet spells it: the import log and the page's summary list these names.
+        created_accounts: ['Savings'],
+      });
+      expect([...ran.created_categories].sort()).toEqual(['Fun', 'Salary']);
+
+      const rows = await listTransactions(api, expect);
+      expect(rows).toHaveLength(4);
+      const byDescription = Object.fromEntries(rows.map((r) => [r.description, r]));
+      expect(byDescription.Salary).toMatchObject({ type: 'income', account_id: everyday });
+      expect(byDescription.Groceries).toMatchObject({
+        type: 'expense',
+        category_id: food,
+        account_id: everyday,
+        date: '2026-03-02',
+      });
+      expectMoney(expect, byDescription.Groceries.amount, 45.5, 'groceries');
+      const savings = await accountNamed(api, expect, 'Savings');
+      expect(savings).toMatchObject({ type: 'savings', currency: 'EUR' });
+      expect(byDescription['To savings']).toMatchObject({
+        type: 'transfer',
+        account_id: everyday,
+        transfer_account_id: savings.id,
+      });
+      // 1,000 + 2,500 - 45.50 - 12 - 100, and the new account's 200 + 100.
+      expectMoney(expect, await balanceOf(api, expect, everyday), 3342.5, 'Everyday');
+      expectMoney(expect, await balanceOf(api, expect, savings.id), 300, 'Savings');
+      const names = await categoryNames(api, expect);
+      expect(names).toEqual(expect.arrayContaining(['Food', 'Fun', 'Salary']));
+    }
+  ),
 
   scenario('a shared Google Sheet is read for the mapping step', async (api, expect) => {
     // The Import page's Google Sheets tab sends the link and the tab it last chose.
