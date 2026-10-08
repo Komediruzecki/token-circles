@@ -7,7 +7,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { VerificationStatus } from '../../core/emailVerification'
+import type { EmailVerifyResult, VerificationStatus } from '../../core/emailVerification'
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -15,7 +15,7 @@ let dispose: (() => void) | undefined
 const toasts: { message: string; type: string }[] = []
 let status: VerificationStatus | null = null
 let authenticated = true
-let bootResult: { ok: true } | { ok: false; error: string } | null = null
+let bootResult: EmailVerifyResult | null = null
 let resend: () => Promise<void> = () => Promise.resolve()
 
 async function mount() {
@@ -192,9 +192,64 @@ describe('the confirm link’s outcome', () => {
     expect(toasts[0].message).toBe('That confirmation link is no longer valid')
   })
 
+  it('answers a reason it does not know with its own fixed words', async () => {
+    bootResult = { ok: false, error: 'a_reason_added_later' }
+    await mount()
+
+    expect(toasts).toEqual([
+      { message: 'That confirmation link is no longer valid', type: 'error' },
+    ])
+  })
+
   it('says nothing when the user simply opened the app', async () => {
     await mount()
 
     expect(toasts).toEqual([])
+  })
+})
+
+describe('the email change link’s outcome', () => {
+  it('says the account moved to the new address', async () => {
+    bootResult = { ok: true, change: true }
+    status = { email: 'new@example.com', verified: true, provider: 'password' }
+    await mount()
+
+    expect(toasts).toEqual([
+      { message: 'Email changed. Your account uses the new address from now on.', type: 'success' },
+    ])
+  })
+
+  it('sends an expired change link back to Settings, where Resend cannot help', async () => {
+    bootResult = { ok: false, error: 'expired', change: true }
+    await mount()
+
+    expect(toasts).toEqual([
+      {
+        message:
+          'That email change link has expired. Save the new address in Settings to get a fresh one.',
+        type: 'error',
+      },
+    ])
+  })
+
+  it('says another account has the address now, and nothing changed', async () => {
+    bootResult = { ok: false, error: 'email_taken', change: true }
+    await mount()
+
+    expect(toasts).toEqual([
+      {
+        message: 'Another account uses that address now, so your email stays as it was.',
+        type: 'error',
+      },
+    ])
+  })
+
+  it('answers a reason it does not know with its own fixed words', async () => {
+    bootResult = { ok: false, error: 'a_reason_added_later', change: true }
+    await mount()
+
+    expect(toasts).toEqual([
+      { message: 'That confirmation link is no longer valid', type: 'error' },
+    ])
   })
 })

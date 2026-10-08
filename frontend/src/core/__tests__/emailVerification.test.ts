@@ -56,6 +56,25 @@ describe('consumeEmailVerifyRedirect', () => {
     expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired' })
   })
 
+  it('marks a change of address, so the message can say the address moved', async () => {
+    history.replaceState(null, '', '/#everified=1&change=1')
+    const { consumeEmailVerifyRedirect, takeEmailVerifyResult } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(takeEmailVerifyResult()).toEqual({ ok: true, change: true })
+    expect(window.location.hash).toBe('')
+  })
+
+  it('marks a change of address that was refused, with its reason', async () => {
+    history.replaceState(null, '', '/#everified_error=email_taken&change=1')
+    const { consumeEmailVerifyRedirect, takeEmailVerifyResult } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'email_taken', change: true })
+  })
+
   it('keeps the query string while dropping the fragment', async () => {
     history.replaceState(null, '', '/?demo=high#everified=1')
     const { consumeEmailVerifyRedirect } = await load()

@@ -5,6 +5,8 @@ import {
   renderAccountExists,
   renderBillsReminder,
   renderBudgetAlert,
+  renderEmailChange,
+  renderEmailChangeNotice,
   renderPasswordReset,
   renderSpendingReport,
   renderSupportAck,
@@ -63,6 +65,50 @@ describe('email templates', () => {
     expect(mail.html).toContain('https://t.co/x?token=abc123');
     expect(mail.text).toContain('https://t.co/x?token=abc123');
     expect(mail.html).toContain('2 hours');
+  });
+
+  it('email change carries its link in html AND text, says when it expires and that nothing changes until then', () => {
+    const link = 'https://api.x/api/auth/verify-email?token=abc123&returnTo=https%3A%2F%2Fapp.x';
+    const mail = renderEmailChange({ link, ttlHours: 24 });
+    expectBrandedShell(mail);
+    expect(mail.subject).toMatch(/confirm your new/i);
+    expect(mail.html).toContain(`href="${link}"`);
+    expect(mail.text).toContain(link);
+    expect(mail.html).toContain('24 hours');
+    expect(mail.text).toContain('nothing changes');
+    expect(mail.html).not.toContain('email/orbit.gif');
+  });
+
+  it('email change link says only what is true for every account, Google ones included', () => {
+    const mail = renderEmailChange({ link: 'https://api.example.com/verify', ttlHours: 24 });
+    expect(mail.html).not.toMatch(/sign in with it/i);
+    expect(mail.text).not.toMatch(/sign in with it/i);
+    expect(mail.html).toContain('From then on, mail about your account comes here.');
+    expect(mail.text).toContain('From then on, mail about your account comes here.');
+  });
+
+  it('email change notice names the new address, points at Settings, and carries no confirm link', () => {
+    const mail = renderEmailChangeNotice({
+      newEmail: 'new@example.com',
+      appUrl: 'https://tokencircles.com',
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('new@example.com');
+    expect(mail.text).toContain('new@example.com');
+    expect(mail.html).toContain('https://tokencircles.com/#settings');
+    expect(mail.html).not.toContain('verify-email');
+    expect(mail.html).not.toContain('email/orbit.gif');
+  });
+
+  it('email change notice can leave the new address out', () => {
+    const mail = renderEmailChangeNotice({ newEmail: null, appUrl: 'https://tokencircles.com' });
+    expectBrandedShell(mail);
+    expect(mail.text).toMatch(/asked to change its email address\./i);
+    expect(mail.html).not.toContain('@example.com');
+    expect(mail.text).not.toContain('@example.com');
+    expect(mail.html).not.toContain('null');
+    expect(mail.text).not.toContain('null');
+    expect(mail.html).toContain('https://tokencircles.com/#settings');
   });
 
   it('budget alert renders rows with the profile currency and escapes names', () => {

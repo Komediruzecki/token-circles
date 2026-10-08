@@ -470,8 +470,11 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/loans\/(\d+)\/prepayments\/(\d+)$/,
-    methods: ['DELETE'],
-    handler: dispatch({ DELETE: (ctx) => h.loanPrepaymentsDelete(ctx.params) }),
+    methods: ['PUT', 'DELETE'],
+    handler: dispatch({
+      PUT: (ctx) => h.loanPrepaymentUpdate(ctx.params, ctx.body),
+      DELETE: (ctx) => h.loanPrepaymentsDelete(ctx.params),
+    }),
   },
 
   // ── Export / Import / Clear ──

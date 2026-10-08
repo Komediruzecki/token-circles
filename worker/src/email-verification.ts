@@ -1,0 +1,85 @@
+// Links that prove someone reads an address: minting one, and the URL that goes in the mail. The
+// route that spends them is GET /api/auth/verify-email (routes/auth.ts). One kind confirms the
+// address an account already has; the other moves the account to a new one (email-change.ts).
+
+// 256-bit URL-safe token (hex). The raw token goes in the email link; only its hash is stored.
+export function randomToken(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
+    b.toString(16).padStart(2, '0')
+  ).join('');
+}
+export async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// ── Email verification (password signups) ──────────────────────────────────────────────────────
+//
+// A password account starts unverified and works anyway: the confirm link is a soft gate, so
+// nothing is blocked on it — the app shows a banner until it is clicked. Google accounts arrive
+// with Google's own email_verified claim and never see any of this.
+//
+// The link stays valid long enough to survive a night in a spam folder. It is longer than the
+// password-reset TTL on purpose: a reset link is a live credential, a confirm link is not.
+export const VERIFY_TOKEN_TTL_HOURS = 24;
+
+/**
+ * What opening the link does: 'confirm' marks the account's current address verified, 'change'
+ * moves the account to the address the link was mailed to (migration 0031).
+ */
+export type VerificationPurpose = 'confirm' | 'change';
+
+/**
+ * Mint a single-use token for `userId`, superseding any link of the same purpose still
+ * outstanding, and store only its hash. Returns the raw token for the email.
+ *
+ * Only the same purpose: sending the confirm link again must not cancel a change that is
+ * waiting, and asking for a change must not kill the link that confirms the address the account
+ * still has.
+ */
+export async function createEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose = 'confirm'
+): Promise<string> {
+  await db
+    .prepare(
+      'DELETE FROM email_verifications WHERE user_id = ? AND purpose = ? AND used_at IS NULL'
+    )
+    .bind(userId, purpose)
+    .run();
+  return (await insertEmailVerification(db, userId, email, purpose)).token;
+}
+
+/**
+ * Store a new single-use link for `userId` without retiring any other, and return its raw token
+ * and row id. For a caller that retires the others only once the new link has been sent.
+ */
+export async function insertEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose
+): Promise<{ token: string; id: number }> {
+  const token = randomToken();
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  const res = await db
+    .prepare(
+      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, ?, ?)'
+    )
+    .bind(userId, email, await sha256Hex(token), expiresAt, purpose)
+    .run();
+  return { token, id: res.meta.last_row_id as number };
+}
+
+/**
+ * The confirm link. It points at this worker rather than the app because there is nothing for
+ * the user to fill in — one GET does the whole job and bounces them back to the app.
+ */
+export function verifyLink(apiOrigin: string, token: string, returnTo: string): string {
+  return (
+    `${apiOrigin}/api/auth/verify-email?token=${encodeURIComponent(token)}` +
+    `&returnTo=${encodeURIComponent(returnTo)}`
+  );
+}

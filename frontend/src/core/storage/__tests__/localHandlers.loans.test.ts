@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PARITY_LOAN } from '../../../../../shared/fixtures/loanParity'
 import { calculateLoan, loanStatus } from '../../../../../shared/loanSchedule'
 import { getDB } from '../idb.js'
+import { routeApiRequest } from '../localApiRouter'
 import {
   loanPrepaymentAdd,
   loansCalculate,
@@ -270,5 +271,162 @@ describe('localHandlers - where each listed loan stands today', () => {
     expect(row.monthly_payment).toBe(100)
     expect(row.next_payment_date).toBeNull()
     expect(row.payoff_date).toBeNull()
+  })
+})
+
+describe('localHandlers - extra payments, by their id', () => {
+  const route = (path: string, method: string, body?: unknown) =>
+    routeApiRequest(`http://localhost/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
+
+  beforeEach(async () => {
+    localStorage.clear()
+    localStorage.setItem('currentProfileId', '1')
+    const db = await getDB()
+    await db.clear('profiles')
+    await db.clear('loans')
+    await db.add('profiles', { id: 1, name: 'Test', created_at: '2026-01-01' })
+  })
+
+  /** A 20,000 loan over 60 months, its extra payments stored exactly as given. */
+  async function loanWith(prepayments: Record<string, unknown>[]): Promise<number> {
+    const created = await (
+      await loansCreate({
+        name: 'Car',
+        principal: 20000,
+        interest_rate: 5,
+        term_months: 60,
+        start_date: '2026-01-01',
+      })
+    ).json()
+    const db = await getDB()
+    const stored = await db.get('loans', created.id)
+    await db.put('loans', { ...stored, prepayments })
+    return created.id
+  }
+
+  const notes = async (id: number) =>
+    ((await (await route(`/loans/${id}`, 'GET')).json()).prepayments as { note: string }[]).map(
+      (p) => p.note
+    )
+
+  it('changes the extra payment with the id sent, and no other', async () => {
+    const id = await loanWith([
+      { month: 3, amount: 500, note: 'Gift' },
+      { month: 6, amount: 1000, note: '' },
+    ])
+    const res = await route(`/loans/${id}/prepayments/2`, 'PUT', {
+      month: 7,
+      amount: 1500,
+      note: ' Bonus ',
+    })
+    expect(res.status).toBe(200)
+    const loan = await (await route(`/loans/${id}`, 'GET')).json()
+    expect(loan.prepayments).toEqual([
+      { month: 3, amount: 500, note: 'Gift', id: 1 },
+      { month: 7, amount: 1500, note: 'Bonus', id: 2 },
+    ])
+  })
+
+  it('keeps an extra payment on its id when an earlier one is removed', async () => {
+    const id = await loanWith([
+      { month: 3, amount: 300, note: 'A' },
+      { month: 6, amount: 600, note: 'B' },
+      { month: 9, amount: 900, note: 'C' },
+    ])
+    expect((await route(`/loans/${id}/prepayments/1`, 'DELETE')).status).toBe(200)
+    const res = await route(`/loans/${id}/prepayments/2`, 'PUT', {
+      month: 6,
+      amount: 650,
+      note: 'B',
+    })
+    expect(res.status).toBe(200)
+    const loan = await (await route(`/loans/${id}`, 'GET')).json()
+    expect(loan.prepayments).toEqual([
+      { month: 6, amount: 650, note: 'B', id: 2 },
+      { month: 9, amount: 900, note: 'C', id: 3 },
+    ])
+  })
+
+  it('keeps the ids a cloud backup brought, and gives a new payment the next one', async () => {
+    const id = await loanWith([
+      { month: 3, amount: 300, note: '', id: 57 },
+      { month: 6, amount: 600, note: '' },
+    ])
+    const added = await route(`/loans/${id}/prepayments`, 'POST', { month: 9, amount: 900 })
+    expect(added.status).toBe(201)
+    expect(await added.json()).toEqual({ id: 59 })
+    const loan = await (await route(`/loans/${id}`, 'GET')).json()
+    expect(loan.prepayments.map((p: { id: number }) => p.id)).toEqual([57, 58, 59])
+  })
+
+  it('refuses a change it would refuse as a new one, and keeps the payment as it was', async () => {
+    const id = await loanWith([{ month: 3, amount: 500, note: '' }])
+    const zero = await route(`/loans/${id}/prepayments/1`, 'PUT', { month: 3, amount: 0 })
+    expect(zero.status).toBe(400)
+    expect(await zero.json()).toEqual({ error: 'Enter an amount above zero.' })
+    // The loan has 60 payments.
+    const late = await route(`/loans/${id}/prepayments/1`, 'PUT', { month: 61, amount: 10 })
+    expect(late.status).toBe(400)
+    const loan = await (await route(`/loans/${id}`, 'GET')).json()
+    expect(loan.prepayments).toEqual([{ month: 3, amount: 500, note: '', id: 1 }])
+  })
+
+  it('answers 404 for an id that is not on the loan, in the words the Worker uses', async () => {
+    const id = await loanWith([{ month: 3, amount: 500, note: '' }])
+    const res = await route(`/loans/${id}/prepayments/2`, 'PUT', { month: 3, amount: 10 })
+    expect(res.status).toBe(404)
+    expect(await res.json()).toEqual({ error: 'Extra payment not found' })
+    const removed = await route(`/loans/${id}/prepayments/2`, 'DELETE')
+    expect(removed.status).toBe(404)
+    expect(await removed.json()).toEqual({ error: 'Extra payment not found' })
+  })
+
+  it('stores an added extra payment as checked, not the body as sent', async () => {
+    const id = await loanWith([])
+    const added = await route(`/loans/${id}/prepayments`, 'POST', {
+      month: 2,
+      amount: 99.999,
+      note: ' x ',
+      other: 'field',
+    })
+    expect(added.status).toBe(201)
+    const db = await getDB()
+    expect((await db.get('loans', id))?.prepayments).toEqual([
+      { month: 2, amount: 100, note: 'x', id: 1 },
+    ])
+    const refused = await route(`/loans/${id}/prepayments`, 'POST', { month: 2, amount: -1 })
+    expect(refused.status).toBe(400)
+  })
+
+  // A cloud backup restored here keeps the Worker's ids on each extra payment. They stay, and a
+  // payment stored without one gets the next id past them, so removing "First" (id 2) removes it
+  // and nothing else.
+  it('keeps the ids a restore stored, and answers the same ids from the loan and the list', async () => {
+    const id = await loanWith([
+      { id: 2, loan_id: 70, month: 3, amount: 500, note: 'First' },
+      { id: 9, loan_id: 70, month: 6, amount: 1000, note: 'Second' },
+      { month: 9, amount: 250, note: 'Added here' },
+    ])
+    const loan = await (await route(`/loans/${id}`, 'GET')).json()
+    expect(loan.prepayments.map((p: { id: number }) => p.id)).toEqual([2, 9, 10])
+    const listed = await (await route('/loans', 'GET')).json()
+    expect(listed[0].prepayments.map((p: { id: number }) => p.id)).toEqual([2, 9, 10])
+
+    const first = loan.prepayments.find((p: { note: string }) => p.note === 'First')
+    expect((await route(`/loans/${id}/prepayments/${first.id}`, 'DELETE')).status).toBe(200)
+    expect(await notes(id)).toEqual(['Second', 'Added here'])
+
+    const second = (await (await route(`/loans/${id}`, 'GET')).json()).prepayments[0]
+    const changed = await route(`/loans/${id}/prepayments/${second.id}`, 'PUT', {
+      month: 6,
+      amount: 1200,
+      note: 'Second, more',
+    })
+    expect(changed.status).toBe(200)
+    expect(await notes(id)).toEqual(['Second, more', 'Added here'])
   })
 })

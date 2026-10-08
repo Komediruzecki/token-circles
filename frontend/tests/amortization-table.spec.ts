@@ -7,23 +7,24 @@ test.describe('Loan Amortization Table', () => {
     await navigateToRoute(page, 'loans')
   })
 
-  test('should display amortization schedule when clicking View Amortization', async ({ page }) => {
-    // Open the amortization view for the first seeded loan.
-    const amortBtn = page.getByTestId('loans-amortization-btn').first()
-    await expect(amortBtn).toBeVisible({ timeout: 10000 })
-    await amortBtn.click()
+  test('should display the amortization schedule on the Month by month tab', async ({ page }) => {
+    // The relayout moved the schedule from a panel under the card to the loan's own page: its
+    // name opens the Month by month tab, still wrapped in the `loans-amortization` container.
+    const name = page.getByTestId('loans-item-name').first()
+    await expect(name).toBeVisible({ timeout: 10000 })
+    await name.click()
+    await expect(page.getByTestId('loans-tab-schedule')).toHaveAttribute('aria-selected', 'true')
 
-    // The panel is rendered by LoanAmortizationTable — a component outside this migration's scope,
-    // so it exposes no inner test-ids of its own. Loans.tsx wraps it in the `loans-amortization`
-    // container, so scope these assertions under that hook instead of searching the whole page.
-    // The summary-card labels are the point of the copy assertions, so matching text is correct.
     const amortization = page.getByTestId('loans-amortization')
     await expect(amortization).toBeVisible({ timeout: 10000 })
-    await expect(amortization.getByText('Total Paid')).toBeVisible({ timeout: 10000 })
-    await expect(amortization.getByText('Total Interest')).toBeVisible()
-    await expect(amortization.getByText('Payoff Date')).toBeVisible()
+    // The summary line is the point of the copy assertion, so matching its words is correct.
+    const summary = amortization.getByTestId('loans-schedule-summary')
+    await expect(summary).toContainText(/\d+ payments, the last on/)
+    await expect(summary).toContainText('Interest in all')
+    await expect(amortization.getByTestId('loans-schedule-export')).toBeVisible()
 
-    // The rendered amortization schedule table lives inside the same container.
-    await expect(amortization.locator('table').first()).toBeVisible()
+    // The schedule itself: one row per payment of the seeded 60-month loan.
+    await expect(amortization.getByTestId('loans-schedule-table')).toBeVisible()
+    await expect(amortization.getByTestId('loans-schedule-row')).toHaveCount(60)
   })
 })

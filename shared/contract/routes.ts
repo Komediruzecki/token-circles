@@ -101,6 +101,7 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'POST /api/loans/:id/calculate',
   'POST /api/loans/:id/prepayments',
   'DELETE /api/loans/:id/prepayments/:prepayId',
+  'PUT /api/loans/:id/prepayments/:prepayId',
   'POST /api/loans/:id/rates',
   'DELETE /api/loans/:id/rates/:rateId',
   'PUT /api/loans/:id/rates/:rateId',
@@ -211,6 +212,10 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'POST /api/auth/logout-all': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/register': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/resend-verification': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/email-change/resend':
+    "The account's email address. Local-first has no account, and its Settings shows no email field.",
+  'DELETE /api/auth/email-change':
+    "The account's email address. Local-first has no account, and its Settings shows no email field.",
   'GET /api/auth/reset-password': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/reset-password': 'Signing in. Local-first has no account to sign in to.',
   'GET /api/auth/sessions': 'Signing in. Local-first has no account to sign in to.',

@@ -131,6 +131,7 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
   P('DELETE FROM reminder_sends WHERE user_id = ?', userId);
   P('DELETE FROM reminder_dedup WHERE user_id = ?', userId);
   P('DELETE FROM password_resets WHERE user_id = ?', userId);
+  P('DELETE FROM email_verifications WHERE user_id = ?', userId);
   P('DELETE FROM totp_credentials WHERE user_id = ?', userId);
   P('DELETE FROM recovery_codes WHERE user_id = ?', userId);
   P('DELETE FROM login_codes WHERE user_id = ?', userId);

@@ -1,3 +1,4 @@
+import { EXTRA_PAYMENT_ERRORS } from '../../loanExtraPayment';
 import { expectMoney } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -189,6 +190,58 @@ export const loanScenarios = [
     expect((await api.other.delete(`/api/loans/${id}/prepayments/${extras[0].id}`)).status).toBe(
       404
     );
+  }),
+
+  scenario('an extra payment is changed by its id, and keeps it', async (api, expect) => {
+    const id = await loan(api, expect);
+    for (const month of [12, 24]) {
+      expectOk(
+        expect,
+        await api.post(`/api/loans/${id}/prepayments`, { month, amount: 1000, note: '' }),
+        `POST an extra payment for month ${month}`
+      );
+    }
+    const [first, second] = (await loanDetail(api, expect, id)).prepayments as Json[];
+
+    // LoanDetail's updateExtra sends the edited month, amount and note.
+    expectOk(
+      expect,
+      await api.put(`/api/loans/${id}/prepayments/${second.id}`, {
+        month: 30,
+        amount: 750.25,
+        note: ' Bonus ',
+      }),
+      'PUT the second extra payment'
+    );
+    const changed = (await loanDetail(api, expect, id)).prepayments as Json[];
+    expect(changed).toEqual([
+      expect.objectContaining({ id: first.id, month: 12, amount: 1000, note: '' }),
+      expect.objectContaining({ id: second.id, month: 30, amount: 750.25, note: 'Bonus' }),
+    ]);
+
+    // A change is checked as a new payment is, and a refused one changes nothing.
+    const refused = await api.put(`/api/loans/${id}/prepayments/${second.id}`, {
+      month: 30,
+      amount: 0,
+      note: '',
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body).toMatchObject({ error: EXTRA_PAYMENT_ERRORS.amount });
+
+    // An id the loan does not have, and the loan seen from another profile, are not found.
+    const missing = await api.put(
+      `/api/loans/${id}/prepayments/${Math.max(first.id, second.id) + 100}`,
+      { month: 6, amount: 10, note: '' }
+    );
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ error: 'Extra payment not found' });
+    const foreign = await api.other.put(`/api/loans/${id}/prepayments/${first.id}`, {
+      month: 6,
+      amount: 10,
+      note: '',
+    });
+    expect(foreign.status).toBe(404);
+    expect((await loanDetail(api, expect, id)).prepayments).toEqual(changed);
   }),
 
   scenario(

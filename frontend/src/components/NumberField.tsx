@@ -17,11 +17,15 @@
  */
 import { createEffect, untrack } from 'solid-js'
 
-export interface NumberFieldProps {
-  value: number
-  onChange: (value: number) => void
+/**
+ * `E` is what an empty box means: a number (0 unless `emptyValue` says otherwise), or `null` for
+ * a field that may be left empty, whose `null` value shows an empty box with its placeholder.
+ */
+export interface NumberFieldProps<E extends number | null = number> {
+  value: number | E
+  onChange: (value: number | E) => void
   /** What an emptied field means. Defaults to 0. */
-  emptyValue?: number
+  emptyValue?: E
   step?: string
   min?: string
   max?: string
@@ -30,15 +34,20 @@ export interface NumberFieldProps {
   testId?: string
   id?: string
   disabled?: boolean
+  placeholder?: string
+  required?: boolean
 }
 
-export default function NumberField(props: NumberFieldProps) {
+/** What the box shows for a value: nothing for `null`. */
+const shown = (value: number | null): string => (value === null ? '' : String(value))
+
+export default function NumberField<E extends number | null = number>(props: NumberFieldProps<E>) {
   let el!: HTMLInputElement
 
   // Deliberately not `value={String(props.value)}`: that compiles to an effect that writes
   // on every model change, including the ones this field just caused.
   createEffect(() => {
-    const next = String(props.value)
+    const next = shown(props.value)
     if (document.activeElement === el) return
     if (el.value !== next) el.value = next
   })
@@ -55,7 +64,9 @@ export default function NumberField(props: NumberFieldProps) {
       data-test-id={props.testId}
       aria-label={props.ariaLabel}
       disabled={props.disabled}
-      value={untrack(() => String(props.value))}
+      placeholder={props.placeholder}
+      required={props.required}
+      value={untrack(() => shown(props.value))}
       onInput={(e) => {
         const text = e.currentTarget.value
         if (text === '') {
@@ -63,7 +74,7 @@ export default function NumberField(props: NumberFieldProps) {
           // ("3.", "-"). Both read as ''. Treating the first as a value and the second as
           // a pause is impossible from here, so both leave the text alone and report the
           // empty reading; a half-typed decimal lands on its real value one keystroke on.
-          props.onChange(props.emptyValue ?? 0)
+          props.onChange(props.emptyValue === undefined ? 0 : props.emptyValue)
           return
         }
         const parsed = Number(text)
@@ -71,7 +82,7 @@ export default function NumberField(props: NumberFieldProps) {
       }}
       onBlur={() => {
         // Show the canonical number now that the caret has gone.
-        el.value = String(props.value)
+        el.value = shown(props.value)
       }}
     />
   )

@@ -78,6 +78,7 @@ export {
   loanPrepaymentAdd,
   loanPrepayments,
   loanPrepaymentsDelete,
+  loanPrepaymentUpdate,
   loanRateDelete,
   loanRates,
   loanRatesAdd,
