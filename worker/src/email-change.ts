@@ -49,9 +49,17 @@ export async function pendingEmailChange(d1: D1Database, userId: number): Promis
   return row?.email ?? null;
 }
 
-/** Whether another account has `email`. A pending change holds nothing, so it never counts. */
+/**
+ * Whether another account has `email`, in any case: some sign-ups have stored an address with its
+ * capitals. A pending change holds nothing, so it never counts.
+ */
 async function emailInUse(d1: D1Database, email: string, userId: number): Promise<boolean> {
-  return !!(await db.first(d1, 'SELECT id FROM users WHERE email = ? AND id != ?', email, userId));
+  return !!(await db.first(
+    d1,
+    'SELECT id FROM users WHERE lower(email) = lower(?) AND id != ?',
+    email,
+    userId
+  ));
 }
 
 /**
@@ -205,7 +213,7 @@ export async function applyEmailChange(
     d1
       .prepare(
         `UPDATE users SET email = ?, email_verified = 1
-         WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE email = ? AND id != ?)`
+         WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?)`
       )
       .bind(email, userId, email, userId),
     onceMoved('DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL'),

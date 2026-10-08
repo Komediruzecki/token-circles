@@ -126,6 +126,14 @@ async function sha256(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/** A Google account, whose address is stored as Google sent it, capitals included. */
+const googleAccountAt = (email: string) =>
+  env.DB.prepare(
+    "INSERT INTO users (id, email, auth_provider, provider_id, email_verified, token_version) VALUES (9520, ?, 'google', 'google-sub-9520', 1, 1)"
+  )
+    .bind(email)
+    .run();
+
 async function seed(verified = 1): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
@@ -271,6 +279,14 @@ describe('saving a new address', () => {
     expect(sent).toEqual([]);
     expect(await unusedLinks()).toEqual([]);
     expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+  });
+
+  it('refuses an address another account has, whatever its case', async () => {
+    await seed(1);
+    await googleAccountAt('Mixed.Case@Example.com');
+
+    expect((await save('mixed.case@example.com')).status).toBe(409);
+    expect(mailsTo('mixed.case@example.com')).toEqual([]);
   });
 
   it('counts asking for an address another account has against the same limits', async () => {
@@ -475,6 +491,20 @@ describe('the link, when it should not work', () => {
     expect(await account()).toEqual({ email: OLD, email_verified: 0 });
     const holders = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(NEW).all();
     expect(holders.results).toHaveLength(1);
+  });
+});
+
+describe('the link, against an address stored in another case', () => {
+  it('says so when another account has taken the address since, and changes nothing', async () => {
+    await seed(0);
+    await save(NEW);
+    const link = latestLinkTo(NEW);
+    await googleAccountAt('New-Home@Example.com');
+
+    const res = await open(link);
+
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=email_taken&change=1`);
+    expect(await account()).toEqual({ email: OLD, email_verified: 0 });
   });
 });
 
