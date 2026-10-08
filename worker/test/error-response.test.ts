@@ -113,6 +113,37 @@ describe('unexpected errors', () => {
     expect(row!.message).toMatch(/categories\.color/);
   });
 
+  // The two tests above throw from a stand-in app, so they hold errorResponse to its word but
+  // cannot see whether the real app uses it. This one goes through the real app (SELF), so a
+  // src/index.ts whose onError says err.message again, or is gone, fails here.
+  //
+  // The failure is made, not found: a route that fails today by mistake (POST /api/loans with no
+  // body escapes as a D1_TYPE_ERROR) gets fixed, and the guard would go with it. Here the table
+  // behind GET /api/import-logs is moved aside for one request, so the route's own query fails
+  // the way any unexpected D1 error does. Storage is shared between tests (vitest.config.ts:
+  // isolatedStorage false), so the table is always put back.
+  it("answers a real route's unexpected failure through the app's own onError", async () => {
+    await env.DB.prepare('ALTER TABLE import_logs RENAME TO import_logs_aside').run();
+    let res: Response;
+    try {
+      res = await api('/api/import-logs', { method: 'GET' });
+    } finally {
+      await env.DB.prepare('ALTER TABLE import_logs_aside RENAME TO import_logs').run();
+    }
+
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({ error: GENERIC_ERROR });
+    for (const leak of ['D1_ERROR', 'SQLITE', 'no such table', 'import_logs']) {
+      expect(text).not.toContain(leak);
+    }
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    // It did fail where it was meant to: the log has the real reason.
+    expect(consoleError.mock.calls.map((args) => String(args[0])).join('\n')).toMatch(
+      /no such table: import_logs/
+    );
+  });
+
   it('answers a thrown Error with the generic body, whatever its message says', async () => {
     const app = new Hono<AppEnv>();
     app.onError(errorResponse);
