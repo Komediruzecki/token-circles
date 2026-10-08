@@ -1,18 +1,22 @@
 import { Hono } from 'hono';
+import { addDays, nextOccurrence } from '../../../shared/calendarMonths';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
-import { localNow, localToday } from '../local-date';
+import { localToday } from '../local-date';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
 // kept identical (snake_case) to the Express backend.
 export const recurringRoutes = new Hono<AppEnv>();
 
-interface RecurringRow {
+const UNREADABLE_NEXT_DATE =
+  "This rule's next date can't be read. Edit the rule and set its date again.";
+
+export interface RecurringRow {
   id: number;
   description: string;
   amount: number;
@@ -50,9 +54,8 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
 recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   // The next 30 days from today on the person's calendar: next_date is one of their dates.
-  const now = localNow(c);
-  const endDate = new Date(now);
-  endDate.setDate(endDate.getDate() + 30);
+  const todayStr = localToday(c);
+  const endStr = addDays(todayStr, 30);
 
   const recurring = await db.all<RecurringRow>(
     c.env.DB,
@@ -80,13 +83,25 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
 
   const upcoming: UpcomingItem[] = [];
   for (const r of recurring) {
-    let cursor = new Date(r.next_date || now.toISOString().split('T')[0]);
-    if (cursor < now) {
-      cursor = new Date(now.toISOString().split('T')[0]);
+    // From the rule's next date. A rule whose next date has passed is listed once on today, for
+    // what populate has not written yet, and after today on its own dates, stepped from its next
+    // date and not from today's day. Each step is the one populate takes, so the list shows the
+    // dates populate will write. The monthly step here used to be setMonth() and then the day,
+    // and setMonth() overflows first: a rule on the 31st went from January to March, and February
+    // was never listed.
+    const dates: string[] = [];
+    let cursor = r.next_date || todayStr;
+    if (cursor <= todayStr) {
+      dates.push(todayStr);
+      while (cursor && cursor <= todayStr) {
+        cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
+      }
     }
-    const maxDate = new Date(endDate.toISOString().split('T')[0]);
-
-    while (cursor <= maxDate) {
+    while (cursor && cursor <= endStr) {
+      dates.push(cursor);
+      cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
+    }
+    for (const date of dates) {
       upcoming.push({
         id: r.id,
         description: r.description,
@@ -94,26 +109,10 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
         type: r.type,
         frequency: r.frequency,
         day_of_month: r.day_of_month,
-        next_date: cursor.toISOString().split('T')[0],
+        next_date: date,
         category_name: r.category_name,
         category_color: r.category_color,
       });
-
-      if (r.frequency === 'daily') {
-        cursor.setDate(cursor.getDate() + 1);
-      } else if (r.frequency === 'weekly') {
-        cursor.setDate(cursor.getDate() + 7);
-      } else if (r.frequency === 'monthly') {
-        cursor.setMonth(cursor.getMonth() + 1);
-        const day = r.day_of_month || cursor.getDate();
-        cursor.setDate(
-          Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate())
-        );
-      } else if (r.frequency === 'yearly') {
-        cursor.setFullYear(cursor.getFullYear() + 1);
-      } else {
-        break;
-      }
     }
   }
 
@@ -293,6 +292,79 @@ recurringRoutes.delete('/api/recurring/:id', requireAuth, async (c) => {
 });
 
 // "Process due": materializes a transaction from the recurring rule and advances next_date.
+/**
+ * The writes that populate `r` for the period dated `date` and move its next_date on to `nextStr`:
+ * the transaction, the account balances and the claim, as one batch. Exported for the test that
+ * runs two of them built from the same stale read.
+ */
+export function populateStatements(
+  DB: D1Database,
+  r: RecurringRow,
+  pid: number,
+  date: string,
+  nextStr: string,
+  baseCurrency: string
+): D1PreparedStatement[] {
+  const stmts: D1PreparedStatement[] = [];
+
+  // Every statement is conditional on `next_date` still being what we read. A batch is one
+  // transaction, so a competing batch either commits entirely before this one — in which case
+  // next_date has already moved and nothing here matches — or entirely after, and sees ours.
+  // The statement that moves next_date goes LAST, so the writes before it still see the pre-state.
+  const guard = `(SELECT COUNT(*) FROM recurring_transactions
+                   WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3) = 1`;
+  const claim = [r.id, pid, r.next_date ?? null] as const;
+
+  // 1. Insert the transaction, including account_id / transfer_account_id if set.
+  stmts.push(
+    DB.prepare(
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local)
+       SELECT ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?5 WHERE ${guard}`
+    ).bind(
+      ...claim,
+      r.description,
+      r.amount,
+      r.type,
+      r.category_id,
+      r.account_id ?? null,
+      r.transfer_account_id ?? null,
+      date,
+      r.notes || '',
+      baseCurrency
+    )
+  );
+
+  // 2. Adjust account balances, mirroring the serverless computeBalanceDeltas
+  //    (frontend/src/core/storage/idb.ts) exactly:
+  //      - transfer with From (account_id) + To (transfer_account_id): debit From, credit To;
+  //      - income/expense with an account: move that one account;
+  //      - a transfer missing a leg makes NO change (money can't vanish);
+  //      - an account-less recurring is a pure reminder (no balance change).
+  const bal = (delta: number, accId: number) =>
+    DB.prepare(
+      `UPDATE accounts SET balance = balance + ?4 WHERE id = ?5 AND profile_id = ?2 AND ${guard}`
+    ).bind(...claim, delta, accId);
+  if (r.account_id != null) {
+    if (r.type === 'transfer' && r.transfer_account_id != null) {
+      stmts.push(bal(-r.amount, r.account_id), bal(r.amount, r.transfer_account_id));
+    } else if (r.type === 'income' || r.type === 'expense') {
+      stmts.push(bal(r.type === 'income' ? r.amount : -r.amount, r.account_id));
+    }
+  } else if (r.transfer_account_id != null && (r.type === 'income' || r.type === 'transfer')) {
+    stmts.push(bal(r.amount, r.transfer_account_id));
+  }
+
+  // 3. Advance next_date. This is the claim — last, and guarded like the rest.
+  stmts.push(
+    DB.prepare(
+      `UPDATE recurring_transactions SET next_date = ?4
+       WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3`
+    ).bind(...claim, nextStr)
+  );
+
+  return stmts;
+}
+
 // Executed in one atomic D1 batch: INSERT the transaction, adjust the linked account
 // balance (if account_id is set), and advance the next_date — so a mid-flight failure
 // cannot create a transaction without updating the balance.
@@ -327,13 +399,10 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   // date forward — if it stalls (e.g. daily/biweekly falling through to no-op),
   // next_date stays <= today and the idempotency guard above never trips, so the
   // rule can be populated repeatedly and each run debits the account again.
-  const next = new Date(date);
-  if (r.frequency === 'daily') next.setDate(next.getDate() + 1);
-  else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7);
-  else if (r.frequency === 'biweekly') next.setDate(next.getDate() + 14);
-  else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
-  else next.setMonth(next.getMonth() + 1); // monthly + safe default: always advance.
-  const nextStr = next.toISOString().split('T')[0];
+  // nextOccurrence counts months on the calendar: setMonth() overflowed past a shorter month, so
+  // a rule on the 31st went from January to 3 March, and stayed on the 3rd.
+  const nextStr = nextOccurrence(date, r.frequency, r.day_of_month);
+  if (!nextStr) throw new HttpError(400, UNREADABLE_NEXT_DATE);
 
   // The generated transaction inherits the profile's base currency and carries
   // amount_local = amount, matching the create handler (amount_local ?? amount) and the
@@ -349,62 +418,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   );
   const baseCurrency = currencyRow?.value || 'EUR';
 
-  const stmts: D1PreparedStatement[] = [];
-
-  // Every statement is conditional on `next_date` still being what we read. A batch is one
-  // transaction, so a competing batch either commits entirely before this one — in which case
-  // next_date has already moved and nothing here matches — or entirely after, and sees ours.
-  // The statement that moves next_date goes LAST, so the writes before it still see the pre-state.
-  const guard = `(SELECT COUNT(*) FROM recurring_transactions
-                   WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3) = 1`;
-  const claim = [id, pid, r.next_date ?? null] as const;
-
-  // 1. Insert the transaction, including account_id / transfer_account_id if set.
-  stmts.push(
-    c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, transfer_account_id, date, notes, beneficiary, payor, currency, amount_local)
-       SELECT ?2, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, '', '', ?12, ?5 WHERE ${guard}`
-    ).bind(
-      ...claim,
-      r.description,
-      r.amount,
-      r.type,
-      r.category_id,
-      r.account_id ?? null,
-      r.transfer_account_id ?? null,
-      date,
-      r.notes || '',
-      baseCurrency
-    )
-  );
-
-  // 2. Adjust account balances, mirroring the serverless computeBalanceDeltas
-  //    (frontend/src/core/storage/idb.ts) exactly:
-  //      - transfer with From (account_id) + To (transfer_account_id): debit From, credit To;
-  //      - income/expense with an account: move that one account;
-  //      - a transfer missing a leg makes NO change (money can't vanish);
-  //      - an account-less recurring is a pure reminder (no balance change).
-  const bal = (delta: number, accId: number) =>
-    c.env.DB.prepare(
-      `UPDATE accounts SET balance = balance + ?4 WHERE id = ?5 AND profile_id = ?2 AND ${guard}`
-    ).bind(...claim, delta, accId);
-  if (r.account_id != null) {
-    if (r.type === 'transfer' && r.transfer_account_id != null) {
-      stmts.push(bal(-r.amount, r.account_id), bal(r.amount, r.transfer_account_id));
-    } else if (r.type === 'income' || r.type === 'expense') {
-      stmts.push(bal(r.type === 'income' ? r.amount : -r.amount, r.account_id));
-    }
-  } else if (r.transfer_account_id != null && (r.type === 'income' || r.type === 'transfer')) {
-    stmts.push(bal(r.amount, r.transfer_account_id));
-  }
-
-  // 3. Advance next_date. This is the claim — last, and guarded like the rest.
-  stmts.push(
-    c.env.DB.prepare(
-      `UPDATE recurring_transactions SET next_date = ?4
-       WHERE id = ?1 AND profile_id = ?2 AND next_date IS ?3`
-    ).bind(...claim, nextStr)
-  );
+  const stmts = populateStatements(c.env.DB, r, pid, date, nextStr, baseCurrency);
 
   const results = await c.env.DB.batch(stmts);
   if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {

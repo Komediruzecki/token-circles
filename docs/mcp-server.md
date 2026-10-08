@@ -60,7 +60,7 @@ Every tool takes an optional `profileId`, defaulting to the token's profile.
 | `prepare_import`          | import | Signed upload URL plus a curl command                      |
 | `list_imports`            | import | Recent import batches                                      |
 | `undo_import`             | import | Delete one import batch                                    |
-| `create_transactions`     | write  | Bulk add, duplicates skipped                               |
+| `create_transactions`     | write  | Bulk add to existing accounts, duplicates skipped          |
 | `create_account`          | write  | Add an account                                             |
 | `categorize_transactions` | write  | Set category and tags by id                                |
 | `upsert_tag_rule`         | write  | Persist a categorization rule                              |

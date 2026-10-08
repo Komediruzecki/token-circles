@@ -127,6 +127,33 @@ describe('write tools', () => {
     expect(row?.account_id).toBe(account.id);
   });
 
+  it('create_transactions refuses an account that is not there, and adds nothing', async () => {
+    unwrap(await call('create_account', { name: 'Wallet', currency: 'EUR' }));
+    const row = (accountName: string, description: string) => ({
+      date: '2026-03-06',
+      description,
+      amount: -5,
+      type: 'expense',
+      accountName,
+    });
+
+    const result = await call('create_transactions', {
+      transactions: [row('wallet ', 'Known'), row('Revolut', 'Unknown'), row('N26', 'Other')],
+    });
+
+    expect(result.isError).toBe(true);
+    const said: string = result.content[0].text;
+    expect(said).toContain('This profile has no account named "Revolut" or "N26".');
+    expect(said).toContain('"Wallet"');
+    expect(said).toContain('create_account');
+    const count = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM transactions WHERE profile_id = ?'
+    )
+      .bind(PROFILE_ID)
+      .first<{ n: number }>();
+    expect(count?.n).toBe(0);
+  });
+
   it('categorize_transactions updates only the named ids in this profile', async () => {
     await env.DB.prepare(
       "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96020, 'Books', 'expense', ?)"

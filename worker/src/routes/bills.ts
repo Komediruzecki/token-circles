@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { addCalendarMonths, addDays } from '../../../shared/calendarMonths';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { configuredBaseCurrency } from '../base-currency';
@@ -125,48 +126,38 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
     pid
   );
 
+  // Due dates are worked out on the calendar, as YYYY-MM-DD, and compared with today's date. They
+  // were Dates at midnight compared with the current instant, so a bill due today was already in
+  // the past at 00:01 and moved to next month; and setMonth() overflowed past a shorter month, so
+  // a bill on the 30th went from January to 2 March.
   const upcoming = bills.map((b) => {
-    let nextDue: Date | null = null;
-    const lastPaid = b.last_paid ? new Date(b.last_paid) : null;
+    let nextDue = '';
+    const lastPaid = b.last_paid ? b.last_paid.slice(0, 10) : null;
 
     if (b.frequency === 'monthly') {
       const dayOfMonth = b.day_of_month || 1;
       if (lastPaid) {
-        nextDue = new Date(lastPaid);
-        nextDue.setMonth(nextDue.getMonth() + 1);
-        nextDue.setDate(
-          Math.min(dayOfMonth, new Date(nextDue.getFullYear(), nextDue.getMonth() + 1, 0).getDate())
-        );
+        nextDue = addCalendarMonths(lastPaid, 1, dayOfMonth);
       } else {
-        nextDue = new Date(
-          now.getFullYear(),
-          now.getMonth(),
-          Math.min(dayOfMonth, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())
-        );
-        if (nextDue < now) nextDue.setMonth(nextDue.getMonth() + 1);
+        const thisMonth = addCalendarMonths(`${todayStr.slice(0, 7)}-01`, 0, dayOfMonth);
+        nextDue = thisMonth < todayStr ? addCalendarMonths(thisMonth, 1, dayOfMonth) : thisMonth;
       }
     } else if (b.frequency === 'weekly') {
-      if (lastPaid) {
-        nextDue = new Date(lastPaid);
-        nextDue.setDate(nextDue.getDate() + 7);
-      } else {
-        nextDue = new Date(todayStr);
-        nextDue.setDate(nextDue.getDate() + 7);
-      }
+      nextDue = addDays(lastPaid ?? todayStr, 7);
     } else if (b.frequency === 'yearly') {
       if (lastPaid) {
-        nextDue = new Date(lastPaid);
-        nextDue.setFullYear(nextDue.getFullYear() + 1);
+        nextDue = addCalendarMonths(lastPaid, 12);
       } else {
+        // In January: a yearly bill without a payment has only its day of the month to go on.
         const dayOfMonth = b.day_of_month || 1;
-        nextDue = new Date(now.getFullYear(), 0, dayOfMonth);
-        if (nextDue < now) nextDue.setFullYear(nextDue.getFullYear() + 1);
+        const thisYear = addCalendarMonths(`${todayStr.slice(0, 4)}-01-01`, 0, dayOfMonth);
+        nextDue = thisYear < todayStr ? addCalendarMonths(thisYear, 12, dayOfMonth) : thisYear;
       }
     }
 
-    const nextDueStr = nextDue ? nextDue.toISOString().split('T')[0] : null;
-    const daysUntil = nextDue
-      ? Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    const nextDueStr = nextDue || null;
+    const daysUntil = nextDueStr
+      ? Math.round((Date.parse(nextDueStr) - Date.parse(todayStr)) / (1000 * 60 * 60 * 24))
       : null;
     const isOverdue = daysUntil !== null && daysUntil < 0;
 

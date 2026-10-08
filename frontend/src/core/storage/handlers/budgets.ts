@@ -934,9 +934,10 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
   try {
     const month = query.get('month') || localMonth()
 
-    // Multi-profile (household) selection, mirroring budgetsList.
+    // Multi-profile (household) selection, mirroring budgetsList. Every budget up to and including
+    // `month`, compared as months: '2026-10-01' sorts after '2026-10' as a string.
     const budgets = (await getAllForProfiles('budgets'))
-      .filter((b: Record<string, unknown>) => (b.start_date as string) <= month)
+      .filter((b: Record<string, unknown>) => (b.start_date as string).slice(0, 7) <= month)
       .sort((a: Record<string, unknown>, b: Record<string, unknown>) =>
         (b.start_date as string).localeCompare(a.start_date as string)
       )

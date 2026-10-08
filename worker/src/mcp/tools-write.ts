@@ -11,6 +11,22 @@ import * as db from '../db';
 
 import { profileArg, DATE } from './args';
 
+const quoted = (names: readonly string[]) => names.map((name) => `"${name}"`);
+
+/** The refusal for rows that name accounts the profile does not have. */
+function unknownAccounts(unknown: readonly string[], existing: readonly string[]): string {
+  const missing = quoted(unknown);
+  const which =
+    missing.length === 1
+      ? missing[0]
+      : `${missing.slice(0, -1).join(', ')} or ${missing[missing.length - 1]}`;
+  const have =
+    existing.length > 0
+      ? `Its accounts are ${quoted(existing).join(', ')}.`
+      : 'It has no accounts yet.';
+  return `This profile has no account named ${which}. ${have} Create an account with create_account first, or leave accountName out. Nothing was added.`;
+}
+
 defineTool({
   name: 'create_transactions',
   title: 'Create transactions',
@@ -32,7 +48,9 @@ defineTool({
               .string()
               .max(200)
               .optional()
-              .describe('Matched against existing account names; created if new.'),
+              .describe(
+                'The name of an account in the profile (list_reference_data lists them), any case. A name that matches none is refused: create the account with create_account first.'
+              ),
             categoryName: z.string().max(200).optional().describe('Existing categories only.'),
             beneficiary: z.string().max(200).optional(),
             notes: z.string().max(1000).optional(),
@@ -43,6 +61,33 @@ defineTool({
     })
     .strict(),
   handler: async (c, args, profileId) => {
+    // Every account a row names must already exist. executeImport creates none here (no
+    // categoryTypes), so a row naming an account that was not there landed with no account at
+    // all, while this tool's description promised one would be created. The call is refused
+    // before anything is written, and says which accounts there are, so an agent can correct it.
+    const named = [
+      ...new Set(args.transactions.map((t) => t.accountName?.trim() ?? '').filter(Boolean)),
+    ];
+    if (named.length > 0) {
+      const accounts = await db.all<{ name: string }>(
+        c.env.DB,
+        'SELECT name FROM accounts WHERE profile_id = ? ORDER BY name',
+        profileId
+      );
+      // Matched as executeImport matches them: trimmed, any case.
+      const known = new Set(accounts.map((a) => a.name.trim().toLowerCase()));
+      const unknown = named.filter((name) => !known.has(name.toLowerCase()));
+      if (unknown.length > 0) {
+        throw new HttpError(
+          400,
+          unknownAccounts(
+            unknown,
+            accounts.map((a) => a.name)
+          )
+        );
+      }
+    }
+
     // Routed through executeImport rather than a hand-written INSERT: that path already owns
     // account resolution, the multiplicity-aware duplicate check, category gating and the
     // balance recompute. A second insert path would drift from the transaction invariants.
