@@ -268,7 +268,7 @@ export default function Bills() {
       name: bill.name,
       amount: bill.amount.toString(),
       due_date: bill.due_date,
-      category: bill.category || '',
+      category: bill.category_id ? String(bill.category_id) : '',
       frequency: bill.frequency,
       autopay: bill.autopay,
       type: bill.type || 'bill',
@@ -913,7 +913,7 @@ export default function Bills() {
                   <option value="">No category</option>
                   <For each={categories()}>
                     {(cat) => (
-                      <option value={cat.name} selected={cat.name === formData().category}>
+                      <option value={cat.id} selected={String(cat.id) === formData().category}>
                         {cat.name}
                       </option>
                     )}
