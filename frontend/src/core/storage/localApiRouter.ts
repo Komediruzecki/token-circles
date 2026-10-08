@@ -960,6 +960,9 @@ const routes: RouteDef[] = [
   },
 ]
 
+/** The table's patterns and methods, for the contract suite's route guard (shared/contract). */
+export const localRoutes: readonly { pattern: RegExp; methods: readonly string[] }[] = routes
+
 // ── Router ───────────────────────────────────────────────────────────────────
 
 function extractParams(pattern: RegExp, path: string): Record<string, string> | null {
