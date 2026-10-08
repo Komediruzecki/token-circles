@@ -43,6 +43,7 @@ import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
+import { apiErrorFrom, plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import { bumpProfileVersion, getProfileVersion, setPage } from '../core/appStore'
@@ -717,13 +718,15 @@ export default function Settings() {
         method: 'POST',
         credentials: 'include',
       })
-      const data = await res.json().catch(() => ({}))
-      // Nothing waits any more: the link expired, or was opened or canceled somewhere else.
-      if (res.status === 404) setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
-      if (!res.ok) throw new Error(data.error || 'Could not send the link')
+      if (!res.ok) {
+        // Nothing waits any more: the link expired, or was opened or canceled somewhere else.
+        if (res.status === 404) setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
+        throw await apiErrorFrom(res)
+      }
+      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
       toast(`Link sent again to ${data.pendingEmail ?? notif()?.pendingEmail}.`, 'success')
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not send the link', 'error')
+      toast(plainMessage(e, 'Could not send the link. Try again.'), 'error')
     } finally {
       setEmailChangeBusy(false)
     }
@@ -735,8 +738,7 @@ export default function Settings() {
         method: 'DELETE',
         credentials: 'include',
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not cancel the change')
+      if (!res.ok) throw await apiErrorFrom(res)
       setNotif((n) => (n ? { ...n, pendingEmail: null } : n))
       toast(
         accountEmail()
@@ -745,7 +747,7 @@ export default function Settings() {
         'success'
       )
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not cancel the change', 'error')
+      toast(plainMessage(e, 'Could not cancel the change. Try again.'), 'error')
     } finally {
       setEmailChangeBusy(false)
     }
