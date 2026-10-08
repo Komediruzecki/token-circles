@@ -167,6 +167,21 @@ export const budgets = [
     expect(await listBudgets(other, expect)).toEqual([]);
   }),
 
+  scenario("allocating to another profile's category is refused", async (api, expect) => {
+    // In a household view the Budgets page lists every selected profile's categories, and its
+    // Allocate button posts whichever one was picked.
+    const theirs = await addCategory(api.other, expect, 'Their food');
+    const reply = await api.post('/api/budgets/allocate?month=2026-03', {
+      category_id: theirs,
+      amount: 50,
+      period: 'monthly',
+    });
+    // DIFFERENCE foreign-link-status
+    expect(reply.status, JSON.stringify(reply.body)).toBe(api.runtime === 'worker' ? 403 : 400);
+    expect(await listBudgets(api, expect)).toEqual([]);
+    expect(await listBudgets(api.other, expect)).toEqual([]);
+  }),
+
   scenario(
     "the month summary counts spending, last month's unused budget and what is left",
     async (api, expect) => {

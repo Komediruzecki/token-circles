@@ -624,6 +624,11 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
     if (!category_id || amount === null) {
       return json({ error: 'Category ID and amount are required' }, 400)
     }
+    // A household view lists every selected profile's categories; the budget is the current
+    // profile's, so it may only be for one of its own categories (as budgetsCreate checks).
+    if (!(await currentProfileOwns('categories', category_id, pid))) {
+      return json({ error: 'Category does not belong to this profile' }, 400)
+    }
 
     const month = query.get('month') || localMonth()
     const start_date = `${month}-01`
