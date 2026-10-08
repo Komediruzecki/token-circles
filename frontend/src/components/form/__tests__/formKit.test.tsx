@@ -968,6 +968,39 @@ describe('a field in a row of a list', () => {
     expect(labelled('Rate 2').getAttribute('aria-invalid')).toBeNull()
     expect(notice().textContent).toBe('')
   })
+
+  it('leaves the lists it was given as they were, so a reset to the start shows none', () => {
+    // A reset reconciles the store, which changes the lists it holds in place. When those were the
+    // form's own `initial`, a new loan opened after an edit showed the edited loan's rate periods.
+    const start: ListValues = { title: '', periods: [] }
+    const opened: ListValues = { title: 'Van', periods: [{ rate: '4' }, { rate: '6' }] }
+    const form = createForm<ListValues>({ initial: start, send: () => undefined, failure: 'x' })
+
+    form.reset(opened)
+    form.set('periods', [...form.values.periods, { rate: '8' }])
+    form.reset({ title: 'Bus', periods: [{ rate: '1' }] })
+    expect(opened).toEqual({ title: 'Van', periods: [{ rate: '4' }, { rate: '6' }] })
+
+    form.reset()
+    expect(start.periods).toEqual([])
+    expect(form.values.periods).toEqual([])
+  })
+
+  it('sends a copy of the rows that a later reset leaves alone', async () => {
+    let sent: ListValues | undefined
+    const form = createForm<ListValues>({
+      initial: { title: 'Van', periods: [{ rate: '4' }] },
+      send: (values) => {
+        sent = values
+      },
+      failure: 'x',
+    })
+
+    await form.submit()
+    form.reset({ title: 'Bus', periods: [{ rate: '1' }, { rate: '2' }] })
+
+    expect(sent).toEqual({ title: 'Van', periods: [{ rate: '4' }] })
+  })
 })
 
 /** Compile-time: a row's field is named `<list>.<index>.<field>`, for a list of the form's own. */

@@ -28,6 +28,10 @@
  *   field is named `<list>.<index>.<field>`, as the runtimes name it in a refusal, and its marks
  *   follow the row when a row before it is removed. A server's mark on it goes when that field
  *   changes, as one on any field does.
+ * - The form keeps its own copy of the values it starts from and is reset to, and `check` and
+ *   `send` get a copy of theirs. A reset changes the lists the store holds in place, so a list it
+ *   shared with `initial` changed `initial` too: a new loan opened after an edit had the edited
+ *   loan's rate periods.
  *
  * `Field` registers each control here, which is how the kit knows which fields this form shows and
  * where to move focus. See docs/plans/2026-10-07-form-errors.md.
@@ -127,6 +131,22 @@ function rowField(list: string, name: string): { index: number; field: string } 
   return { index, field: rest.slice(dot + 1) }
 }
 
+/**
+ * A copy of `value` for the form to own: its lists and plain objects copied all the way down, so
+ * nothing outside the form shares them. Anything else (a `File`, a `Date`) is kept as it is.
+ */
+function own<V>(value: V): V {
+  if (Array.isArray(value)) return value.map(own) as V
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, own(item)])) as V
+  }
+  return value
+}
+
 function fieldOf(row: unknown, field: string): unknown {
   return row !== null && typeof row === 'object'
     ? (row as Record<string, unknown>)[field]
@@ -134,7 +154,7 @@ function fieldOf(row: unknown, field: string): unknown {
 }
 
 export function createForm<T extends FormValues, R = unknown>(options: FormOptions<T, R>): Form<T> {
-  const [values, setValues] = createStore<T>({ ...options.initial })
+  const [values, setValues] = createStore<T>(own({ ...options.initial }))
   /** Every marked field's words, whether or not its field is on the page right now. */
   const [errors, setErrors] = createStore<Record<string, string | undefined>>({})
   /** What belongs to no field: a refusal without fields, offline, a failure with no words. */
@@ -152,7 +172,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
   /** Bumped by reset, so an answer to a send from before it is dropped. */
   let generation = 0
 
-  const snapshot = (): T => ({ ...unwrap(values) })
+  const snapshot = (): T => own({ ...unwrap(values) })
   const check = (): FieldErrors => options.check?.(snapshot()) ?? {}
 
   /**
@@ -258,7 +278,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
     watched = new Set()
     fromServer = new Set()
     batch(() => {
-      setValues(reconcile({ ...(next ?? options.initial) }))
+      setValues(reconcile(own({ ...(next ?? options.initial) })))
       setErrors(reconcile({}))
       setSaid(undefined)
       setSubmitting(false)

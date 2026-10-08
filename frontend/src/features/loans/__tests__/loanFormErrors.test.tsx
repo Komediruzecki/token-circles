@@ -282,6 +282,28 @@ describe('adding a loan', () => {
     expect(failureToasts()).toEqual([])
   })
 
+  it('starts empty after an edit was opened, with none of the edited loan’s rate periods', async () => {
+    await mountPage()
+    await openEdit('Car')
+    expect(periodRows()).toHaveLength(1)
+    Array.from(dialog()!.querySelectorAll('button'))
+      .find((b) => b.textContent === 'Cancel')!
+      .click()
+    await vi.waitFor(() => {
+      expect(dialog()).toBeNull()
+    })
+
+    await openAdd()
+    expect(field('Name').value).toBe('')
+    expect(periodRows()).toHaveLength(0)
+    await fillNewLoan()
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await loans()).find((l) => l.name === 'Boat')?.rate_periods).toEqual([])
+    })
+  })
+
   it('keeps a 0 % loan at 0 %', async () => {
     await mountPage()
     await openAdd()
