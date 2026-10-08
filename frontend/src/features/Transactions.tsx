@@ -838,21 +838,16 @@ export default function Transactions() {
   }
 
   // Apply date preset — recalculates date range from preset
+  // The months are the person's: utils/period builds and prints them on the local calendar.
   const applyDatePreset = (preset: string) => {
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0)
-
-    const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
     switch (preset) {
       case 'month':
-        setDateRange({ from: fmt(startOfMonth), to: fmt(endOfMonth) })
+        setDateRange(toRange(fromPill('thisMonth', now), now))
         break
       case 'lastMonth':
-        setDateRange({ from: fmt(startOfLastMonth), to: fmt(endOfLastMonth) })
+        setDateRange(toRange(fromPill('lastMonth', now), now))
         break
       case 'year':
         setDateRange({ from: `${now.getFullYear()}-01-01`, to: `${now.getFullYear()}-12-31` })
