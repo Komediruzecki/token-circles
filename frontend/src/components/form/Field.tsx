@@ -12,6 +12,10 @@
  * which gives it the `id` the label points at, `aria-invalid` while the field is marked, and
  * `aria-describedby` naming the message first and the hint second. A `group` (a row of swatch
  * buttons) is labelled by `aria-labelledby` instead, since a `<label>` can only name one control.
+ *
+ * A `tip` (an InfoTip) sits beside the label, outside it. Inside a `<label>` its whole explanation
+ * would become part of the control's name, and a screen reader would read a paragraph where the
+ * field's name belongs.
  */
 import { createUniqueId, onCleanup, Show } from 'solid-js'
 import ErrorGlyph from './ErrorGlyph'
@@ -34,6 +38,8 @@ export interface FieldProps<T extends FormValues> {
   label: JSX.Element
   /** Help that stays under the field, after the message. */
   hint?: JSX.Element
+  /** An explanation beside the label (an InfoTip), kept out of the control's name. */
+  tip?: JSX.Element
   /** The control is a set of controls (a row of buttons), labelled as a group. */
   group?: boolean
   /** The page's own class for the field's wrapper. */
@@ -72,19 +78,29 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
     },
   }
 
+  /** The label, with the page's class unless a wrapper beside a tip carries it. */
+  const label = (labelClass: string | undefined) => (
+    <Show
+      when={props.group}
+      fallback={
+        <label for={controlId} class={labelClass}>
+          {props.label}
+        </label>
+      }
+    >
+      <span id={labelId} class={labelClass}>
+        {props.label}
+      </span>
+    </Show>
+  )
+
   return (
     <div class={props.class ? `${styles.field} ${props.class}` : styles.field}>
-      <Show
-        when={props.group}
-        fallback={
-          <label for={controlId} class={props.labelClass}>
-            {props.label}
-          </label>
-        }
-      >
-        <span id={labelId} class={props.labelClass}>
-          {props.label}
-        </span>
+      <Show when={props.tip} fallback={label(props.labelClass)}>
+        <div class={props.labelClass}>
+          {label(undefined)}
+          {props.tip}
+        </div>
       </Show>
       {props.children(control)}
       <Show when={message()}>

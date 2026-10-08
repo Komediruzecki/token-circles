@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
 import {
   BACKUP_EXTENSION_SETTINGS_KEY,
@@ -807,28 +808,15 @@ export class IndexedDBAdapter implements StorageAdapter {
     }))
     // Merge the patch, handling amount_local so a partial edit can't drift the balance:
     //  - if the caller sent amount_local, honour it (including an explicit null);
-    //  - else if the caller changed amount, recompute amount_local from the new amount so the
-    //    balance reflects the edit — previously the stale amount_local was kept, so editing a
-    //    foreign-currency amount left the balance unchanged and the row inconsistent (audit D8);
+    //  - else if the caller changed amount, the local amount follows it, by the rule the Worker's
+    //    PUT takes too (shared/transactionSchema.ts, editedLocalAmount). A stale one used to be
+    //    kept, so editing a foreign-currency amount left the balance as it was (audit D8);
     //  - else preserve the existing amount_local (an unrelated-field edit must not wipe it).
     const preserved: Record<string, unknown> = { ...tx }
     delete preserved.profile_id
     if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
-      const amountChanging = 'amount' in tx && typeof tx.amount === 'number'
-      if (amountChanging) {
-        const rate =
-          typeof (tx as any).exchange_rate === 'number'
-            ? (tx as any).exchange_rate
-            : typeof (existing as any).exchange_rate === 'number'
-              ? (existing as any).exchange_rate
-              : null
-        // Recompute from the new amount when a rate is known; otherwise clear it so the
-        // balance math falls back to the new raw amount.
-        preserved.amount_local =
-          rate && rate > 0 ? Math.round((tx.amount as number) * rate * 100) / 100 : null
-      } else {
-        preserved.amount_local = (existing as any).amount_local
-      }
+      const local = editedLocalAmount(existing, tx)
+      preserved.amount_local = local === undefined ? (existing as any).amount_local : local
     }
     Object.assign(existing, preserved)
     // Only re-validate the links this patch actually changes — an unchanged cross-profile link

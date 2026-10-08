@@ -1,6 +1,7 @@
 # Form errors: one answer, one schema, one kit
 
-Status: **design, with the first slice (categories) being built on `feat/form-errors`**
+Status: **slice 1 (categories) merged in #602; slice 2 (transactions and accounts) built on
+`feat/forms-transactions`, see [Slice 2](#slice-2-transactions-and-accounts-2026-10-08)**
 Date: 2026-10-07, decisions recorded 2026-10-08. Written on PR #599 (`fix/dev-check-polish`,
 664fd0c6); rebased onto main (d92626fe) once #599 and #601 merged.
 
@@ -161,10 +162,10 @@ From `validation.ts` against each Worker route; each PR re-checks its own entiti
 
 - **Transactions.** Local refuses type `deduction` (the Worker and `shared/transactionInvariant.ts`
   allow it), requires `description`, a `YYYY-MM-DD` date and a `category_id` key; the Worker
-  requires none of those. The Worker checks two decimals; local does not.
+  requires none of those. The Worker checks two decimals; local does not. _Settled in slice 2._
 - **Accounts.** Local requires `type` from four values; the Worker defaults it to `giro`. A 409
   base-currency conflict carries a useful sentence that the Accounts form drops for "Failed to
-  create account".
+  create account". _Settled in slice 2._
 - **Budgets.** Local requires amount, period and start date; the Worker checks only that the
   category is the profile's.
 - **Bills.** Local accepts an amount of 0, the Worker refuses it; local requires a frequency from
@@ -386,6 +387,56 @@ quotes it in straight double quotes: `Added "Coffee" to your categories.` (decis
 - E2E per converted form, cloud and local-first: a bad submission marks the field.
 - Rule 5 in `.claude/skills/solid-forms/SKILL.md`.
 
+## Slice 2: transactions and accounts (2026-10-08)
+
+On `feat/forms-transactions`, from main at 60408c6e (#602 and #603 in).
+
+- **One set of rules each, in `shared/`.** `shared/transactionSchema.ts` and
+  `shared/accountSchema.ts` hold the rules and their words. The Worker routes
+  (`worker/src/routes/transactions.ts`, `accounts.ts`), the local-first handlers
+  (`frontend/src/core/storage/handlers/transactions.ts`, `accounts.ts`) and the two forms run
+  them, and both runtimes answer a refusal with 400 `{ error, fields }`. `validation.ts` keeps
+  `POST:/api/transactions` and `POST:/api/accounts` as calls into the shared checks; their zod
+  schemas are gone, and an edit is checked in the handler against the stored row.
+- **An edit checks and writes only what it changes** (decision 2), in both runtimes and both
+  forms: a row an import stored with three decimals can still have its description changed.
+- **The Transactions form is on the kit** (`frontend/src/features/transactionForm.ts`). The seven
+  warning toasts are field errors; a refusal from either runtime lands under its field; a Cash
+  account that could not be created says why under the account field (`form.mark`). Tags,
+  receipts, transfers, copy and household view work as before. Enter in a field now saves, as
+  Save does: the old form had no submit button.
+- **The Accounts dialog is on the kit** (`frontend/src/features/accountForm.ts`): name and
+  balances under their fields, and the 409's sentence in the dialog's notice.
+- **The kit** gained `form.mark(name, message)` and `Field`'s `tip`, which keeps an InfoTip's
+  explanation out of the control's name.
+
+What the runtimes now agree on:
+
+| Question                              | Before                                                                       | Now, in both                                                                          |
+| ------------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Type `deduction`                      | Local refused it; the Worker took it                                         | Taken: it is one of `TRANSACTION_TYPES`                                               |
+| Description                           | Local required it                                                            | Optional, blank is empty; the form still asks for one                                 |
+| Date                                  | Local required `YYYY-MM-DD`; the Worker took any text                        | Blank is today on the person's calendar; a given date must be a real one              |
+| `category_id` key                     | Local required the key                                                       | Optional; none is uncategorized                                                       |
+| Decimals                              | The Worker allowed two; local any                                            | At most two, and below one trillion                                                   |
+| Another profile's account or category | The Worker 403, local-first 400, each in its own words                       | A 400 at its field: `account_id`, `transfer_account_id` or `category_id`              |
+| Local-first stored                    | The body as sent                                                             | The checked row only                                                                  |
+| Account type                          | Local required one of four; the Worker made any giro                         | Blank is giro, the old names map (`LEGACY_ACCOUNT_TYPES`), anything else is refused   |
+| Account name                          | Local: 1 to 100 characters; the Worker: any, and an edit ignored a blank one | Required, at most 100 characters, on a create and on an edit that changes it          |
+| Account balance and currency          | Local checked both; the Worker neither                                       | Numbers, and a three-letter currency; a new account's balance is its starting balance |
+
+Fixed on the way, each with a test that failed before: an edit updates the goals of both categories
+it moves between (Worker); a new amount moves the local amount at the row's own rate; the edit form
+opens with the row's own exchange rate instead of 1; an edit saves notes, a beneficiary or a payor
+someone cleared; the Worker answers "No changes" to an account edit that changes nothing.
+
+Open for the owner: whether the form keeps asking for a description, a category and an account
+that the runtimes do not require (an edit of an imported row without them is asked for them); the
+category list's blank option reads "Uncategorized" while the form refuses it for income and
+expenses (as before); the Worker's default currency for a body without one is USD where
+local-first's is the browser's; Add Account takes the starting balance and ignores Current
+Balance when both are filled.
+
 ## Rollout, one PR each
 
 1. **Contract, `ApiError`, kit, categories.** Forms 1-4, the swatch toasts, the shared category
@@ -490,3 +541,12 @@ Added to the plan, and confirmed on 2026-10-08:
   as the Worker did before #601.
 - A loan's `interest_rate || 5.0` on the Worker stores a 0 % loan as 5 %.
 - The housing schema keys (`/api/housings`) in `validation.ts` never match the route.
+- The bulk update route on the Worker still answers 403 for another profile's category, where
+  local-first and the single-row routes answer 400.
+- Local-first does not resolve `means_of_payment` or a category given by name, as the Worker does.
+- In the Transactions form, a tag that could not be created, a receipt over 5 MB and a receipt
+  that could not be deleted still toast; a receipt that could not be uploaded says nothing.
+- The MCP `create_account` tool stores any type and currency.
+- `CommandBar` and `GuidedOrbit` add transactions outside the form, with their own toasts.
+- The account delete confirmation says it "also removes all of its transactions", but a delete is
+  refused while transactions use the account.

@@ -45,6 +45,7 @@ import {
 import AutoCategorizeModal from '../components/AutoCategorizeModal'
 import BulkActionBar from '../components/BulkActionBar'
 import FilterBar from '../components/FilterBar'
+import { createForm, Field, FormNotice, SubmitButton } from '../components/form'
 import InfoTip from '../components/InfoTip'
 import Pagination from '../components/Pagination'
 import PeriodBar from '../components/PeriodBar'
@@ -55,6 +56,7 @@ import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { activeProfileId, profileReadScope } from '../core/apiProfileScope'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { receiptsLocked } from '../core/billingStore'
@@ -65,9 +67,18 @@ import { handFocusTo } from '../core/domFocus'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
-import { fromPill, localToday, toRange } from '../utils/period'
+import { fromPill, toRange } from '../utils/period'
+import {
+  blankTransaction,
+  checkTransactionForm,
+  savedMessage,
+  TRANSACTION_FORM_MESSAGES,
+  transactionBody,
+  transactionValues,
+} from './transactionForm'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
+import type { TransactionFormValues } from './transactionForm'
 
 /**
  * The add form's account field when the account list did not load: says so, and offers to read it
@@ -136,20 +147,23 @@ export default function Transactions() {
   // Receipt already attached to the transaction being edited (shown in the edit modal).
   const [existingReceipt, setExistingReceipt] = createSignal<Receipt | null>(null)
   const [formId, setFormId] = createSignal<string | null>(null)
-  const [type, setType] = createSignal<TransactionType>('expense')
-  const [formDate, setFormDate] = createSignal(localToday())
-  const [formAmount, setFormAmount] = createSignal('')
-  const [formCurrency, setFormCurrency] = createSignal(getLocalCurrency())
-  const [formExchangeRate, setFormExchangeRate] = createSignal('1')
-  const [formCategory, setFormCategory] = createSignal<number | null>(null)
-  const [formBeneficiary, setFormBeneficiary] = createSignal('')
-  const [formPayor, setFormPayor] = createSignal('')
-  const [formNotes, setFormNotes] = createSignal('')
-  const [formDescription, setFormDescription] = createSignal('')
-  const [formMeans, setFormMeans] = createSignal('')
-  const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
-  const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
-  const [formAmountLocal, setFormAmountLocal] = createSignal('')
+  /** The row an edit opened, which its check compares against; null for a new entry. */
+  let openedRow: Transaction | null = null
+  /**
+   * The form's values, its field errors and its notice (components/form). The check is the
+   * runtimes' rules and the form's own (features/transactionForm.ts); a refused save puts the
+   * reason under the field it is about, and the dialog stays open with what was typed.
+   */
+  const txForm = createForm<TransactionFormValues, boolean>({
+    initial: blankTransaction(null),
+    check: (values) => checkTransactionForm(values, openedRow),
+    send: (values) => saveTransaction(values),
+    saved: () => {
+      closeAfterSave()
+    },
+    failure: TRANSACTION_FORM_MESSAGES.failure,
+  })
+  const type = () => txForm.values.type
   // The tags the transaction in the form will carry, which Save attaches. Its own state: the
   // filter bar's `selectedTags` further down filters the list behind the form.
   const [formTags, setFormTags] = createSignal<Tag[]>([])
@@ -858,20 +872,7 @@ export default function Transactions() {
 
   /** What the form holds, to tell whether the person changed anything since it opened. */
   const formFields = () => ({
-    type: type(),
-    date: formDate(),
-    amount: formAmount(),
-    currency: formCurrency(),
-    exchangeRate: formExchangeRate(),
-    category: formCategory(),
-    beneficiary: formBeneficiary(),
-    payor: formPayor(),
-    notes: formNotes(),
-    description: formDescription(),
-    means: formMeans(),
-    account: formAccountId(),
-    transferAccount: formTransferAccountId(),
-    amountLocal: formAmountLocal(),
+    ...txForm.values,
     tags: formTags().map((t) => t.id),
     receipt: selectedFile() !== null,
   })
@@ -879,43 +880,27 @@ export default function Transactions() {
   const formHasChanges = () =>
     formAtOpen !== null && JSON.stringify(untrack(formFields)) !== JSON.stringify(formAtOpen)
 
-  // Update form values when closing modal
+  // A closed form starts over: no values, no marks, and a save still out no longer closes it.
   createEffect(() => {
     if (!isTransactionModalOpen()) {
       setFormId(null)
-      setFormDescription('')
-      setFormAmount('')
-      setFormCategory(null)
-      setFormBeneficiary('')
-      setFormPayor('')
-      setFormNotes('')
-      setFormMeans('')
-      setFormAmountLocal('')
+      openedRow = null
+      untrack(() => {
+        txForm.reset(blankTransaction(null))
+      })
     }
   })
 
   const openTransactionModal = () => {
     setFormProfileId(activeId())
-    setType('expense')
     setFormId(null)
-    setFormDescription('')
-    setFormAmount('')
-    setFormCurrency(getLocalCurrency())
-    setFormExchangeRate('1')
-    setFormCategory(null)
-    setFormBeneficiary('')
-    setFormPayor('')
-    setFormNotes('')
-    setFormMeans('')
+    openedRow = null
     const account = defaultAccountId()
-    setFormAccountId(account)
+    txForm.reset(blankTransaction(account))
     accountToPreselect = account === null
-    setFormTransferAccountId(null)
-    setFormAmountLocal('')
     setFormTags([])
     formTagIdsAtOpen = []
     setShowAdvanced(false)
-    setFormDate(localToday())
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
@@ -962,13 +947,14 @@ export default function Transactions() {
         if (!accountToPreselect || !isTransactionModalOpen() || accs.length === 0) return
         accountToPreselect = false
         const account = defaultAccountId()
-        setFormAccountId(account)
-        if (formAtOpen !== null) formAtOpen = { ...formAtOpen, account }
+        txForm.set('account_id', account)
+        if (formAtOpen !== null) formAtOpen = { ...formAtOpen, account_id: account }
       },
       { defer: true }
     )
   )
-  // Create a starter "Cash" account inline when the user has none, then select it.
+  // Create a starter "Cash" account inline when the user has none, then select it. A failure is
+  // said under the account field, where the button is: the form is still open in front of it.
   const createCashAccount = async () => {
     try {
       const acc = await api.createAccount({
@@ -980,30 +966,20 @@ export default function Transactions() {
       // The account list follows the create on its own (apiFetch bumps the accounts counter, and
       // loadAccounts answers it), so it is not fetched again here, outside that loader.
       accountToPreselect = false
-      setFormAccountId(acc.id)
+      txForm.set('account_id', acc.id)
     } catch (error) {
       console.error('Failed to create Cash account:', error)
-      toast('Failed to create account', 'error')
+      txForm.mark('account_id', plainMessage(error, TRANSACTION_FORM_MESSAGES.cash))
     }
   }
 
   const handleEditTransaction = (transaction: Transaction) => {
     setFormProfileId(transaction.profile_id ?? activeId())
     accountToPreselect = false
-    setType(transaction.type)
     setFormId(transaction.id.toString())
-    setFormDescription(transaction.description)
-    setFormAmount(transaction.amount.toString())
-    setFormCurrency(transaction.currency || getLocalCurrency())
-    setFormExchangeRate('1')
-    setFormCategory(transaction.category_id || null)
-    setFormBeneficiary(transaction.beneficiary || '')
-    setFormPayor(transaction.payor || '')
-    setFormNotes(transaction.notes || '')
-    setFormDate(transaction.date)
-    setFormMeans(transaction.means_of_payment || '')
-    setFormAccountId(transaction.account_id || null)
-    setFormTransferAccountId(transaction.transfer_account_id || null)
+    openedRow = transaction
+    // The row's own values, its exchange rate among them (transactionValues).
+    txForm.reset(transactionValues(transaction))
     setFormTags(transaction.tags ?? [])
     formTagIdsAtOpen = (transaction.tags ?? []).map((t) => t.id)
     setShowAdvanced(hasAdvancedData(transaction))
@@ -1036,21 +1012,10 @@ export default function Transactions() {
   const handleCopyTransaction = (transaction: Transaction) => {
     setFormProfileId(activeId())
     accountToPreselect = false
-    setType(transaction.type)
     setFormId(null)
-    setFormDescription(transaction.description)
-    setFormAmount(transaction.amount.toString())
-    setFormCurrency(transaction.currency || getLocalCurrency())
-    setFormExchangeRate('1')
-    setFormCategory(transaction.category_id || null)
-    setFormBeneficiary(transaction.beneficiary || '')
-    setFormPayor(transaction.payor || '')
-    setFormNotes(transaction.notes || '')
-    setFormDate(transaction.date)
-    setFormMeans(transaction.means_of_payment || '')
-    setFormAccountId(transaction.account_id || null)
-    setFormTransferAccountId(transaction.transfer_account_id || null)
-    setFormAmountLocal('')
+    openedRow = null
+    // A copy is a new entry at an exchange rate of 1, as it always was.
+    txForm.reset({ ...transactionValues(transaction), exchange_rate: '1' })
     setFormTags(transaction.tags ?? [])
     formTagIdsAtOpen = []
     setShowAdvanced(hasAdvancedData(transaction))
@@ -1059,6 +1024,97 @@ export default function Transactions() {
     revokePreviewUrl()
     formAtOpen = untrack(formFields)
     setTransactionModalOpen(true)
+  }
+
+  /** A type button. The categories offered change with the type, so the one picked goes. */
+  const chooseType = (next: TransactionType) => {
+    txForm.set('type', next)
+    txForm.set('category_id', null)
+  }
+
+  /**
+   * The form's `send`: the row, then its tags and its receipt, as one write, so the list follows
+   * the counters they bump and refetches once, after all of them. It throws to refuse, and the kit
+   * puts the reason under the field it is about. It answers whether the tags were saved.
+   */
+  const saveTransaction = async (values: TransactionFormValues): Promise<boolean> => {
+    const txId = formId()
+    const tagIds = formTags().map((t) => t.id)
+    const tagIdsAtOpen = formTagIdsAtOpen
+    const file = selectedFile()
+    const body = transactionBody(values)
+    let tagsSaved: boolean
+    try {
+      tagsSaved = await asOneWrite(async () => {
+        let savedId: number
+        if (txId) {
+          savedId = parseInt(txId)
+          await api.updateTransaction(savedId, body as Parameters<typeof api.updateTransaction>[1])
+        } else {
+          const created = await api.createTransaction(
+            body as Parameters<typeof api.createTransaction>[0]
+          )
+          savedId = (created as any).id ?? (created as any).transaction_id ?? 0
+        }
+
+        // The tags go as the row's whole set, and only when the form changed them, so an edit
+        // that left them alone is still one request. A failure here does not fail the save: the
+        // row is saved, and keeping the form open would invite a second Save that creates a new
+        // row twice.
+        let tagsOk = true
+        const tagsChanged =
+          tagIds.length !== tagIdsAtOpen.length || tagIds.some((id) => !tagIdsAtOpen.includes(id))
+        if (tagsChanged && savedId) {
+          try {
+            // A new row can already carry tags the form never showed: auto-apply tag rules tag it
+            // as it is created, in both runtimes. The set replaces the row's, so the form's tags
+            // go on top of those rather than over them. An edit showed the row's tags, so there
+            // the form's set is the whole set.
+            let setIds = tagIds
+            if (!txId) {
+              const stored = await api.getTransactionTags(savedId)
+              setIds = [...new Set([...tagIds, ...stored.map((t) => t.id)])]
+            }
+            await api.setTransactionTags(savedId, setIds)
+          } catch (tagErr) {
+            console.error('Failed to save tags:', tagErr)
+            tagsOk = false
+          }
+        }
+
+        if (file && savedId) {
+          try {
+            await api.uploadReceipt(savedId, file)
+          } catch (receiptErr) {
+            console.error('Failed to upload receipt:', receiptErr)
+          }
+        }
+        return tagsOk
+      })
+    } catch (error) {
+      console.error('Failed to save transaction:', error)
+      // 409: the row moved under us. Another device edited or deleted it between this form
+      // opening and Save. The refusal is only useful if the screen catches up to what is
+      // actually there, so pull it in; the form stays open with the person's typing intact.
+      if (errorStatus(error) === 409) await refreshTransactions()
+      throw error
+    }
+    // The save happened, whatever the dialog does from here: it may have been closed and opened
+    // again while the save was out. So the toast and the account to offer next are said now.
+    if (tagsSaved) toast(savedMessage(values.description, txId !== null), 'success')
+    else toast('Transaction saved, but its tags could not be saved', 'warning')
+    if (values.account_id !== null) {
+      localStorage.setItem(lastAccountKey(), String(values.account_id))
+    }
+    return tagsSaved
+  }
+
+  /** The form's `saved`: close the dialog that sent, and let go of its receipt preview. */
+  const closeAfterSave = () => {
+    setTransactionModalOpen(false)
+    setSelectedFile(null)
+    setExistingReceipt(null)
+    revokePreviewUrl()
   }
 
   /**
@@ -1437,238 +1493,316 @@ export default function Transactions() {
             </button>
           </div>
           <div class={styles.modalBody}>
-            <form id="tx-form">
+            <form id="tx-form" {...txForm.attrs}>
+              <FormNotice form={txForm} testId="tx-form-notice" />
               <input type="hidden" value={formId() ?? ''} />
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>
-                  Type
+              <Field
+                form={txForm}
+                name="type"
+                label="Type"
+                group
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+                tip={
                   <InfoTip text="Expense = money leaving an account. Income = money arriving. Transfer = moving money between two of your own accounts (counts as neither spending nor earning)." />
-                </label>
-                <div class={styles.typeSelector} data-test-id="tx-type-selector">
-                  <button
-                    type="button"
-                    data-test-id="tx-type-expense"
-                    class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
-                    onClick={() => {
-                      setType('expense')
-                      setFormCategory(null)
-                    }}
-                  >
-                    Expense
-                  </button>
-                  <button
-                    type="button"
-                    data-test-id="tx-type-income"
-                    class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
-                    onClick={() => {
-                      setType('income')
-                      setFormCategory(null)
-                    }}
-                  >
-                    Income
-                  </button>
-                  <button
-                    type="button"
-                    data-test-id="tx-type-transfer"
-                    class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
-                    onClick={() => {
-                      setType('transfer')
-                      setFormCategory(null)
-                    }}
-                  >
-                    Transfer
-                  </button>
-                </div>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>
-                  Description
+                }
+              >
+                {(control) => (
+                  <div {...control} class={styles.typeSelector} data-test-id="tx-type-selector">
+                    <button
+                      type="button"
+                      data-test-id="tx-type-expense"
+                      class={`${styles.expense} ${type() === 'expense' ? styles.active : ''}`}
+                      onClick={() => {
+                        chooseType('expense')
+                      }}
+                    >
+                      Expense
+                    </button>
+                    <button
+                      type="button"
+                      data-test-id="tx-type-income"
+                      class={`${styles.income} ${type() === 'income' ? styles.active : ''}`}
+                      onClick={() => {
+                        chooseType('income')
+                      }}
+                    >
+                      Income
+                    </button>
+                    <button
+                      type="button"
+                      data-test-id="tx-type-transfer"
+                      class={`${styles.transfer} ${type() === 'transfer' ? styles.active : ''}`}
+                      onClick={() => {
+                        chooseType('transfer')
+                      }}
+                    >
+                      Transfer
+                    </button>
+                  </div>
+                )}
+              </Field>
+              <Field
+                form={txForm}
+                name="description"
+                label="Description"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+                tip={
                   <InfoTip text="A short label for this entry (e.g. 'Weekly groceries', 'March salary'). Shown in lists and used by search and auto-categorization rules." />
-                </label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  data-test-id="tx-description"
-                  value={formDescription()}
-                  onInput={(e) => setFormDescription((e.target as HTMLInputElement).value)}
-                  required
-                />
-              </div>
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    data-test-id="tx-description"
+                    value={txForm.values.description}
+                    onInput={(e) => txForm.set('description', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
               <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Amount
+                <Field
+                  form={txForm}
+                  name="amount"
+                  label="Amount"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  tip={
                     <InfoTip text="How much money moved, as a positive number. The Type sets the direction — expense subtracts from the account, income adds to it." />
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    class={styles.formControl}
-                    data-test-id="tx-amount"
-                    value={formAmount()}
-                    onInput={(e) => setFormAmount((e.target as HTMLInputElement).value)}
-                    required
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Currency
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="number"
+                      step="0.01"
+                      class={styles.formControl}
+                      data-test-id="tx-amount"
+                      value={txForm.values.amount}
+                      onInput={(e) => txForm.set('amount', e.currentTarget.value)}
+                      required
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={txForm}
+                  name="currency"
+                  label="Currency"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  tip={
                     <InfoTip text="The currency the Amount is in — defaults to your local currency. Only change it for a foreign-currency transaction, then fill 'Amount in local currency' under Advanced so all balances stay comparable." />
-                  </label>
-                  <select
-                    class={styles.formControl}
-                    data-test-id="tx-currency"
-                    value={formCurrency()}
-                    onInput={(e) => setFormCurrency((e.target as HTMLSelectElement).value)}
-                  >
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                    <option value="JPY">JPY</option>
-                    <option value="CAD">CAD</option>
-                    <option value="AUD">AUD</option>
-                    <option value="CHF">CHF</option>
-                    <option value="CNY">CNY</option>
-                    <option value="INR">INR</option>
-                  </select>
-                </div>
+                  }
+                >
+                  {(control) => (
+                    <select
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="tx-currency"
+                      value={txForm.values.currency}
+                      onInput={(e) => txForm.set('currency', e.currentTarget.value)}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="JPY">JPY</option>
+                      <option value="CAD">CAD</option>
+                      <option value="AUD">AUD</option>
+                      <option value="CHF">CHF</option>
+                      <option value="CNY">CNY</option>
+                      <option value="INR">INR</option>
+                    </select>
+                  )}
+                </Field>
               </div>
               <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Date
+                <Field
+                  form={txForm}
+                  name="date"
+                  label="Date"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  tip={
                     <InfoTip text="When the transaction happened. Drives every time-based view — monthly trends, this-month totals, budgets and the calendar heatmap." />
-                  </label>
-                  <input
-                    type="date"
-                    class={styles.formControl}
-                    data-test-id="tx-date"
-                    value={formDate()}
-                    onInput={(e) => setFormDate((e.target as HTMLInputElement).value)}
-                    required
-                  />
-                </div>
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="date"
+                      class={styles.formControl}
+                      data-test-id="tx-date"
+                      value={txForm.values.date}
+                      onInput={(e) => txForm.set('date', e.currentTarget.value)}
+                      required
+                    />
+                  )}
+                </Field>
                 <Show
                   when={type() !== 'transfer'}
                   fallback={
-                    <div class={styles.formGroup}>
-                      <label class={styles.formLabel}>
-                        To account
+                    <Field
+                      form={txForm}
+                      name="transfer_account_id"
+                      label="To account"
+                      class={styles.formGroup}
+                      labelClass={styles.formLabel}
+                      tip={
                         <InfoTip text="The account the transfer moves money INTO. With the From account below, the transfer debits one and credits the other — no income/expense is recorded." />
-                      </label>
+                      }
+                    >
+                      {(control) => (
+                        <select
+                          {...control}
+                          class={styles.formControl}
+                          data-test-id="tx-transfer-account"
+                          value={txForm.values.transfer_account_id ?? ''}
+                          onInput={(e) => {
+                            const val = e.currentTarget.value
+                            txForm.set('transfer_account_id', val ? parseInt(val) : null)
+                          }}
+                        >
+                          <option value="">Select destination...</option>
+                          <For each={formAccounts()}>
+                            {(acct) => (
+                              <option
+                                value={String(acct.id)}
+                                selected={acct.id === txForm.values.transfer_account_id}
+                              >
+                                {acct.name}
+                              </option>
+                            )}
+                          </For>
+                        </select>
+                      )}
+                    </Field>
+                  }
+                >
+                  <Field
+                    form={txForm}
+                    name="category_id"
+                    label="Category"
+                    class={styles.formGroup}
+                    labelClass={styles.formLabel}
+                    tip={
+                      <InfoTip text="What kind of spending or income this is (Groceries, Salary, ...). Powers category breakdowns and budgets. Required for income and expense." />
+                    }
+                  >
+                    {(control) => (
                       <select
+                        {...control}
                         class={styles.formControl}
-                        data-test-id="tx-transfer-account"
-                        value={formTransferAccountId() ?? ''}
-                        onInput={(e) => {
-                          const val = (e.target as HTMLSelectElement).value
-                          setFormTransferAccountId(val ? parseInt(val) : null)
+                        data-test-id="tx-category"
+                        value={txForm.values.category_id ?? ''}
+                        onChange={(e) => {
+                          const value = e.currentTarget.value
+                          txForm.set('category_id', value !== '' ? parseInt(value) : null)
                         }}
                       >
-                        <option value="">Select destination...</option>
-                        <For each={formAccounts()}>
-                          {(acct) => (
-                            <option
-                              value={String(acct.id)}
-                              selected={acct.id === formTransferAccountId()}
-                            >
-                              {acct.name}
+                        <option value="">Uncategorized</option>
+                        <For each={filteredCategories()}>
+                          {(cat) => (
+                            <option value={cat.id} selected={cat.id === txForm.values.category_id}>
+                              {cat.name}
                             </option>
                           )}
                         </For>
                       </select>
-                    </div>
-                  }
-                >
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>
-                      Category
-                      <InfoTip text="What kind of spending or income this is (Groceries, Salary, ...). Powers category breakdowns and budgets. Required for income and expense." />
-                    </label>
-                    <select
-                      class={styles.formControl}
-                      data-test-id="tx-category"
-                      value={formCategory() ?? ''}
-                      onchange={(e) => {
-                        const value = (e.target as HTMLSelectElement).value
-                        setFormCategory(value !== '' ? parseInt(value) : null)
-                      }}
-                    >
-                      <option value="">Uncategorized</option>
-                      <For each={filteredCategories()}>
-                        {(cat) => (
-                          <option value={cat.id} selected={cat.id === formCategory()}>
-                            {cat.name}
-                          </option>
-                        )}
-                      </For>
-                    </select>
-                  </div>
+                    )}
+                  </Field>
                 </Show>
               </div>
-              <div class={styles.formGroup} ref={accountField} tabindex="-1">
-                <label class={styles.formLabel}>
-                  {type() === 'transfer' ? 'From account' : 'Account'}
-                  {type() !== 'transfer' && <span style="color: var(--danger, #ef4444)"> *</span>}
-                  <InfoTip text="Which of YOUR accounts the money moved out of (expense / transfer From) or into (income). Links the entry to a real balance so per-account totals and net worth stay accurate. Required for income and expense." />
-                </label>
-                <Show
-                  when={formAccounts().length > 0}
-                  fallback={
-                    <Switch
-                      fallback={
-                        <select
-                          class={styles.formControl}
-                          data-test-id="tx-account-loading"
-                          disabled
-                        >
-                          <option>Loading accounts…</option>
-                        </select>
-                      }
-                    >
-                      <Match when={accountsFailed()}>
-                        <AccountsDidNotLoad
-                          onRetry={() => void loadAccounts()}
-                          focusTarget={() => accountField}
-                        />
-                      </Match>
-                      <Match when={accountsAreIn()}>
-                        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
-                          <span style="font-size: 13px; color: var(--text-secondary)">
-                            No accounts yet.
-                          </span>
-                          <button
-                            type="button"
-                            data-test-id="tx-create-cash-account"
-                            onClick={createCashAccount}
-                            style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
-                          >
-                            Create a "Cash" account
-                          </button>
-                        </div>
-                      </Match>
-                    </Switch>
+              <div ref={accountField} tabindex="-1">
+                <Field
+                  form={txForm}
+                  name="account_id"
+                  // With no accounts to choose from, the field is the line that says so and its
+                  // button: labelled as a group, so the label cannot press the button.
+                  group={formAccounts().length === 0}
+                  label={
+                    <>
+                      {type() === 'transfer' ? 'From account' : 'Account'}
+                      {type() !== 'transfer' && (
+                        <span style="color: var(--danger, #ef4444)"> *</span>
+                      )}
+                    </>
+                  }
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  tip={
+                    <InfoTip text="Which of YOUR accounts the money moved out of (expense / transfer From) or into (income). Links the entry to a real balance so per-account totals and net worth stay accurate. Required for income and expense." />
                   }
                 >
-                  <select
-                    class={styles.formControl}
-                    data-test-id="tx-account"
-                    value={formAccountId() ?? ''}
-                    onInput={(e) => {
-                      const val = (e.target as HTMLSelectElement).value
-                      setFormAccountId(val ? parseInt(val) : null)
-                    }}
-                  >
-                    <option value="">Select account...</option>
-                    <For each={formAccounts()}>
-                      {(acct) => (
-                        <option value={String(acct.id)} selected={acct.id === formAccountId()}>
-                          {acct.name} ({acct.type})
-                        </option>
-                      )}
-                    </For>
-                  </select>
-                </Show>
+                  {(control) => (
+                    <Show
+                      when={formAccounts().length > 0}
+                      fallback={
+                        <div {...control}>
+                          <Switch
+                            fallback={
+                              <select
+                                class={styles.formControl}
+                                data-test-id="tx-account-loading"
+                                disabled
+                              >
+                                <option>Loading accounts…</option>
+                              </select>
+                            }
+                          >
+                            <Match when={accountsFailed()}>
+                              <AccountsDidNotLoad
+                                onRetry={() => void loadAccounts()}
+                                focusTarget={() => accountField}
+                              />
+                            </Match>
+                            <Match when={accountsAreIn()}>
+                              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 0">
+                                <span style="font-size: 13px; color: var(--text-secondary)">
+                                  No accounts yet.
+                                </span>
+                                <button
+                                  type="button"
+                                  data-test-id="tx-create-cash-account"
+                                  onClick={() => void createCashAccount()}
+                                  style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                                >
+                                  Create a "Cash" account
+                                </button>
+                              </div>
+                            </Match>
+                          </Switch>
+                        </div>
+                      }
+                    >
+                      <select
+                        {...control}
+                        class={styles.formControl}
+                        data-test-id="tx-account"
+                        value={txForm.values.account_id ?? ''}
+                        onInput={(e) => {
+                          const val = e.currentTarget.value
+                          txForm.set('account_id', val ? parseInt(val) : null)
+                        }}
+                      >
+                        <option value="">Select account...</option>
+                        <For each={formAccounts()}>
+                          {(acct) => (
+                            <option
+                              value={String(acct.id)}
+                              selected={acct.id === txForm.values.account_id}
+                            >
+                              {acct.name} ({acct.type})
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    </Show>
+                  )}
+                </Field>
               </div>
 
               <button
@@ -1778,64 +1912,96 @@ export default function Transactions() {
                   </div>
                 </div>
                 <div class={styles.formRow}>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>
-                      Beneficiary
+                  <Field
+                    form={txForm}
+                    name="beneficiary"
+                    label="Beneficiary"
+                    class={styles.formGroup}
+                    labelClass={styles.formLabel}
+                    tip={
                       <InfoTip text="Who you paid (the payee). Feeds the Counterparties view so you can see totals per merchant or person." />
-                    </label>
-                    <input
-                      type="text"
-                      class={styles.formControl}
-                      data-test-id="tx-beneficiary"
-                      placeholder="Who you paid"
-                      value={formBeneficiary()}
-                      onInput={(e) => setFormBeneficiary((e.target as HTMLInputElement).value)}
-                    />
-                  </div>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>
-                      Payor
+                    }
+                  >
+                    {(control) => (
+                      <input
+                        {...control}
+                        type="text"
+                        class={styles.formControl}
+                        data-test-id="tx-beneficiary"
+                        placeholder="Who you paid"
+                        value={txForm.values.beneficiary}
+                        onInput={(e) => txForm.set('beneficiary', e.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field
+                    form={txForm}
+                    name="payor"
+                    label="Payor"
+                    class={styles.formGroup}
+                    labelClass={styles.formLabel}
+                    tip={
                       <InfoTip text="Who paid you (the source of income). Feeds the Counterparties view." />
-                    </label>
-                    <input
-                      type="text"
-                      class={styles.formControl}
-                      data-test-id="tx-payor"
-                      placeholder="Who paid you"
-                      value={formPayor()}
-                      onInput={(e) => setFormPayor((e.target as HTMLInputElement).value)}
-                    />
-                  </div>
+                    }
+                  >
+                    {(control) => (
+                      <input
+                        {...control}
+                        type="text"
+                        class={styles.formControl}
+                        data-test-id="tx-payor"
+                        placeholder="Who paid you"
+                        value={txForm.values.payor}
+                        onInput={(e) => txForm.set('payor', e.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
                 </div>
                 <div class={styles.formRow}>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>
-                      Amount in Local Currency
+                  <Field
+                    form={txForm}
+                    name="amount_local"
+                    label="Amount in Local Currency"
+                    class={styles.formGroup}
+                    labelClass={styles.formLabel}
+                    tip={
                       <InfoTip text="This transaction's value converted to your local currency. All balances and reports use this so foreign-currency rows add up correctly. Leave blank if the Amount is already in your local currency." />
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      class={styles.formControl}
-                      data-test-id="tx-amount-local"
-                      value={formAmountLocal()}
-                      onInput={(e) => setFormAmountLocal((e.target as HTMLInputElement).value)}
-                    />
-                  </div>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>
-                      Exchange Rate
+                    }
+                  >
+                    {(control) => (
+                      <input
+                        {...control}
+                        type="number"
+                        step="0.01"
+                        class={styles.formControl}
+                        data-test-id="tx-amount-local"
+                        value={txForm.values.amount_local}
+                        onInput={(e) => txForm.set('amount_local', e.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
+                  <Field
+                    form={txForm}
+                    name="exchange_rate"
+                    label="Exchange Rate"
+                    class={styles.formGroup}
+                    labelClass={styles.formLabel}
+                    tip={
                       <InfoTip text="Optional record of the rate used (foreign amount x rate = local amount). Informational only — the 'Amount in local currency' above is what balances actually use." />
-                    </label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      class={styles.formControl}
-                      data-test-id="tx-exchange-rate"
-                      value={formExchangeRate()}
-                      onInput={(e) => setFormExchangeRate((e.target as HTMLInputElement).value)}
-                    />
-                  </div>
+                    }
+                  >
+                    {(control) => (
+                      <input
+                        {...control}
+                        type="number"
+                        step="0.0001"
+                        class={styles.formControl}
+                        data-test-id="tx-exchange-rate"
+                        value={txForm.values.exchange_rate}
+                        onInput={(e) => txForm.set('exchange_rate', e.currentTarget.value)}
+                      />
+                    )}
+                  </Field>
                 </div>
                 <div class={styles.formGroup}>
                   <label class={styles.formLabel}>
@@ -1991,168 +2157,47 @@ export default function Transactions() {
                     )}
                   </div>
                 </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>
-                    Notes
+                <Field
+                  form={txForm}
+                  name="notes"
+                  label="Notes"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  tip={
                     <InfoTip text="Any extra detail you want to keep — reference numbers, context, reminders. Not used in reports." />
-                  </label>
-                  <textarea
-                    class={styles.formControl}
-                    data-test-id="tx-notes"
-                    rows="2"
-                    value={formNotes()}
-                    onInput={(e) => setFormNotes((e.target as HTMLTextAreaElement).value)}
-                  ></textarea>
-                </div>
+                  }
+                >
+                  {(control) => (
+                    <textarea
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="tx-notes"
+                      rows="2"
+                      value={txForm.values.notes}
+                      onInput={(e) => txForm.set('notes', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </Show>
             </form>
           </div>
           <div class={styles.modalFooter}>
-            <button class={styles.btnSecondary} data-test-id="tx-cancel-btn" onclick={_closeModals}>
+            <button
+              type="button"
+              class={styles.btnSecondary}
+              data-test-id="tx-cancel-btn"
+              onclick={_closeModals}
+            >
               Cancel
             </button>
-            <button
+            <SubmitButton
+              form="tx-form"
               class={styles.btnPrimary}
               data-test-id="tx-save-btn"
-              onclick={async () => {
-                // Validation
-                const desc = formDescription().trim()
-                const amtStr = formAmount().trim()
-                const amt = parseFloat(amtStr)
-                if (!desc) {
-                  toast('Please enter a description', 'warning')
-                  return
-                }
-                if (!amtStr || !Number.isFinite(amt) || amt <= 0) {
-                  toast('Please enter a positive amount', 'warning')
-                  return
-                }
-                if (!formDate()) {
-                  toast('Please enter a date', 'warning')
-                  return
-                }
-                if (type() !== 'transfer' && formCategory() === null) {
-                  toast('Please select a category', 'warning')
-                  return
-                }
-                if (type() !== 'transfer' && formAccountId() === null) {
-                  toast('Please choose which account this affects', 'warning')
-                  return
-                }
-                if (
-                  type() === 'transfer' &&
-                  (formAccountId() === null || formTransferAccountId() === null)
-                ) {
-                  toast('A transfer needs both a From and a To account', 'warning')
-                  return
-                }
-                if (type() === 'transfer' && formAccountId() === formTransferAccountId()) {
-                  toast('Transfer accounts must be different', 'warning')
-                  return
-                }
-
-                const txData: Record<string, unknown> = {
-                  description: desc,
-                  amount: amt,
-                  date: formDate() || localToday(),
-                  type: type(),
-                  category_id: formCategory() ?? null,
-                  currency: formCurrency() || getLocalCurrency(),
-                  means_of_payment: formMeans() || undefined,
-                  account_id: formAccountId() ?? undefined,
-                  transfer_account_id:
-                    type() === 'transfer' ? (formTransferAccountId() ?? undefined) : undefined,
-                  notes: formNotes() || undefined,
-                  beneficiary: formBeneficiary() || undefined,
-                  payor: formPayor() || undefined,
-                  exchange_rate: formExchangeRate() ? parseFloat(formExchangeRate()) : undefined,
-                  amount_local: formAmountLocal() ? parseFloat(formAmountLocal()) : undefined,
-                }
-
-                try {
-                  // The save, its tags and its receipt upload are one write: the list follows the
-                  // counters they bump and refetches once, after all of them, rather than once for
-                  // each.
-                  const tagsSaved = await asOneWrite(async () => {
-                    const txId = formId()
-                    let savedId: number
-                    if (txId) {
-                      savedId = parseInt(txId)
-                      await api.updateTransaction(
-                        savedId,
-                        txData as Parameters<typeof api.updateTransaction>[1]
-                      )
-                    } else {
-                      const created = await api.createTransaction(
-                        txData as Parameters<typeof api.createTransaction>[0]
-                      )
-                      savedId = (created as any).id ?? (created as any).transaction_id ?? 0
-                    }
-
-                    // The tags go as the row's whole set, and only when the form changed them, so
-                    // an edit that left them alone is still one request. A failure here does not
-                    // fail the save: the row is saved, and keeping the form open would invite a
-                    // second Save that creates a new row twice.
-                    let tagsOk = true
-                    const tagIds = formTags().map((t) => t.id)
-                    const tagsChanged =
-                      tagIds.length !== formTagIdsAtOpen.length ||
-                      tagIds.some((id) => !formTagIdsAtOpen.includes(id))
-                    if (tagsChanged && savedId) {
-                      try {
-                        // A new row can already carry tags the form never showed: auto-apply tag
-                        // rules tag it as it is created, in both runtimes. The set replaces the
-                        // row's, so the form's tags go on top of those rather than over them. An
-                        // edit showed the row's tags, so there the form's set is the whole set.
-                        let setIds = tagIds
-                        if (!txId) {
-                          const stored = await api.getTransactionTags(savedId)
-                          setIds = [...new Set([...tagIds, ...stored.map((t) => t.id)])]
-                        }
-                        await api.setTransactionTags(savedId, setIds)
-                      } catch (tagErr) {
-                        console.error('Failed to save tags:', tagErr)
-                        tagsOk = false
-                      }
-                    }
-
-                    const file = selectedFile()
-                    if (file && savedId) {
-                      try {
-                        await api.uploadReceipt(savedId, file)
-                      } catch (receiptErr) {
-                        console.error('Failed to upload receipt:', receiptErr)
-                      }
-                    }
-                    return tagsOk
-                  })
-                  if (!tagsSaved) {
-                    toast('Transaction saved, but its tags could not be saved', 'warning')
-                  }
-
-                  // Remember the account for the next quick entry.
-                  if (formAccountId() !== null) {
-                    localStorage.setItem(lastAccountKey(), String(formAccountId()))
-                  }
-                  setTransactionModalOpen(false)
-                  setSelectedFile(null)
-                  setExistingReceipt(null)
-                  revokePreviewUrl()
-                } catch (error) {
-                  console.error('Failed to save transaction:', error)
-                  const message =
-                    error instanceof Error ? error.message : 'Could not save this transaction'
-                  toast(message, 'error')
-                  // 409: the row moved under us — another device edited or deleted it between
-                  // this form opening and Save. The refusal is only useful if the screen catches
-                  // up to what is actually there, so pull it in and leave the modal open with
-                  // the user's typing intact.
-                  if (errorStatus(error) === 409) await refreshTransactions()
-                }
-              }}
+              busy={txForm.submitting()}
             >
               Save Transaction
-            </button>
+            </SubmitButton>
           </div>
         </div>
       </div>

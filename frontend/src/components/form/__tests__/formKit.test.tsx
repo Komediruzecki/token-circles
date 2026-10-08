@@ -522,7 +522,95 @@ describe('after a save', () => {
   })
 })
 
+describe('mark', () => {
+  const CASH = "Couldn't create the Cash account. Try again."
+
+  it('puts words under a field from outside a submit, and leaves focus where it is', () => {
+    const form = mount()
+    const color = labelled('Color')
+    color.querySelector('button')!.focus()
+
+    form.mark('color', CASH)
+
+    expect(color.getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(color)).toEqual([CASH])
+    expect(document.activeElement).toBe(color.querySelector('button'))
+    expect(notice().textContent).toBe('')
+  })
+
+  it('lets the mark go on the field’s next change, as a server’s does', () => {
+    const form = mount()
+    form.mark('name', CASH)
+
+    type(labelled('Name'), 'Coffee')
+
+    expect(labelled('Name').getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('takes a mark away when given no words', () => {
+    const form = mount()
+    form.mark('amount', CASH)
+
+    form.mark('amount', undefined)
+
+    expect(labelled('Amount').getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('clears with the next submit that passes, and sends', async () => {
+    const send = vi.fn()
+    const form = mount(send)
+    form.mark('color', CASH)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+
+    await submit()
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(labelled('Color').getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('says words for a field this form does not show in the notice', () => {
+    const form = mount()
+
+    // A name no Field on this form registered: what a server or a page could name.
+    form.mark('note' as keyof Values, CASH)
+
+    expect(notice().textContent).toBe(CASH)
+  })
+})
+
 describe('Field', () => {
+  it('keeps a tip beside the label, out of the control’s name', () => {
+    const form = createForm<Values>({ initial: INITIAL, send: () => undefined, failure: 'x' })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <Field
+          form={form}
+          name="name"
+          label="Description"
+          labelClass="page-label"
+          tip={<button type="button" aria-label="A short label for this entry, shown in lists." />}
+        >
+          {(control) => <input {...control} />}
+        </Field>
+      ),
+      host
+    )
+
+    const input = host.querySelector('input')!
+    const label = host.querySelector(`label[for="${input.id}"]`)!
+    // The label holds the field's name and nothing else, so that is all its control is called.
+    expect(label.textContent).toBe('Description')
+    expect(label.querySelector('button')).toBeNull()
+    // The tip sits beside it, in the wrapper that carries the page's label class.
+    const tip = host.querySelector('button')!
+    expect(tip.parentElement).toBe(label.parentElement)
+    expect(label.parentElement!.className).toBe('page-label')
+    expect(label.className).toBe('')
+  })
+
   it('labels its control, and a group by aria-labelledby', () => {
     mount()
 

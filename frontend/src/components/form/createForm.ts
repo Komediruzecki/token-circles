@@ -12,6 +12,8 @@
  *   the rest in the notice; one without `fields` puts its own words in the notice; anything else
  *   puts `failure` there, because a `TypeError` says nothing a person can act on.
  * - A server's mark goes on the field's next change: only the server knows whether it still holds.
+ * - `mark` puts a field's words there from outside a submit, when something the field offers fails
+ *   (creating an account from the account field). It goes the same way as a server's mark.
  * - While `send` runs, the form is `aria-busy` and a second submit does nothing. `SubmitButton`
  *   says so on the button.
  * - Closing the dialog after a save (`saved`) happens only while the form is still the one that
@@ -69,6 +71,13 @@ export interface Form<T extends FormValues> {
   error: (name: keyof T & string) => string | undefined
   /** The form-level message, or `undefined`. */
   notice: () => string | undefined
+  /**
+   * Puts `message` under a field from outside a submit: something the field offers failed, like
+   * creating an account from the account field. Like a server's mark, it goes on the field's next
+   * change, and on the next submit or reset. Words for a field this form does not show go in the
+   * notice. `undefined` takes the mark away. Focus stays where the person is.
+   */
+  mark: (name: keyof T & string, message: string | undefined) => void
   /** True while `send` runs. */
   submitting: () => boolean
   /** The `<form>`'s `onSubmit`. */
@@ -141,6 +150,17 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
       }
     })
     return value
+  }
+
+  const mark: Form<T>['mark'] = (name, message) => {
+    const text = message?.trim() ? message : undefined
+    if (!controls.has(name)) {
+      setNotice(text)
+      return
+    }
+    if (text) fromServer.add(name)
+    else fromServer.delete(name)
+    setErrors(name, text)
   }
 
   const reset: Form<T>['reset'] = (next) => {
@@ -233,6 +253,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
     reset,
     error: (name) => errors[name],
     notice,
+    mark,
     submitting,
     submit,
     attrs,

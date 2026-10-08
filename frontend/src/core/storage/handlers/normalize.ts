@@ -11,15 +11,13 @@
  * writes complete rows for new ones.
  */
 
+import { LEGACY_ACCOUNT_TYPES } from '../../../../../shared/accountSchema'
+
 type Row = Record<string, unknown>
 
-/** v4 renamed account types (checking→giro, investment/retirement→ib); existing IndexedDB
- * rows seeded by older builds may still hold the legacy values. */
-const LEGACY_ACCOUNT_TYPES: Record<string, string> = {
-  checking: 'giro',
-  investment: 'ib',
-  retirement: 'ib',
-}
+// v4 renamed account types (checking→giro, investment/retirement→ib); existing IndexedDB rows
+// seeded by older builds may still hold the legacy values (LEGACY_ACCOUNT_TYPES, which the
+// account rules read the same way).
 
 /**
  * Categories made through the local `POST /api/categories` before it wrote complete rows hold the
