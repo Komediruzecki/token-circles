@@ -73,6 +73,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'POST /api/import answers { profiles_restored, rows_restored, first_profile_id } on the Worker and { ok: true, message } in local-first, where Settings restores through the storage adapter rather than this route. Both replace every profile. Slice 4 (import).',
   'export-by-type':
     'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
+  'settings-scope':
+    "Settings are kept per profile on the Worker and once per browser in local-first, so a base currency or an onboarding state saved on one profile is every profile's in local-first (the achievement record names its profile in its key there). Slice 4 (settings).",
+  'storage-mode-answers':
+    "GET /api/storage-mode answers { mode: 'self-hosted', type: 'sqlite' } on the Worker and the browser's own mode in local-first; POST /api/storage-mode and POST /api/settings/set-storage only acknowledge on the Worker, but switch the browser's mode in local-first and answer it. Settings sends only POST /api/storage-mode, and sets the mode itself after. Slice 4 (settings).",
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':

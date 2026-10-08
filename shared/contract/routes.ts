@@ -217,12 +217,7 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/reports/pl-summary-pdf',
   'GET /api/reports/tax-summary',
   'GET /api/reports/tax-summary-pdf',
-  'GET /api/settings',
-  'PUT /api/settings',
-  'POST /api/settings/set-storage',
   'GET /api/stats/monthly',
-  'GET /api/storage-mode',
-  'POST /api/storage-mode',
 ];
 
 export const WORKER_ONLY: Readonly<Record<string, string>> = {
