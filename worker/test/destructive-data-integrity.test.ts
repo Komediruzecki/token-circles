@@ -303,7 +303,7 @@ describe('destructive profile operations', () => {
       env.DB.prepare(
         "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (70, 'hash', '2026-08-01')"
       ),
-      // A change of address still waiting holds the address the owner asked to move to.
+      // A change of address still waiting stores the address the owner asked to move to.
       env.DB.prepare(
         "INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (70, 'next@example.com', 'hash-change', '2026-08-01', 'change')"
       ),
