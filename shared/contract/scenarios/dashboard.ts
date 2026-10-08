@@ -212,4 +212,36 @@ export const dashboard = [
       { month: month(0), balance: 1000, netChange: -160 },
     ]);
   }),
+
+  scenario('the summary of a month and of a year', async (api, expect) => {
+    const { food } = await februaryAndMarch(api, expect);
+    await addTransaction(api, expect, {
+      description: 'Groceries in April',
+      amount: 99,
+      date: '2025-04-02',
+      category_id: food,
+    });
+
+    const march = await read(api, expect, '/api/dashboard/summary?year=2025&month=3');
+    expect(march).toMatchObject({
+      summary: { income: 2500, expense: 900.5, transfer: 0, balance: 1599.5 },
+      prevSummary: { income: 2400, expense: 700 },
+      ytd: { income: 4900, expense: 1699.5, net: 3200.5 },
+      month: '2025-03',
+      currency: 'EUR',
+    });
+    expect(march.recent.map((t: Json) => t.description)).toEqual([
+      'Salary',
+      'Market',
+      'Cash',
+      'Groceries',
+      'Rent',
+    ]);
+
+    expect(await read(api, expect, '/api/dashboard/summary?year=2025')).toMatchObject({
+      summary: { income: 4900, expense: 1699.5, transfer: 0, balance: 3200.5 },
+      prevSummary: { income: 0, expense: 0 },
+      month: '2025',
+    });
+  }),
 ];
