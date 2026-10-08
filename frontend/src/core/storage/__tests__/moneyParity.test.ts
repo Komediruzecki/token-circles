@@ -118,6 +118,21 @@ describe('adding to a goal', () => {
     const goals = await get<{ id: number; current_amount: number }[]>('/api/savings-goals')
     expect(goals.find((g) => g.id === goal)).toMatchObject({ current_amount: 0.3 })
   })
+
+  // Two taps at once, or a phone and a laptop: each contribution counts, neither overwrites the
+  // other with what it read before the other wrote.
+  it('counts contributions sent at the same time', async () => {
+    const goal = (
+      await post<{ id: number }>('/api/savings-goals', { name: 'Bike', target_amount: 500 })
+    ).id
+
+    await Promise.all(
+      [10, 20, 0.5].map((amount) => post(`/api/savings-goals/${goal}/contribute`, { amount }))
+    )
+
+    const goals = await get<{ id: number; current_amount: number }[]>('/api/savings-goals')
+    expect(goals.find((g) => g.id === goal)).toMatchObject({ current_amount: 30.5 })
+  })
 })
 
 describe('allocating', () => {
