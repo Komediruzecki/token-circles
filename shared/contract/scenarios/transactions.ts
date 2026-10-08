@@ -1,3 +1,4 @@
+import { TRANSACTION_MESSAGES } from '../../transactionSchema';
 import { balanceOf, expectMoney, idsOf, listTransactions } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect } from '../types';
@@ -146,10 +147,14 @@ export const transactions = [
       expect((await other.delete(`/api/transactions/${id}`)).status).toBe(404);
       expect((await other.patch(`/api/transactions/${id}/reconcile`)).status).toBe(404);
 
-      // A row of their own cannot be filed against my account either.
+      // A row of their own cannot be filed against my account either: refused at the field, in the
+      // same words in both runtimes.
       const drawn = await other.post('/api/transactions', entry({ amount: 5, account_id: acct }));
-      // DIFFERENCE foreign-link-status
-      expect(drawn.status).toBe(api.runtime === 'worker' ? 403 : 400);
+      expect(drawn.status).toBe(400);
+      expect(drawn.body).toEqual({
+        error: TRANSACTION_MESSAGES.account,
+        fields: { account_id: TRANSACTION_MESSAGES.account },
+      });
       expect(await listTransactions(other, expect)).toHaveLength(0);
 
       const mine = (await api.get(`/api/transactions/${id}`)).body;

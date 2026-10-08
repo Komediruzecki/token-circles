@@ -16,7 +16,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
   'foreign-link-status':
-    "A write that links another profile's account, category or tag is refused with 403 on the Worker and 400 in local-first; both store nothing. Slice 2 (transactions), where the plan already moves a foreign category parent to 400.",
+    "A bill, budget, savings goal or recurring rule that links another profile's account or category, and a transaction's tags that name another profile's tag (PUT /api/transactions/:id/tags), are refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2. Slices 3 (bills, budgets, goals) and 5 (recurring, tags).",
   'transactions-summary-shape':
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
