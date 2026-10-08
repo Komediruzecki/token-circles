@@ -3,7 +3,8 @@
  * against them at the end of its run (shared/contract/guard.ts):
  *
  * - CONTRACT_ROUTES: both runtimes serve it, and a scenario must send it and get a 2xx answer.
- * - WORKER_ONLY and LOCAL_ONLY: one runtime serves it, with the reason the other does not.
+ * - WORKER_ONLY and LOCAL_ONLY: one runtime serves it, with the reason the other does not. A route
+ *   the Worker keeps only to answer 410 Gone counts as one it does not serve.
  *
  * A route added to either runtime fails that runtime's guard until it is placed here. A reason
  * that starts with OPEN is a question still to answer: if the app calls the route in the mode
@@ -90,7 +91,6 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'DELETE /api/import-sources/:id',
   'PUT /api/import-sources/:id',
   'POST /api/import/execute',
-  'POST /api/import/file-sheet',
   'POST /api/import/googlesheet',
   'POST /api/import/upload',
   'GET /api/loans',
@@ -211,7 +211,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'POST /api/import-sources',
   'DELETE /api/import-sources/:id',
   'PUT /api/import-sources/:id',
-  'POST /api/import/file-sheet',
   'DELETE /api/profile/data',
   'GET /api/profiles',
   'POST /api/profiles',
@@ -262,6 +261,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'GET /api/auth/sessions': 'Signing in. Local-first has no account to sign in to.',
   'DELETE /api/auth/sessions/:id': 'Signing in. Local-first has no account to sign in to.',
   'GET /api/auth/verify-email': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/import/file-sheet':
+    'Retired: answers 410 Gone, telling an old cached page to upload the file again. The Import page reads a file in one upload now, and calls this in neither mode.',
   'POST /api/billing/checkout': 'Billing belongs to a cloud account.',
   'POST /api/billing/portal': 'Billing belongs to a cloud account.',
   'GET /api/billing/status': 'Billing belongs to a cloud account.',
@@ -370,7 +371,9 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'GET ^\\/tags\\/(\\d+)\\/transactions$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'POST ^\\/import\\/preview$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A bulk import of { items }, which nothing in the app sends: the Import page previews with POST /api/import/execute and dry_run, in both modes.',
+  'POST ^\\/import\\/file-sheet$':
+    'The old pick-a-sheet step after an upload, which the Import page calls in neither mode; the Worker answers it 410 Gone.',
   'GET ^\\/exchange-rates$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'GET ^\\/exchange-rates\\/([A-Z]{3})\\/([A-Z]{3})$':
