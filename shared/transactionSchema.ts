@@ -346,36 +346,44 @@ export function checkTransactionEdit(
     if (raw !== undefined && !holds(field, raw, row[field], defaults)) changed[field] = raw;
   }
   const read = readFields(changed, EDIT_FIELDS, defaults, true);
-  if (Object.keys(read.fields).length > 0) return { ok: false, fields: read.fields };
   const patch = read.value as TransactionEdit;
+  const fields: FieldErrors = { ...read.fields };
 
   if (
     patch.type !== undefined &&
     patch.type !== 'transfer' &&
-    patch.transfer_account_id === undefined &&
+    changed.transfer_account_id === undefined &&
     !isBlank(row.transfer_account_id)
   ) {
     patch.transfer_account_id = null;
   }
 
-  if (MONEY_FIELDS.some((field) => patch[field] !== undefined)) {
-    const after = <K extends keyof TransactionEdit>(field: K): unknown =>
-      patch[field] !== undefined ? patch[field] : row[field];
+  if (MONEY_FIELDS.some((field) => changed[field] !== undefined)) {
+    // The row after the edit. A field the edit gets wrong has its own message already, so it
+    // stands for nothing here rather than for the value it would replace.
+    const after = (field: keyof TransactionEdit): unknown =>
+      fields[field] !== undefined
+        ? undefined
+        : patch[field] !== undefined
+          ? patch[field]
+          : row[field];
     const problems = transactionMoneyProblems({
       type: after('type'),
       amount: after('amount'),
       // A new amount with no local amount of its own moves the local amount along with it
       // (both runtimes), so the stored one is not the row's any more.
       amount_local:
-        patch.amount_local !== undefined || patch.amount === undefined
+        changed.amount_local !== undefined || changed.amount === undefined
           ? after('amount_local')
           : undefined,
       account_id: after('account_id'),
       transfer_account_id: after('transfer_account_id'),
     });
-    if (Object.keys(problems).length > 0) return { ok: false, fields: problems };
+    for (const [field, message] of Object.entries(problems)) {
+      if (fields[field] === undefined) fields[field] = message;
+    }
   }
-  return { ok: true, value: patch };
+  return Object.keys(fields).length > 0 ? { ok: false, fields } : { ok: true, value: patch };
 }
 
 /**

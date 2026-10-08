@@ -361,6 +361,13 @@ describe('an edit', () => {
     })
   })
 
+  it('says what is wrong with a field and with the row it leaves behind at once', () => {
+    expect(edit({ type: 'transfer', amount: '' }, STORED)).toEqual({
+      ok: false,
+      fields: { amount: M.amount, transfer_account_id: M.transferTo },
+    })
+  })
+
   it('sets and clears the reconciled flag, which a new transaction cannot', () => {
     expect(edit({ reconciled: 'true' }, STORED)).toEqual({ ok: true, value: { reconciled: 1 } })
     expect(edit({ reconciled: false }, { ...STORED, reconciled: 1 })).toEqual({
