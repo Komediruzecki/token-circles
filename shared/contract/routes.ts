@@ -206,10 +206,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/export',
   'GET /api/export/:type',
   'GET /api/health',
-  'GET /api/housing',
-  'POST /api/housing',
-  'DELETE /api/housing/:id',
-  'PUT /api/housing/:id',
   'POST /api/import',
   'GET /api/import-logs',
   'POST /api/import-logs',
@@ -394,9 +390,9 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'POST ^\\/retirement$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'GET ^\\/housing\\/(\\d+)$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A single housing expense, for no caller: the Housing page reads the list, in both modes.',
   'POST ^\\/housing\\/calculate$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'The housing affordability calculator, for api.calculateHousing, which nothing in the app calls.',
   'GET ^\\/logs$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
   'POST ^\\/logs$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
   'POST ^\\/logs\\/clear$':

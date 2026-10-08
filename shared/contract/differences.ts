@@ -51,6 +51,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
   'fire-inflation':
     'POST /api/calculator/retire ignores an inflationRate in the body on the Worker, projecting in nominal money, but deflates the projection by it (and echoes it in inputs) in local-first, so the same body reaches its FIRE number later there; nothing in the app calls it. Slice 4 (the Retirement forms).',
+  'housing-answer-shape':
+    "POST /api/housing answers 200 on the Worker and 201 in local-first, and GET /api/housing answers autopay as 0 or 1 with the stored columns on the Worker, but as true or false with the form's own fields (property_name, due_day, due_month) too in local-first; the Housing page reads both. Slice 5 (housing).",
+  'housing-due-month-default':
+    'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':
