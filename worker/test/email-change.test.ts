@@ -678,6 +678,52 @@ describe('sending the link again', () => {
   });
 });
 
+describe('a link that cannot be sent', () => {
+  /** Resend refuses every message from here on; each attempt is still recorded in `sent`. */
+  function mailFails(): void {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes('api.resend.com')) {
+        sent.push(JSON.parse(String(init?.body ?? '{}')) as Mail);
+        return new Response('{"message":"unavailable"}', {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return realFetch(input as RequestInfo, init);
+    }) as typeof fetch;
+  }
+
+  it('answers 502, tells the current address nothing, and leaves no change waiting', async () => {
+    await seed(1);
+    mailFails();
+
+    const res = await save(NEW);
+
+    expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      error: "We couldn't send the link. Try again in a moment.",
+    });
+    expect(mailsTo(NEW)).toHaveLength(1);
+    expect(mailsTo(OLD)).toEqual([]);
+    expect(await settings()).toMatchObject({ email: OLD, pendingEmail: null });
+    expect(await unusedLinks()).toEqual([]);
+  });
+
+  it('leaves a change already waiting, and its link, as they were', async () => {
+    await seed(1);
+    await save(NEW);
+    const first = latestLinkTo(NEW);
+    mailFails();
+
+    const res = await resend();
+
+    expect(res.status).toBe(502);
+    expect(await settings()).toMatchObject({ pendingEmail: NEW });
+    expect((await open(first)).headers.get('Location')).toBe(`${APP}/#everified=1&change=1`);
+  });
+});
+
 describe('cancelling', () => {
   it('ends the waiting change: its link stops working and the address stays', async () => {
     await seed(1);

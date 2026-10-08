@@ -49,15 +49,28 @@ export async function createEmailVerification(
     )
     .bind(userId, purpose)
     .run();
+  return (await insertEmailVerification(db, userId, email, purpose)).token;
+}
+
+/**
+ * Store a new single-use link for `userId` without retiring any other, and return its raw token
+ * and row id. For a caller that retires the others only once the new link has been sent.
+ */
+export async function insertEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose
+): Promise<{ token: string; id: number }> {
   const token = randomToken();
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
-  await db
+  const res = await db
     .prepare(
       'INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, ?, ?)'
     )
     .bind(userId, email, await sha256Hex(token), expiresAt, purpose)
     .run();
-  return token;
+  return { token, id: res.meta.last_row_id as number };
 }
 
 /**

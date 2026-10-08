@@ -10,7 +10,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from './index';
 import * as db from './db';
 import { sendMail } from './email';
-import { createEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './email-verification';
+import { insertEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './email-verification';
 import { renderEmailChange, renderEmailChangeNotice } from './emailTemplates';
 import { HttpError } from './http';
 import { clientIp, enforce } from './ratelimit';
@@ -89,6 +89,9 @@ async function limitEmailChange(
  * a change and sending its link again both come here. Returns the 429 past the limits above, and
  * throws 409 when another account has the address, since that link could not work. The limits
  * come first, so they bound the 409 answer too.
+ *
+ * Returns a 502 when the mail could not be sent. Then nothing changes: the new link is dropped, and
+ * a change already waiting keeps its link.
  */
 export async function sendEmailChangeLink(
   c: Context<AppEnv>,
@@ -101,13 +104,30 @@ export async function sendEmailChangeLink(
     throw new HttpError(409, 'That email is already in use');
   }
   const base = appBase(c);
-  const token = await createEmailVerification(c.env.DB, userId, email, 'change');
+  const { token, id } = await insertEmailVerification(c.env.DB, userId, email, 'change');
   const mail = renderEmailChange({
     link: verifyLink(new URL(c.req.url).origin, token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
     assetOrigin: base,
   });
-  await sendMail(c.env, email, mail.subject, mail.html, { text: mail.text });
+  const result = await sendMail(c.env, email, mail.subject, mail.html, { text: mail.text }).catch(
+    (e: unknown) => {
+      console.error('Email change link failed to send:', e);
+      return { sent: false, skipped: false };
+    }
+  );
+  // Without a mail key (local development) the send is skipped, which is not a failure.
+  if (!result.sent && !result.skipped) {
+    await db.run(c.env.DB, 'DELETE FROM email_verifications WHERE id = ?', id);
+    return c.json({ error: "We couldn't send the link. Try again in a moment." }, 502);
+  }
+  // Sent: this link replaces any change still waiting.
+  await db.run(
+    c.env.DB,
+    "DELETE FROM email_verifications WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL AND id != ?",
+    userId,
+    id
+  );
   return null;
 }
 
