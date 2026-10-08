@@ -115,6 +115,7 @@ describe('PUT /api/loans/:id/prepayments/:prepayId', () => {
       amount: 10,
     });
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Extra payment not found' });
     expect(await stored(other.extra)).toEqual({ month: 3, amount: 500, note: 'Gift' });
     expect(await stored(extra)).toEqual({ month: 3, amount: 500, note: 'Gift' });
   });

@@ -19,11 +19,13 @@ export async function loansList(): Promise<Response> {
   const loans = await adapter.listLoans()
   const today = localToday()
   const enriched = loans.map((l) => {
+    // A loan stored without ids is answered with the ones loansGet stores on its first read.
+    giveIds(l)
     const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
     const prepayment_count = prepayments?.length || 0
     return {
-      ...withPlaces(normalizeLoan(l)),
+      ...normalizeLoan(l),
       total_prepaid,
       prepayment_count,
       ...loanStatus(loanInput(l as Record<string, any>), today),
@@ -45,22 +47,34 @@ export async function loansCreate(body: unknown): Promise<Response> {
 export async function loansGet(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  return json(withPlaces(normalizeLoan(loan)))
+  // A loan stored before its extra payments had ids gets them the first time it is read.
+  if (giveIds(loan)) await (await getDB()).put('loans', loan)
+  return json(normalizeLoan(loan))
 }
 
 /**
- * The loan with each extra payment's `id` set to its place in the list, which is what this store's
- * routes take to change or remove one. A loan restored from a cloud backup keeps the Worker's ids in
- * storage; answered as they are, the page would send one of those as a place and miss the row, or
- * change another one.
+ * Gives each of a loan's extra payments without a usable id one past the largest it has, so each
+ * keeps one id for good, as the Worker's rows do. The page changes and removes an extra payment by
+ * that id. Its place in the list would not do: removing an earlier payment moves every later one
+ * up, and a change sent to a place lands on whichever payment has moved into it. A loan restored
+ * from a cloud backup keeps the Worker's ids. Answers whether any payment got one, so the caller
+ * can store the loan.
  */
-function withPlaces<T>(loan: T): T {
-  const prepayments = (loan as { prepayments?: unknown }).prepayments
-  if (!Array.isArray(prepayments)) return loan
-  return {
-    ...loan,
-    prepayments: prepayments.map((p, index) => ({ ...(p as Record<string, unknown>), id: index })),
+function giveIds(loan: object): boolean {
+  const list = (loan as { prepayments?: unknown }).prepayments
+  const rows = Array.isArray(list) ? (list as Record<string, unknown>[]) : []
+  const usable = (id: unknown): id is number => Number.isInteger(id) && (id as number) > 0
+  let next = rows.reduce((max, r) => (usable(r.id) ? Math.max(max, r.id) : max), 0)
+  const seen = new Set<number>()
+  let changed = false
+  for (const row of rows) {
+    if (!usable(row.id) || seen.has(row.id)) {
+      row.id = ++next
+      changed = true
+    }
+    seen.add(row.id as number)
   }
+  return changed
 }
 
 export async function loansUpdate(
@@ -141,7 +155,8 @@ export async function loanRateDelete(params: Record<string, string>): Promise<Re
 export async function loanPrepayments(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  return json(withPlaces(loan).prepayments || [])
+  if (giveIds(loan)) await (await getDB()).put('loans', loan)
+  return json(loan.prepayments || [])
 }
 
 export async function loanPrepaymentAdd(
@@ -153,14 +168,16 @@ export async function loanPrepaymentAdd(
   if (!loan) return notFound('Loan')
   const extra = readExtraPayment(body, loan.term_months)
   if (!extra.ok) return json({ error: extra.error }, 400)
+  giveIds(loan)
   const prepayments = loan.prepayments || []
-  prepayments.push({ ...extra.value })
+  const id = prepayments.reduce((max: number, p: { id: number }) => Math.max(max, p.id), 0) + 1
+  prepayments.push({ ...extra.value, id })
   loan.prepayments = prepayments
   await db.put('loans', loan)
-  return json({ ok: true }, 201)
+  return json({ id }, 201)
 }
 
-/** Change the extra payment at place `p2`, checked as an added one is. */
+/** Change the extra payment whose id is `p2`, checked as an added one is. */
 export async function loanPrepaymentUpdate(
   params: Record<string, string>,
   body: unknown
@@ -170,10 +187,12 @@ export async function loanPrepaymentUpdate(
   if (!loan) return notFound('Loan')
   const extra = readExtraPayment(body, loan.term_months)
   if (!extra.ok) return json({ error: extra.error }, 400)
+  giveIds(loan)
   const prepayId = idParam(params, 'p2')
   const prepayments = loan.prepayments || []
-  if (prepayId < 0 || prepayId >= prepayments.length) return notFound('Prepayment')
-  prepayments[prepayId] = { ...prepayments[prepayId], ...extra.value }
+  const index = prepayments.findIndex((p: { id: number }) => p.id === prepayId)
+  if (index < 0) return notFound('Extra payment')
+  prepayments[index] = { ...prepayments[index], ...extra.value }
   loan.prepayments = prepayments
   await db.put('loans', loan)
   return ok()
@@ -183,15 +202,15 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
+  giveIds(loan)
   const prepayId = idParam(params, 'p2')
   const prepayments = loan.prepayments || []
-  if (prepayId >= 0 && prepayId < prepayments.length) {
-    prepayments.splice(prepayId, 1)
-    loan.prepayments = prepayments
-    await db.put('loans', loan)
-    return ok()
-  }
-  return notFound('Prepayment')
+  const index = prepayments.findIndex((p: { id: number }) => p.id === prepayId)
+  if (index < 0) return notFound('Extra payment')
+  prepayments.splice(index, 1)
+  loan.prepayments = prepayments
+  await db.put('loans', loan)
+  return ok()
 }
 
 /**

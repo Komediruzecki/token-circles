@@ -3,7 +3,7 @@
  * and the loan's rate periods. Saved extra payments always finish the loan sooner; paying less each
  * month is something Compare shows, not something saved yet.
  */
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
 import { addCalendarMonths } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
 import NumberField from '../../components/NumberField'
@@ -48,6 +48,14 @@ export default function LoanExtras(props: Props) {
   const [editAmount, setEditAmount] = createSignal<number | null>(null)
   const [editNote, setEditNote] = createSignal('')
   const [editSaving, setEditSaving] = createSignal(false)
+
+  // A payment removed while its change is open, here or in another tab, closes the change. Left
+  // open, it would wait on the id, and local-first gives a removed last payment's id to the next
+  // payment added, which would then open holding the removed one's values.
+  createEffect(() => {
+    const ref = editing()
+    if (ref !== null && !props.extras.some((extra) => extra.ref === ref)) setEditing(null)
+  })
   let list: HTMLUListElement | undefined
 
   const dateOf = (m: number) => addCalendarMonths(props.startDate, m - 1)
