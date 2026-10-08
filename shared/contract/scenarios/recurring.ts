@@ -195,6 +195,13 @@ export const recurring = [
     }
   ),
 
+  scenario('the recurring list comes soonest first', async (api, expect) => {
+    const may = await rule(api, expect, { description: 'May', next_date: '2026-05-01' });
+    const march = await rule(api, expect, { description: 'March', next_date: '2026-03-01' });
+    const april = await rule(api, expect, { description: 'April', next_date: '2026-04-01' });
+    expect((await rules(api, expect)).map((r) => r.id)).toEqual([march, april, may]);
+  }),
+
   scenario('upcoming recurring transactions, and a paused rule', async (api, expect) => {
     const coffee = await addCategory(api, expect, 'Coffee');
     const today = isoDay(new Date());

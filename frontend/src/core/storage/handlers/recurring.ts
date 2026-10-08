@@ -26,7 +26,14 @@ export async function recurringList(): Promise<Response> {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
   try {
-    return json(await db.getAllFromIndex('recurring', 'by_profile', pid))
+    const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
+    // Soonest first, as the Worker orders them (ORDER BY next_date) and the section shows them.
+    rows.sort(
+      (a, b) =>
+        String(a.next_date ?? '').localeCompare(String(b.next_date ?? '')) ||
+        Number(a.id) - Number(b.id)
+    )
+    return json(rows)
   } catch {
     return json([])
   }
