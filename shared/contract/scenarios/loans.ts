@@ -191,6 +191,44 @@ export const loanScenarios = [
     );
   }),
 
+  scenario(
+    'rate periods are added, changed and removed by their own routes',
+    async (api, expect) => {
+      const id = await loan(api, expect);
+      expectOk(
+        expect,
+        await api.post(`/api/loans/${id}/rates`, { rate: 6, start_month: 13, end_month: 24 }),
+        'POST a rate period'
+      );
+      let periods = (await loanDetail(api, expect, id)).rate_periods as Json[];
+      expect(periods).toEqual([
+        expect.objectContaining({ rate: 6, start_month: 13, end_month: 24 }),
+      ]);
+      expect(periods[0].id).toEqual(expect.any(Number));
+
+      expectOk(
+        expect,
+        await api.put(`/api/loans/${id}/rates/${periods[0].id}`, {
+          rate: 5.5,
+          start_month: 13,
+          end_month: 36,
+        }),
+        'PUT the rate period'
+      );
+      periods = (await loanDetail(api, expect, id)).rate_periods as Json[];
+      expect(periods).toEqual([
+        expect.objectContaining({ rate: 5.5, start_month: 13, end_month: 36 }),
+      ]);
+
+      expectOk(
+        expect,
+        await api.delete(`/api/loans/${id}/rates/${periods[0].id}`),
+        'DELETE the rate period'
+      );
+      expect((await loanDetail(api, expect, id)).rate_periods).toEqual([]);
+    }
+  ),
+
   scenario('the amortization schedule, and what an extra payment saves', async (api, expect) => {
     const id = await loan(api, expect);
     let plan = await schedule(api, expect, id);
