@@ -196,4 +196,19 @@ describe('an edit', () => {
       })
     })
   })
+
+  it('saves a note, a beneficiary and a payor the person cleared', async () => {
+    await mountPage()
+    await editRow('Weekly groceries')
+
+    type(byTestId('tx-notes'), '')
+    type(byTestId('tx-beneficiary'), '')
+    type(byTestId('tx-payor'), '')
+    save()
+
+    await vi.waitFor(async () => {
+      expect(await stored(PLAIN)).toMatchObject({ notes: '', beneficiary: '', payor: '' })
+    })
+    expect(await stored(PLAIN)).toMatchObject({ description: 'Weekly groceries', amount: 82.4 })
+  })
 })

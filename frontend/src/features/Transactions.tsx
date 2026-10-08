@@ -2064,9 +2064,10 @@ export default function Transactions() {
                   account_id: formAccountId() ?? undefined,
                   transfer_account_id:
                     type() === 'transfer' ? (formTransferAccountId() ?? undefined) : undefined,
-                  notes: formNotes() || undefined,
-                  beneficiary: formBeneficiary() || undefined,
-                  payor: formPayor() || undefined,
+                  // Sent blank, not left out: left out, an edit kept what the person cleared.
+                  notes: formNotes(),
+                  beneficiary: formBeneficiary(),
+                  payor: formPayor(),
                   exchange_rate: formExchangeRate() ? parseFloat(formExchangeRate()) : undefined,
                   amount_local: formAmountLocal() ? parseFloat(formAmountLocal()) : undefined,
                 }
