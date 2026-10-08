@@ -145,6 +145,20 @@ describe('localHandlers - analytics and reports', () => {
     assertResolvable(sankey)
   })
 
+  it('sankey answers for a month that has a budget row without a start date', async () => {
+    // The router's schema requires a start date, so the app never stores such a row; one written
+    // around it belongs to no month and must not fail the month's flow.
+    const db = await getDB()
+    await db.add('budgets', { profile_id: 1, category_id: catId, amount: 80, period: 'monthly' })
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
+    expect(res.status).toBe(200)
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.hasBudgets).toBe(false)
+    const budgetLink = sankey.links.find((l) => l.source === 'Total Budget' && l.target === 'Food')
+    expect(budgetLink?.value).toBe(50)
+    assertResolvable(sankey)
+  })
+
   it('sankey is empty for a month with no activity', async () => {
     const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '3' }))
     const sankey = (await res.json()) as SankeyResult

@@ -264,10 +264,12 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
 
     // Budgets for this month: the rows that start in it, as the Budgets page reads them (D13).
     // listBudgets answers every month's row, and taking the first per category showed the
-    // earliest month's budget in every later month's flow.
+    // earliest month's budget in every later month's flow. A row without a start date (the
+    // router's schema requires one, so only a write around it leaves one out) is in no month.
     const budgetMap = new Map<number, (typeof budgets)[number]>()
     for (const b of budgets) {
-      const inMonth = b.start_date.slice(0, 7) === startStr.slice(0, 7)
+      const inMonth =
+        typeof b.start_date === 'string' && b.start_date.slice(0, 7) === startStr.slice(0, 7)
       if (b.period === 'monthly' && inMonth && !budgetMap.has(b.category_id)) {
         budgetMap.set(b.category_id, b)
       }
