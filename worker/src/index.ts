@@ -94,7 +94,13 @@ const app = new Hono<AppEnv>();
 // CORS — origin comes from the env var. credentials:true is required so the browser sends the
 // session cookie cross-origin; with credentials, `*` is invalid anyway, so fail CLOSED (allow
 // nothing cross-origin) rather than reflect `*` when CORS_ORIGIN is unset/misconfigured.
-app.use('*', (c, next) => cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true })(c, next));
+//
+// maxAge: the app sends X-Time-Zone on every request (local-date.ts), and a custom header makes the
+// browser ask with a preflight first, including for the GETs that used to be simple requests. Two
+// hours is the longest Chromium caches the answer for (Firefox allows a day, Safari less).
+app.use('*', (c, next) =>
+  cors({ origin: c.env.CORS_ORIGIN ?? '', credentials: true, maxAge: 7200 })(c, next)
+);
 
 // Security headers on every response (audit S2). The API returns JSON plus a few inline-styled
 // transactional HTML pages (password-reset landing, unsubscribe), so the CSP allows inline styles

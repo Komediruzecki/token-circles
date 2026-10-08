@@ -160,6 +160,21 @@ describe('the X-Time-Zone header', () => {
     expect(allowed).toContain('x-time-zone');
   });
 
+  it('costs one preflight per two hours, not one per request', async () => {
+    // A GET that sent only a cookie was a simple request; with X-Time-Zone the browser asks first.
+    // 7200 seconds is the most Chromium will cache an answer for.
+    const res = await SELF.fetch('https://example.com/api/billing/status', {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'http://localhost:3800',
+        'Access-Control-Request-Method': 'GET',
+        'Access-Control-Request-Headers': 'x-time-zone',
+      },
+    });
+    expect(res.status).toBe(204);
+    expect(res.headers.get('Access-Control-Max-Age')).toBe('7200');
+  });
+
   it('sets the calendar a request is answered on', async () => {
     await at(LATE_ON_THE_7TH);
     for (const zone of [TOKYO, KIRITIMATI, undefined]) {
