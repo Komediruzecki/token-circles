@@ -10,7 +10,7 @@ import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
 import { todayUtc } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
-import { apiDelete, apiGet, apiPost, formatCurrency, showToast } from '../../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../../core/api'
 import { refetchOnActive } from '../../core/pageVisibility'
 import LoanCompare from './LoanCompare'
 import { monthLong } from './loanCopy'
@@ -160,6 +160,22 @@ export default function LoanDetail(props: Props) {
       return true
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'The extra payment was not saved.', 'error')
+      return false
+    }
+  }
+
+  const updateExtra = async (
+    extra: SavedExtra,
+    next: { month: number; amount: number; note: string }
+  ) => {
+    const row = props.row
+    if (!row) return false
+    try {
+      await apiPut(`/api/loans/${row.id}/prepayments/${extra.ref}`, next)
+      showToast('Extra payment updated', 'success')
+      return true
+    } catch {
+      showToast('The extra payment was not updated. Try again.', 'error')
       return false
     }
   }
@@ -349,6 +365,7 @@ export default function LoanDetail(props: Props) {
                       compareHref={hrefFor('compare')}
                       formats={props.formats}
                       onAdd={addExtra}
+                      onUpdate={updateExtra}
                       onDelete={deleteExtra}
                       onEditRates={() => {
                         props.onEdit(row(), true)

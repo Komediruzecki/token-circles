@@ -1,6 +1,7 @@
 /**
  * Loans handlers — IndexedDB-backed implementations
  */
+import { readExtraPayment } from '../../../../../shared/loanExtraPayment'
 import { calculateLoan, loanStatus, todayUtc } from '../../../../../shared/loanSchedule'
 import { getDB } from '../idb'
 import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
@@ -20,7 +21,7 @@ export async function loansList(): Promise<Response> {
     const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
     const prepayment_count = prepayments?.length || 0
     return {
-      ...normalizeLoan(l),
+      ...withPlaces(normalizeLoan(l)),
       total_prepaid,
       prepayment_count,
       ...loanStatus(loanInput(l as Record<string, any>), today),
@@ -42,7 +43,22 @@ export async function loansCreate(body: unknown): Promise<Response> {
 export async function loansGet(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  return json(normalizeLoan(loan))
+  return json(withPlaces(normalizeLoan(loan)))
+}
+
+/**
+ * The loan with each extra payment's `id` set to its place in the list, which is what this store's
+ * routes take to change or remove one. A loan restored from a cloud backup keeps the Worker's ids in
+ * storage; answered as they are, the page would send one of those as a place and miss the row, or
+ * change another one.
+ */
+function withPlaces<T>(loan: T): T {
+  const prepayments = (loan as { prepayments?: unknown }).prepayments
+  if (!Array.isArray(prepayments)) return loan
+  return {
+    ...loan,
+    prepayments: prepayments.map((p, index) => ({ ...(p as Record<string, unknown>), id: index })),
+  }
 }
 
 export async function loansUpdate(
@@ -123,7 +139,7 @@ export async function loanRateDelete(params: Record<string, string>): Promise<Re
 export async function loanPrepayments(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  return json(loan.prepayments || [])
+  return json(withPlaces(loan).prepayments || [])
 }
 
 export async function loanPrepaymentAdd(
@@ -133,12 +149,32 @@ export async function loanPrepaymentAdd(
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const extra = readExtraPayment(body, loan.term_months)
+  if (!extra.ok) return json({ error: extra.error }, 400)
   const prepayments = loan.prepayments || []
-  prepayments.push(body as Record<string, unknown>)
+  prepayments.push({ ...extra.value })
   loan.prepayments = prepayments
   await db.put('loans', loan)
   return json({ ok: true }, 201)
+}
+
+/** Change the extra payment at place `p2`, checked as an added one is. */
+export async function loanPrepaymentUpdate(
+  params: Record<string, string>,
+  body: unknown
+): Promise<Response> {
+  const db = await getDB()
+  const loan = await currentProfileRecord('loans', idParam(params))
+  if (!loan) return notFound('Loan')
+  const extra = readExtraPayment(body, loan.term_months)
+  if (!extra.ok) return json({ error: extra.error }, 400)
+  const prepayId = idParam(params, 'p2')
+  const prepayments = loan.prepayments || []
+  if (prepayId < 0 || prepayId >= prepayments.length) return notFound('Prepayment')
+  prepayments[prepayId] = { ...prepayments[prepayId], ...extra.value }
+  loan.prepayments = prepayments
+  await db.put('loans', loan)
+  return ok()
 }
 
 export async function loanPrepaymentsDelete(params: Record<string, string>): Promise<Response> {

@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import type { AppEnv } from '../index'
+import { readExtraPayment } from '../../../shared/loanExtraPayment'
 import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
 import { HttpError } from '../http'
@@ -255,19 +257,50 @@ loansRoutes.delete('/api/loans/:id/rates/:rateId', requireAuth, async (c) => {
 })
 
 // ── Prepayments CRUD ──────────────────────────────────────────────────────────
+// An extra payment is checked by shared/loanExtraPayment.ts, as the local-first handlers check it:
+// a whole payment number within the loan's term, an amount above zero, a note that is text.
+async function extraPaymentOf(c: Context<AppEnv>, loan: { term_months: number | null }) {
+  const read = readExtraPayment(await c.req.json(), loan.term_months)
+  if (!read.ok) throw new HttpError(400, read.error)
+  return read.value
+}
+
 loansRoutes.post('/api/loans/:id/prepayments', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
+  const loan = await db.first<{ term_months: number | null }>(
+    c.env.DB,
+    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
   if (!loan) throw new HttpError(404, 'Loan not found')
-  const b = (await c.req.json()) as Record<string, any>
-  const res = await db.insert(c.env.DB, 'loan_prepayments', {
-    loan_id: id,
-    month: b.month,
-    amount: b.amount,
-    note: b.note || '',
-  })
+  const extra = await extraPaymentOf(c, loan)
+  const res = await db.insert(c.env.DB, 'loan_prepayments', { loan_id: id, ...extra })
   return c.json({ id: res.meta.last_row_id })
+})
+
+loansRoutes.put('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const id = c.req.param('id')
+  const loan = await db.first<{ term_months: number | null }>(
+    c.env.DB,
+    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!loan) throw new HttpError(404, 'Loan not found')
+  const extra = await extraPaymentOf(c, loan)
+  const res = await db.update(
+    c.env.DB,
+    'loan_prepayments',
+    { ...extra },
+    'id = ? AND loan_id = ?',
+    c.req.param('prepayId'),
+    id
+  )
+  if (!res.meta.changes) throw new HttpError(404, 'Extra payment not found')
+  return c.json({ ok: true })
 })
 
 loansRoutes.delete('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c) => {

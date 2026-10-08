@@ -850,6 +850,30 @@
   font-variant-numeric: tabular-nums;
 }
 
+.list-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* A saved extra payment being changed: its row holds the form, across the whole width. */
+.list-item-editing {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 8px;
+}
+
+.list-item-editing .form {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));

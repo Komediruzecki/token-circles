@@ -76,6 +76,7 @@ describe('loan dates', () => {
         compareHref="#loans/1/compare"
         formats={f}
         onAdd={async () => true}
+        onUpdate={async () => true}
         onDelete={async () => {}}
         onEditRates={() => {}}
       />

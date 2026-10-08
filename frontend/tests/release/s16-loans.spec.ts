@@ -3,7 +3,8 @@
  * redesign). A loan added through the form; What if on it; each mode of an extra payment; both
  * modes side by side; the comparison surviving a reload, because it lives in the address; Use as
  * A; an extra payment saved on Extra payments moving A; and on a phone, the picked what-if still in
- * view after a reload. Every case runs in both storage modes.
+ * view after a reload. Then a saved extra payment changed in
+ * place. Every case runs in both storage modes.
  *
  * The loan is plan 03's example: 100,000 at 5 % over 120 months, first payment due on the first
  * of the month after next, so the next payment is the first one whatever today is. In payment
@@ -244,6 +245,42 @@ for (const [pass, test] of both) {
       await expect
         .poll(async () => inside(await chip.boundingBox(), await strip.boundingBox()))
         .toBe(true)
+    })
+
+    test('16.7 a saved extra payment changed in place moves A again @release', async ({ m }) => {
+      const { page } = m
+      const name = `zz-change${m.suffix}`
+      const { id, start } = await arrangeLoan(m, name)
+      await loanCard(page, name).getByTestId('loans-item-what-if').click()
+      await page.getByTestId('loans-tab-extras').click()
+      await page.getByTestId('loans-extra-month').selectOption('12')
+      await page.getByTestId('loans-extra-amount').fill('10000')
+      await page.getByTestId('loans-extra-add').click()
+      await expect(page.getByTestId('loans-extra-item')).toContainText(money(10000), {
+        timeout: 15_000,
+      })
+
+      await page.getByTestId('loans-extra-edit').click()
+      await expect(page.getByTestId('loans-extra-edit-amount')).toBeFocused()
+      await page.getByTestId('loans-extra-edit-amount').fill('5000')
+      await page.getByTestId('loans-extra-edit-month').selectOption('24')
+      await page.getByTestId('loans-extra-save').click()
+      await expect(page.getByTestId('loans-extra-edit-form')).toHaveCount(0)
+      await expect(page.getByTestId('loans-extra-item')).toContainText('Payment 24')
+      await expect(page.getByTestId('loans-extra-item')).toContainText(money(5000))
+
+      // Changed on the loan, not added beside the old one.
+      const stored = await m.api<{ prepayments?: { month: number; amount: number }[] }>(
+        `/api/loans/${id}`
+      )
+      expect(stored.prepayments?.map((p) => [p.month, p.amount])).toEqual([[24, 5000]])
+
+      // 5,000 with payment 24 ends the loan after 114 payments, where 10,000 with payment 12
+      // ended it after 106.
+      await page.getByTestId('loans-tab-compare').click()
+      await expect(page.getByTestId('loans-compare-a-payoff')).toHaveText(
+        paymentMonth(start, 114, 'short')
+      )
     })
   })
 }

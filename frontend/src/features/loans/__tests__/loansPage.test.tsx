@@ -9,7 +9,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet } from '../../../core/api'
+import { apiGet, apiPut } from '../../../core/api'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
@@ -38,7 +38,15 @@ vi.mock('../../../core/api', async (importOriginal) => {
       invalidateForRequest(path, 'DELETE', true)
       return { ok: true }
     }),
-    apiPut: vi.fn(async () => ({ ok: true })),
+    // A changed extra payment lands in the store, found by its id as the Worker finds it.
+    apiPut: vi.fn(async (path: string, body: Record<string, unknown>) => {
+      const ref = /\/prepayments\/(\d+)$/.exec(path)?.[1]
+      const extras = (loanOf(path)?.prepayments ?? []) as Record<string, unknown>[]
+      const at = extras.findIndex((p) => String(p.id) === ref)
+      if (ref !== undefined && at >= 0) extras[at] = { ...extras[at], ...body }
+      invalidateForRequest(path, 'PUT', true)
+      return { ok: true }
+    }),
     showToast: vi.fn(),
     toast: vi.fn(),
     api: new Proxy({}, { get: () => async () => [] }),
@@ -368,5 +376,70 @@ describe('the loan page', () => {
     await click(root, 'loans-tab-compare')
     expect(text(root, 'loans-compare-a-payoff')).toBe('Oct 2034')
     expect(root.textContent).toContain('With your saved extra payment')
+  })
+
+  it('changes a saved extra payment in place', async () => {
+    vi.mocked(apiPut).mockClear()
+    listed = [
+      {
+        ...structuredClone(LOAN),
+        prepayments: [{ id: 7, month: 12, amount: 10000, note: 'Bonus' }],
+      },
+    ]
+    const root = await mount('#loans/1/extras')
+    await click(root, 'loans-extra-edit')
+    const amount = el(root, 'loans-extra-edit-amount') as HTMLInputElement
+    expect(document.activeElement).toBe(amount)
+    expect(amount.value).toBe('10000')
+    expect((el(root, 'loans-extra-edit-month') as HTMLSelectElement).value).toBe('12')
+    expect((el(root, 'loans-extra-edit-note') as HTMLInputElement).value).toBe('Bonus')
+
+    amount.value = '5000'
+    amount.dispatchEvent(new Event('input', { bubbles: true }))
+    const month = el(root, 'loans-extra-edit-month') as HTMLSelectElement
+    month.value = '24'
+    month.dispatchEvent(new Event('change', { bubbles: true }))
+    el(root, 'loans-extra-edit-form')!.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true })
+    )
+    await settle()
+
+    expect(vi.mocked(apiPut)).toHaveBeenCalledWith('/api/loans/1/prepayments/7', {
+      month: 24,
+      amount: 5000,
+      note: 'Bonus',
+    })
+    // The form closed, and the list came back from the store with the change.
+    expect(el(root, 'loans-extra-edit-form')).toBeNull()
+    expect(text(root, 'loans-extra-item')).toBe('Payment 24, Dec 1, 2027Bonus€5,000.00')
+  })
+
+  it('leaves a saved extra payment as it was on Cancel, or on Escape', async () => {
+    vi.mocked(apiPut).mockClear()
+    listed = [
+      {
+        ...structuredClone(LOAN),
+        prepayments: [{ id: 7, month: 12, amount: 10000, note: '' }],
+      },
+    ]
+    const root = await mount('#loans/1/extras')
+    await click(root, 'loans-extra-edit')
+    const amount = el(root, 'loans-extra-edit-amount') as HTMLInputElement
+    amount.value = '1'
+    amount.dispatchEvent(new Event('input', { bubbles: true }))
+    await click(root, 'loans-extra-cancel')
+    expect(el(root, 'loans-extra-edit-form')).toBeNull()
+    expect(text(root, 'loans-extra-item')).toBe('Payment 12, Dec 1, 2026€10,000.00')
+    expect(document.activeElement).toBe(el(root, 'loans-extra-edit'))
+
+    // Opened again, it starts from what is saved, not from what was typed before Cancel.
+    await click(root, 'loans-extra-edit')
+    expect((el(root, 'loans-extra-edit-amount') as HTMLInputElement).value).toBe('10000')
+    el(root, 'loans-extra-edit-form')!.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    )
+    await settle()
+    expect(el(root, 'loans-extra-edit-form')).toBeNull()
+    expect(vi.mocked(apiPut)).not.toHaveBeenCalled()
   })
 })
