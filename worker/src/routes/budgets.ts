@@ -1012,17 +1012,28 @@ budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Category does not belong to this profile');
   }
+  // Write only the fields the edit sends, as local-first does. An absent field stays as it is,
+  // where it used to be bound as undefined (a 500) or, for the rollover switch, cleared.
+  const fields: Record<string, unknown> = {};
+  for (const key of ['category_id', 'amount', 'period', 'start_date']) {
+    if (b[key] !== undefined) fields[key] = b[key];
+  }
+  if (b.end_date !== undefined) fields.end_date = b.end_date || null;
+  if (b.rollover_enabled !== undefined) fields.rollover_enabled = b.rollover_enabled ? 1 : 0;
+  if (Object.keys(fields).length === 0) {
+    const row = await db.first(
+      c.env.DB,
+      'SELECT id FROM budgets WHERE id = ? AND profile_id = ?',
+      c.req.param('id'),
+      pid
+    );
+    if (!row) throw new HttpError(404, 'Not found');
+    return c.json({ ok: true });
+  }
   const res = await db.update(
     c.env.DB,
     'budgets',
-    {
-      category_id: b.category_id,
-      amount: b.amount,
-      period: b.period,
-      start_date: b.start_date,
-      end_date: b.end_date || null,
-      rollover_enabled: b.rollover_enabled ? 1 : 0,
-    },
+    fields,
     'id = ? AND profile_id = ?',
     c.req.param('id'),
     pid

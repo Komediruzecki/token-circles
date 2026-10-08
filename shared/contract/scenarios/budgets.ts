@@ -182,6 +182,33 @@ export const budgets = [
     expect(await listBudgets(api.other, expect)).toEqual([]);
   }),
 
+  scenario('an edit changes only the fields it is sent', async (api, expect) => {
+    const food = await addCategory(api, expect, 'Food');
+    const id = await budget(api, expect, food, 300);
+    await rollover(api, expect, id, { rollover_enabled: true });
+
+    expectOk(expect, await api.put(`/api/budgets/${id}`, { amount: 250 }), 'PUT an amount alone');
+    let row = await budgetRow(api, expect, id);
+    expect(row).toMatchObject({ category_id: food, period: 'monthly', start_date: '2026-03-01' });
+    expectMoney(expect, row.amount, 250);
+    expect(Boolean(row.rollover_enabled)).toBe(true);
+
+    // The budget form's fields, which do not include the rollover switch.
+    expectOk(
+      expect,
+      await api.put(`/api/budgets/${id}`, {
+        category_id: food,
+        amount: 260,
+        period: 'monthly',
+        start_date: '2026-03-01',
+      }),
+      'PUT the form fields'
+    );
+    row = await budgetRow(api, expect, id);
+    expectMoney(expect, row.amount, 260);
+    expect(Boolean(row.rollover_enabled)).toBe(true);
+  }),
+
   scenario(
     "the month summary counts spending, last month's unused budget and what is left",
     async (api, expect) => {
