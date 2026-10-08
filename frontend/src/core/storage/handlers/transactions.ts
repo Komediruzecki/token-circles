@@ -2,6 +2,12 @@
  * Transactions handlers — IndexedDB-backed implementations
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
+import {
+  checkTransactionCreate,
+  checkTransactionEdit,
+  TRANSACTION_MESSAGES,
+} from '../../../../../shared/transactionSchema'
+import { localTransactionDefaults } from '../../validation'
 import { getDB } from '../idb'
 import { recalcGoalsByCategory } from './goals'
 import {
@@ -13,10 +19,12 @@ import {
   json,
   notFound,
   ok,
+  refuse,
   writeProfileIdFromHeaders,
 } from './helpers'
 import { normalizeTransaction } from './normalize'
 import { autoApplyTagRules } from './tagRules'
+import type { FieldErrors } from '../../../../../shared/refusal'
 
 const toCat = (v: unknown): number | null =>
   typeof v === 'number' ? v : typeof v === 'string' && v ? Number(v) : null
@@ -88,28 +96,45 @@ export async function transactionsList(query: URLSearchParams): Promise<Response
   return json(enriched)
 }
 
+/**
+ * Links to another profile's account or category, each at its field, as the Worker refuses them.
+ * Only the links given are checked (a link left out or cleared is no link): an edit passes the
+ * ones it changes.
+ */
+async function foreignLinks(
+  links: { account_id?: unknown; transfer_account_id?: unknown; category_id?: unknown },
+  profileId: number
+): Promise<FieldErrors> {
+  const fields: FieldErrors = {}
+  if (!(await currentProfileOwns('accounts', links.account_id, profileId))) {
+    fields.account_id = TRANSACTION_MESSAGES.account
+  }
+  if (!(await currentProfileOwns('accounts', links.transfer_account_id, profileId))) {
+    fields.transfer_account_id = TRANSACTION_MESSAGES.account
+  }
+  if (!(await currentProfileOwns('categories', links.category_id, profileId))) {
+    fields.category_id = TRANSACTION_MESSAGES.category
+  }
+  return fields
+}
+
 export async function transactionsCreate(body: unknown, headers?: HeadersInit): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid transaction data' }, 400)
-  const tx = { ...(body as Record<string, unknown>) }
+  // The Worker's rules and words (shared/transactionSchema.ts). The router has already run this
+  // check on the way in; a direct call (tests, other handlers) gets the same answer.
+  const checked = checkTransactionCreate(body, localTransactionDefaults())
+  if (!checked.ok) return refuse(checked.fields)
   const profileId = await writeProfileIdFromHeaders(headers)
-  tx.profile_id = profileId
-  if (!(await currentProfileOwns('accounts', tx.account_id, profileId))) {
-    return json({ error: 'Account does not belong to this profile' }, 400)
+  const foreign = await foreignLinks(checked.value, profileId)
+  if (Object.keys(foreign).length > 0) return refuse(foreign)
+  // The row the Worker stores, not the body as it came: every field the read schema needs, with
+  // its default, and nothing the body made up.
+  const now = new Date().toISOString()
+  const tx: Record<string, unknown> = {
+    ...checked.value,
+    profile_id: profileId,
+    created_at: now,
+    updated_at: now,
   }
-  if (!(await currentProfileOwns('accounts', tx.transfer_account_id, profileId))) {
-    return json({ error: 'Transfer account does not belong to this profile' }, 400)
-  }
-  if (!(await currentProfileOwns('categories', tx.category_id, profileId))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
-  }
-  const invariantError = transactionInvariantError({
-    type: tx.type,
-    amount: tx.amount,
-    amount_local: tx.amount_local,
-    account_id: tx.account_id,
-    transfer_account_id: tx.transfer_account_id,
-  })
-  if (invariantError) return json({ error: invariantError }, 400)
   const id = await adapter.createTransaction(
     tx as unknown as Parameters<typeof adapter.createTransaction>[0]
   )
@@ -118,7 +143,7 @@ export async function transactionsCreate(body: unknown, headers?: HeadersInit): 
   const autoTags = await autoApplyTagRules(id, profileId)
   await recalcGoalsByCategory(toCat(tx.category_id))
   // Normalize like the list endpoint: the client validates this response against the
-  // full TransactionSchema, and callers omit optional fields (beneficiary, notes, ...).
+  // full TransactionSchema.
   return json(
     normalizeTransaction({ id, ...tx, ...(autoTags.length ? { tags: autoTags } : {}) }),
     201
@@ -136,51 +161,32 @@ export async function transactionsUpdate(
   body: unknown,
   headers?: HeadersInit
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
   const profileId = await writeProfileIdFromHeaders(headers)
   const before = await currentProfileRecord('transactions', id, profileId)
   if (!before) return notFound('Transaction')
-  // A transfer must keep a destination account across the edit (audit D2). Check the
-  // merged old+new state so a partial update that flips type to transfer, or clears the
-  // destination, is rejected rather than silently producing an inert/unbalanced row.
-  const patch = body as Record<string, unknown>
-  const normalizedPatch = { ...patch }
-  if (
-    'account_id' in patch &&
-    !(await currentProfileOwns('accounts', patch.account_id, profileId))
-  ) {
-    return json({ error: 'Account does not belong to this profile' }, 400)
+  // Only the fields the body changes, checked as the Worker checks them (shared/
+  // transactionSchema.ts). The Transactions form sends every field on every save: a field sent
+  // back with the value the row holds is neither checked nor written, so a row saved under older
+  // rules can still be edited. An edit that changes how the row moves money is checked against
+  // the whole row it leaves behind, as the balances are reversed and applied again from it.
+  const checked = checkTransactionEdit(body, before, localTransactionDefaults())
+  if (!checked.ok) {
+    // The router logs this for every body its checks refuse, and the release suite fails a
+    // local-first run that shows one (tests/release/release-fixtures.ts). An edit is checked here,
+    // against the stored row, so it is said here.
+    console.error('[transactionsUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  if (
-    'transfer_account_id' in patch &&
-    !(await currentProfileOwns('accounts', patch.transfer_account_id, profileId))
-  ) {
-    return json({ error: 'Transfer account does not belong to this profile' }, 400)
-  }
-  if (
-    'category_id' in patch &&
-    !(await currentProfileOwns('categories', patch.category_id, profileId))
-  ) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
-  }
-  const mergedType = 'type' in patch ? patch.type : before.type
-  if (
-    mergedType !== 'transfer' &&
-    before.type === 'transfer' &&
-    !('transfer_account_id' in patch)
-  ) {
-    normalizedPatch.transfer_account_id = null
-  }
-  const merged = { ...before, ...normalizedPatch }
-  const invariantError = transactionInvariantError(
-    merged as Parameters<typeof transactionInvariantError>[0]
-  )
-  if (invariantError) return json({ error: invariantError }, 400)
-  await adapter.updateTransaction(id, normalizedPatch)
+  const patch = checked.value
+  const foreign = await foreignLinks(patch, profileId)
+  if (Object.keys(foreign).length > 0) return refuse(foreign)
+  // Nothing to change: a save that changed only the tags, which go in a request of their own.
+  if (Object.keys(patch).length === 0) return ok()
+  await adapter.updateTransaction(id, patch as Parameters<typeof adapter.updateTransaction>[1])
   // Recompute both the previous and new category (an edit may re-categorize the tx).
-  const oldCat = toCat(before?.category_id)
-  const newCat = toCat(normalizedPatch.category_id) ?? oldCat
+  const oldCat = toCat(before.category_id)
+  const newCat = patch.category_id !== undefined ? patch.category_id : oldCat
   await recalcGoalsByCategory(oldCat)
   if (newCat !== oldCat) await recalcGoalsByCategory(newCat)
   return ok()

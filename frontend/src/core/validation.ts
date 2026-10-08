@@ -3,9 +3,9 @@
  *
  * A refused body answers 400 `{ error, fields }`, the Worker's answer (shared/refusal.ts): a plain
  * sentence per field for the form to show, and their summary for anything that cannot place them.
- * An entity with a shared schema (categories) runs exactly the Worker's rules. The rest are still
- * zod schemas until their own PR moves them (docs/plans/2026-10-07-form-errors.md), and their
- * issues are put into plain words here rather than passed on in zod's.
+ * An entity with a shared schema (categories, transactions) runs exactly the Worker's rules. The
+ * rest are still zod schemas until their own PR moves them (docs/plans/2026-10-07-form-errors.md),
+ * and their issues are put into plain words here rather than passed on in zod's.
  */
 // Import the Zod JIT-disable config BEFORE this module's schema definitions:
 // the JIT capability probe (a CSP unsafe-eval violation) fires at schema-
@@ -15,37 +15,24 @@ import './zodConfig'
 import { z } from 'zod/v4'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { refusalOf } from '../../../shared/refusal'
+import { checkTransactionCreate } from '../../../shared/transactionSchema'
+import { localToday } from '../utils/period'
+import { getLocalCurrency } from './api'
 import type { Checked, FieldErrors } from '../../../shared/refusal'
+import type { TransactionDefaults } from '../../../shared/transactionSchema'
 
 const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/)
 
 // ── Transaction ────────────────────────────────────────────────────────────────
+// Not a zod schema: shared/transactionSchema.ts, which the Worker route runs too.
 
-const transactionBaseSchema = z.object({
-  type: z.enum(['income', 'expense', 'transfer']),
-  amount: z.number().positive(),
-  description: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  category_id: z.number().int().positive().nullable(),
-  currency: currencyCodeSchema.optional(),
-  amount_local: z.number().nullable().optional(),
-  exchange_rate: z.number().optional(),
-  notes: z.string().optional(),
-  beneficiary: z.string().optional(),
-  payor: z.string().optional(),
-  account_id: z.number().int().positive().nullable().optional(),
-  transfer_account_id: z.number().int().positive().nullable().optional(),
-})
-
-// A transfer moves money to a destination account; without one the balance effect is a
-// silent no-op on the client and a money-losing debit on the worker (audit D2). Require it
-// on create. Updates are guarded in the handler against the merged old+new state.
-export const transactionCreateSchema = transactionBaseSchema.refine(
-  (t) => t.type !== 'transfer' || typeof t.transfer_account_id === 'number',
-  { message: 'Choose the account the transfer goes to.', path: ['transfer_account_id'] }
-)
-
-export const transactionUpdateSchema = transactionBaseSchema.partial()
+/**
+ * What a blank date or currency means in a local-first body: today on this device's calendar,
+ * and the currency the app keeps its balances in.
+ */
+export function localTransactionDefaults(): TransactionDefaults {
+  return { today: localToday(), currency: getLocalCurrency() }
+}
 
 // ── Category ───────────────────────────────────────────────────────────────────
 // Not a zod schema: shared/categorySchema.ts, which the Worker route runs too.
@@ -214,11 +201,11 @@ export const counterpartyCreateSchema = z.object({
 type BodyRule = z.ZodType | ((body: unknown) => Checked<unknown>)
 
 const schemaMap: Record<string, BodyRule> = {
-  'POST:/api/transactions': transactionCreateSchema,
-  'PUT:/api/transactions': transactionUpdateSchema,
+  'POST:/api/transactions': (body) => checkTransactionCreate(body, localTransactionDefaults()),
+  // No PUT entry for transactions or categories: an edit is checked by its handler against the
+  // stored row, since a value the row already holds is never refused (checkTransactionEdit and
+  // checkCategoryEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
-  // No PUT entry for categories: an edit is checked by its handler against the stored row, since
-  // a value the row already holds is never refused (checkCategoryEdit in shared/categorySchema.ts).
   'POST:/api/accounts': accountCreateSchema,
   'PUT:/api/accounts': accountUpdateSchema,
   'POST:/api/budgets': budgetCreateSchema,

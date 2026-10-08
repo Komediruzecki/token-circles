@@ -7,6 +7,7 @@ import {
   tagsList,
   tagsUpdate,
   transactionsCreate,
+  transactionTagsSet,
 } from '../localHandlers.js'
 
 describe('localHandlers - tags', () => {
@@ -62,14 +63,14 @@ describe('localHandlers - tags', () => {
     const tagRes = await tagsCreate({ name: 'Trip' })
     const tag = await tagRes.json()
 
-    // Create a transaction with this tag
-    await transactionsCreate({
-      amount: 100,
-      type: 'expense',
-      description: 'Flight',
-      tags: ['Trip'],
-      tag_ids: [tag.id],
-    })
+    // Create a transaction, and tag it the way the app does: in a request of its own, as the
+    // Worker takes them. A create body's tags are not stored, in either runtime.
+    const created = await (
+      await transactionsCreate({ amount: 100, type: 'expense', description: 'Flight' })
+    ).json()
+    expect(
+      (await transactionTagsSet({ p1: String(created.id) }, { tagIds: [tag.id] })).status
+    ).toBe(200)
 
     const getRes = await tagsGetTransactions({ p1: tag.id.toString() })
     expect(getRes.status).toBe(200)
