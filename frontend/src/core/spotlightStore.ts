@@ -249,19 +249,26 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'loans-header',
         'loans',
         'Loans',
-        'Track loans with amortization schedules, prepayments, and variable-rate periods.'
+        'Every loan you are paying off: what is still owed, what goes out each month and which one ends next.'
       ),
       step(
         'loans-add',
         'loans',
         'Add a loan',
-        'Enter the principal, interest rate, term in months, and start date.'
+        'Enter the amount borrowed, the rate, the term in months and when the first payment is due.'
       ),
       step(
         'loans-list',
         'loans',
         'Your loans',
-        'Each card shows the principal, rate, term, and monthly payment. Click one for the full amortization.',
+        'Each card shows how much is repaid, what is still owed and when the loan is done. Open one for its month-by-month schedule and extra payments.',
+        'top'
+      ),
+      step(
+        'loans-what-if',
+        'loans',
+        'What if',
+        'Try a bit more each month or a one-off payment, and see how much sooner the loan is done and how much interest that saves.',
         'top'
       ),
     ],

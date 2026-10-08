@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test'
 import { login, navigateToRoute } from './test-helpers'
 
 // Structural assertions target stable `data-test-id` hooks, never user-visible copy. See
-// tests/README.md and the Loans ids in src/features/Loans.tsx. The demo profile
-// (Example Low Income) seeds one loan, so loan-card assertions can be meaningful rather than
-// tolerant `>= 0` no-ops.
+// tests/README.md and the Loans ids in src/features/loans/. The fixture account seeds one loan
+// (tests/e2e-seed.ts), so loan-card assertions can be meaningful rather than tolerant `>= 0`
+// no-ops.
 test.describe('Loans', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
@@ -24,9 +24,10 @@ test.describe('Loans', () => {
   })
 
   test('should display loans summary cards', async ({ page }) => {
-    // The four summary cards render unconditionally, independent of loan data.
-    await expect(page.getByTestId('loans-summary')).toBeVisible()
-    await expect(page.getByTestId('loans-summary-card')).toHaveCount(4)
+    // Three figures once there is a loan: owed in total, paid each month, next to finish. With no
+    // loans the page shows its empty state instead.
+    await expect(page.getByTestId('loans-summary')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('loans-summary-card')).toHaveCount(3)
   })
 
   test('should display loan cards', async ({ page }) => {
@@ -62,8 +63,11 @@ test.describe('Loans', () => {
     await expect(monthly).toHaveText(/\d/)
   })
 
-  test('should display loan status badges', async ({ page }) => {
-    await expect(page.getByTestId('loans-item-status').first()).toBeVisible({ timeout: 10000 })
+  test('should say when each loan is done', async ({ page }) => {
+    // The relayout replaced the Active / Paid Off badge with the payoff month.
+    const payoff = page.getByTestId('loans-item-payoff').first()
+    await expect(payoff).toBeVisible({ timeout: 10000 })
+    await expect(payoff).toHaveText(/^(Done in|Paid off)/)
   })
 
   test('should display loan progress bar', async ({ page }) => {
@@ -85,9 +89,13 @@ test.describe('Loans', () => {
     await expect(page.getByTestId('loans-item-delete').first()).toBeVisible()
   })
 
-  test('should display loan amortization chart', async ({ page }) => {
-    // The "Loan Overview" charts section renders whenever at least one loan exists.
-    await expect(page.getByTestId('loans-charts')).toBeVisible({ timeout: 10000 })
+  test('should chart a what-if against the loan as planned', async ({ page }) => {
+    // The overview's charts section went with the relayout; the balance chart is on Compare,
+    // which What if on a card opens.
+    await page.getByTestId('loans-item-what-if').first().click()
+    await expect(page.getByTestId('loans-compare-chart')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByTestId('loans-chart-line-a')).toHaveCount(1)
+    await expect(page.getByTestId('loans-chart-line-b')).toHaveCount(1)
   })
 
   test('should display loan detail rows', async ({ page }) => {
@@ -114,6 +122,9 @@ test.describe('Loans', () => {
   })
 
   test('should have prepayment option', async ({ page }) => {
-    await expect(page.getByTestId('loans-prepay-btn').first()).toBeVisible({ timeout: 10000 })
+    // Extra payments moved from a button on the card to the loan's own Extra payments tab.
+    await page.getByTestId('loans-item-name').first().click()
+    await page.getByTestId('loans-tab-extras').click()
+    await expect(page.getByTestId('loans-extra-form')).toBeVisible({ timeout: 10000 })
   })
 })

@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import type { AppEnv } from '../index'
+import { readExtraPayment } from '../../../shared/loanExtraPayment'
 import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
 import { HttpError } from '../http'
@@ -42,6 +44,15 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
     else groups.set(row.loan_id, [row])
   }
   return groups
+}
+
+/**
+ * Whether a create or an edit was sent a base rate. 0 % is a rate, an interest-free loan; a rate
+ * left out, null or empty is not. A create sent none is saved at the 5 % these routes have always
+ * defaulted to, and an edit sent none keeps the stored rate.
+ */
+function rateSent(rate: unknown): boolean {
+  return rate !== undefined && rate !== null && rate !== ''
 }
 
 // List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
@@ -96,7 +107,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
 loansRoutes.post('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const b = (await c.req.json()) as Record<string, any>
-  const interestRate = b.interest_rate || 5.0
+  const interestRate = rateSent(b.interest_rate) ? b.interest_rate : 5.0
   const res = await db.insert(c.env.DB, 'loans', {
     name: b.name,
     principal: b.principal,
@@ -124,7 +135,7 @@ loansRoutes.post('/api/loans', requireAuth, async (c) => {
     id: loanId,
     name: b.name,
     principal: b.principal,
-    interest_rate: b.interest_rate,
+    interest_rate: interestRate,
     start_date: b.start_date,
     term_months: b.term_months,
     profile_id: pid,
@@ -164,7 +175,7 @@ loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
     {
       name: b.name,
       principal: b.principal,
-      interest_rate: b.interest_rate || 5.0,
+      ...(rateSent(b.interest_rate) ? { interest_rate: b.interest_rate } : {}),
       start_date: b.start_date,
       term_months: b.term_months,
     },
@@ -252,19 +263,50 @@ loansRoutes.delete('/api/loans/:id/rates/:rateId', requireAuth, async (c) => {
 })
 
 // ── Prepayments CRUD ──────────────────────────────────────────────────────────
+// An extra payment is checked by shared/loanExtraPayment.ts, as the local-first handlers check it:
+// a whole payment number within the loan's term, an amount above zero, a note that is text.
+async function extraPaymentOf(c: Context<AppEnv>, loan: { term_months: number | null }) {
+  const read = readExtraPayment(await c.req.json(), loan.term_months)
+  if (!read.ok) throw new HttpError(400, read.error)
+  return read.value
+}
+
 loansRoutes.post('/api/loans/:id/prepayments', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
+  const loan = await db.first<{ term_months: number | null }>(
+    c.env.DB,
+    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
   if (!loan) throw new HttpError(404, 'Loan not found')
-  const b = (await c.req.json()) as Record<string, any>
-  const res = await db.insert(c.env.DB, 'loan_prepayments', {
-    loan_id: id,
-    month: b.month,
-    amount: b.amount,
-    note: b.note || '',
-  })
+  const extra = await extraPaymentOf(c, loan)
+  const res = await db.insert(c.env.DB, 'loan_prepayments', { loan_id: id, ...extra })
   return c.json({ id: res.meta.last_row_id })
+})
+
+loansRoutes.put('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c) => {
+  const pid = await getProfileId(c)
+  const id = c.req.param('id')
+  const loan = await db.first<{ term_months: number | null }>(
+    c.env.DB,
+    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!loan) throw new HttpError(404, 'Loan not found')
+  const extra = await extraPaymentOf(c, loan)
+  const res = await db.update(
+    c.env.DB,
+    'loan_prepayments',
+    { ...extra },
+    'id = ? AND loan_id = ?',
+    c.req.param('prepayId'),
+    id
+  )
+  if (!res.meta.changes) throw new HttpError(404, 'Extra payment not found')
+  return c.json({ ok: true })
 })
 
 loansRoutes.delete('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c) => {
