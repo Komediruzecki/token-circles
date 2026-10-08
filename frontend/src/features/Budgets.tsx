@@ -344,7 +344,8 @@ export default function Budgets() {
     }
 
     try {
-      await apiPost('/api/budgets/allocate', {
+      // For the month on screen: without one, the runtimes set this month's.
+      await apiPost(`/api/budgets/allocate?month=${month()}`, {
         category_id: selectedCategory()!.category_id,
         amount: allocNum,
         period: 'monthly',
