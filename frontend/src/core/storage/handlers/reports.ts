@@ -40,7 +40,9 @@ export async function reportHandler(ctx: {
         return json({ error: 'Unknown PDF report type' }, 400)
       }
 
-      return new Response(blob, {
+      // The bytes, not the Blob: jsPDF builds its Blob with the global Blob, which under jsdom is not
+      // the Blob that Node's Response knows (Node 22 throws, Node 25 sends "[object Blob]").
+      return new Response(await blob.arrayBuffer(), {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',

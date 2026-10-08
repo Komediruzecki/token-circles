@@ -46,7 +46,7 @@ afterAll(() => {
 // jsdom decodes no images and runs no Web Workers, and local-first's PDF reports draw their charts
 // with both (clientPdfReports.ts). Here an image fails to decode and the chart worker answers with
 // no chart, so a report is made without its charts, as a browser that cannot draw one makes it.
-// jsdom's Blob is not the Response's, so a report's bytes do not survive: scenarios read its type.
+// Its bytes still arrive: the handler answers them as an ArrayBuffer, not as jsdom's Blob.
 class UndecodableImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null

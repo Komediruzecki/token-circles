@@ -133,6 +133,7 @@ export const reports = [
       const reply = await api.get(path);
       expectOk(expect, reply, `GET ${path}`);
       expect(reply.type, `GET ${path} answers a PDF`).toBe('application/pdf');
+      expect(String(reply.body).slice(0, 5), `GET ${path} answers a PDF's bytes`).toBe('%PDF-');
     };
     // DIFFERENCE monthly-pdf-month
     if (api.runtime === 'worker') {
