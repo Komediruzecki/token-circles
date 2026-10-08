@@ -181,6 +181,9 @@ export async function billsCreate(body: unknown): Promise<Response> {
     if (!(await currentProfileOwns('categories', b.category_id))) {
       return json({ error: 'Category does not belong to this profile' }, 400)
     }
+    if (!(await currentProfileOwns('accounts', b.account_id))) {
+      return json({ error: 'Account does not belong to this profile' }, 400)
+    }
     const record = {
       profile_id: pid,
       name,
@@ -191,6 +194,8 @@ export async function billsCreate(body: unknown): Promise<Response> {
       day_of_month: (b.day_of_month as number) || 1,
       category_id:
         b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+      // The account a payment comes out of: mark-paid moves its balance, as on the Worker.
+      account_id: b.account_id !== null && b.account_id !== undefined ? Number(b.account_id) : null,
       // NULL on a new Worker row too; BillSchema requires both keys.
       last_paid_date: null,
       next_due_date: null,
@@ -227,6 +232,9 @@ export async function billsUpdate(
     if ('category_id' in b && !(await currentProfileOwns('categories', b.category_id))) {
       return json({ error: 'Category does not belong to this profile' }, 400)
     }
+    if ('account_id' in b && !(await currentProfileOwns('accounts', b.account_id))) {
+      return json({ error: 'Account does not belong to this profile' }, 400)
+    }
     if (b.name !== undefined) bill.name = b.name
     if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
     if (b.frequency !== undefined) bill.frequency = b.frequency
@@ -234,6 +242,8 @@ export async function billsUpdate(
     if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
     if (b.category_id !== undefined)
       bill.category_id = b.category_id !== null ? Number(b.category_id) : null
+    if (b.account_id !== undefined)
+      bill.account_id = b.account_id !== null ? Number(b.account_id) : null
     if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
     if (b.autopay !== undefined) bill.autopay = b.autopay ? 1 : 0
     if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0

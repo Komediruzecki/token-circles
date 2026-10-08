@@ -197,7 +197,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'POST /api/auth/login',
   'POST /api/auth/logout',
   'GET /api/auth/me',
-  'POST /api/bills/:id/mark-paid',
   'GET /api/bills/calendar',
   'POST /api/calculator/compound-interest',
   'GET /api/calculator/emergency-fund',

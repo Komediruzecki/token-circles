@@ -1,6 +1,14 @@
-import { addCategory, expectMoney, isoDay, listTransactions, monthStart } from '../helpers';
+import {
+  addCategory,
+  balanceOf,
+  expectMoney,
+  isoDay,
+  listTransactions,
+  monthStart,
+} from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
+import { account } from './accounts';
 
 /** The body the Bills form posts (features/billForm.ts, buildBillMutationPayload). */
 function billForm(fields: Record<string, unknown> = {}) {
@@ -24,6 +32,15 @@ async function billsList(api: ContractApi, expect: Expect, query = ''): Promise<
   const reply = await api.get(`/api/bills${query}`);
   expectOk(expect, reply, `GET /api/bills${query}`);
   return reply.body as Json[];
+}
+
+/** Today as the runtime dates a payment: UTC on the Worker, the device's day in local-first. */
+function paymentDays(): string[] {
+  const now = new Date();
+  const local = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+  return [isoDay(now), local];
 }
 
 export const bills = [
@@ -118,6 +135,54 @@ export const bills = [
     );
     expect(await billsList(api, expect)).toHaveLength(1);
   }),
+
+  scenario(
+    'paying a bill records the expense on its account, once a period',
+    async (api, expect) => {
+      const utilities = await addCategory(api, expect, 'Utilities');
+      const everyday = await account(api, expect, 'Everyday', 1000);
+      const water = await bill(api, expect, { category_id: utilities, account_id: everyday });
+      const netflix = await bill(api, expect, {
+        name: 'Netflix',
+        amount: 12.99,
+        dueDate: '2026-03-02',
+        type: 'subscription',
+      });
+      expect((await api.get(`/api/bills/${water}`)).body.account_id).toBe(everyday);
+
+      const paid = await api.post(`/api/bills/${water}/mark-paid`, {});
+      expectOk(expect, paid, 'POST mark-paid');
+      expect(paid.body).toMatchObject({ ok: true, transactionId: expect.any(Number) });
+
+      const rows = await listTransactions(api, expect);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        id: paid.body.transactionId,
+        description: 'Water',
+        type: 'expense',
+        category_id: utilities,
+        account_id: everyday,
+        currency: 'EUR',
+      });
+      expectMoney(expect, rows[0].amount, 40.25);
+      expect(paymentDays()).toContain(rows[0].date);
+      expectMoney(expect, await balanceOf(api, expect, everyday), 959.75, 'Everyday');
+
+      const read = (await api.get(`/api/bills/${water}`)).body;
+      expect(read.last_paid_date).toBe(rows[0].date);
+      expect((await billsList(api, expect, '?paid=true')).map((b) => b.id)).toEqual([water]);
+      expect((await billsList(api, expect, '?paid=false')).map((b) => b.id)).toEqual([netflix]);
+      // Housing lists the subscriptions alone.
+      expect((await billsList(api, expect, '?type=subscription')).map((b) => b.id)).toEqual([
+        netflix,
+      ]);
+
+      // Paid for this period: a second tap records nothing more.
+      expect((await api.post(`/api/bills/${water}/mark-paid`, {})).status).toBe(409);
+      expect(await listTransactions(api, expect)).toHaveLength(1);
+      expectMoney(expect, await balanceOf(api, expect, everyday), 959.75, 'Everyday');
+    }
+  ),
 
   scenario('upcoming bills', async (api, expect) => {
     const today = isoDay(new Date());
