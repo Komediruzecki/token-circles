@@ -24,6 +24,7 @@ import {
   nextPaymentMonth,
   niceAmount,
   runScenario,
+  stepAmount,
   TEMPLATE_IDS,
   templateOptions,
   templateTakesMode,
@@ -455,36 +456,43 @@ describe('templateOptions', () => {
       {
         template: 'more-each-month',
         presets: { amount: [50, 100, 200] },
+        steps: { amount: 50 },
         first: { template: 'more-each-month', amount: 50 },
       },
       {
         template: 'round-up',
         presets: { target: [1100, 1200] },
+        steps: { target: 100 },
         first: { template: 'round-up', target: 1100 },
       },
       {
         template: 'one-payment',
         presets: { amount: [1000, 5000, 10000], inMonths: [1, 6, 12] },
+        steps: { amount: 1000 },
         first: { template: 'one-payment', amount: 1000, inMonths: 1 },
       },
       {
         template: 'yearly-bonus',
         presets: { amount: [1000, 2000], monthOfYear: MONTHS },
+        steps: { amount: 1000 },
         first: { template: 'yearly-bonus', amount: 1000, monthOfYear: 12 },
       },
       {
         template: 'extra-installment',
         presets: { monthOfYear: MONTHS },
+        steps: {},
         first: { template: 'extra-installment', monthOfYear: 12 },
       },
       {
         template: 'done-by',
         presets: { yearsEarlier: [1, 2, 5] },
+        steps: {},
         first: { template: 'done-by', yearsEarlier: 1 },
       },
       {
         template: 'rate-change',
         presets: { points: [1, 2, -1] },
+        steps: {},
         first: { template: 'rate-change', points: 1 },
       },
     ])
@@ -516,6 +524,32 @@ describe('templateOptions', () => {
     expect(options['yearly-bonus']).toEqual({ amount: [2000, 5000], monthOfYear: MONTHS })
     expect(options['done-by']).toEqual({ yearsEarlier: [1, 2, 5] })
     expect(options['rate-change']).toEqual({ points: [1, 2, -1] })
+  })
+
+  it('steps each amount by a share of the loan: small for a monthly extra, large for a one-off', () => {
+    const steps = (l: LoanInput) =>
+      Object.fromEntries(templateOptions(l, 1).map((o) => [o.template, o.steps]))
+    // A = 1,060.66: 5 % of it is 53, a tenth 106; 1 % of the balance is 1,000.
+    expect(steps(loan())).toMatchObject({
+      'more-each-month': { amount: 50 },
+      'round-up': { target: 100 },
+      'one-payment': { amount: 1000 },
+      'yearly-bonus': { amount: 1000 },
+    })
+    // 3,000 at 9 % over 18 months: A = 178.79, 1 % of the balance 30.
+    expect(steps(loan({ principal: 3000, interest_rate: 9, term_months: 18 }))).toMatchObject({
+      'more-each-month': { amount: 10 },
+      'round-up': { target: 20 },
+      'one-payment': { amount: 25 },
+      'yearly-bonus': { amount: 200 },
+    })
+    // 450,000 at 3.8 % over 30 years: A = 2,096.81, 1 % of the balance 4,500.
+    expect(steps(loan({ principal: 450000, interest_rate: 3.8, term_months: 360 }))).toMatchObject({
+      'more-each-month': { amount: 100 },
+      'round-up': { target: 200 },
+      'one-payment': { amount: 5000 },
+      'yearly-bonus': { amount: 2000 },
+    })
   })
 
   it('works from the loan as it stands in the month it is seen from', () => {
@@ -779,5 +813,25 @@ describe('amortizeLoan through the scenarios', () => {
         })
       )
     )
+  })
+})
+
+describe('stepAmount', () => {
+  it('moves to the next whole multiple of the step', () => {
+    expect(stepAmount(1000, 1000, 1)).toBe(2000)
+    expect(stepAmount(1234, 1000, 1)).toBe(2000)
+    expect(stepAmount(1234, 1000, -1)).toBe(1000)
+    expect(stepAmount(3000, 1000, -1)).toBe(2000)
+    expect(stepAmount(3000, 2500, 1)).toBe(5000)
+    expect(stepAmount(3000, 2500, -1)).toBe(2500)
+  })
+
+  it('never goes below one step, or below the floor it is given', () => {
+    expect(stepAmount(1000, 1000, -1)).toBe(1000)
+    expect(stepAmount(400, 1000, -1)).toBe(1000)
+    // Round up stops at the first target that pays anything more.
+    expect(stepAmount(1100, 100, -1, 1100)).toBe(1100)
+    expect(stepAmount(1150, 100, -1, 1100)).toBe(1100)
+    expect(stepAmount(1150, 100, 1, 1100)).toBe(1200)
   })
 })

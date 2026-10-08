@@ -324,10 +324,35 @@ export type PresetsFor<T extends TemplateId> = {
   [K in Exclude<keyof ChoiceFor<T>, 'template'>]: number[];
 };
 
-/** A template the loan can take, the values it offers, and the choice it starts on. */
+/**
+ * How far one press of − or + moves each amount a template takes. Only the fields that hold money
+ * have one; the others are picked from their presets.
+ */
+export type StepsFor<T extends TemplateId> = Partial<
+  Record<Exclude<keyof ChoiceFor<T>, 'template'>, number>
+>;
+
+/** A template the loan can take, the values it offers, its steps, and the choice it starts on. */
 export type TemplateOption = {
-  [T in TemplateId]: { template: T; presets: PresetsFor<T>; first: ChoiceFor<T> };
+  [T in TemplateId]: {
+    template: T;
+    presets: PresetsFor<T>;
+    steps: StepsFor<T>;
+    first: ChoiceFor<T>;
+  };
 }[TemplateId];
+
+/**
+ * `value` moved one step in `direction`, to the next whole multiple of `step` that way: in steps
+ * of 1,000, 1,234 goes up to 2,000 and down to 1,000. Never below `floor`, one step unless given.
+ */
+export function stepAmount(value: number, step: number, direction: 1 | -1, floor = step): number {
+  if (!(step > 0) || !Number.isFinite(value)) return value;
+  const steps = value / step;
+  // A hair of tolerance, so 3,000 in steps of 1,000 counts as on a step despite float noise.
+  const next = direction > 0 ? Math.floor(steps + 1e-9) + 1 : Math.ceil(steps - 1e-9) - 1;
+  return Math.max(floor, next * step);
+}
 
 /** Whether the template's extra payments can pay less each month: all but done-by and rate-change. */
 export function templateTakesMode(template: TemplateId): boolean {
@@ -355,6 +380,11 @@ function distinct(values: readonly number[]): number[] {
  * every amount through `niceAmount` and below b. A choice that could not change anything is left
  * out: a payment after the loan's last, a yearly one with less than a year to go, an end date no
  * later than the next payment. Nothing at all once the loan is repaid or down to its last payment.
+ *
+ * Each amount also gets a step, what one press of − or + moves it by, from the same base as its
+ * presets and through `niceAmount`: 5 % of A for more each month, a tenth of A for round up, 1 % of
+ * b for one payment, A for a yearly bonus. A monthly extra moves in small steps, a one-off payment
+ * on a large loan in large ones.
  */
 export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOption[] {
   const from = monthOf(fromMonth);
@@ -366,6 +396,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
   const end = plan.payoffMonth ?? Infinity;
   const amounts = (base: number, shares: number[]) =>
     distinct(shares.map((s) => niceAmount(base * s))).filter((a) => a > 0 && a < balance);
+  const stepOf = (base: number) => Math.max(1, niceAmount(base));
 
   const options: TemplateOption[] = [];
 
@@ -374,6 +405,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
     options.push({
       template: 'more-each-month',
       presets: { amount: more },
+      steps: { amount: stepOf(installment * 0.05) },
       first: { template: 'more-each-month', amount: more[0] },
     });
   }
@@ -383,6 +415,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
   options.push({
     template: 'round-up',
     presets: { target: [target, target + unit] },
+    steps: { target: Math.max(1, unit) },
     first: { template: 'round-up', target },
   });
 
@@ -392,6 +425,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
     options.push({
       template: 'one-payment',
       presets: { amount: once, inMonths },
+      steps: { amount: stepOf(balance * 0.01) },
       first: { template: 'one-payment', amount: once[0], inMonths: inMonths[0] },
     });
   }
@@ -403,12 +437,14 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
       options.push({
         template: 'yearly-bonus',
         presets: { amount: bonus, monthOfYear: MONTHS_OF_YEAR },
+        steps: { amount: stepOf(installment) },
         first: { template: 'yearly-bonus', amount: bonus[0], monthOfYear: 12 },
       });
     }
     options.push({
       template: 'extra-installment',
       presets: { monthOfYear: MONTHS_OF_YEAR },
+      steps: {},
       first: { template: 'extra-installment', monthOfYear: 12 },
     });
   }
@@ -420,6 +456,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
       options.push({
         template: 'done-by',
         presets: { yearsEarlier: years },
+        steps: {},
         first: { template: 'done-by', yearsEarlier: years[0] },
       });
     }
@@ -428,6 +465,7 @@ export function templateOptions(loan: LoanInput, fromMonth: number): TemplateOpt
   options.push({
     template: 'rate-change',
     presets: { points: now.rate >= 1 ? [1, 2, -1] : [1, 2] },
+    steps: {},
     first: { template: 'rate-change', points: 1 },
   });
   return options;

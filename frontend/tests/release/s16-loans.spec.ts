@@ -3,8 +3,8 @@
  * redesign). A loan added through the form; What if on it; each mode of an extra payment; both
  * modes side by side; the comparison surviving a reload, because it lives in the address; Use as
  * A; an extra payment saved on Extra payments moving A; and on a phone, the picked what-if still in
- * view after a reload. Then a saved extra payment changed in
- * place. Every case runs in both storage modes.
+ * view after a reload. Then an amount of your own, typed or stepped, and a saved extra payment
+ * changed in place. Every case runs in both storage modes.
  *
  * The loan is plan 03's example: 100,000 at 5 % over 120 months, first payment due on the first
  * of the month after next, so the next payment is the first one whatever today is. In payment
@@ -245,6 +245,32 @@ for (const [pass, test] of both) {
       await expect
         .poll(async () => inside(await chip.boundingBox(), await strip.boundingBox()))
         .toBe(true)
+    })
+
+    test('16.6 an amount of your own, stepped and typed, and kept by a reload @release', async ({
+      m,
+    }) => {
+      const { page } = m
+      const name = `zz-amount${m.suffix}`
+      await arrangeLoan(m, name)
+      await loanCard(page, name).getByTestId('loans-item-what-if').click()
+      await page.getByTestId('loans-template-yearly-bonus').click()
+      await expect.poll(() => pick(page, 'b')).toMatch(/^yearly-bonus\.1000\.12\./)
+
+      // The installment is 1,060.66, so a yearly bonus moves by 1,000 a press.
+      const up = page.getByTestId('loans-step-up-amount')
+      await expect(up).toHaveText('+1,000')
+      await up.click()
+      await expect.poll(() => pick(page, 'b')).toMatch(/^yearly-bonus\.2000\.12\./)
+
+      await page.getByTestId('loans-amount-amount').fill('10000')
+      await expect.poll(() => pick(page, 'b')).toMatch(/^yearly-bonus\.10000\.12\./)
+      await expect(page.getByTestId('loans-compare-b-title')).toHaveText('€10,000 every December')
+
+      const route = (await page.evaluate(() => window.location.hash)).slice(1)
+      await reloadOn(page, route, 'loans-templates')
+      await expect(page.getByTestId('loans-amount-amount')).toHaveValue('10000')
+      await expect(page.getByTestId('loans-compare-b-title')).toHaveText('€10,000 every December')
     })
 
     test('16.7 a saved extra payment changed in place moves A again @release', async ({ m }) => {

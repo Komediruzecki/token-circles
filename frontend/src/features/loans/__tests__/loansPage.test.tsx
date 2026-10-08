@@ -307,6 +307,85 @@ describe('the picked what-if on a phone', () => {
   })
 })
 
+describe('an amount of your own', () => {
+  /** Type into an amount box the way a person does: focused, one keystroke at a time. */
+  async function typeInto(box: HTMLInputElement, text: string) {
+    box.focus()
+    box.value = text
+    box.dispatchEvent(new Event('input', { bubbles: true }))
+    await settle()
+  }
+
+  it('steps a yearly bonus by about one installment, and takes a typed amount', async () => {
+    const root = await mount('#loans/1/compare?b=yearly-bonus.1000.12.shorten')
+    // A = 1,060.66, so a step is 1,000; the bonus cannot go below one step.
+    expect(text(root, 'loans-step-up-amount')).toBe('+1,000')
+    expect(el(root, 'loans-step-up-amount')?.getAttribute('aria-label')).toBe('Raise by €1,000')
+    expect(el(root, 'loans-step-down-amount')?.hasAttribute('disabled')).toBe(true)
+
+    await click(root, 'loans-step-up-amount')
+    expect(query().get('b')).toBe('yearly-bonus.2000.12.shorten')
+    expect((el(root, 'loans-amount-amount') as HTMLInputElement).value).toBe('2000')
+    expect((el(root, 'loans-preset-amount') as HTMLSelectElement).value).toBe('2000')
+
+    // Each keystroke moves B, and the box under the caret is the same one all the way.
+    const box = el(root, 'loans-amount-amount') as HTMLInputElement
+    for (const typed of ['1', '10', '100', '1000', '10000']) {
+      await typeInto(box, typed)
+      expect(document.activeElement).toBe(box)
+    }
+    expect(el(root, 'loans-amount-amount')).toBe(box)
+    expect(query().get('b')).toBe('yearly-bonus.10000.12.shorten')
+    expect(text(root, 'loans-compare-b-title')).toBe('€10,000 every December')
+    // Not one of the suggested amounts, so the list beside the box names none.
+    expect((el(root, 'loans-preset-amount') as HTMLSelectElement).value).toBe('')
+  })
+
+  it('keeps a typed amount whole, and an emptied box keeps the amount it had', async () => {
+    const root = await mount('#loans/1/compare?b=more-each-month.50.shorten')
+    const box = el(root, 'loans-amount-amount') as HTMLInputElement
+    await typeInto(box, '123.6')
+    expect(query().get('b')).toBe('more-each-month.124.shorten')
+    await typeInto(box, '')
+    expect(query().get('b')).toBe('more-each-month.124.shorten')
+    box.blur()
+    await settle()
+    expect(box.value).toBe('124')
+  })
+
+  it('steps from a typed amount to the next multiple of the step, either way', async () => {
+    const root = await mount('#loans/1/compare?b=one-payment.1234.12.lower')
+    // 1 % of the 100,000 owed.
+    expect(text(root, 'loans-step-down-amount')).toBe('−1,000')
+    await click(root, 'loans-step-up-amount')
+    expect(query().get('b')).toBe('one-payment.2000.12.lower')
+    await click(root, 'loans-step-down-amount')
+    await click(root, 'loans-step-down-amount')
+    expect(query().get('b')).toBe('one-payment.1000.12.lower')
+    expect(el(root, 'loans-step-down-amount')?.hasAttribute('disabled')).toBe(true)
+  })
+
+  it('picks a suggested amount from the list beside the box', async () => {
+    const root = await mount('#loans/1/compare?b=one-payment.1234.12.shorten')
+    const presets = el(root, 'loans-preset-amount') as HTMLSelectElement
+    expect([...presets.options].map((o) => o.value)).toEqual(['', '1000', '5000', '10000'])
+    presets.value = '5000'
+    presets.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    expect(query().get('b')).toBe('one-payment.5000.12.shorten')
+    expect((el(root, 'loans-amount-amount') as HTMLInputElement).value).toBe('5000')
+  })
+
+  it('stops round up at the first amount that pays anything more', async () => {
+    const root = await mount('#loans/1/compare?b=round-up.1100.shorten')
+    expect(el(root, 'loans-step-down-target')?.hasAttribute('disabled')).toBe(true)
+    await click(root, 'loans-step-up-target')
+    expect(query().get('b')).toBe('round-up.1200.shorten')
+    await click(root, 'loans-step-down-target')
+    expect(query().get('b')).toBe('round-up.1100.shorten')
+  })
+})
+
 describe('the tour', () => {
   const anchors = (root: HTMLElement) =>
     ['loans-header', 'loans-add', 'loans-list', 'loans-what-if'].filter(

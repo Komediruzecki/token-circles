@@ -511,6 +511,101 @@
   outline-offset: 1px;
 }
 
+/* An amount in Compare: typed, moved a step at a time, or picked from the suggested amounts. */
+.amount {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+.amount-step {
+  min-width: 44px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.amount-step:first-child {
+  border-right: 1px solid var(--border);
+  border-radius: 7px 0 0 7px;
+}
+
+.amount-step:last-child {
+  border-left: 1px solid var(--border);
+  border-radius: 0 7px 7px 0;
+}
+
+.amount-step:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.amount-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.amount-input {
+  width: 9ch;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.amount-input::-webkit-inner-spin-button,
+.amount-input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.amount-presets {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  color: var(--text-secondary);
+}
+
+.amount-presets:hover {
+  color: var(--text);
+}
+
+/* The native select lies invisibly over the chevron, so the list it opens is the platform's own. */
+.amount-presets select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.amount-step:focus-visible,
+.amount-input:focus-visible,
+.amount-presets:has(select:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
 .segments {
   display: inline-flex;
   flex-wrap: wrap;

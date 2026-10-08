@@ -12,9 +12,11 @@ import {
   applyWhatIf,
   buildWhatIf,
   runScenario,
+  stepAmount,
   templateTakesMode,
 } from '../../../../shared/loanScenarios'
 import { addCalendarMonths, rateStretches } from '../../../../shared/loanSchedule'
+import NumberField from '../../components/NumberField'
 import LoanBalanceChart from './LoanBalanceChart'
 import {
   bothModesSentence,
@@ -55,28 +57,36 @@ interface Props {
   axisMoney: (amount: number) => string
 }
 
-/** A field of a template's choice: how its select is labelled and how each value reads. */
+/** A field of a template's choice: how its control is labelled and how each value reads. */
 interface FieldSpec {
   key: string
   label: string
   text: (value: number) => string
+  /** An amount of money: typed, or moved a step at a time, as well as picked from the presets. */
+  money?: boolean
 }
+
+/** The most an amount can be and still be read back from the address (loanRoute's FIELDS). */
+const MOST = 1e12
+
+/** A step as the − and + buttons show it: 1,000, in the app's en-US locale. */
+const wholeNumber = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 
 function fieldsOf(template: TemplateId, f: Formats): FieldSpec[] {
   const money = (v: number) => f.wholeMoney(v)
   switch (template) {
     case 'more-each-month':
-      return [{ key: 'amount', label: 'More each month', text: money }]
+      return [{ key: 'amount', label: 'More each month', text: money, money: true }]
     case 'round-up':
-      return [{ key: 'target', label: 'Pay each month', text: money }]
+      return [{ key: 'target', label: 'Pay each month', text: money, money: true }]
     case 'one-payment':
       return [
-        { key: 'amount', label: 'Amount', text: money },
+        { key: 'amount', label: 'Amount', text: money, money: true },
         { key: 'inMonths', label: 'When', text: inMonthsLabel },
       ]
     case 'yearly-bonus':
       return [
-        { key: 'amount', label: 'Amount', text: money },
+        { key: 'amount', label: 'Amount', text: money, money: true },
         { key: 'monthOfYear', label: 'Every', text: monthOfYearName },
       ]
     case 'extra-installment':
@@ -330,8 +340,117 @@ export default function LoanCompare(props: Props) {
     queueMicrotask(() => group.querySelector<HTMLElement>(`[data-mode="${next}"]`)?.focus())
   }
 
+  const optionOf = (template: TemplateId) => props.options.find((o) => o.template === template)
   const presetsFor = (template: TemplateId) =>
-    (props.options.find((o) => o.template === template)?.presets ?? {}) as Record<string, number[]>
+    (optionOf(template)?.presets ?? {}) as Record<string, number[]>
+  const stepFor = (template: TemplateId, key: string) =>
+    ((optionOf(template)?.steps ?? {}) as Record<string, number | undefined>)[key] ?? 1
+  /** The lowest amount − goes to: one step, or for round up the first target that pays more. */
+  const floorFor = (template: TemplateId, key: string) =>
+    key === 'target'
+      ? (presetsFor(template).target?.[0] ?? stepFor(template, key))
+      : stepFor(template, key)
+
+  /** A typed amount, kept whole. An emptied box, or one under 1, keeps the amount it had. */
+  const setAmount = (key: string, value: number | null) => {
+    if (value === null || value < 1) return
+    setField(key, Math.min(MOST, Math.round(value)))
+  }
+
+  // Built again only when the template changes. Built from the pick itself, every amount typed
+  // would hand <For> new fields, and it would rebuild the box under the caret on each keystroke.
+  const fields = createMemo(() => {
+    const template = pickedTemplate()
+    return template ? fieldsOf(template, f()) : []
+  })
+
+  /**
+   * An amount: one step down, the box to type in, the suggested amounts, one step up. The step
+   * comes with the presets (templateOptions), so a monthly extra moves by tens and a one-off
+   * payment on a large loan by thousands.
+   */
+  const amountField = (template: TemplateId, field: FieldSpec) => {
+    const id = `loans-amount-${field.key}`
+    const current = () =>
+      (props.b?.choice as unknown as Record<string, number> | undefined)?.[field.key] ?? 0
+    const step = () => stepFor(template, field.key)
+    const floor = () => floorFor(template, field.key)
+    const presets = () => presetsFor(template)[field.key] ?? []
+    const presetValue = () => (presets().includes(current()) ? String(current()) : '')
+    return (
+      <div class={styles.field}>
+        <label for={id}>{field.label}</label>
+        <div class={styles.amount} role="group" aria-label={field.label}>
+          <button
+            type="button"
+            class={styles.amountStep}
+            data-test-id={`loans-step-down-${field.key}`}
+            aria-label={`Lower by ${f().wholeMoney(step())}`}
+            disabled={current() <= floor()}
+            onClick={() => {
+              setField(field.key, stepAmount(current(), step(), -1, floor()))
+            }}
+          >
+            −{wholeNumber.format(step())}
+          </button>
+          <NumberField<null>
+            id={id}
+            class={styles.amountInput}
+            testId={id}
+            step="1"
+            min="1"
+            value={current()}
+            emptyValue={null}
+            onChange={(value) => {
+              setAmount(field.key, value)
+            }}
+          />
+          <span class={styles.amountPresets}>
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+            <select
+              data-test-id={`loans-preset-${field.key}`}
+              aria-label="Suggested amounts"
+              value={presetValue()}
+              onChange={(e) => {
+                setField(field.key, Number(e.currentTarget.value))
+              }}
+            >
+              <option value="" disabled>
+                Suggested amounts
+              </option>
+              <For each={presets()}>
+                {(value) => <option value={String(value)}>{field.text(value)}</option>}
+              </For>
+            </select>
+          </span>
+          <button
+            type="button"
+            class={styles.amountStep}
+            data-test-id={`loans-step-up-${field.key}`}
+            aria-label={`Raise by ${f().wholeMoney(step())}`}
+            disabled={current() >= MOST}
+            onClick={() => {
+              setField(field.key, Math.min(MOST, stepAmount(current(), step(), 1, floor())))
+            }}
+          >
+            +{wholeNumber.format(step())}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const valuesFor = (key: string): number[] => {
     if (!props.b) return []
@@ -412,24 +531,28 @@ export default function LoanCompare(props: Props) {
         <Show when={props.b}>
           {(b) => (
             <div class={styles.controls} data-test-id="loans-compare-controls">
-              <For each={fieldsOf(b().choice.template, f())}>
-                {(field) => (
-                  <label class={styles.field}>
-                    {field.label}
-                    <select
-                      class={styles.select}
-                      data-test-id={`loans-preset-${field.key}`}
-                      value={String((b().choice as unknown as Record<string, number>)[field.key])}
-                      onChange={(e) => {
-                        setField(field.key, Number(e.currentTarget.value))
-                      }}
-                    >
-                      <For each={valuesFor(field.key)}>
-                        {(value) => <option value={String(value)}>{field.text(value)}</option>}
-                      </For>
-                    </select>
-                  </label>
-                )}
+              <For each={fields()}>
+                {(field) =>
+                  field.money ? (
+                    amountField(b().choice.template, field)
+                  ) : (
+                    <label class={styles.field}>
+                      {field.label}
+                      <select
+                        class={styles.select}
+                        data-test-id={`loans-preset-${field.key}`}
+                        value={String((b().choice as unknown as Record<string, number>)[field.key])}
+                        onChange={(e) => {
+                          setField(field.key, Number(e.currentTarget.value))
+                        }}
+                      >
+                        <For each={valuesFor(field.key)}>
+                          {(value) => <option value={String(value)}>{field.text(value)}</option>}
+                        </For>
+                      </select>
+                    </label>
+                  )
+                }
               </For>
 
               <Show when={templateTakesMode(b().choice.template)}>
