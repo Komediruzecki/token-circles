@@ -9,6 +9,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { apiGet } from '../../../core/api'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
@@ -198,6 +199,31 @@ describe('Compare', () => {
     expect(query().get('b')).toBe('more-each-month.50.shorten')
     expect(text(root, 'loans-compare-b-title')).toBe('€50 more each month')
     expect(text(root, 'loans-compare-b-installment')).toBe('€1,060.66plus €50.00 extra a month')
+  })
+
+  it('keeps a tab picked while the loan is still loading, instead of going back to Compare', async () => {
+    // The Worker's list rows carry no rate periods or extra payments, so the page fetches the loan
+    // before it can work out the presets. A tab picked in that moment is where the person stays.
+    const row: Record<string, unknown> = structuredClone(LOAN)
+    delete row.rate_periods
+    delete row.prepayments
+    listed = [row]
+    let release!: () => void
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    vi.mocked(apiGet).mockImplementationOnce(async () => {
+      await held
+      return structuredClone(LOAN)
+    })
+    const root = await mount('#loans')
+    await click(root, 'loans-item-what-if')
+    await click(root, 'loans-tab-extras')
+    release()
+    await settle()
+    expect(window.location.hash.split('?')[0]).toBe('#loans/1/extras')
+    expect(query().get('b')).toBeNull()
+    expect(el(root, 'loans-extras')).not.toBeNull()
   })
 
   it('compares on payment numbers when the start date cannot be read', async () => {

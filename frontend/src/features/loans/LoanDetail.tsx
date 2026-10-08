@@ -115,13 +115,14 @@ export default function LoanDetail(props: Props) {
   })
 
   // What if from the overview: open Compare on the first template's first preset, in place of
-  // the address without one, so Back returns to the overview.
+  // the address without one, so Back returns to the overview. In cloud mode the loan is fetched
+  // first, and a tab picked in that moment wins: the preset is only ever put on Compare.
   createEffect(() => {
     if (!props.pendingWhatIf || !input()) return
     const first = options()[0]
-    if (first && !props.route.b) {
+    if (first && !props.route.b && props.route.tab === 'compare') {
       props.navigate(
-        { ...props.route, tab: 'compare', b: { choice: first.first, mode: 'shorten' } },
+        { ...props.route, b: { choice: first.first, mode: 'shorten' } },
         { replace: true }
       )
     }
