@@ -3,13 +3,13 @@ import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
-/** The body the Bills form posts (features/billForm.ts, buildBillMutationPayload). */
+/** The body the Bills form posts (features/billForm.ts, billBody). */
 export function billForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Water',
     amount: 40.25,
     dueDate: '2026-03-15',
-    category_id: undefined,
+    category_id: null,
     frequency: 'monthly',
     autopay: false,
     type: 'bill',
@@ -55,8 +55,8 @@ export const bills = [
       last_paid_date: null,
     });
     expectMoney(expect, one.body.amount, 40.25);
-    // DIFFERENCE day-of-month-default: the form sends no day of the month.
-    expect(one.body.day_of_month).toBe(api.runtime === 'worker' ? null : 1);
+    // The form sends no day of the month, and none is stored: the due date's day is the bill's.
+    expect(one.body.day_of_month).toBeNull();
     expect(await billsList(api, expect)).toContainEqual(
       expect.objectContaining({ id, name: 'Water', paid: false })
     );
@@ -109,9 +109,7 @@ export const bills = [
     expect(await billsList(other, expect)).toEqual([]);
     expect((await other.put(`/api/bills/${id}`, billForm({ name: 'Theirs' }))).status).toBe(404);
     expect((await other.post(`/api/bills/${id}/mark-paid`, {})).status).toBe(404);
-    // DIFFERENCE delete-missing
-    const removed = await other.delete(`/api/bills/${id}`);
-    expect(removed.status).toBe(api.runtime === 'worker' ? 200 : 404);
+    expect((await other.delete(`/api/bills/${id}`)).status).toBe(404);
 
     expect((await api.get(`/api/bills/${id}`)).body).toMatchObject({
       id,
@@ -121,11 +119,13 @@ export const bills = [
     expect(await listTransactions(api, expect)).toEqual([]);
     expect(await listTransactions(other, expect)).toEqual([]);
 
-    // DIFFERENCE foreign-link-status: a bill on another profile's category.
+    // A bill on another profile's category is refused at the category.
     const theirs = await addCategory(other, expect, 'Their utilities');
-    expect((await api.post('/api/bills', billForm({ category_id: theirs }))).status).toBe(
-      api.runtime === 'worker' ? 403 : 400
-    );
+    const refused = await api.post('/api/bills', billForm({ category_id: theirs }));
+    expect(refused.status).toBe(400);
+    expect(refused.body.fields).toEqual({
+      category_id: 'Choose a category from the list, or leave it blank.',
+    });
     expect(await billsList(api, expect)).toHaveLength(1);
   }),
 
@@ -233,12 +233,13 @@ export const bills = [
     expectMoney(expect, march.body.summary.totalAmount, 70.25, 'March total');
     expect(march.body.summary).toMatchObject({ paidAmount: 0, billCount: 2 });
 
-    // KNOWN BUG, in both runtimes; slice 3 (bills) fixes it. February has no 31st, and the Gym,
-    // due on the 31st, is left out of February instead of falling due on its last day, the 28th.
-    // Fixed, February draws the Gym on the 28th and counts 2 bills: change this expectation then.
+    // February has no 31st: the Gym, due on the 31st, falls due on its last day, the 28th.
     const february = await api.get('/api/bills/calendar?year=2026&month=2');
     expect(Object.keys(february.body.days)).toHaveLength(28);
-    expect(february.body.summary).toMatchObject({ billCount: 1 });
+    expect(february.body.days['28']).toEqual([
+      expect.objectContaining({ name: 'Gym', date: '2026-02-28', type: 'subscription' }),
+    ]);
+    expect(february.body.summary).toMatchObject({ billCount: 2 });
 
     expect((await api.get('/api/bills/calendar?year=2026&month=13')).status).toBe(400);
     expect((await api.get('/api/bills/calendar?year=1800&month=3')).status).toBe(400);
@@ -259,18 +260,12 @@ export const bills = [
     expectOk(expect, reply, 'GET /api/bills/upcoming');
     const rows = reply.body as Json[];
     expect(rows.map((b) => b.id)).toEqual([dueToday]);
-    // DIFFERENCE bills-upcoming
-    if (api.runtime === 'worker') {
-      // Due today, and answered as due today.
-      expect(rows[0]).toMatchObject({
-        next_due_date: today,
-        days_until: 0,
-        is_overdue: false,
-        paid: false,
-      });
-    } else {
-      expect(rows[0]).toMatchObject({ due_date: today, is_active: 1 });
-      expect(rows[0].next_due_date).toBeNull();
-    }
+    // Due today, and answered as due today.
+    expect(rows[0]).toMatchObject({
+      next_due_date: today,
+      days_until: 0,
+      is_overdue: false,
+      paid: false,
+    });
   }),
 ];
