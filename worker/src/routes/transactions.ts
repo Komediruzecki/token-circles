@@ -956,7 +956,7 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Fetch old transaction for account balance reversal.
   const oldTx = await db.first<TxRow>(
     c.env.DB,
-    'SELECT account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
+    'SELECT account_id, transfer_account_id, category_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
@@ -1167,8 +1167,15 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     throw new HttpError(409, CONCURRENT_EDIT);
   }
 
-  // Recalculate linked goal progress.
-  if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null, pids);
+  // Recalculate linked goal progress: the goal of the category the row was in, and of the one it
+  // is in now. Any edit can change what it counts toward (its amount, its date, its type), and
+  // one that moves it to another category takes it off the first goal.
+  const categoryBefore = oldTx.category_id ?? null;
+  const categoryAfter = category_id !== undefined ? Number(category_id) || null : categoryBefore;
+  await recalcGoalsByCategory(c.env.DB, categoryBefore, pids);
+  if (categoryAfter !== categoryBefore) {
+    await recalcGoalsByCategory(c.env.DB, categoryAfter, pids);
+  }
 
   return c.json({ ok: true });
 });
