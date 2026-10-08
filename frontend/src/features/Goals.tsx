@@ -33,6 +33,7 @@
 import { createMemo, createSignal, For } from 'solid-js'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
@@ -42,7 +43,9 @@ import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
+import { createCategoryForm } from './categoryForm'
 import styles from './GoalsPage.module.css'
+import type { CategoryFormValues } from './categoryForm'
 
 interface Goal {
   id: number
@@ -73,11 +76,17 @@ export default function Goals() {
   const chartColors = () => theme.getChartColors()
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
-  const [categoryForm, setCategoryForm] = createSignal({
-    name: '',
-    type: 'expense',
+  // The "+ Add Category" dialog over the goal form. What a save does, and what it says when the
+  // save is refused, is categoryForm.ts, shared with Categories, Budgets and Bills. No reload after
+  // a save: the POST bumped the categories counter, which the effect below tracks.
+  const categoryForm = createCategoryForm({
     color: '#6e9bff',
+    onSaved: () => setShowCategoryModal(false),
   })
+  const openCategoryModal = () => {
+    categoryForm.open()
+    setShowCategoryModal(true)
+  }
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
   const [formData, setFormData] = createSignal({
     name: '',
@@ -186,24 +195,6 @@ export default function Goals() {
     } catch (err) {
       console.error('Failed to delete goal:', err)
       showToast('Failed to delete goal', 'error')
-    }
-  }
-
-  // Add category from within goal modal
-  const addCategory = async (e: Event) => {
-    e.preventDefault()
-    try {
-      await apiPost('/api/categories', {
-        name: categoryForm().name,
-        type: categoryForm().type,
-        color: categoryForm().color,
-      })
-      setShowCategoryModal(false)
-      setCategoryForm({ name: '', type: 'expense', color: '#6e9bff' })
-      // No reload here: the POST bumped the categories counter, which the effect below tracks.
-    } catch (err) {
-      console.error('Failed to create category:', err)
-      showToast('Failed to create category', 'error')
     }
   }
 
@@ -784,7 +775,7 @@ export default function Goals() {
                   type="button"
                   class={styles.btnLink}
                   style={{ 'margin-top': '8px' }}
-                  onClick={() => setShowCategoryModal(true)}
+                  onClick={openCategoryModal}
                 >
                   + Add Category
                 </button>
@@ -874,44 +865,66 @@ export default function Goals() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onsubmit={addCategory}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Category Name</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Vacation Fund"
-                  value={categoryForm().name}
-                  oninput={(e) => setCategoryForm({ ...categoryForm(), name: e.target.value })}
-                  autofocus
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Type</label>
-                <select
-                  class={styles.formControl}
-                  value={categoryForm().type}
-                  oninput={(e) =>
-                    setCategoryForm({
-                      ...categoryForm(),
-                      type: e.target.value as 'expense' | 'income',
-                    })
-                  }
-                >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                </select>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Color</label>
-                <input
-                  type="color"
-                  class={styles.colorInput}
-                  value={categoryForm().color}
-                  oninput={(e) => setCategoryForm({ ...categoryForm(), color: e.target.value })}
-                />
-              </div>
+            <form class={styles.modalBody} {...categoryForm.attrs}>
+              <FormNotice form={categoryForm} />
+              <Field
+                form={categoryForm}
+                name="name"
+                label="Category Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., Vacation Fund"
+                    value={categoryForm.values.name}
+                    onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
+                    autofocus
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={categoryForm}
+                name="type"
+                label="Type"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formControl}
+                    value={categoryForm.values.type}
+                    onInput={(e) =>
+                      categoryForm.set('type', e.currentTarget.value as CategoryFormValues['type'])
+                    }
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                  </select>
+                )}
+              </Field>
+              <Field
+                form={categoryForm}
+                name="color"
+                label="Color"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="color"
+                    class={styles.colorInput}
+                    value={categoryForm.values.color}
+                    onInput={(e) => categoryForm.set('color', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
               <div class={styles.modalFooter}>
                 <button
                   type="button"
@@ -920,9 +933,13 @@ export default function Goals() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={categoryForm.submitting()}
+                  busyLabel="Adding…"
+                >
                   Add Category
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

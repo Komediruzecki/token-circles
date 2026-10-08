@@ -60,6 +60,9 @@
   --danger-hover: #b93842;
   --danger-outline: #d64550;
   --danger-bg: rgba(214, 69, 80, 0.05);
+  /* Small text in the danger hue, such as a field's message: 5.7:1 on --surface and 5.4:1 on --bg.
+     --danger itself is under 4.5:1 on --surface. */
+  --danger-text: #b93842;
   --warning: #d97f2e;
   --info: #3b6fe0;
 
