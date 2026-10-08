@@ -196,7 +196,7 @@ export const UNCOVERED: readonly RouteKey[] = [];
 export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'DELETE /api/account': 'Deletes the cloud account itself.',
   'DELETE /api/accounts/:id/history':
-    'OPEN: only the Worker serves this (accounts.ts). Does the app call it in local-first?',
+    "Clears an account's whole balance history, and nothing in the app sends it. Local-first deletes one recorded balance instead (DELETE /accounts/:id/history/:entryId), for api.deleteBalanceEntry, which nothing calls either.",
   'GET /api/account/api-tokens':
     'API tokens authenticate against the Worker; local-first has no API.',
   'POST /api/account/api-tokens':
@@ -223,23 +223,22 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'GET /api/billing/status': 'Billing belongs to a cloud account.',
   'POST /api/billing/webhook': 'Billing belongs to a cloud account.',
   'GET /api/bills/notifications':
-    'OPEN: only the Worker serves this (bills.ts). Does the app call it in local-first?',
-  'GET /api/bills/summary':
-    'OPEN: only the Worker serves this (bills.ts). Does the app call it in local-first?',
+    'Bills falling due soon; nothing in the app calls it, in either mode.',
+  'GET /api/bills/summary': 'Bill totals; nothing in the app calls it, in either mode.',
   'GET /api/calculators/currency':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/loans':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/loans/amortization':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/mortgages':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/retirement':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/savings':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'GET /api/calculators/units':
-    'OPEN: only the Worker serves this (calculators.ts). Does the app call it in local-first?',
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
   'POST /api/auth/email-code/request': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/email-code/verify': 'Signing in. Local-first has no account to sign in to.',
   'GET /mcp': 'The MCP server is the Worker.',
@@ -260,32 +259,32 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
     'Signing in. Local-first has no account to sign in to.',
   'GET /api/plans': 'Billing belongs to a cloud account.',
   'GET /api/receipts':
-    'OPEN: only the Worker serves this (receipts.ts). Does the app call it in local-first?',
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/categorize':
-    'OPEN: only the Worker serves this (receipts.ts). Does the app call it in local-first?',
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/export':
-    'OPEN: only the Worker serves this (receipts.ts). Does the app call it in local-first?',
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/share':
-    'OPEN: only the Worker serves this (receipts.ts). Does the app call it in local-first?',
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/split':
-    'OPEN: only the Worker serves this (receipts.ts). Does the app call it in local-first?',
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'GET /api/reports/compare':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'DELETE /api/reports/custom/:id':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'GET /api/reports/custom/:id':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'PUT /api/reports/custom/:id':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'GET /api/reports/overview':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'POST /api/reports/save':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'GET /api/reports/saved':
-    'OPEN: only the Worker serves this (reports.ts). Does the app call it in local-first?',
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'POST /api/support/contact': 'Support messages are sent by the Worker.',
   'GET /api/tags/:id':
-    'OPEN: only the Worker serves this (tags.ts). Does the app call it in local-first?',
+    'One tag; nothing in the app reads it: the Tags page reads the list, in both modes.',
   'POST /api/auth/2fa/disable': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/2fa/enable': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/2fa/setup': 'Signing in. Local-first has no account to sign in to.',
@@ -297,52 +296,54 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
 
 /** Keyed by method and the local router's pattern source, as `routes` in localApiRouter.ts has it. */
 export const LOCAL_ONLY: Readonly<Record<string, string>> = {
-  'GET ^\\/app-info$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
+  'GET ^\\/app-info$': 'A fixed name and version; nothing in the app calls it.',
   'POST ^\\/auth\\/login$':
     'A stub of the cloud sign-in that answers a fixed admin user for any username. Nothing in local-first calls it: Sign in switches to cloud mode and reloads first (App.tsx handleLogin).',
   'GET ^\\/auth\\/check$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A signed-in check that always says yes; nothing in the app calls it (the app asks GET /api/auth/me, on the contract).',
   'GET ^\\/profiles\\/(\\d+)$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
-  'GET ^\\/analytics$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'One profile, for api.getProfile, which nothing in the app calls: the profile switcher reads the list, in both modes.',
+  'GET ^\\/analytics$':
+    'A summary for api.getAnalytics, which nothing in the app calls: Analytics reads /api/analytics/* and /api/stats/monthly (on the contract).',
   'GET ^\\/transactions\\/export$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A CSV of transactions for api.exportTransactions, which nothing in the app calls: Settings exports through GET /api/export/:type (on the contract).',
   'DELETE ^\\/accounts\\/(\\d+)\\/history\\/(\\d+)$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'Deletes one recorded balance, for api.deleteBalanceEntry, which nothing in the app calls. The Worker serves only a delete of the whole history (DELETE /api/accounts/:id/history), which nothing calls either.',
   'GET ^\\/budgets\\/(\\d+)$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'One budget, for api.getBudget, which nothing in the app calls: the Budgets page reads the list, in both modes.',
   'GET ^\\/savings-goals\\/(\\d+)$':
     'A single goal read, for api.getGoal, which nothing in the app calls: the Goals page reads the list, in both modes.',
   'GET ^\\/loans\\/(\\d+)\\/rate-periods$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "For api.getLoanRatePeriods, which nothing in the app calls: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'PUT ^\\/loans\\/(\\d+)\\/rate$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "For api.updateLoanRate, which nothing in the app calls; it answers 404 for every loan. The Loans page saves a loan's rate periods with the loan itself (POST and PUT /api/loans).",
   'GET ^\\/loans\\/(\\d+)\\/rates$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'POST ^\\/loans\\/(\\d+)\\/prepayment$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'For api.addLoanPrepayment, which nothing in the app calls: the Loans page adds an extra payment with POST /api/loans/:id/prepayments (on the contract).',
   'GET ^\\/loans\\/(\\d+)\\/prepayments$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'POST ^\\/categories\\/seed$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'Puts the default categories in the active profile; nothing in the app calls it.',
   'GET ^\\/tags\\/(\\d+)\\/transactions$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "A tag's transactions, for no caller: the Transactions page filters by tag in the page, on the rows it read.",
   'POST ^\\/import\\/preview$':
     'A bulk import of { items }, which nothing in the app sends: the Import page previews with POST /api/import/execute and dry_run, in both modes.',
   'POST ^\\/import\\/file-sheet$':
     'The old pick-a-sheet step after an upload, which the Import page calls in neither mode; the Worker answers it 410 Gone.',
-  'GET ^\\/exchange-rates$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+  'GET ^\\/exchange-rates$': 'For api.getExchangeRates, which nothing in the app calls.',
   'GET ^\\/exchange-rates\\/([A-Z]{3})\\/([A-Z]{3})$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'For api.getExchangeRate, which nothing in the app calls.',
   'POST ^\\/retirement$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A projection for api.getRetirementProjection, which nothing in the app calls: the Retirement pages read /api/retirement/settings and the calculators (on the contract).',
   'GET ^\\/housing\\/(\\d+)$':
     'A single housing expense, for no caller: the Housing page reads the list, in both modes.',
   'POST ^\\/housing\\/calculate$':
     'The housing affordability calculator, for api.calculateHousing, which nothing in the app calls.',
-  'GET ^\\/logs$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
-  'POST ^\\/logs$': 'OPEN: only local-first serves this. Does the app call it when signed in?',
+  'GET ^\\/logs$':
+    "A log store in IndexedDB that nothing in the app reads: the app's logger keeps its log in localStorage (core/logger.ts).",
+  'POST ^\\/logs$':
+    "A log store in IndexedDB that nothing in the app writes: the app's logger keeps its log in localStorage (core/logger.ts).",
   'POST ^\\/logs\\/clear$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    "Clears the IndexedDB log store, which nothing in the app uses: the app's logger keeps its log in localStorage (core/logger.ts).",
 };
