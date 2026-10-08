@@ -56,6 +56,15 @@ function readFields(raw: unknown): FieldErrors {
   return fields
 }
 
+/**
+ * Words that only repeat the status line: the Worker's sign-in gate answers a 401 with
+ * 'Unauthorized' (worker/src/auth.ts requireAuth, apitoken.ts), which tells a person nothing. A 401
+ * with words of its own, a wrong password or an expired code, keeps them.
+ */
+function onlyTheStatus(status: number, said: string): boolean {
+  return status === 401 && said.trim().toLowerCase() === 'unauthorized'
+}
+
 /** The ApiError for an answer that is not a success. Reads the body, so call it once. */
 export async function apiErrorFrom(response: Response): Promise<ApiError> {
   let body: unknown = null
@@ -68,7 +77,9 @@ export async function apiErrorFrom(response: Response): Promise<ApiError> {
   )
   return new ApiError(
     response.status,
-    said ?? statusMessage(response.status),
+    said === undefined || onlyTheStatus(response.status, said)
+      ? statusMessage(response.status)
+      : said,
     readFields(data.fields)
   )
 }

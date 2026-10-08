@@ -99,6 +99,65 @@ describe.each(SURFACES)('%s', (_name, send) => {
     expect(error).toBeInstanceOf(ApiError)
     expect(error.status).toBe(0)
   })
+
+  // The Worker's sign-in gate answers {error: 'Unauthorized'} (worker/src/auth.ts requireAuth).
+  // A dialog showed that word and stayed open.
+  it('says a 401 from the sign-in gate as a session that has ended', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ error: 'Unauthorized' }, 401))
+
+    const error = (await send().catch((e: unknown) => e)) as ApiError
+
+    expect(error.status).toBe(401)
+    expect(error.message).toBe('Your session has ended. Sign in again to carry on.')
+  })
+
+  it('keeps the words of a 401 that has its own', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ error: 'That code did not match' }, 401))
+
+    const error = (await send().catch((e: unknown) => e)) as ApiError
+
+    expect(error.message).toBe('That code did not match')
+  })
+})
+
+describe('a write the session ended under', () => {
+  const asked = vi.fn()
+  beforeEach(() => {
+    window.addEventListener('auth:required', asked)
+  })
+  afterEach(() => {
+    window.removeEventListener('auth:required', asked)
+    asked.mockReset()
+  })
+
+  // App opens sign-in on 'auth:required'. The typed client asked for it; the raw helpers, which
+  // the category dialogs save through, did not.
+  it.each(SURFACES.filter(([name]) => name !== 'apiGet'))(
+    'asks to sign in again: %s',
+    async (_, send) => {
+      apiFetchMock.mockResolvedValue(jsonResponse({ error: 'Unauthorized' }, 401))
+
+      await send().catch(() => undefined)
+
+      expect(asked).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('leaves a read to the page that made it, as the typed client does', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ error: 'Unauthorized' }, 401))
+
+    await apiGet('/api/categories').catch(() => undefined)
+
+    expect(asked).not.toHaveBeenCalled()
+  })
+
+  it('leaves a 401 from /auth/ to its own form: a wrong password is not an ended session', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ error: 'Invalid email or password' }, 401))
+
+    await apiPost('/api/auth/login', { email: 'a@example.com' }).catch(() => undefined)
+
+    expect(asked).not.toHaveBeenCalled()
+  })
 })
 
 describe('the words for an answer with none of its own', () => {

@@ -76,9 +76,7 @@ export class ApiClient {
       const response = await apiFetch(url, requestOptions)
 
       if (!response.ok) {
-        if (response.status === 401 && method !== 'GET' && !endpoint.startsWith('/auth/')) {
-          window.dispatchEvent(new Event('auth:required'))
-        }
+        askToSignInAgain(response.status, method, endpoint)
         // The same ApiError the raw helpers throw (core/apiError.ts): the answer's words, its
         // per-field reasons for a form to show, and its status, so a caller can tell a refusal it
         // should act on from one it can only report (a 409 means "catch up", not "that failed").
@@ -1375,10 +1373,34 @@ function jsonHeaders(scope: ApiProfileScope, additional?: HeadersInit): Headers 
   return headers
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T> {
+/** Whether a request is for /auth/: `request()` names it '/auth/...', a raw helper '/api/auth/...'. */
+function isAuthPath(path: string): boolean {
+  const { pathname } = new URL(path, 'http://localhost')
+  return (pathname.startsWith('/api/') ? pathname.slice('/api'.length) : pathname).startsWith(
+    '/auth/'
+  )
+}
+
+/**
+ * A write refused with a 401 outside /auth/ means the session ended under the person: App opens
+ * sign-in on 'auth:required'. Both client surfaces call this. The raw helpers did not, and the
+ * category dialogs save through them, so an ended session left a dialog open with no way on. A
+ * read is left to the page that made it, and a 401 from /auth/ is a wrong password or code, which
+ * its own form says.
+ */
+function askToSignInAgain(status: number, method: string, path: string): void {
+  if (status === 401 && method !== 'GET' && !isAuthPath(path)) {
+    window.dispatchEvent(new Event('auth:required'))
+  }
+}
+
+async function parseJsonResponse<T>(response: Response, method: string, url: string): Promise<T> {
   // Any failure, JSON or not (a Cloudflare 502 is an HTML page), is the ApiError `request()`
   // throws too: one error type from both client surfaces (core/apiError.ts).
-  if (!response.ok) throw await apiErrorFrom(response)
+  if (!response.ok) {
+    askToSignInAgain(response.status, method, url)
+    throw await apiErrorFrom(response)
+  }
   const contentType = response.headers.get('content-type')
   if (contentType !== null && contentType.includes('application/json')) {
     return (await response.json()) as T
@@ -1400,7 +1422,7 @@ export async function apiGet<T = unknown>(
     method: 'GET',
     headers: jsonHeaders(profileScope),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'GET', url)
 }
 
 export function apiHouseholdGet<T = unknown>(url: string): Promise<T> {
@@ -1436,7 +1458,7 @@ export async function apiPost<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'POST', url)
 }
 
 export async function apiPut<T = unknown>(
@@ -1451,7 +1473,7 @@ export async function apiPut<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'PUT', url)
 }
 
 export async function apiDelete<T = unknown>(url: string): Promise<T> {
@@ -1460,5 +1482,5 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
     method: 'DELETE',
     headers: profileRequestHeaders('active'),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'DELETE', url)
 }

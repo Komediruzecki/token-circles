@@ -226,4 +226,17 @@ test.describe('the category dialog while it saves, cloud @smoke', () => {
     const stored = await storedCategory(page, name)
     if (stored) await deleteCategory(page, stored.id)
   })
+
+  // The Worker answers a request with no session {error: 'Unauthorized'}. The dialog said that
+  // word and stayed open, with nothing to do but cancel.
+  test('a session that has ended asks to sign in again', async ({ page }) => {
+    await nameField(page).fill(`zz-ended-${Date.now().toString(36)}`)
+    await page.context().clearCookies()
+
+    await submit(page)
+
+    // App answers 'auth:required' by putting the sign-in screen where the app was.
+    await expect(page.getByTestId('emailcode-open')).toBeVisible()
+    await expect(page.getByText('Unauthorized', { exact: true })).toHaveCount(0)
+  })
 })
