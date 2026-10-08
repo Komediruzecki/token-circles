@@ -302,9 +302,9 @@ describe.each(SURFACES)(
       expect(dialogOpen()).toBe(true)
       expect(nameField().value).toBe('Tea')
       expect(dialogForm().getAttribute('aria-busy')).toBeNull()
-      // The list behind shows the category; a toast about a dialog no longer open would be news
-      // about something the person cancelled, over the one they are typing in.
-      expect(successToasts()).toEqual([])
+      // Cancelling did not stop the save, so the toast says it happened: otherwise Coffee turns up
+      // in the list with nothing to say why.
+      expect(successToasts()).toEqual(['Added "Coffee" to your categories.'])
     })
   }
 )

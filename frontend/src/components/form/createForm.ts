@@ -14,9 +14,10 @@
  * - A server's mark goes on the field's next change: only the server knows whether it still holds.
  * - While `send` runs, the form is `aria-busy` and a second submit does nothing. `SubmitButton`
  *   says so on the button.
- * - What follows a save (`saved`: say so, close the dialog) runs only while the form is still the
- *   one that sent. A reset in between, as when a dialog is cancelled and opened again, drops it,
- *   as it drops a refusal that lands late.
+ * - Closing the dialog after a save (`saved`) happens only while the form is still the one that
+ *   sent. A reset in between, as when a dialog is cancelled and opened again, drops it, as it
+ *   drops a refusal that lands late. A success toast does not wait for that: it reports a write
+ *   that happened, which the reset did not undo, so it belongs in `send`, after the write.
  *
  * `Field` registers each control here, which is how the kit knows which fields this form shows and
  * where to move focus. See docs/plans/2026-10-07-form-errors.md.
@@ -37,8 +38,8 @@ export interface FormOptions<T extends FormValues, R = unknown> {
   /** Sends the values. Throw to refuse; it gets a plain copy, never the store. */
   send: (values: T) => R | Promise<R>
   /**
-   * After `send` succeeds, with what it returned: say so, close the dialog. Not run when the form
-   * was reset while it sent: the dialog in front of the person by then is not the one that sent.
+   * After `send` succeeds, with what it returned: close the dialog. Not run when the form was reset
+   * while it sent: the dialog in front of the person by then is not the one that sent.
    */
   saved?: (result: R) => void
   /** The notice when `send` throws something that is not an `ApiError`. */
