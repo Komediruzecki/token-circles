@@ -601,6 +601,32 @@ describe('opening the link', () => {
     expect((await signInWithCode(OLD, sentToOld)).status).toBe(401);
   });
 
+  it('ends the unsubscribe link that reminders gave the old address', async () => {
+    await seed(1);
+    await env.DB.prepare('UPDATE users SET unsubscribe_token = ? WHERE id = ?')
+      .bind('given-to-the-old-address', UID)
+      .run();
+    await save(NEW);
+
+    await open(latestLinkTo(NEW));
+
+    const unsubscribe = await call(
+      'GET',
+      '/api/notifications/unsubscribe?token=given-to-the-old-address',
+      undefined,
+      false
+    );
+    expect(unsubscribe.status).toBe(400);
+    const row = await env.DB.prepare(
+      'SELECT notifications_unsubscribed AS off, unsubscribe_token AS token FROM users WHERE id = ?'
+    )
+      .bind(UID)
+      .first<{ off: number | null; token: string | null }>();
+    expect(row?.off ?? 0).toBe(0);
+    // The next reminder mints a new one for the new address (reminders.ts, unsubscribeToken).
+    expect(row?.token).toBeNull();
+  });
+
   it('ends no reset link or sign-in code when the move is refused', async () => {
     await seed(1);
     await call('POST', '/api/auth/forgot-password', { email: OLD }, false);

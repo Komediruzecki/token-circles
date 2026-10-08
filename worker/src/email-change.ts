@@ -202,15 +202,16 @@ export async function applyEmailChange(
   email: string
 ): Promise<'changed' | 'taken' | 'gone'> {
   // One batch: the move, and the end of everything else the account has out by mail: a change
-  // still waiting, the confirm link for the address it leaves, and the password reset links and
-  // sign-in codes that address was sent. Each DELETE only matches once the row has `email`, so a
-  // refused move ends nothing.
+  // still waiting, the confirm link for the address it leaves, the password reset links and
+  // sign-in codes that address was sent, and the unsubscribe link its reminders carried (the next
+  // reminder mints a new one, reminders.ts). Each DELETE only matches once the row has `email`, so
+  // a refused move ends nothing.
   const onceMoved = (sql: string) =>
     d1.prepare(`${sql} AND (SELECT email FROM users WHERE id = ?) = ?`).bind(userId, userId, email);
   const [moved] = await d1.batch([
     d1
       .prepare(
-        `UPDATE users SET email = ?, email_verified = 1
+        `UPDATE users SET email = ?, email_verified = 1, unsubscribe_token = NULL
          WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?)`
       )
       .bind(email, userId, email, userId),
