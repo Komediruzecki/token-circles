@@ -214,3 +214,62 @@ describe('a monthly rule on the 31st', () => {
     expect(await nextDateOf(id)).toBe('05.01.2027');
   });
 });
+
+describe('upcoming bills', () => {
+  type Upcoming = {
+    id: number;
+    next_due_date: string | null;
+    days_until: number | null;
+    is_overdue: boolean;
+  };
+
+  async function bill(fields: Record<string, unknown>): Promise<number> {
+    const row = { profile_id: PROFILE, name: 'Power', amount: 60, is_active: 1, ...fields };
+    const cols = Object.keys(row);
+    const res = await env.DB.prepare(
+      `INSERT INTO bills (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+    )
+      .bind(...Object.values(row))
+      .run();
+    return Number(res.meta.last_row_id);
+  }
+
+  async function upcomingOf(id: number): Promise<Upcoming | undefined> {
+    return (await get<Upcoming[]>('/api/bills/upcoming')).find((b) => b.id === id);
+  }
+
+  it('keep a monthly bill due today until the day is over', async () => {
+    const monthly = await bill({ frequency: 'monthly', day_of_month: 8, due_date: '2026-10-08' });
+    for (const instant of ['2026-10-08T00:30:00Z', '2026-10-08T23:30:00Z']) {
+      await at(instant);
+      expect(await upcomingOf(monthly), instant).toMatchObject({
+        next_due_date: '2026-10-08',
+        days_until: 0,
+        is_overdue: false,
+      });
+    }
+  });
+
+  it('keep a yearly bill due today', async () => {
+    const yearly = await bill({ frequency: 'yearly', day_of_month: 8, due_date: '2027-01-08' });
+    await at('2027-01-08T09:00:00Z');
+    expect(await upcomingOf(yearly)).toMatchObject({ next_due_date: '2027-01-08', days_until: 0 });
+  });
+
+  it('move a bill whose day has passed to the last day of a shorter month', async () => {
+    const id = await bill({ frequency: 'monthly', day_of_month: 30, due_date: '2027-01-30' });
+    await at('2027-01-31T12:00:00Z');
+    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 28 });
+  });
+
+  it('count a month from the last payment without skipping February', async () => {
+    const id = await bill({
+      frequency: 'monthly',
+      day_of_month: 31,
+      due_date: '2027-01-31',
+      last_paid: '2027-01-31',
+    });
+    await at('2027-02-01T12:00:00Z');
+    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 27 });
+  });
+});
