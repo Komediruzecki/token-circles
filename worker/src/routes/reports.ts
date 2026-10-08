@@ -105,6 +105,10 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
   const month = c.req.query('month') || localMonth(c);
   const start = `${month}-01`;
   const [y, m] = month.split('-').map(Number);
+  // A month that is not YYYY-MM (month=3) made an Invalid Date, and toISOString() threw: a 500.
+  if (!Number.isInteger(y) || !Number.isInteger(m)) {
+    return c.json({ error: 'month must be YYYY-MM' }, 400);
+  }
   const end = new Date(y, m, 0).toISOString().slice(0, 10);
 
   const income =

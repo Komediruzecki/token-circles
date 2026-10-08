@@ -137,6 +137,7 @@ export const reports = [
     // DIFFERENCE monthly-pdf-month
     if (api.runtime === 'worker') {
       await pdf('/api/reports/monthly-pdf?month=2025-03');
+      expect((await api.get('/api/reports/monthly-pdf?year=2025&month=3')).status).toBe(400);
     } else {
       await pdf('/api/reports/monthly-pdf?year=2025&month=3');
     }
