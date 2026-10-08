@@ -178,7 +178,7 @@ describe('importExecute — configured account currency', () => {
     expect(((await res.json()) as { imported: number }).imported).toBe(1)
 
     const account = (await db.getAllFromIndex('accounts', 'by_profile', 1)).find(
-      (item) => item.name === 'savings'
+      (item) => item.name === 'Savings'
     )
     const transaction = (await db.getAllFromIndex('transactions', 'by_profile', 1)).find(
       (item) => item.description === 'Opening deposit'
@@ -200,7 +200,7 @@ describe('importExecute — configured account currency', () => {
     expect(((await res.json()) as { imported: number }).imported).toBe(1)
 
     const account = (await db.getAllFromIndex('accounts', 'by_profile', 1)).find(
-      (item) => item.name === 'savings'
+      (item) => item.name === 'Savings'
     )
     expect(account?.currency).toBe('EUR')
   })
