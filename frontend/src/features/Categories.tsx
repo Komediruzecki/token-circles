@@ -36,12 +36,14 @@ import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import IconPicker from '../components/IconPicker'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPut, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
+import { localMonth } from '../utils/period'
+import { createBudgetForm } from './budgetForm'
 import styles from './CategoriesPage.module.css'
 import { createCategoryForm } from './categoryForm'
 import type { CategoryFormValues } from './categoryForm'
@@ -106,7 +108,6 @@ export default function Categories() {
   const [showBudgetModal, setShowBudgetModal] = createSignal(false)
   const [editingCategory, setEditingCategory] = createSignal<Category | null>(null)
   const [selectedCategory, setSelectedCategory] = createSignal<Category | null>(null)
-  const [budgetAmount, setBudgetAmount] = createSignal('')
   const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
 
   // The add/edit dialog. What a save does, and what it says when the save is refused, is
@@ -153,32 +154,22 @@ export default function Categories() {
     openCategoryModal(category)
   }
 
-  // Open budget modal
+  // Set Budget: this month's one budget for the category (features/budgetForm.ts), the month the
+  // cards' summary shows. A refused amount is said under the amount.
+  const closeBudgetModal = () => {
+    setShowBudgetModal(false)
+    setSelectedCategory(null)
+  }
+  const budgetForm = createBudgetForm({
+    month: () => localMonth(),
+    nameOf: (id) => categories().find((c) => c.id === id)?.name,
+    onSaved: closeBudgetModal,
+  })
   const openBudgetModal = (category: Category) => {
     setSelectedCategory(category)
-    setBudgetAmount('')
+    // This month's budget, when it has one: a save changes it.
+    budgetForm.open(category.id, budgetSummary()[category.id]?.budget || null)
     setShowBudgetModal(true)
-  }
-
-  // Update budget
-  const updateBudget = async (amount: number) => {
-    if (!selectedCategory()) return
-    try {
-      const now = new Date()
-      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-      await apiPost('/api/budgets', {
-        category_id: selectedCategory()!.id,
-        amount,
-        period: 'monthly',
-        start_date: startDate,
-      })
-      showToast('Budget set successfully', 'success')
-      setShowBudgetModal(false)
-      setSelectedCategory(null)
-    } catch (err) {
-      console.error('Failed to set budget', err)
-      showToast('Failed to set budget', 'error')
-    }
   }
 
   // Tint the icon chip with the category's own color (a translucent wash of
@@ -612,7 +603,7 @@ export default function Categories() {
         <div
           class={styles.modalOverlay}
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowBudgetModal(false)
+            if (e.target === e.currentTarget) closeBudgetModal()
           }}
         >
           <div
@@ -623,41 +614,51 @@ export default function Categories() {
           >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle}>Set Budget</h3>
-              <button class={styles.modalClose} onClick={() => setShowBudgetModal(false)}>
+              <button class={styles.modalClose} onClick={closeBudgetModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div class={styles.modalBody}>
-              <p class={styles.modalText}>
-                Set a monthly budget for <strong>{selectedCategory()!.name}</strong>
-              </p>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Monthly Budget Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  class={styles.formControl}
-                  placeholder="500.00"
-                  value={budgetAmount()}
-                  oninput={(e) => setBudgetAmount((e.target as HTMLInputElement).value)}
-                />
+            <form {...budgetForm.attrs}>
+              <div class={styles.modalBody}>
+                <p class={styles.modalText}>
+                  Set a monthly budget for <strong>{selectedCategory()!.name}</strong>
+                </p>
+                <FormNotice form={budgetForm} testId="category-budget-notice" />
+                <Field
+                  form={budgetForm}
+                  name="amount"
+                  label="Monthly Budget Amount"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="500.00"
+                      value={budgetForm.values.amount}
+                      onInput={(e) => budgetForm.set('amount', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </div>
-            </div>
-            <div class={styles.modalFooter}>
-              <button class={styles.btnSecondary} onClick={() => setShowBudgetModal(false)}>
-                Cancel
-              </button>
-              <button
-                class={styles.btnPrimary}
-                onClick={() => {
-                  updateBudget(parseFloat(budgetAmount()) || 0)
-                }}
-              >
-                Save Budget
-              </button>
-            </div>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnSecondary} onClick={closeBudgetModal}>
+                  Cancel
+                </button>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={budgetForm.submitting()}
+                  busyLabel="Saving…"
+                >
+                  Save Budget
+                </SubmitButton>
+              </div>
+            </form>
           </div>
         </div>
       )}

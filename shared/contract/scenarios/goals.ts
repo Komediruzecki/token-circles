@@ -2,7 +2,7 @@ import { addCategory, addTransaction, expectMoney, isoDay } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
-/** The body the Goals form saves (features/Goals.tsx, handleSubmit), for a goal with no category. */
+/** The body the Goals form saves (features/goalForm.ts, goalBody), for a goal with no category. */
 export function goalForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Holiday',
@@ -69,16 +69,11 @@ export const goalScenarios = [
     // The form sends null when the monthly field is empty, and no tracking date without a category.
     const id = await goal(api, expect, { monthly_contribution: null });
     const row = await goalRow(api, expect, id);
-    // DIFFERENCE goal-unsent-defaults
-    if (api.runtime === 'worker') {
-      expect(row).toMatchObject({
-        monthly_contribution: 0,
-        tracking_start_date: isoDay(new Date()),
-      });
-    } else {
-      expect(row.monthly_contribution).toBeNull();
-      expect(row.tracking_start_date).toBeUndefined();
-    }
+    // Stored as no monthly amount, and counted from the day it was saved.
+    expect(row).toMatchObject({
+      monthly_contribution: 0,
+      tracking_start_date: isoDay(new Date()),
+    });
   }),
 
   scenario("another profile's goal is not changed, paid into or removed", async (api, expect) => {
@@ -98,15 +93,15 @@ export const goalScenarios = [
     expect(row).toMatchObject({ name: 'Holiday' });
     expectMoney(expect, row.current_amount, 0, 'saved');
 
-    // DIFFERENCE foreign-link-status: a goal on another profile's category.
+    // A goal on another profile's category is refused at the category, added or changed.
     const theirs = await addCategory(other, expect, 'Their travel');
-    const refused = api.runtime === 'worker' ? 403 : 400;
-    expect((await api.post('/api/savings-goals', goalForm({ category_id: theirs }))).status).toBe(
-      refused
-    );
-    expect(
-      (await api.put(`/api/savings-goals/${id}`, goalForm({ category_id: theirs }))).status
-    ).toBe(refused);
+    const atCategory = { category_id: 'Choose a category from the list, or leave it blank.' };
+    const onAdd = await api.post('/api/savings-goals', goalForm({ category_id: theirs }));
+    expect(onAdd.status).toBe(400);
+    expect(onAdd.body.fields).toEqual(atCategory);
+    const onEdit = await api.put(`/api/savings-goals/${id}`, goalForm({ category_id: theirs }));
+    expect(onEdit.status).toBe(400);
+    expect(onEdit.body.fields).toEqual(atCategory);
     expect(await goals(api, expect)).toHaveLength(1);
   }),
 

@@ -37,7 +37,7 @@ import { Field, FormNotice, SubmitButton } from '../components/form'
 import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
@@ -45,6 +45,7 @@ import { refetchOnActive } from '../core/pageVisibility'
 import { theme } from '../core/theme'
 import { localToday } from '../utils/period'
 import { createCategoryForm } from './categoryForm'
+import { createContributionForm, createGoalForm } from './goalForm'
 import styles from './GoalsPage.module.css'
 import type { CategoryFormValues } from './categoryForm'
 
@@ -88,15 +89,20 @@ export default function Goals() {
     categoryForm.open()
     setShowCategoryModal(true)
   }
+  // The goal the dialog edits, or null for a new one: its title and its button say which.
   const [editingGoal, setEditingGoal] = createSignal<Goal | null>(null)
-  const [formData, setFormData] = createSignal({
-    name: '',
-    target_amount: '',
-    target_date: '',
-    monthly_contribution: '',
-    category_id: '',
-    tracking_start_date: '',
-  })
+  const closeGoalModal = () => {
+    setShowAddModal(false)
+    setEditingGoal(null)
+  }
+  // The dialog's values, field errors and notice (components/form), and its save
+  // (features/goalForm.ts). A refused save is said in the dialog, under the field it is about.
+  const goalForm = createGoalForm({ onSaved: closeGoalModal })
+  const openNewGoal = () => {
+    setEditingGoal(null)
+    goalForm.open()
+    setShowAddModal(true)
+  }
 
   // Load goals
   const loadGoals = async () => {
@@ -143,50 +149,6 @@ export default function Goals() {
   const categoryNameOf = (goal: Goal): string | undefined =>
     goal.category_id ? categories().find((c) => c.id === goal.category_id)?.name : undefined
 
-  // Handle form submit (create or update)
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data: Record<string, unknown> = {
-      name: formData().name,
-      target_amount: parseFloat(formData().target_amount),
-      target_date: formData().target_date,
-      monthly_contribution: formData().monthly_contribution
-        ? parseFloat(formData().monthly_contribution)
-        : null,
-    }
-    const catId = formData().category_id ? parseInt(formData().category_id) : null
-    if (catId) {
-      data.category_id = catId
-      // Category goals track from this date on; default to today when unset.
-      data.tracking_start_date = formData().tracking_start_date || localToday()
-    } else {
-      data.category_id = null
-    }
-
-    try {
-      if (editingGoal()) {
-        await apiPut(`/api/savings-goals/${editingGoal()!.id}`, data)
-        showToast('Goal updated successfully', 'success')
-      } else {
-        await apiPost('/api/savings-goals', data)
-        showToast('Goal created successfully', 'success')
-      }
-      setShowAddModal(false)
-      setEditingGoal(null)
-      setFormData({
-        name: '',
-        target_amount: '',
-        target_date: '',
-        monthly_contribution: '',
-        category_id: '',
-        tracking_start_date: '',
-      })
-    } catch (err) {
-      console.error('Failed to save goal:', err)
-      showToast('Failed to save goal', 'error')
-    }
-  }
-
   // Delete goal
   const deleteGoal = async (id: number) => {
     try {
@@ -198,57 +160,20 @@ export default function Goals() {
     }
   }
 
-  // Accept both '.' and ',' as the decimal separator (a native number input rejects
-  // '.' and clears on ',' in comma-decimal locales).
-  const sanitizeDecimal = (s: string): string => {
-    let out = s.replace(/,/g, '.').replace(/[^0-9.]/g, '')
-    const first = out.indexOf('.')
-    if (first !== -1) out = out.slice(0, first + 1) + out.slice(first + 1).replace(/\./g, '')
-    return out
-  }
-
-  // Contribute to manually tracked goal
+  // "Add Funds" on a goal tracked by hand, open on one goal's card at a time. What it checks and
+  // says is goalForm.ts; a refused amount is said under the amount.
   const [contributingGoalId, setContributingGoalId] = createSignal<number | null>(null)
-  const [contributeAmount, setContributeAmount] = createSignal('')
-
-  const startContribute = (goalId: number) => {
-    setContributingGoalId(goalId)
-    setContributeAmount('')
-  }
-
-  const cancelContribute = () => {
-    setContributingGoalId(null)
-    setContributeAmount('')
-  }
-
-  const submitContribute = async (goalId: number) => {
-    const parsed = parseFloat(contributeAmount())
-    if (isNaN(parsed) || parsed <= 0) {
-      showToast('Please enter a valid positive amount', 'error')
-      return
-    }
-    try {
-      await apiPost(`/api/savings-goals/${goalId}/contribute`, { amount: parsed })
-      showToast('Contribution added', 'success')
-      setContributingGoalId(null)
-      setContributeAmount('')
-    } catch (err) {
-      console.error('Failed to contribute:', err)
-      showToast('Failed to add contribution', 'error')
-    }
+  const cancelContribute = () => setContributingGoalId(null)
+  const contributionForm = createContributionForm({ onSaved: cancelContribute })
+  const startContribute = (goal: Goal) => {
+    contributionForm.open(goal)
+    setContributingGoalId(goal.id)
   }
 
   // Open edit modal
   const editGoal = (goal: Goal) => {
     setEditingGoal(goal)
-    setFormData({
-      name: goal.name,
-      target_amount: goal.target_amount.toString(),
-      target_date: goal.target_date ?? '',
-      monthly_contribution: goal.monthly_contribution ? goal.monthly_contribution.toString() : '',
-      category_id: goal.category_id ? goal.category_id.toString() : '',
-      tracking_start_date: goal.tracking_start_date || '',
-    })
+    goalForm.open(goal)
     setShowAddModal(true)
   }
 
@@ -331,7 +256,7 @@ export default function Goals() {
             data-test-id="add-goal-btn"
             data-tour="goals-add"
             class={styles.btnPrimary}
-            onclick={() => setShowAddModal(true)}
+            onclick={openNewGoal}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -351,7 +276,7 @@ export default function Goals() {
           <div data-test-id="goals-empty" class={styles.emptyState}>
             <p>No goals yet</p>
             <p>Create your first savings goal to start tracking.</p>
-            <button class={styles.btnPrimary} onclick={() => setShowAddModal(true)}>
+            <button class={styles.btnPrimary} onclick={openNewGoal}>
               Create Goal
             </button>
           </div>
@@ -436,7 +361,7 @@ export default function Goals() {
                           class={`${styles.btnPrimary} ${styles.btnSm} ${styles.goalCtaBtn}`}
                           title="Add money toward this goal"
                           onclick={() => {
-                            startContribute(goal.id)
+                            startContribute(goal)
                           }}
                         >
                           <svg
@@ -455,35 +380,55 @@ export default function Goals() {
                       </div>
                     )}
                     {contributingGoalId() === goal.id && (
-                      <div class={styles.contributeForm}>
-                        <input
-                          type="text"
-                          inputmode="decimal"
-                          class={styles.formControl}
-                          placeholder="Amount..."
-                          value={contributeAmount()}
-                          oninput={(e) =>
-                            setContributeAmount(sanitizeDecimal(e.currentTarget.value))
-                          }
-                          onkeydown={(e) => {
-                            if (e.key === 'Enter') submitContribute(goal.id)
-                            if (e.key === 'Escape') cancelContribute()
-                          }}
-                          autofocus
-                        />
-                        <button
-                          class={`${styles.btnPrimary} ${styles.btnSm}`}
-                          onclick={() => submitContribute(goal.id)}
-                        >
-                          Add
-                        </button>
-                        <button
-                          class={`${styles.btnSecondary} ${styles.btnSm}`}
-                          onclick={cancelContribute}
-                        >
-                          Cancel
-                        </button>
-                      </div>
+                      <form
+                        data-test-id="goal-contribute-form"
+                        class={styles.contributeForm}
+                        {...contributionForm.attrs}
+                      >
+                        <FormNotice form={contributionForm} testId="goal-contribute-notice" />
+                        <div class={styles.contributeRow}>
+                          <Field
+                            form={contributionForm}
+                            name="amount"
+                            label={`Amount to add to ${goal.name}`}
+                            class={styles.contributeField}
+                            labelClass={styles.visuallyHidden}
+                          >
+                            {(control) => (
+                              <input
+                                {...control}
+                                data-test-id="goal-contribute-amount"
+                                type="text"
+                                inputmode="decimal"
+                                class={styles.formControl}
+                                placeholder="Amount..."
+                                value={contributionForm.values.amount}
+                                onInput={(e) =>
+                                  contributionForm.set('amount', e.currentTarget.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') cancelContribute()
+                                }}
+                                autofocus
+                              />
+                            )}
+                          </Field>
+                          <SubmitButton
+                            class={`${styles.btnPrimary} ${styles.btnSm}`}
+                            busy={contributionForm.submitting()}
+                            busyLabel="Adding…"
+                          >
+                            Add
+                          </SubmitButton>
+                          <button
+                            type="button"
+                            class={`${styles.btnSecondary} ${styles.btnSm}`}
+                            onClick={cancelContribute}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     )}
                     <div data-test-id="goal-progress-bar" class={styles.goalProgress}>
                       <GoalRing
@@ -664,7 +609,7 @@ export default function Goals() {
           role="dialog"
           aria-modal="true"
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false)
+            if (e.target === e.currentTarget) closeGoalModal()
           }}
         >
           <div
@@ -677,164 +622,171 @@ export default function Goals() {
               <h3 data-test-id="goals-modal-title" class={styles.modalTitle}>
                 {editingGoal() ? 'Edit Goal' : 'New Goal'}
               </h3>
-              <button
-                class={styles.modalClose}
-                onclick={() => {
-                  setShowAddModal(false)
-                  setEditingGoal(null)
-                  setFormData({
-                    name: '',
-                    target_amount: '',
-                    target_date: '',
-                    monthly_contribution: '',
-                    category_id: '',
-                    tracking_start_date: '',
-                  })
-                }}
-              >
+              <button class={styles.modalClose} onclick={closeGoalModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onsubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Goal Name</label>
-                <input
-                  data-test-id="goals-form-name"
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Emergency Fund, Vacation"
-                  value={formData().name}
-                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
-                  autofocus
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Target Amount</label>
-                <input
-                  data-test-id="goals-form-target"
-                  type="text"
-                  inputmode="decimal"
-                  class={styles.formControl}
-                  placeholder="5000.00"
-                  value={formData().target_amount}
-                  oninput={(e) =>
-                    setFormData({
-                      ...formData(),
-                      target_amount: sanitizeDecimal(e.currentTarget.value),
-                    })
-                  }
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Target Date (optional)</label>
-                <input
-                  data-test-id="goals-form-date"
-                  type="date"
-                  class={styles.formControl}
-                  value={formData().target_date}
-                  oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Monthly Contribution</label>
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  class={styles.formControl}
-                  placeholder="e.g., 500.00"
-                  value={formData().monthly_contribution}
-                  oninput={(e) =>
-                    setFormData({
-                      ...formData(),
-                      monthly_contribution: sanitizeDecimal(e.currentTarget.value),
-                    })
-                  }
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Linked Category (optional)</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().category_id}
-                  onchange={(e) => setFormData({ ...formData(), category_id: e.target.value })}
-                >
-                  <option value="">None — manual tracking</option>
-                  <For each={categories()}>
-                    {(cat) => (
-                      <option value={cat.id} selected={String(cat.id) === formData().category_id}>
-                        {cat.name} ({cat.type})
-                      </option>
-                    )}
-                  </For>
-                </select>
-                <button
-                  type="button"
-                  class={styles.btnLink}
-                  style={{ 'margin-top': '8px' }}
-                  onClick={openCategoryModal}
-                >
-                  + Add Category
-                </button>
-                <p
-                  style={{
-                    'font-size': '11px',
-                    color: 'var(--text-secondary)',
-                    'margin-top': '4px',
-                  }}
-                >
-                  Transactions to this category will count toward goal progress
-                </p>
-              </div>
-              {formData().category_id && (
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Count transactions from</label>
+            <form class={styles.modalBody} {...goalForm.attrs}>
+              <FormNotice form={goalForm} testId="goals-form-notice" />
+              <Field
+                form={goalForm}
+                name="name"
+                label="Goal Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
+                    {...control}
+                    data-test-id="goals-form-name"
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., Emergency Fund, Vacation"
+                    value={goalForm.values.name}
+                    onInput={(e) => goalForm.set('name', e.currentTarget.value)}
+                    autofocus
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={goalForm}
+                name="target_amount"
+                label="Target Amount"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    data-test-id="goals-form-target"
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    placeholder="5000.00"
+                    value={goalForm.values.target_amount}
+                    onInput={(e) => goalForm.set('target_amount', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={goalForm}
+                name="deadline"
+                label="Target Date (optional)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    data-test-id="goals-form-date"
                     type="date"
                     class={styles.formControl}
-                    value={formData().tracking_start_date || localToday()}
-                    oninput={(e) =>
-                      setFormData({ ...formData(), tracking_start_date: e.currentTarget.value })
-                    }
+                    value={goalForm.values.deadline}
+                    onInput={(e) => goalForm.set('deadline', e.currentTarget.value)}
                   />
-                  <p
-                    style={{
-                      'font-size': '11px',
-                      color: 'var(--text-secondary)',
-                      'margin-top': '4px',
-                    }}
-                  >
-                    Only category transactions on/after this date count. Defaults to today so past
-                    history doesn't fill the goal — set it earlier to include prior activity.
-                  </p>
-                </div>
+                )}
+              </Field>
+              <Field
+                form={goalForm}
+                name="monthly_contribution"
+                label="Monthly Contribution"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    data-test-id="goals-form-monthly"
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    placeholder="e.g., 500.00"
+                    value={goalForm.values.monthly_contribution}
+                    onInput={(e) => goalForm.set('monthly_contribution', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field
+                form={goalForm}
+                name="category_id"
+                label="Linked Category (optional)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+                hint="Transactions to this category will count toward goal progress"
+              >
+                {(control) => (
+                  <>
+                    <select
+                      {...control}
+                      data-test-id="goals-form-category"
+                      class={styles.formControl}
+                      value={goalForm.values.category_id}
+                      onInput={(e) => goalForm.set('category_id', e.currentTarget.value)}
+                    >
+                      <option value="">None — manual tracking</option>
+                      <For each={categories()}>
+                        {(cat) => (
+                          <option
+                            value={String(cat.id)}
+                            selected={String(cat.id) === goalForm.values.category_id}
+                          >
+                            {cat.name} ({cat.type})
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                    <button
+                      type="button"
+                      class={styles.btnLink}
+                      style={{ 'margin-top': '8px' }}
+                      onClick={openCategoryModal}
+                    >
+                      + Add Category
+                    </button>
+                  </>
+                )}
+              </Field>
+              {goalForm.values.category_id && (
+                <Field
+                  form={goalForm}
+                  name="tracking_start_date"
+                  label="Count transactions from"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hint="Only category transactions on/after this date count. Defaults to today so past history doesn't fill the goal — set it earlier to include prior activity."
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="date"
+                      class={styles.formControl}
+                      value={goalForm.values.tracking_start_date || localToday()}
+                      onInput={(e) => goalForm.set('tracking_start_date', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               )}
               <div data-test-id="goals-modal-footer" class={styles.modalFooter}>
                 <button
                   data-test-id="goals-modal-cancel"
                   type="button"
                   class={styles.btnSecondary}
-                  onclick={() => {
-                    setShowAddModal(false)
-                    setEditingGoal(null)
-                    setFormData({
-                      name: '',
-                      target_amount: '',
-                      target_date: '',
-                      monthly_contribution: '',
-                      category_id: '',
-                      tracking_start_date: '',
-                    })
-                  }}
+                  onclick={closeGoalModal}
                 >
                   Cancel
                 </button>
-                <button data-test-id="goals-modal-submit" type="submit" class={styles.btnPrimary}>
+                <SubmitButton
+                  data-test-id="goals-modal-submit"
+                  class={styles.btnPrimary}
+                  busy={goalForm.submitting()}
+                  busyLabel={editingGoal() ? 'Saving…' : 'Creating…'}
+                >
                   {editingGoal() ? 'Update' : 'Create'} Goal
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>

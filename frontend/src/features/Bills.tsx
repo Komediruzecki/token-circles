@@ -66,17 +66,19 @@ import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPost, apiPut, errorStatus, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
-import { buildBillMutationPayload } from './billForm'
+import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
+import { createBillForm } from './billForm'
 import styles from './BillsPage.module.css'
 import { createCategoryForm } from './categoryForm'
 import { filterSubscriptions, subscriptionGroupCounts } from './subscriptionFilters'
 import type { SubscriptionCardBill } from '../components/SubscriptionCard'
+import type { BillKind } from './billForm'
 import type { CategoryFormValues } from './categoryForm'
 import type { SubscriptionFilter } from './subscriptionFilters'
 
@@ -93,7 +95,8 @@ interface Bill {
   name: string
   amount: number
   due_date: string
-  category?: string
+  /** When it falls due next (features/billDue.ts): the date the cards show. */
+  next_due_date?: string | null
   category_id?: number | null
   category_name?: string
   category_color?: string
@@ -149,15 +152,28 @@ export default function Bills() {
   const [showCatalog, setShowCatalog] = createSignal(false)
   const [showScan, setShowScan] = createSignal(false)
   const [showCategoryModal, setShowCategoryModal] = createSignal(false)
-  const [editingId, setEditingId] = createSignal<number | null>(null)
-  const [formData, setFormData] = createSignal({
-    name: '',
-    amount: '',
-    due_date: '',
-    category: '',
-    frequency: 'monthly' as Bill['frequency'],
-    autopay: false,
-    type: 'bill' as 'bill' | 'subscription',
+  // The bill the dialog edits, or null for a new one: its title and its button say which.
+  const [editingBill, setEditingBill] = createSignal<Bill | null>(null)
+  const closeBillModal = () => {
+    setShowAddModal(false)
+    setEditingBill(null)
+  }
+  // The dialog's values, field errors and notice (components/form), and its save
+  // (features/billForm.ts). A refused save is said in the dialog, under the field it is about.
+  const billForm = createBillForm({ onSaved: closeBillModal })
+  const openAddModal = (kind: BillKind) => {
+    setEditingBill(null)
+    billForm.open(null, kind)
+    setShowAddModal(true)
+  }
+  // The dialog's categories: this page's expense categories, and the bill's own when it is not one
+  // of them (an income category set elsewhere), so that saving an edit does not clear it unseen.
+  const categoryOptions = createMemo(() => {
+    const list = categories()
+    const bill = editingBill()
+    const id = bill?.category_id
+    if (!id || list.some((c) => c.id === id)) return list
+    return [...list, { id, name: bill?.category_name ?? "This bill's category" }]
   })
   // The "+ Add Category" dialog over the bill form. What a save does, and what it says when the
   // save is refused, is categoryForm.ts, shared with Categories, Budgets and Goals. No refetch
@@ -228,51 +244,12 @@ export default function Bills() {
     setShowCategoryModal(true)
   }
 
-  // Handle form submit
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = buildBillMutationPayload(formData())
-
-    try {
-      const id = editingId()
-      if (id) {
-        await apiPut(`/api/bills/${id}`, data)
-        showToast('Bill updated', 'success')
-      } else {
-        await apiPost('/api/bills', data)
-        showToast('Bill saved', 'success')
-      }
-      setShowAddModal(false)
-      setEditingId(null)
-      setFormData({
-        name: '',
-        amount: '',
-        due_date: '',
-        category: '',
-        frequency: 'monthly',
-        autopay: false,
-        type: 'bill',
-      })
-    } catch (err) {
-      console.error('Failed to save bill:', err)
-      showToast('Failed to save bill', 'error')
-    }
-  }
-
-  // Open edit modal pre-filled with bill data
+  // Open the dialog on a bill, from its card or a subscription card's menu.
   const openEditModal = (idOrBill: number | Bill) => {
     const bill = typeof idOrBill === 'number' ? bills().find((b) => b.id === idOrBill) : idOrBill
     if (!bill) return
-    setEditingId(bill.id)
-    setFormData({
-      name: bill.name,
-      amount: bill.amount.toString(),
-      due_date: bill.due_date,
-      category: bill.category || '',
-      frequency: bill.frequency,
-      autopay: bill.autopay,
-      type: bill.type || 'bill',
-    })
+    setEditingBill(bill)
+    billForm.open(bill)
     setShowAddModal(true)
   }
 
@@ -304,51 +281,26 @@ export default function Bills() {
     }
   }
 
-  // Delete bill
+  // Delete bill. One deleted in another tab or on another device first answers 404: gone is what
+  // was asked, so the page says so and drops the card. A failed write bumps no counter, so this
+  // refetch has to be asked for.
   const deleteBill = async (id: number) => {
     try {
       await apiDelete(`/api/bills/${id}`)
       showToast('Bill deleted successfully', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That bill was already deleted.', 'info')
+        await refetchBills()
+        return
+      }
       console.error('Failed to delete bill:', err)
       showToast('Failed to delete bill', 'error')
     }
   }
 
-  // Days until due
-  const daysUntil = (dateStr: string): string => {
-    const target = new Date(dateStr)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    target.setHours(0, 0, 0, 0)
-    const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (diff < 0) return `${Math.abs(diff)} days overdue`
-    if (diff === 0) return 'Due today'
-    if (diff === 1) return 'Due tomorrow'
-    return `Due in ${diff} days`
-  }
-
-  const isOverdue = (dateStr: string): boolean => {
-    const target = new Date(dateStr)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    target.setHours(0, 0, 0, 0)
-    return target < today
-  }
-
-  // Format date
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date:', dateStr, 'Date object:', date)
-      return 'Invalid Date'
-    }
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  /** Unpaid, and its day has passed. */
+  const isOverdue = (bill: Bill): boolean => !bill.paid && daysToDue(bill) < 0
 
   return (
     <div class={`${styles.billsPage} page page-bills page-enter`}>
@@ -402,16 +354,7 @@ export default function Bills() {
               data-tour="bills-add"
               class={styles.btnPrimary}
               onClick={() => {
-                setEditingId(null)
-                setFormData({
-                  ...formData(),
-                  name: '',
-                  amount: '',
-                  due_date: '',
-                  category: '',
-                  type: billTab() === 'subscriptions' ? 'subscription' : 'bill',
-                })
-                setShowAddModal(true)
+                openAddModal(billTab() === 'subscriptions' ? 'subscription' : 'bill')
               }}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -578,17 +521,7 @@ export default function Bills() {
               <button
                 class={styles.btnPrimary}
                 onClick={() => {
-                  setEditingId(null)
-                  setFormData({
-                    name: '',
-                    amount: '',
-                    due_date: '',
-                    category: '',
-                    frequency: 'monthly',
-                    autopay: false,
-                    type: 'subscription',
-                  })
-                  setShowAddModal(true)
+                  openAddModal('subscription')
                 }}
               >
                 Add Subscription
@@ -604,17 +537,7 @@ export default function Bills() {
             data-test-id="bills-add-btn-empty"
             class={styles.btnPrimary}
             onClick={() => {
-              setEditingId(null)
-              setFormData({
-                name: '',
-                amount: '',
-                due_date: '',
-                category: '',
-                frequency: 'monthly',
-                autopay: false,
-                type: 'bill',
-              })
-              setShowAddModal(true)
+              openAddModal('bill')
             }}
           >
             Add Bill
@@ -635,7 +558,7 @@ export default function Bills() {
                   {(bill) => (
                     <div
                       data-test-id="bill-card"
-                      class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                      class={`${styles.billCard} ${isOverdue(bill) ? styles.overdue : ''}`}
                     >
                       <div class={styles.billMain}>
                         <div data-test-id="bill-icon" class={styles.billIcon}>
@@ -668,8 +591,8 @@ export default function Bills() {
                             {bill.name}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
-                            {daysUntil(bill.due_date)} •{' '}
+                            <span data-test-id="bill-due-date">{dueDateLabel(nextDue(bill))}</span>{' '}
+                            • {dueInWords(daysToDue(bill))} •{' '}
                             <span data-test-id="bill-frequency">
                               {frequencyLabel(bill.frequency)}
                             </span>
@@ -678,7 +601,7 @@ export default function Bills() {
                       </div>
                       <div
                         data-test-id="bill-amount-container"
-                        class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                        class={`${styles.billAmount} ${isOverdue(bill) ? styles.overdue : ''}`}
                       >
                         <div data-test-id="bill-amount" class={styles.amountValue}>
                           {formatCurrency(bill.amount)}
@@ -723,7 +646,7 @@ export default function Bills() {
                 <For each={paidBills()}>
                   {(bill) => (
                     <div
-                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill) ? styles.overdue : ''}`}
                     >
                       <div class={styles.billMain}>
                         <div data-test-id="bill-icon" class={styles.billIcon}>
@@ -761,11 +684,14 @@ export default function Bills() {
                             )}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
+                            <span data-test-id="bill-due-date">
+                              Next due {dueDateLabel(nextDue(bill))}
+                            </span>{' '}
+                            •{' '}
                             <span data-test-id="bill-frequency">
                               {frequencyLabel(bill.frequency)}
                             </span>
-                            {bill.category && ` • ${bill.category}`}
+                            {bill.category_name && ` • ${bill.category_name}`}
                           </p>
                         </div>
                       </div>
@@ -793,7 +719,7 @@ export default function Bills() {
                             >
                               {markingPaid().has(bill.id)
                                 ? 'Paying...'
-                                : isOverdue(bill.due_date)
+                                : isOverdue(bill)
                                   ? 'Mark as Paid (Overdue)'
                                   : 'Mark Paid'}
                             </button>
@@ -834,10 +760,7 @@ export default function Bills() {
         <div
           class={styles.modalOverlay}
           onclick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowAddModal(false)
-              setEditingId(null)
-            }
+            if (e.target === e.currentTarget) closeBillModal()
           }}
         >
           <div
@@ -849,133 +772,181 @@ export default function Bills() {
           >
             <div class={styles.modalHeader}>
               <h3 class={styles.modalTitle} data-test-id="bill-modal-title">
-                {editingId() ? 'Edit' : 'Add'}{' '}
-                {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
+                {editingBill() ? 'Edit' : 'Add'}{' '}
+                {billForm.values.type === 'subscription' ? 'Subscription' : 'Bill'}
               </h3>
               <OrbitalAccent />
-              <button
-                class={styles.modalClose}
-                onClick={() => {
-                  setShowAddModal(false)
-                  setEditingId(null)
-                }}
-              >
+              <button class={styles.modalClose} onClick={closeBillModal}>
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Bill Name</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  data-test-id="bill-form-name"
-                  placeholder="e.g., Rent, Electricity, Internet"
-                  value={formData().name}
-                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
-                  autofocus
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  class={styles.formControl}
-                  data-test-id="bill-form-amount"
-                  placeholder="500.00"
-                  value={formData().amount}
-                  oninput={(e) => setFormData({ ...formData(), amount: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Due Date</label>
-                <input
-                  type="date"
-                  class={styles.formControl}
-                  data-test-id="bill-form-date"
-                  value={formData().due_date}
-                  oninput={(e) => setFormData({ ...formData(), due_date: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Category</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().category}
-                  oninput={(e) => setFormData({ ...formData(), category: e.target.value })}
-                >
-                  <option value="">No category</option>
-                  <For each={categories()}>
-                    {(cat) => (
-                      <option value={cat.name} selected={cat.name === formData().category}>
-                        {cat.name}
-                      </option>
-                    )}
-                  </For>
-                </select>
-                <button
-                  type="button"
-                  class={styles.btnLink}
-                  style={{ 'margin-top': '8px' }}
-                  onClick={openCategoryModal}
-                >
-                  + Add Category
-                </button>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Frequency</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().frequency}
-                  oninput={(e) =>
-                    setFormData({ ...formData(), frequency: e.target.value as Bill['frequency'] })
-                  }
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="biweekly">Biweekly</option>
-                  <option value="yearly">Yearly</option>
-                </select>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Type</label>
-                <select
-                  class={styles.formControl}
-                  value={formData().type}
-                  oninput={(e) =>
-                    setFormData({ ...formData(), type: e.target.value as 'bill' | 'subscription' })
-                  }
-                >
-                  <option value="bill">Regular Bill</option>
-                  <option value="subscription">Subscription</option>
-                </select>
-              </div>
+            <form class={styles.modalBody} {...billForm.attrs}>
+              <FormNotice form={billForm} testId="bill-form-notice" />
+              <Field
+                form={billForm}
+                name="name"
+                label="Bill Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    data-test-id="bill-form-name"
+                    placeholder="e.g., Rent, Electricity, Internet"
+                    value={billForm.values.name}
+                    onInput={(e) => billForm.set('name', e.currentTarget.value)}
+                    autofocus
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={billForm}
+                name="amount"
+                label="Amount"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    data-test-id="bill-form-amount"
+                    placeholder="500.00"
+                    value={billForm.values.amount}
+                    onInput={(e) => billForm.set('amount', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={billForm}
+                name="due_date"
+                label="Due Date"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="date"
+                    class={styles.formControl}
+                    data-test-id="bill-form-date"
+                    value={billForm.values.due_date}
+                    onInput={(e) => billForm.set('due_date', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={billForm}
+                name="category_id"
+                label="Category"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <>
+                    <select
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="bill-form-category"
+                      value={billForm.values.category_id}
+                      onInput={(e) => billForm.set('category_id', e.currentTarget.value)}
+                    >
+                      <option value="">No category</option>
+                      <For each={categoryOptions()}>
+                        {(cat) => (
+                          <option
+                            value={String(cat.id)}
+                            selected={String(cat.id) === billForm.values.category_id}
+                          >
+                            {cat.name}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                    <button
+                      type="button"
+                      class={styles.btnLink}
+                      style={{ 'margin-top': '8px' }}
+                      onClick={openCategoryModal}
+                    >
+                      + Add Category
+                    </button>
+                  </>
+                )}
+              </Field>
+              <Field
+                form={billForm}
+                name="frequency"
+                label="Frequency"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formControl}
+                    data-test-id="bill-form-frequency"
+                    value={billForm.values.frequency}
+                    onInput={(e) => billForm.set('frequency', e.currentTarget.value)}
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                )}
+              </Field>
+              <Field
+                form={billForm}
+                name="type"
+                label="Type"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <select
+                    {...control}
+                    class={styles.formControl}
+                    data-test-id="bill-form-type"
+                    value={billForm.values.type}
+                    onInput={(e) => billForm.set('type', e.currentTarget.value as BillKind)}
+                  >
+                    <option value="bill">Regular Bill</option>
+                    <option value="subscription">Subscription</option>
+                  </select>
+                )}
+              </Field>
               <div class={styles.formGroup}>
                 <ToggleField
                   title="Autopay"
                   description="Indicate that this bill is handled automatically."
-                  checked={() => formData().autopay}
-                  onChange={(v) => setFormData({ ...formData(), autopay: v })}
+                  checked={() => billForm.values.autopay}
+                  onChange={(v) => billForm.set('autopay', v)}
                 />
               </div>
               <div class={styles.modalFooter}>
-                <button
-                  type="button"
-                  class={styles.btnSecondary}
-                  onClick={() => setShowAddModal(false)}
-                >
+                <button type="button" class={styles.btnSecondary} onClick={closeBillModal}>
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary} data-test-id="bill-form-submit">
-                  {editingId() ? 'Update' : 'Add'}{' '}
-                  {formData().type === 'subscription' ? 'Subscription' : 'Bill'}
-                </button>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  data-test-id="bill-form-submit"
+                  busy={billForm.submitting()}
+                  busyLabel={editingBill() ? 'Saving…' : 'Adding…'}
+                >
+                  {editingBill() ? 'Update' : 'Add'}{' '}
+                  {billForm.values.type === 'subscription' ? 'Subscription' : 'Bill'}
+                </SubmitButton>
               </div>
             </form>
           </div>

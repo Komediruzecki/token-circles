@@ -2,8 +2,11 @@ import { z } from 'zod';
 import { defineTool } from './registry';
 import { executeImport } from '../routes/imports';
 import { recalcGoalsByCategory } from '../recalc-goals';
-import { HttpError } from '../http';
+import { HttpError, accept, refuse } from '../http';
 import * as db from '../db';
+import { localMonth } from '../local-date';
+import { BUDGET_MESSAGES, checkBudgetCreate } from '../../../shared/budgetSchema';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
 
 // Write tools: append plus curate. No arbitrary update or delete -- an agent should be able to
 // add rows and to act on its own analysis, and its mistakes should stay additive and reversible
@@ -318,50 +321,69 @@ defineTool({
   description:
     'Set the budget amount for a category and period, creating it if there is none. Use this to act on a recommendation about spending limits.',
   scope: 'write',
+  // The amount and the start date are the app's to check (shared/budgetSchema.ts): zero or more,
+  // to the cent, and a real date. The tool took any positive number and any date-shaped text.
   input: z
     .object({
       ...profileArg,
       categoryId: z.number().int(),
-      amount: z.number().positive(),
+      amount: z.number(),
       period: z.enum(['monthly', 'yearly']).default('monthly'),
-      startDate: z.string().regex(DATE),
+      startDate: z.string(),
     })
     .strict(),
   handler: async (c, args, profileId) => {
-    const owned = await db.first(
-      c.env.DB,
-      'SELECT 1 AS ok FROM categories WHERE id = ? AND profile_id = ?',
-      args.categoryId,
-      profileId
+    const budget = accept(
+      checkBudgetCreate(
+        {
+          category_id: args.categoryId,
+          amount: args.amount,
+          period: args.period,
+          start_date: args.startDate,
+        },
+        { monthStart: `${localMonth(c)}-01` }
+      )
     );
-    if (!owned) throw new HttpError(403, 'That category does not belong to this profile.');
+    // Another profile's category is refused at the category, as the app's budget routes refuse it.
+    if (!(await db.categoryBelongsToProfile(c.env.DB, budget.category_id, profileId))) {
+      throw refuse({ category_id: BUDGET_MESSAGES.category });
+    }
 
+    // The budget its month (a yearly one, its year) already has, whatever day that one starts, as
+    // the app's Allocate finds it: matched on the exact date, a second budget was added.
+    const from =
+      budget.period === 'yearly'
+        ? `${budget.start_date.slice(0, 4)}-01-01`
+        : `${budget.start_date.slice(0, 7)}-01`;
     const existing = await db.first<{ id: number }>(
       c.env.DB,
-      'SELECT id FROM budgets WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date = ?',
+      `SELECT id FROM budgets
+        WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date >= ? AND start_date < ?
+        ORDER BY start_date, id`,
       profileId,
-      args.categoryId,
-      args.period,
-      args.startDate
+      budget.category_id,
+      budget.period,
+      from,
+      addCalendarMonths(from, budget.period === 'yearly' ? 12 : 1)
     );
     if (existing) {
       await db.update(
         c.env.DB,
         'budgets',
-        { amount: args.amount },
+        { amount: budget.amount },
         'id = ? AND profile_id = ?',
         existing.id,
         profileId
       );
-      return { id: existing.id, created: false, amount: args.amount };
+      return { id: existing.id, created: false, amount: budget.amount };
     }
     const created = await db.insert(c.env.DB, 'budgets', {
       profile_id: profileId,
-      category_id: args.categoryId,
-      amount: args.amount,
-      period: args.period,
-      start_date: args.startDate,
+      category_id: budget.category_id,
+      amount: budget.amount,
+      period: budget.period,
+      start_date: budget.start_date,
     });
-    return { id: Number(created.meta.last_row_id), created: true, amount: args.amount };
+    return { id: Number(created.meta.last_row_id), created: true, amount: budget.amount };
   },
 });

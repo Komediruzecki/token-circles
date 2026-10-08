@@ -103,10 +103,8 @@ export const dashboard = [
       'Food',
       'Rent',
     ]);
-    // DIFFERENCE dashboard-upcoming-bills
-    expect(march.upcomingBills.map((b: Json) => b.name)).toEqual(
-      api.runtime === 'worker' ? ['Water'] : []
-    );
+    // The bills due in the next 30 days.
+    expect(march.upcomingBills.map((b: Json) => b.name)).toEqual(['Water']);
 
     // A range, and all time.
     expect(

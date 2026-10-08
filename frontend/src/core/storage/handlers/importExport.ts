@@ -3,6 +3,7 @@
  */
 import { localToday } from '../../../utils/period'
 import { seedDemoProfiles } from '../idb'
+import { dashboardUpcomingBills } from './bills'
 import {
   adapter,
   getAmount,
@@ -301,6 +302,8 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
     const accts = await adapter.listAccounts()
     const balance = accts.reduce((s, a) => s + (a.balance || 0), 0)
 
+    const upcomingBills = await dashboardUpcomingBills()
+
     return json({
       totalIncome: currentIncome,
       totalExpenses: currentExpense,
@@ -308,7 +311,7 @@ export async function dashboardMain(query: URLSearchParams): Promise<Response> {
       incomeByCategory: [],
       expenseByCategory,
       recentTransactions: recent,
-      upcomingBills: [],
+      upcomingBills,
       momIncomeDelta: currentIncome - prevIncome,
       momExpenseDelta: currentExpense - prevExpense,
       momBalanceDelta: currentIncome - currentExpense - (prevIncome - prevExpense),

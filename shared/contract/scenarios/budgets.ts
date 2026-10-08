@@ -2,7 +2,11 @@ import { addCategory, addTransaction, expectMoney, monthStart } from '../helpers
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
-/** A month's budget, with the body the Budgets and Categories pages post (updateCatBudget). */
+/**
+ * A month's budget, through POST /api/budgets. The Budgets and Categories pages set one through
+ * Allocate instead (see "allocating sets a category's budget"), which changes the month's budget
+ * when it has one.
+ */
 async function budget(
   api: ContractApi,
   expect: Expect,
@@ -152,17 +156,15 @@ export const budgets = [
     expectMoney(expect, row.amount, 300);
     expect(Boolean(row.rollover_enabled)).toBe(false);
 
-    // DIFFERENCE foreign-link-status: a budget on another profile's category.
-    expect(
-      (
-        await api.post('/api/budgets', {
-          category_id: theirs,
-          amount: 50,
-          period: 'monthly',
-          start_date: '2026-03-01',
-        })
-      ).status
-    ).toBe(api.runtime === 'worker' ? 403 : 400);
+    // A budget on another profile's category is refused at the category.
+    const refused = await api.post('/api/budgets', {
+      category_id: theirs,
+      amount: 50,
+      period: 'monthly',
+      start_date: '2026-03-01',
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.fields).toEqual({ category_id: 'Choose the category this budget is for.' });
     expect(await listBudgets(api, expect)).toHaveLength(1);
     expect(await listBudgets(other, expect)).toEqual([]);
   }),
@@ -176,8 +178,8 @@ export const budgets = [
       amount: 50,
       period: 'monthly',
     });
-    // DIFFERENCE foreign-link-status
-    expect(reply.status, JSON.stringify(reply.body)).toBe(api.runtime === 'worker' ? 403 : 400);
+    expect(reply.status, JSON.stringify(reply.body)).toBe(400);
+    expect(reply.body.fields).toEqual({ category_id: 'Choose the category this budget is for.' });
     expect(await listBudgets(api, expect)).toEqual([]);
     expect(await listBudgets(api.other, expect)).toEqual([]);
   }),
@@ -279,7 +281,7 @@ export const budgets = [
   }),
 
   scenario('budget alerts list the categories at or over the threshold', async (api, expect) => {
-    const { food, fun } = await twoMonths(api, expect);
+    const { fun } = await twoMonths(api, expect);
     const reply = await api.get('/api/budgets/alerts?threshold=80&year=2026&month=3');
     expectOk(expect, reply, 'GET /api/budgets/alerts');
     expect(reply.body).toMatchObject({
@@ -297,13 +299,10 @@ export const budgets = [
     expectMoney(expect, alerts[0].budgetAmount, 100, 'Fun budget');
     expectMoney(expect, alerts[0].spent, 110, 'Fun spent');
     expectMoney(expect, alerts[0].remaining, -10, 'Fun remaining');
-    // KNOWN BUG, in both runtimes; slice 3 (budgets) fixes it. The alerts test every budget that
-    // has not ended against March's spending, February's included, so February's Food budget of
-    // 200 is listed at 90% (180 spent). March's own Food budget, 300, is 60% spent and is not.
-    // Fixed, the list is Fun's alert alone: change this expectation then.
+    // Each of March's budgets against March's spending: Food's, 300, is 60% spent and is not
+    // listed. February's Food budget of 200 is not March's, and is not listed at 90% either.
     expect(alerts.map((a) => [a.categoryId, Number(a.budgetAmount), a.status])).toEqual([
       [fun, 100, 'over'],
-      [food, 200, 'warning'],
     ]);
   }),
 
@@ -338,12 +337,8 @@ export const budgets = [
       expectMoney(expect, byCategory(allocations, fun).remaining_budget, -10, 'Fun left');
       expect(byCategory(allocations, rent)).toMatchObject({ budget_id: null, is_budgeted: false });
       expectMoney(expect, byCategory(allocations, rent).spent, 500, 'Rent spent');
-      // DIFFERENCE budget-zero-based-unbudgeted
-      if (api.runtime === 'worker') {
-        expect(byCategory(allocations, rent)).toMatchObject({ amount: 0, percent_used: 0 });
-      } else {
-        expect(byCategory(allocations, rent)).toMatchObject({ amount: 500, percent_used: 100 });
-      }
+      // A category without a budget has none, whatever it spent.
+      expect(byCategory(allocations, rent)).toMatchObject({ amount: 0, percent_used: 0 });
 
       const summary = await api.get('/api/budgets/zero-based/summary?month=2026-03');
       expectOk(expect, summary, 'GET /api/budgets/zero-based/summary');
@@ -375,10 +370,10 @@ export const budgets = [
       });
       expectMoney(expect, byCategory(rows, fun).percent_used, 110, 'Fun used');
       expectMoney(expect, byCategory(rows, fun).remaining, -10, 'Fun left');
-      // DIFFERENCE budget-allocation-alerts
+      // Over by what was spent past the allocation, from past 100%.
       expect(byCategory(rows, fun).alerts).toEqual([
         'Approaching limit: 110% used',
-        api.runtime === 'worker' ? 'Over budget by $-10.00' : 'Over budget by $10.00',
+        'Over budget by $10.00',
       ]);
       expect(byCategory(rows, 0)).toMatchObject({
         category_name: 'Unallocated / Future',
@@ -514,12 +509,22 @@ export const budgets = [
     await budget(api, expect, fun, 999, '2026-03-01');
     await addTransaction(api.other, expect, { amount: 40, date: '2026-02-05' });
 
+    // A budget the month already has is kept: Fun's 999 stays, and only Food is set.
     const reply = await api.post('/api/budgets/from-expenses', { year: 2026, month: 3 });
     expectOk(expect, reply, 'POST /api/budgets/from-expenses');
-    expect(reply.body).toMatchObject({ ok: true, count: 2 });
+    expect(reply.body).toMatchObject({ ok: true, count: 1, already_budgeted: 1 });
     expect(await monthOf(api, expect, '2026-03-01')).toEqual([
       [food, 150],
-      [fun, 30.5],
+      [fun, 999],
+    ]);
+
+    // Setting it again sets nothing and adds nothing.
+    const again = await api.post('/api/budgets/from-expenses', { year: 2026, month: 3 });
+    expectOk(expect, again, 'POST /api/budgets/from-expenses again');
+    expect(again.body).toMatchObject({ ok: true, count: 0, already_budgeted: 2 });
+    expect(await monthOf(api, expect, '2026-03-01')).toEqual([
+      [food, 150],
+      [fun, 999],
     ]);
 
     const none = await api.post('/api/budgets/from-expenses', { year: 2026, month: 6 });
@@ -573,16 +578,11 @@ export const budgets = [
     expectMoney(expect, february.adherence_pct, 75, 'February adherence');
     expect(february.prev_adherence).toBeNull();
     expectMoney(expect, march.prev_adherence, 75, 'March against February');
-    // DIFFERENCE budget-trend-spending
-    if (api.runtime === 'worker') {
-      expectMoney(expect, march.total_spent, 290, 'March spent');
-      expectMoney(expect, march.adherence_pct, 72.5, 'March adherence');
-      expectMoney(expect, march.change_pct, -2.5, 'March change');
-    } else {
-      expectMoney(expect, march.total_spent, 815, 'March spent');
-      expectMoney(expect, march.adherence_pct, 203.75, 'March adherence');
-      expectMoney(expect, march.change_pct, 128.75, 'March change');
-    }
+    // The spending of the budgeted categories only: Food's 180 and Fun's 110, not Rent's 500 or
+    // the uncategorised 25.
+    expectMoney(expect, march.total_spent, 290, 'March spent');
+    expectMoney(expect, march.adherence_pct, 72.5, 'March adherence');
+    expectMoney(expect, march.change_pct, -2.5, 'March change');
     expect(
       (JSON.parse(march.category_budgets) as Json[]).map((c) => [c.name, Number(c.budget_amount)])
     ).toEqual([
@@ -608,16 +608,10 @@ export const budgets = [
     expectMoney(expect, history[1].total_budget, 200, 'February budget');
     expectMoney(expect, history[1].total_spent, 150, 'February spent');
     expectMoney(expect, history[1].adherence, 75, 'February adherence');
-    // DIFFERENCE budget-trend-spending
-    if (api.runtime === 'worker') {
-      expectMoney(expect, history[0].total_spent, 290, 'March spent');
-      expectMoney(expect, history[0].adherence, 72.5, 'March adherence');
-      expect(forecast.body.avg_adherence).toBe(74);
-    } else {
-      expectMoney(expect, history[0].total_spent, 815, 'March spent');
-      expectMoney(expect, history[0].adherence, 100, 'March adherence');
-      expect(forecast.body.avg_adherence).toBe(88);
-    }
+    // The spending of the budgeted categories only, as the adherence trend counts it.
+    expectMoney(expect, history[0].total_spent, 290, 'March spent');
+    expectMoney(expect, history[0].adherence, 72.5, 'March adherence');
+    expect(forecast.body.avg_adherence).toBe(74);
   }),
 
   scenario('the forecast covers the next six months', async (api, expect) => {

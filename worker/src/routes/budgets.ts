@@ -1,8 +1,18 @@
 import { Hono } from 'hono';
+import {
+  BUDGET_MESSAGES,
+  checkAllocation,
+  checkBudgetCreate,
+  checkBudgetEdit,
+  checkBudgetMonth,
+  checkRollover,
+} from '../../../shared/budgetSchema';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
+import { toCents } from '../../../shared/money';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localMonth, localNow } from '../local-date';
 
@@ -33,22 +43,22 @@ budgetsRoutes.get('/api/budgets', requireAuth, async (c) => {
   return c.json(rows);
 });
 
+// The rules and their words are shared/budgetSchema.ts, which local-first and the budget dialogs
+// run too. A refused body answers 400 { error, fields }. A category of another profile is a 400 at
+// `category_id`; it was a 403 with no field.
 budgetsRoutes.post('/api/budgets', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))) {
-    throw new HttpError(403, 'Category does not belong to this profile');
+  const b = await c.req.json();
+  const budget = accept(checkBudgetCreate(b, { monthStart: `${localMonth(c)}-01` }));
+  if (!(await db.categoryBelongsToProfile(c.env.DB, budget.category_id, pid))) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
   }
   const res = await db.insert(c.env.DB, 'budgets', {
-    category_id: b.category_id,
-    amount: b.amount,
-    period: b.period || 'monthly',
-    start_date: b.start_date,
-    end_date: b.end_date || null,
-    rollover_enabled: b.rollover_enabled ? 1 : 0,
+    ...budget,
+    rollover_enabled: budget.rollover_enabled ? 1 : 0,
     profile_id: pid,
   });
-  return c.json({ id: res.meta.last_row_id, ...b, profile_id: pid });
+  return c.json({ id: res.meta.last_row_id, ...budget, profile_id: pid });
 });
 
 // ── Analytical / zero-based / forecast endpoints ──────────────────────────────
@@ -111,8 +121,9 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     startDate,
     endDate
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  for (const s of spent) spentMap[s.category_id] = s.total;
+  for (const s of spent) spentMap[s.category_id] = toCents(s.total);
 
   // Automatic rollover from the previous month.
   const prevY = m === 1 ? y - 1 : y;
@@ -147,17 +158,17 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     prevEnd
   );
   const prevSpentMap: Record<number, number> = {};
-  for (const s of prevSpent) prevSpentMap[s.category_id] = s.total;
+  for (const s of prevSpent) prevSpentMap[s.category_id] = toCents(s.total);
 
   const prevUnusedMap: Record<number, { unused: number; rollover_enabled: number }> = {};
   for (const pb of prevBudgets) {
-    const unused = Math.max(0, pb.budget_amount - (prevSpentMap[pb.category_id] || 0));
+    const unused = Math.max(0, toCents(pb.budget_amount - (prevSpentMap[pb.category_id] || 0)));
     prevUnusedMap[pb.category_id] = { unused, rollover_enabled: pb.rollover_enabled };
   }
 
   const summary = budgets.map((b) => {
     const spentAmt = spentMap[b.category_id] || 0;
-    const baseRemaining = b.amount - spentAmt;
+    const baseRemaining = toCents(b.amount - spentAmt);
 
     let rollover_contribution = 0;
     let auto_rollover = 0;
@@ -167,11 +178,13 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
       if (prevInfo && prevInfo.rollover_enabled) {
         auto_rollover = prevInfo.unused;
       }
-      rollover_contribution = (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0);
+      rollover_contribution = toCents(
+        (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0)
+      );
     }
 
-    const effective_budget = b.amount + Math.max(0, rollover_contribution);
-    const effective_remaining = effective_budget - spentAmt;
+    const effective_budget = toCents(b.amount + Math.max(0, rollover_contribution));
+    const effective_remaining = toCents(effective_budget - spentAmt);
 
     return {
       ...b,
@@ -318,15 +331,18 @@ budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => {
     endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
   }
 
-  // budgetsRepo.listActive
+  // The month's budgets: the rows that start in it, as GET /api/budgets reads them (D13). It took
+  // every row without an end date, so each earlier month's budget for a category, and each later
+  // one, was measured against this month's spending, and one category raised an alert per month.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+     WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
     pid,
-    startDate
+    startDate,
+    endDate
   );
 
   const spent = await db.all<{ category_id: number; total: number }>(
@@ -398,8 +414,9 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  for (const s of spent) spentMap[s.category_id] = Math.abs(s.total);
+  for (const s of spent) spentMap[s.category_id] = toCents(Math.abs(s.total));
 
   const incomeRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -410,12 +427,12 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const income = incomeRow?.total || 0;
+  const income = toCents(incomeRow?.total || 0);
 
-  const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
-  const totalSpent = Object.values(spentMap).reduce((sum, val) => sum + val, 0);
-  const remaining = totalBudget - totalSpent;
-  const zero_based_remaining = income - totalBudget;
+  const totalBudget = toCents(budgets.reduce((sum, b) => sum + b.amount, 0));
+  const totalSpent = toCents(Object.values(spentMap).reduce((sum, val) => sum + val, 0));
+  const remaining = toCents(totalBudget - totalSpent);
+  const zero_based_remaining = toCents(income - totalBudget);
 
   const summary: Array<
     Record<string, unknown> & { percent_used: number; remaining: number; alerts: string[] }
@@ -427,7 +444,7 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     category_icon: b.category_icon,
     allocated: b.amount,
     spent: spentMap[b.category_id] || 0,
-    remaining: b.amount - (spentMap[b.category_id] || 0),
+    remaining: toCents(b.amount - (spentMap[b.category_id] || 0)),
     percent_used: b.amount > 0 ? ((spentMap[b.category_id] || 0) / b.amount) * 100 : 0,
     status: (spentMap[b.category_id] || 0) > b.amount ? 'over' : 'ok',
     is_fully_allocated: b.amount > 0 && (spentMap[b.category_id] || 0) <= b.amount,
@@ -454,12 +471,14 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     });
   }
 
+  // Over budget by what was spent past the allocation: the remaining amount is negative there, and
+  // this said "Over budget by $-10.00" (the contract's `budget-allocation-alerts`).
   summary.forEach((item) => {
     if (item.percent_used >= 90) {
       item.alerts.push(`Approaching limit: ${Math.round(item.percent_used)}% used`);
     }
     if (item.percent_used > 100) {
-      item.alerts.push(`Over budget by $${item.remaining.toFixed(2)}`);
+      item.alerts.push(`Over budget by $${(-item.remaining).toFixed(2)}`);
     }
   });
 
@@ -515,8 +534,9 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
+  // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
   const spentMap: Record<number, number> = {};
-  spent.forEach((s) => (spentMap[s.category_id] = Math.abs(s.total)));
+  spent.forEach((s) => (spentMap[s.category_id] = toCents(Math.abs(s.total))));
 
   const incomeRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -527,7 +547,7 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const remaining = incomeRow?.total || 0;
+  const remaining = toCents(incomeRow?.total || 0);
 
   const alreadyBudgetedRow = await db.first<{ total: number | null }>(
     c.env.DB,
@@ -537,14 +557,14 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
     startOfMonth,
     endOfMonth
   );
-  const alreadyBudgeted = alreadyBudgetedRow?.total ?? 0;
+  const alreadyBudgeted = toCents(alreadyBudgetedRow?.total ?? 0);
 
-  const unassignedBudget = Math.max(0, remaining - alreadyBudgeted);
+  const unassignedBudget = Math.max(0, toCents(remaining - alreadyBudgeted));
 
   const allocations = categories.map((cat) => {
     const budget = budgetMap[cat.id];
     const spentAmt = spentMap[cat.id] || 0;
-    const remainingBudget = budget ? budget.amount - spentAmt : 0;
+    const remainingBudget = budget ? toCents(budget.amount - spentAmt) : 0;
     const percentUsed = budget && budget.amount > 0 ? (spentAmt / budget.amount) * 100 : 0;
 
     return {
@@ -752,48 +772,38 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
 // POST /api/budgets/allocate — create a monthly budget for a category after existence check.
 budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const { category_id, amount, period } = b;
-
-  if (!category_id || amount == null) {
-    throw new HttpError(400, 'Category ID and amount are required');
+  const month = accept(checkBudgetMonth(c.req.query('month'), localMonth(c)));
+  const { category_id, amount, period: budgetPeriod } = accept(checkAllocation(await c.req.json()));
+  if (!(await db.categoryBelongsToProfile(c.env.DB, category_id, pid))) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
   }
-  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-
-  const budgetPeriod = period || 'monthly';
-
-  const month = c.req.query('month') || localMonth(c);
   const start_date = `${month}-01`;
 
-  // budgetsRepo.getByCategoryForMonth
-  const existing = await db.first(
+  // The month's budget for the category, whatever day it starts: one an API client, an import or
+  // an MCP agent started mid-month is still the month's, and allocating changes it rather than
+  // adding a second one that the month would count as well.
+  const existing = await db.first<{ id: number; start_date: string }>(
     c.env.DB,
-    'SELECT * FROM budgets WHERE category_id = ? AND profile_id = ? AND start_date = ? AND period = ?',
+    `SELECT * FROM budgets
+      WHERE category_id = ? AND profile_id = ? AND period = ? AND start_date >= ? AND start_date < ?
+      ORDER BY start_date, id`,
     category_id,
     pid,
+    budgetPeriod,
     start_date,
-    budgetPeriod
+    addCalendarMonths(start_date, 1)
   );
 
   // Allocate is an upsert: re-allocating a category for the same month updates the amount
   // instead of erroring, so users can freely change an allocation from the same action.
   if (existing) {
-    await db.update(
-      c.env.DB,
-      'budgets',
-      { amount },
-      'id = ? AND profile_id = ?',
-      (existing as { id: number }).id,
-      pid
-    );
+    await db.update(c.env.DB, 'budgets', { amount }, 'id = ? AND profile_id = ?', existing.id, pid);
     return c.json({
-      id: (existing as { id: number }).id,
+      id: existing.id,
       category_id,
       amount,
       period: budgetPeriod,
-      start_date,
+      start_date: existing.start_date,
       profile_id: pid,
       message: 'Budget updated successfully',
     });
@@ -818,7 +828,13 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   });
 });
 
-// POST /api/budgets/from-expenses — replace current-month budgets from last month's expenses.
+// POST /api/budgets/from-expenses — set budgets for the month from last month's spending, for the
+// categories the month has no budget for yet.
+//
+// It used to delete the month's budgets first and write last month's spending in their place,
+// without asking, so a budget set by hand went back to whatever was spent. Like "Copy last month",
+// it never deletes or overwrites a budget the month has: it fills the categories without one, and
+// says how many it set and how many already had a budget.
 budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const body = (await c.req.json()) as Record<string, any>;
@@ -826,15 +842,11 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
 
   // The month these default to is the person's, not the Worker's UTC one.
   const now = localNow(c);
-  let prevYear = year || now.getFullYear();
-  let prevMonth = (month || now.getMonth() + 1) - 1;
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear--;
-  }
-
-  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-  const prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+  const currYear = year || now.getFullYear();
+  const currMonth = month || now.getMonth() + 1;
+  const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
+  const prevStart = addCalendarMonths(currStart, -1);
+  const nextStart = addCalendarMonths(currStart, 1);
 
   const expenses = await db.all<{ category_id: number; name: string; total: number }>(
     c.env.DB,
@@ -845,37 +857,28 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
        GROUP BY t.category_id`,
     pid,
     prevStart,
-    prevEnd
+    currStart
   );
 
   if (expenses.length === 0) {
     return c.json({ ok: false, message: 'No expenses found for previous month' });
   }
 
-  const currYear = year || now.getFullYear();
-  const currMonth = month || now.getMonth() + 1;
-  const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
-
-  // budgetsRepo.deleteByDateRange — clear existing budgets for the current month.
-  await db.run(
-    c.env.DB,
-    'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
-    pid,
-    currStart,
-    `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`
+  // One guarded INSERT per category, in one batch: a category with a budget in the month already
+  // matches nothing, so two taps at once cannot set the same category twice.
+  const stmts = expenses.map((item) =>
+    c.env.DB.prepare(
+      `INSERT INTO budgets (category_id, amount, period, start_date, profile_id)
+       SELECT ?1, ?2, 'monthly', ?3, ?4
+        WHERE NOT EXISTS (SELECT 1 FROM budgets
+                           WHERE profile_id = ?4 AND category_id = ?1
+                             AND start_date >= ?3 AND start_date < ?5)`
+    ).bind(item.category_id, Math.round(item.total * 100) / 100, currStart, pid, nextStart)
   );
+  const results = await c.env.DB.batch(stmts);
+  const count = results.reduce((sum, result) => sum + (result.meta?.changes ?? 0), 0);
 
-  // Batch all INSERTs into a single D1 batch call to avoid N+1 round-trips.
-  if (expenses.length > 0) {
-    const stmts = expenses.map((item) =>
-      c.env.DB.prepare(
-        'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
-      ).bind(item.category_id, item.total, 'monthly', currStart, pid)
-    );
-    await c.env.DB.batch(stmts);
-  }
-
-  return c.json({ ok: true, count: expenses.length });
+  return c.json({ ok: true, count, already_budgeted: expenses.length - count });
 });
 
 // POST /api/budgets/backfill-from-spending — for every month in the range, set each
@@ -934,12 +937,14 @@ budgetsRoutes.post('/api/budgets/backfill-from-spending', requireAuth, async (c)
     toEnd
   );
 
+  // Each budget to the cent: SUM over 0.1 and 0.2 is 0.30000000000000004, which the Allocate
+  // dialog's cents rule would refuse to save back.
   const months = new Set<string>();
   const stmts = rows.map((r) => {
     months.add(r.ym);
     return c.env.DB.prepare(
       'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
-    ).bind(r.category_id, r.total, 'monthly', `${r.ym}-01`, pid);
+    ).bind(r.category_id, toCents(r.total), 'monthly', `${r.ym}-01`, pid);
   });
   for (let i = 0; i < stmts.length; i += 50) {
     await c.env.DB.batch(stmts.slice(i, i + 50));
@@ -1033,42 +1038,31 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
 
 // ── Parametric /:id routes — registered last so static segments above win ─────
 
+// An edit checks and writes only the fields whose value it changes (decision 2): a field it leaves
+// out keeps its value, where it used to be written as NULL (the amount, the dates) or off
+// (rollover).
 budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (
-    b.category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  // Write only the fields the edit sends, as local-first does. An absent field stays as it is,
-  // where it used to be bound as undefined (a 500) or, for the rollover switch, cleared.
-  const fields: Record<string, unknown> = {};
-  for (const key of ['category_id', 'amount', 'period', 'start_date']) {
-    if (b[key] !== undefined) fields[key] = b[key];
-  }
-  if (b.end_date !== undefined) fields.end_date = b.end_date || null;
-  if (b.rollover_enabled !== undefined) fields.rollover_enabled = b.rollover_enabled ? 1 : 0;
-  if (Object.keys(fields).length === 0) {
-    const row = await db.first(
-      c.env.DB,
-      'SELECT id FROM budgets WHERE id = ? AND profile_id = ?',
-      c.req.param('id'),
-      pid
-    );
-    if (!row) throw new HttpError(404, 'Not found');
-    return c.json({ ok: true });
-  }
-  const res = await db.update(
+  const id = c.req.param('id');
+  const existing = await db.first<BudgetRow>(
     c.env.DB,
-    'budgets',
-    fields,
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
+    'SELECT * FROM budgets WHERE id = ? AND profile_id = ?',
+    id,
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Not found');
+  const edit = accept(checkBudgetEdit(await c.req.json(), existing));
+  if (
+    edit.category_id !== undefined &&
+    !(await db.categoryBelongsToProfile(c.env.DB, edit.category_id, pid))
+  ) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
+  }
+  const data: Record<string, unknown> = { ...edit };
+  if (edit.rollover_enabled !== undefined) data.rollover_enabled = edit.rollover_enabled ? 1 : 0;
+  if (Object.keys(data).length > 0) {
+    await db.update(c.env.DB, 'budgets', data, 'id = ? AND profile_id = ?', id, pid);
+  }
   return c.json({ ok: true });
 });
 
@@ -1089,7 +1083,7 @@ budgetsRoutes.delete('/api/budgets/:id', requireAuth, async (c) => {
 budgetsRoutes.put('/api/budgets/:id/rollover', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const b = (await c.req.json()) as Record<string, any>;
+  const b = accept(checkRollover(await c.req.json()));
 
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -1105,7 +1099,6 @@ budgetsRoutes.put('/api/budgets/:id/rollover', requireAuth, async (c) => {
     updates.push('rollover_enabled = ?');
     values.push(b.rollover_enabled ? 1 : 0);
   }
-  if (updates.length === 0) throw new HttpError(400, 'No rollover fields provided');
 
   values.push(id, pid);
   const res = await db.run(

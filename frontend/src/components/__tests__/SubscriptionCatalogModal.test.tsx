@@ -1,5 +1,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BILL_MESSAGES } from '../../../../shared/billSchema'
+import { ApiError } from '../../core/apiError'
 import { SubscriptionCatalogModal } from '../SubscriptionCatalogModal'
 
 const apiMocks = vi.hoisted(() => ({
@@ -114,6 +116,27 @@ describe('SubscriptionCatalogModal custom prices', () => {
       )
     })
     expect(apiMocks.apiPost).not.toHaveBeenCalled()
+  })
+})
+
+// A subscription the runtime refuses is named, with the reason it was refused for. The catalog
+// said "Some subscriptions could not be added", whatever the reason, and named none.
+describe('SubscriptionCatalogModal refusals', () => {
+  it('says which subscription was not added, and why', async () => {
+    apiMocks.apiPost.mockRejectedValue(
+      new ApiError(400, BILL_MESSAGES.amountCents, { amount: BILL_MESSAGES.amountCents })
+    )
+    const catalog = mountCatalog()
+
+    click(catalog.add())
+
+    await vi.waitFor(() => {
+      expect(apiMocks.showToast).toHaveBeenCalledWith(
+        `Couldn't add "Netflix". ${BILL_MESSAGES.amountCents}`,
+        'error'
+      )
+    })
+    expect(apiMocks.showToast).toHaveBeenCalledTimes(1)
   })
 })
 

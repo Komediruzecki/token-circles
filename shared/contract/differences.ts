@@ -16,7 +16,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
   'foreign-link-status':
-    "A bill, budget, savings goal or recurring rule that links another profile's account or category, and a transaction's tags that name another profile's tag (PUT /api/transactions/:id/tags), are refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2. Slices 3 (bills, budgets, goals) and 5 (recurring, tags).",
+    "A recurring rule that links another profile's account or category, and a transaction's tags that name another profile's tag (PUT /api/transactions/:id/tags), are refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2, and a bill's, a budget's and a savings goal's since slice 3. Slice 5 (recurring, tags).",
   'transactions-summary-shape':
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
@@ -29,16 +29,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'A tag edit that leaves out the colour resets it to #6b7280 on the Worker and keeps it in local-first; the Tags page always sends it. Slice 5 (tags).',
   'tag-rename-duplicate':
     "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
-  'budget-zero-based-unbudgeted':
-    "GET /api/budgets/zero-based gives a category with spending and no budget an amount of 0 and 0% used on the Worker, but an amount equal to its spending and 100% used in local-first, so the Budgets page marks it 'warning' in local-first only. Slice 3 (budgets).",
-  'budget-allocation-alerts':
-    "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
-  'budget-trend-spending':
-    "The months of GET /api/budgets/improvements and of the forecast's history count only the spending of budgeted categories on the Worker, but every expense of the month, unbudgeted and uncategorised included, in local-first, so the Budgets page's trend and average adherence differ between modes. Slice 3 (budgets).",
   'day-of-month-default':
-    'A bill or a recurring rule saved without a day of the month (neither form requires one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. Slices 3 (bills) and 5 (recurring).',
+    'A recurring rule saved without a day of the month (the form does not require one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. A bill stores none in both runtimes since slice 3. Slice 5 (recurring).',
   'delete-missing':
-    "DELETE /api/bills/:id and DELETE /api/recurring/:id answer 200 { ok: true } on the Worker when the profile has no such row, another profile's included, and 404 in local-first; neither deletes anything. Slices 3 (bills) and 5 (recurring).",
+    "DELETE /api/recurring/:id answers 200 { ok: true } on the Worker when the profile has no such row, another profile's included, and 404 in local-first; neither deletes anything. DELETE /api/bills/:id answers 404 in both runtimes since slice 3. Slice 5 (recurring).",
   'recurring-populate-answer':
     'POST /api/recurring/:id/populate answers { ok, transactionId, next_date } on the Worker and { ok } in local-first; the Recurring section reads neither. Slice 5 (recurring).',
   'recurring-upcoming':
@@ -87,10 +81,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/stats/monthly answers only the months that have income or expense, each with its net, on the Worker, and every month of the window, empty ones as zeros and without a net, in local-first; Analytics reads only month, income and expense, so its monthly chart leaves out empty months in cloud mode only. Slice 2 (transactions), whose data it reads.',
   'analytics-month-to-date':
     "GET /api/stats/monthly counts the current month up to today on the Worker and the whole month in local-first, so an expense dated later this month is in Analytics' monthly figures and savings rate in local-first only. Slice 2 (transactions), whose data it reads.",
-  'sankey-uncategorised':
-    "GET /api/analytics/sankey leaves uncategorised spending out of the month's budget flow on the Worker, and shows it as an Uncategorized category, budgeted at what was spent, in local-first, so the flow's Total Actual differs between modes by the uncategorised spending. Slice 3 (budgets).",
-  'dashboard-upcoming-bills':
-    "GET /api/dashboard answers as upcomingBills the bills whose stored due date falls in the next 30 days on the Worker, and none in local-first, so the Dashboard's Upcoming Bills card shows in cloud mode only. The Worker reads the due date a bill was saved with, which marking it paid does not move. Slice 3 (bills).",
   'dashboard-uncategorised':
     "GET /api/dashboard answers uncategorised spending (in expenseByCategory) and an uncategorised recent transaction with a null category name and colour on the Worker, and as 'Uncategorized' in #999 in local-first; the Dashboard then labels that recent transaction 'No category' in cloud mode and 'Uncategorized' in local-first. Slice 2 (transactions).",
   'dashboard-charts':
@@ -103,10 +93,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
   'custom-report':
     "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
-  'goal-unsent-defaults':
-    "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
-  'bills-upcoming':
-    'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset) on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
   'category-apply-mappings':
     'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
   'category-mapping-upsert':

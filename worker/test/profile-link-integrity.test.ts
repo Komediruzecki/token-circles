@@ -2,6 +2,9 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { issueSessionCookie } from '../src/auth';
+import { BILL_MESSAGES } from '../../shared/billSchema';
+import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
+import { GOAL_MESSAGES } from '../../shared/goalSchema';
 
 const USER = 91;
 const CURRENT = 910;
@@ -160,16 +163,6 @@ describe('Worker profile-link integrity', () => {
   it('rejects foreign category/account links in dependent resources', async () => {
     expect(
       (
-        await post('/api/bills', {
-          name: 'Bill',
-          amount: 10,
-          dueDate: '2026-02-01',
-          category_id: 9222,
-        })
-      ).status
-    ).toBe(403);
-    expect(
-      (
         await post('/api/recurring', {
           description: 'Recurring',
           amount: 10,
@@ -178,25 +171,37 @@ describe('Worker profile-link integrity', () => {
         })
       ).status
     ).toBe(403);
-    expect(
-      (
-        await post('/api/budgets', {
-          amount: 100,
-          category_id: 9222,
-          period: 'monthly',
-          start_date: '2026-01-01',
-        })
-      ).status
-    ).toBe(403);
-    expect(
-      (
-        await post('/api/savings-goals', {
-          name: 'Goal',
-          target_amount: 100,
-          category_id: 9222,
-        })
-      ).status
-    ).toBe(403);
+    // A budget, a bill and a goal answer a 400 at the field (shared/budgetSchema.ts and its
+    // siblings), as a transaction does; the others are still a 403 until their slice.
+    const budget = await post('/api/budgets', {
+      amount: 100,
+      category_id: 9222,
+      period: 'monthly',
+      start_date: '2026-01-01',
+    });
+    expect(budget.status).toBe(400);
+    expect(((await budget.json()) as { fields: object }).fields).toEqual({
+      category_id: BUDGET_MESSAGES.category,
+    });
+    const goal = await post('/api/savings-goals', {
+      name: 'Goal',
+      target_amount: 100,
+      category_id: 9222,
+    });
+    expect(goal.status).toBe(400);
+    expect(((await goal.json()) as { fields: object }).fields).toEqual({
+      category_id: GOAL_MESSAGES.category,
+    });
+    const bill = await post('/api/bills', {
+      name: 'Bill',
+      amount: 10,
+      dueDate: '2026-02-01',
+      category_id: 9222,
+    });
+    expect(bill.status).toBe(400);
+    expect(((await bill.json()) as { fields: object }).fields).toEqual({
+      category_id: BILL_MESSAGES.category,
+    });
     expect(
       (
         await post('/api/categories/mappings', {

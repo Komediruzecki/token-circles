@@ -536,7 +536,12 @@ describe('the MCP tools answer on the caller’s calendar, and on UTC without on
       }),
     });
     const body = (await res.json()) as {
-      result: { structuredContent: { monthKey: string; upcomingBills: { name: string }[] } };
+      result: {
+        structuredContent: {
+          monthKey: string;
+          upcomingBills: { name: string; next_due_date: string }[];
+        };
+      };
     };
     return body.result.structuredContent;
   }
@@ -545,12 +550,20 @@ describe('the MCP tools answer on the caller’s calendar, and on UTC without on
     await at(LAST_OF_OCTOBER);
     await bill('Water', '2026-10-31');
     await bill('Phone', '2026-11-01');
+    // On the Dashboard's rule (shared/billSchedule.ts). In Tokyo it is 1 November: Phone falls due
+    // today, and Water, whose October date went unpaid, next on 30 November, the month's last day.
     const local = await overview(TOKYO);
     expect(local.monthKey).toBe('2026-11');
-    expect(local.upcomingBills.map((b) => b.name)).toEqual(['Phone']);
+    expect(local.upcomingBills.map((b) => [b.name, b.next_due_date])).toEqual([
+      ['Phone', '2026-11-01'],
+      ['Water', '2026-11-30'],
+    ]);
     const utc = await overview();
     expect(utc.monthKey).toBe('2026-10');
-    expect(utc.upcomingBills.map((b) => b.name)).toEqual(['Water', 'Phone']);
+    expect(utc.upcomingBills.map((b) => [b.name, b.next_due_date])).toEqual([
+      ['Water', '2026-10-31'],
+      ['Phone', '2026-11-01'],
+    ]);
   });
 });
 
@@ -610,14 +623,16 @@ describe('more routes that answer on the person’s calendar', () => {
     expect(await paid()).toBe(true);
   });
 
-  it('a weekly bill never paid comes up a week from today (/api/bills/upcoming)', async () => {
+  // Never paid, a weekly bill first due on the 1st falls due every seventh day from it: on the 8th
+  // it is due today, and on the 7th the 1st's is still unpaid (shared/billSchedule.ts).
+  it('a weekly bill never paid falls due on its own weekday (/api/bills/upcoming)', async () => {
     await at(LATE_ON_THE_7TH);
     await bill('Cleaner', '2026-10-01', { frequency: 'weekly' });
     const next = async (zone?: string) =>
       (await json<{ next_due_date: string }[]>('GET', '/api/bills/upcoming', zone))[0]!
         .next_due_date;
-    expect(await next(TOKYO)).toBe('2026-10-15');
-    expect(await next()).toBe('2026-10-14');
+    expect(await next(TOKYO)).toBe('2026-10-08');
+    expect(await next()).toBe('2026-10-01');
   });
 
   it('the budget summary defaults to the local month (/api/budgets/summary)', async () => {

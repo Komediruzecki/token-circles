@@ -7,7 +7,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDB } from '../idb.js'
-import { budgetsForecast, dashboardCharts, recurringPopulate } from '../localHandlers.js'
+import {
+  billsCalendar,
+  budgetsForecast,
+  dashboardCharts,
+  recurringPopulate,
+} from '../localHandlers.js'
 
 const FOOD = 1
 
@@ -50,6 +55,7 @@ beforeEach(async () => {
     'accounts',
     'budgets',
     'recurring',
+    'bills',
   ]) {
     await db.clear(store)
   }
@@ -148,5 +154,54 @@ describe('a monthly rule on the 31st', () => {
     )
     expect(await paidOn()).toEqual([])
     expect(await nextDateOf(id)).toBe('05.01.2027')
+  })
+})
+
+describe('the bills calendar', () => {
+  type Calendar = {
+    days: Record<string, Array<{ id: number; date: string }>>
+    summary: { totalAmount: number; billCount: number }
+  }
+
+  async function bill(fields: Record<string, unknown>): Promise<number> {
+    const db = await getDB()
+    return (await db.add('bills', {
+      profile_id: 1,
+      name: 'Rent',
+      amount: 600,
+      is_active: 1,
+      ...fields,
+    } as never)) as number
+  }
+
+  async function calendar(year: number, month: number): Promise<Calendar> {
+    const query = new URLSearchParams({ year: String(year), month: String(month) })
+    return (await billsCalendar(query)).json()
+  }
+
+  /** The dates `id` is drawn on in that month's calendar. */
+  async function drawnOn(id: number, year: number, month: number): Promise<string[]> {
+    return Object.values((await calendar(year, month)).days)
+      .flat()
+      .filter((b) => b.id === id)
+      .map((b) => b.date)
+  }
+
+  it('draws a monthly bill due on the 31st on the last day of a shorter month', async () => {
+    at('Europe/Zagreb', -60, '2027-01-10T12:00:00Z')
+    const id = await bill({ frequency: 'monthly', day_of_month: 31, due_date: '2027-01-31' })
+    expect(await drawnOn(id, 2027, 1)).toEqual(['2027-01-31'])
+    expect(await drawnOn(id, 2027, 2)).toEqual(['2027-02-28'])
+    expect(await drawnOn(id, 2027, 3)).toEqual(['2027-03-31'])
+    expect(await drawnOn(id, 2027, 4)).toEqual(['2027-04-30'])
+    expect(await drawnOn(id, 2028, 2)).toEqual(['2028-02-29'])
+  })
+
+  it('counts it in the month it is drawn in', async () => {
+    at('Europe/Zagreb', -60, '2027-02-10T12:00:00Z')
+    await bill({ frequency: 'monthly', day_of_month: 30, due_date: '2027-01-30' })
+    const february = await calendar(2027, 2)
+    expect(february.summary).toMatchObject({ totalAmount: 600, billCount: 1 })
+    expect(february.days['28']?.map((b) => b.date)).toEqual(['2027-02-28'])
   })
 })

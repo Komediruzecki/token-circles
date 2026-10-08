@@ -24,6 +24,7 @@ import {
   invalidateForRequest,
 } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
+import { localMonth } from '../../utils/period'
 import type { PageName } from '../../types/models'
 
 /** Every read, in order, as the URL the page asked for. */
@@ -568,7 +569,7 @@ const OWN_WRITES: OwnWrite[] = [
     },
     helper: 'apiPost',
     method: 'POST',
-    url: '/api/budgets',
+    url: `/api/budgets/allocate?month=${localMonth()}`,
   },
   {
     does: 'edits a loan',

@@ -4,12 +4,14 @@
  * old view grouped by one and labelled cards by the other, so a card could sit under a heading
  * that didn't match its own pill.
  */
+import { nextDue } from './billDue'
 import { matchBrand } from './subscriptionBrands'
 
 export interface FilterableSubscription {
   id: number
   name: string
   due_date: string
+  next_due_date?: string | null
   is_active?: number
   category?: string
   category_name?: string
@@ -26,8 +28,11 @@ export function subscriptionCategoryLabel(sub: FilterableSubscription): string {
 
 const isActive = (sub: FilterableSubscription) => sub.is_active !== 0
 
-const byDueDate = (a: FilterableSubscription, b: FilterableSubscription) =>
-  a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : a.name.localeCompare(b.name)
+/** Soonest due first, by the date each falls due next: the first one a bill was saved with never moves. */
+const byDueDate = (a: FilterableSubscription, b: FilterableSubscription) => {
+  const [x, y] = [nextDue(a), nextDue(b)]
+  return x < y ? -1 : x > y ? 1 : a.name.localeCompare(b.name)
+}
 
 /** Category pills for the ACTIVE subscriptions, largest group first, ties alphabetical. */
 export function subscriptionGroupCounts(

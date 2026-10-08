@@ -53,6 +53,29 @@ describe('POST /api/budgets/allocate (upsert)', () => {
     expect(rows[0].amount).toBe(1500);
   });
 
+  // A budget can start mid-month: one an API client, an import or an MCP agent set. Allocate found
+  // the month's budget by its first day only, so it added a second budget for the category that
+  // month, and the month counted both.
+  it('changes a budget that starts mid-month instead of adding a second', async () => {
+    const mid = await env.DB.prepare(
+      "INSERT INTO budgets (category_id, profile_id, amount, period, start_date) VALUES (81, 800, 200, 'monthly', '2026-05-15')"
+    ).run();
+    const id = mid.meta.last_row_id;
+
+    const res = await allocate(300);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      id,
+      amount: 300,
+      start_date: '2026-05-15',
+      message: 'Budget updated successfully',
+    });
+    const may = await env.DB.prepare(
+      "SELECT id, amount FROM budgets WHERE category_id = 81 AND profile_id = 800 AND start_date >= '2026-05-01' AND start_date < '2026-06-01'"
+    ).all<{ id: number; amount: number }>();
+    expect(may.results).toEqual([{ id, amount: 300 }]);
+  });
+
   it('allows lowering an existing allocation', async () => {
     await allocate(1000);
     const res = await allocate(500);

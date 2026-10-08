@@ -1,6 +1,15 @@
 /**
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
+import {
+  BUDGET_MESSAGES,
+  checkAllocation,
+  checkBudgetCreate,
+  checkBudgetEdit,
+  checkBudgetMonth,
+  checkRollover,
+} from '../../../../../shared/budgetSchema'
+import { toCents } from '../../../../../shared/money'
 import { localMonth } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
@@ -18,20 +27,33 @@ import {
   notFound,
   ok,
   prevMonth,
+  refuse,
 } from './helpers'
 import { normalizeBudget } from './normalize'
+import type { BudgetDefaults } from '../../../../../shared/budgetSchema'
 
 export async function budgetsList(): Promise<Response> {
   const budgets = await adapter.listBudgets()
   return json(budgets.map(normalizeBudget))
 }
 
+/** What a blank budget field means in local-first: the first of this month on this device. */
+export function localBudgetDefaults(): BudgetDefaults {
+  return { monthStart: `${localMonth()}-01` }
+}
+
+// The rules and their words are shared/budgetSchema.ts, which the Worker and the budget dialogs run
+// too. Only the checked fields are stored: the body used to be stored as it came.
 export async function budgetsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid budget data' }, 400)
-  const budget = body as Record<string, unknown>
-  budget.profile_id = await adapter.getCurrentProfileId()
-  if (!(await currentProfileOwns('categories', budget.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+  const checked = checkBudgetCreate(body, localBudgetDefaults())
+  if (!checked.ok) return refuse(checked.fields)
+  if (!(await currentProfileOwns('categories', checked.value.category_id))) {
+    return refuse({ category_id: BUDGET_MESSAGES.category })
+  }
+  const budget = {
+    ...checked.value,
+    rollover_amount: 0,
+    profile_id: await adapter.getCurrentProfileId(),
   }
   const id = await adapter.createBudget(
     budget as unknown as Parameters<typeof adapter.createBudget>[0]
@@ -49,14 +71,25 @@ export async function budgetsUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('budgets', id))) return notFound('Budget')
-  const patch = body as Record<string, unknown>
-  if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+  const before = await currentProfileRecord('budgets', id)
+  if (!before) return notFound('Budget')
+  // Only the fields whose value the edit changes are checked and written (decision 2).
+  const checked = checkBudgetEdit(body, before)
+  if (!checked.ok) {
+    console.error('[budgetsUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  await adapter.updateBudget(id, patch)
+  const edit = checked.value
+  if (
+    edit.category_id !== undefined &&
+    !(await currentProfileOwns('categories', edit.category_id))
+  ) {
+    return refuse({ category_id: BUDGET_MESSAGES.category })
+  }
+  if (Object.keys(edit).length > 0) {
+    await adapter.updateBudget(id, edit as Parameters<typeof adapter.updateBudget>[1])
+  }
   return ok()
 }
 
@@ -104,9 +137,13 @@ export async function budgetsAlerts(query: URLSearchParams): Promise<Response> {
       allCats.push(...c)
     }
 
-    const budgets = allBudgets.filter(
-      (b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate
-    )
+    // The month's budgets: the rows that start in it, as the Worker reads them. It took every row
+    // without an end date, so each earlier month's budget for a category, and each later one, was
+    // measured against this month's spending, and one category raised an alert per month.
+    const budgets = allBudgets.filter((b: Record<string, unknown>) => {
+      const start = typeof b.start_date === 'string' ? b.start_date : ''
+      return start >= startDate && start < endDate
+    })
 
     const txns = allTxns.filter(
       (t: Record<string, unknown>) =>
@@ -212,6 +249,40 @@ export async function budgetsHistory(query: URLSearchParams): Promise<Response> 
 
 // ── Budget improvements ──────────────────────────────────────────────────────
 
+/**
+ * What each budget's category spent in the budget's month, as the Worker's join counts it: the
+ * category's expenses from the budget's start date to the same day a month on. A month's trend
+ * and adherence compare the budgets with this, not with every expense of the month: spending in a
+ * category without a budget, or without a category, has no budget to be measured against.
+ */
+function budgetSpending(
+  txns: Record<string, unknown>[]
+): (budget: Record<string, unknown>) => number {
+  const byCategoryMonth = new Map<string, number>()
+  for (const t of txns) {
+    if (t.type !== 'expense' || t.category_id === null || t.category_id === undefined) continue
+    const key = `${Number(t.category_id)} ${(t.date as string).slice(0, 7)}`
+    byCategoryMonth.set(key, (byCategoryMonth.get(key) ?? 0) + getAmount(t))
+  }
+  return (budget) => {
+    const start = budget.start_date as string
+    // A budget that starts on the 1st spends in its calendar month: one lookup.
+    if (start.slice(8, 10) === '01') {
+      return byCategoryMonth.get(`${Number(budget.category_id)} ${start.slice(0, 7)}`) ?? 0
+    }
+    const end = endOfNextMonth(start)
+    return txns
+      .filter(
+        (t) =>
+          t.type === 'expense' &&
+          t.category_id === budget.category_id &&
+          (t.date as string) >= start &&
+          (t.date as string) < end
+      )
+      .reduce((sum, t) => sum + getAmount(t), 0)
+  }
+}
+
 export async function budgetsImprovements(query: URLSearchParams): Promise<Response> {
   try {
     const numMonths = parseInt(query.get('months')!) || 6
@@ -221,18 +292,16 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
     const budgets = await getAllForProfiles('budgets')
     const txns = await getAllForProfiles('transactions')
 
+    // Each month's budgets, and what their categories spent: every expense of the month was
+    // counted, unbudgeted and uncategorised included, where the Worker counts the budgeted
+    // categories' (the contract's `budget-trend-spending`).
+    const spentOf = budgetSpending(txns)
     const monthlyMap: Record<string, { budget: number; spent: number }> = {}
     for (const b of budgets) {
       const mo = (b.start_date as string).slice(0, 7)
       if (!monthlyMap[mo]) monthlyMap[mo] = { budget: 0, spent: 0 }
       monthlyMap[mo].budget += (b.amount as number) || 0
-    }
-    for (const t of txns) {
-      if (t.type !== 'expense') continue
-      const mo = (t.date as string).slice(0, 7)
-      if (monthlyMap[mo]) {
-        monthlyMap[mo].spent += getAmount(t)
-      }
+      monthlyMap[mo].spent += spentOf(b)
     }
 
     const months = Object.keys(monthlyMap).sort().reverse().slice(0, numMonths)
@@ -344,11 +413,15 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
     )
 
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    for (const cid of Object.keys(prevSpentMap)) prevSpentMap[+cid] = toCents(prevSpentMap[+cid]!)
+
     const prevUnusedMap: Record<number, { unused: number; rollover_enabled: boolean }> = {}
     for (const pb of prevBudgets) {
       const unused = Math.max(
         0,
-        (pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0)
+        toCents((pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0))
       )
       prevUnusedMap[pb.category_id as number] = {
         unused,
@@ -362,7 +435,7 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
 
     const summary = budgets.map((b: Record<string, unknown>) => {
       const spentAmt = spentMap[b.category_id as number] || 0
-      const baseRemaining = (b.amount as number) - spentAmt
+      const baseRemaining = toCents((b.amount as number) - spentAmt)
       const cat = catMap[b.category_id as number]
 
       let rollover_contribution = 0
@@ -374,14 +447,15 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         if (prevInfo && prevInfo.rollover_enabled) {
           auto_rollover = prevInfo.unused
         }
-        rollover_contribution =
+        rollover_contribution = toCents(
           (((b as Record<string, unknown>).rollover_amount as number) || 0) +
-          auto_rollover -
-          (((b as Record<string, unknown>).rollover_used as number) || 0)
+            auto_rollover -
+            (((b as Record<string, unknown>).rollover_used as number) || 0)
+        )
       }
 
-      const effective_budget = (b.amount as number) + Math.max(0, rollover_contribution)
-      const effective_remaining = effective_budget - spentAmt
+      const effective_budget = toCents((b.amount as number) + Math.max(0, rollover_contribution))
+      const effective_remaining = toCents(effective_budget - spentAmt)
 
       return {
         ...b,
@@ -441,26 +515,33 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
       }
     }
 
-    const income = txns
-      .filter(
-        (t: Record<string, unknown>) =>
-          t.type === 'income' &&
-          (t.date as string) >= startOfMonth &&
-          (t.date as string) < endOfMonth
-      )
-      .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    const income = toCents(
+      txns
+        .filter(
+          (t: Record<string, unknown>) =>
+            t.type === 'income' &&
+            (t.date as string) >= startOfMonth &&
+            (t.date as string) < endOfMonth
+        )
+        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    )
 
     let alreadyBudgeted = 0
     for (const b of budgets) alreadyBudgeted += (b.amount as number) || 0
-    const unassignedBudget = Math.max(0, income - alreadyBudgeted)
+    alreadyBudgeted = toCents(alreadyBudgeted)
+    const unassignedBudget = Math.max(0, toCents(income - alreadyBudgeted))
 
+    // A category without a budget has none: an amount of 0 and nothing used, as on the Worker. Its
+    // spending was given as its budget, 100% used, so the Budgets page called it near its limit in
+    // local-first only (the contract's `budget-zero-based-unbudgeted`).
     const allocations = cats.map((cat: Record<string, unknown>) => {
       const budget = budgetMap[cat.id as number]
       const spentAmt = spentMap[cat.id as number] || 0
       const budgetAmount = (budget?.amount as number) || 0
-      const effectiveAmount = budgetAmount > 0 ? budgetAmount : spentAmt
-      const remainingBudget = effectiveAmount - spentAmt
-      const percentUsed = effectiveAmount > 0 ? (spentAmt / effectiveAmount) * 100 : 0
+      const remainingBudget = budget ? toCents(budgetAmount - spentAmt) : 0
+      const percentUsed = budget && budgetAmount > 0 ? (spentAmt / budgetAmount) * 100 : 0
 
       return {
         budget_id: budget?.id ?? null,
@@ -468,7 +549,7 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
         category_name: cat.name,
         category_color: cat.color,
         category_icon: cat.icon,
-        amount: effectiveAmount,
+        amount: budgetAmount,
         spent: spentAmt,
         remaining_budget: remainingBudget,
         percent_used: Math.min(100, Math.round(percentUsed)),
@@ -524,26 +605,34 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
       }
     }
 
-    const income = txns
-      .filter(
-        (t: Record<string, unknown>) =>
-          t.type === 'income' &&
-          (t.date as string) >= startOfMonth &&
-          (t.date as string) < endOfMonth
-      )
-      .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
+    for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
+    const income = toCents(
+      txns
+        .filter(
+          (t: Record<string, unknown>) =>
+            t.type === 'income' &&
+            (t.date as string) >= startOfMonth &&
+            (t.date as string) < endOfMonth
+        )
+        .reduce((sum: number, t: Record<string, unknown>) => sum + getAmount(t), 0)
+    )
 
     const cats = await db.getAllFromIndex('categories', 'by_profile', pid)
     const catMap: Record<number, Record<string, unknown>> = {}
     for (const c of cats) catMap[c.id as number] = c
 
-    const totalBudget = budgets.reduce(
-      (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
-      0
+    const totalBudget = toCents(
+      budgets.reduce(
+        (sum: number, b: Record<string, unknown>) => sum + ((b.amount as number) || 0),
+        0
+      )
     )
-    const totalSpent = Object.values(spentMap).reduce((sum: number, val: number) => sum + val, 0)
-    const remaining = totalBudget - totalSpent
-    const zero_based_remaining = income - totalBudget
+    const totalSpent = toCents(
+      Object.values(spentMap).reduce((sum: number, val: number) => sum + val, 0)
+    )
+    const remaining = toCents(totalBudget - totalSpent)
+    const zero_based_remaining = toCents(income - totalBudget)
 
     const summary = budgets.map((b: Record<string, unknown>) => {
       const cat = catMap[b.category_id as number]
@@ -558,7 +647,7 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
         category_icon: cat?.icon,
         allocated: amt,
         spent: s,
-        remaining: amt - s,
+        remaining: toCents(amt - s),
         percent_used: pct,
         status: s > amt ? 'over' : 'ok',
         is_fully_allocated: amt > 0 && s <= amt,
@@ -589,12 +678,14 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
       })
     }
 
+    // Over budget is spending past the allocation, as `status` says: not at exactly 100%, where
+    // this said "Over budget by $0.00" (the contract's `budget-allocation-alerts`).
     for (const item of summary) {
       if (item.percent_used >= 90) {
         item.alerts.push(`Approaching limit: ${Math.round(item.percent_used)}% used`)
       }
-      if (item.percent_used >= 100) {
-        item.alerts.push(`Over budget by $${Math.abs(item.remaining).toFixed(2)}`)
+      if (item.percent_used > 100) {
+        item.alerts.push(`Over budget by $${(-item.remaining).toFixed(2)}`)
       }
     }
 
@@ -620,46 +711,60 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
 export async function budgetsAllocate(query: URLSearchParams, body: unknown): Promise<Response> {
   try {
     const pid = await adapter.getCurrentProfileId()
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const { category_id, amount, period } = body as Record<string, unknown>
-    if (!category_id || amount === null) {
-      return json({ error: 'Category ID and amount are required' }, 400)
-    }
+    const checkedMonth = checkBudgetMonth(query.get('month'), localMonth())
+    if (!checkedMonth.ok) return refuse(checkedMonth.fields)
+    const checked = checkAllocation(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const { category_id, amount, period: budgetPeriod } = checked.value
     // A household view lists every selected profile's categories; the budget is the current
-    // profile's, so it may only be for one of its own categories (as budgetsCreate checks).
+    // profile's, so it may only be for one of its own (as the Worker's allocate checks).
     if (!(await currentProfileOwns('categories', category_id, pid))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
+      return refuse({ category_id: BUDGET_MESSAGES.category })
     }
 
-    const month = query.get('month') || localMonth()
-    const start_date = `${month}-01`
-    const budgetPeriod = (period as string) || 'monthly'
+    const start_date = `${checkedMonth.value}-01`
+    const [year, month] = checkedMonth.value.split('-').map(Number)
+    const after = nextMonth(year!, month!)
+    const nextStart = monthStart(after.year, after.month)
 
+    // The month's budget for the category, whatever day it starts: one an API client or an import
+    // started mid-month is still the month's, and allocating changes it rather than adding a
+    // second one that the month would count as well.
     const db = await getDB()
-    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).find(
-      (b: Record<string, unknown>) =>
-        b.category_id === category_id && b.start_date === start_date && b.period === budgetPeriod
-    )
+    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid))
+      .filter(
+        (b: Record<string, unknown>) =>
+          b.category_id === category_id &&
+          b.period === budgetPeriod &&
+          typeof b.start_date === 'string' &&
+          b.start_date >= start_date &&
+          b.start_date < nextStart
+      )
+      .sort(
+        (a, b) =>
+          String(a.start_date).localeCompare(String(b.start_date)) ||
+          (a.id as number) - (b.id as number)
+      )[0]
 
     // Allocate is an upsert: re-allocating a category for the same month updates the amount
     // instead of erroring, so users can freely change an allocation from the same action.
     if (existing) {
-      await adapter.updateBudget(existing.id as number, { amount: amount as number })
+      await adapter.updateBudget(existing.id as number, { amount })
       return json({
         id: existing.id,
         category_id,
         amount,
         period: budgetPeriod,
-        start_date,
+        start_date: existing.start_date,
         profile_id: pid,
         message: 'Budget updated successfully',
       })
     }
 
     const id = await adapter.createBudget({
-      category_id: category_id as number,
-      amount: amount as number,
-      period: budgetPeriod as 'monthly' | 'weekly' | 'yearly',
+      category_id,
+      amount,
+      period: budgetPeriod,
       start_date,
       profile_id: pid,
       rollover_enabled: false,
@@ -691,25 +796,18 @@ export async function budgetsRollover(
     const pid = await adapter.getCurrentProfileId()
     const id = idParam(params)
 
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const { rollover_amount, rollover_used, rollover_enabled } = body as Record<string, unknown>
-
-    if (
-      rollover_amount === undefined &&
-      rollover_used === undefined &&
-      rollover_enabled === undefined
-    ) {
-      return json({ error: 'No rollover fields provided' }, 400)
-    }
+    const checked = checkRollover(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const { rollover_amount, rollover_used, rollover_enabled } = checked.value
 
     const budget = await db.get('budgets', id)
     if (!budget || (budget.profile_id as number) !== pid) {
       return json({ error: 'Budget not found' }, 404)
     }
 
-    if (rollover_amount !== undefined) budget.rollover_amount = rollover_amount as number
-    if (rollover_used !== undefined) budget.rollover_used = rollover_used as number
-    if (rollover_enabled !== undefined) budget.rollover_enabled = rollover_enabled ? true : false
+    if (rollover_amount !== undefined) budget.rollover_amount = rollover_amount
+    if (rollover_used !== undefined) budget.rollover_used = rollover_used
+    if (rollover_enabled !== undefined) budget.rollover_enabled = rollover_enabled
 
     await db.put('budgets', budget)
 
@@ -720,6 +818,11 @@ export async function budgetsRollover(
 }
 
 // ── Budget from-expenses ─────────────────────────────────────────────────────
+// Sets budgets for the month from last month's spending, for the categories the month has no
+// budget for yet. It used to delete the month's budgets first and write last month's spending in
+// their place, without asking. Like "Copy last month", it never deletes or overwrites a budget the
+// month has, and says how many it set and how many already had one. The Worker's twin is
+// POST /api/budgets/from-expenses in worker/src/routes/budgets.ts.
 
 export async function budgetsFromExpenses(body: unknown): Promise<Response> {
   try {
@@ -734,44 +837,49 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
 
     const pm = prevMonth(targetYear, targetMonth)
     const prevStart = monthStart(pm.year, pm.month)
-    const prevEnd = monthStart(targetYear, targetMonth)
+    const currStart = monthStart(targetYear, targetMonth)
+    const nm = nextMonth(targetYear, targetMonth)
+    const currEnd = monthStart(nm.year, nm.month)
 
+    // The profile's own categories, as the Worker's JOIN reads them: spending on a category that
+    // is gone sets no budget.
+    const categories = new Set(
+      (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => c.id as number)
+    )
     const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
       (t: Record<string, unknown>) =>
         t.type === 'expense' &&
-        t.category_id !== null &&
+        categories.has(t.category_id as number) &&
         (t.date as string) >= prevStart &&
-        (t.date as string) < prevEnd
+        (t.date as string) < currStart
     )
 
-    const expensesByCat: Record<number, number> = {}
+    const expensesByCat = new Map<number, number>()
     for (const t of txns) {
       const cid = t.category_id as number
-      expensesByCat[cid] = (expensesByCat[cid] || 0) + getAmount(t)
+      expensesByCat.set(cid, (expensesByCat.get(cid) ?? 0) + getAmount(t))
     }
-
-    const entries = Object.entries(expensesByCat)
-    if (entries.length === 0) {
+    if (expensesByCat.size === 0) {
       return json({ ok: false, message: 'No expenses found for previous month' })
     }
 
-    const currStart = monthStart(targetYear, targetMonth)
-    const currEnd =
-      targetMonth === 12 ? monthStart(targetYear + 1, 1) : monthStart(targetYear, targetMonth + 1)
-
-    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
-      (b: Record<string, unknown>) =>
-        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
-    )
-
+    // Read and write in one transaction, so the month's budgets cannot change in between.
     const tx = db.transaction('budgets', 'readwrite')
-    for (const b of existingBudgets) await tx.store.delete(b.id as number)
-
+    const budgeted = new Set(
+      (await tx.store.index('by_profile').getAll(pid))
+        .filter(
+          (b: Record<string, unknown>) =>
+            (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
+        )
+        .map((b: Record<string, unknown>) => b.category_id as number)
+    )
     const createdAt = new Date().toISOString()
-    for (const [catId, total] of entries) {
+    let count = 0
+    for (const [categoryId, total] of expensesByCat) {
+      if (budgeted.has(categoryId)) continue
       await tx.store.add({
-        category_id: parseInt(catId),
-        amount: total,
+        category_id: categoryId,
+        amount: Math.round(total * 100) / 100,
         period: 'monthly',
         start_date: currStart,
         end_date: null,
@@ -780,10 +888,11 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
         rollover_amount: 0,
         created_at: createdAt,
       })
+      count++
     }
     await tx.done
 
-    return json({ ok: true, count: entries.length })
+    return json({ ok: true, count, already_budgeted: expensesByCat.size - count })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
@@ -852,7 +961,8 @@ export async function budgetsBackfillFromSpending(body: unknown): Promise<Respon
       for (const [catId, total] of Object.entries(totals[ym])) {
         await tx.store.add({
           category_id: parseInt(catId),
-          amount: total,
+          // To the cent: 0.1 + 0.2 is 0.30000000000000004, which Allocate would refuse to save back.
+          amount: toCents(total),
           period: 'monthly',
           start_date: `${ym}-01`,
           end_date: null,
@@ -1068,16 +1178,14 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       }
     })
 
+    // The months' budgets against what their categories spent, as in budgetsImprovements.
+    const spentOf = budgetSpending(txns)
     const histMap: Record<string, { budget: number; spent: number }> = {}
     for (const b of budgets) {
       const mo = (b.start_date as string).slice(0, 7)
       if (!histMap[mo]) histMap[mo] = { budget: 0, spent: 0 }
       histMap[mo].budget += (b.amount as number) || 0
-    }
-    for (const t of txns) {
-      if (t.type !== 'expense') continue
-      const mo = (t.date as string).slice(0, 7)
-      if (histMap[mo]) histMap[mo].spent += getAmount(t)
+      histMap[mo].spent += spentOf(b)
     }
 
     const historyMonths = Object.keys(histMap)

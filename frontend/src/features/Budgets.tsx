@@ -54,10 +54,13 @@ import { gatedSource, refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toYYYYMM } from '../utils/period'
+import { createBudgetForm } from './budgetForm'
 import styles from './BudgetsPage.module.css'
+import { fromSpendingToast } from './budgetToasts'
 import { createCategoryForm } from './categoryForm'
 import { copyLastMonthToast } from './copyLastMonth'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
+import type { FromSpendingAnswer } from './budgetToasts'
 import type { CategoryFormValues } from './categoryForm'
 import type { CopyLastMonthAnswer } from './copyLastMonth'
 
@@ -128,7 +131,6 @@ export default function Budgets() {
   // The budget month follows the global focus period ("YYYY-MM" for any mode).
   const month = () => toYYYYMM(period())
   const [improvements, setImprovements] = createSignal<BudgetImprovement[]>([])
-  const [error, setError] = createSignal<string | null>(null)
   const [budgetMessage, setBudgetMessage] = createSignal<string>('')
   const [budgetResource, { refetch: refetchBudget }] = createResource(
     // Gated on visibility: focus-month and profile changes refetch now only while
@@ -185,7 +187,13 @@ export default function Budgets() {
 
   const [showAllocateModal, setShowAllocateModal] = createSignal(false)
   const [selectedCategory, setSelectedCategory] = createSignal<CategoryAllocation | null>(null)
-  const [allocateAmount, setAllocateAmount] = createSignal('')
+  // Allocate's values, field errors and notice (components/form), and its save
+  // (features/budgetForm.ts): the month on screen's one budget for the category.
+  const allocateForm = createBudgetForm({
+    month,
+    nameOf: (id) => allocations().find((a) => a.category_id === id)?.category_name,
+    onSaved: () => setShowAllocateModal(false),
+  })
 
   // Categories state
   const [categories, setCategories] = createSignal<Category[]>([])
@@ -193,11 +201,20 @@ export default function Budgets() {
   const [showCatBudgetModal, setShowCatBudgetModal] = createSignal(false)
   const [editingCategory, setEditingCategory] = createSignal<Category | null>(null)
   const [selectedCat, setSelectedCat] = createSignal<Category | null>(null)
-  const [catBudgetAmount, setCatBudgetAmount] = createSignal('')
   const [filterType, setFilterType] = createSignal<'all' | 'expense' | 'income'>('all')
   const [categoryBudgetSummary, setCategoryBudgetSummary] = createSignal<
     Record<number, { spent: number; budget: number; remaining: number; percent_used: number }>
   >({})
+  // Set Budget on a category card: the same save as Allocate, for the card's category.
+  const closeCatBudgetModal = () => {
+    setShowCatBudgetModal(false)
+    setSelectedCat(null)
+  }
+  const catBudgetForm = createBudgetForm({
+    month,
+    nameOf: (id) => categories().find((c) => c.id === id)?.name,
+    onSaved: closeCatBudgetModal,
+  })
   // The add/edit category dialog. What a save does, and what it says when the save is refused, is
   // categoryForm.ts, shared with the Categories page and the dialogs in Bills and Goals. No reload
   // after a save: the write bumped the categories counter, which the effect below tracks.
@@ -234,6 +251,12 @@ export default function Budgets() {
     d.setMonth(d.getMonth() - 1)
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   }
+  // The month being viewed, in the same words, e.g. "July 2026".
+  const monthLabel = () =>
+    new Date(`${month()}-01T00:00:00`).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    })
 
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {
@@ -268,25 +291,23 @@ export default function Budgets() {
     }
   }
 
-  // Set budgets from previous month's expenses
+  // Give each category without a budget this month what it cost last month. A budget the month
+  // already has is kept: the toast says how many were set and how many were already there.
   const setFromExpenses = async () => {
     const [year, mon] = month().split('-')
     try {
-      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>(
-        '/api/budgets/from-expenses',
-        {
-          year: parseInt(year),
-          month: parseInt(mon),
-        }
+      const result = await apiPost<FromSpendingAnswer>('/api/budgets/from-expenses', {
+        year: parseInt(year),
+        month: parseInt(mon),
+      })
+      const said = fromSpendingToast(result, prevMonthLabel(), monthLabel())
+      showToast(said.text, said.kind)
+      // No refetch here: the POST bumped the budgets counter.
+    } catch (err) {
+      showToast(
+        plainMessage(err, "Couldn't set budgets from last month's spending. Try again."),
+        'error'
       )
-      if (result.ok) {
-        showToast(`Set ${result.count} budgets from ${prevMonthLabel()} expenses`, 'success')
-        // No refetch here: the POST bumped the budgets counter.
-      } else {
-        showToast(result.message || 'No expenses found', 'info')
-      }
-    } catch (_err) {
-      showToast('Failed to set budgets from expenses', 'error')
     }
   }
 
@@ -325,32 +346,8 @@ export default function Budgets() {
       })
       showToast(enabled ? 'Rollover enabled' : 'Rollover disabled', 'success')
       // No refetch here: the PUT bumped the budgets counter.
-    } catch {
-      showToast('Failed to update rollover', 'error')
-    }
-  }
-
-  // Allocate budget to a category
-  const allocateBudget = async () => {
-    const allocNum = parseFloat(allocateAmount()) || 0
-    if (!selectedCategory() || allocNum <= 0) {
-      return
-    }
-
-    try {
-      await apiPost('/api/budgets/allocate', {
-        category_id: selectedCategory()!.category_id,
-        amount: allocNum,
-        period: 'monthly',
-      })
-
-      showToast('Budget allocated successfully!', 'success')
-      setShowAllocateModal(false)
-      setAllocateAmount('')
-      // No refetch here: the POST bumped the budgets counter.
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to allocate budget')
-      showToast('Failed to allocate budget', 'error')
+      showToast(plainMessage(err, "Couldn't change rollover. Try again."), 'error')
     }
   }
 
@@ -382,8 +379,9 @@ export default function Budgets() {
   const openAllocateModal = (category: CategoryAllocation) => {
     setSelectedCategory(category)
     // Pre-fill with the current allocation so an already-budgeted category opens ready to edit.
-    setAllocateAmount(
-      category.is_budgeted && category.allocated > 0 ? String(category.allocated) : ''
+    allocateForm.open(
+      category.category_id,
+      category.is_budgeted && category.allocated > 0 ? category.allocated : null
     )
     setBudgetMessage('')
     setShowAllocateModal(true)
@@ -450,30 +448,9 @@ export default function Budgets() {
   // Open budget modal for a category
   const openCatBudgetModal = (category: Category) => {
     setSelectedCat(category)
-    setCatBudgetAmount('')
+    // The month's budget, when it has one: a save changes it.
+    catBudgetForm.open(category.id, categoryBudgetSummary()[category.id]?.budget || null)
     setShowCatBudgetModal(true)
-  }
-
-  // Update budget for a category
-  const updateCatBudget = async (amount: number) => {
-    if (!selectedCat()) return
-    try {
-      const now = new Date()
-      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-      await apiPost('/api/budgets', {
-        category_id: selectedCat()!.id,
-        amount,
-        period: 'monthly',
-        start_date: startDate,
-      })
-      showToast('Budget set successfully', 'success')
-      setShowCatBudgetModal(false)
-      setSelectedCat(null)
-      // No reload here: the POST bumped the budgets counter, which the effect below tracks.
-    } catch (err) {
-      console.error('Failed to set budget', err)
-      showToast('Failed to set budget', 'error')
-    }
   }
 
   // Improvements follow the profile and every budget write — they compare budgets against
@@ -791,7 +768,6 @@ export default function Budgets() {
       </div>
 
       {/* Error */}
-      {error() && <div class={styles.toastError}>{error()}</div>}
 
       {/* Allocation Table */}
       <div
@@ -824,7 +800,7 @@ export default function Budgets() {
               </OrbitalAction>
               <OrbitalAction
                 onClick={setFromExpenses}
-                title={`Set this month's budgets to what you actually spent in ${prevMonthLabel()}`}
+                title={`Give each category without a budget what you spent on it in ${prevMonthLabel()}`}
                 icon={
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -1236,56 +1212,81 @@ export default function Budgets() {
                 </svg>
               </button>
             </div>
-            <div class={styles.modalBody}>
-              <label class={styles.formLabel}>Category</label>
-              <select
-                class={styles.formInput}
-                value={selectedCategory()?.category_id ?? ''}
-                onChange={(e) => {
-                  const cid = parseInt(e.currentTarget.value, 10)
-                  const cat = allocations().find((a) => a.category_id === cid)
-                  if (cat) setSelectedCategory(cat)
-                }}
-              >
-                <For each={allocations()}>
-                  {(a) => (
-                    <option
-                      value={a.category_id}
-                      selected={a.category_id === selectedCategory()?.category_id}
+            <form {...allocateForm.attrs}>
+              <div class={styles.modalBody}>
+                <FormNotice form={allocateForm} testId="budgets-allocate-notice" />
+                <Field
+                  form={allocateForm}
+                  name="category_id"
+                  label="Category"
+                  class={styles.catFormGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <select
+                      {...control}
+                      class={styles.formInput}
+                      value={allocateForm.values.category_id}
+                      onInput={(e) => {
+                        allocateForm.set('category_id', e.currentTarget.value)
+                        const cid = Number(e.currentTarget.value)
+                        const cat = allocations().find((a) => a.category_id === cid)
+                        if (cat) setSelectedCategory(cat)
+                      }}
                     >
-                      {a.category_name}
-                      {a.is_budgeted ? ` (currently ${formatCurrency(a.allocated)})` : ''}
-                    </option>
+                      <For each={allocations()}>
+                        {(a) => (
+                          <option
+                            value={String(a.category_id)}
+                            selected={String(a.category_id) === allocateForm.values.category_id}
+                          >
+                            {a.category_name}
+                            {a.is_budgeted ? ` (currently ${formatCurrency(a.allocated)})` : ''}
+                          </option>
+                        )}
+                      </For>
+                    </select>
                   )}
-                </For>
-              </select>
-              <label class={styles.formLabel}>Amount</label>
-              <input
-                type="number"
-                class={styles.formInput}
-                step="0.01"
-                min="0.01"
-                value={allocateAmount()}
-                oninput={(e) => setAllocateAmount(e.target.value)}
-                placeholder="0.00"
-                autocapitalize="off"
-              />
-              <p class={styles.helpText}>
-                Available unallocated: {formatCurrency(summary()?.unassigned_budget || 0)}
-              </p>
-            </div>
-            <div class={styles.modalFooter}>
-              <button class={styles.btnGhost} onClick={() => setShowAllocateModal(false)}>
-                Cancel
-              </button>
-              <button
-                class={styles.btnPrimary}
-                onClick={allocateBudget}
-                disabled={parseFloat(allocateAmount()) <= 0 || !allocateAmount()}
-              >
-                Allocate
-              </button>
-            </div>
+                </Field>
+                <Field
+                  form={allocateForm}
+                  name="amount"
+                  label="Amount"
+                  labelClass={styles.formLabel}
+                  hintClass={styles.helpText}
+                  hint={`Available unallocated: ${formatCurrency(summary()?.unassigned_budget || 0)}`}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formInput}
+                      value={allocateForm.values.amount}
+                      onInput={(e) => allocateForm.set('amount', e.currentTarget.value)}
+                      placeholder="0.00"
+                      autocapitalize="off"
+                    />
+                  )}
+                </Field>
+              </div>
+              <div class={styles.modalFooter}>
+                <button
+                  type="button"
+                  class={styles.btnGhost}
+                  onClick={() => setShowAllocateModal(false)}
+                >
+                  Cancel
+                </button>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={allocateForm.submitting()}
+                  busyLabel="Allocating…"
+                >
+                  Allocate
+                </SubmitButton>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -1441,7 +1442,7 @@ export default function Budgets() {
         <div
           class={styles.modalOverlay}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setShowCatBudgetModal(false)
+            if (e.target === e.currentTarget) closeCatBudgetModal()
           }}
         >
           <div
@@ -1452,41 +1453,51 @@ export default function Budgets() {
           >
             <div class={styles.modalHeader}>
               <h3>Set Budget</h3>
-              <button class={styles.modalClose} onClick={() => setShowCatBudgetModal(false)}>
+              <button class={styles.modalClose} onClick={closeCatBudgetModal}>
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div class={styles.modalBody}>
-              <p class={styles.modalText}>
-                Set a monthly budget for <strong>{selectedCat()!.name}</strong>
-              </p>
-              <div class={styles.catFormGroup}>
-                <label class={styles.formLabel}>Monthly Budget Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  class={styles.formInput}
-                  placeholder="500.00"
-                  value={catBudgetAmount()}
-                  oninput={(e) => setCatBudgetAmount((e.target as HTMLInputElement).value)}
-                />
+            <form {...catBudgetForm.attrs}>
+              <div class={styles.modalBody}>
+                <p class={styles.modalText}>
+                  Set a monthly budget for <strong>{selectedCat()!.name}</strong>
+                </p>
+                <FormNotice form={catBudgetForm} testId="budgets-set-budget-notice" />
+                <Field
+                  form={catBudgetForm}
+                  name="amount"
+                  label="Monthly Budget Amount"
+                  class={styles.catFormGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formInput}
+                      placeholder="500.00"
+                      value={catBudgetForm.values.amount}
+                      onInput={(e) => catBudgetForm.set('amount', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </div>
-            </div>
-            <div class={styles.modalFooter}>
-              <button class={styles.btnGhost} onClick={() => setShowCatBudgetModal(false)}>
-                Cancel
-              </button>
-              <button
-                class={styles.btnPrimary}
-                onClick={() => {
-                  updateCatBudget(parseFloat(catBudgetAmount()) || 0)
-                }}
-              >
-                Save Budget
-              </button>
-            </div>
+              <div class={styles.modalFooter}>
+                <button type="button" class={styles.btnGhost} onClick={closeCatBudgetModal}>
+                  Cancel
+                </button>
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  busy={catBudgetForm.submitting()}
+                  busyLabel="Saving…"
+                >
+                  Save Budget
+                </SubmitButton>
+              </div>
+            </form>
           </div>
         </div>
       )}

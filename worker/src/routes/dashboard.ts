@@ -3,7 +3,8 @@ import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileIds } from '../profile'
 import * as db from '../db'
-import { localNow } from '../local-date'
+import { localNow, localToday } from '../local-date'
+import { dueWithin, type ScheduledBill } from '../../../shared/billSchedule'
 
 // Port of backend/routes/dashboard.js — read-only aggregations over
 // transactions / accounts / budgets / bills. Every response object is built by
@@ -132,15 +133,16 @@ dashboardRoutes.get('/api/dashboard', requireAuth, async (c) => {
   )
   const balance = accounts.reduce((sum, a) => sum + (a.balance || 0), 0)
 
-  // Upcoming bills (next 30 days).
-  const today = now
-  const upcomingBills = await db.all(
+  // Upcoming bills: the active ones that fall due from today through the next 30 days, by the one
+  // rule for when a bill falls due next (shared/billSchedule.ts), five at most. It read the due date
+  // a bill was saved with, which marking it paid never moves, so a monthly bill left the card for
+  // good once that first date had passed; and it listed paused bills.
+  const bills = await db.all<ScheduledBill & Record<string, unknown>>(
     c.env.DB,
-    `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause}) AND b.due_date >= ? AND b.due_date <= ? ORDER BY b.due_date ASC LIMIT 5`,
-    ...pids,
-    today.toISOString().split('T')[0],
-    new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    `SELECT b.*, p.name as profile_name FROM bills b LEFT JOIN profiles p ON b.profile_id = p.id WHERE b.profile_id IN (${inClause})`,
+    ...pids
   )
+  const upcomingBills = dueWithin(bills, localToday(c), 30).slice(0, 5)
 
   return c.json({
     totalIncome: summary.income,

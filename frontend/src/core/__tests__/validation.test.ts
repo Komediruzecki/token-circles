@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { BILL_MESSAGES } from '../../../../shared/billSchema'
+import { BUDGET_MESSAGES } from '../../../../shared/budgetSchema'
+import { GOAL_MESSAGES } from '../../../../shared/goalSchema'
 import { TRANSACTION_MESSAGES } from '../../../../shared/transactionSchema'
 import { validateBody } from '../validation'
 
@@ -116,6 +119,20 @@ describe('validation - validateBody', () => {
         currency: 'EURO',
       })
     ).not.toBeNull()
+  })
+
+  it('answers a budget, a bill and a savings goal in the Worker’s rules and words (shared/)', async () => {
+    const fieldsOf = async (path: string, body: unknown) =>
+      (await validateBody('POST', path, body)!.json()).fields
+    expect(await fieldsOf('/api/budgets', { category_id: 1, amount: -5 })).toEqual({
+      amount: BUDGET_MESSAGES.amountNegative,
+    })
+    expect(await fieldsOf('/api/bills', { name: 'Rent', amount: 900 })).toEqual({
+      due_date: BILL_MESSAGES.dueDate,
+    })
+    expect(await fieldsOf('/api/savings-goals', { name: 'Car', target_amount: 0 })).toEqual({
+      target_amount: GOAL_MESSAGES.targetPositive,
+    })
   })
 
   it('validates bill create body', () => {
@@ -241,17 +258,30 @@ describe('validation - a zod refusal in plain words', () => {
 
   it('says what to do with a number out of range, a list value and a date', async () => {
     expect(
-      await fieldsOf('/api/budgets', {
-        category_id: 0,
-        amount: -5,
-        period: 'daily',
+      await fieldsOf('/api/loans', {
+        name: 'Car',
+        principal: 0,
+        interest_rate: -1,
         start_date: '1 May',
+        term_months: 12,
       })
     ).toEqual({
-      category_id: 'Choose the category from the list.',
-      amount: "The amount can't be negative.",
-      period: 'Choose the period from the list.',
+      principal: 'Make the principal more than zero.',
+      interest_rate: "The interest rate can't be negative.",
       start_date: 'Enter a valid start date.',
+    })
+    expect(
+      await fieldsOf('/api/recurring', {
+        description: 'Rent',
+        amount: 900,
+        type: 'expense',
+        frequency: 'fortnightly',
+        next_date: '2026-06-01',
+        category_id: 0,
+      })
+    ).toEqual({
+      frequency: 'Choose the frequency from the list.',
+      category_id: 'Choose the category from the list.',
     })
   })
 
@@ -259,12 +289,6 @@ describe('validation - a zod refusal in plain words', () => {
     expect(await fieldsOf('/api/tags', { name: 'x'.repeat(51), color: 5 })).toEqual({
       name: 'Keep the name to 50 characters or fewer.',
       color: 'Enter a valid color.',
-    })
-  })
-
-  it('keeps a rule’s own sentence', async () => {
-    expect(await fieldsOf('/api/bills', { name: 'Rent', amount: 900 })).toEqual({
-      due_date: 'Pick a due date.',
     })
   })
 

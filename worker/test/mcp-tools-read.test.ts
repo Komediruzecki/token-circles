@@ -4,7 +4,7 @@
  * never pages thousands of rows to compute a sum.
  */
 import { env, SELF } from 'cloudflare:test';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
 
 const USER_ID = 9400;
@@ -136,6 +136,71 @@ describe('read tools', () => {
     expect(overview.netWorth).toBeCloseTo(1000);
     expect(overview.month.income).toBeCloseTo(2000);
     expect(overview.month.expense).toBeCloseTo(-100);
+  });
+
+  // Upcoming means what the Dashboard's Upcoming Bills lists: the active bills that fall due from
+  // today through 30 days on, on the dates they fall due. The tool read the stored due date, the
+  // first one, which paying never moves: a monthly bill set up before today was never upcoming
+  // again, and a paused one with a later date still was.
+  it('get_overview lists the bills falling due in the next 30 days, as the Dashboard does', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-08T12:00:00Z'));
+    try {
+      const bills: [number, string, string, string | null, number][] = [
+        // Paid for October: next due 5 November.
+        [94040, 'Rent', '2026-01-05', '2026-10-03', 1],
+        // Paid for September: due on the 10th.
+        [94041, 'Water', '2026-01-10', '2026-09-10', 1],
+        // Overdue since the 3rd: the Bills page lists it as unpaid, not as upcoming.
+        [94042, 'Power', '2026-01-03', '2026-09-03', 1],
+        // Paused.
+        [94043, 'Gym', '2026-12-01', null, 0],
+      ];
+      for (const [id, name, due, paid, active] of bills) {
+        await env.DB.prepare(
+          "INSERT INTO bills (id, name, amount, frequency, due_date, last_paid_date, is_active, profile_id) VALUES (?, ?, 10, 'monthly', ?, ?, ?, ?)"
+        )
+          .bind(id, name, due, paid, active, PROFILE_ID)
+          .run();
+      }
+
+      const overview = await call('get_overview', {});
+      expect(
+        overview.upcomingBills.map((b: any) => [b.name, b.next_due_date, b.days_until])
+      ).toEqual([
+        ['Water', '2026-10-10', 2],
+        ['Rent', '2026-11-05', 28],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A month's budgets are the ones that start in it, as the Budgets page reads them. The tool
+  // answered every budget the profile ever had, each against the asked month's spending.
+  it("get_budgets_and_goals answers the month's budgets only", async () => {
+    await env.DB.prepare(
+      "INSERT INTO categories (id, name, type, profile_id) VALUES (94021, 'Rent', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    for (const [id, amount, start] of [
+      [94032, 500, '2026-01-01'],
+      [94033, 600, '2026-02-01'],
+    ] as const) {
+      await env.DB.prepare(
+        "INSERT INTO budgets (id, category_id, amount, period, start_date, profile_id) VALUES (?, 94021, ?, 'monthly', ?, ?)"
+      )
+        .bind(id, amount, start, PROFILE_ID)
+        .run();
+    }
+
+    const rent = async (month: string) =>
+      (await call('get_budgets_and_goals', { month })).budgets
+        .filter((b: any) => b.category_id === 94021)
+        .map((b: any) => [b.id, b.amount]);
+    expect(await rent('2026-01')).toEqual([[94032, 500]]);
+    expect(await rent('2026-02')).toEqual([[94033, 600]]);
   });
 
   it('get_budgets_and_goals returns budgets with spend against them', async () => {

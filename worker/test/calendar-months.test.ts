@@ -269,20 +269,72 @@ describe('upcoming bills', () => {
     expect(await upcomingOf(yearly)).toMatchObject({ next_due_date: '2027-01-08', days_until: 0 });
   });
 
-  it('move a bill whose day has passed to the last day of a shorter month', async () => {
-    const id = await bill({ frequency: 'monthly', day_of_month: 30, due_date: '2027-01-30' });
+  // A bill paid for this month falls due next month; one whose day has passed unpaid is overdue
+  // (worker/test/bill-schedule.test.ts). Either way the month it lands in may be shorter.
+  it('move a bill paid this month to the last day of a shorter month', async () => {
+    const id = await bill({
+      frequency: 'monthly',
+      day_of_month: 30,
+      due_date: '2027-01-30',
+      last_paid_date: '2027-01-30',
+    });
     await at('2027-01-31T12:00:00Z');
     expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 28 });
   });
 
-  it('count a month from the last payment without skipping February', async () => {
+  it('keep a bill on the 31st once February is paid, without staying on the 28th', async () => {
     const id = await bill({
       frequency: 'monthly',
       day_of_month: 31,
       due_date: '2027-01-31',
-      last_paid: '2027-01-31',
+      last_paid_date: '2027-02-28',
     });
-    await at('2027-02-01T12:00:00Z');
-    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 27 });
+    await at('2027-02-28T12:00:00Z');
+    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-03-31', days_until: 31 });
+  });
+});
+
+describe('the bills calendar', () => {
+  type Calendar = {
+    days: Record<string, Array<{ id: number; date: string }>>;
+    summary: { totalAmount: number; billCount: number };
+  };
+
+  async function bill(fields: Record<string, unknown>): Promise<number> {
+    const row = { profile_id: PROFILE, name: 'Rent', amount: 600, is_active: 1, ...fields };
+    const cols = Object.keys(row);
+    const res = await env.DB.prepare(
+      `INSERT INTO bills (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+    )
+      .bind(...Object.values(row))
+      .run();
+    return Number(res.meta.last_row_id);
+  }
+
+  /** The dates `id` is drawn on in that month's calendar. */
+  async function drawnOn(id: number, year: number, month: number): Promise<string[]> {
+    const calendar = await get<Calendar>(`/api/bills/calendar?year=${year}&month=${month}`);
+    return Object.values(calendar.days)
+      .flat()
+      .filter((b) => b.id === id)
+      .map((b) => b.date);
+  }
+
+  it('draws a monthly bill due on the 31st on the last day of a shorter month', async () => {
+    await at('2027-01-10T12:00:00Z');
+    const id = await bill({ frequency: 'monthly', day_of_month: 31, due_date: '2027-01-31' });
+    expect(await drawnOn(id, 2027, 1)).toEqual(['2027-01-31']);
+    expect(await drawnOn(id, 2027, 2)).toEqual(['2027-02-28']);
+    expect(await drawnOn(id, 2027, 3)).toEqual(['2027-03-31']);
+    expect(await drawnOn(id, 2027, 4)).toEqual(['2027-04-30']);
+    expect(await drawnOn(id, 2028, 2)).toEqual(['2028-02-29']);
+  });
+
+  it('counts it in the month it is drawn in', async () => {
+    await at('2027-02-10T12:00:00Z');
+    await bill({ frequency: 'monthly', day_of_month: 30, due_date: '2027-01-30' });
+    const february = await get<Calendar>('/api/bills/calendar?year=2027&month=2');
+    expect(february.summary).toMatchObject({ totalAmount: 600, billCount: 1 });
+    expect(february.days['28']?.map((b) => b.date)).toEqual(['2027-02-28']);
   });
 });

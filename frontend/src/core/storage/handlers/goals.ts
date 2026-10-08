@@ -1,6 +1,14 @@
 /**
  * Goals handlers — IndexedDB-backed implementations
  */
+import {
+  addToSaved,
+  checkContribution,
+  checkGoalCreate,
+  checkGoalEdit,
+  GOAL_MESSAGES,
+} from '../../../../../shared/goalSchema'
+import { localToday } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -11,16 +19,9 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 import { normalizeSavingsGoal } from './normalize'
-
-// The Goals form sends `target_date`; the contract field, and the Worker's column, is `deadline`.
-// Accept either, as the Worker's readDeadline does, so a local goal keeps the date it was given.
-function readDeadline(b: Record<string, unknown>): string | null | undefined {
-  if (b.deadline !== undefined) return (b.deadline as string) || null
-  if (b.target_date !== undefined) return (b.target_date as string) || null
-  return undefined
-}
 
 // Category-linked goal progress = base-currency sum of that category's transactions
 // dated on/after the goal's tracking_start_date (falling back to its creation day).
@@ -75,19 +76,18 @@ export async function goalsList(): Promise<Response> {
   return json(goals.map(normalizeSavingsGoal))
 }
 
+// The rules and their words are shared/goalSchema.ts, which the Worker and the Goals dialog run
+// too. Only the checked fields are stored, `deadline` among them: the body used to be stored as it
+// came, the form's `target_date` included.
 export async function goalsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
-  const goal = body as Record<string, unknown>
-  goal.profile_id = await adapter.getCurrentProfileId()
-  // Mirror the Worker's insert: the form sends no current_amount, and sends its date as
-  // target_date.
-  goal.current_amount = goal.current_amount || 0
-  goal.deadline = readDeadline(goal) ?? null
+  const checked = checkGoalCreate(body, { today: localToday() })
+  if (!checked.ok) return refuse(checked.fields)
+  const goal = { ...checked.value, profile_id: await adapter.getCurrentProfileId() }
   if (!(await currentProfileOwns('categories', goal.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+    return refuse({ category_id: GOAL_MESSAGES.category })
   }
   const id = await adapter.createGoal(goal as unknown as Parameters<typeof adapter.createGoal>[0])
-  if (goal.category_id) await recalcGoalsByCategory(Number(goal.category_id))
+  if (goal.category_id) await recalcGoalsByCategory(goal.category_id)
   const refreshed = await (await getDB()).get('goals', id)
   return json(refreshed ?? { id, ...goal }, 201)
 }
@@ -102,21 +102,32 @@ export async function goalsUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
   const before = await currentProfileRecord('goals', id)
   if (!before) return notFound('Goal')
-  const patch = body as Record<string, unknown>
-  if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+  // Only the fields whose value the edit changes are checked and written (decision 2).
+  const checked = checkGoalEdit(body, before)
+  if (!checked.ok) {
+    console.error('[goalsUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  const deadline = readDeadline(patch)
-  if (deadline !== undefined) patch.deadline = deadline
-  await adapter.updateGoal(id, patch)
+  const edit = checked.value
+  if (
+    edit.category_id !== undefined &&
+    edit.category_id !== null &&
+    !(await currentProfileOwns('categories', edit.category_id))
+  ) {
+    return refuse({ category_id: GOAL_MESSAGES.category })
+  }
+  if (Object.keys(edit).length === 0) return ok()
+  const row: Record<string, unknown> = { ...before, ...edit }
+  // A row the Goals page stored before kept its date as `target_date`, which the page reads when
+  // `deadline` is empty: a changed date goes in `deadline` alone, or a cleared one comes back.
+  if (edit.deadline !== undefined) delete row.target_date
+  await (await getDB()).put('goals', row)
   // Recompute for both the old and new category (the link or tracking date may change).
-  const b = body as Record<string, unknown>
-  const oldCat = before?.category_id as number | undefined
-  const newCat = (b.category_id ?? oldCat) as number | undefined
+  const oldCat = before.category_id as number | null | undefined
+  const newCat = edit.category_id !== undefined ? edit.category_id : oldCat
   if (oldCat) await recalcGoalsByCategory(oldCat)
   if (newCat && newCat !== oldCat) await recalcGoalsByCategory(newCat)
   return ok()
@@ -129,16 +140,23 @@ export async function goalsDelete(params: Record<string, string>): Promise<Respo
   return ok()
 }
 
+/**
+ * Add to what a goal has saved: an amount more than zero, to the cent. A string amount used to be
+ * added as text, so 100 and "50" made "10050". Read and written in one transaction, so two
+ * contributions at once both count.
+ */
 export async function goalsContribute(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  const db = await getDB()
-  const goal = await currentProfileRecord('goals', idParam(params))
-  if (!goal) return notFound('Goal')
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  const amount = (body as Record<string, unknown>).amount as number
-  goal.current_amount = (goal.current_amount || 0) + amount
-  await db.put('goals', goal)
+  const id = idParam(params)
+  if (!(await currentProfileRecord('goals', id))) return notFound('Goal')
+  const checked = checkContribution(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const tx = (await getDB()).transaction('goals', 'readwrite')
+  const goal = (await tx.store.get(id)) as Record<string, unknown>
+  goal.current_amount = addToSaved(goal.current_amount, checked.value.amount)
+  await tx.store.put(goal)
+  await tx.done
   return json({ ok: true, current_amount: goal.current_amount })
 }

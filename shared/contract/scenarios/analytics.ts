@@ -269,10 +269,9 @@ export const analytics = [
     });
 
     // March: Food has its March budget, Fun a budget and no spending, Rent spending and no
-    // budget, which the flow counts as budgeted at what was spent.
+    // budget, which the flow counts as budgeted at what was spent, and so is the spending with no
+    // category.
     const flow = await read(api, expect, '/api/analytics/sankey?year=2025&month=3');
-    // DIFFERENCE sankey-uncategorised
-    const uncategorised = api.runtime === 'local';
     expect(sorted(flow)).toEqual(
       sorted({
         nodes: [
@@ -280,7 +279,7 @@ export const analytics = [
           { name: 'Food', category: 'category', color: '#2e7d32' },
           { name: 'Fun', category: 'category', color: '#8e24aa' },
           { name: 'Rent', category: 'category', color: '#1565c0' },
-          ...(uncategorised ? [{ name: 'Uncategorized', category: 'category' }] : []),
+          { name: 'Uncategorized', category: 'category' },
           { name: 'Total Actual', category: 'actual' },
           { name: 'Unused Budget', category: 'savings' },
         ],
@@ -290,9 +289,8 @@ export const analytics = [
           link('Total Budget', 'Rent', 800),
           link('Food', 'Total Actual', 80.5),
           link('Rent', 'Total Actual', 800),
-          ...(uncategorised
-            ? [link('Total Budget', 'Uncategorized', 20), link('Uncategorized', 'Total Actual', 20)]
-            : []),
+          link('Total Budget', 'Uncategorized', 20),
+          link('Uncategorized', 'Total Actual', 20),
           link('Total Budget', 'Unused Budget', 69.5),
         ],
         hasBudgets: true,

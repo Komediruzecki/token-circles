@@ -162,3 +162,27 @@ describe('the overflow menu', () => {
     expect(menu()).toBeNull()
   })
 })
+
+describe('when it is due', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('says when it falls due next, not when it first did', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 8, 12))
+    await mount(sub({ due_date: '2026-08-20', next_due_date: '2026-10-20' }))
+
+    expect(host.textContent).toContain('Oct 20')
+    expect(host.textContent).toContain('Due in 12d')
+    expect(host.textContent).not.toContain('overdue')
+  })
+
+  it('counts an unpaid one whose day has passed as overdue', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(2026, 9, 23, 12))
+    await mount(sub({ due_date: '2026-08-20', next_due_date: '2026-10-20' }))
+
+    expect(host.textContent).toContain('3d overdue')
+  })
+})

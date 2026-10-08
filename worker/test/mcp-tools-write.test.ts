@@ -6,6 +6,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
+import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 
 const USER_ID = 9600;
 const PROFILE_ID = 9601;
@@ -234,6 +235,64 @@ describe('write tools', () => {
       .bind(created.id)
       .first<{ amount: number }>();
     expect(row?.amount).toBe(350);
+  });
+
+  // The tool took any positive number and any date-shaped text, so it stored 12.345 and
+  // 2026-02-30, refused a budget of zero, and answered another profile's category with a 403
+  // where the app answers a 400 at the category. It runs the app's checks now.
+  it('upsert_budget checks a budget as the app does', async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96021, 'Food', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const refused = async (args: Record<string, unknown>): Promise<string> => {
+      const result = await call('upsert_budget', args);
+      expect(result.isError, JSON.stringify(args)).toBe(true);
+      return result.content[0].text;
+    };
+    const food = { categoryId: 96021, startDate: '2026-03-01' };
+
+    expect(await refused({ ...food, amount: 12.345 })).toBe(BUDGET_MESSAGES.amountCents);
+    expect(await refused({ ...food, amount: -5 })).toBe(BUDGET_MESSAGES.amountNegative);
+    expect(await refused({ ...food, amount: 10, startDate: '2026-02-30' })).toBe(
+      BUDGET_MESSAGES.startDate
+    );
+    expect(await refused({ ...food, categoryId: 96099, amount: 10 })).toBe(
+      BUDGET_MESSAGES.category
+    );
+    const stored = await env.DB.prepare('SELECT COUNT(*) AS n FROM budgets WHERE profile_id = ?')
+      .bind(PROFILE_ID)
+      .first<{ n: number }>();
+    expect(stored?.n).toBe(0);
+
+    expect(unwrap(await call('upsert_budget', { ...food, amount: 0 }))).toMatchObject({
+      created: true,
+      amount: 0,
+    });
+  });
+
+  // Its month is the start date's month: a budget that starts on the 15th is March's budget, and
+  // setting March's again changes it. Matched on the exact date, a second budget was added.
+  it('upsert_budget changes the budget its month has, whatever day that one starts', async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96021, 'Food', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const created = unwrap(
+      await call('upsert_budget', { categoryId: 96021, amount: 300, startDate: '2026-03-15' })
+    );
+    const updated = unwrap(
+      await call('upsert_budget', { categoryId: 96021, amount: 350, startDate: '2026-03-01' })
+    );
+    expect(updated).toMatchObject({ id: created.id, created: false, amount: 350 });
+    const march = await env.DB.prepare(
+      "SELECT id, amount, start_date FROM budgets WHERE profile_id = ? AND start_date >= '2026-03-01' AND start_date < '2026-04-01'"
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(march.results).toEqual([{ id: created.id, amount: 350, start_date: '2026-03-15' }]);
   });
 
   it('upsert_tag_rule creates the tag if it does not exist', async () => {

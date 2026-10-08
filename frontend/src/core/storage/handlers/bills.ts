@@ -1,7 +1,16 @@
 /**
  * Bills handlers — IndexedDB-backed implementations
  */
-import { isoDate, parseLocalDate } from '../../../utils/period'
+import {
+  billDay,
+  comingUp,
+  daysFrom,
+  dueWithin,
+  isPaidUp,
+  nextDueDate,
+} from '../../../../../shared/billSchedule'
+import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../../../shared/billSchema'
+import { isoDate, localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
@@ -12,37 +21,16 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 import { normalizeBill } from './normalize'
 
-// Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
-function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
-  if (!bill.last_paid_date && !bill.last_paid) return false
-  // parseLocalDate, not `new Date(str)`: a bare `YYYY-MM-DD` parses as UTC midnight, whose local
-  // month is the previous one west of UTC. Comparing that against a LOCAL `today` below reported
-  // a bill unpaid the instant it was marked paid, every 1st of the month. The worker mirror gets
-  // away with the same code only because its runtime is UTC; a browser's is the user's own zone.
-  const lastPaid = parseLocalDate(bill.last_paid_date || bill.last_paid)
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
-
-  const frequency = (bill.frequency as string) || 'monthly'
-  if (frequency === 'monthly') {
-    return (
-      lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
-    )
-  } else if (frequency === 'weekly') {
-    const weekAgo = new Date(today)
-    weekAgo.setDate(weekAgo.getDate() - 7)
-    return lastPaid >= weekAgo
-  } else if (frequency === 'biweekly') {
-    const twoWeeksAgo = new Date(today)
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
-    return lastPaid >= twoWeeksAgo
-  } else if (frequency === 'yearly') {
-    return lastPaid.getFullYear() === today.getFullYear()
-  }
-  return false
+/**
+ * A stored bill as the schedule reads it (shared/billSchedule.ts, the Worker's rule too). A payment
+ * an older version of this app recorded may carry only `last_paid`; this one writes both.
+ */
+function timing(bill: Record<string, unknown>): Record<string, unknown> {
+  return { ...bill, last_paid_date: bill.last_paid_date ?? bill.last_paid ?? null }
 }
 
 /**
@@ -72,14 +60,17 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
       all.push(...rows)
     }
 
-    const now = new Date()
+    // Whether it is paid, and when it falls due next, by the Worker's rule: the stored
+    // next_due_date is never written, and the due date a bill was saved with is only its first.
+    const today = localToday()
     const looks = await categoryLooks(pids)
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...normalizeBill(b),
       category_name: looks.get(b.category_id as number)?.name ?? null,
       category_color: looks.get(b.category_id as number)?.color ?? null,
       autopay: b.autopay === 1 || b.autopay === true,
-      paid: isBillPaidForCurrentPeriod(b, now),
+      next_due_date: nextDueDate(timing(b), today),
+      paid: isPaidUp(timing(b), today),
     }))
 
     // Filter by paid status if requested
@@ -106,6 +97,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
   const now = new Date()
+  const today = localToday(now)
 
   const yearParam = parseInt(query?.get('year') || String(now.getFullYear()), 10)
   const monthParam = parseInt(query?.get('month') || String(now.getMonth() + 1), 10)
@@ -138,25 +130,12 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   const looks = await categoryLooks(pids)
 
   for (const b of bills) {
-    // Occurrence day in the given month: due_date's day-of-month, else day_of_month field.
-    let day = 1
-    if (b.due_date) {
-      // Local parse, or the calendar shifts a day west of UTC: a bill due on the 15th would be
-      // drawn on the 14th, and one due on the 1st would fall out of the month entirely.
-      const parsed = parseLocalDate(b.due_date)
-      if (!isNaN(parsed.getTime())) day = parsed.getDate()
-    } else if (b.day_of_month) {
-      day = Number(b.day_of_month) || 1
-    }
-    if (day < 1 || day > lastDay) continue
-
+    // The bill's day of the month (shared/billSchedule.ts: its due date's), and a day the month does
+    // not have falls on its last day, as shared/calendarMonths.ts moves a monthly date: a bill due on
+    // the 31st was not drawn at all in February, April or June.
+    const day = Math.min(billDay(b), lastDay)
     const billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const isPaid = isBillPaidForCurrentPeriod(b, now)
-    // Both sides on the local calendar: mixing a UTC-parsed midnight with a local instant put
-    // `daysUntil` off by one for part of every day.
-    const daysUntil = Math.ceil(
-      (parseLocalDate(billDateStr).getTime() - now.getTime()) / 86_400_000
-    )
+    const isPaid = isPaidUp(timing(b), today)
     const amount = Number(b.amount) || 0
 
     days[String(day)]!.push({
@@ -170,7 +149,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
       date: billDateStr,
       paid: isPaid,
       type: (b.type as string) || 'bill',
-      is_overdue: daysUntil < 0 && !isPaid,
+      is_overdue: daysFrom(today, billDateStr) < 0 && !isPaid,
     })
 
     totalAmount += amount
@@ -188,50 +167,34 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   })
 }
 
+// The rules and their words are shared/billSchema.ts, which the Worker and the Bills dialog run
+// too. Only the checked fields are stored. A bill without a day of the month stores none, as on the
+// Worker: it stored 1, so the same bill fell due on different days (`day-of-month-default`).
 export async function billsCreate(body: unknown): Promise<Response> {
-  try {
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const b = body as Record<string, unknown>
-    const name = ((b.name as string) || '').trim()
-    const amount = parseFloat(String((b.amount as string | number) || 0))
-    if (!name || isNaN(amount) || amount <= 0) {
-      return json({ error: 'Name and a valid amount are required' }, 400)
-    }
-    const db = await getDB()
-    const pid = await adapter.getCurrentProfileId()
-    if (!(await currentProfileOwns('categories', b.category_id))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
-    }
-    if (!(await currentProfileOwns('accounts', b.account_id))) {
-      return json({ error: 'Account does not belong to this profile' }, 400)
-    }
-    const record = {
-      profile_id: pid,
-      name,
-      amount,
-      frequency: (b.frequency as string) || 'monthly',
-      // The Bills form (and the worker API) send camelCase `dueDate`; internal callers use snake.
-      due_date: ((b.due_date ?? b.dueDate) as string) || '',
-      day_of_month: (b.day_of_month as number) || 1,
-      category_id:
-        b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
-      // The account a payment comes out of: mark-paid moves its balance, as on the Worker.
-      account_id: b.account_id !== null && b.account_id !== undefined ? Number(b.account_id) : null,
-      // NULL on a new Worker row too; BillSchema requires both keys.
-      last_paid_date: null,
-      next_due_date: null,
-      recurring: b.recurring !== false ? 1 : 0,
-      autopay: b.autopay ? 1 : 0,
-      is_active: 1,
-      notes: (b.notes as string) || '',
-      type: (b.type as string) || 'bill',
-      created_at: new Date().toISOString(),
-    }
-    const id = await db.add('bills', record)
-    return json({ id }, 201)
-  } catch (err) {
-    return json({ error: `Failed to create bill: ${(err as Error).message}` }, 500)
+  const checked = checkBillCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const bill = checked.value
+  // The account first, then the category, as the Worker checks them: a bill on another profile's
+  // account and category is refused at the same field in both runtimes.
+  if (!(await currentProfileOwns('accounts', bill.account_id))) {
+    return refuse({ account_id: BILL_MESSAGES.account })
   }
+  if (!(await currentProfileOwns('categories', bill.category_id))) {
+    return refuse({ category_id: BILL_MESSAGES.category })
+  }
+  const record = {
+    profile_id: await adapter.getCurrentProfileId(),
+    ...bill,
+    autopay: bill.autopay ? 1 : 0,
+    // The Worker's column defaults; BillSchema requires each key.
+    last_paid_date: null,
+    next_due_date: null,
+    recurring: 1,
+    is_active: 1,
+    created_at: new Date().toISOString(),
+  }
+  const id = await (await getDB()).add('bills', record)
+  return json({ id }, 201)
 }
 
 export async function billsGet(params: Record<string, string>): Promise<Response> {
@@ -248,30 +211,27 @@ export async function billsUpdate(
   const db = await getDB()
   const bill = await currentProfileRecord('bills', idParam(params))
   if (!bill) return notFound('Bill')
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>
-    if ('category_id' in b && !(await currentProfileOwns('categories', b.category_id))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
-    }
-    if ('account_id' in b && !(await currentProfileOwns('accounts', b.account_id))) {
-      return json({ error: 'Account does not belong to this profile' }, 400)
-    }
-    if (b.name !== undefined) bill.name = b.name
-    if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
-    if (b.frequency !== undefined) bill.frequency = b.frequency
-    if (b.due_date !== undefined || b.dueDate !== undefined) bill.due_date = b.due_date ?? b.dueDate
-    if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
-    if (b.category_id !== undefined)
-      bill.category_id = b.category_id !== null ? Number(b.category_id) : null
-    if (b.account_id !== undefined)
-      bill.account_id = b.account_id !== null ? Number(b.account_id) : null
-    if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
-    if (b.autopay !== undefined) bill.autopay = b.autopay ? 1 : 0
-    if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0
-    if (b.notes !== undefined) bill.notes = b.notes
-    if (b.type !== undefined) bill.type = b.type
+  // Only the fields whose value the edit changes are checked and written (decision 2).
+  const checked = checkBillEdit(body, bill)
+  if (!checked.ok) {
+    console.error('[billsUpdate] Validation failed', { id: bill.id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  await db.put('bills', bill)
+  const edit = checked.value
+  // The account first, then the category, as the Worker checks them.
+  if (edit.account_id !== undefined && !(await currentProfileOwns('accounts', edit.account_id))) {
+    return refuse({ account_id: BILL_MESSAGES.account })
+  }
+  if (
+    edit.category_id !== undefined &&
+    !(await currentProfileOwns('categories', edit.category_id))
+  ) {
+    return refuse({ category_id: BILL_MESSAGES.category })
+  }
+  const row: Record<string, unknown> = { ...bill, ...edit }
+  if (edit.autopay !== undefined) row.autopay = edit.autopay ? 1 : 0
+  if (edit.is_active !== undefined) row.is_active = edit.is_active ? 1 : 0
+  await db.put('bills', row)
   return ok()
 }
 
@@ -283,36 +243,62 @@ export async function billsDelete(params: Record<string, string>): Promise<Respo
   return ok()
 }
 
+/**
+ * GET /api/bills/upcoming, as the Worker answers it: every active bill with when it falls due next
+ * (shared/billSchedule.ts), the most overdue first. It answered the stored rows whose due day of
+ * the month was today or later, with no date.
+ */
 export async function billsUpcoming(): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
-  try {
-    const all: Record<string, unknown>[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('bills', 'by_profile', pid)
-      all.push(...rows)
+  const all: Record<string, unknown>[] = []
+  const categories = new Map<unknown, Record<string, unknown>>()
+  for (const pid of adapter.getCurrentProfileIds()) {
+    all.push(...(await db.getAllFromIndex('bills', 'by_profile', pid)))
+    for (const category of await db.getAllFromIndex('categories', 'by_profile', pid)) {
+      categories.set(category.id, category as Record<string, unknown>)
     }
-    const active = all.filter((b: Record<string, unknown>) => b.is_active !== 0)
-    const today = new Date()
-    const dayOfMonth = today.getDate()
-    const upcoming = active
-      .filter((b: Record<string, unknown>) => {
-        // Derive day of month from due_date (format: YYYY-MM-DD) or fall back to day_of_month field
-        const dueDate = (b.due_date as string) || ''
-        const dom = dueDate ? parseInt(dueDate.split('-')[2], 10) : Number(b.day_of_month) || 1
-        return dom >= dayOfMonth
-      })
-      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-        const aDate = (a.due_date as string) || ''
-        const bDate = (b.due_date as string) || ''
-        const aDom = aDate ? parseInt(aDate.split('-')[2], 10) : Number(a.day_of_month) || 1
-        const bDom = bDate ? parseInt(bDate.split('-')[2], 10) : Number(b.day_of_month) || 1
-        return aDom - bDom
-      })
-    return json(upcoming)
-  } catch {
-    return json([])
   }
+  return json(
+    comingUp(all.map(timing), localToday()).map((b) => {
+      const category = categories.get(b.category_id)
+      return {
+        id: b.id,
+        name: b.name,
+        amount: b.amount,
+        frequency: b.frequency,
+        day_of_month: b.day_of_month ?? null,
+        category_name: category?.name ?? null,
+        category_color: category?.color ?? null,
+        category_id: b.category_id ?? null,
+        last_paid: b.last_paid_date,
+        last_paid_date: b.last_paid_date,
+        next_due_date: b.next_due_date,
+        days_until: b.days_until,
+        is_overdue: b.is_overdue,
+        paid: b.paid,
+      }
+    })
+  )
+}
+
+/**
+ * The Dashboard's Upcoming Bills, as GET /api/dashboard answers them on the Worker: the active bills
+ * of the selected profiles that fall due from today through the next 30 days (shared/billSchedule.ts),
+ * soonest first, five at most. Local-first answered none, so the card showed in cloud mode only.
+ */
+export async function dashboardUpcomingBills(): Promise<Record<string, unknown>[]> {
+  const db = await getDB()
+  const profiles = new Map((await db.getAll('profiles')).map((p) => [p.id, p.name]))
+  const all: Record<string, unknown>[] = []
+  for (const pid of adapter.getCurrentProfileIds()) {
+    all.push(...(await db.getAllFromIndex('bills', 'by_profile', pid)))
+  }
+  return dueWithin(all.map(timing), localToday(), 30)
+    .slice(0, 5)
+    .map((b) => ({
+      ...normalizeBill(b),
+      profile_name: profiles.get(b.profile_id as number) ?? null,
+    }))
 }
 
 /**
@@ -332,7 +318,7 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
     idParam(params),
     pid,
     { date: isoDate(now), currency: getLocalCurrency(), createdAt: now.toISOString() },
-    (bill) => isBillPaidForCurrentPeriod(bill, now)
+    (bill) => isPaidUp(timing(bill), isoDate(now))
   )
   if (result === 'missing') return notFound('Bill')
   if (result === 'already-paid') {

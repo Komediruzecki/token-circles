@@ -8,9 +8,13 @@
  *   page, and nothing is sent.
  * - A field that has been marked is re-checked on every change from then on, so its message goes
  *   the moment it is fixed (and comes back if it is broken again).
- * - `send` throws to refuse. An `ApiError` with `fields` marks the fields this form shows and puts
- *   the rest in the notice; one without `fields` puts its own words in the notice; anything else
- *   puts `failure` there, because a `TypeError` says nothing a person can act on.
+ * - `send` throws to refuse. An `ApiError` with `fields` marks the fields it names; one without
+ *   `fields` puts its own words in the notice; anything else puts `failure` there, because a
+ *   `TypeError` says nothing a person can act on.
+ * - A marked field that is not on the page (one inside a closed "Show advanced options", or one
+ *   this form has no field for) is said in the notice instead. Its words move under the field when
+ *   the field appears, so they are never said twice, and they leave the notice when the field is
+ *   fixed, as they leave the field.
  * - A server's mark goes on the field's next change: only the server knows whether it still holds.
  * - `mark` puts a field's words there from outside a submit, when something the field offers fails
  *   (creating an account from the account field). It goes the same way as a server's mark.
@@ -93,18 +97,24 @@ const FOCUSABLE =
   'textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /** The entries that actually say something. */
-function messages(errors: FieldErrors): [string, string][] {
-  return Object.entries(errors).filter(([, message]) => message.trim() !== '')
+function messages(errors: Readonly<Record<string, string | undefined>>): [string, string][] {
+  return Object.entries(errors).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim() !== ''
+  )
 }
 
 export function createForm<T extends FormValues, R = unknown>(options: FormOptions<T, R>): Form<T> {
   const [values, setValues] = createStore<T>({ ...options.initial })
+  /** Every marked field's words, whether or not its field is on the page right now. */
   const [errors, setErrors] = createStore<Record<string, string | undefined>>({})
-  const [notice, setNotice] = createSignal<string>()
+  /** What belongs to no field: a refusal without fields, offline, a failure with no words. */
+  const [said, setSaid] = createSignal<string>()
   const [submitting, setSubmitting] = createSignal(false)
 
   /** Field name -> the id of the control a `Field` rendered for it. */
   const controls = new Map<string, string>()
+  /** The names in `controls`, as a signal: the notice follows fields as they come and go. */
+  const [shown, setShown] = createSignal<ReadonlySet<string>>(new Set())
   /** Fields a submit's check marked: re-checked on every change until the next reset. */
   let watched = new Set<string>()
   /** Fields the server marked: the mark goes on the field's next change. */
@@ -115,10 +125,21 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
   const snapshot = (): T => ({ ...unwrap(values) })
   const check = (): FieldErrors => options.check?.(snapshot()) ?? {}
 
-  /** What no `Field` on this form shows still has to be said somewhere: the notice. */
-  const unshown = (found: [string, string][]): string | undefined => {
-    const rest = found.filter(([name]) => !controls.has(name)).map(([, message]) => message)
-    return rest.length > 0 ? rest.join(' ') : undefined
+  /**
+   * The notice: what belongs to no field, then the words of each marked field no `Field` shows
+   * right now. A field inside a closed section is said here until the section opens, and from
+   * then on only under the field; fixed, it goes from both.
+   */
+  const notice = (): string | undefined => {
+    const onPage = shown()
+    const parts = [
+      said(),
+      ...messages(errors)
+        .filter(([name]) => !onPage.has(name))
+        .map(([, m]) => m),
+    ]
+    const text = parts.filter((part): part is string => !!part).join(' ')
+    return text || undefined
   }
 
   /** Focus the first marked control in page order (for a group, the first control inside it). */
@@ -154,10 +175,6 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
 
   const mark: Form<T>['mark'] = (name, message) => {
     const text = message?.trim() ? message : undefined
-    if (!controls.has(name)) {
-      setNotice(text)
-      return
-    }
     if (text) fromServer.add(name)
     else fromServer.delete(name)
     setErrors(name, text)
@@ -170,7 +187,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
     batch(() => {
       setValues(reconcile({ ...(next ?? options.initial) }))
       setErrors(reconcile({}))
-      setNotice(undefined)
+      setSaid(undefined)
       setSubmitting(false)
     })
   }
@@ -178,19 +195,18 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
   const refused = (error: unknown) => {
     if (!(error instanceof ApiError)) {
       console.error('[form] the save failed with no words for a person:', error)
-      setNotice(options.failure)
+      setSaid(options.failure)
       return
     }
     const found = messages(error.fields)
     if (found.length === 0) {
-      setNotice(error.message)
+      setSaid(error.message)
       return
     }
-    const shown = found.filter(([name]) => controls.has(name))
-    fromServer = new Set(shown.map(([name]) => name))
+    fromServer = new Set(found.map(([name]) => name))
     batch(() => {
-      setErrors(reconcile(Object.fromEntries(shown)))
-      setNotice(unshown(found))
+      setErrors(reconcile(Object.fromEntries(found)))
+      setSaid(undefined)
     })
     focusFirstMarked()
   }
@@ -204,7 +220,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
       fromServer = new Set()
       batch(() => {
         setErrors(reconcile(Object.fromEntries(found)))
-        setNotice(unshown(found))
+        setSaid(undefined)
       })
       focusFirstMarked()
       return
@@ -212,7 +228,7 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
     fromServer = new Set()
     batch(() => {
       setErrors(reconcile({}))
-      setNotice(undefined)
+      setSaid(undefined)
       setSubmitting(true)
     })
     const mine = generation
@@ -234,8 +250,11 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
 
   const register: Form<T>['register'] = (name, controlId) => {
     controls.set(name, controlId)
+    setShown(new Set(controls.keys()))
     return () => {
-      if (controls.get(name) === controlId) controls.delete(name)
+      if (controls.get(name) !== controlId) return
+      controls.delete(name)
+      setShown(new Set(controls.keys()))
     }
   }
 

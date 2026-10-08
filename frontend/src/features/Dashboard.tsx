@@ -33,6 +33,7 @@ import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toRange, toYYYYMM } from '../utils/period'
+import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
 import styles from './DashboardPage.module.css'
 import { matchBrand } from './subscriptionBrands'
 import type { CalcTrace } from '../components/CalcTracer'
@@ -392,7 +393,7 @@ export default function Dashboard() {
                         <div class={styles.transactionDetails}>
                           <div class={styles.transactionName}>{bill.name}</div>
                           <div class={styles.transactionMeta}>
-                            Due {formatDate(bill.due_date)} • Due in {daysUntil(bill.due_date)}
+                            {dueDateLabel(nextDue(bill))} • {dueInWords(daysToDue(bill))}
                           </div>
                         </div>
                         <div class={`${styles.transactionAmount} ${styles.expense}`}>
@@ -955,15 +956,4 @@ function getIcon(type: string) {
 
 function getIconColor(type: string): string {
   return type === 'expense' ? 'var(--danger)' : 'var(--income)'
-}
-
-function daysUntil(dateStr: string): string {
-  const target = new Date(dateStr)
-  const today = new Date()
-  const diff = target.getTime() - today.getTime()
-  const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-  if (days < 0) return `${Math.abs(days)} days overdue`
-  if (days === 0) return 'Due today'
-  if (days === 1) return 'Due tomorrow'
-  return `Due in ${days} days`
 }
