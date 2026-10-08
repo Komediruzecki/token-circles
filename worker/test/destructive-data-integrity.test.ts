@@ -10,6 +10,7 @@ const TABLES = [
   'reminder_sends',
   'reminder_dedup',
   'password_resets',
+  'email_verifications',
   'transaction_tags',
   'account_balance_history',
   'loan_rate_periods',
@@ -302,6 +303,16 @@ describe('destructive profile operations', () => {
       env.DB.prepare(
         "INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (70, 'hash', '2026-08-01')"
       ),
+      // A change of address still waiting holds the address the owner asked to move to.
+      env.DB.prepare(
+        "INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (70, 'next@example.com', 'hash-change', '2026-08-01', 'change')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO email_verifications (user_id, email, token_hash, expires_at) VALUES (70, 'owner@example.com', 'hash-confirm', '2026-08-01')"
+      ),
+      env.DB.prepare(
+        "INSERT INTO email_verifications (user_id, email, token_hash, expires_at) VALUES (71, 'other@example.com', 'hash-other', '2026-08-01')"
+      ),
     ]);
 
     const response = await SELF.fetch('https://example.com/api/account', {
@@ -318,7 +329,13 @@ describe('destructive profile operations', () => {
     expect(
       await env.DB.prepare('SELECT COUNT(*) AS n FROM profiles WHERE user_id = 70').first()
     ).toMatchObject({ n: 0 });
-    for (const table of ['custom_reports', 'error_logs', 'reminder_sends', 'reminder_dedup']) {
+    for (const table of [
+      'custom_reports',
+      'error_logs',
+      'reminder_sends',
+      'reminder_dedup',
+      'email_verifications',
+    ]) {
       const row = await env.DB.prepare(
         `SELECT COUNT(*) AS n FROM ${table} WHERE user_id = 70`
       ).first<{
@@ -329,6 +346,11 @@ describe('destructive profile operations', () => {
     expect(await env.RECEIPTS.get('receipts/700.txt')).toBeNull();
     expect(await env.RECEIPTS.get('receipts/701.txt')).toBeNull();
     expect(await count('transactions', 702)).toBe(1);
+    expect(
+      await env.DB.prepare(
+        'SELECT COUNT(*) AS n FROM email_verifications WHERE user_id = 71'
+      ).first()
+    ).toMatchObject({ n: 1 });
   });
 });
 
