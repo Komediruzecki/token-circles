@@ -343,6 +343,37 @@ describe('saving a new address', () => {
     }
   });
 
+  it('lets one network address ask for at most twenty changes an hour, across accounts', async () => {
+    const ip = '203.0.113.9';
+    const ids = [9601, 9602, 9603, 9604, 9605, 9606];
+    for (const id of ids) {
+      await env.DB.prepare(
+        "INSERT INTO users (id, email, auth_provider, email_verified, token_version) VALUES (?, ?, 'password', 1, 1)"
+      )
+        .bind(id, `ip-owner-${id}@example.com`)
+        .run();
+    }
+    const saveFrom = async (id: number, email: string, from = ip) =>
+      SELF.fetch('https://example.com/api/notifications/settings', {
+        method: 'PUT',
+        headers: {
+          Cookie: (await issueSessionCookie(id, 'password', env)).split(';')[0],
+          'Content-Type': 'application/json',
+          'CF-Connecting-IP': from,
+        },
+        body: JSON.stringify({ email }),
+      });
+    // Five accounts, four requests each: under every per-account and per-address cap.
+    for (const id of ids.slice(0, 5)) {
+      for (let i = 1; i <= 4; i++) {
+        expect((await saveFrom(id, `ip-${id}-${i}@example.com`)).status).toBe(200);
+      }
+    }
+
+    expect((await saveFrom(9606, 'ip-9606-1@example.com')).status).toBe(429);
+    expect((await saveFrom(9606, 'ip-9606-1@example.com', '198.51.100.4')).status).toBe(200);
+  });
+
   it('leaves the link that confirms the current address working', async () => {
     await seed(0);
     expect((await call('POST', '/api/auth/resend-verification')).status).toBe(200);

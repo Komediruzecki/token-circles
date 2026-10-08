@@ -13,7 +13,7 @@ import { sendMail } from './email';
 import { createEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './email-verification';
 import { renderEmailChange, renderEmailChangeNotice } from './emailTemplates';
 import { HttpError } from './http';
-import { enforce } from './ratelimit';
+import { clientIp, enforce } from './ratelimit';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // The longest address SMTP carries (RFC 5321). The address is written into mail, so it is bounded.
@@ -21,10 +21,12 @@ const MAX_EMAIL_LENGTH = 254;
 
 // One address gets at most three links an hour, the cap sign-in codes have (routes/email-code.ts),
 // and asking again shares it. One account asks for at most five changes an hour and ten a day,
-// whatever the addresses, so a session cannot mail its way down a list.
+// whatever the addresses, so a session cannot mail its way down a list. One network address asks
+// for at most twenty an hour, whichever accounts it signs in to.
 const PER_ADDRESS_LIMIT = 3;
 const PER_ACCOUNT_LIMIT = 5;
 const PER_ACCOUNT_DAILY_LIMIT = 10;
+const PER_IP_LIMIT = 20;
 const LIMIT_WINDOW_SEC = 3600;
 const DAY_SEC = 86_400;
 
@@ -59,6 +61,7 @@ async function limitEmailChange(
   email: string
 ): Promise<Response | null> {
   return (
+    (await enforce(c, `email-change-ip:${clientIp(c)}`, PER_IP_LIMIT, LIMIT_WINDOW_SEC)) ??
     (await enforce(c, `email-change-account:${userId}`, PER_ACCOUNT_LIMIT, LIMIT_WINDOW_SEC)) ??
     (await enforce(c, `email-change-account-day:${userId}`, PER_ACCOUNT_DAILY_LIMIT, DAY_SEC)) ??
     (await enforce(c, `email-change:${email}`, PER_ADDRESS_LIMIT, LIMIT_WINDOW_SEC))
