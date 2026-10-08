@@ -273,6 +273,13 @@ describe('saving a new address', () => {
     expect(await account()).toEqual({ email: OLD, email_verified: 1 });
   });
 
+  it('counts asking for an address another account has against the same limits', async () => {
+    await seed(1);
+    for (let i = 0; i < 3; i++) expect((await save(TAKEN)).status).toBe(409);
+
+    expect((await save(TAKEN)).status).toBe(429);
+  });
+
   it('refuses something that is not an address', async () => {
     await seed(1);
 

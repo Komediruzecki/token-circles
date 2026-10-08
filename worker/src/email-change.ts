@@ -64,19 +64,20 @@ async function limitEmailChange(
 
 /**
  * Mail `email` the link that moves `userId` to it, replacing any change still waiting. Asking for
- * a change and sending its link again both come here. Throws 409 when another account has the
- * address, since that link could not work, and returns the 429 past the limits above.
+ * a change and sending its link again both come here. Returns the 429 past the limits above, and
+ * throws 409 when another account has the address, since that link could not work. The limits
+ * come first, so they bound the 409 answer too.
  */
 export async function sendEmailChangeLink(
   c: Context<AppEnv>,
   userId: number,
   email: string
 ): Promise<Response | null> {
+  const limited = await limitEmailChange(c, userId, email);
+  if (limited) return limited;
   if (await emailInUse(c.env.DB, email, userId)) {
     throw new HttpError(409, 'That email is already in use');
   }
-  const limited = await limitEmailChange(c, userId, email);
-  if (limited) return limited;
   const base = appBase(c);
   const token = await createEmailVerification(c.env.DB, userId, email, 'change');
   const mail = renderEmailChange({
