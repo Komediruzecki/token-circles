@@ -610,14 +610,16 @@ describe('more routes that answer on the person’s calendar', () => {
     expect(await paid()).toBe(true);
   });
 
-  it('a weekly bill never paid comes up a week from today (/api/bills/upcoming)', async () => {
+  // Never paid, a weekly bill first due on the 1st falls due every seventh day from it: on the 8th
+  // it is due today, and on the 7th the 1st's is still unpaid (shared/billSchedule.ts).
+  it('a weekly bill never paid falls due on its own weekday (/api/bills/upcoming)', async () => {
     await at(LATE_ON_THE_7TH);
     await bill('Cleaner', '2026-10-01', { frequency: 'weekly' });
     const next = async (zone?: string) =>
       (await json<{ next_due_date: string }[]>('GET', '/api/bills/upcoming', zone))[0]!
         .next_due_date;
-    expect(await next(TOKYO)).toBe('2026-10-15');
-    expect(await next()).toBe('2026-10-14');
+    expect(await next(TOKYO)).toBe('2026-10-08');
+    expect(await next()).toBe('2026-10-01');
   });
 
   it('the budget summary defaults to the local month (/api/budgets/summary)', async () => {

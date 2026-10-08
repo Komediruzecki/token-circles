@@ -1,13 +1,20 @@
 import { Hono } from 'hono';
 import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../shared/billSchema';
-import { addCalendarMonths, addDays } from '../../../shared/calendarMonths';
+import {
+  billDay,
+  comingUp,
+  daysFrom,
+  isPaidUp,
+  nextDueDate,
+  paidFrom,
+} from '../../../shared/billSchedule';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { configuredBaseCurrency } from '../base-currency';
 import { getProfileId, getProfileIds } from '../profile';
 import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
-import { localNow } from '../local-date';
+import { localNow, localToday } from '../local-date';
 
 // Port of backend/routes/bills.js + backend/repositories/billsRepo.js.
 // Table: bills, LEFT JOINed to categories for name/color. Response shapes are
@@ -37,37 +44,9 @@ function billResponse(bill: BillRow) {
   return { ...bill, autopay: bill.autopay === 1 };
 }
 
-// The earliest last_paid_date that settles a bill for the current period, YYYY-MM-DD: the first of
-// this month for a monthly bill, 1 January for a yearly one, seven or fourteen days ago for a
-// weekly or biweekly one. `now` is the caller's wall clock (localNow), so the period is theirs.
-//
-// "On or after", not "in": two clients can be on different calendars. At 23:30 UTC on 31 October it
-// is already 1 November in Tokyo, so a phone there stamps a payment 2026-11-01 while a client with
-// no zone (UTC) is still in October. Asked "is the payment in my month?", each said no to the
-// other's date and paid again. A payment dated after the period began has settled it, whichever
-// calendar stamped it.
-function paidFromDate(frequency: string, now: Date): string {
-  const today = now.toISOString().slice(0, 10);
-  const daysBack = (days: number) => {
-    const d = new Date(`${today}T00:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - days);
-    return d.toISOString().slice(0, 10);
-  };
-  if (frequency === 'monthly') return `${today.slice(0, 7)}-01`;
-  if (frequency === 'weekly') return daysBack(7);
-  if (frequency === 'biweekly') return daysBack(14);
-  if (frequency === 'yearly') return `${today.slice(0, 4)}-01-01`;
-  // No period: only a payment made today (or stamped later by a calendar ahead of this one).
-  return today;
-}
-
-// Ported from backend/routes/bills.js, which compared the payment's month (or year) with the
-// current one; see paidFromDate for why it is now "on or after the period's start".
-function isBillPaidForCurrentPeriod(bill: BillRow, now: Date): boolean {
-  if (!bill.last_paid_date) return false;
-  if (!['monthly', 'weekly', 'biweekly', 'yearly'].includes(bill.frequency)) return false;
-  return bill.last_paid_date.slice(0, 10) >= paidFromDate(bill.frequency, now);
-}
+// Whether a bill is paid up, and when it falls due next, are shared/billSchedule.ts: one rule for
+// the list, the calendar, GET /api/bills/upcoming, the Dashboard and mark-paid, in both runtimes.
+// Each reads the person's today (localToday), so the period is theirs.
 
 billsRoutes.get('/api/bills', requireAuth, async (c) => {
   const pid = await getProfileId(c);
@@ -83,11 +62,14 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
     pid
   );
 
-  const now = localNow(c);
+  const today = localToday(c);
 
+  // next_due_date is worked out, not read: the column is never written, and the due date a bill
+  // was saved with is only its first.
   const billsWithStatus = rows.map((b) => ({
     ...billResponse(b),
-    paid: isBillPaidForCurrentPeriod(b, now),
+    next_due_date: nextDueDate(b, today),
+    paid: isPaidUp(b, today),
   }));
 
   // Filter by paid status if requested
@@ -109,11 +91,14 @@ billsRoutes.get('/api/bills', requireAuth, async (c) => {
 });
 
 // Registered before /api/bills/:id so it isn't shadowed.
+//
+// Every active bill with when it falls due next (shared/billSchedule.ts), the most overdue first.
+// It read `last_paid`, a column nothing writes, so marking a bill paid never moved it; and it went
+// by the day of the month alone, 1 for every bill the Bills form saved, and had no date at all for
+// a biweekly bill. `last_paid` answers the payment date now; the column stays, unread.
 billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  // Due dates are the person's calendar dates, so "now" is their wall clock.
-  const now = localNow(c);
-  const todayStr = now.toISOString().split('T')[0];
+  const today = localToday(c);
 
   const bills = await db.all<BillRow>(
     c.env.DB,
@@ -127,42 +112,8 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
     pid
   );
 
-  // Due dates are worked out on the calendar, as YYYY-MM-DD, and compared with today's date. They
-  // were Dates at midnight compared with the current instant, so a bill due today was already in
-  // the past at 00:01 and moved to next month; and setMonth() overflowed past a shorter month, so
-  // a bill on the 30th went from January to 2 March.
-  const upcoming = bills.map((b) => {
-    let nextDue = '';
-    const lastPaid = b.last_paid ? b.last_paid.slice(0, 10) : null;
-
-    if (b.frequency === 'monthly') {
-      const dayOfMonth = b.day_of_month || 1;
-      if (lastPaid) {
-        nextDue = addCalendarMonths(lastPaid, 1, dayOfMonth);
-      } else {
-        const thisMonth = addCalendarMonths(`${todayStr.slice(0, 7)}-01`, 0, dayOfMonth);
-        nextDue = thisMonth < todayStr ? addCalendarMonths(thisMonth, 1, dayOfMonth) : thisMonth;
-      }
-    } else if (b.frequency === 'weekly') {
-      nextDue = addDays(lastPaid ?? todayStr, 7);
-    } else if (b.frequency === 'yearly') {
-      if (lastPaid) {
-        nextDue = addCalendarMonths(lastPaid, 12);
-      } else {
-        // In January: a yearly bill without a payment has only its day of the month to go on.
-        const dayOfMonth = b.day_of_month || 1;
-        const thisYear = addCalendarMonths(`${todayStr.slice(0, 4)}-01-01`, 0, dayOfMonth);
-        nextDue = thisYear < todayStr ? addCalendarMonths(thisYear, 12, dayOfMonth) : thisYear;
-      }
-    }
-
-    const nextDueStr = nextDue || null;
-    const daysUntil = nextDueStr
-      ? Math.round((Date.parse(nextDueStr) - Date.parse(todayStr)) / (1000 * 60 * 60 * 24))
-      : null;
-    const isOverdue = daysUntil !== null && daysUntil < 0;
-
-    return {
+  return c.json(
+    comingUp(bills, today).map((b) => ({
       id: b.id,
       name: b.name,
       amount: b.amount,
@@ -171,24 +122,14 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
       category_name: b.category_name,
       category_color: b.category_color,
       category_id: b.category_id,
-      last_paid: b.last_paid,
-      next_due_date: nextDueStr,
-      days_until: daysUntil,
-      is_overdue: isOverdue,
-      paid: isBillPaidForCurrentPeriod(b, now),
-    };
-  });
-
-  upcoming.sort((a, b) => {
-    if (a.is_overdue && !b.is_overdue) return -1;
-    if (!a.is_overdue && b.is_overdue) return 1;
-    if (a.days_until !== null && b.days_until !== null) return a.days_until - b.days_until;
-    if (a.days_until !== null) return -1;
-    if (b.days_until !== null) return 1;
-    return 0;
-  });
-
-  return c.json(upcoming);
+      last_paid: b.last_paid_date,
+      last_paid_date: b.last_paid_date,
+      next_due_date: b.next_due_date,
+      days_until: b.days_until,
+      is_overdue: b.is_overdue,
+      paid: b.paid,
+    }))
+  );
 });
 
 billsRoutes.get('/api/bills/summary', requireAuth, async (c) => {
@@ -218,6 +159,7 @@ billsRoutes.get('/api/bills/notifications', requireAuth, async (c) => {
 billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const now = localNow(c);
+  const today = localToday(c);
 
   const yearQ = c.req.query('year');
   const monthQ = c.req.query('month');
@@ -256,49 +198,30 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
   let billCount = 0;
 
   bills.forEach((b) => {
-    // Determine occurrence in the given month. For simplicity we use due_date's day or day_of_month
-    let day: number;
-    let billDateStr: string;
+    // The bill's day of the month (shared/billSchedule.ts: its due date's), and a day the month does
+    // not have falls on its last day, as shared/calendarMonths.ts moves a monthly date: a bill due on
+    // the 31st was not drawn at all in February, April or June.
+    const day = Math.min(billDay(b), lastDay);
+    const billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isPaid = isPaidUp(b, today);
 
-    if (b.due_date) {
-      const dDate = new Date(b.due_date);
-      day = dDate.getDate();
-    } else if (b.day_of_month) {
-      day = b.day_of_month;
-    } else {
-      day = 1; // Fallback
-    }
-    // A day the month does not have falls on its last day, as shared/calendarMonths.ts moves a
-    // monthly date: a bill due on the 31st was not drawn at all in February, April or June.
-    day = Math.min(day, lastDay);
-    billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    days[String(day)]!.push({
+      id: b.id,
+      name: b.name,
+      amount: b.amount,
+      frequency: b.frequency,
+      category_id: b.category_id,
+      category_name: b.category_name,
+      category_color: b.category_color,
+      date: billDateStr,
+      paid: isPaid,
+      type: b.type || 'bill',
+      is_overdue: daysFrom(today, billDateStr) < 0 && !isPaid,
+    });
 
-    if (day >= 1) {
-      const isPaid = isBillPaidForCurrentPeriod(b, now);
-
-      // Calculate is_overdue for the specific bill occurrence in this month
-      const nextDue = new Date(billDateStr);
-      const daysUntil = Math.ceil((nextDue.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      const is_overdue = daysUntil < 0 && !isPaid;
-
-      days[String(day)]!.push({
-        id: b.id,
-        name: b.name,
-        amount: b.amount,
-        frequency: b.frequency,
-        category_id: b.category_id,
-        category_name: b.category_name,
-        category_color: b.category_color,
-        date: billDateStr,
-        paid: isPaid,
-        type: b.type || 'bill',
-        is_overdue,
-      });
-
-      totalAmount += b.amount;
-      if (isPaid) paidAmount += b.amount;
-      billCount++;
-    }
+    totalAmount += b.amount;
+    if (isPaid) paidAmount += b.amount;
+    billCount++;
   });
 
   return c.json({
@@ -397,7 +320,7 @@ export function markPaidStatements(
   baseCurrency: string
 ): D1PreparedStatement[] {
   // Paid today on the person's calendar: the date the payment and last_paid_date carry.
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = now.toISOString().split('T')[0]!;
 
   // Every statement carries the same guard: the bill has not been paid since its period began.
   //
@@ -411,7 +334,11 @@ export function markPaidStatements(
   // guarded statement matches nothing. "Paid today" was not enough: a phone in Tokyo and a client
   // on UTC tapping at the same moment around midnight have different todays. The UPDATE goes LAST
   // so the two before it still see the pre-state.
-  const paidFrom = paidFromDate(bill.frequency, now);
+  //
+  // "Since its period began" is shared/billSchedule.ts's paidFrom: the first of the month, 1 January,
+  // or the last 7 or 14 days with today included, so a weekly bill paid a week ago is due, and
+  // payable, today. It counted 8 and 15 days, so a weekly bill could be paid only once overdue.
+  const periodStart = paidFrom(bill.frequency, todayStr);
   const guard = (param: number) => `(SELECT COUNT(*) FROM bills
                    WHERE id = ?1 AND profile_id = ?2
                      AND (last_paid_date IS NULL OR last_paid_date < ?${param})) = 1`;
@@ -434,7 +361,7 @@ export function markPaidStatements(
       bill.account_id ?? null,
       bill.notes || '',
       baseCurrency,
-      paidFrom
+      periodStart
     )
   );
 
@@ -443,14 +370,14 @@ export function markPaidStatements(
       DB.prepare(
         `UPDATE accounts SET balance = balance - ?4
          WHERE id = ?5 AND profile_id = ?2 AND ${guard(6)}`
-      ).bind(id, pid, todayStr, bill.amount, bill.account_id, paidFrom)
+      ).bind(id, pid, todayStr, bill.amount, bill.account_id, periodStart)
     );
   }
 
   stmts.push(
     DB.prepare(
       `UPDATE bills SET last_paid_date = ?3 WHERE id = ?1 AND profile_id = ?2 AND ${guard(4)}`
-    ).bind(id, pid, todayStr, paidFrom)
+    ).bind(id, pid, todayStr, periodStart)
   );
   return stmts;
 }
@@ -469,7 +396,7 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   // Pre-flight, for the message: it asks the guard's question before anything is written. It is
   // NOT what makes this safe — see the guard in markPaidStatements.
   const now = localNow(c);
-  if (isBillPaidForCurrentPeriod(bill, now)) {
+  if (isPaidUp(bill, localToday(c))) {
     throw new HttpError(409, 'Bill already paid for current period');
   }
 

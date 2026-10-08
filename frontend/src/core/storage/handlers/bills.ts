@@ -1,8 +1,16 @@
 /**
  * Bills handlers — IndexedDB-backed implementations
  */
+import {
+  billDay,
+  comingUp,
+  daysFrom,
+  dueWithin,
+  isPaidUp,
+  nextDueDate,
+} from '../../../../../shared/billSchedule'
 import { BILL_MESSAGES, checkBillCreate, checkBillEdit } from '../../../../../shared/billSchema'
-import { isoDate, parseLocalDate } from '../../../utils/period'
+import { isoDate, localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
@@ -17,34 +25,12 @@ import {
 } from './helpers'
 import { normalizeBill } from './normalize'
 
-// Helper: determine if a bill is paid for the current billing period (mirrors backend logic)
-function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): boolean {
-  if (!bill.last_paid_date && !bill.last_paid) return false
-  // parseLocalDate, not `new Date(str)`: a bare `YYYY-MM-DD` parses as UTC midnight, whose local
-  // month is the previous one west of UTC. Comparing that against a LOCAL `today` below reported
-  // a bill unpaid the instant it was marked paid, every 1st of the month. The worker mirror gets
-  // away with the same code only because its runtime is UTC; a browser's is the user's own zone.
-  const lastPaid = parseLocalDate(bill.last_paid_date || bill.last_paid)
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
-
-  const frequency = (bill.frequency as string) || 'monthly'
-  if (frequency === 'monthly') {
-    return (
-      lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
-    )
-  } else if (frequency === 'weekly') {
-    const weekAgo = new Date(today)
-    weekAgo.setDate(weekAgo.getDate() - 7)
-    return lastPaid >= weekAgo
-  } else if (frequency === 'biweekly') {
-    const twoWeeksAgo = new Date(today)
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14)
-    return lastPaid >= twoWeeksAgo
-  } else if (frequency === 'yearly') {
-    return lastPaid.getFullYear() === today.getFullYear()
-  }
-  return false
+/**
+ * A stored bill as the schedule reads it (shared/billSchedule.ts, the Worker's rule too). A payment
+ * an older version of this app recorded may carry only `last_paid`; this one writes both.
+ */
+function timing(bill: Record<string, unknown>): Record<string, unknown> {
+  return { ...bill, last_paid_date: bill.last_paid_date ?? bill.last_paid ?? null }
 }
 
 /**
@@ -74,14 +60,17 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
       all.push(...rows)
     }
 
-    const now = new Date()
+    // Whether it is paid, and when it falls due next, by the Worker's rule: the stored
+    // next_due_date is never written, and the due date a bill was saved with is only its first.
+    const today = localToday()
     const looks = await categoryLooks(pids)
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...normalizeBill(b),
       category_name: looks.get(b.category_id as number)?.name ?? null,
       category_color: looks.get(b.category_id as number)?.color ?? null,
       autopay: b.autopay === 1 || b.autopay === true,
-      paid: isBillPaidForCurrentPeriod(b, now),
+      next_due_date: nextDueDate(timing(b), today),
+      paid: isPaidUp(timing(b), today),
     }))
 
     // Filter by paid status if requested
@@ -108,6 +97,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
   const now = new Date()
+  const today = localToday(now)
 
   const yearParam = parseInt(query?.get('year') || String(now.getFullYear()), 10)
   const monthParam = parseInt(query?.get('month') || String(now.getMonth() + 1), 10)
@@ -140,28 +130,12 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   const looks = await categoryLooks(pids)
 
   for (const b of bills) {
-    // Occurrence day in the given month: due_date's day-of-month, else day_of_month field.
-    let day = 1
-    if (b.due_date) {
-      // Local parse, or the calendar shifts a day west of UTC: a bill due on the 15th would be
-      // drawn on the 14th, and one due on the 1st would fall out of the month entirely.
-      const parsed = parseLocalDate(b.due_date)
-      if (!isNaN(parsed.getTime())) day = parsed.getDate()
-    } else if (b.day_of_month) {
-      day = Number(b.day_of_month) || 1
-    }
-    // A day the month does not have falls on its last day, as shared/calendarMonths.ts moves a
-    // monthly date: a bill due on the 31st was not drawn at all in February, April or June.
-    day = Math.min(day, lastDay)
-    if (day < 1) continue
-
+    // The bill's day of the month (shared/billSchedule.ts: its due date's), and a day the month does
+    // not have falls on its last day, as shared/calendarMonths.ts moves a monthly date: a bill due on
+    // the 31st was not drawn at all in February, April or June.
+    const day = Math.min(billDay(b), lastDay)
     const billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const isPaid = isBillPaidForCurrentPeriod(b, now)
-    // Both sides on the local calendar: mixing a UTC-parsed midnight with a local instant put
-    // `daysUntil` off by one for part of every day.
-    const daysUntil = Math.ceil(
-      (parseLocalDate(billDateStr).getTime() - now.getTime()) / 86_400_000
-    )
+    const isPaid = isPaidUp(timing(b), today)
     const amount = Number(b.amount) || 0
 
     days[String(day)]!.push({
@@ -175,7 +149,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
       date: billDateStr,
       paid: isPaid,
       type: (b.type as string) || 'bill',
-      is_overdue: daysUntil < 0 && !isPaid,
+      is_overdue: daysFrom(today, billDateStr) < 0 && !isPaid,
     })
 
     totalAmount += amount
@@ -266,36 +240,62 @@ export async function billsDelete(params: Record<string, string>): Promise<Respo
   return ok()
 }
 
+/**
+ * GET /api/bills/upcoming, as the Worker answers it: every active bill with when it falls due next
+ * (shared/billSchedule.ts), the most overdue first. It answered the stored rows whose due day of
+ * the month was today or later, with no date.
+ */
 export async function billsUpcoming(): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
-  try {
-    const all: Record<string, unknown>[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('bills', 'by_profile', pid)
-      all.push(...rows)
+  const all: Record<string, unknown>[] = []
+  const categories = new Map<unknown, Record<string, unknown>>()
+  for (const pid of adapter.getCurrentProfileIds()) {
+    all.push(...(await db.getAllFromIndex('bills', 'by_profile', pid)))
+    for (const category of await db.getAllFromIndex('categories', 'by_profile', pid)) {
+      categories.set(category.id, category as Record<string, unknown>)
     }
-    const active = all.filter((b: Record<string, unknown>) => b.is_active !== 0)
-    const today = new Date()
-    const dayOfMonth = today.getDate()
-    const upcoming = active
-      .filter((b: Record<string, unknown>) => {
-        // Derive day of month from due_date (format: YYYY-MM-DD) or fall back to day_of_month field
-        const dueDate = (b.due_date as string) || ''
-        const dom = dueDate ? parseInt(dueDate.split('-')[2], 10) : Number(b.day_of_month) || 1
-        return dom >= dayOfMonth
-      })
-      .sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-        const aDate = (a.due_date as string) || ''
-        const bDate = (b.due_date as string) || ''
-        const aDom = aDate ? parseInt(aDate.split('-')[2], 10) : Number(a.day_of_month) || 1
-        const bDom = bDate ? parseInt(bDate.split('-')[2], 10) : Number(b.day_of_month) || 1
-        return aDom - bDom
-      })
-    return json(upcoming)
-  } catch {
-    return json([])
   }
+  return json(
+    comingUp(all.map(timing), localToday()).map((b) => {
+      const category = categories.get(b.category_id)
+      return {
+        id: b.id,
+        name: b.name,
+        amount: b.amount,
+        frequency: b.frequency,
+        day_of_month: b.day_of_month ?? null,
+        category_name: category?.name ?? null,
+        category_color: category?.color ?? null,
+        category_id: b.category_id ?? null,
+        last_paid: b.last_paid_date,
+        last_paid_date: b.last_paid_date,
+        next_due_date: b.next_due_date,
+        days_until: b.days_until,
+        is_overdue: b.is_overdue,
+        paid: b.paid,
+      }
+    })
+  )
+}
+
+/**
+ * The Dashboard's Upcoming Bills, as GET /api/dashboard answers them on the Worker: the active bills
+ * of the selected profiles that fall due from today through the next 30 days (shared/billSchedule.ts),
+ * soonest first, five at most. Local-first answered none, so the card showed in cloud mode only.
+ */
+export async function dashboardUpcomingBills(): Promise<Record<string, unknown>[]> {
+  const db = await getDB()
+  const profiles = new Map((await db.getAll('profiles')).map((p) => [p.id, p.name]))
+  const all: Record<string, unknown>[] = []
+  for (const pid of adapter.getCurrentProfileIds()) {
+    all.push(...(await db.getAllFromIndex('bills', 'by_profile', pid)))
+  }
+  return dueWithin(all.map(timing), localToday(), 30)
+    .slice(0, 5)
+    .map((b) => ({
+      ...normalizeBill(b),
+      profile_name: profiles.get(b.profile_id as number) ?? null,
+    }))
 }
 
 /**
@@ -315,7 +315,7 @@ export async function billsPayOrMarkPaid(params: Record<string, string>): Promis
     idParam(params),
     pid,
     { date: isoDate(now), currency: getLocalCurrency(), createdAt: now.toISOString() },
-    (bill) => isBillPaidForCurrentPeriod(bill, now)
+    (bill) => isPaidUp(timing(bill), isoDate(now))
   )
   if (result === 'missing') return notFound('Bill')
   if (result === 'already-paid') {

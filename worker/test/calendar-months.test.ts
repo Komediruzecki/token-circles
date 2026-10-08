@@ -269,21 +269,28 @@ describe('upcoming bills', () => {
     expect(await upcomingOf(yearly)).toMatchObject({ next_due_date: '2027-01-08', days_until: 0 });
   });
 
-  it('move a bill whose day has passed to the last day of a shorter month', async () => {
-    const id = await bill({ frequency: 'monthly', day_of_month: 30, due_date: '2027-01-30' });
+  // A bill paid for this month falls due next month; one whose day has passed unpaid is overdue
+  // (worker/test/bill-schedule.test.ts). Either way the month it lands in may be shorter.
+  it('move a bill paid this month to the last day of a shorter month', async () => {
+    const id = await bill({
+      frequency: 'monthly',
+      day_of_month: 30,
+      due_date: '2027-01-30',
+      last_paid_date: '2027-01-30',
+    });
     await at('2027-01-31T12:00:00Z');
     expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 28 });
   });
 
-  it('count a month from the last payment without skipping February', async () => {
+  it('keep a bill on the 31st once February is paid, without staying on the 28th', async () => {
     const id = await bill({
       frequency: 'monthly',
       day_of_month: 31,
       due_date: '2027-01-31',
-      last_paid: '2027-01-31',
+      last_paid_date: '2027-02-28',
     });
-    await at('2027-02-01T12:00:00Z');
-    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-02-28', days_until: 27 });
+    await at('2027-02-28T12:00:00Z');
+    expect(await upcomingOf(id)).toMatchObject({ next_due_date: '2027-03-31', days_until: 31 });
   });
 });
 
