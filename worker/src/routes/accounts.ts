@@ -2,11 +2,12 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError } from '../http';
 import * as db from '../db';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
+import { checkAccountCreate, checkAccountEdit } from '../../../shared/accountSchema';
 import { calendarDateIn } from '../../../shared/calendarDate';
 import { requestTimeZone } from '../local-date';
 
@@ -14,8 +15,6 @@ import { requestTimeZone } from '../local-date';
 // Accounts are profile-scoped; balance history is keyed by account_id and only
 // reachable after the parent account is verified to belong to the active profile.
 export const accountsRoutes = new Hono<AppEnv>();
-
-const VALID_TYPES = ['giro', 'ib', 'savings', 'cash'];
 
 // accountsRepo.list — current_balance is the latest balance-history entry,
 // falling back to starting_balance, then 0 (correlated subquery replicated).
@@ -29,26 +28,17 @@ accountsRoutes.get('/api/accounts', requireAuth, async (c) => {
   return c.json(rows);
 });
 
+// The body is checked by shared/accountSchema.ts, the rules local-first runs too: a refusal is a
+// 400 naming each field. A new account opens at its starting balance; it has no transactions yet.
 accountsRoutes.post('/api/accounts', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (!b.name) throw new HttpError(400, 'Name is required');
-  const accountType = VALID_TYPES.includes(b.type) ? b.type : 'giro';
-  const startBalanceRaw =
-    b.starting_balance !== undefined ? parseFloat(b.starting_balance) : parseFloat(b.balance);
-  const startBalance = Number.isFinite(startBalanceRaw) ? startBalanceRaw : 0;
-  const startDate = b.starting_date || null;
-  const baseCurrency = await resolveProfileBaseCurrency(c.env.DB, pid, b.currency, true);
+  const b = (await c.req.json()) as Record<string, unknown>;
+  const account = accept(checkAccountCreate(b));
+  const baseCurrency = await resolveProfileBaseCurrency(c.env.DB, pid, account.currency, true);
   const res = await db.insert(c.env.DB, 'accounts', {
-    name: String(b.name).trim(),
-    bank_name: b.bank_name || '',
-    type: accountType,
+    ...account,
     currency: baseCurrency,
-    balance: startBalance,
-    notes: b.notes || '',
     profile_id: pid,
-    starting_balance: startBalance,
-    starting_date: startDate,
   });
   return c.json({ id: res.meta.last_row_id, message: 'Account created' });
 });
@@ -120,15 +110,15 @@ accountsRoutes.get('/api/accounts/:id', requireAuth, async (c) => {
   return c.json(account);
 });
 
-// Partial update: only the fields the client actually sends are written; everything else
-// is preserved. Editing account info must never silently wipe notes/currency or clobber the
-// derived balance. `balance` is starting_balance + the ledger (see recompute-balances.ts), so
-// a durable balance correction shifts starting_balance by the same delta — the frontend sends
-// both the new starting_balance and the matching balance together.
+// Partial update: only the fields the body changes are checked and written (shared/
+// accountSchema.ts, decision 2), so a row stored under older rules can still be edited, and
+// editing account info never wipes notes or the currency. `balance` is starting_balance + the
+// ledger (see recompute-balances.ts), so a durable balance correction shifts starting_balance by
+// the same delta: the frontend sends both the new starting_balance and the matching balance.
 accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const b = (await c.req.json()) as Record<string, any>;
+  const b = (await c.req.json()) as Record<string, unknown>;
   const existing = await db.first<Record<string, any>>(
     c.env.DB,
     'SELECT * FROM accounts WHERE id = ? AND profile_id = ?',
@@ -136,23 +126,12 @@ accountsRoutes.put('/api/accounts/:id', requireAuth, async (c) => {
     pid
   );
   if (!existing) throw new HttpError(404, 'Account not found');
-  const data: Record<string, any> = {};
-  if (typeof b.name === 'string' && b.name.trim()) data.name = b.name.trim();
-  if (b.bank_name !== undefined) data.bank_name = b.bank_name ?? '';
-  if (b.type !== undefined) data.type = VALID_TYPES.includes(b.type) ? b.type : existing.type;
-  if (b.currency !== undefined && b.currency) {
-    data.currency = await resolveProfileBaseCurrency(c.env.DB, pid, b.currency);
+  const data: Record<string, unknown> = { ...accept(checkAccountEdit(b, existing)) };
+  // A currency the edit changes has to be the base currency: another one is the 409.
+  if (typeof data.currency === 'string') {
+    data.currency = await resolveProfileBaseCurrency(c.env.DB, pid, data.currency);
+    if (data.currency === existing.currency) delete data.currency;
   }
-  if (b.notes !== undefined) data.notes = b.notes ?? '';
-  if (b.balance !== undefined) {
-    const v = parseFloat(b.balance);
-    if (Number.isFinite(v)) data.balance = v;
-  }
-  if (b.starting_balance !== undefined) {
-    const v = parseFloat(b.starting_balance);
-    if (Number.isFinite(v)) data.starting_balance = v;
-  }
-  if (b.starting_date !== undefined) data.starting_date = b.starting_date || null;
   if (Object.keys(data).length === 0) return c.json({ message: 'No changes' });
 
   await db.update(c.env.DB, 'accounts', data, 'id = ? AND profile_id = ?', id, pid);
@@ -245,8 +224,9 @@ accountsRoutes.delete('/api/accounts/:id/history', requireAuth, async (c) => {
   return c.json({ message: 'Balance history deleted' });
 });
 
-// Reconciliation summary — accounts don't directly link to transactions, so the
-// counts span all profile transactions (matches the Express implementation).
+// Reconciliation summary for one account: the transactions drawn on it (account_id), as
+// local-first counts them. The Express port counted every transaction of the profile here,
+// from before transactions named their account, so each account reported the whole ledger.
 accountsRoutes.get('/api/accounts/:id/reconciliation-summary', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
@@ -262,13 +242,16 @@ accountsRoutes.get('/api/accounts/:id/reconciliation-summary', requireAuth, asyn
     c.env.DB,
     `SELECT COUNT(*) as count, COALESCE(SUM(${amountSql}), 0) as total
      FROM transactions
-     WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
-    pid
+     WHERE profile_id = ? AND account_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
+    pid,
+    account.id
   );
   const reconciled = await db.first<{ count: number }>(
     c.env.DB,
-    `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`,
-    pid
+    `SELECT COUNT(*) as count FROM transactions
+     WHERE profile_id = ? AND account_id = ? AND reconciled = 1`,
+    pid,
+    account.id
   );
   const unreconciledCount = unreconciled?.count ?? 0;
   const reconciledCount = reconciled?.count ?? 0;

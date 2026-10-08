@@ -81,7 +81,12 @@ describe('Worker profile-link integrity', () => {
       account_id: 922,
       category_id: 9111,
     });
-    expect(foreignAccount.status).toBe(403);
+    // A 400 naming the field, as local-first answers it: the form marks the account it chose.
+    expect(foreignAccount.status).toBe(400);
+    expect(await foreignAccount.json()).toEqual({
+      error: 'Choose one of your accounts from the list.',
+      fields: { account_id: 'Choose one of your accounts from the list.' },
+    });
     const foreignCategory = await post('/api/transactions', {
       description: 'Cross category',
       amount: 100,
@@ -89,7 +94,11 @@ describe('Worker profile-link integrity', () => {
       account_id: 911,
       category_id: 9222,
     });
-    expect(foreignCategory.status).toBe(403);
+    expect(foreignCategory.status).toBe(400);
+    expect(await foreignCategory.json()).toEqual({
+      error: 'Choose a category from the list, or leave it uncategorized.',
+      fields: { category_id: 'Choose a category from the list, or leave it uncategorized.' },
+    });
     const balances = await env.DB.prepare(
       'SELECT id, balance FROM accounts WHERE id IN (911, 922) ORDER BY id'
     ).all<{ id: number; balance: number }>();

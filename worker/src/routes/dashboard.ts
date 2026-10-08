@@ -165,25 +165,27 @@ dashboardRoutes.get('/api/dashboard/summary', requireAuth, async (c) => {
   const month = c.req.query('month')
   // Support both "YYYY-MM" format and just "MM".
   const monthPart = month ? (month.includes('-') ? month.split('-')[1] : month) : null
-  // NOTE: faithfully mirrors the Express code. `y` is a number when defaulted,
-  // a string when it comes from the query; `m` (monthPart) is a string. The
-  // backend's `m === 12`/`m + 1` comparisons therefore behave loosely — the SQL
-  // date strings below reproduce that exact behavior (e.g. m + 1 concatenates).
+  // NOTE: mirrors the Express code. `y` is a number when defaulted, a string when it comes from
+  // the query; `m` (monthPart) is a string, so the previous-period comparisons below behave
+  // loosely. The current period is worked out on numbers: the Express `m + 1` concatenated, so
+  // month=3 ended on '2025-31-01' and counted every later month of the year as March.
   const y: number | string = year || localNow(c).getFullYear()
   const m: string | null = monthPart
+  const yNum = Number(y)
+  const mNum = m ? parseInt(m, 10) : NaN
   let startDate: string
   let endDate: string
 
   if (m) {
     // Specific month.
     startDate = `${y}-${String(m).padStart(2, '0')}-01`
-    const nextM = (m as unknown as number) === 12 ? 1 : (m as unknown as number) + 1
-    const nextY = (m as unknown as number) === 12 ? (y as number) + 1 : y
+    const nextM = mNum === 12 ? 1 : mNum + 1
+    const nextY = mNum === 12 ? yNum + 1 : yNum
     endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`
   } else {
     // Full year.
     startDate = `${y}-01-01`
-    endDate = `${(y as number) + 1}-01-01`
+    endDate = `${yNum + 1}-01-01`
   }
 
   const monthly = await db.all<TypeTotalRow>(
@@ -295,8 +297,12 @@ dashboardRoutes.get('/api/dashboard/charts', requireAuth, async (c) => {
   const months = c.req.query('months') ?? '12'
   // Ends today on the person's calendar (see /api/stats/monthly).
   const endDate = localNow(c)
-  const startDate = new Date(endDate)
-  startDate.setMonth(startDate.getMonth() - parseInt(String(months)) + 1)
+  // From the 1st of the first month, as /api/stats/monthly and local-first count it.
+  const startDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth() - parseInt(String(months)) + 1,
+    1
+  )
   const startStr = startDate.toISOString().split('T')[0]
   const endStr = endDate.toISOString().split('T')[0]
 

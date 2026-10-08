@@ -440,11 +440,6 @@ const routes: RouteDef[] = [
     handler: dispatch({ GET: (ctx) => h.loanRates(ctx.params) }),
   },
   {
-    pattern: /^\/loans\/(\d+)\/rate$/,
-    methods: ['PUT'],
-    handler: dispatch({ PUT: (ctx) => h.loanRateUpdate(ctx.params, ctx.body) }),
-  },
-  {
     pattern: /^\/loans\/(\d+)\/rates$/,
     methods: ['GET', 'POST'],
     handler: dispatch({
@@ -962,6 +957,9 @@ const routes: RouteDef[] = [
     handler: dispatch({ POST: (ctx) => h.portfolioPrices(ctx.body) }),
   },
 ]
+
+/** The table's patterns and methods, for the contract suite's route guard (shared/contract). */
+export const localRoutes: readonly { pattern: RegExp; methods: readonly string[] }[] = routes
 
 // ── Router ───────────────────────────────────────────────────────────────────
 

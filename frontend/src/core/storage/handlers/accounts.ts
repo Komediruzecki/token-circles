@@ -1,11 +1,21 @@
 /**
  * Accounts handlers — IndexedDB-backed implementations
  */
+import { checkAccountCreate, checkAccountEdit } from '../../../../../shared/accountSchema'
 import { isoDate } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { AccountInUseError, getDB } from '../idb'
-import { adapter, currentProfileRecord, getAmount, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileRecord,
+  getAmount,
+  idParam,
+  json,
+  notFound,
+  ok,
+  refuse,
+} from './helpers'
 import { normalizeAccount } from './normalize'
 
 export async function accountsList(): Promise<Response> {
@@ -14,15 +24,20 @@ export async function accountsList(): Promise<Response> {
 }
 
 export async function accountsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid account data' }, 400)
-  const acct = body as Record<string, unknown>
-  acct.profile_id = await adapter.getCurrentProfileId()
+  // The Worker's rules and words (shared/accountSchema.ts). The router has already run this check
+  // on the way in; a direct call (tests, other handlers) gets the same answer. The row stored is
+  // the one the check gives back: every field with its default, a new account at its starting
+  // balance, and nothing the body made up.
+  const checked = checkAccountCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  let currency: string
   try {
-    acct.currency = await ensureBaseCurrency(acct.currency ?? getLocalCurrency())
+    currency = await ensureBaseCurrency(checked.value.currency ?? getLocalCurrency())
   } catch (error) {
     if (error instanceof BaseCurrencyConflictError) return json({ error: error.message }, 409)
     throw error
   }
+  const acct = { ...checked.value, currency, profile_id: await adapter.getCurrentProfileId() }
   const id = await adapter.createAccount(
     acct as unknown as Parameters<typeof adapter.createAccount>[0]
   )
@@ -39,19 +54,32 @@ export async function accountsUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('accounts', id))) return notFound('Account')
-  const update = { ...(body as Record<string, unknown>) }
-  if (update.currency !== undefined) {
+  const before = await currentProfileRecord('accounts', id)
+  if (!before) return notFound('Account')
+  // Only the fields the body changes, checked as the Worker checks them (shared/accountSchema.ts).
+  // The Accounts form sends every field it shows on every save: one sent back with the value the
+  // row holds is neither checked nor written, so a row stored under older rules stays editable.
+  const checked = checkAccountEdit(body, before)
+  if (!checked.ok) {
+    // The router logs this for every body its checks refuse, and the release suite fails a
+    // local-first run that shows one. An edit is checked here, against the stored row, so it is
+    // said here.
+    console.error('[accountsUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
+  }
+  const update: Record<string, unknown> = { ...checked.value }
+  // A currency the edit changes has to be the base currency: another one is the 409.
+  if (typeof update.currency === 'string') {
     try {
       update.currency = await ensureBaseCurrency(update.currency)
+      if (update.currency === before.currency) delete update.currency
     } catch (error) {
       if (error instanceof BaseCurrencyConflictError) return json({ error: error.message }, 409)
       throw error
     }
   }
-  await adapter.updateAccount(id, update)
+  if (Object.keys(update).length > 0) await adapter.updateAccount(id, update)
   return ok()
 }
 

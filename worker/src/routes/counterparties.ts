@@ -35,17 +35,25 @@ counterpartiesRoutes.get('/api/counterparties', requireAuth, async (c) => {
     string,
     { name: string; incoming: number; outgoing: number; count: number }
   >();
+  // SQL groups the names as stored and they are trimmed here, so two groups can land on one name
+  // ('Corner Shop' and 'Corner Shop '): each adds to it rather than replacing the one before.
   for (const row of outgoing) {
     const name = (row.name || '').trim();
     if (!name) continue;
-    map.set(name, { name, incoming: 0, outgoing: row.total || 0, count: row.count || 0 });
+    const ex = map.get(name);
+    if (ex) {
+      ex.outgoing += row.total || 0;
+      ex.count += row.count || 0;
+    } else {
+      map.set(name, { name, incoming: 0, outgoing: row.total || 0, count: row.count || 0 });
+    }
   }
   for (const row of incoming) {
     const name = (row.name || '').trim();
     if (!name) continue;
     const ex = map.get(name);
     if (ex) {
-      ex.incoming = row.total || 0;
+      ex.incoming += row.total || 0;
       ex.count += row.count || 0;
     } else {
       map.set(name, { name, incoming: row.total || 0, outgoing: 0, count: row.count || 0 });

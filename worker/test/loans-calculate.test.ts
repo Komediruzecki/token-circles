@@ -96,8 +96,8 @@ describe('the base rate POST and PUT /api/loans store', () => {
     const id = await create({ ...LOAN, interest_rate: 0 });
     const loan = await stored(id);
     expect(loan.interest_rate).toBe(0);
-    // The month-1 period a create adds when it is sent none carries the same base rate.
-    expect(loan.rate_periods.map((p: { rate: number }) => p.rate)).toEqual([0]);
+    // A create sent no rate periods stores none, so the base rate covers every month.
+    expect(loan.rate_periods).toEqual([]);
     expect(await totalInterest(id)).toBe(0);
   });
 

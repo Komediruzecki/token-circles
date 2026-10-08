@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { TRANSACTION_MESSAGES } from '../../../../shared/transactionSchema'
 import { validateBody } from '../validation'
 
 describe('validation - validateBody', () => {
@@ -13,27 +14,24 @@ describe('validation - validateBody', () => {
     expect(result).toBeNull()
   })
 
-  it('rejects missing required fields', async () => {
+  it('answers a transaction body in the Worker’s rules and words (shared/transactionSchema.ts)', async () => {
+    // Only the amount: a blank description, date or category is the Worker's default, not a
+    // refusal, as an import or an API client sends them.
     const result = validateBody('POST', '/api/transactions', {
       type: 'expense',
+      currency: 'euro',
     })
     expect(result).not.toBeNull()
     expect(result!.status).toBe(400)
     // The Worker's answer: a sentence per field, and the summary that joins them. No zod text.
     const data = await result!.json()
-    expect(data.fields).toEqual({
-      amount: 'Fill in the amount.',
-      description: 'Fill in the description.',
-      date: 'Fill in the date.',
-      category_id: 'Choose the category.',
+    expect(data).toEqual({
+      error: `${TRANSACTION_MESSAGES.amount} ${TRANSACTION_MESSAGES.currency}`,
+      fields: { amount: TRANSACTION_MESSAGES.amount, currency: TRANSACTION_MESSAGES.currency },
     })
-    expect(data.error).toBe(
-      'Fill in the amount. Fill in the description. Fill in the date. Choose the category.'
-    )
-    expect(data).not.toHaveProperty('details')
   })
 
-  it('rejects invalid transaction type', () => {
+  it('rejects invalid transaction type', async () => {
     const result = validateBody('POST', '/api/transactions', {
       type: 'invalid',
       amount: 100,
@@ -43,6 +41,14 @@ describe('validation - validateBody', () => {
     })
     expect(result).not.toBeNull()
     expect(result!.status).toBe(400)
+    expect((await result!.json()).fields).toEqual({ type: TRANSACTION_MESSAGES.type })
+  })
+
+  it('has no rule for a transaction edit: its handler checks it against the stored row', () => {
+    // What the form sends back from a row an import stored: refused on a create, kept on an edit.
+    expect(
+      validateBody('PUT', '/api/transactions/7', { date: '2026-1-5', amount: 12.345 })
+    ).toBeNull()
   })
 
   it('returns null for routes without schema', () => {
@@ -257,15 +263,9 @@ describe('validation - a zod refusal in plain words', () => {
   })
 
   it('keeps a rule’s own sentence', async () => {
-    expect(
-      await fieldsOf('/api/transactions', {
-        type: 'transfer',
-        amount: 10,
-        description: 'Move',
-        date: '2026-05-13',
-        category_id: null,
-      })
-    ).toEqual({ transfer_account_id: 'Choose the account the transfer goes to.' })
+    expect(await fieldsOf('/api/bills', { name: 'Rent', amount: 900 })).toEqual({
+      due_date: 'Pick a due date.',
+    })
   })
 
   it('answers a body that is not an object with a summary and no fields', async () => {

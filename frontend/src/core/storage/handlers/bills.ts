@@ -45,6 +45,23 @@ function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): b
   return false
 }
 
+/**
+ * The name and colour of each profile's categories, by id, for the bills that point at them: the
+ * Worker joins them onto its bill rows, and the Bill Calendar and Housing show them.
+ */
+async function categoryLooks(
+  pids: number[]
+): Promise<Map<number, { name: unknown; color: unknown }>> {
+  const db = await getDB()
+  const looks = new Map<number, { name: unknown; color: unknown }>()
+  for (const pid of pids) {
+    for (const c of await db.getAllFromIndex('categories', 'by_profile', pid)) {
+      looks.set(c.id as number, { name: c.name, color: c.color })
+    }
+  }
+  return looks
+}
+
 export async function billsList(query?: URLSearchParams): Promise<Response> {
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
@@ -56,8 +73,11 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
     }
 
     const now = new Date()
+    const looks = await categoryLooks(pids)
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...normalizeBill(b),
+      category_name: looks.get(b.category_id as number)?.name ?? null,
+      category_color: looks.get(b.category_id as number)?.color ?? null,
       autopay: b.autopay === 1 || b.autopay === true,
       paid: isBillPaidForCurrentPeriod(b, now),
     }))
@@ -115,6 +135,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   let totalAmount = 0
   let paidAmount = 0
   let billCount = 0
+  const looks = await categoryLooks(pids)
 
   for (const b of bills) {
     // Occurrence day in the given month: due_date's day-of-month, else day_of_month field.
@@ -144,8 +165,8 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
       amount,
       frequency: b.frequency,
       category_id: b.category_id ?? null,
-      category_name: (b.category_name as string) ?? null,
-      category_color: (b.category_color as string) ?? null,
+      category_name: looks.get(b.category_id as number)?.name ?? null,
+      category_color: looks.get(b.category_id as number)?.color ?? null,
       date: billDateStr,
       paid: isPaid,
       type: (b.type as string) || 'bill',
@@ -181,6 +202,9 @@ export async function billsCreate(body: unknown): Promise<Response> {
     if (!(await currentProfileOwns('categories', b.category_id))) {
       return json({ error: 'Category does not belong to this profile' }, 400)
     }
+    if (!(await currentProfileOwns('accounts', b.account_id))) {
+      return json({ error: 'Account does not belong to this profile' }, 400)
+    }
     const record = {
       profile_id: pid,
       name,
@@ -191,6 +215,8 @@ export async function billsCreate(body: unknown): Promise<Response> {
       day_of_month: (b.day_of_month as number) || 1,
       category_id:
         b.category_id !== null && b.category_id !== undefined ? Number(b.category_id) : null,
+      // The account a payment comes out of: mark-paid moves its balance, as on the Worker.
+      account_id: b.account_id !== null && b.account_id !== undefined ? Number(b.account_id) : null,
       // NULL on a new Worker row too; BillSchema requires both keys.
       last_paid_date: null,
       next_due_date: null,
@@ -227,6 +253,9 @@ export async function billsUpdate(
     if ('category_id' in b && !(await currentProfileOwns('categories', b.category_id))) {
       return json({ error: 'Category does not belong to this profile' }, 400)
     }
+    if ('account_id' in b && !(await currentProfileOwns('accounts', b.account_id))) {
+      return json({ error: 'Account does not belong to this profile' }, 400)
+    }
     if (b.name !== undefined) bill.name = b.name
     if (b.amount !== undefined) bill.amount = parseFloat(String((b.amount as string | number) || 0))
     if (b.frequency !== undefined) bill.frequency = b.frequency
@@ -234,6 +263,8 @@ export async function billsUpdate(
     if (b.day_of_month !== undefined) bill.day_of_month = Number(b.day_of_month)
     if (b.category_id !== undefined)
       bill.category_id = b.category_id !== null ? Number(b.category_id) : null
+    if (b.account_id !== undefined)
+      bill.account_id = b.account_id !== null ? Number(b.account_id) : null
     if (b.recurring !== undefined) bill.recurring = b.recurring ? 1 : 0
     if (b.autopay !== undefined) bill.autopay = b.autopay ? 1 : 0
     if (b.is_active !== undefined) bill.is_active = b.is_active ? 1 : 0

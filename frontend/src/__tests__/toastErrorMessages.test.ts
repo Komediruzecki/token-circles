@@ -39,7 +39,6 @@ const KNOWN: Record<string, number> = {
   'features/EmergencyFundCalculator.tsx': 1,
   'features/Settings.tsx': 5,
   'features/Tags.tsx': 6,
-  'features/Transactions.tsx': 1,
 }
 
 const TOASTS = new Set(['toast', 'showToast', 'addToast'])

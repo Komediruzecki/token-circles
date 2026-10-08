@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
 import {
   BACKUP_EXTENSION_SETTINGS_KEY,
@@ -519,6 +520,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       ...profileStores,
       ...(db.objectStoreNames.contains('balanceHistory') ? ['balanceHistory'] : []),
       ...(options.deleteProfiles && db.objectStoreNames.contains('profiles') ? ['profiles'] : []),
+      ...(options.deleteProfiles && db.objectStoreNames.contains('settings') ? ['settings'] : []),
     ]
     const tx = db.transaction(transactionStores, 'readwrite')
 
@@ -560,6 +562,13 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (options.deleteProfiles && transactionStores.includes('profiles')) {
       const profileStore = tx.objectStore('profiles')
       for (const profileId of pidSet) await profileStore.delete(profileId)
+    }
+
+    // A deleted profile's settings go with it, as they do on the Worker. Its retirement plan is
+    // the one kept per profile (handlers/calculators.ts); left behind, it stayed in every backup.
+    if (options.deleteProfiles && transactionStores.includes('settings')) {
+      const settingsStore = tx.objectStore('settings')
+      for (const profileId of pidSet) await settingsStore.delete(`retirement_settings:${profileId}`)
     }
 
     await tx.done
@@ -719,7 +728,10 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
 
-    return txns.sort((a, b) => b.date.localeCompare(a.date))
+    // Newest first, and within one day the last entered first: the Worker's
+    // `ORDER BY t.date DESC, t.id DESC`. Sorting on the date alone kept a day's rows in key order,
+    // oldest entry first, so a row just added landed below the ones from earlier that day.
+    return txns.sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0))
   }
 
   async createTransaction(tx: Transaction): Promise<number> {
@@ -807,28 +819,15 @@ export class IndexedDBAdapter implements StorageAdapter {
     }))
     // Merge the patch, handling amount_local so a partial edit can't drift the balance:
     //  - if the caller sent amount_local, honour it (including an explicit null);
-    //  - else if the caller changed amount, recompute amount_local from the new amount so the
-    //    balance reflects the edit — previously the stale amount_local was kept, so editing a
-    //    foreign-currency amount left the balance unchanged and the row inconsistent (audit D8);
+    //  - else if the caller changed amount, the local amount follows it, by the rule the Worker's
+    //    PUT takes too (shared/transactionSchema.ts, editedLocalAmount). A stale one used to be
+    //    kept, so editing a foreign-currency amount left the balance as it was (audit D8);
     //  - else preserve the existing amount_local (an unrelated-field edit must not wipe it).
     const preserved: Record<string, unknown> = { ...tx }
     delete preserved.profile_id
     if (!('amount_local' in tx) && typeof (existing as any).amount_local === 'number') {
-      const amountChanging = 'amount' in tx && typeof tx.amount === 'number'
-      if (amountChanging) {
-        const rate =
-          typeof (tx as any).exchange_rate === 'number'
-            ? (tx as any).exchange_rate
-            : typeof (existing as any).exchange_rate === 'number'
-              ? (existing as any).exchange_rate
-              : null
-        // Recompute from the new amount when a rate is known; otherwise clear it so the
-        // balance math falls back to the new raw amount.
-        preserved.amount_local =
-          rate && rate > 0 ? Math.round((tx.amount as number) * rate * 100) / 100 : null
-      } else {
-        preserved.amount_local = (existing as any).amount_local
-      }
+      const local = editedLocalAmount(existing, tx)
+      preserved.amount_local = local === undefined ? (existing as any).amount_local : local
     }
     Object.assign(existing, preserved)
     // Only re-validate the links this patch actually changes — an unchanged cross-profile link
@@ -1495,6 +1494,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'categoryMappings',
       'import_logs',
+      // A backup carries no import sources, but the profiles they belong to are replaced: the
+      // Worker deletes them with those profiles, and so does this.
+      'import_sources',
       'settings',
     ]
     const stores = requestedStores.filter((store) => db.objectStoreNames.contains(store))
@@ -1616,6 +1618,19 @@ export class IndexedDBAdapter implements StorageAdapter {
         }
       }
       for (const [key, value] of Object.entries(data.settings)) {
+        // A retirement plan is kept per profile, as `retirement_settings:<profile id>`
+        // (handlers/calculators.ts), and the restore gave every profile a new id: the plan
+        // follows its profile. One for a profile the file does not carry is left out.
+        const perProfile = /^retirement_settings:(\d+)$/.exec(key)
+        if (perProfile) {
+          const restoredId = profileIdMap.get(Number(perProfile[1]))
+          if (restoredId !== undefined) {
+            await tx
+              .objectStore('settings')
+              .put({ key: `retirement_settings:${restoredId}`, value })
+          }
+          continue
+        }
         await tx.objectStore('settings').put({ key, value })
       }
 

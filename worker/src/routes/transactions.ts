@@ -1,10 +1,21 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import { fieldErrorsOf } from '../../../shared/refusal';
+import {
+  editedLocalAmount,
+  checkTransactionCreate,
+  checkTransactionEdit,
+  checkTransactionFields,
+  TRANSACTION_MESSAGES,
+  transactionMoneyProblems,
+} from '../../../shared/transactionSchema';
+import type { FieldErrors } from '../../../shared/refusal';
+import type { TransactionDefaults } from '../../../shared/transactionSchema';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
-import { validateTransactionCreate, validateTransactionUpdate } from '../validation';
+import { accept, HttpError, refuse } from '../http';
 import { recalcGoalsByCategory } from '../recalc-goals';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { autoApplyTagRules } from '../tag-rules';
@@ -138,6 +149,47 @@ export function unchangedSince(row: TxRow, id: number | string, pid: number) {
 }
 
 const CONCURRENT_EDIT = 'This transaction was changed on another device. Reload and try again.';
+
+/** What a blank date or currency means in this request's body. */
+function transactionDefaults(c: Context<AppEnv>): TransactionDefaults {
+  // An undated transaction happened today, on the person's calendar. A body without a currency
+  // gets the column's default, which the route has always stored.
+  return { today: localToday(c), currency: 'USD' };
+}
+
+/**
+ * The 400 for a link to another profile's account or category, each at its field and in the
+ * words local-first uses. It was a 403 with no field to put it under. Only the ids given are
+ * checked: an edit passes the links it changes, so an unchanged link on a legacy row never blocks
+ * an unrelated edit.
+ */
+async function refuseForeignLinks(
+  d1: D1Database,
+  pid: number,
+  links: {
+    account_id?: number | null;
+    transfer_account_id?: number | null;
+    category_id?: number | null;
+  }
+): Promise<void> {
+  const fields: FieldErrors = {};
+  if (links.account_id != null && !(await db.accountBelongsToProfile(d1, links.account_id, pid))) {
+    fields.account_id = TRANSACTION_MESSAGES.account;
+  }
+  if (
+    links.transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(d1, links.transfer_account_id, pid))
+  ) {
+    fields.transfer_account_id = TRANSACTION_MESSAGES.account;
+  }
+  if (
+    links.category_id != null &&
+    !(await db.categoryBelongsToProfile(d1, links.category_id, pid))
+  ) {
+    fields.category_id = TRANSACTION_MESSAGES.category;
+  }
+  if (Object.keys(fields).length > 0) throw refuse(fields);
+}
 
 interface TagRow {
   id: number;
@@ -652,17 +704,21 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
 // ── Reconciliation routes ─────────────────────────────────────────────────────
 // Registered before /api/transactions/:id so they aren't shadowed.
 
-// POST /api/transactions/reconcile/bulk — bulk reconcile by date range.
+// POST /api/transactions/reconcile/bulk — bulk reconcile by date range. The app sends the range as
+// date_from/date_to (core/api.ts reconcileByDateRange, which local-first reads too); startDate and
+// endDate, the names this route was ported with, still work.
 transactionsRoutes.post('/api/transactions/reconcile/bulk', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
-  const { startDate, endDate } = b;
-  if (!startDate || !endDate) throw new HttpError(400, 'startDate and endDate are required');
+  const startDate = b.date_from ?? b.startDate;
+  const endDate = b.date_to ?? b.endDate;
+  if (!startDate || !endDate) throw new HttpError(400, 'date_from and date_to are required');
 
+  // Unreconciled as the summary counts it: a NULL is unreconciled too.
   const result = await db.run(
     c.env.DB,
     `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
-     WHERE profile_id = ? AND date >= ? AND date <= ? AND reconciled = 0`,
+     WHERE profile_id = ? AND date >= ? AND date <= ? AND COALESCE(reconciled, 0) = 0`,
     pid,
     startDate,
     endDate
@@ -714,14 +770,22 @@ transactionsRoutes.put('/api/transactions/reconcile-batch', requireAuth, async (
 });
 
 // ── POST /api/transactions — create ───────────────────────────────────────────
+// The body is checked with the rules local-first and the Transactions form run
+// (shared/transactionSchema.ts): a refused body answers 400 naming each field, in their words.
 transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   // `pids` (the full selected set) still scopes the multi-profile goal recalc below, matching
   // local's getCurrentProfileIds(); balance mutations, by contrast, are scoped to the single
   // write profile `pid` (see below).
   const pids = await getProfileIds(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  validateTransactionCreate(b);
+  const body: unknown = await c.req.json();
+  const defaults = transactionDefaults(c);
+  const checked = checkTransactionFields(body, defaults);
+  // A body refused for its own fields gets the answer local-first gives it, a transfer's missing
+  // accounts included, so a client can fix everything in one go. Accounts named rather than given
+  // by id are resolved below, once the body is otherwise fine.
+  if (!checked.ok) throw refuse(fieldErrorsOf(checkTransactionCreate(body, defaults)));
+  const input = checked.value;
   const {
     description,
     amount,
@@ -735,46 +799,19 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     exchange_rate,
     type,
     notes,
-    account_id,
-    transfer_account_id,
-  } = b;
+  } = input;
 
-  // Business rule: income amounts must be positive.
-  if (Number(amount) < 0 && type === 'income') {
-    throw new HttpError(400, 'Income amount must be positive');
-  }
-
-  // Validate account ownership before accepting account_id from client input.
-  if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
-  ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
-  }
-  if (
-    category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  if (
-    transfer_account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
-  ) {
-    throw new HttpError(403, 'Transfer account does not belong to this profile');
-  }
-
-  // An undated transaction happened today, on the person's calendar.
-  const resolvedDate = date || localToday(c);
+  // Validate account and category ownership before accepting ids from client input.
+  await refuseForeignLinks(c.env.DB, pid, input);
 
   // Resolve account_id from means_of_payment (FROM) if not explicitly provided.
-  let resolvedAccountId: number | null = account_id || null;
-  let resolvedTransferAccountId: number | null = transfer_account_id || null;
+  let resolvedAccountId: number | null = input.account_id;
+  let resolvedTransferAccountId: number | null = input.transfer_account_id;
   if (!resolvedAccountId && means_of_payment) {
     const matched = await db.first<{ id: number }>(
       c.env.DB,
       'SELECT id FROM accounts WHERE LOWER(name) = LOWER(?) AND profile_id = ?',
-      String(means_of_payment).trim(),
+      means_of_payment,
       pid
     );
     if (matched) resolvedAccountId = matched.id;
@@ -798,14 +835,16 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     }
   }
 
-  const invariantError = transactionInvariantError({
+  // A transfer needs the account the money leaves and a different one it goes to: checked on the
+  // row as it will be stored, once the names above have been resolved.
+  const problems = transactionMoneyProblems({
     type,
     amount,
     amount_local,
     account_id: resolvedAccountId,
     transfer_account_id: resolvedTransferAccountId,
   });
-  if (invariantError) throw new HttpError(400, invariantError);
+  if (Object.keys(problems).length > 0) throw refuse(problems);
 
   // Persist the row and its balance side effects atomically. The INSERT is first in the batch so
   // its generated id can be read back from the batch result.
@@ -816,16 +855,16 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     ).bind(
       description,
       amount,
-      resolvedDate,
-      beneficiary || '',
-      payor || '',
-      category_id || null,
-      currency || 'USD',
+      date,
+      beneficiary,
+      payor,
+      category_id,
+      currency,
       amount_local ?? amount,
-      means_of_payment || '',
-      exchange_rate || 1.0,
-      type || 'expense',
-      notes || '',
+      means_of_payment,
+      exchange_rate,
+      type,
+      notes,
       pid,
       resolvedAccountId,
       resolvedTransferAccountId
@@ -927,156 +966,71 @@ transactionsRoutes.get('/api/transactions/:id', requireAuth, async (c) => {
 });
 
 // ── PUT /api/transactions/:id — update ────────────────────────────────────────
+// Only the fields the body changes are checked and written, with the rules local-first and the
+// Transactions form run (shared/transactionSchema.ts). The form sends every field on every save:
+// a field sent back with the value the row holds is neither checked nor written, so a row saved
+// under older rules can still be edited (decision 2 of docs/plans/2026-10-07-form-errors.md).
 transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   // `pids` still scopes the multi-profile goal recalc below (matches local's
   // getCurrentProfileIds()); balance mutations are scoped to the single write profile `pid`.
   const pids = await getProfileIds(c);
   const id = c.req.param('id');
-  const b = (await c.req.json()) as Record<string, any>;
-  validateTransactionUpdate(b);
-  const {
-    description,
-    amount,
-    date,
-    beneficiary,
-    payor,
-    category_id,
-    currency,
-    amount_local,
-    means_of_payment,
-    exchange_rate,
-    type,
-    notes,
-    reconciled,
-    account_id,
-    transfer_account_id,
-  } = b;
+  const body: unknown = await c.req.json();
 
-  // Fetch old transaction for account balance reversal.
+  // The row as stored: what the edit is compared with, and what the balance reversal undoes.
   const oldTx = await db.first<TxRow>(
     c.env.DB,
-    'SELECT account_id, transfer_account_id, type, amount, amount_local FROM transactions WHERE id = ? AND profile_id = ?',
+    'SELECT * FROM transactions WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
   if (!oldTx) throw new HttpError(404, 'Not found');
 
-  // Validate account ownership if account_id or transfer_account_id are being changed.
-  if (
-    account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(account_id), pid))
-  ) {
-    throw new HttpError(403, 'Account does not belong to this profile');
-  }
-  if (
-    transfer_account_id != null &&
-    !(await db.accountBelongsToProfile(c.env.DB, Number(transfer_account_id), pid))
-  ) {
-    throw new HttpError(403, 'Transfer account does not belong to this profile');
-  }
-  if (
-    category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
+  const patch = accept(checkTransactionEdit(body, oldTx, transactionDefaults(c)));
+  // Only the links the edit changes: an unchanged link on a legacy row must not block it.
+  await refuseForeignLinks(c.env.DB, pid, patch);
+
+  // A new amount without a local amount of its own moves the local amount with it, as local-first
+  // does (shared/transactionSchema.ts, editedLocalAmount): a 100 USD hotel worth 92 EUR, edited to
+  // 110 USD, is worth 101.20 EUR, and its account moves by that. The route used to clear the local
+  // amount, so the balance moved by 110. A local amount that is a copy of the amount follows it,
+  // and a row that never had one keeps none.
+  const local = editedLocalAmount(oldTx, patch);
+  if (local !== undefined) patch.amount_local = local;
 
   const updates: string[] = [];
   const params: unknown[] = [];
-  let hasUpdate = false;
-
-  if (description !== undefined) {
-    updates.push('description = ?');
-    params.push(description);
-    hasUpdate = true;
+  const COLUMNS = [
+    'description',
+    'amount',
+    'date',
+    'beneficiary',
+    'payor',
+    'category_id',
+    'currency',
+    'amount_local',
+    'means_of_payment',
+    'exchange_rate',
+    'type',
+    'notes',
+    'account_id',
+    'transfer_account_id',
+  ] as const;
+  for (const column of COLUMNS) {
+    if (patch[column] === undefined) continue;
+    updates.push(`${column} = ?`);
+    params.push(patch[column]);
   }
-  if (amount !== undefined) {
-    updates.push('amount = ?');
-    params.push(amount);
-    // If amount is changing but amount_local is not explicitly provided, clear the
-    // stale base-currency value so balance math falls back to the new raw amount.
-    if (amount_local === undefined) {
-      updates.push('amount_local = NULL');
-    }
-    hasUpdate = true;
-  }
-  if (date !== undefined) {
-    updates.push('date = ?');
-    params.push(date);
-    hasUpdate = true;
-  }
-  if (beneficiary !== undefined) {
-    updates.push('beneficiary = ?');
-    params.push(beneficiary || '');
-    hasUpdate = true;
-  }
-  if (payor !== undefined) {
-    updates.push('payor = ?');
-    params.push(payor || '');
-    hasUpdate = true;
-  }
-  if (category_id !== undefined) {
-    updates.push('category_id = ?');
-    params.push(category_id || null);
-    hasUpdate = true;
-  }
-  if (currency !== undefined) {
-    updates.push('currency = ?');
-    params.push(currency);
-    hasUpdate = true;
-  }
-  if (amount_local !== undefined) {
-    updates.push('amount_local = ?');
-    params.push(amount_local ?? amount);
-    hasUpdate = true;
-  }
-  if (means_of_payment !== undefined) {
-    updates.push('means_of_payment = ?');
-    params.push(means_of_payment || '');
-    hasUpdate = true;
-  }
-  if (exchange_rate !== undefined) {
-    updates.push('exchange_rate = ?');
-    params.push(exchange_rate || 1.0);
-    hasUpdate = true;
-  }
-  if (type !== undefined) {
-    updates.push('type = ?');
-    params.push(type);
-    hasUpdate = true;
-  }
-  if (notes !== undefined) {
-    updates.push('notes = ?');
-    params.push(notes || '');
-    hasUpdate = true;
-  }
-  if (reconciled !== undefined) {
-    // Coerce safely — a JSON string like "false" is truthy in JS, so a plain
-    // `reconciled ? 1 : 0` would wrongly set reconciled = 1 (matches the bulk path).
-    const reconciledInt = reconciled === true || reconciled === 1 || reconciled === '1' ? 1 : 0;
+  if (patch.reconciled !== undefined) {
     updates.push('reconciled = ?');
     updates.push("reconciled_at = CASE WHEN ? = 1 THEN datetime('now') ELSE reconciled_at END");
-    params.push(reconciledInt);
-    params.push(reconciledInt);
-    hasUpdate = true;
-  }
-  if (account_id !== undefined) {
-    updates.push('account_id = ?');
-    params.push(account_id || null);
-    hasUpdate = true;
-  }
-  if (transfer_account_id !== undefined) {
-    updates.push('transfer_account_id = ?');
-    params.push(transfer_account_id || null);
-    hasUpdate = true;
-  }
-  if (type !== undefined && type !== 'transfer' && transfer_account_id === undefined) {
-    updates.push('transfer_account_id = NULL');
-    hasUpdate = true;
+    params.push(patch.reconciled, patch.reconciled);
   }
 
-  if (!hasUpdate) throw new HttpError(400, 'No valid fields provided for update');
+  // Nothing to change. The form sends every field on every save, and a save that changed only
+  // the tags (which go in a request of their own) changes nothing here. It used to answer 400.
+  if (updates.length === 0) return c.json({ ok: true });
 
   // The pre-fetched oldTx shares the UPDATE's WHERE clause, so a missing row means 404 — check it
   // up front so the reverse / row-update / re-apply run as one atomic batch. Previously these were
@@ -1115,33 +1069,22 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   }
 
   // Apply new transaction effect on account(s).
-  const newAccountId = account_id !== undefined ? account_id || null : oldTx.account_id;
+  const newAccountId = patch.account_id !== undefined ? patch.account_id : oldTx.account_id;
   const newTransferAccountId =
-    transfer_account_id !== undefined
-      ? transfer_account_id || null
-      : type !== undefined && type !== 'transfer'
-        ? null
-        : oldTx.transfer_account_id;
-  const newType = type !== undefined ? type : oldTx.type;
-  const newAmount = amount !== undefined ? amount : oldTx.amount;
+    patch.transfer_account_id !== undefined ? patch.transfer_account_id : oldTx.transfer_account_id;
+  const newType = patch.type ?? oldTx.type;
+  const newAmount = patch.amount ?? oldTx.amount;
   // Compute the base-currency amount for the new balance effect, matching the reversal
-  // logic: if amount_local was explicitly provided, use it; if amount changed (and
-  // amount_local was cleared to NULL above), use the new raw amount; otherwise preserve
-  // the old base-currency value.
+  // logic: the local amount the edit writes (given, or moved with the amount above); the new raw
+  // amount when there is none; otherwise the old base-currency value.
   const newAmountLocal =
-    amount_local !== undefined
-      ? (amount_local ?? newAmount)
-      : amount !== undefined
+    patch.amount_local !== undefined
+      ? (patch.amount_local ?? newAmount)
+      : patch.amount !== undefined
         ? newAmount
         : baseAmount(oldTx);
-  const invariantError = transactionInvariantError({
-    type: newType,
-    amount: newAmount,
-    amount_local: newAmountLocal,
-    account_id: newAccountId,
-    transfer_account_id: newTransferAccountId,
-  });
-  if (invariantError) throw new HttpError(400, invariantError);
+  // No invariant check here: the edit check judged the row the edit leaves behind whenever the
+  // edit changed how it moves money (shared/transactionSchema.ts).
   if (newAccountId) {
     if (newType === 'transfer' && newTransferAccountId) {
       stmts.push(bal(-newAmountLocal, newAccountId), bal(newAmountLocal, newTransferAccountId));
@@ -1167,8 +1110,15 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     throw new HttpError(409, CONCURRENT_EDIT);
   }
 
-  // Recalculate linked goal progress.
-  if (category_id !== undefined) await recalcGoalsByCategory(c.env.DB, category_id || null, pids);
+  // Recalculate linked goal progress: the goal of the category the row was in, and of the one it
+  // is in now. Any edit can change what it counts toward (its amount, its date, its type), and
+  // one that moves it to another category takes it off the first goal.
+  const categoryBefore = oldTx.category_id ?? null;
+  const categoryAfter = patch.category_id !== undefined ? patch.category_id : categoryBefore;
+  await recalcGoalsByCategory(c.env.DB, categoryBefore, pids);
+  if (categoryAfter !== categoryBefore) {
+    await recalcGoalsByCategory(c.env.DB, categoryAfter, pids);
+  }
 
   return c.json({ ok: true });
 });

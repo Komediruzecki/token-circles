@@ -803,8 +803,11 @@ export async function importExecute(body: unknown): Promise<Response> {
         .map((name) => name.trim().toLowerCase())
         .filter(Boolean)
     )
-    for (const [catName, catType] of Object.entries(catTypes)) {
+    // The names as the sheet spells them: the lowercased maps above are for lookups only, and an
+    // account created from one would otherwise be named in lower case.
+    for (const [rawName, catType] of Object.entries(categoryTypes)) {
       if (catType !== 'account') continue
+      const catName = rawName.trim()
       const catLower = catName.toLowerCase()
       if (
         configuredAccounts.has(catLower) ||
@@ -814,7 +817,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         configuredAccounts.add(catLower)
         continue
       }
-      const rawBalance = toStr(acctBalances[catName]).trim()
+      const rawBalance = toStr(acctBalances[catLower]).trim()
       const balance = rawBalance ? parseImportNumber(rawBalance) : 0
       if (balance === null) {
         return json(
@@ -835,9 +838,9 @@ export async function importExecute(body: unknown): Promise<Response> {
       accountConfigs.push({
         name: catName,
         lower: catLower,
-        type: (acctTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib',
+        type: (acctTypes[catLower] || 'giro') as 'giro' | 'savings' | 'ib',
         balance,
-        balanceDate: acctBalanceDates[catName] || localToday(),
+        balanceDate: acctBalanceDates[catLower] || localToday(),
       })
       configuredAccounts.add(catLower)
     }

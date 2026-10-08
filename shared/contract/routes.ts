@@ -1,0 +1,347 @@
+/**
+ * Every route either runtime serves, in one of three lists. Each runner checks its own runtime
+ * against them at the end of its run (shared/contract/guard.ts):
+ *
+ * - CONTRACT_ROUTES: both runtimes serve it, and a scenario must send it and get a 2xx answer.
+ * - WORKER_ONLY and LOCAL_ONLY: one runtime serves it, with the reason the other does not. A
+ *   handler that only answers 410 Gone, or a stub the app cannot reach in that mode, does not count
+ *   as serving the route; the route is then on both lists, each saying why.
+ *
+ * A route added to either runtime fails that runtime's guard until it is placed here. A reason
+ * that starts with OPEN is a question still to answer: if the app calls the route in the mode
+ * that lacks it, that mode is broken there.
+ */
+import type { RouteKey } from './guard';
+
+export const CONTRACT_ROUTES: readonly RouteKey[] = [
+  'GET /api/accounts',
+  'POST /api/accounts',
+  'DELETE /api/accounts/:id',
+  'GET /api/accounts/:id',
+  'PUT /api/accounts/:id',
+  'GET /api/accounts/:id/history',
+  'POST /api/accounts/:id/history',
+  'GET /api/accounts/:id/reconciliation-summary',
+  'GET /api/accounts/history/timeline',
+  'POST /api/accounts/recompute-balances',
+  'GET /api/analytics/category-trends',
+  'GET /api/analytics/daily-heatmap',
+  'GET /api/analytics/distinct-years',
+  'GET /api/analytics/sankey',
+  'GET /api/analytics/weeks',
+  'POST /api/auth/logout',
+  'GET /api/auth/me',
+  'GET /api/bills',
+  'POST /api/bills',
+  'DELETE /api/bills/:id',
+  'GET /api/bills/:id',
+  'PUT /api/bills/:id',
+  'POST /api/bills/:id/mark-paid',
+  'GET /api/bills/calendar',
+  'GET /api/bills/upcoming',
+  'GET /api/budgets',
+  'POST /api/budgets',
+  'DELETE /api/budgets/:id',
+  'PUT /api/budgets/:id',
+  'PUT /api/budgets/:id/rollover',
+  'GET /api/budgets/alerts',
+  'POST /api/budgets/allocate',
+  'POST /api/budgets/backfill-from-spending',
+  'POST /api/budgets/duplicate-last',
+  'GET /api/budgets/forecast',
+  'POST /api/budgets/from-expenses',
+  'GET /api/budgets/history',
+  'GET /api/budgets/improvements',
+  'GET /api/budgets/summary',
+  'GET /api/budgets/zero-based',
+  'GET /api/budgets/zero-based/summary',
+  'POST /api/calculator/compound-interest',
+  'GET /api/calculator/emergency-fund',
+  'POST /api/calculator/retire',
+  'DELETE /api/categories',
+  'GET /api/categories',
+  'POST /api/categories',
+  'DELETE /api/categories/:id',
+  'GET /api/categories/:id',
+  'PUT /api/categories/:id',
+  'POST /api/categories/apply-mappings',
+  'POST /api/categories/auto-map',
+  'GET /api/categories/mappings',
+  'POST /api/categories/mappings',
+  'DELETE /api/categories/mappings/:id',
+  'DELETE /api/clear-all',
+  'GET /api/counterparties',
+  'GET /api/dashboard',
+  'GET /api/dashboard/charts',
+  'GET /api/dashboard/net-worth',
+  'GET /api/dashboard/summary',
+  'GET /api/export',
+  'GET /api/export/:type',
+  'GET /api/health',
+  'GET /api/housing',
+  'POST /api/housing',
+  'DELETE /api/housing/:id',
+  'PUT /api/housing/:id',
+  'POST /api/import',
+  'GET /api/import-logs',
+  'POST /api/import-logs',
+  'DELETE /api/import-logs/:id',
+  'GET /api/import-sources',
+  'POST /api/import-sources',
+  'DELETE /api/import-sources/:id',
+  'PUT /api/import-sources/:id',
+  'POST /api/import/execute',
+  'POST /api/import/googlesheet',
+  'POST /api/import/upload',
+  'GET /api/loans',
+  'POST /api/loans',
+  'DELETE /api/loans/:id',
+  'GET /api/loans/:id',
+  'PUT /api/loans/:id',
+  'POST /api/loans/:id/calculate',
+  'POST /api/loans/:id/prepayments',
+  'DELETE /api/loans/:id/prepayments/:prepayId',
+  'POST /api/loans/:id/rates',
+  'DELETE /api/loans/:id/rates/:rateId',
+  'PUT /api/loans/:id/rates/:rateId',
+  'GET /api/portfolio/holdings',
+  'POST /api/portfolio/holdings',
+  'DELETE /api/portfolio/holdings/:id',
+  'PUT /api/portfolio/holdings/:id',
+  'POST /api/portfolio/prices',
+  'GET /api/portfolio/summary',
+  'DELETE /api/profile/data',
+  'GET /api/profiles',
+  'POST /api/profiles',
+  'DELETE /api/profiles/:id',
+  'PATCH /api/profiles/:id',
+  'PUT /api/profiles/:id',
+  'POST /api/profiles/reseed-demo',
+  'POST /api/receipts',
+  'DELETE /api/receipts/:id',
+  'GET /api/receipts/:id',
+  'GET /api/receipts/:id/file',
+  'GET /api/receipts/file/:filename',
+  'GET /api/receipts/transaction/:transactionId',
+  'POST /api/receipts/upload',
+  'GET /api/recurring',
+  'POST /api/recurring',
+  'DELETE /api/recurring/:id',
+  'GET /api/recurring/:id',
+  'PUT /api/recurring/:id',
+  'POST /api/recurring/:id/populate',
+  'GET /api/recurring/upcoming',
+  'GET /api/reports/annual-pdf',
+  'POST /api/reports/custom',
+  'GET /api/reports/monthly-pdf',
+  'GET /api/reports/pl-summary',
+  'GET /api/reports/pl-summary-pdf',
+  'GET /api/reports/tax-summary',
+  'GET /api/reports/tax-summary-pdf',
+  'GET /api/retirement-goals',
+  'POST /api/retirement-goals',
+  'DELETE /api/retirement-goals/:id',
+  'PUT /api/retirement-goals/:id',
+  'GET /api/retirement/projection',
+  'GET /api/retirement/settings',
+  'PUT /api/retirement/settings',
+  'GET /api/savings-goals',
+  'POST /api/savings-goals',
+  'DELETE /api/savings-goals/:id',
+  'PUT /api/savings-goals/:id',
+  'POST /api/savings-goals/:id/contribute',
+  'GET /api/settings',
+  'PUT /api/settings',
+  'POST /api/settings/set-storage',
+  'GET /api/stats/monthly',
+  'GET /api/storage-mode',
+  'POST /api/storage-mode',
+  'GET /api/tags',
+  'POST /api/tags',
+  'DELETE /api/tags/:id',
+  'PUT /api/tags/:id',
+  'POST /api/tags/:id/apply',
+  'GET /api/tags/:id/summary',
+  'POST /api/tags/:id/transactions',
+  'GET /api/tags/rules',
+  'POST /api/tags/rules',
+  'DELETE /api/tags/rules/:ruleId',
+  'PUT /api/tags/rules/:ruleId',
+  'POST /api/tags/rules/preview',
+  'GET /api/tags/summary',
+  'DELETE /api/transactions',
+  'GET /api/transactions',
+  'POST /api/transactions',
+  'DELETE /api/transactions/:id',
+  'GET /api/transactions/:id',
+  'PUT /api/transactions/:id',
+  'PATCH /api/transactions/:id/reconcile',
+  'GET /api/transactions/:id/tags',
+  'POST /api/transactions/:id/tags',
+  'PUT /api/transactions/:id/tags',
+  'PUT /api/transactions/bulk',
+  'GET /api/transactions/by-tag/:tagId',
+  'PUT /api/transactions/reconcile-batch',
+  'POST /api/transactions/reconcile/bulk',
+  'GET /api/transactions/reconcile/summary',
+  'GET /api/transactions/summary',
+];
+
+/**
+ * Contract routes no scenario sends yet. Empty: every contract route is sent, so a route added to
+ * the contract comes with its scenario.
+ */
+export const UNCOVERED: readonly RouteKey[] = [];
+
+export const WORKER_ONLY: Readonly<Record<string, string>> = {
+  'DELETE /api/account': 'Deletes the cloud account itself.',
+  'DELETE /api/accounts/:id/history':
+    "Clears an account's whole balance history, and nothing in the app sends it. Local-first deletes one recorded balance instead (DELETE /accounts/:id/history/:entryId), for api.deleteBalanceEntry, which nothing calls either.",
+  'GET /api/account/api-tokens':
+    'API tokens authenticate against the Worker; local-first has no API.',
+  'POST /api/account/api-tokens':
+    'API tokens authenticate against the Worker; local-first has no API.',
+  'DELETE /api/account/api-tokens/:id':
+    'API tokens authenticate against the Worker; local-first has no API.',
+  'POST /api/auth/forgot-password': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/login':
+    'Signing in. Local-first has no account to sign in to; Sign in there switches to cloud mode and reloads before it shows a form (App.tsx handleLogin).',
+  'GET /api/auth/google/callback': 'Signing in. Local-first has no account to sign in to.',
+  'GET /api/auth/google/start': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/logout-all': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/register': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/resend-verification': 'Signing in. Local-first has no account to sign in to.',
+  'GET /api/auth/reset-password': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/reset-password': 'Signing in. Local-first has no account to sign in to.',
+  'GET /api/auth/sessions': 'Signing in. Local-first has no account to sign in to.',
+  'DELETE /api/auth/sessions/:id': 'Signing in. Local-first has no account to sign in to.',
+  'GET /api/auth/verify-email': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/import/file-sheet':
+    'Retired: answers 410 Gone, telling an old cached page to upload the file again. The Import page reads a file in one upload now, and calls this in neither mode.',
+  'POST /api/billing/checkout': 'Billing belongs to a cloud account.',
+  'POST /api/billing/portal': 'Billing belongs to a cloud account.',
+  'GET /api/billing/status': 'Billing belongs to a cloud account.',
+  'POST /api/billing/webhook': 'Billing belongs to a cloud account.',
+  'GET /api/bills/notifications':
+    'Bills falling due soon; nothing in the app calls it, in either mode.',
+  'GET /api/bills/summary': 'Bill totals; nothing in the app calls it, in either mode.',
+  'GET /api/calculators/currency':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/loans':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/loans/amortization':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/mortgages':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/retirement':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/savings':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'GET /api/calculators/units':
+    "The app's calculators call /api/calculator/* (on the contract), never /api/calculators/*, in either mode.",
+  'POST /api/auth/email-code/request': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/email-code/verify': 'Signing in. Local-first has no account to sign in to.',
+  'GET /mcp': 'The MCP server is the Worker.',
+  'POST /mcp': 'The MCP server is the Worker.',
+  'GET /robots.txt': 'Served to crawlers and uptime checks, not to the app.',
+  'GET /api/notifications/settings': 'Email notifications are sent by the Worker.',
+  'PUT /api/notifications/settings': 'Email notifications are sent by the Worker.',
+  'POST /api/notifications/test-email': 'Email notifications are sent by the Worker.',
+  'POST /api/notifications/trigger': 'Email notifications are sent by the Worker.',
+  'GET /api/notifications/unsubscribe': 'Email notifications are sent by the Worker.',
+  'GET /api/auth/passkeys': 'Signing in. Local-first has no account to sign in to.',
+  'DELETE /api/auth/passkeys/:id': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/passkeys/login/options': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/passkeys/login/verify': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/passkeys/register/options':
+    'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/passkeys/register/verify':
+    'Signing in. Local-first has no account to sign in to.',
+  'GET /api/plans': 'Billing belongs to a cloud account.',
+  'GET /api/receipts':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
+  'POST /api/receipts/:id/categorize':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
+  'POST /api/receipts/:id/export':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
+  'POST /api/receipts/:id/share':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
+  'POST /api/receipts/:id/split':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
+  'GET /api/reports/compare':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'DELETE /api/reports/custom/:id':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'GET /api/reports/custom/:id':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'PUT /api/reports/custom/:id':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'GET /api/reports/overview':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'POST /api/reports/save':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'GET /api/reports/saved':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'POST /api/support/contact': 'Support messages are sent by the Worker.',
+  'GET /api/tags/:id':
+    'One tag; nothing in the app reads it: the Tags page reads the list, in both modes.',
+  'POST /api/auth/2fa/disable': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/2fa/enable': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/2fa/setup': 'Signing in. Local-first has no account to sign in to.',
+  'GET /api/auth/2fa/status': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/2fa/verify': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/v1/import': 'The public v1 API is the Worker.',
+  'GET /api/v1/snapshot': 'The public v1 API is the Worker.',
+};
+
+/** Keyed by method and the local router's pattern source, as `routes` in localApiRouter.ts has it. */
+export const LOCAL_ONLY: Readonly<Record<string, string>> = {
+  'GET ^\\/app-info$': 'A fixed name and version; nothing in the app calls it.',
+  'POST ^\\/auth\\/login$':
+    'A stub of the cloud sign-in that answers a fixed admin user for any username. Nothing in local-first calls it: Sign in switches to cloud mode and reloads first (App.tsx handleLogin).',
+  'GET ^\\/auth\\/check$':
+    'A signed-in check that always says yes; nothing in the app calls it (the app asks GET /api/auth/me, on the contract).',
+  'GET ^\\/profiles\\/(\\d+)$':
+    'One profile, for api.getProfile, which nothing in the app calls: the profile switcher reads the list, in both modes.',
+  'GET ^\\/analytics$':
+    'A summary for api.getAnalytics, which nothing in the app calls: Analytics reads /api/analytics/* and /api/stats/monthly (on the contract).',
+  'GET ^\\/transactions\\/export$':
+    'A CSV of transactions for api.exportTransactions, which nothing in the app calls: Settings exports through GET /api/export/:type (on the contract).',
+  'DELETE ^\\/accounts\\/(\\d+)\\/history\\/(\\d+)$':
+    'Deletes one recorded balance, for api.deleteBalanceEntry, which nothing in the app calls. The Worker serves only a delete of the whole history (DELETE /api/accounts/:id/history), which nothing calls either.',
+  'GET ^\\/budgets\\/(\\d+)$':
+    'One budget, for api.getBudget, which nothing in the app calls: the Budgets page reads the list, in both modes.',
+  'GET ^\\/savings-goals\\/(\\d+)$':
+    'A single goal read, for api.getGoal, which nothing in the app calls: the Goals page reads the list, in both modes.',
+  'GET ^\\/loans\\/(\\d+)\\/rate-periods$':
+    "For api.getLoanRatePeriods, which nothing in the app calls: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
+  'GET ^\\/loans\\/(\\d+)\\/rates$':
+    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
+  'POST ^\\/loans\\/(\\d+)\\/prepayment$':
+    'For api.addLoanPrepayment, which nothing in the app calls: the Loans page adds an extra payment with POST /api/loans/:id/prepayments (on the contract).',
+  'GET ^\\/loans\\/(\\d+)\\/prepayments$':
+    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
+  'POST ^\\/categories\\/seed$':
+    'Puts the default categories in the active profile; nothing in the app calls it.',
+  'GET ^\\/tags\\/(\\d+)\\/transactions$':
+    "A tag's transactions, for no caller: the Transactions page filters by tag in the page, on the rows it read.",
+  'POST ^\\/import\\/preview$':
+    'A bulk import of { items }, which nothing in the app sends: the Import page previews with POST /api/import/execute and dry_run, in both modes.',
+  'POST ^\\/import\\/file-sheet$':
+    'The old pick-a-sheet step after an upload, which the Import page calls in neither mode; the Worker answers it 410 Gone.',
+  'GET ^\\/exchange-rates$': 'For api.getExchangeRates, which nothing in the app calls.',
+  'GET ^\\/exchange-rates\\/([A-Z]{3})\\/([A-Z]{3})$':
+    'For api.getExchangeRate, which nothing in the app calls.',
+  'POST ^\\/retirement$':
+    'A projection for api.getRetirementProjection, which nothing in the app calls: the Retirement pages read /api/retirement/settings and the calculators (on the contract).',
+  'GET ^\\/housing\\/(\\d+)$':
+    'A single housing expense, for no caller: the Housing page reads the list, in both modes.',
+  'POST ^\\/housing\\/calculate$':
+    'The housing affordability calculator, for api.calculateHousing, which nothing in the app calls.',
+  'GET ^\\/logs$':
+    "A log store in IndexedDB that nothing in the app reads: the app's logger keeps its log in localStorage (core/logger.ts).",
+  'POST ^\\/logs$':
+    "A log store in IndexedDB that nothing in the app writes: the app's logger keeps its log in localStorage (core/logger.ts).",
+  'POST ^\\/logs\\/clear$':
+    "Clears the IndexedDB log store, which nothing in the app uses: the app's logger keeps its log in localStorage (core/logger.ts).",
+};

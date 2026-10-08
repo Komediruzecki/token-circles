@@ -1,0 +1,116 @@
+/**
+ * Where the two runtimes answer the same request differently, and the contract pins both answers
+ * until the form-errors slice named in each entry settles it (docs/plans/2026-10-07-form-errors.md,
+ * "Rollout"). A scenario that meets one branches on `api.runtime` under a `// DIFFERENCE <id>`
+ * comment, so it passes on today's behaviour in each runtime and fails the day either changes.
+ *
+ * Settling one means making both runtimes answer alike, deleting the branch, and deleting the
+ * entry. Each runner checks that every id named in a scenario is listed here and every entry is
+ * still named by a scenario.
+ */
+export const DIFFERENCES: Readonly<Record<string, string>> = {
+  'transactions-list-shape':
+    'GET /api/transactions answers { rows, total, limit, offset } on the Worker and a bare array in local-first; the app reads both through listRows(). Slice 2 (transactions).',
+  'account-history-shape':
+    'A recorded balance is stored with recorded_at and answered 200 { id, balance, recorded_at } on the Worker, but stored with date and answered 201 { id, account_id, balance, date } in local-first; no screen reads the history yet. Slice 2 (accounts).',
+  'account-recompute-answer':
+    'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
+  'foreign-link-status':
+    "A bill, budget, savings goal or recurring rule that links another profile's account or category, and a transaction's tags that name another profile's tag (PUT /api/transactions/:id/tags), are refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2. Slices 3 (bills, budgets, goals) and 5 (recurring, tags).",
+  'transactions-summary-shape':
+    'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
+  'transaction-account-from-names':
+    "On the Worker only, a new transaction is linked to the account named like its category as where the money went (transfer_account_id), and one with no account to the account named like its means of payment as where it came from. Through the Transactions form, which always sends an account, balances agree, but the row still names the other account, which the Transactions page's account filter then shows it under and which cannot be deleted while the row exists (409). An income written with no account (API, MCP or import) credits the account named like its category on the Worker only. Slice 2 (transactions).",
+  'transactions-by-tag':
+    'GET /api/transactions/by-tag/:tagId orders rows newest first and honours startDate, endDate, category_ids, type, limit and offset on the Worker, but answers every tagged row in key order, unfiltered, in local-first; nothing in the app calls it. Slice 5 (tags).',
+  'tag-default-colour':
+    'A tag created without a colour gets the next colour of a twelve-colour palette (#3b82f6 first) on the Worker and #6e9bff in local-first; both forms always send one. Slice 5 (tags).',
+  'tag-edit-without-colour':
+    'A tag edit that leaves out the colour resets it to #6b7280 on the Worker and keeps it in local-first; the Tags page always sends it. Slice 5 (tags).',
+  'tag-rename-duplicate':
+    "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
+  'budget-zero-based-unbudgeted':
+    "GET /api/budgets/zero-based gives a category with spending and no budget an amount of 0 and 0% used on the Worker, but an amount equal to its spending and 100% used in local-first, so the Budgets page marks it 'warning' in local-first only. Slice 3 (budgets).",
+  'budget-allocation-alerts':
+    "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
+  'budget-trend-spending':
+    "The months of GET /api/budgets/improvements and of the forecast's history count only the spending of budgeted categories on the Worker, but every expense of the month, unbudgeted and uncategorised included, in local-first, so the Budgets page's trend and average adherence differ between modes. Slice 3 (budgets).",
+  'day-of-month-default':
+    'A bill or a recurring rule saved without a day of the month (neither form requires one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. Slices 3 (bills) and 5 (recurring).',
+  'delete-missing':
+    "DELETE /api/bills/:id and DELETE /api/recurring/:id answer 200 { ok: true } on the Worker when the profile has no such row, another profile's included, and 404 in local-first; neither deletes anything. Slices 3 (bills) and 5 (recurring).",
+  'recurring-populate-answer':
+    'POST /api/recurring/:id/populate answers { ok, transactionId, next_date } on the Worker and { ok } in local-first; the Recurring section reads neither. Slice 5 (recurring).',
+  'recurring-upcoming':
+    'GET /api/recurring/upcoming answers { transactions, byCategory, totalMonthly, currency }, every occurrence of the next 30 days, on the Worker, and the active rules themselves in local-first; nothing in the app calls it. Slice 5 (recurring).',
+  'recurring-pause':
+    "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
+  'loan-total-prepaid-none':
+    'GET /api/loans answers total_prepaid null for a loan with no extra payments on the Worker (SUM over no rows) and 0 in local-first; the Loans page does not read it. Slice 4 (loans).',
+  'emergency-fund-extras':
+    'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
+  'fire-inflation':
+    'POST /api/calculator/retire ignores an inflationRate in the body on the Worker, projecting in nominal money, but deflates the projection by it (and echoes it in inputs) in local-first, so the same body reaches its FIRE number later there; nothing in the app calls it. Slice 4 (the Retirement forms).',
+  'housing-answer-shape':
+    "POST /api/housing answers 200 on the Worker and 201 in local-first, and GET /api/housing answers autopay as 0 or 1 with the stored columns on the Worker, but as true or false with the form's own fields (property_name, due_day, due_month) too in local-first; the Housing page reads both. Slice 5 (housing).",
+  'housing-due-month-default':
+    'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
+  'portfolio-prices':
+    'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
+  'import-upload-answer':
+    "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
+  'profile-answers':
+    "POST /api/profiles answers 200 with the profile and its zero counts on the Worker, but 201 with { id, name, created_at } in local-first; PUT and PATCH answer the renamed profile on the Worker and { ok: true } in local-first. The app reads only the new profile's id, name and created_at, and only whether a rename worked. Slice 4 (profiles).",
+  'profile-delete-selection':
+    "DELETE /api/profiles/:id deletes any of the person's profiles but the last on the Worker; local-first refuses with 403 unless the profile is in the active selection, so the Danger Zone's Delete Profile fails in local-first for every profile but the one in use. Slice 4 (profiles).",
+  'profile-delete-last':
+    "The Worker refuses to delete a person's only profile with 400; local-first deletes it and is left with none. The Danger Zone disables Delete Profile when one profile is left. Slice 4 (profiles).",
+  'profile-reseed-demo':
+    'POST /api/profiles/reseed-demo clears the active profile and gives it the default categories on the Worker; local-first deletes every profile and puts back its three example profiles. The Danger Zone offers it in local-first only. Slice 4 (profiles).',
+  'profile-clear-import-sources':
+    'DELETE /api/profile/data and DELETE /api/clear-all keep the saved import sources on the Worker and delete them in local-first; on the Worker, a source on the daily schedule fills the cleared profile again at its next sync. Slice 4 (profiles).',
+  'backup-restore-answer':
+    'POST /api/import answers { profiles_restored, rows_restored, first_profile_id } on the Worker and { ok: true, message } in local-first, where Settings restores through the storage adapter rather than this route. Both replace every profile. Slice 4 (import).',
+  'export-by-type':
+    'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
+  'settings-scope':
+    "Settings are kept per profile on the Worker and once per browser in local-first, so a base currency or an onboarding state saved on one profile is every profile's in local-first (the achievement record names its profile in its key there). Slice 4 (settings).",
+  'storage-mode-answers':
+    "GET /api/storage-mode answers { mode: 'self-hosted', type: 'sqlite' } on the Worker and the browser's own mode in local-first; POST /api/storage-mode and POST /api/settings/set-storage only acknowledge on the Worker, but switch the browser's mode in local-first and answer it. Settings sends only POST /api/storage-mode, and sets the mode itself after. Slice 4 (settings).",
+  'receipt-answers':
+    'A receipt upload answers 201 with the stored row on the Worker and 200 with the row and a url in local-first; GET /api/receipts/transaction/:id answers the receipt on the Worker and a list of it in local-first; DELETE /api/receipts/:id answers { message } on the Worker and { ok: true } in local-first. The app finds a receipt through its transaction row, and reads none of these. Slice 2 (transactions).',
+  'auth-local-user':
+    "GET /api/auth/me answers the signed-in account on the Worker and a fixed local user ({ id: 1, username: 'local', role: 'admin' }) in local-first, which has no accounts; POST /api/auth/logout ends the Worker's session and changes nothing in local-first. Slice 6 (auth).",
+  'health-answer':
+    "GET /api/health answers { ok, env, captcha } on the Worker and { status: 'ok', timestamp } in local-first; nothing in the app reads it. Slice 6 (auth and support).",
+  'stats-monthly-shape':
+    'GET /api/stats/monthly answers only the months that have income or expense, each with its net, on the Worker, and every month of the window, empty ones as zeros and without a net, in local-first; Analytics reads only month, income and expense, so its monthly chart leaves out empty months in cloud mode only. Slice 2 (transactions), whose data it reads.',
+  'analytics-month-to-date':
+    "GET /api/stats/monthly counts the current month up to today on the Worker and the whole month in local-first, so an expense dated later this month is in Analytics' monthly figures and savings rate in local-first only. Slice 2 (transactions), whose data it reads.",
+  'sankey-uncategorised':
+    "GET /api/analytics/sankey leaves uncategorised spending out of the month's budget flow on the Worker, and shows it as an Uncategorized category, budgeted at what was spent, in local-first, so the flow's Total Actual differs between modes by the uncategorised spending. Slice 3 (budgets).",
+  'dashboard-upcoming-bills':
+    "GET /api/dashboard answers as upcomingBills the bills whose stored due date falls in the next 30 days on the Worker, and none in local-first, so the Dashboard's Upcoming Bills card shows in cloud mode only. The Worker reads the due date a bill was saved with, which marking it paid does not move. Slice 3 (bills).",
+  'dashboard-uncategorised':
+    "GET /api/dashboard answers uncategorised spending (in expenseByCategory) and an uncategorised recent transaction with a null category name and colour on the Worker, and as 'Uncategorized' in #999 in local-first; the Dashboard then labels that recent transaction 'No category' in cloud mode and 'Uncategorized' in local-first. Slice 2 (transactions).",
+  'dashboard-charts':
+    "GET /api/dashboard/charts answers byCategory over all time with uncategorised spending left out, the currency of a local_currency setting nothing writes (so EUR, whatever the base currency), and monthly rows that also carry the running total, on the Worker; byCategory over the months charted with uncategorised spending included, and the base currency, in local-first. The Dashboard reads only the monthly rows' month, income and expense. Slice 2 (transactions), whose data it reads.",
+  'counterparties-from-description':
+    'GET /api/counterparties names only the beneficiaries of expenses and the payors of income on the Worker, but falls back to the description of a transaction that has neither in local-first, so the Counterparties page lists every such description as a counterparty in local-first only. Slice 2 (transactions).',
+  'year-summaries':
+    "GET /api/reports/tax-summary and GET /api/reports/pl-summary leave uncategorised transactions out on the Worker and count them under 'Unknown' in local-first, and the tax summary lists each category's transactions on the Worker but none in local-first; nothing in the app calls either. Slice 2 (transactions), whose data they read.",
+  'monthly-pdf-month':
+    'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
+  'custom-report':
+    "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
+  'goal-unsent-defaults':
+    "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
+  'bills-upcoming':
+    'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset) on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
+  'category-apply-mappings':
+    'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
+  'category-mapping-upsert':
+    'A mapping saved again for a pattern the profile already has updates that row and counts it (use_count 2) on the Worker, which also trims the pattern and lists mappings with their category name, most used first; local-first adds a second row and lists raw rows. Only the auto-categorise dialog reads mappings, and nothing in the app saves one through this route. Slice 4 (import).',
+  'category-auto-map':
+    'POST /api/categories/auto-map only suggests a category per transaction ({ total, mapped, mappings }) on the Worker, but files the rows itself ({ ok, mapped }), without moving a linked goal, in local-first; nothing in the app calls it. Slice 4 (import).',
+};

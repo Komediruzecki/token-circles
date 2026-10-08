@@ -403,9 +403,9 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
   try {
     const monthsCount = parseInt(query.get('months')!) || 12
     const endDate = new Date()
-    const startDate = new Date()
-    startDate.setMonth(startDate.getMonth() - monthsCount + 1)
-    startDate.setDate(1)
+    // The 1st of the first month. setMonth() before setDate(1) overflowed on the 29th to the 31st:
+    // on 31 October, twelve months back from the 31st is 31 November, which is 1 December.
+    const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - monthsCount + 1, 1)
     // Both ends on the person's calendar. toISOString() gives the UTC date: east of UTC the range
     // ended yesterday for the first hours of every day and began on the last day of the month
     // before (local midnight on the 1st is still the day before in UTC); west of UTC it ran into

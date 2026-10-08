@@ -240,7 +240,9 @@ budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
           AND t.date >= b.start_date
           AND t.date < date(b.start_date, '+1 month')
         WHERE b.profile_id IN (${inClause})
-        GROUP BY b.start_date
+        -- One row per budget. Grouped by start_date, the budgets of one month collapsed into one
+        -- row whose budget_amount was any one of theirs, not their sum.
+        GROUP BY b.id
       ),
       aggregated AS (
         SELECT
@@ -579,12 +581,15 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
   const inClause = pids.map(() => '?').join(',');
   const month = c.req.query('month') || localMonth(c);
 
+  // Every budget up to and including `month`. start_date is a date and `month` a month, so they
+  // are compared as months: as strings, '2026-10-01' sorts after '2026-10', and the budgets that
+  // start in the month asked for, every budget the app makes for this month, were left out.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color
        FROM budgets b
        JOIN categories c ON c.id = b.category_id AND c.profile_id = b.profile_id
-       WHERE b.profile_id IN (${inClause}) AND b.start_date <= ?
+       WHERE b.profile_id IN (${inClause}) AND substr(b.start_date, 1, 7) <= ?
        ORDER BY b.start_date DESC`,
     ...pids,
     month
@@ -693,16 +698,23 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     total_spent: number | null;
   }>(
     c.env.DB,
-    `SELECT
-        strftime('%Y-%m', start_date) as month,
-        SUM(b.amount) as total_budget,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
-      FROM budgets b
-      LEFT JOIN transactions t ON t.category_id = b.category_id
-        AND t.profile_id = b.profile_id
-        AND t.date >= b.start_date
-        AND t.date < date(b.start_date, '+1 month')
-      WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', start_date) <= ?
+    // Each budget's spending first, then the month's sums. Summed straight off the join, a
+    // budget's amount counted once per expense against it.
+    `WITH per_budget AS (
+        SELECT
+          strftime('%Y-%m', b.start_date) as month,
+          b.amount as budget_amount,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+        WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', b.start_date) <= ?
+        GROUP BY b.id
+      )
+      SELECT month, SUM(budget_amount) as total_budget, SUM(spent) as total_spent
+      FROM per_budget
       GROUP BY month
       ORDER BY month DESC
       LIMIT ?`,
@@ -970,32 +982,53 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
   const currYear = year || now.getFullYear();
   const currMonth = month || now.getMonth() + 1;
 
-  // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match,
-  // then INSERT OR REPLACE into the current-month start_date.
+  // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match.
   const dlPrevMonth = currMonth === 1 ? 12 : currMonth - 1;
   const dlPrevYear = currMonth === 1 ? currYear - 1 : currYear;
   const dlPrevBudgets = await db.all<BudgetRow>(
     c.env.DB,
-    'SELECT * FROM budgets WHERE profile_id = ? AND start_date LIKE ?',
+    'SELECT * FROM budgets WHERE profile_id = ? AND start_date LIKE ? ORDER BY id',
     pid,
     `${dlPrevYear}-${String(dlPrevMonth).padStart(2, '0')}%`
   );
   const startDate = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
-  let count = 0;
-  for (const b of dlPrevBudgets) {
-    await db.run(
-      c.env.DB,
-      'INSERT OR REPLACE INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, ?, ?, ?)',
-      pid,
-      b.category_id,
-      b.amount,
-      b.period,
-      startDate
+  const endDate =
+    currMonth === 12
+      ? `${currYear + 1}-01-01`
+      : `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`;
+
+  // A budget the month already has is never replaced: only a category with no budget in it yet
+  // gets last month's, one budget per category (the newest, should last month hold two), with its
+  // rollover switch. A rollover amount set by hand is not copied: it was carried into last month,
+  // and this month rolls over what last month left unspent instead. The answer says how many were
+  // copied and how many categories already had one, for the Budgets page's toast. (This deleted
+  // the month's budgets first, so a copy overwrote the amounts a person had set and dropped the
+  // categories last month did not budget.)
+  const budgeted = await db.all<{ category_id: number }>(
+    c.env.DB,
+    'SELECT category_id FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
+    pid,
+    startDate,
+    endDate
+  );
+  const already = new Set(budgeted.map((b) => b.category_id));
+  const copies = new Map<number, BudgetRow>();
+  for (const b of dlPrevBudgets) if (!already.has(b.category_id)) copies.set(b.category_id, b);
+  const alreadyBudgeted = new Set(
+    dlPrevBudgets.map((b) => b.category_id).filter((id) => already.has(id))
+  ).size;
+
+  if (copies.size > 0) {
+    await c.env.DB.batch(
+      [...copies.values()].map((b) =>
+        c.env.DB.prepare(
+          'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, 0)'
+        ).bind(pid, b.category_id, b.amount, b.period, startDate, b.rollover_enabled ? 1 : 0)
+      )
     );
-    count++;
   }
 
-  return c.json({ ok: true, count });
+  return c.json({ ok: true, count: copies.size, already_budgeted: alreadyBudgeted });
 });
 
 // ── Parametric /:id routes — registered last so static segments above win ─────
@@ -1009,17 +1042,28 @@ budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   ) {
     throw new HttpError(403, 'Category does not belong to this profile');
   }
+  // Write only the fields the edit sends, as local-first does. An absent field stays as it is,
+  // where it used to be bound as undefined (a 500) or, for the rollover switch, cleared.
+  const fields: Record<string, unknown> = {};
+  for (const key of ['category_id', 'amount', 'period', 'start_date']) {
+    if (b[key] !== undefined) fields[key] = b[key];
+  }
+  if (b.end_date !== undefined) fields.end_date = b.end_date || null;
+  if (b.rollover_enabled !== undefined) fields.rollover_enabled = b.rollover_enabled ? 1 : 0;
+  if (Object.keys(fields).length === 0) {
+    const row = await db.first(
+      c.env.DB,
+      'SELECT id FROM budgets WHERE id = ? AND profile_id = ?',
+      c.req.param('id'),
+      pid
+    );
+    if (!row) throw new HttpError(404, 'Not found');
+    return c.json({ ok: true });
+  }
   const res = await db.update(
     c.env.DB,
     'budgets',
-    {
-      category_id: b.category_id,
-      amount: b.amount,
-      period: b.period,
-      start_date: b.start_date,
-      end_date: b.end_date || null,
-      rollover_enabled: b.rollover_enabled ? 1 : 0,
-    },
+    fields,
     'id = ? AND profile_id = ?',
     c.req.param('id'),
     pid

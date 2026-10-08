@@ -1,8 +1,9 @@
 /**
  * Recurring handlers — IndexedDB-backed implementations
  */
+import { nextOccurrence } from '../../../../../shared/calendarMonths'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
-import { isoDate, localToday } from '../../../utils/period'
+import { localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
@@ -25,7 +26,29 @@ export async function recurringList(): Promise<Response> {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
   try {
-    return json(await db.getAllFromIndex('recurring', 'by_profile', pid))
+    const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
+    // Soonest first, as the Worker orders them (ORDER BY next_date) and the section shows them.
+    rows.sort(
+      (a, b) =>
+        String(a.next_date ?? '').localeCompare(String(b.next_date ?? '')) ||
+        Number(a.id) - Number(b.id)
+    )
+    // Each rule with its category's name, colour and type, joined as the Worker joins them: the
+    // Recurring section and the dashboard card colour a rule by its category.
+    const categories = new Map(
+      (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => [c.id, c])
+    )
+    return json(
+      rows.map((r) => {
+        const c = categories.get(r.category_id as number)
+        return {
+          ...r,
+          category_name: c?.name ?? null,
+          category_color: c?.color ?? null,
+          category_type: c?.type ?? null,
+        }
+      })
+    )
   } catch {
     return json([])
   }
@@ -151,6 +174,14 @@ export async function recurringPopulate(params: Record<string, string>): Promise
     return json({ error: 'Recurring transaction already populated for current period' }, 409)
   }
   const date = item.next_date || todayStr
+  // Worked out before anything is written: a date it cannot read is refused, not stored as NaN.
+  const nextDate = nextOccurrence(date, item.frequency, item.day_of_month)
+  if (!nextDate) {
+    return json(
+      { error: "This rule's next date can't be read. Edit the rule and set its date again." },
+      400
+    )
+  }
 
   // Go through the adapter so account balances move via computeBalanceDeltas —
   // which handles a two-legged transfer when both account_id and
@@ -179,17 +210,11 @@ export async function recurringPopulate(params: Record<string, string>): Promise
     transfer_account_id: item.transfer_account_id ?? null,
   } as unknown as Parameters<typeof adapter.createTransaction>[0])
 
-  // Advance next_date past the populated period — every frequency must move
-  // forward so the guard above can engage on the next call. Parse and format on the
-  // local calendar (T00:00:00 = local midnight, isoDate = local) so the setDate/setMonth
-  // math and the stored string stay in the same timezone as todayStr (audit M-02).
-  const next = new Date(`${date}T00:00:00`)
-  if (item.frequency === 'daily') next.setDate(next.getDate() + 1)
-  else if (item.frequency === 'weekly') next.setDate(next.getDate() + 7)
-  else if (item.frequency === 'biweekly') next.setDate(next.getDate() + 14)
-  else if (item.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1)
-  else next.setMonth(next.getMonth() + 1)
-  item.next_date = isoDate(next)
+  // Advance next_date past the populated period — every frequency must move forward so the
+  // guard above can engage on the next call. nextOccurrence works on the date string, the same
+  // step as the Worker's: setMonth() overflowed past a shorter month, so a rule on the 31st went
+  // from January to 3 March.
+  item.next_date = nextDate
   await db.put('recurring', item)
 
   return json({ ok: true })

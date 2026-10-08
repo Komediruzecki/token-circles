@@ -16,7 +16,11 @@ import type { LoanInput } from '../../../../../shared/loanSchedule'
  * zone the app sends in the Worker (worker/src/local-date.ts).
  */
 export async function loansList(): Promise<Response> {
-  const loans = await adapter.listLoans()
+  // Newest first, as the Worker lists them and the Loans page shows them.
+  const createdAt = (loan: object) => (loan as { created_at?: string }).created_at ?? ''
+  const loans = (await adapter.listLoans()).sort(
+    (a, b) => createdAt(b).localeCompare(createdAt(a)) || (b.id ?? 0) - (a.id ?? 0)
+  )
   const today = localToday()
   const enriched = loans.map((l) => {
     // A loan stored without ids is answered with the ones loansGet stores on its first read.
@@ -44,37 +48,39 @@ export async function loansCreate(body: unknown): Promise<Response> {
   return json({ id, ...loan }, 201)
 }
 
+/**
+ * Gives each of a loan's extra payments and rate periods without a usable id one past the largest
+ * of its list, so each keeps one id for good, as the Worker's rows do. The page changes and removes
+ * an extra payment by that id, and the rate period routes address a period by it. A place in the
+ * list would not do: removing an earlier row moves every later one up, and a change sent to a
+ * place lands on whichever row has moved into it. A loan restored from a cloud backup keeps the
+ * Worker's ids. Answers whether any row got one, so the caller can store the loan.
+ */
+function giveIds(loan: object): boolean {
+  const usable = (id: unknown): id is number => Number.isInteger(id) && (id as number) > 0
+  let changed = false
+  for (const key of ['prepayments', 'rate_periods'] as const) {
+    const list = (loan as Record<string, unknown>)[key]
+    const rows = Array.isArray(list) ? (list as Record<string, unknown>[]) : []
+    let next = rows.reduce((max, r) => (usable(r.id) ? Math.max(max, r.id) : max), 0)
+    const seen = new Set<number>()
+    for (const row of rows) {
+      if (!usable(row.id) || seen.has(row.id)) {
+        row.id = ++next
+        changed = true
+      }
+      seen.add(row.id as number)
+    }
+  }
+  return changed
+}
+
 export async function loansGet(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  // A loan stored before its extra payments had ids gets them the first time it is read.
+  // A loan stored before its rows had ids gets them the first time it is read.
   if (giveIds(loan)) await (await getDB()).put('loans', loan)
   return json(normalizeLoan(loan))
-}
-
-/**
- * Gives each of a loan's extra payments without a usable id one past the largest it has, so each
- * keeps one id for good, as the Worker's rows do. The page changes and removes an extra payment by
- * that id. Its place in the list would not do: removing an earlier payment moves every later one
- * up, and a change sent to a place lands on whichever payment has moved into it. A loan restored
- * from a cloud backup keeps the Worker's ids. Answers whether any payment got one, so the caller
- * can store the loan.
- */
-function giveIds(loan: object): boolean {
-  const list = (loan as { prepayments?: unknown }).prepayments
-  const rows = Array.isArray(list) ? (list as Record<string, unknown>[]) : []
-  const usable = (id: unknown): id is number => Number.isInteger(id) && (id as number) > 0
-  let next = rows.reduce((max, r) => (usable(r.id) ? Math.max(max, r.id) : max), 0)
-  const seen = new Set<number>()
-  let changed = false
-  for (const row of rows) {
-    if (!usable(row.id) || seen.has(row.id)) {
-      row.id = ++next
-      changed = true
-    }
-    seen.add(row.id as number)
-  }
-  return changed
 }
 
 export async function loansUpdate(
@@ -110,11 +116,13 @@ export async function loanRatesAdd(
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  giveIds(loan)
   const rates = loan.rate_periods || []
-  rates.push(body as Record<string, unknown>)
+  const id = rates.reduce((max: number, r: any) => Math.max(max, Number(r.id) || 0), 0) + 1
+  rates.push({ ...(body as Record<string, unknown>), id })
   loan.rate_periods = rates
   await db.put('loans', loan)
-  return json({ ok: true }, 201)
+  return json({ id }, 201)
 }
 
 export async function loanRateUpdate(
@@ -126,14 +134,14 @@ export async function loanRateUpdate(
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const rateId = idParam(params, 'p2') // p2 is the rateId
+  giveIds(loan)
   const rates = loan.rate_periods || []
-  if (rateId >= 0 && rateId < rates.length) {
-    rates[rateId] = { ...rates[rateId], ...(body as Record<string, unknown>) }
-    loan.rate_periods = rates
-    await db.put('loans', loan)
-    return ok()
-  }
-  return notFound('Rate period')
+  const index = rates.findIndex((r: any) => Number(r.id) === rateId)
+  if (index < 0) return notFound('Rate period')
+  rates[index] = { ...rates[index], ...(body as Record<string, unknown>), id: rateId }
+  loan.rate_periods = rates
+  await db.put('loans', loan)
+  return ok()
 }
 
 export async function loanRateDelete(params: Record<string, string>): Promise<Response> {
@@ -141,14 +149,14 @@ export async function loanRateDelete(params: Record<string, string>): Promise<Re
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   const rateId = idParam(params, 'p2')
+  giveIds(loan)
   const rates = loan.rate_periods || []
-  if (rateId >= 0 && rateId < rates.length) {
-    rates.splice(rateId, 1)
-    loan.rate_periods = rates
-    await db.put('loans', loan)
-    return ok()
-  }
-  return notFound('Rate period')
+  const index = rates.findIndex((r: any) => Number(r.id) === rateId)
+  if (index < 0) return notFound('Rate period')
+  rates.splice(index, 1)
+  loan.rate_periods = rates
+  await db.put('loans', loan)
+  return ok()
 }
 
 // Loan prepayments
