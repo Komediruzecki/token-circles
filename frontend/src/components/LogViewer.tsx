@@ -7,6 +7,7 @@
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { logger } from '../core/logger'
+import { localToday } from '../utils/period'
 import ConfirmButton from './ConfirmButton'
 import css from './LogViewer.module.css'
 import type { LogEntry, LogLevel } from '../core/logger'
@@ -60,7 +61,7 @@ export function LogViewer() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `app-logs-${new Date().toISOString().split('T')[0]}.txt`
+    a.download = `app-logs-${localToday()}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }

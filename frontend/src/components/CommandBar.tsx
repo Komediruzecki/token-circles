@@ -19,6 +19,7 @@ import { api, getLocalCurrency, toast } from '../core/api'
 import { handFocusTo } from '../core/domFocus'
 import { parseEntry } from '../core/entry/parseEntry'
 import { quickEntrySave } from '../core/quickEntryLists'
+import { localToday } from '../utils/period'
 import styles from './CommandBar.module.css'
 import type { QuickEntryList } from '../core/quickEntryLists'
 import type { Account, Category } from '../types/models'
@@ -61,7 +62,7 @@ function RetryCategories(props: {
   )
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => localToday()
 const lastAccountKey = () => `lastAccountId:${localStorage.getItem('currentProfileId') || '1'}`
 
 export function CommandBar(props: CommandBarProps) {

@@ -7,6 +7,7 @@
  * reused by other entry surfaces. It never invents an amount or a category — it
  * proposes, the user confirms.
  */
+import { localToday } from '../../utils/period'
 
 export interface ParseCategory {
   id: number
@@ -133,7 +134,7 @@ const RECUR_WORDS = new Set(['monthly', 'weekly', 'yearly', 'annually', 'annual'
 
 function isoToday(ctx: ParseContext): string {
   if (ctx.today) return ctx.today
-  return new Date().toISOString().slice(0, 10)
+  return localToday()
 }
 
 function shiftDate(iso: string, days: number): string {

@@ -65,7 +65,7 @@ import { handFocusTo } from '../core/domFocus'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
-import { fromPill, toRange } from '../utils/period'
+import { fromPill, localToday, toRange } from '../utils/period'
 import styles from './TransactionsPage.module.css'
 import type { Category, Receipt, Tag, Transaction, TransactionType } from '../types/models'
 
@@ -137,7 +137,7 @@ export default function Transactions() {
   const [existingReceipt, setExistingReceipt] = createSignal<Receipt | null>(null)
   const [formId, setFormId] = createSignal<string | null>(null)
   const [type, setType] = createSignal<TransactionType>('expense')
-  const [formDate, setFormDate] = createSignal(new Date().toISOString().slice(0, 10))
+  const [formDate, setFormDate] = createSignal(localToday())
   const [formAmount, setFormAmount] = createSignal('')
   const [formCurrency, setFormCurrency] = createSignal(getLocalCurrency())
   const [formExchangeRate, setFormExchangeRate] = createSignal('1')
@@ -915,7 +915,7 @@ export default function Transactions() {
     setFormTags([])
     formTagIdsAtOpen = []
     setShowAdvanced(false)
-    setFormDate(new Date().toISOString().slice(0, 10))
+    setFormDate(localToday())
     setSelectedFile(null)
     setExistingReceipt(null)
     revokePreviewUrl()
@@ -2054,7 +2054,7 @@ export default function Transactions() {
                 const txData: Record<string, unknown> = {
                   description: desc,
                   amount: amt,
-                  date: formDate() || new Date().toISOString().slice(0, 10),
+                  date: formDate() || localToday(),
                   type: type(),
                   category_id: formCategory() ?? null,
                   currency: formCurrency() || getLocalCurrency(),

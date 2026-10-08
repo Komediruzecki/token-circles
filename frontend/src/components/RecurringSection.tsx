@@ -10,6 +10,7 @@ import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { localToday } from '../utils/period'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
 
@@ -44,7 +45,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
   const [formType, setFormType] = createSignal('expense')
   const [formFrequency, setFormFrequency] = createSignal('monthly')
   const [formDay, setFormDay] = createSignal('')
-  const [formNextDate, setFormNextDate] = createSignal(new Date().toISOString().slice(0, 10))
+  const [formNextDate, setFormNextDate] = createSignal(localToday())
   const [formCategory, setFormCategory] = createSignal<number | null>(null)
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
@@ -107,7 +108,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormType(item.type)
     setFormFrequency(item.frequency)
     setFormDay(item.day_of_month?.toString() || '')
-    setFormNextDate(item.next_date || new Date().toISOString().slice(0, 10))
+    setFormNextDate(item.next_date || localToday())
     setFormCategory(item.category_id)
     setFormAccountId(item.account_id ?? null)
     setFormTransferAccountId(item.transfer_account_id ?? null)
@@ -121,7 +122,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormType('expense')
     setFormFrequency('monthly')
     setFormDay('')
-    setFormNextDate(new Date().toISOString().slice(0, 10))
+    setFormNextDate(localToday())
     setFormCategory(null)
     setFormAccountId(null)
     setFormTransferAccountId(null)

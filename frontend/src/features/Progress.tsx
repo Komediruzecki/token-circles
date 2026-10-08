@@ -24,6 +24,7 @@ import {
 import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { addToast } from '../core/toastStore'
+import { localToday } from '../utils/period'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
 import type { AdviceCard } from '../core/achievements/advice'
@@ -67,7 +68,7 @@ export default function Progress(): JSX.Element {
 
   /** The last twelve months, oldest first, each with the entries it holds. */
   const strip = createMemo(() => {
-    const today = snap()?.today ?? new Date().toISOString().slice(0, 10)
+    const today = snap()?.today ?? localToday()
     const counts = new Map<string, number>()
     for (const t of snap()?.transactions ?? []) {
       const m = monthOf(t.date)
