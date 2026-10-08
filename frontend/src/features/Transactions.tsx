@@ -995,7 +995,9 @@ export default function Transactions() {
     setFormDescription(transaction.description)
     setFormAmount(transaction.amount.toString())
     setFormCurrency(transaction.currency || getLocalCurrency())
-    setFormExchangeRate('1')
+    // The row's own rate. The form sends it back on save, and '1' here overwrote a foreign row's
+    // rate on every edit, and moved its local amount at 1 when the amount changed.
+    setFormExchangeRate(String(transaction.exchange_rate ?? 1))
     setFormCategory(transaction.category_id || null)
     setFormBeneficiary(transaction.beneficiary || '')
     setFormPayor(transaction.payor || '')
