@@ -7,15 +7,22 @@
  * month instead, where the page did not show it. Both Set Budget dialogs added a budget on every
  * save (POST /api/budgets), so a category set twice had two budgets that month, and the Budgets
  * page's set this month's whatever month was on screen.
+ *
+ * Each refused save said "Failed to allocate budget" or "Failed to set budget" in a toast, with
+ * nothing in the dialog marked. Now each checks the amount with the rules both runtimes run
+ * (shared/budgetSchema.ts) and marks the field in its own words. The rollover switch, which has no
+ * dialog, says why in the toast.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BUDGET_MESSAGES as M } from '../../../../shared/budgetSchema'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
-import { defaultPeriod, monthPeriod } from '../../utils/period'
+import { defaultPeriod, localMonth, monthPeriod } from '../../utils/period'
+import { monthName } from '../budgetForm'
 import type { JSX } from 'solid-js'
 
 vi.mock('../../components/Chart', () => ({ default: () => null }))
@@ -235,6 +242,186 @@ describe('Set Budget on a Categories page card', () => {
           start_date: thisMonthStart(),
         }),
       ])
+    })
+  })
+})
+
+/** The control under the label that starts with `text`, as a person finds it. */
+function field(root: HTMLElement, text: string): HTMLInputElement {
+  const label = Array.from(root.querySelectorAll('label')).find((l) =>
+    l.textContent?.trim().startsWith(text)
+  )
+  if (!label) throw new Error(`no ${text} field`)
+  return label.parentElement!.querySelector<HTMLInputElement>('input, select')!
+}
+
+const describedBy = (el: HTMLElement): string =>
+  (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' | ')
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
+
+const failureToasts = () =>
+  toasts()
+    .filter((t) => t.type === 'error' || t.type === 'warning')
+    .map((t) => t.message)
+const successToasts = () =>
+  toasts()
+    .filter((t) => t.type === 'success')
+    .map((t) => t.message)
+
+/** A budget for Groceries this month, as allocating stores one. */
+async function budgetThisMonth(amount: number): Promise<number> {
+  return (await (
+    await getDB()
+  ).add('budgets', {
+    profile_id: 1,
+    category_id: GROCERIES,
+    amount,
+    period: 'monthly',
+    start_date: thisMonthStart(),
+    end_date: null,
+    rollover_enabled: false,
+    rollover_amount: 0,
+    created_at: '2026-01-01T00:00:00.000Z',
+  } as never)) as number
+}
+
+describe('Allocate, when the amount is wrong', () => {
+  it('marks an amount it cannot read, under the amount, focuses it, and sends nothing', async () => {
+    await mountBudgets()
+    const dialog = await openAllocate()
+    type(field(dialog, 'Amount'), 'lots')
+
+    byText(dialog, 'Allocate').click()
+    await settle()
+
+    expect(field(dialog, 'Amount').getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(field(dialog, 'Amount'))).toContain(M.amountNumber)
+    expect(document.activeElement).toBe(field(dialog, 'Amount'))
+    expect(await budgets()).toEqual([])
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('marks an amount below zero', async () => {
+    await mountBudgets()
+    const dialog = await openAllocate()
+    type(field(dialog, 'Amount'), '-5')
+
+    byText(dialog, 'Allocate').click()
+    await settle()
+
+    expect(describedBy(field(dialog, 'Amount'))).toContain(M.amountNegative)
+    expect(await budgets()).toEqual([])
+  })
+
+  it('says what it set, for which month, and closes', async () => {
+    await mountBudgets()
+    const dialog = await openAllocate()
+    type(field(dialog, 'Amount'), '250,50')
+
+    byText(dialog, 'Allocate').click()
+
+    await vi.waitFor(() => {
+      expect(allocateDialog()).toBeNull()
+    })
+    expect(await budgets()).toEqual([expect.objectContaining({ amount: 250.5 })])
+    expect(successToasts()).toEqual([
+      `Set the Groceries budget for ${monthName(localMonth())} to €250.50.`,
+    ])
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('marks a category deleted while the dialog was open, under the category', async () => {
+    await mountBudgets()
+    const dialog = await openAllocate()
+    type(field(dialog, 'Amount'), '250')
+    await (await getDB()).delete('categories', GROCERIES)
+
+    byText(dialog, 'Allocate').click()
+
+    await vi.waitFor(() => {
+      expect(describedBy(field(dialog, 'Category'))).toBe(M.category)
+    })
+    expect(allocateDialog()).not.toBeNull()
+    expect(await budgets()).toEqual([])
+    expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('Set Budget, when the amount is wrong', () => {
+  const amountInput = () => host.querySelector<HTMLInputElement>('input[placeholder="500.00"]')
+
+  it("opens on the Budgets page with the month's budget, and marks an amount it cannot read", async () => {
+    await budgetThisMonth(250)
+    await mountBudgets()
+    host
+      .querySelector<HTMLButtonElement>(
+        '[data-test-id="budgets-category-actions"] button[title="Set Budget"]'
+      )!
+      .click()
+    await vi.waitFor(() => {
+      expect(amountInput()?.value).toBe('250')
+    })
+    type(amountInput()!, 'abc')
+
+    byText(host, 'Save Budget').click()
+    await settle()
+
+    expect(describedBy(amountInput()!)).toBe(M.amountNumber)
+    expect(document.activeElement).toBe(amountInput())
+    expect(await budgets()).toEqual([expect.objectContaining({ amount: 250 })])
+    expect(failureToasts()).toEqual([])
+  })
+
+  it("opens on the Categories page with this month's budget, marks a wrong amount, then says what it set", async () => {
+    await budgetThisMonth(250)
+    const { default: Categories } = await import('../Categories')
+    await mount('categories', Categories)
+    byText(host, 'Budget').click()
+    await vi.waitFor(() => {
+      expect(amountInput()?.value).toBe('250')
+    })
+    type(amountInput()!, '-1')
+
+    byText(host, 'Save Budget').click()
+    await settle()
+
+    expect(describedBy(amountInput()!)).toBe(M.amountNegative)
+    expect(failureToasts()).toEqual([])
+
+    type(amountInput()!, '320')
+    byText(host, 'Save Budget').click()
+
+    await vi.waitFor(() => {
+      expect(amountInput()).toBeNull()
+    })
+    expect(await budgets()).toEqual([expect.objectContaining({ amount: 320 })])
+    expect(successToasts()).toEqual([
+      `Set the Groceries budget for ${monthName(localMonth())} to €320.00.`,
+    ])
+  })
+})
+
+describe('the rollover switch', () => {
+  it("says why it could not change, in the runtime's words", async () => {
+    const id = await budgetThisMonth(250)
+    await mountBudgets()
+    let toggle: HTMLButtonElement | null = null
+    await vi.waitFor(() => {
+      toggle = host.querySelector<HTMLButtonElement>('button[title="Enable rollover"]')
+      expect(toggle).not.toBeNull()
+    })
+    // Deleted in another tab.
+    await (await getDB()).delete('budgets', id)
+
+    toggle!.click()
+
+    await vi.waitFor(() => {
+      expect(failureToasts()).toEqual(['Budget not found'])
     })
   })
 })
