@@ -167,10 +167,10 @@ From `validation.ts` against each Worker route; each PR re-checks its own entiti
   base-currency conflict carries a useful sentence that the Accounts form drops for "Failed to
   create account". _Settled in slice 2._
 - **Budgets.** Local requires amount, period and start date; the Worker checks only that the
-  category is the profile's.
+  category is the profile's. _Settled in slice 3._
 - **Bills.** Local accepts an amount of 0, the Worker refuses it; local requires a frequency from
-  five values, the Worker stores any.
-- **Savings goals.** Local requires a positive target; the Worker accepts 0.
+  five values, the Worker stores any. _Settled in slice 3._
+- **Savings goals.** Local requires a positive target; the Worker accepts 0. _Settled in slice 3._
 - **Loans.** Local requires every field; the Worker checks none. A loan without a name answers 500
   with D1's text, and `interest_rate || 5.0` turns a 0 % loan into a 5 % one (outside this
   workstream; noted under Later).
@@ -436,6 +436,65 @@ category list's blank option reads "Uncategorized" while the form refuses it for
 expenses (as before); the Worker's default currency for a body without one is USD where
 local-first's is the browser's; Add Account takes the starting balance and ignores Current
 Balance when both are filled.
+
+## Slice 3: budgets, goals and bills (2026-10-08)
+
+On `feat/forms-budgets`, from #605 and moved onto main at 5b4a4d91 (#606 in).
+
+- **One set of rules each, in `shared/`.** `shared/budgetSchema.ts`, `shared/goalSchema.ts` and
+  `shared/billSchema.ts` hold the rules and their words, and read values through
+  `shared/fieldReaders.ts`. The Worker routes (`budgets.ts`, `savings-goals.ts`, `bills.ts`), the
+  local-first handlers and the forms run them; both runtimes answer a refusal with 400
+  `{ error, fields }`, and an edit checks and writes only what it changes. The three zod schemas
+  are gone from `validation.ts`.
+- **The forms are on the kit.** The goal dialog and Add Funds (`features/goalForm.ts`), the Bills
+  dialog (`features/billForm.ts`), and Allocate and both Set Budget dialogs
+  (`features/budgetForm.ts`, one save between them). A refusal lands under its field, a category
+  deleted in another tab is marked at the category, and a save says what it did.
+- **Set Budget goes through Allocate**, so it changes the month's budget instead of adding a
+  second one, and Allocate sets the month on screen.
+- **One rule for when a bill falls due next** (`shared/billSchedule.ts`). The Bills list, its
+  calendar, `GET /api/bills/upcoming`, the Dashboard and mark-paid use it in both runtimes, and
+  the pages say the next due date rather than the first one a bill was saved with
+  (`features/billDue.ts`).
+- **Money to the cent** (`shared/money.ts`). Budget summaries and a bill's payment answer 739.65,
+  not 739.6500000000001, in both runtimes. `worker/test/money-parity.test.ts` and its local-first
+  twin make every row through POST, as the forms do.
+
+What the runtimes now agree on:
+
+| Question                                  | Before                                                                      | Now, in both                                             |
+| ----------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Budget without a start date               | A 500 from D1 on the Worker                                                 | It starts on the first of the person's month             |
+| Budget amount                             | Local required one; the Worker took anything                                | Zero or more, to the cent                                |
+| Goal target                               | The Worker took 0, or text                                                  | More than zero, to the cent                              |
+| Goal contribution                         | The Worker added nothing for an unreadable amount; local added text as text | More than zero, to the cent, added in one write          |
+| Goal saved without a monthly amount       | Local stored null and no tracking date                                      | 0, counted from today                                    |
+| Bill amount and frequency                 | Local took 0 and `daily`; the Worker stored any frequency                   | More than zero; weekly, biweekly, monthly or yearly      |
+| Bill without a day of the month           | Local stored 1                                                              | None: the due date's day is the bill's                   |
+| Another profile's category or account     | The Worker 403, local-first 400                                             | A 400 at `category_id` or `account_id`                   |
+| Deleting a bill the profile does not have | 200 on the Worker                                                           | 404                                                      |
+| A category with spending and no budget    | Local gave it its spending as its budget, 100% used                         | An amount of 0, nothing used                             |
+| Budget trend and forecast history         | Local counted every expense of the month                                    | What the budgeted categories spent                       |
+| "Over budget by"                          | "$-10.00" on the Worker, "$0.00" at exactly 100% in local-first             | What was spent past the allocation, from past 100%       |
+| The budget flow (sankey)                  | The Worker left uncategorised spending out                                  | It is shown as Uncategorized, budgeted at what was spent |
+| Upcoming bills                            | The first due date on the Worker; none, or the stored rows, in local-first  | The next due date, by one rule                           |
+
+Fixed on the way, each with a test that failed before: setting a month from last month's spending
+replaced the month's budgets (it now fills only the categories without one, as Copy last month
+does); the bill calendar left out a bill due on the 31st in a shorter month; budget alerts measured
+every month's budget against this month's spending; the Bills dialog saved no category, ever;
+Allocate set this month whatever month was on screen; Set Budget added a budget on every save; New
+Goal opened as Edit Goal after a backdrop close; the Dashboard said "Due in Due in 12 days"; a
+weekly bill could not be paid on the day it fell due again; and a field marked in a closed section
+of a form was said twice.
+
+Open for the owner: the next due date of an unpaid bill whose day has passed stays that day
+(overdue) rather than rolling to next month; the Dashboard's Upcoming Bills leaves overdue and
+paused bills out; a bill's frequency is one of four, so a stored `daily` bill opens with a blank
+frequency; a budget of zero is allowed where a goal target must be more than zero; "Over budget
+by $" names dollars whatever the currency; the Bills dialog has no account field, so a payment
+moves no balance unless an API client set one; there is no way to remove a budget on the page.
 
 ## Rollout, one PR each
 
