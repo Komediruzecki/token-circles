@@ -440,7 +440,8 @@ export const budgets = [
     const foodMar = await budget(api, expect, food, 300);
     const funMar = await budget(api, expect, fun, 100);
     await rollover(api, expect, foodMar, { rollover_enabled: true });
-    await rollover(api, expect, funMar, { rollover_enabled: true });
+    // 25 carried into March by hand, on top of what February left.
+    await rollover(api, expect, funMar, { rollover_enabled: true, rollover_amount: 25 });
     // April already has its own Food budget, and one for Gym, which March does not budget.
     const foodApr = await budget(api, expect, food, 450, '2026-04-01');
     const gymApr = await budget(api, expect, gym, 50, '2026-04-01');
@@ -465,6 +466,13 @@ export const budgets = [
     expect(Boolean(byCategory(april, food).rollover_enabled), "with April's rollover").toBe(false);
     expect(byCategory(april, gym).id).toBe(gymApr);
     expect(Boolean(byCategory(april, fun).rollover_enabled), 'Fun keeps its rollover').toBe(true);
+    // The rollover switch carries over, the 25 set by hand does not: it was carried into March,
+    // and April rolls over only what March left unspent (all of its 100).
+    const summary = await api.get('/api/budgets/summary?year=2026&month=4');
+    expectOk(expect, summary, 'GET /api/budgets/summary for April');
+    expectMoney(expect, byCategory(summary.body, fun).rollover_contribution, 100, 'Fun rollover');
+    expectMoney(expect, byCategory(summary.body, fun).effective_budget, 200, 'Fun effective');
+    expectMoney(expect, byCategory(april, fun).rollover_amount, 0, "April's Fun rollover amount");
 
     // Copying again copies nothing and adds nothing.
     expect(await copy(4)).toMatchObject({ ok: true, count: 0, already_budgeted: 2 });

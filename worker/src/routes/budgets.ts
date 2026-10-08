@@ -999,9 +999,11 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
 
   // A budget the month already has is never replaced: only a category with no budget in it yet
   // gets last month's, one budget per category (the newest, should last month hold two), with its
-  // rollover. The answer says how many were copied and how many categories already had one, for
-  // the Budgets page's toast. (This deleted the month's budgets first, so a copy overwrote the
-  // amounts a person had set and dropped the categories last month did not budget.)
+  // rollover switch. A rollover amount set by hand is not copied: it was carried into last month,
+  // and this month rolls over what last month left unspent instead. The answer says how many were
+  // copied and how many categories already had one, for the Budgets page's toast. (This deleted
+  // the month's budgets first, so a copy overwrote the amounts a person had set and dropped the
+  // categories last month did not budget.)
   const budgeted = await db.all<{ category_id: number }>(
     c.env.DB,
     'SELECT category_id FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
@@ -1020,16 +1022,8 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
     await c.env.DB.batch(
       [...copies.values()].map((b) =>
         c.env.DB.prepare(
-          'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, ?)'
-        ).bind(
-          pid,
-          b.category_id,
-          b.amount,
-          b.period,
-          startDate,
-          b.rollover_enabled ? 1 : 0,
-          b.rollover_amount || 0
-        )
+          'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, 0)'
+        ).bind(pid, b.category_id, b.amount, b.period, startDate, b.rollover_enabled ? 1 : 0)
       )
     );
   }

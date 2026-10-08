@@ -911,9 +911,11 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
 
     // A budget the month already has is never replaced: only a category with no budget in it yet
     // gets last month's, one budget per category (the newest, should last month hold two), with
-    // its rollover. The answer says how many were copied and how many categories already had one.
-    // (This deleted the month's budgets first, so a copy overwrote the amounts a person had set and
-    // dropped the categories last month did not budget.)
+    // its rollover switch. A rollover amount set by hand is not copied: it was carried into last
+    // month, and this month rolls over what last month left unspent instead. The answer says how
+    // many were copied and how many categories already had one. (This deleted the month's budgets
+    // first, so a copy overwrote the amounts a person had set and dropped the categories last
+    // month did not budget.)
     const already = new Set(
       existingBudgets.map((b: Record<string, unknown>) => Number(b.category_id))
     )
@@ -938,7 +940,7 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
         end_date: null,
         profile_id: pid,
         rollover_enabled: b.rollover_enabled || false,
-        rollover_amount: b.rollover_amount || 0,
+        rollover_amount: 0,
         created_at: createdAt,
       })
     }
