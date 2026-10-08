@@ -2,7 +2,7 @@
  * Small helpers the scenarios share: dates, money, and reading a list either runtime answers.
  * Like the rest of shared/contract, nothing here imports vitest; `expect` is handed in.
  */
-import { expectOk } from './types';
+import { added, expectOk } from './types';
 import type { ContractApi, Expect, Json, Reply } from './types';
 
 /** `YYYY-MM-DD` for a date, in UTC as the Worker reads it. */
@@ -67,4 +67,31 @@ export async function balanceOf(api: ContractApi, expect: Expect, id: number): P
   const reply = await api.get(`/api/accounts/${id}`);
   expectOk(expect, reply, `GET /api/accounts/${id}`);
   return Number(reply.body.balance);
+}
+
+/** A category, as the Categories form adds it. */
+export async function addCategory(
+  api: ContractApi,
+  expect: Expect,
+  name: string,
+  type = 'expense'
+): Promise<number> {
+  return added(api, expect, '/api/categories', { name, type, color: '#aa5500', icon: 'tag' });
+}
+
+/** A transaction, as the Transactions form sends it (features/Transactions.tsx, the Save handler). */
+export async function addTransaction(
+  api: ContractApi,
+  expect: Expect,
+  fields: Record<string, unknown>
+): Promise<number> {
+  return added(api, expect, '/api/transactions', {
+    description: 'Groceries',
+    amount: 10,
+    date: '2026-03-10',
+    type: 'expense',
+    category_id: null,
+    currency: 'EUR',
+    ...fields,
+  });
 }

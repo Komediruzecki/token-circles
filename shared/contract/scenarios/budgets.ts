@@ -1,0 +1,368 @@
+import { addCategory, addTransaction, expectMoney, monthStart } from '../helpers';
+import { added, expectOk, scenario } from '../types';
+import type { ContractApi, Expect, Json } from '../types';
+
+/** A month's budget, with the body the Budgets and Categories pages post (updateCatBudget). */
+async function budget(
+  api: ContractApi,
+  expect: Expect,
+  category: number,
+  amount: number,
+  start = '2026-03-01'
+) {
+  return added(api, expect, '/api/budgets', {
+    category_id: category,
+    amount,
+    period: 'monthly',
+    start_date: start,
+  });
+}
+
+/** Every budget of the profile, as `GET /api/budgets` answers them. */
+async function listBudgets(api: ContractApi, expect: Expect): Promise<Json[]> {
+  const reply = await api.get('/api/budgets');
+  expectOk(expect, reply, 'GET /api/budgets');
+  return reply.body as Json[];
+}
+
+/** One budget out of the list: there is no single read on the Worker. */
+async function budgetRow(api: ContractApi, expect: Expect, id: number): Promise<Json | undefined> {
+  return (await listBudgets(api, expect)).find((row) => Number(row.id) === id);
+}
+
+/** The budgets that start on one day, as `[category_id, amount]`, sorted. */
+async function monthOf(api: ContractApi, expect: Expect, start: string) {
+  return (await listBudgets(api, expect))
+    .filter((row) => row.start_date === start)
+    .map((row) => [Number(row.category_id), Number(row.amount)])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
+async function rollover(api: ContractApi, expect: Expect, id: number, body: Json) {
+  const reply = await api.put(`/api/budgets/${id}/rollover`, body);
+  expectOk(expect, reply, `PUT /api/budgets/${id}/rollover`);
+  return reply.body;
+}
+
+function byCategory(rows: readonly Json[], category: number): Json {
+  return rows.find((row) => Number(row.category_id) === category);
+}
+
+/**
+ * February and March of one profile: Food budgeted both months with rollover on, Fun in March,
+ * Rent spent on without a budget, one uncategorised expense and the month's pay. The other
+ * profile budgets and spends in March too, and must count nowhere.
+ */
+async function twoMonths(api: ContractApi, expect: Expect) {
+  const food = await addCategory(api, expect, 'Food');
+  const fun = await addCategory(api, expect, 'Fun');
+  const rent = await addCategory(api, expect, 'Rent');
+  const pay = await addCategory(api, expect, 'Pay', 'income');
+  const foodFeb = await budget(api, expect, food, 200, '2026-02-01');
+  const foodMar = await budget(api, expect, food, 300, '2026-03-01');
+  const funMar = await budget(api, expect, fun, 100, '2026-03-01');
+  // The Budgets page's rollover switch.
+  await rollover(api, expect, foodFeb, { rollover_enabled: true });
+  await rollover(api, expect, foodMar, { rollover_enabled: true });
+
+  await addTransaction(api, expect, { amount: 150, date: '2026-02-10', category_id: food });
+  await addTransaction(api, expect, { amount: 120.4, date: '2026-03-05', category_id: food });
+  // The last day of the month belongs to it.
+  await addTransaction(api, expect, { amount: 59.6, date: '2026-03-31', category_id: food });
+  await addTransaction(api, expect, { amount: 110, date: '2026-03-12', category_id: fun });
+  await addTransaction(api, expect, { amount: 500, date: '2026-03-01', category_id: rent });
+  await addTransaction(api, expect, { amount: 25, date: '2026-03-15' });
+  await addTransaction(api, expect, {
+    description: 'Salary',
+    type: 'income',
+    amount: 2000,
+    date: '2026-03-01',
+    category_id: pay,
+  });
+
+  const other = api.other;
+  const theirFood = await addCategory(other, expect, 'Food');
+  await budget(other, expect, theirFood, 50, '2026-03-01');
+  await addTransaction(other, expect, { amount: 40, date: '2026-03-05', category_id: theirFood });
+  await addTransaction(other, expect, { type: 'income', amount: 900, date: '2026-03-02' });
+
+  return { food, fun, rent, foodFeb, foodMar, funMar };
+}
+
+export const budgets = [
+  scenario('a budget is added, read back, changed and removed', async (api, expect) => {
+    const food = await addCategory(api, expect, 'Food');
+    const fun = await addCategory(api, expect, 'Fun');
+    const id = await budget(api, expect, food, 300.25);
+
+    const row = await budgetRow(api, expect, id);
+    expect(row).toMatchObject({
+      id,
+      category_id: food,
+      period: 'monthly',
+      start_date: '2026-03-01',
+      end_date: null,
+    });
+    expectMoney(expect, row.amount, 300.25);
+    expect(Boolean(row.rollover_enabled)).toBe(false);
+
+    expectOk(
+      expect,
+      await api.put(`/api/budgets/${id}`, {
+        category_id: fun,
+        amount: 275.5,
+        period: 'monthly',
+        start_date: '2026-04-01',
+      }),
+      'PUT the budget'
+    );
+    const changed = await budgetRow(api, expect, id);
+    expect(changed).toMatchObject({ id, category_id: fun, start_date: '2026-04-01' });
+    expectMoney(expect, changed.amount, 275.5);
+
+    expectOk(expect, await api.delete(`/api/budgets/${id}`), 'DELETE the budget');
+    expect(await budgetRow(api, expect, id)).toBeUndefined();
+    expect((await api.delete(`/api/budgets/${id}`)).status).toBe(404);
+  }),
+
+  scenario("another profile's budget is not read, changed or removed", async (api, expect) => {
+    const food = await addCategory(api, expect, 'Food');
+    const id = await budget(api, expect, food, 300);
+    const other = api.other;
+    const theirs = await addCategory(other, expect, 'Their food');
+
+    expect(await listBudgets(other, expect)).toEqual([]);
+    expect(
+      (
+        await other.put(`/api/budgets/${id}`, {
+          category_id: theirs,
+          amount: 1,
+          period: 'monthly',
+          start_date: '2026-03-01',
+        })
+      ).status
+    ).toBe(404);
+    expect(
+      (await other.put(`/api/budgets/${id}/rollover`, { rollover_enabled: true })).status
+    ).toBe(404);
+    expect((await other.delete(`/api/budgets/${id}`)).status).toBe(404);
+
+    const row = await budgetRow(api, expect, id);
+    expect(row).toMatchObject({ category_id: food, start_date: '2026-03-01' });
+    expectMoney(expect, row.amount, 300);
+    expect(Boolean(row.rollover_enabled)).toBe(false);
+
+    // DIFFERENCE foreign-link-status: a budget on another profile's category.
+    expect(
+      (
+        await api.post('/api/budgets', {
+          category_id: theirs,
+          amount: 50,
+          period: 'monthly',
+          start_date: '2026-03-01',
+        })
+      ).status
+    ).toBe(api.runtime === 'worker' ? 403 : 400);
+    expect(await listBudgets(api, expect)).toHaveLength(1);
+    expect(await listBudgets(other, expect)).toEqual([]);
+  }),
+
+  scenario(
+    "the month summary counts spending, last month's unused budget and what is left",
+    async (api, expect) => {
+      const { food, fun, foodMar } = await twoMonths(api, expect);
+
+      const summary = async () => {
+        const reply = await api.get('/api/budgets/summary?year=2026&month=3');
+        expectOk(expect, reply, 'GET /api/budgets/summary');
+        expect(reply.body).toHaveLength(2);
+        return reply.body as Json[];
+      };
+
+      let rows = await summary();
+      // Food: 300 budgeted, 180 spent, and February's 50 unused rolls in.
+      expect(byCategory(rows, food)).toMatchObject({ id: foodMar, category_name: 'Food' });
+      expectMoney(expect, byCategory(rows, food).spent, 180, 'Food spent');
+      expectMoney(expect, byCategory(rows, food).remaining, 120, 'Food remaining');
+      expectMoney(expect, byCategory(rows, food).auto_rollover, 50, 'Food auto rollover');
+      expectMoney(expect, byCategory(rows, food).rollover_contribution, 50, 'Food rollover');
+      expectMoney(expect, byCategory(rows, food).effective_budget, 350, 'Food effective');
+      expectMoney(expect, byCategory(rows, food).effective_remaining, 170, 'Food left');
+      expectMoney(expect, byCategory(rows, food).percentage, 60, 'Food percentage');
+      // Fun: over budget, and its percentage stops at 100.
+      expectMoney(expect, byCategory(rows, fun).spent, 110, 'Fun spent');
+      expectMoney(expect, byCategory(rows, fun).remaining, -10, 'Fun remaining');
+      expectMoney(expect, byCategory(rows, fun).rollover_contribution, 0, 'Fun rollover');
+      expectMoney(expect, byCategory(rows, fun).effective_budget, 100, 'Fun effective');
+      expectMoney(expect, byCategory(rows, fun).percentage, 100, 'Fun percentage');
+
+      // A manual adjustment adds to the rollover, and what was used of it comes off.
+      const adjusted = await rollover(api, expect, foodMar, {
+        rollover_amount: 25,
+        rollover_used: 10,
+      });
+      expect(adjusted.ok).toBe(true);
+      expectMoney(expect, adjusted.budget.rollover_amount, 25, 'rollover_amount');
+      rows = await summary();
+      expectMoney(expect, byCategory(rows, food).rollover_contribution, 65, 'Food rollover');
+      expectMoney(expect, byCategory(rows, food).effective_budget, 365, 'Food effective');
+      expectMoney(expect, byCategory(rows, food).effective_remaining, 185, 'Food left');
+
+      // Switched off, the budget is its own amount again.
+      const off = await rollover(api, expect, foodMar, { rollover_enabled: false });
+      expect(Boolean(off.budget.rollover_enabled)).toBe(false);
+      rows = await summary();
+      expectMoney(expect, byCategory(rows, food).auto_rollover, 0, 'Food auto rollover');
+      expectMoney(expect, byCategory(rows, food).effective_budget, 300, 'Food effective');
+
+      expect((await api.put(`/api/budgets/${foodMar}/rollover`, {})).status).toBe(400);
+    }
+  ),
+
+  scenario("a category's budget history, newest month first", async (api, expect) => {
+    const { food } = await twoMonths(api, expect);
+    const reply = await api.get(`/api/budgets/history?category_id=${food}&months=6`);
+    expectOk(expect, reply, 'GET /api/budgets/history');
+    expect(reply.body).toHaveLength(2);
+    expect(reply.body[0].month).toBe('2026-03-01');
+    expectMoney(expect, reply.body[0].budget_amount, 300, 'March budget');
+    expectMoney(expect, reply.body[0].spent, 180, 'March spent');
+    expect(reply.body[1].month).toBe('2026-02-01');
+    expectMoney(expect, reply.body[1].budget_amount, 200, 'February budget');
+    expectMoney(expect, reply.body[1].spent, 150, 'February spent');
+
+    const one = await api.get(`/api/budgets/history?category_id=${food}&months=1`);
+    expect(one.body).toHaveLength(1);
+    expect(one.body[0].month).toBe('2026-03-01');
+  }),
+
+  scenario('budget alerts list the categories at or over the threshold', async (api, expect) => {
+    const { food, fun } = await twoMonths(api, expect);
+    const reply = await api.get('/api/budgets/alerts?threshold=80&year=2026&month=3');
+    expectOk(expect, reply, 'GET /api/budgets/alerts');
+    expect(reply.body).toMatchObject({
+      threshold: 80,
+      startDate: '2026-03-01',
+      endDate: '2026-04-01',
+    });
+    const alerts = reply.body.alerts as Json[];
+    expect(alerts[0]).toMatchObject({
+      categoryId: fun,
+      categoryName: 'Fun',
+      percentage: 110,
+      status: 'over',
+    });
+    expectMoney(expect, alerts[0].budgetAmount, 100, 'Fun budget');
+    expectMoney(expect, alerts[0].spent, 110, 'Fun spent');
+    expectMoney(expect, alerts[0].remaining, -10, 'Fun remaining');
+    // March's Food budget is 60% spent: under the threshold.
+    expect(alerts).not.toContainEqual(
+      expect.objectContaining({ categoryId: food, budgetAmount: 300 })
+    );
+  }),
+
+  scenario(
+    "allocating sets a category's budget for this month, and again changes it",
+    async (api, expect) => {
+      const food = await addCategory(api, expect, 'Food');
+      const month = monthStart(0).slice(0, 7);
+
+      // The Allocate dialog's body; the page sends no month, so it is this month.
+      const first = await api.post('/api/budgets/allocate', {
+        category_id: food,
+        amount: 150,
+        period: 'monthly',
+      });
+      expectOk(expect, first, 'POST /api/budgets/allocate');
+      expect(first.body).toMatchObject({
+        category_id: food,
+        period: 'monthly',
+        start_date: `${month}-01`,
+        message: 'Budget allocated successfully',
+      });
+      const again = await api.post('/api/budgets/allocate', {
+        category_id: food,
+        amount: 175.25,
+        period: 'monthly',
+      });
+      expectOk(expect, again, 'POST /api/budgets/allocate again');
+      expect(again.body).toMatchObject({
+        id: first.body.id,
+        message: 'Budget updated successfully',
+      });
+      expect(await monthOf(api, expect, `${month}-01`)).toEqual([[food, 175.25]]);
+
+      const form = await api.get(`/api/budgets/zero-based?month=${month}`);
+      expect(byCategory(form.body.allocations, food)).toMatchObject({
+        budget_id: first.body.id,
+        is_budgeted: true,
+      });
+      expectMoney(expect, byCategory(form.body.allocations, food).amount, 175.25);
+
+      // A month in the query allocates that month.
+      const march = await api.post('/api/budgets/allocate?month=2026-03', {
+        category_id: food,
+        amount: 90,
+        period: 'monthly',
+      });
+      expectOk(expect, march, 'POST /api/budgets/allocate?month=2026-03');
+      expect(await monthOf(api, expect, '2026-03-01')).toEqual([[food, 90]]);
+    }
+  ),
+
+  scenario("this month's budgets are set from last month's spending", async (api, expect) => {
+    const food = await addCategory(api, expect, 'Food');
+    const fun = await addCategory(api, expect, 'Fun');
+    await addTransaction(api, expect, { amount: 120.4, date: '2026-02-03', category_id: food });
+    await addTransaction(api, expect, { amount: 29.6, date: '2026-02-28', category_id: food });
+    await addTransaction(api, expect, { amount: 30.5, date: '2026-02-14', category_id: fun });
+    await addTransaction(api, expect, { amount: 75, date: '2026-02-20' });
+    await addTransaction(api, expect, { amount: 999, date: '2026-03-02', category_id: fun });
+    await budget(api, expect, fun, 999, '2026-03-01');
+    await addTransaction(api.other, expect, { amount: 40, date: '2026-02-05' });
+
+    const reply = await api.post('/api/budgets/from-expenses', { year: 2026, month: 3 });
+    expectOk(expect, reply, 'POST /api/budgets/from-expenses');
+    expect(reply.body).toMatchObject({ ok: true, count: 2 });
+    expect(await monthOf(api, expect, '2026-03-01')).toEqual([
+      [food, 150],
+      [fun, 30.5],
+    ]);
+
+    const none = await api.post('/api/budgets/from-expenses', { year: 2026, month: 6 });
+    expectOk(expect, none, 'POST /api/budgets/from-expenses with nothing spent');
+    expect(none.body).toMatchObject({ ok: false, message: 'No expenses found for previous month' });
+    expect(await listBudgets(api.other, expect)).toEqual([]);
+  }),
+
+  scenario("every month's budgets are backfilled from its spending", async (api, expect) => {
+    const { food, fun, rent } = await twoMonths(api, expect);
+
+    // Budgets.tsx and the import flow both post an empty body: the whole range.
+    const reply = await api.post('/api/budgets/backfill-from-spending', {});
+    expectOk(expect, reply, 'POST /api/budgets/backfill-from-spending');
+    expect(reply.body).toMatchObject({ ok: true, count: 4, months: 2 });
+    expect(await monthOf(api, expect, '2026-02-01')).toEqual([[food, 150]]);
+    expect(await monthOf(api, expect, '2026-03-01')).toEqual([
+      [food, 180],
+      [fun, 110],
+      [rent, 500],
+    ]);
+
+    // A range leaves the months outside it alone.
+    await budget(api, expect, food, 210, '2026-02-01');
+    const march = await api.post('/api/budgets/backfill-from-spending', {
+      from_month: '2026-03',
+      to_month: '2026-03',
+    });
+    expect(march.body).toMatchObject({ ok: true, count: 3, months: 1 });
+    expect(await monthOf(api, expect, '2026-02-01')).toEqual([
+      [food, 150],
+      [food, 210],
+    ]);
+
+    const theirs = await listBudgets(api.other, expect);
+    expect(theirs).toHaveLength(1);
+    expectMoney(expect, theirs[0].amount, 50, "the other profile's budget");
+  }),
+];
