@@ -29,20 +29,52 @@ import type { FieldErrors } from '../../../../../shared/refusal'
 const toCat = (v: unknown): number | null =>
   typeof v === 'number' ? v : typeof v === 'string' && v ? Number(v) : null
 
+/**
+ * `GET /api/transactions`'s filters, by the names the app sends them under: the Worker's
+ * (`startDate`, `endDate`, `category_ids`, `account_id`, `reconciled`, `limit`, `offset`;
+ * core/api.ts getTransactions translates to them, and Analytics and Accounts write them by hand).
+ * This handler used to read only `date_from`, `date_to` and `category_id`, which it still accepts,
+ * so every filter the app sent was ignored here and a day's or an account's list came back whole.
+ */
+function narrowList<T extends Record<string, any>>(rows: T[], query: URLSearchParams): T[] {
+  let out = rows
+  const categoryIds = (query.get('category_ids') ?? query.get('category_id') ?? '')
+    .split(',')
+    .map((id) => parseInt(id, 10))
+    .filter((id) => !isNaN(id))
+  if (categoryIds.length > 0) out = out.filter((t) => categoryIds.includes(t.category_id))
+  const accountId = parseInt(query.get('account_id') ?? '', 10)
+  if (!isNaN(accountId)) {
+    out = out.filter((t) => t.account_id === accountId || t.transfer_account_id === accountId)
+  }
+  const reconciled = query.get('reconciled')
+  if (reconciled === '0' || reconciled === 'false') out = out.filter((t) => !t.reconciled)
+  if (reconciled === '1' || reconciled === 'true')
+    out = out.filter((t) => Number(t.reconciled) === 1)
+  // A window as the Worker cuts it: a limit that is not a number means 50, and no more than 1000.
+  const limit = query.get('limit')
+  const offset = parseInt(query.get('offset') ?? '', 10)
+  const from = !isNaN(offset) && offset > 0 ? offset : 0
+  if (limit) {
+    const parsed = parseInt(limit, 10)
+    return out.slice(from, from + (isNaN(parsed) ? 50 : Math.min(parsed, 1000)))
+  }
+  return from > 0 ? out.slice(from) : out
+}
+
 export async function transactionsList(query: URLSearchParams): Promise<Response> {
   const filters: Record<string, unknown> = {}
-  const df = query.get('date_from')
-  const dt = query.get('date_to')
-  const cat = query.get('category_id')
+  const df = query.get('startDate') || query.get('date_from')
+  const dt = query.get('endDate') || query.get('date_to')
   const type = query.get('type')
   const search = query.get('search')
   if (df) filters.date_from = df
   if (dt) filters.date_to = dt
-  if (cat) filters.category_id = parseInt(cat, 10)
   if (type) filters.type = type
   if (search) filters.search = search
-  const txns = await adapter.listTransactions(
-    filters as Parameters<typeof adapter.listTransactions>[0]
+  const txns = narrowList(
+    await adapter.listTransactions(filters as Parameters<typeof adapter.listTransactions>[0]),
+    query
   )
 
   // Enrich transactions with category name/color and receipt id/name (like the

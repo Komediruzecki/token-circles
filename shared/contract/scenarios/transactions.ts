@@ -210,6 +210,38 @@ export const transactions = [
   ),
 
   scenario(
+    'the list filters by month, account, category, type, text and reconciled, and pages',
+    async (api, expect) => {
+      const { savings, food, pay, move, bigBakery, bakery, salary, market } = await ledger(
+        api,
+        expect
+      );
+      expectOk(expect, await api.patch(`/api/transactions/${bakery}/reconcile`), 'reconcile');
+
+      const list = async (query: string) => idsOf(await listTransactions(api, expect, query));
+      expect(await list('?startDate=2026-03-01&endDate=2026-03-31')).toEqual([
+        move,
+        bigBakery,
+        bakery,
+        salary,
+      ]);
+      expect(await list(`?account_id=${savings}`)).toEqual([move, bigBakery]);
+      expect(await list(`?category_ids=${food}`)).toEqual([bigBakery, bakery, market]);
+      expect(await list(`?category_ids=${food},${pay}&type=income`)).toEqual([salary]);
+      expect(await list('?search=bakery')).toEqual([bigBakery, bakery]);
+      expect(await list('?reconciled=1')).toEqual([bakery]);
+      expect(await list('?reconciled=0')).toEqual([move, bigBakery, salary, market]);
+      expect(await list('?limit=2')).toEqual([move, bigBakery]);
+      // The Analytics heatmap's day drill-down asks for one day of one type.
+      expect(await list('?startDate=2026-03-05&endDate=2026-03-05&type=expense&limit=20')).toEqual([
+        bigBakery,
+        bakery,
+      ]);
+      expect(await listTransactions(api.other, expect, `?account_id=${savings}`)).toHaveLength(0);
+    }
+  ),
+
+  scenario(
     'a bulk edit recategorises and retypes rows, and a bulk delete removes them',
     async (api, expect) => {
       const acct = await account(api, expect, 'Everyday', 1000);
