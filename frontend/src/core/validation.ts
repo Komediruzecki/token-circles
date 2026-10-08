@@ -3,9 +3,10 @@
  *
  * A refused body answers 400 `{ error, fields }`, the Worker's answer (shared/refusal.ts): a plain
  * sentence per field for the form to show, and their summary for anything that cannot place them.
- * An entity with a shared schema (categories, transactions) runs exactly the Worker's rules. The
- * rest are still zod schemas until their own PR moves them (docs/plans/2026-10-07-form-errors.md),
- * and their issues are put into plain words here rather than passed on in zod's.
+ * An entity with a shared schema (categories, transactions, accounts) runs exactly the Worker's
+ * rules. The rest are still zod schemas until their own PR moves them
+ * (docs/plans/2026-10-07-form-errors.md), and their issues are put into plain words here rather
+ * than passed on in zod's.
  */
 // Import the Zod JIT-disable config BEFORE this module's schema definitions:
 // the JIT capability probe (a CSP unsafe-eval violation) fires at schema-
@@ -13,6 +14,7 @@
 // always evaluate before its body, making this chunk-order-independent.
 import './zodConfig'
 import { z } from 'zod/v4'
+import { checkAccountCreate } from '../../../shared/accountSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
@@ -38,17 +40,7 @@ export function localTransactionDefaults(): TransactionDefaults {
 // Not a zod schema: shared/categorySchema.ts, which the Worker route runs too.
 
 // ── Account ────────────────────────────────────────────────────────────────────
-
-export const accountCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  type: z.enum(['giro', 'savings', 'ib', 'cash']),
-  currency: currencyCodeSchema.optional(),
-  balance: z.number().optional(),
-  bank_name: z.string().optional(),
-  notes: z.string().optional(),
-})
-
-export const accountUpdateSchema = accountCreateSchema.partial()
+// Not a zod schema: shared/accountSchema.ts, which the Worker route runs too.
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
 
@@ -202,12 +194,11 @@ type BodyRule = z.ZodType | ((body: unknown) => Checked<unknown>)
 
 const schemaMap: Record<string, BodyRule> = {
   'POST:/api/transactions': (body) => checkTransactionCreate(body, localTransactionDefaults()),
-  // No PUT entry for transactions or categories: an edit is checked by its handler against the
-  // stored row, since a value the row already holds is never refused (checkTransactionEdit and
-  // checkCategoryEdit in shared/).
+  // No PUT entry for transactions, categories or accounts: an edit is checked by its handler
+  // against the stored row, since a value the row already holds is never refused
+  // (checkTransactionEdit, checkCategoryEdit and checkAccountEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
-  'POST:/api/accounts': accountCreateSchema,
-  'PUT:/api/accounts': accountUpdateSchema,
+  'POST:/api/accounts': checkAccountCreate,
   'POST:/api/budgets': budgetCreateSchema,
   'PUT:/api/budgets': budgetUpdateSchema,
   'POST:/api/bills': billCreateSchema,
