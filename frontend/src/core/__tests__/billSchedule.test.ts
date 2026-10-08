@@ -192,6 +192,23 @@ describe('a payment made before a weekly bill first falls due', () => {
   })
 })
 
+describe('a bill stored as daily', () => {
+  // The Bills dialog offers four frequencies, but local-first stored `daily` before it checked one.
+  // Read as monthly, such a bill fell due once a month, on its first date's day.
+  it('falls due every day, and is paid up for the day it is paid', () => {
+    const parking = { frequency: 'daily', due_date: '2026-09-12' }
+    expect(nextDueDate(parking, '2026-10-08')).toBe('2026-10-08')
+    expect(isPaidUp(parking, '2026-10-08')).toBe(false)
+
+    const paid = { ...parking, last_paid_date: '2026-10-08' }
+    expect(isPaidUp(paid, '2026-10-08')).toBe(true)
+    expect(nextDueDate(paid, '2026-10-08')).toBe('2026-10-09')
+    expect(isPaidUp(paid, '2026-10-09')).toBe(false)
+    expect(nextDueDate(paid, '2026-10-09')).toBe('2026-10-09')
+    expect(paidFrom(paid, '2026-10-09')).toBe('2026-10-09')
+  })
+})
+
 describe('days from today', () => {
   it('counts whole days, negative when past', () => {
     expect(daysFrom('2026-10-08', '2026-10-15')).toBe(7)

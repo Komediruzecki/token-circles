@@ -20,22 +20,27 @@
  * A bill's day of the month is its due date's day: the Bills form saves no other. `day_of_month`
  * counts only for a bill with no due date the calendar can read. Monthly and yearly bills fall
  * due on that day (or the month's last, when it is shorter), weekly and biweekly ones every seven
- * or fourteen days from their first due date, whenever they are paid.
+ * or fourteen days from their first due date, whenever they are paid, and a daily one every day.
  *
  * Paid up means a payment on or after the start of the current period: the first of this month
- * for a monthly bill, 1 January for a yearly one, the date a weekly or biweekly one last fell due.
- * A weekly or biweekly bill paid up to a step before its first due date has paid that date. The
- * next due date is the current period's when the bill is not paid up (in the past, it is overdue
- * until the period ends), and the next period's when it is. Never before the bill's own first due
- * date.
+ * for a monthly bill, 1 January for a yearly one, the date a daily, weekly or biweekly one last
+ * fell due. One of those paid up to a step before its first due date has paid that date. The next
+ * due date is the current period's when the bill is not paid up (in the past, it is overdue until
+ * the period ends), and the next period's when it is. Never before the bill's own first due date.
  *
  * GET /api/bills/upcoming answers every active bill this way, the most overdue first; the
  * Dashboard lists the ones due from today through the next 30 days.
  */
 import { addCalendarMonths, addDays, daysInMonth } from './calendarMonths';
 
-/** The frequencies a bill can have; anything else is read as monthly. */
+/**
+ * The frequencies that fall due every so many days. Monthly and yearly go by the calendar, and
+ * anything else is read as monthly. The Bills dialog no longer offers daily, but local-first stored
+ * it before it checked one, and such a bill still falls due every day: read as monthly, it fell due
+ * once a month.
+ */
 const STEP_DAYS: ReadonlyMap<string, number> = new Map([
+  ['daily', 1],
   ['weekly', 7],
   ['biweekly', 14],
 ]);
@@ -79,22 +84,22 @@ export function billDay(bill: BillTiming): number {
 }
 
 /**
- * Where a weekly or biweekly bill's dates count from: its first due date, else its last payment
- * (a row an older version stored without a date), else today.
+ * Where a daily, weekly or biweekly bill's dates count from: its first due date, else its last
+ * payment (a row an older version stored without a date), else today.
  */
 function anchorOf(bill: BillTiming, today: string): string {
   return dateOf(bill.due_date) ?? dateOf(bill.last_paid_date) ?? today;
 }
 
-/** The weekly or biweekly bill's date on or before `date`: `anchor` plus whole steps. */
+/** The daily, weekly or biweekly bill's date on or before `date`: `anchor` plus whole steps. */
 function stepOnOrBefore(anchor: string, step: number, date: string): string {
   return addDays(anchor, Math.floor(daysFrom(anchor, date) / step) * step);
 }
 
 /**
  * The first day of the period `today` is in, for the bill: a payment dated on or after it has
- * paid the bill up. The first of the month, 1 January, or the date a weekly or biweekly bill last
- * fell due. Two clients on different calendars agree on it, whichever stamped the payment
+ * paid the bill up. The first of the month, 1 January, or the date a daily, weekly or biweekly bill
+ * last fell due. Two clients on different calendars agree on it, whichever stamped the payment
  * (worker/test/bills-paid-across-zones.test.ts).
  */
 export function paidFrom(bill: BillTiming, today: string): string {

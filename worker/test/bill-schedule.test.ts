@@ -297,3 +297,20 @@ describe('a weekly bill', () => {
     expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
   });
 });
+
+describe('a bill stored as daily', () => {
+  // The Bills dialog no longer offers daily, but local-first stored it before it checked, and the
+  // Worker took any frequency. Read as monthly, such a bill fell due once a month.
+  it('falls due every day, and is payable once a day', async () => {
+    await on('2026-10-08');
+    const id = await bill('Parking', { dueDate: '2026-09-12', amount: 5 });
+    await env.DB.prepare("UPDATE bills SET frequency = 'daily' WHERE id = ?").bind(id).run();
+    expect((await upcoming())[0]).toMatchObject({ next_due_date: '2026-10-08', days_until: 0 });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+    expect((await upcoming())[0]).toMatchObject({ next_due_date: '2026-10-09', paid: true });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(409);
+    await on('2026-10-09');
+    expect((await upcoming())[0]).toMatchObject({ next_due_date: '2026-10-09', paid: false });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+  });
+});
