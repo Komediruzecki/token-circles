@@ -327,15 +327,18 @@ budgetsRoutes.get('/api/budgets/alerts', requireAuth, async (c) => {
     endDate = `${nextY}-${String(nextM).padStart(2, '0')}-01`;
   }
 
-  // budgetsRepo.listActive
+  // The month's budgets: the rows that start in it, as GET /api/budgets reads them (D13). It took
+  // every row without an end date, so each earlier month's budget for a category, and each later
+  // one, was measured against this month's spending, and one category raised an alert per month.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+     WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
     pid,
-    startDate
+    startDate,
+    endDate
   );
 
   const spent = await db.all<{ category_id: number; total: number }>(

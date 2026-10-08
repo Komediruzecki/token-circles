@@ -136,9 +136,13 @@ export async function budgetsAlerts(query: URLSearchParams): Promise<Response> {
       allCats.push(...c)
     }
 
-    const budgets = allBudgets.filter(
-      (b: Record<string, unknown>) => !b.end_date || (b.end_date as string) >= startDate
-    )
+    // The month's budgets: the rows that start in it, as the Worker reads them. It took every row
+    // without an end date, so each earlier month's budget for a category, and each later one, was
+    // measured against this month's spending, and one category raised an alert per month.
+    const budgets = allBudgets.filter((b: Record<string, unknown>) => {
+      const start = typeof b.start_date === 'string' ? b.start_date : ''
+      return start >= startDate && start < endDate
+    })
 
     const txns = allTxns.filter(
       (t: Record<string, unknown>) =>
