@@ -312,6 +312,17 @@ describe('saving a new address', () => {
     expect(mailsTo(NEW)).toHaveLength(3);
   });
 
+  it('counts spellings of one inbox against one limit: case, a trailing dot, a +tag', async () => {
+    await seed(1);
+    expect((await save('new-home@example.com')).status).toBe(200);
+    expect((await save('new-home+a@example.com')).status).toBe(200);
+    expect((await save('new-home@example.com.')).status).toBe(200);
+
+    const fourth = await save('New-Home+b@Example.com');
+
+    expect(fourth.status).toBe(429);
+  });
+
   it('lets one account ask for at most five changes an hour', async () => {
     await seed(1);
     for (let i = 1; i <= 5; i++) expect((await save(`home-${i}@example.com`)).status).toBe(200);

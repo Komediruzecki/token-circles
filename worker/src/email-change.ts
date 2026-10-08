@@ -54,6 +54,22 @@ async function emailInUse(d1: D1Database, email: string, userId: number): Promis
   return !!(await db.first(d1, 'SELECT id FROM users WHERE email = ? AND id != ?', email, userId));
 }
 
+/**
+ * The key one address's limit is counted under. Spellings that reach the same inbox share it: any
+ * case, a trailing dot on the domain, a +tag. Only the limit uses this; the address is kept as
+ * given everywhere else.
+ */
+function addressBucket(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at < 0) return email.toLowerCase();
+  const local = email.slice(0, at).toLowerCase().split('+')[0];
+  const domain = email
+    .slice(at + 1)
+    .toLowerCase()
+    .replace(/\.+$/, '');
+  return `${local}@${domain}`;
+}
+
 /** The 429 to send when `userId` may not mail `email` a link now, or null when it may. */
 async function limitEmailChange(
   c: Context<AppEnv>,
@@ -64,7 +80,7 @@ async function limitEmailChange(
     (await enforce(c, `email-change-ip:${clientIp(c)}`, PER_IP_LIMIT, LIMIT_WINDOW_SEC)) ??
     (await enforce(c, `email-change-account:${userId}`, PER_ACCOUNT_LIMIT, LIMIT_WINDOW_SEC)) ??
     (await enforce(c, `email-change-account-day:${userId}`, PER_ACCOUNT_DAILY_LIMIT, DAY_SEC)) ??
-    (await enforce(c, `email-change:${email}`, PER_ADDRESS_LIMIT, LIMIT_WINDOW_SEC))
+    (await enforce(c, `email-change:${addressBucket(email)}`, PER_ADDRESS_LIMIT, LIMIT_WINDOW_SEC))
   );
 }
 
