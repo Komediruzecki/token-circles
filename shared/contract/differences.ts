@@ -35,6 +35,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/budgets/zero-based gives a category with spending and no budget an amount of 0 and 0% used on the Worker, but an amount equal to its spending and 100% used in local-first, so the Budgets page marks it 'warning' in local-first only. Slice 3 (budgets).",
   'budget-allocation-alerts':
     "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
+  'budget-trend-spending':
+    "The months of GET /api/budgets/improvements and of the forecast's history count only the spending of budgeted categories on the Worker, but every expense of the month, unbudgeted and uncategorised included, in local-first, so the Budgets page's trend and average adherence differ between modes. Slice 3 (budgets).",
   'category-apply-mappings':
     'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
   'category-mapping-upsert':

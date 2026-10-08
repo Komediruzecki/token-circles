@@ -526,4 +526,39 @@ export const budgets = [
     expect(theirs).toHaveLength(1);
     expectMoney(expect, theirs[0].amount, 50, "the other profile's budget");
   }),
+
+  scenario('budget adherence by month, with the month before', async (api, expect) => {
+    await twoMonths(api, expect);
+
+    const trend = await api.get('/api/budgets/improvements?months=6');
+    expectOk(expect, trend, 'GET /api/budgets/improvements');
+    expect((trend.body as Json[]).map((m) => m.month)).toEqual(['2026-03', '2026-02']);
+    const [march, february] = trend.body as Json[];
+    // Every budget of the month counts once: Food 300 and Fun 100.
+    expectMoney(expect, march.total_budget, 400, 'March budget');
+    expectMoney(expect, february.total_budget, 200, 'February budget');
+    expectMoney(expect, february.total_spent, 150, 'February spent');
+    expectMoney(expect, february.adherence_pct, 75, 'February adherence');
+    expect(february.prev_adherence).toBeNull();
+    expectMoney(expect, march.prev_adherence, 75, 'March against February');
+    // DIFFERENCE budget-trend-spending
+    if (api.runtime === 'worker') {
+      expectMoney(expect, march.total_spent, 290, 'March spent');
+      expectMoney(expect, march.adherence_pct, 72.5, 'March adherence');
+      expectMoney(expect, march.change_pct, -2.5, 'March change');
+    } else {
+      expectMoney(expect, march.total_spent, 815, 'March spent');
+      expectMoney(expect, march.adherence_pct, 203.75, 'March adherence');
+      expectMoney(expect, march.change_pct, 128.75, 'March change');
+    }
+    expect(
+      (JSON.parse(march.category_budgets) as Json[]).map((c) => [c.name, Number(c.budget_amount)])
+    ).toEqual([
+      ['Food', 300],
+      ['Fun', 100],
+    ]);
+
+    const one = await api.get('/api/budgets/improvements?months=1');
+    expect((one.body as Json[]).map((m) => m.month)).toEqual(['2026-03']);
+  }),
 ];

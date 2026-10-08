@@ -240,7 +240,9 @@ budgetsRoutes.get('/api/budgets/improvements', requireAuth, async (c) => {
           AND t.date >= b.start_date
           AND t.date < date(b.start_date, '+1 month')
         WHERE b.profile_id IN (${inClause})
-        GROUP BY b.start_date
+        -- One row per budget. Grouped by start_date, the budgets of one month collapsed into one
+        -- row whose budget_amount was any one of theirs, not their sum.
+        GROUP BY b.id
       ),
       aggregated AS (
         SELECT
