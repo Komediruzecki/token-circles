@@ -157,6 +157,18 @@ describe('an edit to a category', () => {
     expect(edit({ name: 'Food' })).toEqual({ ok: true, value: { name: 'Food' } })
   })
 
+  // A form field holds text: a parent comes back as "4", not the 4 storage holds. The tax flag is
+  // a boolean in a body and 0 or 1 in D1.
+  it('reads a value the way its field reads one before deciding it changed', () => {
+    expect(
+      edit({ parent_id: '4', tax_deductible: false, type: 'Expense', icon: ' cart ' })
+    ).toEqual({ ok: true, value: {} })
+    expect(edit({ parent_id: '5', tax_deductible: true })).toEqual({
+      ok: true,
+      value: { parent_id: 5, tax_deductible: true },
+    })
+  })
+
   describe('of a row saved under older rules', () => {
     const legacy = {
       id: 8,

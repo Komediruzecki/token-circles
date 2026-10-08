@@ -441,6 +441,13 @@ describe('editing a local-first row saved under older rules', () => {
     expect(row).toMatchObject({ name: 'Children', parent_id: ELSEWHERE })
   })
 
+  // A form field holds text, so a parent can come back as "30" rather than 30.
+  it('sends that parent back as the string a form field holds, and it is still unchanged', async () => {
+    const row = await saved(KIDS, { name: 'Children', parent_id: String(ELSEWHERE) })
+
+    expect(row).toMatchObject({ name: 'Children', parent_id: ELSEWHERE })
+  })
+
   it('still refuses a color the edit changes to one that cannot be used', async () => {
     const body = await refusal(
       await call('PUT', `/api/categories/${FUEL}`, {

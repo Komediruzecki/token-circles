@@ -453,6 +453,17 @@ describe('editing a row saved under older rules', () => {
     expect(await stored(KIDS)).toMatchObject({ name: 'Children', parent_id: ELSEWHERE });
   });
 
+  // A form field holds text, so a parent can come back as "981110" rather than 981110.
+  it('sends that parent back as the string a form field holds, and it is still unchanged', async () => {
+    const res = await call('PUT', `/api/categories/${KIDS}`, {
+      name: 'Children',
+      parent_id: String(ELSEWHERE),
+    });
+
+    expect(res.status).toBe(200);
+    expect(await stored(KIDS)).toMatchObject({ name: 'Children', parent_id: ELSEWHERE });
+  });
+
   it('still checks a value the edit changes', async () => {
     const body = await refusal(
       await call('PUT', `/api/categories/${FUEL}`, { name: 'Fuel', color: '#ffff' })

@@ -157,19 +157,24 @@ export function checkCategoryEdit(body: unknown, stored: object): Checked<Partia
 }
 
 /**
- * Whether an edit's value for `field` is the one the row holds. A name is the same name without
- * the space around it: older versions stored a name as typed, and a client that trims the name it
- * sends back has not changed it. A long name with a trailing space, sent back trimmed, would
- * otherwise be checked as new and refused for its length.
+ * Whether an edit's value for `field` says what the row holds. Both are read the way the field
+ * reads a body: a parent sent as "771104", the text a form field holds, is the 771104 the row
+ * holds, and a tax flag sent as false is the 0 D1 keeps. A value these rules refuse is the same
+ * only as it is stored.
+ *
+ * A name is the same name without the space around it, even one these rules refuse: older versions
+ * stored a name as typed, and a client that trims the name it sends back has not changed it. A
+ * long name with a trailing space, sent back trimmed, would otherwise be checked as new and
+ * refused for its length.
  */
 function holds(field: keyof CategoryInput, raw: unknown, stored: unknown): boolean {
   if (raw === stored) return true;
-  return (
-    field === 'name' &&
-    typeof raw === 'string' &&
-    typeof stored === 'string' &&
-    raw.trim() === stored.trim()
-  );
+  if (field === 'name') {
+    return typeof raw === 'string' && typeof stored === 'string' && raw.trim() === stored.trim();
+  }
+  const sent = READERS[field](raw);
+  const kept = READERS[field](stored);
+  return 'value' in sent && 'value' in kept && sent.value === kept.value;
 }
 
 /**
