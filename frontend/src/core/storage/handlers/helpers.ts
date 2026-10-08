@@ -166,6 +166,15 @@ export function endOfNextMonth(startDate: string): string {
   return `${next.year}-${String(next.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
+/** A `YYYY-MM` as "Mar 2026", the same in every timezone. */
+export function monthLabel(month: string): string {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  })
+}
+
 // ── Shared data helpers ───────────────────────────────────────────────────────
 
 /** Fetch all records from a store across current profile IDs */

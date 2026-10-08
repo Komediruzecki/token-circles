@@ -587,4 +587,24 @@ export const budgets = [
       expect(forecast.body.avg_adherence).toBe(88);
     }
   }),
+
+  scenario('the forecast covers the next six months', async (api, expect) => {
+    await twoMonths(api, expect);
+
+    const forecast = await api.get('/api/budgets/forecast?month=2026-04');
+    expectOk(expect, forecast, 'GET /api/budgets/forecast');
+    // Each month from Food's average month, (150 + 180) / 2, and 3% a month of inflation.
+    const months = forecast.body.forecast as Json[];
+    expect(months.map((m) => m.month)).toEqual(
+      [1, 2, 3, 4, 5, 6].map((i) => monthStart(i).slice(0, 7))
+    );
+    expectMoney(expect, months[0].budget_amount, 200, 'forecast budget');
+    expectMoney(expect, months[0].predicted_spent, 165 * 1.03, 'next month predicted');
+    expectMoney(expect, months[5].predicted_spent, 165 * 1.03 ** 6, 'sixth month predicted');
+    expect(months[0].status).toBe('warning');
+
+    const empty = await api.other.get('/api/budgets/forecast?month=2026-02');
+    expectOk(expect, empty, 'GET /api/budgets/forecast with no budgets');
+    expect(empty.body).toMatchObject({ history: [], forecast: [], total_budget: 0 });
+  }),
 ];

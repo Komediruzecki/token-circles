@@ -12,6 +12,7 @@ import {
   getAmount,
   idParam,
   json,
+  monthLabel,
   monthStart,
   nextMonth,
   notFound,
@@ -1071,10 +1072,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       const d = histMap[mo]
       return {
         month: mo,
-        label: new Date(`${mo}-01`).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        }),
+        label: monthLabel(mo),
         total_budget: d.budget,
         total_spent: d.spent,
         adherence: d.budget > 0 ? Math.min(100, (d.spent / d.budget) * 100) : 0,
