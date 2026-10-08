@@ -190,9 +190,6 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
 /** Contract routes no scenario sends yet. The list only shrinks: empty is the goal. */
 export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/counterparties',
-  'GET /api/dashboard',
-  'GET /api/dashboard/charts',
-  'GET /api/dashboard/net-worth',
   'GET /api/dashboard/summary',
   'GET /api/reports/annual-pdf',
   'POST /api/reports/custom',

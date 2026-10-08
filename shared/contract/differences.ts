@@ -89,6 +89,12 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/stats/monthly counts the current month up to today on the Worker and the whole month in local-first, so an expense dated later this month is in Analytics' monthly figures and savings rate in local-first only. Slice 2 (transactions), whose data it reads.",
   'sankey-uncategorised':
     "GET /api/analytics/sankey leaves uncategorised spending out of the month's budget flow on the Worker, and shows it as an Uncategorized category, budgeted at what was spent, in local-first, so the flow's Total Actual differs between modes by the uncategorised spending. Slice 3 (budgets).",
+  'dashboard-upcoming-bills':
+    "GET /api/dashboard answers as upcomingBills the bills whose stored due date falls in the next 30 days on the Worker, and none in local-first, so the Dashboard's Upcoming Bills card shows in cloud mode only. The Worker reads the due date a bill was saved with, which marking it paid does not move. Slice 3 (bills).",
+  'dashboard-uncategorised':
+    "GET /api/dashboard answers uncategorised spending (in expenseByCategory) and an uncategorised recent transaction with a null category name and colour on the Worker, and as 'Uncategorized' in #999 in local-first; the Dashboard then labels that recent transaction 'No category' in cloud mode and 'Uncategorized' in local-first. Slice 2 (transactions).",
+  'dashboard-charts':
+    "GET /api/dashboard/charts answers byCategory over all time with uncategorised spending left out, the currency of a local_currency setting nothing writes (so EUR, whatever the base currency), and monthly rows that also carry the running total, on the Worker; byCategory over the months charted with uncategorised spending included, and the base currency, in local-first. The Dashboard reads only the monthly rows' month, income and expense. Slice 2 (transactions), whose data it reads.",
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':
