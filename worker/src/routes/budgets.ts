@@ -987,7 +987,7 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
   const dlPrevYear = currMonth === 1 ? currYear - 1 : currYear;
   const dlPrevBudgets = await db.all<BudgetRow>(
     c.env.DB,
-    'SELECT * FROM budgets WHERE profile_id = ? AND start_date LIKE ?',
+    'SELECT * FROM budgets WHERE profile_id = ? AND start_date LIKE ? ORDER BY id',
     pid,
     `${dlPrevYear}-${String(dlPrevMonth).padStart(2, '0')}%`
   );
@@ -997,30 +997,44 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
       ? `${currYear + 1}-01-01`
       : `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`;
 
-  // The copy replaces this month's budgets, as local-first and from-expenses do, and keeps each
-  // budget's rollover. (This was INSERT OR REPLACE, but budgets has no unique key to replace on,
-  // so copying twice made two of every budget.)
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?'
-    ).bind(pid, startDate, endDate),
-    ...dlPrevBudgets.map((b) =>
-      c.env.DB.prepare(
-        'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, ?)'
-      ).bind(
-        pid,
-        b.category_id,
-        b.amount,
-        b.period,
-        startDate,
-        b.rollover_enabled ? 1 : 0,
-        b.rollover_amount || 0
-      )
-    ),
-  ]);
-  const count = dlPrevBudgets.length;
+  // A budget the month already has is never replaced: only a category with no budget in it yet
+  // gets last month's, one budget per category (the newest, should last month hold two), with its
+  // rollover. The answer says how many were copied and how many categories already had one, for
+  // the Budgets page's toast. (This deleted the month's budgets first, so a copy overwrote the
+  // amounts a person had set and dropped the categories last month did not budget.)
+  const budgeted = await db.all<{ category_id: number }>(
+    c.env.DB,
+    'SELECT category_id FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
+    pid,
+    startDate,
+    endDate
+  );
+  const already = new Set(budgeted.map((b) => b.category_id));
+  const copies = new Map<number, BudgetRow>();
+  for (const b of dlPrevBudgets) if (!already.has(b.category_id)) copies.set(b.category_id, b);
+  const alreadyBudgeted = new Set(
+    dlPrevBudgets.map((b) => b.category_id).filter((id) => already.has(id))
+  ).size;
 
-  return c.json({ ok: true, count });
+  if (copies.size > 0) {
+    await c.env.DB.batch(
+      [...copies.values()].map((b) =>
+        c.env.DB.prepare(
+          'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).bind(
+          pid,
+          b.category_id,
+          b.amount,
+          b.period,
+          startDate,
+          b.rollover_enabled ? 1 : 0,
+          b.rollover_amount || 0
+        )
+      )
+    );
+  }
+
+  return c.json({ ok: true, count: copies.size, already_budgeted: alreadyBudgeted });
 });
 
 // ── Parametric /:id routes — registered last so static segments above win ─────

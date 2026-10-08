@@ -909,11 +909,27 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
         (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
     )
 
-    const tx = db.transaction('budgets', 'readwrite')
-    for (const b of existingBudgets) await tx.store.delete(b.id as number)
+    // A budget the month already has is never replaced: only a category with no budget in it yet
+    // gets last month's, one budget per category (the newest, should last month hold two), with
+    // its rollover. The answer says how many were copied and how many categories already had one.
+    // (This deleted the month's budgets first, so a copy overwrote the amounts a person had set and
+    // dropped the categories last month did not budget.)
+    const already = new Set(
+      existingBudgets.map((b: Record<string, unknown>) => Number(b.category_id))
+    )
+    const copies = new Map<number, Record<string, unknown>>()
+    for (const b of prevBudgets as Record<string, unknown>[]) {
+      if (!already.has(Number(b.category_id))) copies.set(Number(b.category_id), b)
+    }
+    const alreadyBudgeted = new Set(
+      prevBudgets
+        .map((b: Record<string, unknown>) => Number(b.category_id))
+        .filter((id: number) => already.has(id))
+    ).size
 
+    const tx = db.transaction('budgets', 'readwrite')
     const createdAt = new Date().toISOString()
-    for (const b of prevBudgets) {
+    for (const b of copies.values()) {
       await tx.store.add({
         category_id: b.category_id,
         amount: b.amount,
@@ -921,14 +937,14 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
         start_date: currStart,
         end_date: null,
         profile_id: pid,
-        rollover_enabled: (b as Record<string, unknown>).rollover_enabled || false,
-        rollover_amount: (b as Record<string, unknown>).rollover_amount || 0,
+        rollover_enabled: b.rollover_enabled || false,
+        rollover_amount: b.rollover_amount || 0,
         created_at: createdAt,
       })
     }
     await tx.done
 
-    return json({ ok: true, count: prevBudgets.length })
+    return json({ ok: true, count: copies.size, already_budgeted: alreadyBudgeted })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

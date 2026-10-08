@@ -436,34 +436,54 @@ export const budgets = [
   scenario("last month's budgets are copied to this month, once", async (api, expect) => {
     const food = await addCategory(api, expect, 'Food');
     const fun = await addCategory(api, expect, 'Fun');
+    const gym = await addCategory(api, expect, 'Gym');
     const foodMar = await budget(api, expect, food, 300);
-    await budget(api, expect, fun, 100);
+    const funMar = await budget(api, expect, fun, 100);
     await rollover(api, expect, foodMar, { rollover_enabled: true });
+    await rollover(api, expect, funMar, { rollover_enabled: true });
+    // April already has its own Food budget, and one for Gym, which March does not budget.
+    const foodApr = await budget(api, expect, food, 450, '2026-04-01');
+    const gymApr = await budget(api, expect, gym, 50, '2026-04-01');
 
     // The Budgets page sends the month it shows.
-    const copy = async () => {
-      const reply = await api.post('/api/budgets/duplicate-last', { year: 2026, month: 4 });
-      expectOk(expect, reply, 'POST /api/budgets/duplicate-last');
+    const copy = async (month: number) => {
+      const reply = await api.post('/api/budgets/duplicate-last', { year: 2026, month });
+      expectOk(expect, reply, `POST /api/budgets/duplicate-last into month ${month}`);
       return reply.body;
     };
-    expect(await copy()).toMatchObject({ ok: true, count: 2 });
-    expect(await monthOf(api, expect, '2026-04-01')).toEqual([
-      [food, 300],
-      [fun, 100],
-    ]);
-    const april = (await listBudgets(api, expect)).filter((row) => row.start_date === '2026-04-01');
-    expect(Boolean(byCategory(april, food).rollover_enabled), 'Food keeps its rollover').toBe(true);
-    expect(Boolean(byCategory(april, fun).rollover_enabled)).toBe(false);
 
-    // Copying again replaces April's budgets; it does not add a second set.
-    expect(await copy()).toMatchObject({ ok: true, count: 2 });
+    // Only Fun is copied: a budget April already has is never replaced, and Food was there.
+    const first = await copy(4);
     expect(await monthOf(api, expect, '2026-04-01')).toEqual([
-      [food, 300],
+      [food, 450],
       [fun, 100],
+      [gym, 50],
+    ]);
+    expect(first).toMatchObject({ ok: true, count: 1, already_budgeted: 1 });
+    const april = (await listBudgets(api, expect)).filter((row) => row.start_date === '2026-04-01');
+    expect(byCategory(april, food).id, "April's own Food budget is the one kept").toBe(foodApr);
+    expect(Boolean(byCategory(april, food).rollover_enabled), "with April's rollover").toBe(false);
+    expect(byCategory(april, gym).id).toBe(gymApr);
+    expect(Boolean(byCategory(april, fun).rollover_enabled), 'Fun keeps its rollover').toBe(true);
+
+    // Copying again copies nothing and adds nothing.
+    expect(await copy(4)).toMatchObject({ ok: true, count: 0, already_budgeted: 2 });
+    expect(await monthOf(api, expect, '2026-04-01')).toEqual([
+      [food, 450],
+      [fun, 100],
+      [gym, 50],
     ]);
     expect(await monthOf(api, expect, '2026-03-01')).toEqual([
       [food, 300],
       [fun, 100],
+    ]);
+
+    // Into a month with no budgets, every one of last month's is copied.
+    expect(await copy(5)).toMatchObject({ ok: true, count: 3, already_budgeted: 0 });
+    expect(await monthOf(api, expect, '2026-05-01')).toEqual([
+      [food, 450],
+      [fun, 100],
+      [gym, 50],
     ]);
 
     const none = await api.post('/api/budgets/duplicate-last', { year: 2026, month: 9 });

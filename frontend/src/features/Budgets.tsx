@@ -56,8 +56,10 @@ import { theme } from '../core/theme'
 import { toYYYYMM } from '../utils/period'
 import styles from './BudgetsPage.module.css'
 import { createCategoryForm } from './categoryForm'
+import { copyLastMonthToast } from './copyLastMonth'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
 import type { CategoryFormValues } from './categoryForm'
+import type { CopyLastMonthAnswer } from './copyLastMonth'
 
 type AllocationStatus = 'ok' | 'warning' | 'over'
 
@@ -247,7 +249,7 @@ export default function Budgets() {
   const duplicateLastMonth = async () => {
     const [year, mon] = month().split('-')
     try {
-      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>(
+      const result = await apiPost<CopyLastMonthAnswer & { ok: boolean; message?: string }>(
         '/api/budgets/duplicate-last',
         {
           year: parseInt(year),
@@ -255,7 +257,8 @@ export default function Budgets() {
         }
       )
       if (result.ok) {
-        showToast(`Copied ${result.count} budgets from ${prevMonthLabel()}`, 'success')
+        const toast = copyLastMonthToast(result, month())
+        showToast(toast.message, toast.type)
         // No refetch here: the POST bumped the budgets counter, which the resource tracks.
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
