@@ -79,6 +79,9 @@ defineTool({
       // Categories must already exist: an agent inventing a taxonomy row by row is exactly
       // what the import gate refuses, and the same reasoning applies here.
       approvedCategories: [],
+      // No `today`: MCP answers on the UTC calendar unless the client sends X-Time-Zone
+      // (docs/mcp-server.md, "Dates are UTC"). It is never reached here anyway: every row
+      // carries its own date, and no categoryTypes means no account is created.
     });
     if (outcome.status >= 400) {
       throw new HttpError(outcome.status, String(outcome.body.error ?? 'Could not create rows'));
