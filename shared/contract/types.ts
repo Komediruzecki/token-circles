@@ -65,6 +65,7 @@ export const STORED_KINDS = [
   'loan extra payments',
   'loan rate periods',
   'loans',
+  'receipts',
   'recurring',
   'retirement goals',
   'retirement settings',

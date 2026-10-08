@@ -54,6 +54,10 @@ export async function fillProfile(api: ContractApi, expect: Expect): Promise<Own
     category_id: food,
     account_id: everyday,
   });
+  const receipt = new FormData();
+  receipt.append('receipt', new File(['%PDF-1.4\n'], 'groceries.pdf', { type: 'application/pdf' }));
+  receipt.append('transaction_id', String(groceries));
+  expectOk(expect, await api.post('/api/receipts/upload', receipt), 'POST the receipt');
   const coffee = await added(api, expect, '/api/tags', { name: 'Coffee', color: '#6b4f2a' });
   expectOk(
     expect,

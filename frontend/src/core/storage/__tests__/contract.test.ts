@@ -104,6 +104,7 @@ const PROFILE_STORES: Partial<Record<StoredKind, string>> = {
   'import logs': 'import_logs',
   'import sources': 'import_sources',
   loans: 'loans',
+  receipts: 'receipts',
   recurring: 'recurring',
   'retirement goals': 'retirement_goals',
   'tag rules': 'tagRules',
