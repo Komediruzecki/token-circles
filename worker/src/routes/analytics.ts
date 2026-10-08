@@ -25,8 +25,14 @@ analyticsRoutes.get('/api/stats/monthly', requireAuth, async (c) => {
   // range ending on the UTC date left out everything entered between local midnight and the UTC
   // one (00:00-02:00 in CEST) from Monthly Income, Monthly Expense and the savings rate.
   const endDate = localNow(c);
-  const startDate = new Date(endDate);
-  startDate.setMonth(startDate.getMonth() - parseInt(String(months)) + 1);
+  // From the 1st of the first month, so that month counts whole. setMonth() on today's date began
+  // it on today's day of the month instead, and on the 29th to the 31st overflowed past a shorter
+  // month: on 31 October, twelve months began on 1 December and left November out.
+  const startDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth() - parseInt(String(months)) + 1,
+    1
+  );
   const startStr = startDate.toISOString().split('T')[0];
   const endStr = endDate.toISOString().split('T')[0];
 

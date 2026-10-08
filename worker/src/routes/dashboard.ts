@@ -295,8 +295,12 @@ dashboardRoutes.get('/api/dashboard/charts', requireAuth, async (c) => {
   const months = c.req.query('months') ?? '12'
   // Ends today on the person's calendar (see /api/stats/monthly).
   const endDate = localNow(c)
-  const startDate = new Date(endDate)
-  startDate.setMonth(startDate.getMonth() - parseInt(String(months)) + 1)
+  // From the 1st of the first month, as /api/stats/monthly and local-first count it.
+  const startDate = new Date(
+    endDate.getFullYear(),
+    endDate.getMonth() - parseInt(String(months)) + 1,
+    1
+  )
   const startStr = startDate.toISOString().split('T')[0]
   const endStr = endDate.toISOString().split('T')[0]
 
