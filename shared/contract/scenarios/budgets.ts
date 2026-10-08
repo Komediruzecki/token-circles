@@ -304,6 +304,87 @@ export const budgets = [
   }),
 
   scenario(
+    'zero-based budgeting: income, what each category has and what is left to assign',
+    async (api, expect) => {
+      const { food, fun, rent, foodMar, funMar } = await twoMonths(api, expect);
+
+      const form = await api.get('/api/budgets/zero-based?month=2026-03');
+      expectOk(expect, form, 'GET /api/budgets/zero-based');
+      expect(form.body).toMatchObject({ period: '2026-03', can_allocate: true });
+      expectMoney(expect, form.body.remaining_income, 2000, 'income');
+      expectMoney(expect, form.body.alreadyBudgeted, 400, 'already budgeted');
+      expectMoney(expect, form.body.unassigned_budget, 1600, 'unassigned');
+      expect((form.body.categories as Json[]).map((c) => c.name)).toEqual(['Food', 'Fun', 'Rent']);
+
+      const allocations = form.body.allocations as Json[];
+      expect(byCategory(allocations, food)).toMatchObject({
+        budget_id: foodMar,
+        category_name: 'Food',
+        is_budgeted: true,
+        percent_used: 60,
+      });
+      expectMoney(expect, byCategory(allocations, food).amount, 300, 'Food amount');
+      expectMoney(expect, byCategory(allocations, food).spent, 180, 'Food spent');
+      expectMoney(expect, byCategory(allocations, food).remaining_budget, 120, 'Food left');
+      expect(byCategory(allocations, fun)).toMatchObject({
+        budget_id: funMar,
+        is_budgeted: true,
+        percent_used: 100,
+      });
+      expectMoney(expect, byCategory(allocations, fun).remaining_budget, -10, 'Fun left');
+      expect(byCategory(allocations, rent)).toMatchObject({ budget_id: null, is_budgeted: false });
+      expectMoney(expect, byCategory(allocations, rent).spent, 500, 'Rent spent');
+      // DIFFERENCE budget-zero-based-unbudgeted
+      if (api.runtime === 'worker') {
+        expect(byCategory(allocations, rent)).toMatchObject({ amount: 0, percent_used: 0 });
+      } else {
+        expect(byCategory(allocations, rent)).toMatchObject({ amount: 500, percent_used: 100 });
+      }
+
+      const summary = await api.get('/api/budgets/zero-based/summary?month=2026-03');
+      expectOk(expect, summary, 'GET /api/budgets/zero-based/summary');
+      expect(summary.body).toMatchObject({ period: '2026-03', can_allocate: true });
+      expectMoney(expect, summary.body.income, 2000, 'income');
+      expectMoney(expect, summary.body.total_budget, 400, 'total budget');
+      expectMoney(expect, summary.body.already_budgeted, 400, 'already budgeted');
+      // Spent counts every category with spending this month, Rent included.
+      expectMoney(expect, summary.body.total_spent, 790, 'total spent');
+      expectMoney(expect, summary.body.remaining, -390, 'remaining');
+      expectMoney(expect, summary.body.zero_based_remaining, 1600, 'left to assign');
+      expectMoney(expect, summary.body.unassigned_budget, 1600, 'unassigned');
+
+      const rows = summary.body.allocations as Json[];
+      expect(rows).toHaveLength(3);
+      expect(byCategory(rows, food)).toMatchObject({
+        budget_id: foodMar,
+        status: 'ok',
+        is_fully_allocated: true,
+        alerts: [],
+      });
+      expectMoney(expect, byCategory(rows, food).allocated, 300, 'Food allocated');
+      expectMoney(expect, byCategory(rows, food).spent, 180, 'Food spent');
+      expectMoney(expect, byCategory(rows, food).percent_used, 60, 'Food used');
+      expect(byCategory(rows, fun)).toMatchObject({
+        budget_id: funMar,
+        status: 'over',
+        is_fully_allocated: false,
+      });
+      expectMoney(expect, byCategory(rows, fun).percent_used, 110, 'Fun used');
+      expectMoney(expect, byCategory(rows, fun).remaining, -10, 'Fun left');
+      // DIFFERENCE budget-allocation-alerts
+      expect(byCategory(rows, fun).alerts).toEqual([
+        'Approaching limit: 110% used',
+        api.runtime === 'worker' ? 'Over budget by $-10.00' : 'Over budget by $10.00',
+      ]);
+      expect(byCategory(rows, 0)).toMatchObject({
+        category_name: 'Unallocated / Future',
+        is_unallocated: true,
+      });
+      expectMoney(expect, byCategory(rows, 0).remaining, 1600, 'unallocated');
+    }
+  ),
+
+  scenario(
     "allocating sets a category's budget for this month, and again changes it",
     async (api, expect) => {
       const food = await addCategory(api, expect, 'Food');

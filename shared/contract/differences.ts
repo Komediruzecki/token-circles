@@ -31,6 +31,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'A tag edit that leaves out the colour resets it to #6b7280 on the Worker and keeps it in local-first; the Tags page always sends it. Slice 5 (tags).',
   'tag-rename-duplicate':
     "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
+  'budget-zero-based-unbudgeted':
+    "GET /api/budgets/zero-based gives a category with spending and no budget an amount of 0 and 0% used on the Worker, but an amount equal to its spending and 100% used in local-first, so the Budgets page marks it 'warning' in local-first only. Slice 3 (budgets).",
+  'budget-allocation-alerts':
+    "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
   'category-apply-mappings':
     'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
   'category-mapping-upsert':
