@@ -6,13 +6,19 @@
  * moved. The pattern the fixes share is to make the write itself the claim — a conditional
  * statement inside the batch — and to report a lost race rather than a success that quietly lost.
  *
- * The races are driven with Promise.all so both requests read before either writes. A guard that
- * only holds because the runtime happened to serialise the handlers is not a guard, so each case
- * also checks the SIDE EFFECT (the balance, the row count), which is what actually went wrong.
+ * Promise.all sends two requests at once, but it does not make them overlap: the runtime may run
+ * one handler to the end before the other reads, and then the read refuses the second before any
+ * guard is reached. The bill cases passed with their guard replaced by `1 = 1`. So the bill and
+ * recurring guards each also have a case that builds both batches from ONE read, as two
+ * overlapping requests build them, where nothing but the guard stands between them and a second
+ * payment. Every case checks the SIDE EFFECT (the balance, the row count), which is what actually
+ * went wrong.
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { markPaidStatements, type BillRow } from '../src/routes/bills';
+import { populateStatements, type RecurringRow } from '../src/routes/recurring';
 import { unchangedSince } from '../src/routes/transactions';
 
 const UID = 700;
@@ -94,6 +100,19 @@ describe('paying a bill from two devices at once', () => {
     expect(await balance()).toBe(940);
   });
 
+  it('takes the money once when both taps read the bill unpaid', async () => {
+    const bill = (await env.DB.prepare('SELECT * FROM bills WHERE id = 7200').first<BillRow>())!;
+    const now = new Date();
+    const tap = () => markPaidStatements(env.DB, bill, PID, now, 'EUR');
+    const [first, second] = [tap(), tap()];
+
+    await env.DB.batch(first);
+    await env.DB.batch(second);
+
+    expect(await count('transactions')).toBe(1);
+    expect(await balance()).toBe(940);
+  });
+
   it('marks the bill paid exactly once', async () => {
     await Promise.all([
       api('/api/bills/7200/mark-paid', { method: 'POST' }),
@@ -139,6 +158,21 @@ describe('populating a recurring rule from two devices at once', () => {
     const created = await count('transactions');
     expect(created).toBeGreaterThan(0);
     expect(await periodsAdvanced()).toBe(created);
+  });
+
+  it('populates a period once when both taps read the same next date', async () => {
+    const rule = (await env.DB.prepare(
+      'SELECT * FROM recurring_transactions WHERE id = 7300'
+    ).first<RecurringRow>())!;
+    const tap = () => populateStatements(env.DB, rule, PID, '2026-01-01', '2026-02-01', 'EUR');
+    const [first, second] = [tap(), tap()];
+
+    await env.DB.batch(first);
+    await env.DB.batch(second);
+
+    expect(await count('transactions')).toBe(1);
+    expect(await periodsAdvanced()).toBe(1);
+    expect(await balance()).toBe(750);
   });
 
   it('debits the account once per period, not once per tap', async () => {
