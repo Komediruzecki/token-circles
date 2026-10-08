@@ -171,10 +171,11 @@ const form = createForm({
 - `SubmitButton`, never `disabled={form.submitting()}`: while the form sends it reads "Saving…"
   (or the form's own verb, `busyLabel`) and is `aria-disabled`, so it keeps focus. A `disabled`
   button drops a keyboard user at the top of the page.
-- What follows a save (the toast, closing the dialog) goes in `saved`, never after the `await` in
-  `send`. The kit runs `saved` only while the form is still the one that sent: a dialog cancelled
-  and opened again while its save was out has been reset, and a late save closing it throws away
-  what the person is typing.
+- The success toast goes in `send`, after the write: the save happened whatever the dialog does
+  next, so it is said even when the dialog was cancelled and opened again while the save was out.
+  Closing the dialog goes in `saved`, never after the `await` in `send`. The kit runs `saved` only
+  while the form is still the one that sent: a dialog opened again has been reset, and a late save
+  closing it throws away what the person is typing.
 - The check is the entity's schema in `shared/`, the one the local-first router and the Worker
   also run, so the form and the server refuse the same values in the same words.
 - An edit checks only what it changes (`checkCategoryEdit(values, opened)`), as the server does:
@@ -185,9 +186,19 @@ const form = createForm({
 - No failure toast from a form. Toasts are for success, undo, and work with no form in front of
   the person; that failure goes through `plainMessage(err, fallback)`, never `err.message`.
   `frontend/src/__tests__/toastErrorMessages.test.ts` fails on a new one.
+- Something a field offers besides typing into it (the Transactions form's "Create a Cash
+  account" button, under the account field) says its failure there with
+  `form.mark(name, plainMessage(err, fallback))`. A mark behaves like a server's: it goes on the
+  field's next change, on the next submit or reset, and focus stays where the person is.
+- An InfoTip beside a label goes in `Field`'s `tip`, never inside the label: inside a `<label>`
+  its whole explanation becomes the control's accessible name.
+- A submit button outside the `<form>` (a dialog footer) is `<SubmitButton form="<the form's id>">`.
 
-Worked example: `frontend/src/features/categoryForm.ts`, used by the four category dialogs, and
-its test `frontend/src/features/__tests__/categoryForms.test.tsx`.
+Worked examples: `frontend/src/features/categoryForm.ts`, used by the four category dialogs, with
+its test `frontend/src/features/__tests__/categoryForms.test.tsx`; `accountForm.ts` (a form object
+the page opens for a new or an existing row) with `accountForm.test.tsx`; and `transactionForm.ts`,
+the Transactions form's values, body and check, which `Transactions.tsx` builds the form from,
+with `transactionForm.test.tsx`.
 
 ## Testing this
 
@@ -225,7 +236,7 @@ Worked examples: `frontend/src/features/__tests__/retirementPlanner.test.tsx`, i
 
 ## Reviewing a diff
 
-Eight greps that catch all of it:
+Nine greps that catch all of it:
 
 ```sh
 grep -n '<For each' <file>            # any editable row in there? -> <Index>
@@ -236,4 +247,5 @@ grep -n 'step="0.1"' <file>           # will 2dp values live here?
 grep -n '<form' <file>                # -> components/form: {...form.attrs}
 grep -n 'disabled={.*ubmitting' <file>  # a busy submit button -> SubmitButton, keeps focus
 grep -n 'err.message\|error.message' <file>  # in a toast? -> the form kit, or plainMessage
+grep -n 'InfoTip' <file>              # inside a <label>? -> Field's tip
 ```
