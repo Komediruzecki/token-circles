@@ -264,6 +264,38 @@ describe('POST /api/budgets/allocate', () => {
     expect(await stored(id)).toMatchObject({ amount: 99, start_date: '2026-11-01' })
     expect(await count()).toBe(3)
   })
+
+  // A budget can start mid-month: one an API client or an import set. Allocate found the month's
+  // budget by its first day only, so it added a second budget for the category that month.
+  it('changes the budget the month has when it starts mid-month, instead of adding one', async () => {
+    const mid = (await (
+      await getDB()
+    ).add('budgets', {
+      profile_id: 1,
+      category_id: RENT,
+      amount: 200,
+      period: 'monthly',
+      start_date: '2026-11-15',
+      end_date: null,
+      rollover_enabled: false,
+      rollover_amount: 0,
+      created_at: '2026-11-15T00:00:00.000Z',
+    } as never)) as number
+
+    const res = await call('POST', '/api/budgets/allocate?month=2026-11', {
+      category_id: RENT,
+      amount: 300,
+    })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({
+      id: mid,
+      amount: 300,
+      start_date: '2026-11-15',
+      message: 'Budget updated successfully',
+    })
+    expect(await stored(mid)).toMatchObject({ amount: 300, start_date: '2026-11-15' })
+    expect(await count()).toBe(3)
+  })
 })
 
 describe('PUT /api/budgets/:id/rollover', () => {

@@ -723,12 +723,28 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
     }
 
     const start_date = `${checkedMonth.value}-01`
+    const [year, month] = checkedMonth.value.split('-').map(Number)
+    const after = nextMonth(year!, month!)
+    const nextStart = monthStart(after.year, after.month)
 
+    // The month's budget for the category, whatever day it starts: one an API client or an import
+    // started mid-month is still the month's, and allocating changes it rather than adding a
+    // second one that the month would count as well.
     const db = await getDB()
-    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).find(
-      (b: Record<string, unknown>) =>
-        b.category_id === category_id && b.start_date === start_date && b.period === budgetPeriod
-    )
+    const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid))
+      .filter(
+        (b: Record<string, unknown>) =>
+          b.category_id === category_id &&
+          b.period === budgetPeriod &&
+          typeof b.start_date === 'string' &&
+          b.start_date >= start_date &&
+          b.start_date < nextStart
+      )
+      .sort(
+        (a, b) =>
+          String(a.start_date).localeCompare(String(b.start_date)) ||
+          (a.id as number) - (b.id as number)
+      )[0]
 
     // Allocate is an upsert: re-allocating a category for the same month updates the amount
     // instead of erroring, so users can freely change an allocation from the same action.
@@ -739,7 +755,7 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
         category_id,
         amount,
         period: budgetPeriod,
-        start_date,
+        start_date: existing.start_date,
         profile_id: pid,
         message: 'Budget updated successfully',
       })

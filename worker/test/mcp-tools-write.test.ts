@@ -272,6 +272,29 @@ describe('write tools', () => {
     });
   });
 
+  // Its month is the start date's month: a budget that starts on the 15th is March's budget, and
+  // setting March's again changes it. Matched on the exact date, a second budget was added.
+  it('upsert_budget changes the budget its month has, whatever day that one starts', async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96021, 'Food', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const created = unwrap(
+      await call('upsert_budget', { categoryId: 96021, amount: 300, startDate: '2026-03-15' })
+    );
+    const updated = unwrap(
+      await call('upsert_budget', { categoryId: 96021, amount: 350, startDate: '2026-03-01' })
+    );
+    expect(updated).toMatchObject({ id: created.id, created: false, amount: 350 });
+    const march = await env.DB.prepare(
+      "SELECT id, amount, start_date FROM budgets WHERE profile_id = ? AND start_date >= '2026-03-01' AND start_date < '2026-04-01'"
+    )
+      .bind(PROFILE_ID)
+      .all();
+    expect(march.results).toEqual([{ id: created.id, amount: 350, start_date: '2026-03-15' }]);
+  });
+
   it('upsert_tag_rule creates the tag if it does not exist', async () => {
     const out = unwrap(
       await call('upsert_tag_rule', {

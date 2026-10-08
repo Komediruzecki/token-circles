@@ -6,6 +6,7 @@ import { HttpError, accept, refuse } from '../http';
 import * as db from '../db';
 import { localMonth } from '../local-date';
 import { BUDGET_MESSAGES, checkBudgetCreate } from '../../../shared/budgetSchema';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
 
 // Write tools: append plus curate. No arbitrary update or delete -- an agent should be able to
 // add rows and to act on its own analysis, and its mistakes should stay additive and reversible
@@ -348,13 +349,22 @@ defineTool({
       throw refuse({ category_id: BUDGET_MESSAGES.category });
     }
 
+    // The budget its month (a yearly one, its year) already has, whatever day that one starts, as
+    // the app's Allocate finds it: matched on the exact date, a second budget was added.
+    const from =
+      budget.period === 'yearly'
+        ? `${budget.start_date.slice(0, 4)}-01-01`
+        : `${budget.start_date.slice(0, 7)}-01`;
     const existing = await db.first<{ id: number }>(
       c.env.DB,
-      'SELECT id FROM budgets WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date = ?',
+      `SELECT id FROM budgets
+        WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date >= ? AND start_date < ?
+        ORDER BY start_date, id`,
       profileId,
       budget.category_id,
       budget.period,
-      budget.start_date
+      from,
+      addCalendarMonths(from, budget.period === 'yearly' ? 12 : 1)
     );
     if (existing) {
       await db.update(

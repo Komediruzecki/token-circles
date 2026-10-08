@@ -779,33 +779,31 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   }
   const start_date = `${month}-01`;
 
-  // budgetsRepo.getByCategoryForMonth
-  const existing = await db.first(
+  // The month's budget for the category, whatever day it starts: one an API client, an import or
+  // an MCP agent started mid-month is still the month's, and allocating changes it rather than
+  // adding a second one that the month would count as well.
+  const existing = await db.first<{ id: number; start_date: string }>(
     c.env.DB,
-    'SELECT * FROM budgets WHERE category_id = ? AND profile_id = ? AND start_date = ? AND period = ?',
+    `SELECT * FROM budgets
+      WHERE category_id = ? AND profile_id = ? AND period = ? AND start_date >= ? AND start_date < ?
+      ORDER BY start_date, id`,
     category_id,
     pid,
+    budgetPeriod,
     start_date,
-    budgetPeriod
+    addCalendarMonths(start_date, 1)
   );
 
   // Allocate is an upsert: re-allocating a category for the same month updates the amount
   // instead of erroring, so users can freely change an allocation from the same action.
   if (existing) {
-    await db.update(
-      c.env.DB,
-      'budgets',
-      { amount },
-      'id = ? AND profile_id = ?',
-      (existing as { id: number }).id,
-      pid
-    );
+    await db.update(c.env.DB, 'budgets', { amount }, 'id = ? AND profile_id = ?', existing.id, pid);
     return c.json({
-      id: (existing as { id: number }).id,
+      id: existing.id,
       category_id,
       amount,
       period: budgetPeriod,
-      start_date,
+      start_date: existing.start_date,
       profile_id: pid,
       message: 'Budget updated successfully',
     });
