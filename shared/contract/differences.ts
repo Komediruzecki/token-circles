@@ -20,7 +20,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'transactions-summary-shape':
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
-    'A new transaction with no destination account is linked to the account named like its category (and with no source account, to the one named like its means of payment) on the Worker only, so on the Worker that account then counts it and cannot be deleted. Slice 2 (transactions).',
+    "On the Worker only, a new transaction is linked to the account named like its category as where the money went (transfer_account_id), and one with no account to the account named like its means of payment as where it came from. Through the Transactions form, which always sends an account, balances agree, but the row still names the other account, which the Transactions page's account filter then shows it under and which cannot be deleted while the row exists (409). An income written with no account (API, MCP or import) credits the account named like its category on the Worker only. Slice 2 (transactions).",
   'transactions-by-tag':
     'GET /api/transactions/by-tag/:tagId orders rows newest first and honours startDate, endDate, category_ids, type, limit and offset on the Worker, but answers every tagged row in key order, unfiltered, in local-first; nothing in the app calls it. Slice 5 (tags).',
   'tag-default-colour':
@@ -58,7 +58,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'portfolio-prices':
     'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
   'import-upload-answer':
-    "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape, so a file upload fails in local-first (it reads sheetNames[0] of nothing); and it drops rows[0], which on the Worker is the first transaction, not the header. Slice 4 (import).",
+    "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
   'profile-answers':
     "POST /api/profiles answers 200 with the profile and its zero counts on the Worker, but 201 with { id, name, created_at } in local-first; PUT and PATCH answer the renamed profile on the Worker and { ok: true } in local-first. The app reads only the new profile's id, name and created_at, and only whether a rename worked. Slice 4 (profiles).",
   'profile-delete-selection':

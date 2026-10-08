@@ -391,6 +391,7 @@ export const transactions = [
       const everyday = await account(api, expect, 'Everyday', 500);
       const revolut = await account(api, expect, 'Revolut', 0);
       const sameName = await category(api, expect, 'Revolut');
+      // The Transactions form always sends the account the money moves in: balances agree.
       const id = await transaction(api, expect, {
         amount: 15,
         category_id: sameName,
@@ -401,10 +402,20 @@ export const transactions = [
       expectMoney(expect, await balanceOf(api, expect, revolut), 0, 'Revolut balance');
       // DIFFERENCE transaction-account-from-names
       if (api.runtime === 'worker') {
+        // The row names Revolut as where the money went, so Revolut cannot be deleted.
         expect(row.transfer_account_id).toBe(revolut);
         expect((await api.delete(`/api/accounts/${revolut}`)).status).toBe(409);
       } else {
         expect(row.transfer_account_id ?? null).toBeNull();
+      }
+
+      // An income with no account, as the API, the MCP server or an import can write one.
+      await transaction(api, expect, { type: 'income', amount: 40, category_id: sameName });
+      // DIFFERENCE transaction-account-from-names
+      if (api.runtime === 'worker') {
+        expectMoney(expect, await balanceOf(api, expect, revolut), 40, 'Revolut credited');
+      } else {
+        expectMoney(expect, await balanceOf(api, expect, revolut), 0, 'Revolut balance');
         expectOk(expect, await api.delete(`/api/accounts/${revolut}`), 'DELETE Revolut');
       }
     }
