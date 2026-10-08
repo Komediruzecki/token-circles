@@ -1,6 +1,7 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { DIFFERENCES } from '../../../../../shared/contract/differences'
 import { namedDifferences, samplePaths, unsent } from '../../../../../shared/contract/guard'
+import { outbound } from '../../../../../shared/contract/outbound'
 import { CONTRACT_ROUTES, LOCAL_ONLY, UNCOVERED } from '../../../../../shared/contract/routes'
 import { SCENARIOS } from '../../../../../shared/contract/scenarios'
 import { getDB } from '../idb.js'
@@ -24,6 +25,17 @@ afterAll(() => {
   else process.env.TZ = hostZone
 })
 
+// Local-first's own requests to other services (a spreadsheet) are answered from
+// shared/contract/outbound.ts, so no scenario reaches the network; anything else fails it.
+beforeAll(() => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) =>
+    outbound(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+  )
+})
+afterAll(() => {
+  vi.restoreAllMocks()
+})
+
 const hits: Hit[] = []
 let ran = 0
 const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0)
@@ -33,10 +45,14 @@ function apiFor(profile: number, partner: () => ContractApi): ContractApi {
     // What the app has in place while this profile is the active one.
     localStorage.setItem('currentProfileId', String(profile))
     localStorage.setItem('selectedProfileIds', JSON.stringify([profile]))
+    const form = body instanceof FormData
     const res = await routeApiRequest(`http://localhost${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': String(profile) },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: {
+        ...(form ? {} : { 'Content-Type': 'application/json' }),
+        'X-Profile-Id': String(profile),
+      },
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     })
     const text = await res.text()
     let parsed: unknown = text

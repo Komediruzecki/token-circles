@@ -22,7 +22,10 @@ export interface Reply {
   body: Json;
 }
 
-/** The API as one profile of one person sees it. */
+/**
+ * The API as one profile of one person sees it. A body goes as JSON, except a FormData, which goes
+ * as the multipart form a file upload sends.
+ */
 export interface ContractApi {
   readonly runtime: Runtime;
   get(path: string): Promise<Reply>;

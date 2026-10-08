@@ -36,14 +36,16 @@ const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0);
 
 function apiFor(cookie: string, profile: number, partner: () => ContractApi): ContractApi {
   const send = async (method: Method, path: string, body?: unknown): Promise<Reply> => {
+    const form = body instanceof FormData;
     const res = await SELF.fetch(`https://example.com${path}`, {
       method,
       headers: {
         Cookie: cookie,
-        'Content-Type': 'application/json',
+        // A form sets its own multipart type, boundary included.
+        ...(form ? {} : { 'Content-Type': 'application/json' }),
         'X-Profile-Id': String(profile),
       },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     });
     const text = await res.text();
     let parsed: unknown = text;
