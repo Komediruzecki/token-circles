@@ -704,16 +704,6 @@ export class ApiClient {
     return this.request<Models.LoanRatePeriod[]>(`/loans/${id}/rate-periods`, Schemas.GenericSchema)
   }
 
-  /**
-   * Add prepayment
-   */
-  async addLoanPrepayment(id: number, month: number, amount: number, note?: string): Promise<void> {
-    await this.request(`/loans/${id}/prepayment`, undefined, {
-      method: 'POST',
-      body: { month, amount, note },
-    })
-  }
-
   // ============ BILLS ============
 
   /**

@@ -397,6 +397,15 @@ describe('localHandlers - extra payments, by their id', () => {
     expect(loan.prepayments).toEqual([{ month: 3, amount: 500, note: '', id: 1 }])
   })
 
+  // POST /loans/:id/prepayment, singular, was served for api.addLoanPrepayment, which nothing
+  // called; the Worker never had it. An extra payment is added with POST .../prepayments.
+  it('has no singular /prepayment route', async () => {
+    const id = await loanWith([])
+    const res = await route(`/loans/${id}/prepayment`, 'POST', { month: 2, amount: 10 })
+    expect(res.status).toBe(404)
+    expect((await getDB().then((db) => db.get('loans', id)))?.prepayments).toEqual([])
+  })
+
   it('answers 404 for an id that is not on the loan, in the words the Worker uses', async () => {
     const id = await loanWith([{ month: 3, amount: 500, note: '' }])
     const res = await route(`/loans/${id}/prepayments/2`, 'PUT', { month: 3, amount: 10 })

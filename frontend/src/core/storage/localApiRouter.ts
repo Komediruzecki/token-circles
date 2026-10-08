@@ -456,11 +456,6 @@ const routes: RouteDef[] = [
     }),
   },
   {
-    pattern: /^\/loans\/(\d+)\/prepayment$/,
-    methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.loanPrepaymentAdd(ctx.params, ctx.body) }),
-  },
-  {
     pattern: /^\/loans\/(\d+)\/prepayments$/,
     methods: ['GET', 'POST'],
     handler: dispatch({
