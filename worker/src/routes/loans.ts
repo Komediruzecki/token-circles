@@ -189,10 +189,19 @@ loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
   return c.json({ ok: true })
 })
 
+// The loan's rate periods and extra payments go with it, in one batch. They have no foreign key to
+// cascade, and every later sweep (a profile's deletion, the account's, a restore) finds them through
+// the loan, so once the loan alone was gone they stayed in D1 for good.
 loansRoutes.delete('/api/loans/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
-  const res = await db.del(c.env.DB, 'loans', 'id = ? AND profile_id = ?', c.req.param('id'), pid)
-  if (!res.meta.changes) throw new HttpError(404, 'Not found')
+  const id = c.req.param('id')
+  const owned = 'loan_id IN (SELECT id FROM loans WHERE id = ? AND profile_id = ?)'
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare(`DELETE FROM loan_rate_periods WHERE ${owned}`).bind(id, pid),
+    c.env.DB.prepare(`DELETE FROM loan_prepayments WHERE ${owned}`).bind(id, pid),
+    c.env.DB.prepare('DELETE FROM loans WHERE id = ? AND profile_id = ?').bind(id, pid),
+  ])
+  if (!results[2]?.meta.changes) throw new HttpError(404, 'Not found')
   return c.json({ ok: true })
 })
 
