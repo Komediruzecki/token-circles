@@ -170,7 +170,7 @@ retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) =>
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Retirement goal not found');
   return c.json({ ok: true });
 });
 
@@ -183,7 +183,7 @@ retirementGoalsRoutes.delete('/api/retirement-goals/:id', requireAuth, async (c)
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Retirement goal not found');
   return c.json({ ok: true });
 });
 

@@ -99,7 +99,15 @@ export const retirement = [
 
     expectOk(expect, await api.delete(`/api/retirement-goals/${id}`), 'DELETE the goal');
     expect((await listed(api, expect)).goals).toEqual([]);
-    expect((await api.delete(`/api/retirement-goals/${id}`)).status).toBe(404);
+    // A goal that is not there is said the same way by both. The Worker said "Not found" where
+    // local-first said "Retirement goal not found", and the goal dialog shows it in its notice.
+    for (const reply of [
+      await api.put(`/api/retirement-goals/${id}`, retirementForm()),
+      await api.delete(`/api/retirement-goals/${id}`),
+    ]) {
+      expect(reply.status).toBe(404);
+      expect(reply.body).toEqual({ error: 'Retirement goal not found' });
+    }
   }),
 
   scenario("another profile's retirement goal is not changed or removed", async (api, expect) => {
