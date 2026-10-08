@@ -1,16 +1,20 @@
 import { Hono } from 'hono';
+import { addDays, nextOccurrence } from '../../../shared/calendarMonths';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
-import { localNow, localToday } from '../local-date';
+import { localToday } from '../local-date';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
 // kept identical (snake_case) to the Express backend.
 export const recurringRoutes = new Hono<AppEnv>();
+
+const UNREADABLE_NEXT_DATE =
+  "This rule's next date can't be read. Edit the rule and set its date again.";
 
 interface RecurringRow {
   id: number;
@@ -50,9 +54,8 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
 recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   // The next 30 days from today on the person's calendar: next_date is one of their dates.
-  const now = localNow(c);
-  const endDate = new Date(now);
-  endDate.setDate(endDate.getDate() + 30);
+  const todayStr = localToday(c);
+  const endStr = addDays(todayStr, 30);
 
   const recurring = await db.all<RecurringRow>(
     c.env.DB,
@@ -80,13 +83,12 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
 
   const upcoming: UpcomingItem[] = [];
   for (const r of recurring) {
-    let cursor = new Date(r.next_date || now.toISOString().split('T')[0]);
-    if (cursor < now) {
-      cursor = new Date(now.toISOString().split('T')[0]);
-    }
-    const maxDate = new Date(endDate.toISOString().split('T')[0]);
-
-    while (cursor <= maxDate) {
+    // From the rule's next date, or from today once that has passed. Each step is the one populate
+    // takes, so the list shows the dates populate will write. The monthly step here used to be
+    // setMonth() and then the day, and setMonth() overflows first: a rule on the 31st went from
+    // January to March, and February was never listed.
+    let cursor = r.next_date && r.next_date > todayStr ? r.next_date : todayStr;
+    while (cursor && cursor <= endStr) {
       upcoming.push({
         id: r.id,
         description: r.description,
@@ -94,26 +96,11 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
         type: r.type,
         frequency: r.frequency,
         day_of_month: r.day_of_month,
-        next_date: cursor.toISOString().split('T')[0],
+        next_date: cursor,
         category_name: r.category_name,
         category_color: r.category_color,
       });
-
-      if (r.frequency === 'daily') {
-        cursor.setDate(cursor.getDate() + 1);
-      } else if (r.frequency === 'weekly') {
-        cursor.setDate(cursor.getDate() + 7);
-      } else if (r.frequency === 'monthly') {
-        cursor.setMonth(cursor.getMonth() + 1);
-        const day = r.day_of_month || cursor.getDate();
-        cursor.setDate(
-          Math.min(day, new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate())
-        );
-      } else if (r.frequency === 'yearly') {
-        cursor.setFullYear(cursor.getFullYear() + 1);
-      } else {
-        break;
-      }
+      cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
     }
   }
 
@@ -327,13 +314,10 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   // date forward — if it stalls (e.g. daily/biweekly falling through to no-op),
   // next_date stays <= today and the idempotency guard above never trips, so the
   // rule can be populated repeatedly and each run debits the account again.
-  const next = new Date(date);
-  if (r.frequency === 'daily') next.setDate(next.getDate() + 1);
-  else if (r.frequency === 'weekly') next.setDate(next.getDate() + 7);
-  else if (r.frequency === 'biweekly') next.setDate(next.getDate() + 14);
-  else if (r.frequency === 'yearly') next.setFullYear(next.getFullYear() + 1);
-  else next.setMonth(next.getMonth() + 1); // monthly + safe default: always advance.
-  const nextStr = next.toISOString().split('T')[0];
+  // nextOccurrence counts months on the calendar: setMonth() overflowed past a shorter month, so
+  // a rule on the 31st went from January to 3 March, and stayed on the 3rd.
+  const nextStr = nextOccurrence(date, r.frequency, r.day_of_month);
+  if (!nextStr) throw new HttpError(400, UNREADABLE_NEXT_DATE);
 
   // The generated transaction inherits the profile's base currency and carries
   // amount_local = amount, matching the create handler (amount_local ?? amount) and the

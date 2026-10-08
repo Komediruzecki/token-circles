@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDB } from '../idb.js'
-import { budgetsForecast, dashboardCharts } from '../localHandlers.js'
+import { budgetsForecast, dashboardCharts, recurringPopulate } from '../localHandlers.js'
 
 const FOOD = 1
 
@@ -98,5 +98,55 @@ describe('the budget forecast', () => {
       expect(forecast.total_budget, JSON.stringify(query)).toBe(300)
       expect(forecast.forecast, JSON.stringify(query)).toHaveLength(6)
     }
+  })
+})
+
+describe('a monthly rule on the 31st', () => {
+  async function rule(fields: Record<string, unknown>): Promise<number> {
+    const db = await getDB()
+    return (await db.add('recurring', {
+      profile_id: 1,
+      description: 'Rent',
+      amount: 250,
+      type: 'expense',
+      category_id: FOOD,
+      frequency: 'monthly',
+      is_active: 1,
+      ...fields,
+    })) as number
+  }
+
+  async function nextDateOf(id: number): Promise<string> {
+    const db = await getDB()
+    return ((await db.get('recurring', id)) as { next_date: string }).next_date
+  }
+
+  async function paidOn(): Promise<string[]> {
+    const db = await getDB()
+    return ((await db.getAll('transactions')) as Array<{ date: string }>).map((t) => t.date).sort()
+  }
+
+  it('is paid at the end of February, and on the 31st again in March', async () => {
+    const id = await rule({ next_date: '2027-01-31', day_of_month: 31 })
+    at('Europe/Zagreb', -60, '2027-01-31T12:00:00Z')
+    expect((await recurringPopulate({ p1: String(id) })).status).toBe(200)
+    expect(await nextDateOf(id)).toBe('2027-02-28')
+
+    at('Europe/Zagreb', -60, '2027-02-28T12:00:00Z')
+    expect((await recurringPopulate({ p1: String(id) })).status).toBe(200)
+    expect(await nextDateOf(id)).toBe('2027-03-31')
+    expect(await paidOn()).toEqual(['2027-01-31', '2027-02-28'])
+  })
+
+  it('refuses a next date it cannot read, and writes nothing', async () => {
+    const id = await rule({ next_date: '05.01.2027' })
+    at('Europe/Zagreb', -60, '2027-01-10T12:00:00Z')
+    const res = await recurringPopulate({ p1: String(id) })
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe(
+      "This rule's next date can't be read. Edit the rule and set its date again."
+    )
+    expect(await paidOn()).toEqual([])
+    expect(await nextDateOf(id)).toBe('05.01.2027')
   })
 })

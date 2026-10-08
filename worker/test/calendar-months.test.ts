@@ -129,3 +129,88 @@ describe('the budget forecast', () => {
     }
   });
 });
+
+describe('a monthly rule on the 31st', () => {
+  async function rule(fields: Record<string, unknown>): Promise<number> {
+    const row = {
+      profile_id: PROFILE,
+      description: 'Rent',
+      amount: 250,
+      type: 'expense',
+      account_id: GIRO,
+      frequency: 'monthly',
+      active: 1,
+      ...fields,
+    };
+    const cols = Object.keys(row);
+    const res = await env.DB.prepare(
+      `INSERT INTO recurring_transactions (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`
+    )
+      .bind(...Object.values(row))
+      .run();
+    return Number(res.meta.last_row_id);
+  }
+
+  async function nextDateOf(id: number): Promise<string> {
+    const row = await env.DB.prepare('SELECT next_date FROM recurring_transactions WHERE id = ?')
+      .bind(id)
+      .first<{ next_date: string }>();
+    return String(row?.next_date);
+  }
+
+  async function paidOn(): Promise<string[]> {
+    const { results } = await env.DB.prepare(
+      'SELECT date FROM transactions WHERE profile_id = ? ORDER BY date'
+    )
+      .bind(PROFILE)
+      .all<{ date: string }>();
+    return results.map((r) => r.date);
+  }
+
+  it('is paid at the end of February, and on the 31st again in March', async () => {
+    const id = await rule({ next_date: '2027-01-31', day_of_month: 31 });
+    await at('2027-01-31T12:00:00Z');
+    expect((await send('POST', `/api/recurring/${id}/populate`)).status).toBe(200);
+    expect(await nextDateOf(id)).toBe('2027-02-28');
+
+    await at('2027-02-28T12:00:00Z');
+    expect((await send('POST', `/api/recurring/${id}/populate`)).status).toBe(200);
+    expect(await nextDateOf(id)).toBe('2027-03-31');
+    expect(await paidOn()).toEqual(['2027-01-31', '2027-02-28']);
+  });
+
+  it('without a day of the month, stays on the 28th after February', async () => {
+    const id = await rule({ next_date: '2027-01-31', day_of_month: null });
+    await at('2027-02-28T12:00:00Z');
+    await send('POST', `/api/recurring/${id}/populate`);
+    expect(await nextDateOf(id)).toBe('2027-02-28');
+    await send('POST', `/api/recurring/${id}/populate`);
+    expect(await nextDateOf(id)).toBe('2027-03-28');
+  });
+
+  it('lists February among the next 30 days', async () => {
+    const id = await rule({ next_date: '2027-01-31', day_of_month: 31 });
+    await at('2027-01-30T12:00:00Z');
+    const { transactions } = await get<{ transactions: { id: number; next_date: string }[] }>(
+      '/api/recurring/upcoming'
+    );
+    expect(transactions.filter((t) => t.id === id).map((t) => t.next_date)).toEqual([
+      '2027-01-31',
+      '2027-02-28',
+    ]);
+  });
+
+  it('refuses a next date it cannot read, and writes nothing', async () => {
+    // A date an API client wrote in its own format. It sorts before today, so it passes the
+    // already-populated check and reaches the step.
+    const id = await rule({ next_date: '05.01.2027' });
+    await at('2027-01-10T12:00:00Z');
+    const res = await send('POST', `/api/recurring/${id}/populate`);
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe(
+      "This rule's next date can't be read. Edit the rule and set its date again."
+    );
+    expect(await paidOn()).toEqual([]);
+    expect(await nextDateOf(id)).toBe('05.01.2027');
+  });
+});
