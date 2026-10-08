@@ -14,12 +14,14 @@ import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
 import { detectSubscriptions } from '../features/subscriptionDetection'
 import { OrbitSpinner } from './OrbitSpinner'
+import { refusedMessages } from './refusedSubscriptions'
 import styles from './SubscriptionScan.module.css'
 import type {
   DetectableTransaction,
   DetectedFrequency,
   DetectedSubscription,
 } from '../features/subscriptionDetection'
+import type { RefusedSubscription } from './refusedSubscriptions'
 
 interface BillRow {
   name: string
@@ -173,6 +175,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     if (submitting() || picks.length === 0) return 0
     setSubmitting(true)
     let ok = 0
+    const refused: RefusedSubscription[] = []
     try {
       for (const d of picks) {
         const r = row(d.key)
@@ -189,13 +192,14 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           setAdded((prev) => new Set(prev).add(d.key))
         } catch (err) {
           console.error('Failed to add subscription', d.name, err)
+          refused.push({ name: d.name, error: err })
         }
       }
       if (ok > 0) {
         showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
         props.onAdded?.(ok)
       }
-      if (ok < picks.length) showToast('Some subscriptions could not be added', 'error')
+      for (const message of refusedMessages(refused)) showToast(message, 'error')
     } finally {
       setSubmitting(false)
     }

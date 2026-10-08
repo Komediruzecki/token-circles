@@ -17,8 +17,10 @@ import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
 import { localToday } from '../utils/period'
+import { refusedMessages } from './refusedSubscriptions'
 import styles from './SubscriptionCatalogModal.module.css'
 import type { CatalogItem } from '../features/subscriptionCatalog'
+import type { RefusedSubscription } from './refusedSubscriptions'
 
 /** Minimal category shape the catalog needs to resolve a category_id. */
 export interface CatalogCategory {
@@ -175,6 +177,7 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     setSubmitting(true)
     const due = todayIso()
     let ok = 0
+    const refused: RefusedSubscription[] = []
     try {
       for (const { item, amount } of pending) {
         try {
@@ -189,12 +192,13 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
           ok += 1
         } catch (err) {
           console.error('Failed to add subscription', item.name, err)
+          refused.push({ name: item.name, error: err })
         }
       }
       if (ok > 0) {
         showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
       }
-      if (ok < pending.length) showToast('Some subscriptions could not be added', 'error')
+      for (const message of refusedMessages(refused)) showToast(message, 'error')
       setSelected({})
       setDraftPrices({})
       setPriceErrors({})
