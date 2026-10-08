@@ -1,8 +1,9 @@
 import { env, SELF } from 'cloudflare:test';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
 import { mcpRoutes } from '../src/mcp';
 import { unsent, type Hit, type RouteKey } from '../../shared/contract/guard';
+import { outbound } from '../../shared/contract/outbound';
 import { CONTRACT_ROUTES, UNCOVERED, WORKER_ONLY } from '../../shared/contract/routes';
 import { SCENARIOS } from '../../shared/contract/scenarios';
 import type { ContractApi, Expect, Method, Reply } from '../../shared/contract/types';
@@ -16,6 +17,17 @@ declare global {
     glob<T>(pattern: string, options: { eager: true }): Record<string, T>;
   }
 }
+
+// The Worker's own requests to other services (a price feed, a spreadsheet) are answered from
+// shared/contract/outbound.ts, so no scenario reaches the network; anything else fails it.
+beforeAll(() => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) =>
+    outbound(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+  );
+});
+afterAll(() => {
+  vi.restoreAllMocks();
+});
 
 const hits: Hit[] = [];
 let people = 0;

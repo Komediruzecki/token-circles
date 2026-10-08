@@ -55,6 +55,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "POST /api/housing answers 200 on the Worker and 201 in local-first, and GET /api/housing answers autopay as 0 or 1 with the stored columns on the Worker, but as true or false with the form's own fields (property_name, due_day, due_month) too in local-first; the Housing page reads both. Slice 5 (housing).",
   'housing-due-month-default':
     'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
+  'portfolio-prices':
+    'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':
