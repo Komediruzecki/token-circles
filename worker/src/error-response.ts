@@ -4,6 +4,7 @@ import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
 import { HttpError } from './http';
 import type { AppEnv } from './index';
+import type { FieldErrors } from '../../shared/refusal';
 
 /**
  * What a client sees when the Worker fails in a way nobody wrote a message for. The real error
@@ -19,6 +20,11 @@ export interface PublicError {
   status: number;
   message: string;
   transient: boolean;
+  /**
+   * A refused body's reason per field (http.ts `refuse`), which a form puts under each field.
+   * Only an HttpError carries them.
+   */
+  fields?: FieldErrors;
 }
 
 /**
@@ -34,7 +40,12 @@ export function publicError(err: unknown): PublicError {
   // in-helper retries (db.ts) were exhausted (or the query bypassed the helpers).
   if (isTransientD1Error(err)) return { status: 503, message: RETRY_SHORTLY, transient: true };
   if (err instanceof HttpError) {
-    return { status: err.statusCode, message: err.message || GENERIC_ERROR, transient: false };
+    const answer = {
+      status: err.statusCode,
+      message: err.message || GENERIC_ERROR,
+      transient: false,
+    };
+    return err.fields ? { ...answer, fields: err.fields } : answer;
   }
   if (err instanceof HTTPException) {
     return { status: err.status, message: err.message || GENERIC_ERROR, transient: false };
@@ -64,13 +75,16 @@ export function errorResponse(err: Error, c: Context<AppEnv>): Response {
   // the one this handler is about to replace. Say it again here so a 5xx is never the one
   // response on the host without it.
   c.header('X-Robots-Tag', 'noindex, nofollow');
-  const { status, message, transient } = reportError(c, err);
+  const { status, message, transient, fields } = reportError(c, err);
   if (err instanceof HTTPException && err.res) {
     const res = err.getResponse();
     res.headers.set('X-Robots-Tag', 'noindex, nofollow');
     return res;
   }
   if (transient) c.header('Retry-After', '5');
+  // A refused body names its fields (shared/refusal.ts), and the form marks them.
+  // worker/test/category-refusals.test.ts fails if they stop arriving.
+  if (fields) return c.json({ error: message, fields }, status as 400);
   return c.json({ error: message }, status as 500);
 }
 

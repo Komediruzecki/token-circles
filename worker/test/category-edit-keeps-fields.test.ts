@@ -117,10 +117,15 @@ describe('editing a category', () => {
     expect(await stored(PHARMACY)).toMatchObject({ parent_id: null, tax_deductible: 0 });
   });
 
-  it('still refuses a parent from another profile', async () => {
+  it('still refuses a parent from another profile, at parent_id', async () => {
     const res = await put(PHARMACY, { ...formBody, parent_id: ELSEWHERE });
 
-    expect(res.status).toBe(403);
+    // A 400 that names the field, as local-first answers it (category-refusals.test.ts). It was a
+    // 403 with no field.
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      fields: { parent_id: 'Choose a parent category from the list, or leave it empty.' },
+    });
     expect(await stored(PHARMACY)).toMatchObject({ name: 'Pharmacy', parent_id: HEALTH });
   });
 });

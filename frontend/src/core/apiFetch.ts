@@ -2,6 +2,7 @@
  * API Fetch Interceptor
  * Routes API calls to either the real backend (self-hosted) or IndexedDB (serverless)
  */
+import { networkError } from './apiError'
 import { announceDataChanged } from './dataChangedEvent'
 import { invalidateForRequest } from './dataVersions'
 import { getStorageMode } from './storage/storageFactory'
@@ -87,13 +88,22 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   // origin. Default credentials to 'include' so the session cookie rides along cross-origin.
   if (mode === 'self-hosted') {
     if (apiPath) {
-      const response = await fetch(`${API_ORIGIN}${apiPath}`, {
-        ...init,
-        headers: withTimeZone(init?.headers),
-        // Pin credentials last so a caller's own `init.credentials` can't override it
-        // and silently drop the cross-origin session cookie.
-        credentials: 'include',
-      })
+      let response: Response
+      try {
+        response = await fetch(`${API_ORIGIN}${apiPath}`, {
+          ...init,
+          headers: withTimeZone(init?.headers),
+          // Pin credentials last so a caller's own `init.credentials` can't override it
+          // and silently drop the cross-origin session cookie.
+          credentials: 'include',
+        })
+      } catch (error) {
+        // No answer at all: fetch rejects with a TypeError ("Failed to fetch"), which tells a
+        // person nothing. Both client surfaces pass through here, so both get the same ApiError
+        // for it (core/apiError.ts). An abort is the caller's own doing and stays as it is.
+        if (error instanceof TypeError) throw networkError(error)
+        throw error
+      }
       announceWrite(apiPath, init, response.ok)
       return response
     }

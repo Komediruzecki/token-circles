@@ -4,6 +4,7 @@
 
 import { z } from 'zod'
 import * as Schemas from '../schemas/models.js'
+import { apiErrorFrom } from './apiError'
 import { apiFetch } from './apiFetch'
 import { profileRequestHeaders } from './apiProfileScope'
 import { normalizeCurrencyCode } from './currencies'
@@ -75,13 +76,11 @@ export class ApiClient {
       const response = await apiFetch(url, requestOptions)
 
       if (!response.ok) {
-        if (response.status === 401 && method !== 'GET' && !endpoint.startsWith('/auth/')) {
-          window.dispatchEvent(new Event('auth:required'))
-        }
-        const errorData = await response.json().catch(() => ({
-          error: `HTTP ${response.status}`,
-        }))
-        const errorMsg = (errorData.error || errorData.message) ?? `HTTP ${response.status}`
+        askToSignInAgain(response.status, method, endpoint)
+        // The same ApiError the raw helpers throw (core/apiError.ts): the answer's words, its
+        // per-field reasons for a form to show, and its status, so a caller can tell a refusal it
+        // should act on from one it can only report (a 409 means "catch up", not "that failed").
+        const err = await apiErrorFrom(response)
 
         // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
         // A 503 is a transient "retry shortly" (e.g. D1 briefly locked by a backup export) — also
@@ -94,16 +93,11 @@ export class ApiClient {
         if (!expected) {
           logger.error(
             'API Error',
-            { status: response.status, endpoint, message: errorMsg },
+            { status: response.status, endpoint, message: err.message },
             'ApiClient'
           )
         }
-        const err = new Error(errorMsg) as Error & { __handled?: boolean; status?: number }
         err.__handled = true
-        // Carried so a caller can tell a refusal it should act on from one it can only report —
-        // a 409 means "someone else changed this, catch up", which is different advice from
-        // "that did not work".
-        err.status = response.status
         throw err
       }
 
@@ -1379,19 +1373,37 @@ function jsonHeaders(scope: ApiProfileScope, additional?: HeadersInit): Headers 
   return headers
 }
 
-async function parseJsonResponse<T>(response: Response): Promise<T> {
+/** Whether a request is for /auth/: `request()` names it '/auth/...', a raw helper '/api/auth/...'. */
+function isAuthPath(path: string): boolean {
+  const { pathname } = new URL(path, 'http://localhost')
+  return (pathname.startsWith('/api/') ? pathname.slice('/api'.length) : pathname).startsWith(
+    '/auth/'
+  )
+}
+
+/**
+ * A write refused with a 401 outside /auth/ means the session ended under the person: App opens
+ * sign-in on 'auth:required'. Both client surfaces call this. The raw helpers did not, and the
+ * category dialogs save through them, so an ended session left a dialog open with no way on. A
+ * read is left to the page that made it, and a 401 from /auth/ is a wrong password or code, which
+ * its own form says.
+ */
+function askToSignInAgain(status: number, method: string, path: string): void {
+  if (status === 401 && method !== 'GET' && !isAuthPath(path)) {
+    window.dispatchEvent(new Event('auth:required'))
+  }
+}
+
+async function parseJsonResponse<T>(response: Response, method: string, url: string): Promise<T> {
+  // Any failure, JSON or not (a Cloudflare 502 is an HTML page), is the ApiError `request()`
+  // throws too: one error type from both client surfaces (core/apiError.ts).
+  if (!response.ok) {
+    askToSignInAgain(response.status, method, url)
+    throw await apiErrorFrom(response)
+  }
   const contentType = response.headers.get('content-type')
   if (contentType !== null && contentType.includes('application/json')) {
-    const data = (await response.json()) as T
-    if (!response.ok) {
-      const errorData = data as { error?: string } | undefined
-      const err = new Error(
-        errorData?.error || `Request failed with status ${response.status}`
-      ) as Error & { status?: number }
-      err.status = response.status
-      throw err
-    }
-    return data
+    return (await response.json()) as T
   }
   throw new Error('Invalid response format')
 }
@@ -1410,7 +1422,7 @@ export async function apiGet<T = unknown>(
     method: 'GET',
     headers: jsonHeaders(profileScope),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'GET', url)
 }
 
 export function apiHouseholdGet<T = unknown>(url: string): Promise<T> {
@@ -1446,7 +1458,7 @@ export async function apiPost<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'POST', url)
 }
 
 export async function apiPut<T = unknown>(
@@ -1461,7 +1473,7 @@ export async function apiPut<T = unknown>(
     headers: jsonHeaders('active', options?.headers),
     body: JSON.stringify(body),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'PUT', url)
 }
 
 export async function apiDelete<T = unknown>(url: string): Promise<T> {
@@ -1470,5 +1482,5 @@ export async function apiDelete<T = unknown>(url: string): Promise<T> {
     method: 'DELETE',
     headers: profileRequestHeaders('active'),
   })
-  return parseJsonResponse<T>(response)
+  return parseJsonResponse<T>(response, 'DELETE', url)
 }

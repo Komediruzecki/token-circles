@@ -19,9 +19,18 @@ describe('validation - validateBody', () => {
     })
     expect(result).not.toBeNull()
     expect(result!.status).toBe(400)
+    // The Worker's answer: a sentence per field, and the summary that joins them. No zod text.
     const data = await result!.json()
-    expect(data.error).toBe('Validation failed')
-    expect(data.details.length).toBeGreaterThan(0)
+    expect(data.fields).toEqual({
+      amount: 'Fill in the amount.',
+      description: 'Fill in the description.',
+      date: 'Fill in the date.',
+      category_id: 'Choose the category.',
+    })
+    expect(data.error).toBe(
+      'Fill in the amount. Fill in the description. Fill in the date. Choose the category.'
+    )
+    expect(data).not.toHaveProperty('details')
   })
 
   it('rejects invalid transaction type', () => {
@@ -214,5 +223,56 @@ describe('validation - validateBody', () => {
     })
     // URL /api/transactions/123 should match schema key 'POST:/api/transactions'
     expect(result).toBeNull()
+  })
+})
+
+describe('validation - a zod refusal in plain words', () => {
+  async function fieldsOf(path: string, body: unknown): Promise<Record<string, string>> {
+    const result = validateBody('POST', path, body)
+    expect(result?.status).toBe(400)
+    return (await result!.json()).fields
+  }
+
+  it('says what to do with a number out of range, a list value and a date', async () => {
+    expect(
+      await fieldsOf('/api/budgets', {
+        category_id: 0,
+        amount: -5,
+        period: 'daily',
+        start_date: '1 May',
+      })
+    ).toEqual({
+      category_id: 'Choose the category from the list.',
+      amount: "The amount can't be negative.",
+      period: 'Choose the period from the list.',
+      start_date: 'Enter a valid start date.',
+    })
+  })
+
+  it('names a too-long name, and a wrong kind of value, by the field', async () => {
+    expect(await fieldsOf('/api/tags', { name: 'x'.repeat(51), color: 5 })).toEqual({
+      name: 'Keep the name to 50 characters or fewer.',
+      color: 'Enter a valid color.',
+    })
+  })
+
+  it('keeps a rule’s own sentence', async () => {
+    expect(
+      await fieldsOf('/api/transactions', {
+        type: 'transfer',
+        amount: 10,
+        description: 'Move',
+        date: '2026-05-13',
+        category_id: null,
+      })
+    ).toEqual({ transfer_account_id: 'Choose the account the transfer goes to.' })
+  })
+
+  it('answers a body that is not an object with a summary and no fields', async () => {
+    const result = validateBody('POST', '/api/tags', 'not json')
+    expect(result?.status).toBe(400)
+    expect(await result!.json()).toEqual({
+      error: 'Some details need another look. Check them and try again.',
+    })
   })
 })

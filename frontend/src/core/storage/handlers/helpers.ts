@@ -1,8 +1,10 @@
 /**
  * Shared helpers for local API handlers.
  */
+import { refusalOf } from '../../../../../shared/refusal'
 import { normalizedTransactionAmount } from '../../transactionAmount'
 import { getDB, IndexedDBAdapter } from '../idb'
+import type { FieldErrors } from '../../../../../shared/refusal'
 
 // Singleton: do NOT create additional IndexedDBAdapter instances.
 // Multiple instances cause in-memory state divergence (caches, locks).
@@ -19,6 +21,9 @@ export const json = (data: unknown, status = 200, pretty = false): Response => {
 export const ok = (data: Record<string, unknown> = {}): Response => json({ ok: true, ...data })
 
 export const notFound = (what: string): Response => json({ error: `${what} not found` }, 404)
+
+/** The 400 for a body a check refused: `{ error, fields }`, as the Worker answers it. */
+export const refuse = (fields: FieldErrors): Response => json(refusalOf(fields), 400)
 
 export function idParam(params: Record<string, string>, key = 'p1'): number {
   return parseInt(params[key], 10)

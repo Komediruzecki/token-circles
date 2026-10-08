@@ -6,7 +6,7 @@ import { basicAuth } from 'hono/basic-auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
 import { errorResponse, GENERIC_ERROR } from '../src/error-response';
-import { HttpError } from '../src/http';
+import { HttpError, refuse } from '../src/http';
 import type { AppEnv } from '../src/index';
 
 // An unexpected failure used to reach the browser word for word: the onError handler put
@@ -48,11 +48,36 @@ function api(path: string, init: { method: string; body?: unknown }): Promise<Re
   });
 }
 
+/**
+ * A route that lets a raw D1 error escape: it writes `color`, which is NOT NULL, whatever the body
+ * says. The category edit route did exactly this until it checked its body by the shared rules
+ * (shared/categorySchema.ts); any route that does not check yet behaves the same. It answers
+ * through the app's own onError, errorResponse.
+ */
+function leakyEdit(): Promise<Response> {
+  const app = new Hono<AppEnv>();
+  app.onError(errorResponse);
+  app.put('/api/categories/:id', async (c) => {
+    const body = await c.req.json<{ color: unknown }>();
+    await c.env.DB.prepare('UPDATE categories SET color = ? WHERE id = ?')
+      .bind(body.color, c.req.param('id'))
+      .run();
+    return c.json({ ok: true });
+  });
+  return app.request(
+    '/api/categories/9001',
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color: null }),
+    },
+    env
+  );
+}
+
 describe('unexpected errors', () => {
   it('answers a D1 constraint failure with the generic body and none of the internal text', async () => {
-    // `color` is NOT NULL and the edit route writes whatever the body says. Any route that lets a
-    // raw D1 error escape would do; this one is reachable with a plain session.
-    const res = await api('/api/categories/9001', { method: 'PUT', body: { color: null } });
+    const res = await leakyEdit();
     expect(res.status).toBe(500);
     const text = await res.text();
     expect(JSON.parse(text)).toEqual({ error: GENERIC_ERROR });
@@ -63,7 +88,7 @@ describe('unexpected errors', () => {
   });
 
   it('still logs the full error, with method and path, to the console and to error_logs', async () => {
-    await api('/api/categories/9001', { method: 'PUT', body: { color: null } });
+    await leakyEdit();
 
     const lines = consoleError.mock.calls.map((args) => String(args[0]));
     const line = lines.find((l) => l.includes('categories.color'));
@@ -86,6 +111,37 @@ describe('unexpected errors', () => {
     }
     expect(row).toMatchObject({ method: 'PUT', path: '/api/categories/9001', status: 500 });
     expect(row!.message).toMatch(/categories\.color/);
+  });
+
+  // The two tests above throw from a stand-in app, so they hold errorResponse to its word but
+  // cannot see whether the real app uses it. This one goes through the real app (SELF), so a
+  // src/index.ts whose onError says err.message again, or is gone, fails here.
+  //
+  // The failure is made, not found: a route that fails today by mistake (POST /api/loans with no
+  // body escapes as a D1_TYPE_ERROR) gets fixed, and the guard would go with it. Here the table
+  // behind GET /api/import-logs is moved aside for one request, so the route's own query fails
+  // the way any unexpected D1 error does. Storage is shared between tests (vitest.config.ts:
+  // isolatedStorage false), so the table is always put back.
+  it("answers a real route's unexpected failure through the app's own onError", async () => {
+    await env.DB.prepare('ALTER TABLE import_logs RENAME TO import_logs_aside').run();
+    let res: Response;
+    try {
+      res = await api('/api/import-logs', { method: 'GET' });
+    } finally {
+      await env.DB.prepare('ALTER TABLE import_logs_aside RENAME TO import_logs').run();
+    }
+
+    expect(res.status).toBe(500);
+    const text = await res.text();
+    expect(JSON.parse(text)).toEqual({ error: GENERIC_ERROR });
+    for (const leak of ['D1_ERROR', 'SQLITE', 'no such table', 'import_logs']) {
+      expect(text).not.toContain(leak);
+    }
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    // It did fail where it was meant to: the log has the real reason.
+    expect(consoleError.mock.calls.map((args) => String(args[0])).join('\n')).toMatch(
+      /no such table: import_logs/
+    );
   });
 
   it('answers a thrown Error with the generic body, whatever its message says', async () => {
@@ -134,6 +190,33 @@ describe('errors written for the client', () => {
     const unavailable = await app.request('/unavailable', {}, env);
     expect(unavailable.status).toBe(503);
     expect(await unavailable.json()).toEqual({ error: 'Imports are paused for maintenance' });
+  });
+
+  it('keeps the fields of a refused body, so a form can mark them', async () => {
+    const app = new Hono<AppEnv>();
+    app.onError(errorResponse);
+    app.post('/refused', () => {
+      throw new HttpError(400, 'Give the category a name.', {
+        name: 'Give the category a name.',
+      });
+    });
+    app.post('/refused-twice', () => {
+      throw refuse({ name: 'Give the category a name.', color: 'Pick another color.' });
+    });
+
+    const res = await app.request('/refused', { method: 'POST' }, env);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      error: 'Give the category a name.',
+      fields: { name: 'Give the category a name.' },
+    });
+
+    const twice = await app.request('/refused-twice', { method: 'POST' }, env);
+    expect(twice.status).toBe(400);
+    expect(await twice.json()).toEqual({
+      error: 'Give the category a name. Pick another color.',
+      fields: { name: 'Give the category a name.', color: 'Pick another color.' },
+    });
   });
 
   it('keeps an HttpError thrown from a test route', async () => {

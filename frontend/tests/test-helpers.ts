@@ -3,9 +3,21 @@
  */
 
 import { expect } from '@playwright/test'
+import { OFFLINE, UNREACHABLE } from '../src/core/apiError'
 import { E2E_BASE, E2E_PROFILE } from './e2e-constants'
 
 export { E2E_BASE }
+
+/**
+ * Whether a console line only says the network failed, which the CRUD specs leave out of the
+ * errors they count. fetch's own words are "Failed to fetch"; the app says it in a sentence of
+ * its own (core/apiError.ts), and a page's loader logs "Failed to load goals: ApiError: Couldn't
+ * reach Token Circles. ...", which has "Error" in it. Read from the app, so a reworded sentence
+ * cannot slip past the filter.
+ */
+export function isNetworkNoise(message: string): boolean {
+  return ['Failed to fetch', UNREACHABLE, OFFLINE].some((words) => message.includes(words))
+}
 
 /**
  * Navigate to a hash route in serverless/demo mode and wait until the app shell is ready.
