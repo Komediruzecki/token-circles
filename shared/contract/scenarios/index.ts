@@ -2,6 +2,7 @@ import type { Scenario } from '../types';
 import { accounts } from './accounts';
 import { bills } from './bills';
 import { budgets } from './budgets';
+import { calculators } from './calculators';
 import { categories } from './categories';
 import { goalScenarios } from './goals';
 import { loanScenarios } from './loans';
@@ -15,6 +16,7 @@ export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   accounts,
   bills,
   budgets,
+  calculators,
   categories,
   goals: goalScenarios,
   loans: loanScenarios,
