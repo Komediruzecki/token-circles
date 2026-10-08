@@ -567,6 +567,19 @@ describe('the current address', () => {
     expect(notices[0].html).not.toContain('verify-email');
   });
 
+  it('is not told the new address while it is unconfirmed itself', async () => {
+    await seed(0);
+
+    expect((await save(NEW)).status).toBe(200);
+
+    const notices = mailsTo(OLD);
+    expect(notices).toHaveLength(1);
+    expect(notices[0].text).toMatch(/asked to change its email address/i);
+    expect(notices[0].subject).not.toContain(NEW);
+    expect(notices[0].text).not.toContain(NEW);
+    expect(notices[0].html).not.toContain(NEW);
+  });
+
   it('hears nothing about a request that was refused', async () => {
     await seed(1);
 

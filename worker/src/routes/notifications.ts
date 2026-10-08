@@ -61,13 +61,16 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   let pendingEmail: string | null = null;
   if (typeof b.email === 'string' && b.email.trim()) {
     const email = b.email.trim().toLowerCase();
-    const user = await db.first<{ email: string | null }>(
+    const user = await db.first<{ email: string | null; email_verified: number | null }>(
       c.env.DB,
-      'SELECT email FROM users WHERE id = ?',
+      'SELECT email, email_verified FROM users WHERE id = ?',
       userId
     );
     if (email !== (user?.email ?? '').toLowerCase()) {
-      const limited = await requestEmailChange(c, userId, email, user?.email ?? null);
+      const limited = await requestEmailChange(c, userId, email, {
+        email: user?.email ?? null,
+        confirmed: !!user?.email_verified,
+      });
       if (limited) return limited;
       pendingEmail = email;
     }

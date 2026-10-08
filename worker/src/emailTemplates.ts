@@ -298,19 +298,28 @@ export function renderEmailChange(opts: {
 /**
  * Sent to an account's current address when a change to `newEmail` is asked for. It carries no
  * link that makes the change: it tells the owner, who can cancel the change from Settings.
+ * `newEmail` is null when the notice should not name it (the current address is unconfirmed).
  */
 export function renderEmailChangeNotice(opts: {
-  newEmail: string;
+  newEmail: string | null;
   appUrl?: string;
 }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
   const subject = `A new email address was requested for your ${BRAND} account`;
   const footerReason = 'Sent because a new email address was requested for your account.';
   const ifNotYou = `If this was you, there's nothing more to do. If it wasn't, sign in, cancel the change in Settings, and choose Sign out on all devices under Settings, About.`;
+  const named = opts.newEmail;
+  const asked = named
+    ? `asked to change its email address to <strong style="color:${C.text}">${escapeHtml(named)}</strong>.`
+    : 'asked to change its email address.';
+  const askedText = named
+    ? `asked to change its email address to ${named}.`
+    : 'asked to change its email address.';
+  const until = `Nothing changes unless ${named ? 'that' : 'the new'} address confirms it, with the link we sent there. Until then, you keep signing in with this one.`;
   const body = `
     ${h1('Email change requested')}
-    ${p(`Someone signed in to your ${BRAND} account asked to change its email address to <strong style="color:${C.text}">${escapeHtml(opts.newEmail)}</strong>.`)}
-    ${p(`Nothing changes unless that address confirms it, with the link we sent there. Until then, you keep signing in with this one.`)}
+    ${p(`Someone signed in to your ${BRAND} account ${asked}`)}
+    ${p(until)}
     <div style="padding:8px 0 12px">${btn(`${app}/#settings`, 'Open Settings')}</div>
     ${p(ifNotYou, `font-size:12.5px;color:${C.faint}`)}
   `;
@@ -318,13 +327,13 @@ export function renderEmailChangeNotice(opts: {
     subject,
     html: shell({
       title: subject,
-      preheader: `Nothing changes unless ${opts.newEmail} confirms it.`,
+      preheader: `Nothing changes unless ${named ?? 'the new address'} confirms it.`,
       body,
       footerReason,
       orbit: false,
       assetOrigin: opts.appUrl,
     }),
-    text: `${subject}\n\nSomeone signed in to your ${BRAND} account asked to change its email address to ${opts.newEmail}.\n\nNothing changes unless that address confirms it, with the link we sent there. Until then, you keep signing in with this one.\n\n${ifNotYou}\nOpen Settings: ${app}/#settings${textFooter(footerReason)}`,
+    text: `${subject}\n\nSomeone signed in to your ${BRAND} account ${askedText}\n\n${until}\n\n${ifNotYou}\nOpen Settings: ${app}/#settings${textFooter(footerReason)}`,
   };
 }
 

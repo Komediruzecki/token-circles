@@ -112,15 +112,16 @@ export async function sendEmailChangeLink(
 }
 
 /**
- * Tell the account's current address that a change to `email` was asked for: that is how the
- * owner hears of it. Best-effort, like the other notices; the change itself does not wait on it.
+ * Tell the account's current address that a change was asked for: that is how the owner hears of
+ * it. `named` is the new address, or null to leave it out. Best-effort, like the other notices;
+ * the change itself does not wait on it.
  */
 async function mailEmailChangeNotice(
   c: Context<AppEnv>,
   current: string,
-  email: string
+  named: string | null
 ): Promise<void> {
-  const notice = renderEmailChangeNotice({ newEmail: email, appUrl: appBase(c) });
+  const notice = renderEmailChangeNotice({ newEmail: named, appUrl: appBase(c) });
   await sendMail(c.env, current, notice.subject, notice.html, { text: notice.text }).catch(
     (e: unknown) => {
       console.error('Email change notice failed to send:', e);
@@ -129,16 +130,16 @@ async function mailEmailChangeNotice(
 }
 
 /**
- * Ask to move `userId` from `current` to `email` (trimmed and lowercased by the caller, and
- * different from `current`). Throws 400 for something that is not an address and 409 for one
- * another account has; returns the 429 past the limits above, and null once the link has gone to
- * `email` and the notice to `current`.
+ * Ask to move `userId` from its `current` address to `email` (trimmed and lowercased by the
+ * caller, and different from the current one). Throws 400 for something that is not an address
+ * and 409 for one another account has; returns the 429 past the limits above, and null once the
+ * link has gone to `email` and the notice to the current address.
  */
 export async function requestEmailChange(
   c: Context<AppEnv>,
   userId: number,
   email: string,
-  current: string | null
+  current: { email: string | null; confirmed: boolean }
 ): Promise<Response | null> {
   if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
     throw new HttpError(400, 'A valid email is required');
@@ -146,8 +147,11 @@ export async function requestEmailChange(
   const limited = await sendEmailChangeLink(c, userId, email);
   if (limited) return limited;
   // An account with no address yet (a Google sign-up whose address Google had not confirmed) has
-  // nobody to tell.
-  if (current) await mailEmailChangeNotice(c, current, email);
+  // nobody to tell. An address nobody has confirmed may not be the owner's, so its notice says a
+  // change was asked for without naming the new address.
+  if (current.email) {
+    await mailEmailChangeNotice(c, current.email, current.confirmed ? email : null);
+  }
   return null;
 }
 

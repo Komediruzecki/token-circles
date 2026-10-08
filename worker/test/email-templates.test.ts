@@ -92,6 +92,17 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
+  it('email change notice can leave the new address out', () => {
+    const mail = renderEmailChangeNotice({ newEmail: null, appUrl: 'https://tokencircles.com' });
+    expectBrandedShell(mail);
+    expect(mail.text).toMatch(/asked to change its email address\./i);
+    expect(mail.html).not.toContain('@example.com');
+    expect(mail.text).not.toContain('@example.com');
+    expect(mail.html).not.toContain('null');
+    expect(mail.text).not.toContain('null');
+    expect(mail.html).toContain('https://tokencircles.com/#settings');
+  });
+
   it('budget alert renders rows with the profile currency and escapes names', () => {
     const mail = renderBudgetAlert({
       alerts: [
