@@ -178,8 +178,10 @@ export const accounts = [
   scenario('the net worth timeline adds up the recorded balances by day', async (api, expect) => {
     const a = await account(api, expect, 'Everyday', 100);
     const b = await account(api, expect, 'Savings', 900);
+    // Recorded balances that do not add up to the accounts' own (1000), so a timeline of the
+    // accounts' balances fails here.
     expectOk(expect, await api.post(`/api/accounts/${a}/history`, { balance: 150.25 }), 'a');
-    expectOk(expect, await api.post(`/api/accounts/${b}/history`, { balance: 849.75 }), 'b');
+    expectOk(expect, await api.post(`/api/accounts/${b}/history`, { balance: 700 }), 'b');
     const theirs = await account(api.other, expect, 'Theirs', 5);
     expectOk(
       expect,
@@ -191,7 +193,7 @@ export const accounts = [
     expectOk(expect, timeline, 'GET the timeline');
     expect(timeline.body).toHaveLength(1);
     expect(timeline.body[0].date).toBe(isoDay(new Date()));
-    expectMoney(expect, timeline.body[0].net_worth, 1000, 'net worth');
+    expectMoney(expect, timeline.body[0].net_worth, 850.25, 'net worth');
   }),
 
   scenario(
