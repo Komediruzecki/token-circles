@@ -184,6 +184,7 @@ describe("the Worker's retirement-goal contract", () => {
       target_amount: 900000,
       current_amount: 120000,
       deadline: '2046-06-30',
+      notes: '',
       profile_id: 1,
     })
 
@@ -204,25 +205,32 @@ describe("the Worker's retirement-goal contract", () => {
     })
   })
 
-  it('a field left empty on the page takes the Worker default', async () => {
+  it('an amount left empty is zero and a date none; empty ages and return are refused', async () => {
     const id = await createRetirementGoal({
-      name: 'Blank',
-      target_amount: 100,
+      ...PAGE_FORM,
       current_amount: null,
       target_date: '',
       monthly_contribution: null,
-      expected_return_rate: null,
-      current_age: null,
-      retirement_age: null,
     })
     expect(await (await getDB()).get('retirement_goals', id)).toMatchObject({
       current_amount: 0,
       deadline: null,
       monthly_contribution: 0,
-      expected_return_rate: 7,
-      current_age: 30,
-      retirement_age: 65,
     })
+
+    // They used to be stored as 7 %, 30 and 65, which the planner then took for the person's own.
+    const res = await call('POST', '/retirement-goals', {
+      ...PAGE_FORM,
+      expected_return_rate: null,
+      current_age: null,
+      retirement_age: null,
+    })
+    expect(res.status).toBe(400)
+    expect(Object.keys(((await res.json()) as { fields: object }).fields)).toEqual([
+      'current_age',
+      'retirement_age',
+      'expected_return_rate',
+    ])
   })
 
   it('POST files the goal under the active profile, whatever the body says', async () => {
@@ -410,6 +418,35 @@ describe('backups', () => {
     // Nothing is parked out of sight any more.
     const parked = await db.get('settings', BACKUP_EXTENSION_SETTINGS_KEY)
     expect(parked.value.retirementGoals).toEqual([])
+  })
+
+  it('a goal at 0 % restores at 0 %, and one with no return at the 7 % default', async () => {
+    const backup: ExportData = await adapter.exportData()
+    const goal = (id: number, name: string, rate: number | null) => ({
+      id,
+      profile_id: 1,
+      name,
+      target_amount: 500000,
+      current_amount: 0,
+      deadline: null,
+      notes: '',
+      current_age: 35,
+      retirement_age: 67,
+      monthly_contribution: 800,
+      expected_return_rate: rate,
+      created_at: '2026-05-01 10:00:00',
+    })
+    backup.retirementGoals = [goal(7, 'Cash only', 0), goal(8, 'Unset', null)]
+
+    await adapter.importData(backup)
+
+    const db = await getDB()
+    const me = (await db.getAll('profiles')).find((p) => p.name === 'Me')
+    useProfile(me!.id as number)
+    const rates = Object.fromEntries(
+      (await retirementList()).goals.map((g) => [g.name, g.expected_return_rate])
+    )
+    expect(rates).toEqual({ 'Cash only': 0, Unset: 7 })
   })
 
   it('a backup made before this fix, with retirement goals inside goals, restores them where they belong', async () => {

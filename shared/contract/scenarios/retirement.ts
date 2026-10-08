@@ -1,9 +1,10 @@
+import { RETIREMENT_GOAL_MESSAGES as M } from '../../retirementGoalSchema';
 import { addTransaction, dayOf, expectMoney } from '../helpers';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
-/** The body the Retirement page saves (features/Retirement.tsx, handleSubmit): every field is required. */
+/** The body the Retirement page saves (features/Retirement.tsx): every field it shows. */
 export function retirementForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Retire at 60',
@@ -55,13 +56,15 @@ function monthsAgo(months: number): string {
 export const retirement = [
   scenario('a retirement goal is added, read back, changed and removed', async (api, expect) => {
     const answer = await addGoal(api, expect);
-    // Both answer the fields they were sent, not the stored row.
-    expect(answer).toMatchObject({
+    // Both answer the fields they stored, not the whole row.
+    expect(answer).toEqual({
       id: expect.any(Number),
       name: 'Retire at 60',
       target_amount: 750000,
       current_amount: 42000.5,
       deadline: '2050-01-01',
+      notes: '',
+      profile_id: expect.any(Number),
     });
     const id = answer.id as number;
 
@@ -109,6 +112,52 @@ export const retirement = [
       expect(reply.body).toEqual({ error: 'Retirement goal not found' });
     }
   }),
+
+  scenario(
+    'a retirement goal is refused in the same words, at the same fields',
+    async (api, expect) => {
+      // Both used to save a goal sent without ages or a return as a 30-year-old retiring at 65 at
+      // 7 %, and store a target sent as text.
+      const refused = await api.post(
+        '/api/retirement-goals',
+        retirementForm({
+          target_amount: 'lots',
+          current_age: null,
+          retirement_age: 140,
+          expected_return_rate: null,
+        })
+      );
+      expect(refused.status).toBe(400);
+      expect(refused.body).toEqual({
+        error: [M.targetNumber, M.currentAge, M.retirementAge, M.returnRate].join(' '),
+        fields: {
+          target_amount: M.targetNumber,
+          current_age: M.currentAge,
+          retirement_age: M.retirementAge,
+          expected_return_rate: M.returnRate,
+        },
+      });
+      expect((await listed(api, expect)).goals).toEqual([]);
+
+      // A 0 % return is 0 %, where both saved it as 7 %; an edit refuses what it changes wrongly,
+      // and leaves the rest as it was.
+      const { id } = await addGoal(api, expect, { expected_return_rate: 0 });
+      const edit = await api.put(
+        `/api/retirement-goals/${id}`,
+        retirementForm({ expected_return_rate: 0, name: '', current_age: 17 })
+      );
+      expect(edit.status).toBe(400);
+      expect(edit.body.fields).toEqual({ name: M.name, current_age: M.currentAge });
+      expect((await listed(api, expect)).goals).toEqual([
+        expect.objectContaining({
+          id,
+          name: 'Retire at 60',
+          current_age: 38,
+          expected_return_rate: 0,
+        }),
+      ]);
+    }
+  ),
 
   scenario("another profile's retirement goal is not changed or removed", async (api, expect) => {
     const { id } = await addGoal(api, expect);

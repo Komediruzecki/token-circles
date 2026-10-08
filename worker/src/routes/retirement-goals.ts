@@ -3,11 +3,15 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError } from '../http';
 import * as db from '../db';
 import { localNow } from '../local-date';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { projectRetirement } from '../../../shared/retirement';
+import {
+  checkRetirementGoalCreate,
+  checkRetirementGoalEdit,
+} from '../../../shared/retirementGoalSchema';
 import {
   buildFacts,
   deriveSettings,
@@ -119,58 +123,53 @@ retirementGoalsRoutes.get('/api/retirement-goals', requireAuth, async (c) => {
   });
 });
 
+// A goal is checked by the rules local-first and the goal dialog run too
+// (shared/retirementGoalSchema.ts): a refused body answers 400 at its fields, and nothing a
+// person did not type is stored as if they had.
 retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const dl = b.deadline || b.target_date || null;
-  if (!b.name || b.target_amount == null)
-    throw new HttpError(400, 'Name and target amount are required');
-  const res = await db.insert(c.env.DB, 'retirement_goals', {
-    profile_id: pid,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: dl,
-    notes: b.notes || '',
-    current_age: b.current_age || 30,
-    retirement_age: b.retirement_age || 65,
-    monthly_contribution: b.monthly_contribution || 0,
-    expected_return_rate: b.expected_return_rate || 7,
-  });
+  const goal = accept(checkRetirementGoalCreate(await c.req.json()));
+  const res = await db.insert(c.env.DB, 'retirement_goals', { ...goal, profile_id: pid });
   return c.json({
     id: res.meta.last_row_id,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: dl,
-    notes: b.notes,
+    name: goal.name,
+    target_amount: goal.target_amount,
+    current_amount: goal.current_amount,
+    deadline: goal.deadline,
+    notes: goal.notes,
     profile_id: pid,
   });
 });
 
-retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const dl = b.deadline || b.target_date || null;
-  const res = await db.update(
+/** The profile's goal `id`, or the 404 that says it is not there. */
+async function ownGoal(c: Context<AppEnv>, pid: number): Promise<Record<string, unknown>> {
+  const goal = await db.first<Record<string, unknown>>(
     c.env.DB,
-    'retirement_goals',
-    {
-      name: b.name,
-      target_amount: b.target_amount,
-      current_amount: b.current_amount,
-      deadline: dl,
-      notes: b.notes || '',
-      current_age: b.current_age || 30,
-      retirement_age: b.retirement_age || 65,
-      monthly_contribution: b.monthly_contribution || 0,
-      expected_return_rate: b.expected_return_rate || 7,
-    },
-    'id = ? AND profile_id = ?',
+    'SELECT * FROM retirement_goals WHERE id = ? AND profile_id = ?',
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Retirement goal not found');
+  if (!goal) throw new HttpError(404, 'Retirement goal not found');
+  return goal;
+}
+
+// An edit checks and writes only the fields whose value it changes (decision 2), so a goal an
+// older version stored under other rules can still be renamed, and a field it leaves out is left
+// as it is.
+retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) => {
+  const pid = await getProfileId(c);
+  const existing = await ownGoal(c, pid);
+  const fields = accept(checkRetirementGoalEdit(await c.req.json(), existing));
+  if (Object.keys(fields).length > 0) {
+    await db.update(
+      c.env.DB,
+      'retirement_goals',
+      fields,
+      'id = ? AND profile_id = ?',
+      existing.id,
+      pid
+    );
+  }
   return c.json({ ok: true });
 });
 

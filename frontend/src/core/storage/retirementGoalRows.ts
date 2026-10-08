@@ -27,42 +27,28 @@ export function isLegacyRetirementGoal(row: Row): boolean {
   )
 }
 
-/**
- * The columns the Worker's insert writes for a request body. The page sends its date as
- * `target_date`, which is stored as `deadline`, and a field left empty takes the column default.
- */
-export function retirementGoalFields(b: Row): Row {
-  const fields: Row = {
-    current_amount: b.current_amount || 0,
-    deadline: b.deadline || b.target_date || null,
-    notes: b.notes || '',
-    current_age: b.current_age || 30,
-    retirement_age: b.retirement_age || 65,
-    monthly_contribution: b.monthly_contribution || 0,
-    expected_return_rate: b.expected_return_rate || 7,
-  }
-  if (b.name !== undefined) fields.name = b.name
-  if (b.target_amount !== undefined) fields.target_amount = b.target_amount
-  return fields
-}
+/** Nothing there: a field a row never had, or one the page sent empty. */
+const isBlank = (value: unknown): boolean =>
+  value === undefined || value === null || value === '' || Number.isNaN(value)
 
-/** A row stored before v13, or restored from a backup, in the shape the handlers write now. */
+/**
+ * A row stored before v13, or restored from a backup, in the shape the handlers write now: the
+ * date as `deadline`, and a field the row has no value for at the column's default. A field it has
+ * keeps its value: a 0 % return stays 0 %, where `|| 7` made it 7 %.
+ */
 export function asRetirementGoalRow(row: Row): Row {
   const { target_date: _targetDate, ...rest } = row
-  return { ...rest, ...retirementGoalFields(row) }
-}
-
-/**
- * An edit: the body's fields, with the defaults the Worker's PUT applies, over the stored row,
- * whose id, profile and creation date the body cannot change. A field the body leaves out keeps
- * its stored value, where the Worker's PUT would reset it; the page sends every field, so it sees
- * no difference. The date moves only when the body carries one, under either name, so a cleared
- * date clears it.
- */
-export function editedRetirementGoal(existing: Row, b: Row): Row {
-  const dated = b.deadline !== undefined || b.target_date !== undefined
-  const deadline = dated ? b.deadline || b.target_date || null : (existing.deadline ?? null)
-  return { ...existing, ...retirementGoalFields({ ...existing, ...b, deadline }) }
+  const or = (value: unknown, blank: unknown) => (isBlank(value) ? blank : value)
+  return {
+    ...rest,
+    current_amount: or(row.current_amount, 0),
+    deadline: row.deadline || row.target_date || null,
+    notes: or(row.notes, ''),
+    current_age: or(row.current_age, 30),
+    retirement_age: or(row.retirement_age, 65),
+    monthly_contribution: or(row.monthly_contribution, 0),
+    expected_return_rate: or(row.expected_return_rate, 7),
+  }
 }
 
 interface AddableStore {
