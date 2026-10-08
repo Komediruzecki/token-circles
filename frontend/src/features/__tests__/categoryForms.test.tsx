@@ -15,6 +15,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as api from '../../core/api'
 import { setPage } from '../../core/appStore'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
@@ -130,6 +131,7 @@ afterEach(() => {
   dispose = undefined
   host.remove()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 async function mount(surface: Surface, open = surface.open): Promise<void> {
@@ -309,5 +311,42 @@ describe.each(SURFACES.filter((s) => s.edit))('editing on $page', (surface) => {
     expect(nameField().getAttribute('aria-invalid')).toBe('true')
     expect(describedBy(nameField())).toContain('Give the category a name.')
     expect(((await (await getDB()).get('categories', 2)) as { name: string }).name).toBe(LONG_NAME)
+  })
+
+  // Older versions stored a name as typed. The dialog sent it back trimmed, which made it a
+  // change to check: a color-only edit had a long name with a trailing space refused for its
+  // length, and a name of spaces refused as blank.
+  it.each([
+    ['a name over 100 characters with a trailing space', `${LONG_NAME} `, LONG_NAME],
+    ['a name of nothing but spaces', '   ', ''],
+  ])('saves a color-only edit of %s, sending the name back as it came', async (_, name, shown) => {
+    const db = await getDB()
+    await db.put('categories', { ...(await db.get('categories', 2)), name })
+    const put = vi.spyOn(api, 'apiPut')
+    await mount(surface, surface.edit)
+    await vi.waitFor(() => {
+      expect(nameField().value).toBe(name)
+    })
+
+    const swatch = dialogForm().querySelector<HTMLButtonElement>(
+      '[data-test-id="category-color-swatch"]'
+    )!
+    swatch.click()
+    submitDialog()
+
+    await vi.waitFor(async () => {
+      expect(await (await getDB()).get('categories', 2)).toMatchObject({
+        name,
+        color: swatch.title,
+      })
+    })
+    expect(put).toHaveBeenCalledWith('/api/categories/2', expect.objectContaining({ name }))
+    await vi.waitFor(() => {
+      expect(dialogOpen()).toBe(false)
+    })
+    expect(errorToasts()).toEqual([])
+    expect(successToasts()).toEqual([
+      shown ? `Saved your changes to "${shown}".` : 'Saved your changes.',
+    ])
   })
 })

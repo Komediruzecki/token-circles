@@ -62,7 +62,12 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
     check: (values) =>
       fieldErrorsOf(opened ? checkCategoryEdit(values, opened) : checkCategoryCreate(values)),
     send: async (values) => {
-      const name = values.name.trim()
+      // A name the edit left alone goes back as it came, stray spaces and all. Trimmed, it is a
+      // change, and checked as one: a long name with a trailing space would be refused for its
+      // length on a color-only edit, the very edit the check against `opened` let through.
+      const untouched = opened !== null && values.name === opened.name
+      const name = untouched ? values.name : values.name.trim()
+      const shown = name.trim()
       // Only the fields this form shows: an edit must not clear a parent or a tax flag it never
       // offered. A blank icon is sent as null and stored as the default.
       const body = {
@@ -74,10 +79,10 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
       const editing = options.editing?.()
       if (editing) {
         await apiPut(`/api/categories/${editing.id}`, body)
-        showToast(`Saved your changes to "${name}".`, 'success')
+        showToast(shown ? `Saved your changes to "${shown}".` : 'Saved your changes.', 'success')
       } else {
         await apiPost('/api/categories', body)
-        showToast(`Added "${name}" to your categories.`, 'success')
+        showToast(`Added "${shown}" to your categories.`, 'success')
       }
       options.onSaved()
     },

@@ -38,10 +38,13 @@ const COFFEE = 981108; // "Coffee" and "coffee": two names that differ only in c
 const COFFEE_LOWER = 981109;
 const SAVINGS = 981112; // a type the app cannot read
 const KIDS = 981113; // a parent in another profile
+const PADDED = 981114; // a name over 100 characters, stored with a trailing space
+const SPACES = 981115; // a name of nothing but spaces
 // A second profile of the same user, and a category in it.
 const OTHER_PROFILE = 98111;
 const ELSEWHERE = 981110;
 const LONG_NAME = 'Allotment '.repeat(12).trim();
+const PADDED_NAME = 'Garden '.repeat(16);
 const PARENT = 'Choose a parent category from the list, or leave it empty.';
 let cookie = '';
 
@@ -105,6 +108,13 @@ beforeEach(async () => {
     env.DB.prepare(
       "INSERT INTO categories (id, profile_id, name, type, color, icon, parent_id) VALUES (?, ?, 'Kids', 'expense', '#e0708a', 'tag', ?)"
     ).bind(KIDS, PROFILE, ELSEWHERE),
+    // Names as older versions stored them: as typed, stray spaces and all.
+    env.DB.prepare(
+      "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, ?, 'expense', '#6e9bff', 'tag')"
+    ).bind(PADDED, PROFILE, PADDED_NAME),
+    env.DB.prepare(
+      "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, '   ', 'expense', '#6e9bff', 'tag')"
+    ).bind(SPACES, PROFILE),
   ]);
   cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
 });
@@ -369,6 +379,32 @@ describe('editing a row saved under older rules', () => {
 
     expect(res.status).toBe(200);
     expect(await stored(ALLOTMENT)).toMatchObject({ name: LONG_NAME, color: '#59d2a2' });
+  });
+
+  // The dialogs sent the name back trimmed until they learned to send an untouched name as it
+  // came. Without its trailing space this name is under no new rule, but over 100 characters.
+  it('takes a name sent back without the space it was stored with as unchanged', async () => {
+    const res = await call('PUT', `/api/categories/${PADDED}`, {
+      name: PADDED_NAME.trim(),
+      type: 'expense',
+      color: '#59d2a2',
+      icon: 'tag',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await stored(PADDED)).toMatchObject({ name: PADDED_NAME, color: '#59d2a2' });
+  });
+
+  it('takes a blank name sent back for a name of spaces as unchanged', async () => {
+    const res = await call('PUT', `/api/categories/${SPACES}`, {
+      name: '',
+      type: 'expense',
+      color: '#59d2a2',
+      icon: 'tag',
+    });
+
+    expect(res.status).toBe(200);
+    expect(await stored(SPACES)).toMatchObject({ name: '   ', color: '#59d2a2' });
   });
 
   it('sends a type the app cannot read back unchanged, and the new name saves', async () => {

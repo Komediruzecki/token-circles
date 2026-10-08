@@ -253,10 +253,12 @@ another profile is refused at `parent_id` with a 400 in both runtimes; no form s
 holds is neither checked nor written, so a row saved under older rules can still be edited: a
 colour-only edit of a category whose name is over 100 characters saves. What the edit changes is
 checked like anything else. The duplicate check runs only when the name changes other than in case
-or surrounding space. "Unchanged" is strict equality with the stored value, so the comparison needs
-the row: the Worker route and the local handler run `checkCategoryEdit(body, row)` after loading
-it, and the local router has no category PUT entry in `validateBody`. The form runs the same check
-against the values it opened with.
+or surrounding space. "Unchanged" means equal to the stored value, and a name is the same name
+without the space around it: older versions stored names as typed, and a long name with a trailing
+space, sent back trimmed, was refused for its length. The comparison needs the row: the Worker
+route and the local handler run `checkCategoryEdit(body, row)` after loading it, and the local
+router has no category PUT entry in `validateBody`. The form runs the same check against the
+values it opened with, and sends a name it did not touch back as it came.
 
 ### 3. One client error type
 

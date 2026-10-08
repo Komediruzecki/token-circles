@@ -192,6 +192,22 @@ describe('an edit to a category', () => {
         name: CATEGORY_MESSAGES.nameLength,
       })
     })
+
+    // Older versions stored a name as typed, stray spaces included. A client that trims the name
+    // it sends back would otherwise change it, and have a name over 100 characters refused.
+    it('takes a name sent back without the spaces around it as the name it holds', () => {
+      const padded = { ...legacy, name: `${legacy.name} ` }
+      expect(checkCategoryEdit({ name: legacy.name, color: '#112233' }, padded)).toEqual({
+        ok: true,
+        value: { color: '#112233' },
+      })
+      expect(checkCategoryEdit({ name: '', color: '#112233' }, { ...legacy, name: '   ' })).toEqual(
+        { ok: true, value: { color: '#112233' } }
+      )
+      expect(fieldErrorsOf(checkCategoryEdit({ name: `${legacy.name}s` }, padded))).toEqual({
+        name: CATEGORY_MESSAGES.nameLength,
+      })
+    })
   })
 })
 

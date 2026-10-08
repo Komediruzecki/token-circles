@@ -36,11 +36,14 @@ const COFFEE = 18 // "Coffee" and "coffee", from before the duplicate check
 const COFFEE_LOWER = 19
 const SAVINGS = 20 // a type the app cannot read
 const KIDS = 21 // a parent in another profile
+const PADDED = 22 // a name over 100 characters, stored with a trailing space
+const SPACES = 23 // a name of nothing but spaces
 // A second profile and a category in it.
 const OTHER_PROFILE = 2
 const ELSEWHERE = 30
 
 const LONG_NAME = 'Allotment '.repeat(12).trim()
+const PADDED_NAME = 'Garden '.repeat(16)
 const PARENT = 'Choose a parent category from the list, or leave it empty.'
 
 beforeEach(async () => {
@@ -143,6 +146,21 @@ beforeEach(async () => {
     type: 'expense',
     color: '#59d2a2',
     parent_id: ELSEWHERE,
+  })
+  // Names as older versions stored them: as typed, stray spaces and all.
+  await db.add('categories', {
+    ...legacy,
+    id: PADDED,
+    name: PADDED_NAME,
+    type: 'expense',
+    color: '#59d2a2',
+  })
+  await db.add('categories', {
+    ...legacy,
+    id: SPACES,
+    name: '   ',
+    type: 'expense',
+    color: '#59d2a2',
   })
 })
 
@@ -363,6 +381,25 @@ describe('editing a local-first row saved under older rules', () => {
     })
 
     expect(row).toMatchObject({ name: LONG_NAME, color: '#f0a860' })
+  })
+
+  // The dialogs sent the name back trimmed until they learned to send an untouched name as it
+  // came. Without its trailing space this name is under no new rule, but over 100 characters.
+  it('takes a name sent back without the space it was stored with as unchanged', async () => {
+    const row = await saved(PADDED, {
+      name: PADDED_NAME.trim(),
+      type: 'expense',
+      color: '#f0a860',
+      icon: 'tag',
+    })
+
+    expect(row).toMatchObject({ name: PADDED_NAME, color: '#f0a860' })
+  })
+
+  it('takes a blank name sent back for a name of spaces as unchanged', async () => {
+    const row = await saved(SPACES, { name: '', type: 'expense', color: '#f0a860', icon: 'tag' })
+
+    expect(row).toMatchObject({ name: '   ', color: '#f0a860' })
   })
 
   it('sends a type the app cannot read back unchanged, and the new name saves', async () => {

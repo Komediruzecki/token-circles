@@ -151,9 +151,25 @@ export function checkCategoryEdit(body: unknown, stored: object): Checked<Partia
   const changed: Record<string, unknown> = {};
   for (const field of FIELDS) {
     const raw = rawField(record, field);
-    if (raw !== undefined && raw !== row[field]) changed[field] = raw;
+    if (raw !== undefined && !holds(field, raw, row[field])) changed[field] = raw;
   }
   return check(changed, true);
+}
+
+/**
+ * Whether an edit's value for `field` is the one the row holds. A name is the same name without
+ * the space around it: older versions stored a name as typed, and a client that trims the name it
+ * sends back has not changed it. A long name with a trailing space, sent back trimmed, would
+ * otherwise be checked as new and refused for its length.
+ */
+function holds(field: keyof CategoryInput, raw: unknown, stored: unknown): boolean {
+  if (raw === stored) return true;
+  return (
+    field === 'name' &&
+    typeof raw === 'string' &&
+    typeof stored === 'string' &&
+    raw.trim() === stored.trim()
+  );
 }
 
 /**
