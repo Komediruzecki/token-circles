@@ -9,7 +9,8 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet, apiPut } from '../../../core/api'
+import { apiGet, apiPost, apiPut, showToast } from '../../../core/api'
+import { ApiError } from '../../../core/apiError'
 import { setPage } from '../../../core/appStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
@@ -457,6 +458,25 @@ describe('the loan page', () => {
     expect(root.textContent).toContain('With your saved extra payment')
   })
 
+  it('says a failed add in plain words, and keeps what was typed', async () => {
+    vi.mocked(showToast).mockClear()
+    vi.mocked(apiPost).mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
+    const root = await mount('#loans/1/extras')
+    const amount = el(root, 'loans-extra-amount') as HTMLInputElement
+    amount.focus()
+    amount.value = '10000'
+    amount.dispatchEvent(new Event('input', { bubbles: true }))
+    el(root, 'loans-extra-form')!.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true })
+    )
+    await settle()
+
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ["Couldn't save the extra payment. Try again.", 'error'],
+    ])
+    expect((el(root, 'loans-extra-amount') as HTMLInputElement).value).toBe('10000')
+  })
+
   it('changes a saved extra payment in place', async () => {
     vi.mocked(apiPut).mockClear()
     listed = [
@@ -491,6 +511,33 @@ describe('the loan page', () => {
     // The form closed, and the list came back from the store with the change.
     expect(el(root, 'loans-extra-edit-form')).toBeNull()
     expect(text(root, 'loans-extra-item')).toBe('Payment 24, Dec 1, 2027Bonus€5,000.00')
+  })
+
+  it('says a refused change in plain words, and keeps the form open', async () => {
+    listed = [
+      {
+        ...structuredClone(LOAN),
+        prepayments: [{ id: 7, month: 12, amount: 10000, note: 'Bonus' }],
+      },
+    ]
+    vi.mocked(showToast).mockClear()
+    // The Worker's own sentence for a refusal, then a failure that has no words for a person.
+    vi.mocked(apiPut)
+      .mockRejectedValueOnce(new ApiError(400, 'Enter an amount above zero.'))
+      .mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
+    const root = await mount('#loans/1/extras')
+    await click(root, 'loans-extra-edit')
+    for (let i = 0; i < 2; i++) {
+      el(root, 'loans-extra-edit-form')!.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true })
+      )
+      await settle()
+    }
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ['Enter an amount above zero.', 'error'],
+      ["Couldn't update the extra payment. Try again.", 'error'],
+    ])
+    expect(el(root, 'loans-extra-edit-form')).not.toBeNull()
   })
 
   it('leaves a saved extra payment as it was on Cancel, or on Escape', async () => {

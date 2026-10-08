@@ -10,6 +10,7 @@ import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
 import ConfirmButton from '../../components/ConfirmButton'
 import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../../core/api'
+import { plainMessage } from '../../core/apiError'
 import { refetchOnActive } from '../../core/pageVisibility'
 import { localToday } from '../../utils/period'
 import LoanCompare from './LoanCompare'
@@ -159,7 +160,7 @@ export default function LoanDetail(props: Props) {
       showToast('Extra payment saved', 'success')
       return true
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'The extra payment was not saved.', 'error')
+      showToast(plainMessage(err, "Couldn't save the extra payment. Try again."), 'error')
       return false
     }
   }
@@ -174,8 +175,8 @@ export default function LoanDetail(props: Props) {
       await apiPut(`/api/loans/${row.id}/prepayments/${extra.ref}`, next)
       showToast('Extra payment updated', 'success')
       return true
-    } catch {
-      showToast('The extra payment was not updated. Try again.', 'error')
+    } catch (err) {
+      showToast(plainMessage(err, "Couldn't update the extra payment. Try again."), 'error')
       return false
     }
   }
@@ -187,7 +188,7 @@ export default function LoanDetail(props: Props) {
       await apiDelete(`/api/loans/${row.id}/prepayments/${extra.ref}`)
       showToast('Extra payment removed', 'success')
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'The extra payment was not removed.', 'error')
+      showToast(plainMessage(err, "Couldn't remove the extra payment. Try again."), 'error')
     }
   }
 
