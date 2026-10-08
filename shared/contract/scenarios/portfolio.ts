@@ -87,6 +87,53 @@ export const portfolio = [
     ]);
   }),
 
+  scenario(
+    'holdings are listed latest purchase first, and summed by ticker',
+    async (api, expect) => {
+      const january = (
+        await addHolding(api, expect, {
+          shares: 10,
+          purchase_price: 100,
+          purchase_date: '2026-01-05',
+        })
+      ).id;
+      const march = (
+        await addHolding(api, expect, {
+          ticker: 'BETA',
+          shares: 5,
+          purchase_price: 40,
+          purchase_date: '2026-03-01',
+        })
+      ).id;
+      const february = (
+        await addHolding(api, expect, {
+          shares: 2,
+          purchase_price: 110,
+          purchase_date: '2026-02-01',
+        })
+      ).id;
+      await addHolding(api.other, expect, { ticker: 'THEIRS' });
+
+      expect((await holdings(api, expect)).map((h) => h.id)).toEqual([march, february, january]);
+
+      const summary = await api.get('/api/portfolio/summary');
+      expectOk(expect, summary, 'GET /api/portfolio/summary');
+      expect(summary.body).toMatchObject({ totalValue: 1420, totalCostBasis: 1420, totalGain: 0 });
+      expect(summary.body.holdings).toHaveLength(3);
+      expect(summary.body.allocation).toEqual([
+        { ticker: 'ACME', value: 1220, shares: 12, percentage: expect.any(Number) },
+        { ticker: 'BETA', value: 200, shares: 5, percentage: expect.any(Number) },
+      ]);
+      expect(summary.body.allocation[0].percentage).toBeCloseTo((1220 / 1420) * 100, 6);
+
+      const theirs = await api.other.get('/api/portfolio/summary');
+      expectOk(expect, theirs, "GET the other profile's summary");
+      expect(theirs.body.allocation).toEqual([
+        expect.objectContaining({ ticker: 'THEIRS', shares: 10 }),
+      ]);
+    }
+  ),
+
   scenario('live prices for the tickers held', async (api, expect) => {
     // The Portfolio page's refresh sends every ticker it holds.
     const reply = await api.post('/api/portfolio/prices', { tickers: ['ACME', 'NOPE'] });
