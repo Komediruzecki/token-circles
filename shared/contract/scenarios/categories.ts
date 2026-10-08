@@ -1,5 +1,9 @@
+import { addTransaction } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
+import { billForm } from './bills';
+import { goalForm } from './goals';
+import { ruleForm } from './recurring';
 
 async function uncategorised(api: ContractApi, expect: Expect, description: string) {
   return added(api, expect, '/api/transactions', {
@@ -49,6 +53,78 @@ export const categories = [
       expect.objectContaining({ id })
     );
   }),
+
+  scenario(
+    'a category in use is removed: what used it keeps going without it',
+    async (api, expect) => {
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+        icon: 'tag',
+      });
+      const bakery = await added(api, expect, '/api/categories', {
+        name: 'Bakery',
+        type: 'expense',
+        color: '#bb7733',
+        icon: 'tag',
+        parent_id: food,
+      });
+      const groceries = await addTransaction(api, expect, {
+        description: 'Groceries',
+        amount: 45.5,
+        category_id: food,
+      });
+      const goal = await added(api, expect, '/api/savings-goals', goalForm({ category_id: food }));
+      const bill = await added(api, expect, '/api/bills', billForm({ category_id: food }));
+      const rule = await added(api, expect, '/api/recurring', ruleForm({ category_id: food }));
+      await added(api, expect, '/api/budgets', {
+        category_id: food,
+        amount: 300,
+        period: 'monthly',
+        start_date: '2026-03-01',
+      });
+      await added(api, expect, '/api/categories/mappings', { pattern: 'lidl', category_id: food });
+      // The other profile's own Food, budgeted and spent on, is not this one.
+      const theirFood = await added(api.other, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+        icon: 'tag',
+      });
+      await addTransaction(api.other, expect, { description: 'Theirs', category_id: theirFood });
+      await added(api.other, expect, '/api/budgets', {
+        category_id: theirFood,
+        amount: 200,
+        period: 'monthly',
+        start_date: '2026-03-01',
+      });
+      const theirsBefore = await api.stored(api.other.profile);
+
+      expectOk(expect, await api.delete(`/api/categories/${food}`), 'DELETE the category');
+
+      // A transaction, a goal, a bill and a recurring rule lose the category and stay.
+      expect((await api.get(`/api/transactions/${groceries}`)).body).toMatchObject({
+        id: groceries,
+        amount: 45.5,
+        category_id: null,
+      });
+      const listed = async (path: string, id: number) =>
+        ((await api.get(path)).body as Json[]).find((row) => row.id === id);
+      expect(await listed('/api/savings-goals', goal)).toMatchObject({ category_id: null });
+      expect(await listed('/api/bills', bill)).toMatchObject({ category_id: null });
+      expect(await listed('/api/recurring', rule)).toMatchObject({ category_id: null });
+      // A budget and a mapping need the category, and go with it.
+      expect((await api.get('/api/budgets')).body).toEqual([]);
+      expect((await api.get('/api/categories/mappings')).body).toEqual([]);
+      // A child category moves to the top.
+      expect((await api.get(`/api/categories/${bakery}`)).body).toMatchObject({
+        id: bakery,
+        parent_id: null,
+      });
+      expect(await api.stored(api.other.profile)).toEqual(theirsBefore);
+    }
+  ),
 
   scenario("another profile's category is not read, changed or removed", async (api, expect) => {
     const id = await added(api, expect, '/api/categories', {
