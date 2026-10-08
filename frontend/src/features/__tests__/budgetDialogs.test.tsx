@@ -406,6 +406,57 @@ describe('Set Budget, when the amount is wrong', () => {
   })
 })
 
+// The app stored budgets like this: local-first's backfill summed 0.1, 0.2 and 0.3 to
+// 0.6000000000000001, and older rows and MCP clients can carry the same. The dialogs opened on
+// that text, and the cents rule refused it, so a budget nobody touched could not be saved.
+describe('a budget stored with a float error', () => {
+  const NOISY = 0.1 + 0.2 + 0.3
+
+  it('opens Change on the amount to the cent, and saves it as it is', async () => {
+    await budgetThisMonth(NOISY)
+    await mountBudgets()
+    byText(host, 'Change').click()
+    await vi.waitFor(() => {
+      expect(allocateDialog()).not.toBeNull()
+    })
+    expect(field(allocateDialog()!, 'Amount').value).toBe('0.6')
+
+    byText(allocateDialog()!, 'Allocate').click()
+
+    await vi.waitFor(() => {
+      expect(allocateDialog()).toBeNull()
+    })
+    expect(await budgets()).toEqual([expect.objectContaining({ amount: 0.6 })])
+    expect(successToasts()).toEqual([
+      `Set the Groceries budget for ${monthName(localMonth())} to €0.60.`,
+    ])
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('opens Set Budget on the amount to the cent, and saves it as it is', async () => {
+    const amountInput = () => host.querySelector<HTMLInputElement>('input[placeholder="500.00"]')
+    await budgetThisMonth(NOISY)
+    await mountBudgets()
+    host
+      .querySelector<HTMLButtonElement>(
+        '[data-test-id="budgets-category-actions"] button[title="Set Budget"]'
+      )!
+      .click()
+    await vi.waitFor(() => {
+      expect(amountInput()).not.toBeNull()
+    })
+    expect(amountInput()!.value).toBe('0.6')
+
+    byText(host, 'Save Budget').click()
+
+    await vi.waitFor(() => {
+      expect(amountInput()).toBeNull()
+    })
+    expect(await budgets()).toEqual([expect.objectContaining({ amount: 0.6 })])
+    expect(failureToasts()).toEqual([])
+  })
+})
+
 describe('the rollover switch', () => {
   it("says why it could not change, in the runtime's words", async () => {
     const id = await budgetThisMonth(250)

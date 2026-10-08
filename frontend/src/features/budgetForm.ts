@@ -13,6 +13,7 @@
  * "Failed to allocate budget" and "Failed to set budget" in a toast said nothing about which.
  */
 import { checkAllocation } from '../../../shared/budgetSchema'
+import { toCents } from '../../../shared/money'
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { createForm } from '../components/form'
 import { apiPost, formatCurrency, showToast } from '../core/api'
@@ -87,10 +88,12 @@ export function createBudgetForm(options: BudgetFormOptions): BudgetForm {
     failure: "Couldn't save the budget. Try again.",
   })
 
+  // The amount to the cent: a budget stored as 0.6000000000000001 (a sum with a float error, from
+  // an older row or an API client) opened as that text, and the cents rule refused to save it.
   const open = (categoryId: number, amount?: number | null) => {
     form.reset({
       category_id: String(categoryId),
-      amount: amount ? String(amount) : '',
+      amount: amount ? String(toCents(amount)) : '',
     })
   }
 
