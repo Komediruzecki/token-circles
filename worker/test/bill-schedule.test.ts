@@ -222,6 +222,18 @@ describe('GET /api/bills', () => {
     const [power] = await get<{ next_due_date: string | null; due_date: string }[]>('/api/bills');
     expect(power).toMatchObject({ due_date: '2026-08-20', next_due_date: '2026-10-20' });
   });
+
+  it("names each bill's category, as local-first's list does", async () => {
+    await on('2026-10-08');
+    await bill('Power', { dueDate: '2026-08-20' });
+    await bill('Rent', { dueDate: '2026-08-01', category_id: null });
+    const list =
+      await get<{ name: string; category_name: unknown; category_color: unknown }[]>('/api/bills');
+    expect(list.map((b) => [b.name, b.category_name, b.category_color])).toEqual([
+      ['Power', 'Utilities', '#F97316'],
+      ['Rent', null, null],
+    ]);
+  });
 });
 
 describe('a weekly bill', () => {
