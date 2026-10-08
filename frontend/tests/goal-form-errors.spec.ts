@@ -132,7 +132,9 @@ async function sweep(page: Page, mode: Mode, stamp: string): Promise<void> {
 }
 
 for (const mode of MODES) {
-  test.describe(`the goal dialog and Add Funds, ${mode.name} @smoke`, () => {
+  // Pull requests run these cases signed in only (cloudSmoke): main runs every case in both modes.
+  const cloudSmoke = mode.name === 'cloud' ? ' @smoke' : ''
+  test.describe(`the goal dialog and Add Funds, ${mode.name}`, () => {
     /** In the name of every goal a case makes, so `sweep` can find it. */
     let stamp = ''
 
@@ -148,7 +150,7 @@ for (const mode of MODES) {
       await sweep(page, mode, stamp)
     })
 
-    test('a goal without a name or a target is marked at each, focused, and nothing is sent', async ({
+    test(`a goal without a name or a target is marked at each, focused, and nothing is sent${cloudSmoke}`, async ({
       page,
     }) => {
       const writes = watchGoalWrites(page)
@@ -179,7 +181,7 @@ for (const mode of MODES) {
       await expect(dialog(page).getByLabel('Target Amount', { exact: true })).toBeFocused()
     })
 
-    test('a goal is added, funded, renamed and deleted, and each step names it', async ({
+    test(`a goal is added, funded, renamed and deleted, and each step names it${cloudSmoke}`, async ({
       page,
     }) => {
       const errors = watchErrors(page)

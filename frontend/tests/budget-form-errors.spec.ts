@@ -196,7 +196,10 @@ async function openAllocateFor(page: Page, name: string): Promise<void> {
 }
 
 for (const mode of MODES) {
-  test.describe(`the budget dialogs, ${mode.name} @smoke`, () => {
+  // Pull requests run the cases tagged `@smoke`, and the ones tagged `cloudSmoke` signed in only:
+  // main runs every case in both modes.
+  const cloudSmoke = mode.name === 'cloud' ? ' @smoke' : ''
+  test.describe(`the budget dialogs, ${mode.name}`, () => {
     /** In the name of every category a case makes, so `sweep` can find it. */
     let stamp = ''
 
@@ -215,7 +218,7 @@ for (const mode of MODES) {
       await sweep(page, mode, stamp)
     })
 
-    test('Allocate marks an amount it cannot use under the field, focused, and sends nothing', async ({
+    test(`Allocate marks an amount it cannot use under the field, focused, and sends nothing${cloudSmoke}`, async ({
       page,
     }) => {
       const writes = watchBudgetWrites(page)
@@ -244,7 +247,9 @@ for (const mode of MODES) {
       await expect(allocateAmount(page)).not.toHaveAttribute('aria-invalid', 'true')
     })
 
-    test("a category deleted in another tab is marked at Allocate's category", async ({ page }) => {
+    test(`a category deleted in another tab is marked at Allocate's category @smoke`, async ({
+      page,
+    }) => {
       const name = `zz-budget-gone-${stamp}`
       const id = await addCategory(page, name)
       await openAllocateFor(page, name)
@@ -261,7 +266,7 @@ for (const mode of MODES) {
       await expect(errorToasts(page)).toHaveCount(0)
     })
 
-    test('a budget is allocated, changed with Set Budget, and removed, and the page says each', async ({
+    test(`a budget is allocated, changed with Set Budget, and removed, and the page says each${cloudSmoke}`, async ({
       page,
     }) => {
       const errors = watchErrors(page)

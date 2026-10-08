@@ -197,7 +197,10 @@ async function addCategory(page: Page, name: string): Promise<number> {
 }
 
 for (const mode of MODES) {
-  test.describe(`the bill dialog, ${mode.name} @smoke`, () => {
+  // Pull requests run the cases tagged `@smoke`, and the ones tagged `cloudSmoke` signed in only:
+  // main runs every case in both modes.
+  const cloudSmoke = mode.name === 'cloud' ? ' @smoke' : ''
+  test.describe(`the bill dialog, ${mode.name}`, () => {
     /** In the name of everything a case makes, so `sweep` can find it. */
     let stamp = ''
 
@@ -213,7 +216,7 @@ for (const mode of MODES) {
       await sweep(page, mode, stamp)
     })
 
-    test('a bill without a name, an amount or a due date is marked at each, and nothing is sent', async ({
+    test(`a bill without a name, an amount or a due date is marked at each, and nothing is sent${cloudSmoke}`, async ({
       page,
     }) => {
       const writes = watchBillWrites(page)
@@ -244,7 +247,7 @@ for (const mode of MODES) {
       await expect(dialog(page).getByLabel('Amount', { exact: true })).toBeFocused()
     })
 
-    test('a category deleted in another tab is marked at the category', async ({ page }) => {
+    test(`a category deleted in another tab is marked at the category @smoke`, async ({ page }) => {
       const category = `zz-bill-gone-${stamp}`
       await page.getByTestId('add-bill-btn').click()
       const id = await addCategory(page, category)
@@ -265,7 +268,7 @@ for (const mode of MODES) {
       await expect(errorToasts(page)).toHaveCount(0)
     })
 
-    test('a bill is added with its category, renamed, paid and deleted, and each step says so', async ({
+    test(`a bill is added with its category, renamed, paid and deleted, and each step says so @smoke`, async ({
       page,
     }) => {
       const errors = watchErrors(page)
