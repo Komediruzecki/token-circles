@@ -21,7 +21,10 @@ import type {
 
 declare global {
   interface ImportMeta {
-    glob<T>(pattern: string, options: { eager: true }): Record<string, T>;
+    glob<T>(
+      pattern: string,
+      options: { eager: true; query?: string; import?: string }
+    ): Record<string, T>;
   }
 }
 
@@ -182,18 +185,42 @@ async function person(): Promise<ContractApi> {
   return mine;
 }
 
-/** Every route the Worker serves: each routes module, the MCP server, and index.ts's own two. */
-function workerRoutes(): Set<string> {
+type RouteTable = { routes: { method: string; path: string }[] };
+
+/**
+ * Every route the Worker serves, as worker/src/index.ts builds the app: the routes it registers
+ * itself, and those of each module it mounts (a routes module, or the MCP server). index.ts does
+ * not export the app (its default export is the Worker's handlers), so it is read as text. A mount
+ * under a prefix, or of a module this cannot read, is answered as unreadable: its routes would be
+ * on no list.
+ */
+function workerRoutes(): { served: Set<string>; unreadable: string[] } {
   const modules = import.meta.glob<Record<string, unknown>>('../src/routes/*.ts', { eager: true });
-  const apps = [...Object.values(modules).flatMap((m) => Object.values(m)), mcpRoutes].filter(
-    (v): v is { routes: { method: string; path: string }[] } =>
-      typeof v === 'object' && v !== null && Array.isArray((v as { routes?: unknown }).routes)
-  );
-  const keys = new Set(['GET /api/health', 'GET /robots.txt']);
-  for (const app of apps) {
-    for (const r of app.routes) if (r.method !== 'ALL') keys.add(`${r.method} ${r.path}`);
+  const tables = new Map<string, RouteTable>([['mcpRoutes', mcpRoutes]]);
+  for (const module of Object.values(modules)) {
+    for (const [name, value] of Object.entries(module)) {
+      const routes = (value as Partial<RouteTable> | null)?.routes;
+      if (Array.isArray(routes)) tables.set(name, value as RouteTable);
+    }
   }
-  return keys;
+  const [index] = Object.values(
+    import.meta.glob<string>('../src/index.ts', { query: '?raw', import: 'default', eager: true })
+  );
+  const served = new Set<string>();
+  for (const [, method, path] of index.matchAll(
+    /\bapp\.(get|post|put|patch|delete)\(\s*['"`]([^'"`]+)['"`]/g
+  )) {
+    served.add(`${method.toUpperCase()} ${path}`);
+  }
+  const unreadable: string[] = [];
+  for (const [mount, prefix, name] of index.matchAll(
+    /\bapp\.route\(\s*['"`]([^'"`]*)['"`]\s*,\s*(\w+)\s*\)/g
+  )) {
+    const table = tables.get(name);
+    if (prefix !== '/' || !table) unreadable.push(mount);
+    else for (const r of table.routes) if (r.method !== 'ALL') served.add(`${r.method} ${r.path}`);
+  }
+  return { served, unreadable };
 }
 
 for (const [entity, list] of Object.entries(SCENARIOS)) {
@@ -224,7 +251,8 @@ describe('contract: every route', () => {
   });
 
   it('serves every contract route, and lists every route it serves', () => {
-    const served = workerRoutes();
+    const { served, unreadable } = workerRoutes();
+    expect(unreadable, 'mounts in index.ts whose routes this cannot read').toEqual([]);
     expect(
       CONTRACT_ROUTES.filter((k) => !served.has(k)),
       'contract routes the Worker does not serve'
