@@ -986,6 +986,21 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Only the links the edit changes: an unchanged link on a legacy row must not block it.
   await refuseForeignLinks(c.env.DB, pid, patch);
 
+  // A new amount without a local amount of its own moves the local amount with it, at the row's
+  // exchange rate, as local-first does (core/storage/idb.ts, updateTransaction): a 100 USD hotel
+  // worth 92 EUR, edited to 110 USD, is worth 101.20 EUR, and its account moves by that. The
+  // route used to clear the local amount, so the balance moved by 110. A row that never had a
+  // local amount keeps none, and its balance follows the raw amount, as before.
+  if (
+    patch.amount !== undefined &&
+    patch.amount_local === undefined &&
+    typeof oldTx.amount_local === 'number'
+  ) {
+    const rate =
+      patch.exchange_rate ?? (typeof oldTx.exchange_rate === 'number' ? oldTx.exchange_rate : 0);
+    patch.amount_local = rate > 0 ? Math.round(patch.amount * rate * 100) / 100 : null;
+  }
+
   const updates: string[] = [];
   const params: unknown[] = [];
   const COLUMNS = [
@@ -1008,11 +1023,6 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
     if (patch[column] === undefined) continue;
     updates.push(`${column} = ?`);
     params.push(patch[column]);
-  }
-  // If amount is changing but amount_local is not, clear the stale base-currency value so
-  // balance math falls back to the new raw amount.
-  if (patch.amount !== undefined && patch.amount_local === undefined) {
-    updates.push('amount_local = NULL');
   }
   if (patch.reconciled !== undefined) {
     updates.push('reconciled = ?');
@@ -1067,9 +1077,8 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   const newType = patch.type ?? oldTx.type;
   const newAmount = patch.amount ?? oldTx.amount;
   // Compute the base-currency amount for the new balance effect, matching the reversal
-  // logic: if amount_local was explicitly provided, use it; if amount changed (and
-  // amount_local was cleared to NULL above), use the new raw amount; otherwise preserve
-  // the old base-currency value.
+  // logic: the local amount the edit writes (given, or moved with the amount above); the new raw
+  // amount when there is none; otherwise the old base-currency value.
   const newAmountLocal =
     patch.amount_local !== undefined
       ? (patch.amount_local ?? newAmount)
