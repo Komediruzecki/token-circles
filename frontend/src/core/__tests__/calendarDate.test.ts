@@ -180,4 +180,11 @@ describe('the formatter cache', () => {
     for (const zone of names) expect(isTimeZone(zone)).toBe(true)
     expect(built.count - firstPass).toBeGreaterThanOrEqual(names.length - MAX_CACHED_ZONES)
   })
+
+  it('refuses a name longer than any zone before building a formatter for it', () => {
+    const built = countConstructions({ anyZone: true })
+    // Well-formed, so only the length limit stands between it and a formatter.
+    expect(isTimeZone(`Europe/${'Z'.repeat(64)}`)).toBe(false)
+    expect(built.count).toBe(0)
+  })
 })

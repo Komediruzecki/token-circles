@@ -193,6 +193,14 @@ describe('apiFetch sends the person’s time zone', () => {
     expect(sentHeaders(fetchSpy, 2).get('X-Time-Zone')).toBe('America/Los_Angeles')
   })
 
+  it('unless the caller named a zone itself, which is sent as it was given', async () => {
+    process.env.TZ = 'Asia/Tokyo'
+    const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
+    await apiFetch('/api/reports/monthly-pdf', { headers: { 'x-time-zone': 'Europe/Zagreb' } })
+    const sent = sentHeaders(fetchSpy)
+    expect(sent.get('X-Time-Zone')).toBe('Europe/Zagreb')
+  })
+
   it('and never to anyone but the app’s API', async () => {
     process.env.TZ = 'Asia/Tokyo'
     const { apiFetch, fetchSpy } = await loadApiFetch('self-hosted', API)
