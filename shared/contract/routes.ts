@@ -214,7 +214,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'POST /api/import-sources',
   'DELETE /api/import-sources/:id',
   'PUT /api/import-sources/:id',
-  'POST /api/import/execute',
   'POST /api/import/file-sheet',
   'DELETE /api/profile/data',
   'GET /api/profiles',
