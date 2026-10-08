@@ -393,3 +393,56 @@ describe('opening the link', () => {
     expect(await unusedLinks()).toEqual([]);
   });
 });
+
+describe('the current address', () => {
+  it('hears that a change was asked for, to which address, and that nothing changes until then', async () => {
+    await seed(1);
+
+    await save(NEW);
+
+    const notices = mailsTo(OLD);
+    expect(notices).toHaveLength(1);
+    expect(notices[0].html).toContain(NEW);
+    expect(notices[0].text).toContain(NEW);
+    expect(notices[0].text).toMatch(/nothing changes unless that address confirms it/i);
+    // The notice can only tell; the link that makes the change goes to the new address alone.
+    expect(notices[0].text).not.toContain('verify-email');
+    expect(notices[0].html).not.toContain('verify-email');
+  });
+
+  it('hears nothing about a request that was refused', async () => {
+    await seed(1);
+
+    expect((await save(TAKEN)).status).toBe(409);
+    expect((await save('owner-at-example')).status).toBe(400);
+
+    expect(mailsTo(OLD)).toEqual([]);
+  });
+
+  it('gets the new address as text, never as markup', async () => {
+    await seed(1);
+    const odd = '<b>new</b>@example.com';
+
+    expect((await save(odd)).status).toBe(200);
+
+    const html = mailsTo(OLD)[0].html;
+    expect(html).toContain('&lt;b&gt;new&lt;/b&gt;@example.com');
+    expect(html).not.toContain(odd);
+  });
+
+  it('is skipped when the account has no address, and the link still goes', async () => {
+    // A Google account whose address Google had not confirmed is created without one.
+    await env.DB.prepare(
+      "INSERT INTO users (id, email, auth_provider, provider_id, email_verified, token_version) VALUES (?, NULL, 'google', 'google-sub-9500', 0, 1)"
+    )
+      .bind(UID)
+      .run();
+    cookie = (await issueSessionCookie(UID, 'google', env)).split(';')[0];
+
+    expect((await save(NEW)).status).toBe(200);
+
+    expect(sent.map((m) => m.to)).toEqual([NEW]);
+    await open(latestLinkTo(NEW));
+    expect(await account()).toEqual({ email: NEW, email_verified: 1 });
+  });
+});

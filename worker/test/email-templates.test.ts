@@ -6,6 +6,7 @@ import {
   renderBillsReminder,
   renderBudgetAlert,
   renderEmailChange,
+  renderEmailChangeNotice,
   renderPasswordReset,
   renderSpendingReport,
   renderSupportAck,
@@ -75,6 +76,19 @@ describe('email templates', () => {
     expect(mail.text).toContain(link);
     expect(mail.html).toContain('24 hours');
     expect(mail.text).toContain('nothing changes');
+    expect(mail.html).not.toContain('email/orbit.gif');
+  });
+
+  it('email change notice names the new address, points at Settings, and carries no confirm link', () => {
+    const mail = renderEmailChangeNotice({
+      newEmail: 'new@example.com',
+      appUrl: 'https://tokencircles.com',
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('new@example.com');
+    expect(mail.text).toContain('new@example.com');
+    expect(mail.html).toContain('https://tokencircles.com/#settings');
+    expect(mail.html).not.toContain('verify-email');
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 

@@ -67,7 +67,7 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
       userId
     );
     if (email !== (user?.email ?? '').toLowerCase()) {
-      const limited = await requestEmailChange(c, userId, email);
+      const limited = await requestEmailChange(c, userId, email, user?.email ?? null);
       if (limited) return limited;
       pendingEmail = email;
     }
