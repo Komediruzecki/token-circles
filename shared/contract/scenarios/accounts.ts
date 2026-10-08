@@ -224,4 +224,26 @@ export const accounts = [
       expectMoney(expect, await balanceOf(api.other, expect, theirs), 70, 'their balance');
     }
   ),
+
+  scenario('an account reconciliation summary counts its own transactions', async (api, expect) => {
+    const id = await account(api, expect, 'Everyday', 0);
+    const elsewhere = await account(api, expect, 'Cash', 0);
+    const first = await expense(api, expect, id, 10.1);
+    await expense(api, expect, id, 20.2);
+    await expense(api, expect, elsewhere, 99.99);
+    const toggled = await api.patch(`/api/transactions/${first}/reconcile`);
+    expectOk(expect, toggled, 'PATCH reconcile');
+
+    const summary = await api.get(`/api/accounts/${id}/reconciliation-summary`);
+    expectOk(expect, summary, 'GET the reconciliation summary');
+    expect(summary.body).toMatchObject({
+      account_id: id,
+      account_name: 'Everyday',
+      reconciled_count: 1,
+      unreconciled_count: 1,
+      total_transactions: 2,
+    });
+    expectMoney(expect, summary.body.unreconciled_total, 20.2, 'unreconciled total');
+    expect((await api.other.get(`/api/accounts/${id}/reconciliation-summary`)).status).toBe(404);
+  }),
 ];
