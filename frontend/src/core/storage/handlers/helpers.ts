@@ -1,8 +1,10 @@
 /**
  * Shared helpers for local API handlers.
  */
+import { refusalOf } from '../../../../../shared/refusal'
 import { normalizedTransactionAmount } from '../../transactionAmount'
 import { getDB, IndexedDBAdapter } from '../idb'
+import type { FieldErrors } from '../../../../../shared/refusal'
 
 // Singleton: do NOT create additional IndexedDBAdapter instances.
 // Multiple instances cause in-memory state divergence (caches, locks).
@@ -19,6 +21,9 @@ export const json = (data: unknown, status = 200, pretty = false): Response => {
 export const ok = (data: Record<string, unknown> = {}): Response => json({ ok: true, ...data })
 
 export const notFound = (what: string): Response => json({ error: `${what} not found` }, 404)
+
+/** The 400 for a body a check refused: `{ error, fields }`, as the Worker answers it. */
+export const refuse = (fields: FieldErrors): Response => json(refusalOf(fields), 400)
 
 export function idParam(params: Record<string, string>, key = 'p1'): number {
   return parseInt(params[key], 10)
@@ -142,16 +147,23 @@ export function prevMonth(y: number, m: number): { year: number; month: number }
   return { year: y, month: m - 1 }
 }
 
+/**
+ * The same day one month after `startDate` (YYYY-MM-DD), or that month's last day when it is
+ * shorter: 2026-03-01 gives 2026-04-01, 2026-01-31 gives 2026-02-28. The exclusive end of a
+ * budget's month.
+ *
+ * Calendar arithmetic on the date's own numbers. Parsing it as UTC midnight, moving it with the
+ * local-time setters and printing it as UTC again lost a day wherever the local offset differed
+ * between the two ends, and west of UTC, where UTC midnight is the evening before, always.
+ */
 export function endOfNextMonth(startDate: string): string {
-  const d = new Date(startDate)
-  const origDay = d.getDate()
-  const targetMonth = d.getMonth() + 1
-  d.setMonth(targetMonth, 1)
-  // If adding one month overflowed the day (e.g. Jan 31 -> Mar 3), clamp to last
-  // valid day of the target month. Otherwise use the original day.
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  d.setDate(Math.min(origDay, lastDay))
-  return d.toISOString().slice(0, 10)
+  const [y, m, d] = startDate.slice(0, 10).split('-').map(Number) as [number, number, number]
+  const next = nextMonth(y, m)
+  // Day 0 of the month after `next` is the last day of `next`, counted in UTC so no offset applies.
+  const last = new Date(0)
+  last.setUTCFullYear(next.year, next.month, 0)
+  const day = Math.min(d, last.getUTCDate())
+  return `${next.year}-${String(next.month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
 // ── Shared data helpers ───────────────────────────────────────────────────────

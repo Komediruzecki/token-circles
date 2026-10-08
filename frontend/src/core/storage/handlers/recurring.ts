@@ -2,7 +2,7 @@
  * Recurring handlers — IndexedDB-backed implementations
  */
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
-import { isoDate } from '../../../utils/period'
+import { isoDate, localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { getDB } from '../idb'
 import {
@@ -15,16 +15,17 @@ import {
   ok,
 } from './helpers'
 
+/**
+ * The active profile's rules, as the Worker lists them. This used to read every ticked profile
+ * (Settings > Household) while every other route here, like the Worker's, answers for the active
+ * profile alone: the Recurring section offered Edit, Delete and "Add to transactions" on another
+ * profile's rules, and each answered 404.
+ */
 export async function recurringList(): Promise<Response> {
   const db = await getDB()
-  const pids = adapter.getCurrentProfileIds()
+  const pid = await adapter.getCurrentProfileId()
   try {
-    const all: Record<string, unknown>[] = []
-    for (const pid of pids) {
-      const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
-      all.push(...rows)
-    }
-    return json(all)
+    return json(await db.getAllFromIndex('recurring', 'by_profile', pid))
   } catch {
     return json([])
   }
@@ -140,10 +141,9 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   )
   if (invariantError) return json({ error: invariantError }, 400)
 
-  // Local-calendar today (isoDate uses getFullYear/Month/Date), NOT toISOString which
-  // shifts to UTC and can roll the date to the previous day/month near midnight for a
-  // user in a negative-offset timezone (audit M-02).
-  const todayStr = isoDate(new Date())
+  // Today on the person's calendar, NOT toISOString, which is the UTC date and is a day off near
+  // midnight in every zone but UTC (audit M-02).
+  const todayStr = localToday()
   // Idempotency guard — mirrors the worker: once next_date is in the future the
   // current period is already populated, so a repeat call must not create another
   // transaction (and, now that balances move, must not double-count).

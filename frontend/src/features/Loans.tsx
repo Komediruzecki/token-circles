@@ -14,13 +14,13 @@
  * THEN every figure follows: the write bumps the `loans` data version and the page reloads from it
  */
 import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
-import { todayUtc } from '../../../shared/loanSchedule'
 import { apiDelete, apiHouseholdGet, getLocalCurrency, showToast } from '../core/api'
 import { activeProfileId } from '../core/apiProfileScope'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
+import { localToday } from '../utils/period'
 import { formatsFor } from './loans/loanCopy'
 import { toLoanRow } from './loans/loanData'
 import LoanDetail from './loans/LoanDetail'
@@ -71,7 +71,7 @@ export default function Loans() {
     try {
       const data = await apiHouseholdGet<ListedLoan[]>('/api/loans')
       if (mine !== listToken) return
-      const today = todayUtc()
+      const today = localToday()
       setRows(data.map((loan) => toLoanRow(loan, today, writeProfileId())))
       setStatus('ready')
     } catch (err) {

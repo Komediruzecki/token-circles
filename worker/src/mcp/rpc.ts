@@ -3,6 +3,7 @@ import type { AppEnv } from '../index';
 import { assertScope } from '../apitoken';
 import { ensureProfile } from '../profile';
 import { HttpError } from '../http';
+import { reportError } from '../error-response';
 import { findTool, guardSize, toolListPayload } from './registry';
 import * as db from '../db';
 
@@ -103,7 +104,9 @@ export async function dispatch(
           structuredContent: result,
         });
       } catch (err) {
-        const text = err instanceof Error ? err.message : 'Tool failed';
+        // Same rule as onError: an HttpError's message is written for the caller, anything else
+        // is logged in full and answered with the generic sentence.
+        const { message: text } = reportError(c, err);
         return ok(id, { isError: true, content: [{ type: 'text', text }] });
       }
     }

@@ -7,6 +7,7 @@ import { buildReportPdf } from '../pdf';
 import { enforce } from '../ratelimit';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import * as db from '../db';
+import { localMonth, localNow, localToday } from '../local-date';
 
 // Port of backend/routes/reports.js. The JSON/data endpoints (tax-summary,
 // pl-summary, overview, compare, saved/save) and the custom-report CRUD are
@@ -101,7 +102,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
   const rl = await enforce(c, `report-pdf:${c.get('userId')}`, 20, 300);
   if (rl) return rl;
   const pid = await getProfileId(c);
-  const month = c.req.query('month') || new Date().toISOString().slice(0, 7);
+  const month = c.req.query('month') || localMonth(c);
   const start = `${month}-01`;
   const [y, m] = month.split('-').map(Number);
   const end = new Date(y, m, 0).toISOString().slice(0, 10);
@@ -140,6 +141,7 @@ reportsRoutes.get('/api/reports/monthly-pdf', requireAuth, async (c) => {
   const pdf = await buildReportPdf({
     title: 'Monthly Report',
     subtitle: month,
+    generatedOn: localToday(c),
     sections: [
       {
         heading: 'Summary',
@@ -246,6 +248,7 @@ reportsRoutes.get(
     const pdf = await buildReportPdf({
       title: 'Year-End Tax Summary',
       subtitle: `Tax year ${year}`,
+      generatedOn: localToday(c),
       sections: [
         {
           heading: 'Summary',
@@ -353,6 +356,7 @@ reportsRoutes.get('/api/reports/pl-summary-pdf', requireAuth, requireAdvancedRep
   const pdf = await buildReportPdf({
     title: 'Year-End P&L Summary',
     subtitle: `Year ${year}`,
+    generatedOn: localToday(c),
     sections: [
       { heading: 'Income by category', rows: cat('income').map(([n, t]) => [n, money(t)]) },
       { heading: 'Expenses by category', rows: cat('expense').map(([n, t]) => [n, money(t)]) },
@@ -415,7 +419,7 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
   if (rl) return rl;
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const year = c.req.query('year') || String(new Date().getFullYear());
+  const year = c.req.query('year') || String(localNow(c).getFullYear());
   const start = `${year}-01-01`;
   const end = `${year}-12-31`;
   const sum = async (type: string) =>
@@ -461,6 +465,7 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
   const pdf = await buildReportPdf({
     title: 'Annual Financial Report',
     subtitle: `Year ${year}`,
+    generatedOn: localToday(c),
     sections: [
       {
         heading: 'Summary',
@@ -629,7 +634,8 @@ reportsRoutes.delete('/api/reports/custom/:id', requireAuth, async (c) => {
 reportsRoutes.get('/api/reports/compare', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const comparison: Array<{ month: string; income: number; expenses: number; net: number }> = [];
-  const now = new Date();
+  // The last three months, counted back from the person's month.
+  const now = localNow(c);
   for (let i = 0; i < 3; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const startDate = d.toISOString().split('T')[0];

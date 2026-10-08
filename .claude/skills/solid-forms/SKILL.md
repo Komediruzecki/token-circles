@@ -1,11 +1,11 @@
 ---
 name: solid-forms
-description: The rules for editable form controls in this Solid.js frontend — inputs that keep focus while you type, numbers that can be emptied and can hold a decimal, values rounded so HTML5 step validation cannot block a save, and months picked without scrolling through years. Read BEFORE writing or reviewing any component with an <input>, a <select>, or a <For> over editable rows. These are shipped bugs, each found by a user, each cheap to reintroduce.
+description: The rules for editable form controls in this Solid.js frontend — inputs that keep focus while you type, numbers that can be emptied and can hold a decimal, values rounded so HTML5 step validation cannot block a save, months picked without scrolling through years, and a refused save said under the field it is about instead of in a toast. Read BEFORE writing or reviewing any component with an <input>, a <select>, or a <For> over editable rows. These are shipped bugs, each found by a user, each cheap to reintroduce.
 ---
 
 # Editable controls in this frontend
 
-Four bugs keep coming back. Every one of them ships looking fine and fails only when a
+Five bugs keep coming back. Every one of them ships looking fine and fails only when a
 real person types into it, which is why none of them are caught by reading the diff.
 
 ## 1. A list of editable rows uses `<Index>`, never `<For>`
@@ -122,9 +122,76 @@ one click at a time; Firefox offers no picker at all.
 
 A month value has no day in it, so it needs no calendar at all.
 
+## 5. A refused save is said in the form, under the field it is about
+
+**The bug the user sees:** a toast in the corner says "Validation failed", or "Failed to save
+category", and the dialog is still open with nothing in it marked. Or the browser's own bubble
+says "Please fill out this field." in the browser's words. The reason existed: the server sent
+it, field by field, and the form's `catch` threw it away.
+
+**Why:** every form caught the refusal and toasted it. A toast is the wrong place for it: it is
+away from the field, it goes on its own, and a screen reader hears it out of context. And
+`err instanceof Error ? err.message : '…'` prints whatever the error says, which is as often
+"Failed to fetch" or a `TypeError` as anything a person can act on.
+
+**The fix:** build the form from the kit in `frontend/src/components/form/`.
+
+```tsx
+const form = createForm({
+  initial: { name: '', icon: '' },
+  check: (values) => fieldErrorsOf(checkCategoryCreate(values)), // {} when it can be sent
+  send: (values) => apiPost('/api/categories', values), // throws ApiError, with the server's fields
+  saved: () => close(), // only while this is still the form that sent
+  failure: "Couldn't save the category. Try again.", // for an error with no words of its own
+});
+```
+
+```tsx
+<form {...form.attrs}>
+  <FormNotice form={form} />
+  <Field form={form} name="name" label="Category Name">
+    {(control) => (
+      <input
+        {...control}
+        required
+        value={form.values.name}
+        onInput={(e) => form.set('name', e.currentTarget.value)}
+      />
+    )}
+  </Field>
+  <SubmitButton busy={form.submitting()} busyLabel="Adding…">
+    Add Category
+  </SubmitButton>
+</form>
+```
+
+- `form.attrs` gives the form `novalidate`, the submit, and `aria-busy` while it sends. With
+  `required` kept on the control, the browser stops swallowing the submit and assistive
+  technology still hears "required".
+- `SubmitButton`, never `disabled={form.submitting()}`: while the form sends it reads "Saving…"
+  (or the form's own verb, `busyLabel`) and is `aria-disabled`, so it keeps focus. A `disabled`
+  button drops a keyboard user at the top of the page.
+- What follows a save (the toast, closing the dialog) goes in `saved`, never after the `await` in
+  `send`. The kit runs `saved` only while the form is still the one that sent: a dialog cancelled
+  and opened again while its save was out has been reset, and a late save closing it throws away
+  what the person is typing.
+- The check is the entity's schema in `shared/`, the one the local-first router and the Worker
+  also run, so the form and the server refuse the same values in the same words.
+- An edit checks only what it changes (`checkCategoryEdit(values, opened)`), as the server does:
+  a row saved under older rules has to save with its own values sent back unchanged.
+- The kit marks the field (`aria-invalid`, the message under it via `aria-describedby`), moves
+  focus to the first marked field, re-checks a marked field as it changes, and maps the server's
+  `fields` onto the same fields. What belongs to no field goes in the `role="alert"` notice.
+- No failure toast from a form. Toasts are for success, undo, and work with no form in front of
+  the person; that failure goes through `plainMessage(err, fallback)`, never `err.message`.
+  `frontend/src/__tests__/toastErrorMessages.test.ts` fails on a new one.
+
+Worked example: `frontend/src/features/categoryForm.ts`, used by the four category dialogs, and
+its test `frontend/src/features/__tests__/categoryForms.test.tsx`.
+
 ## Testing this
 
-None of these are visible in a snapshot — all four pass a test that only checks values.
+None of these are visible in a snapshot — all five pass a test that only checks values.
 Assert the behaviour instead:
 
 ```tsx
@@ -144,12 +211,21 @@ expect(field.closest('form')!.checkValidity()).toBe(true);
 Make the test helper **focus the input before typing** — these controls deliberately behave
 differently while focused, so a helper that does not focus tests the wrong path.
 
+```tsx
+// A refused save: the field is marked, says why, has focus, and nothing was sent.
+submitDialog();
+expect(name.getAttribute('aria-invalid')).toBe('true');
+expect(describedBy(name)).toContain('Give the category a name.');
+expect(document.activeElement).toBe(name);
+expect(await storedNames()).toEqual(['Groceries']);
+```
+
 Worked examples: `frontend/src/features/__tests__/retirementPlanner.test.tsx`, in the
 `describe('the controls behave like controls')` block.
 
 ## Reviewing a diff
 
-Five greps that catch all of it:
+Eight greps that catch all of it:
 
 ```sh
 grep -n '<For each' <file>            # any editable row in there? -> <Index>
@@ -157,4 +233,7 @@ grep -n 'type="number"' <file>        # -> NumberField
 grep -n 'type="month"\|type="date"' <file>   # -> MonthPicker
 grep -n 'Number(e.currentTarget.value)' <file>  # hand-rolled, always wrong
 grep -n 'step="0.1"' <file>           # will 2dp values live here?
+grep -n '<form' <file>                # -> components/form: {...form.attrs}
+grep -n 'disabled={.*ubmitting' <file>  # a busy submit button -> SubmitButton, keeps focus
+grep -n 'err.message\|error.message' <file>  # in a toast? -> the form kit, or plainMessage
 ```

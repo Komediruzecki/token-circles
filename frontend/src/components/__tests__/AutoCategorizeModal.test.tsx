@@ -17,9 +17,12 @@ import {
 import { AutoCategorizeModal } from '../AutoCategorizeModal'
 import type { AutoCategorizeTransaction } from '../AutoCategorizeModal'
 
+const toast = vi.fn()
+
 vi.mock('../../core/api', async (importOriginal) => ({
   // Read for real: the currency tests set the base currency through localStorage.
   getLocalCurrency: (await importOriginal<Record<string, unknown>>()).getLocalCurrency,
+  toast: (...args: unknown[]) => toast(...args),
   api: {
     getCategoryMappings: vi.fn(() =>
       Promise.resolve([
@@ -58,6 +61,7 @@ const TXS: AutoCategorizeTransaction[] = [
 function mount(opts: {
   txs?: AutoCategorizeTransaction[]
   onApply?: (id: number, cat: number) => void | Promise<void>
+  onClose?: () => void
 }) {
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -65,7 +69,7 @@ function mount(opts: {
     () => (
       <AutoCategorizeModal
         isOpen={() => true}
-        onClose={() => {}}
+        onClose={opts.onClose ?? (() => {})}
         uncategorizedTransactions={() => opts.txs ?? TXS}
         categories={() => [
           { id: 7, name: 'Entertainment', type: 'expense' },
@@ -202,5 +206,47 @@ describe('staging and applying are separate', () => {
     await flush()
     // One of the two rows matches the mapping fixture.
     expect(host.querySelector('[data-test-id="auto-cat-apply"]')!.textContent).toContain('Apply 1')
+  })
+})
+
+describe('a pick that does not save', () => {
+  it('is said so, stays staged for the next Apply, and the modal stays open', async () => {
+    const onClose = vi.fn()
+    mount({
+      onClose,
+      onApply: async (id) => {
+        if (id === 12) throw Object.assign(new Error('Transaction not found'), { status: 404 })
+      },
+    })
+    await flush()
+    host.querySelector<HTMLButtonElement>('button[aria-label^="Use "]')!.click()
+    const select = host.querySelector<HTMLSelectElement>('[data-test-id="auto-cat-manual-select"]')!
+    select.value = '8'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    await flush()
+
+    host.querySelector<HTMLButtonElement>('[data-test-id="auto-cat-apply"]')!.click()
+    await flush()
+    await flush()
+
+    expect(toast).toHaveBeenCalledWith("Couldn't categorize 1 of 2. Try again.", 'error')
+    expect(onClose).not.toHaveBeenCalled()
+    // The saved one is no longer staged; the refused one is, so Apply tries it alone.
+    expect(host.querySelector('[data-test-id="auto-cat-apply"]')!.textContent).toContain('Apply 1')
+  })
+
+  it('every pick saved: the modal closes without a word', async () => {
+    const onClose = vi.fn()
+    mount({ onClose, onApply: async () => {} })
+    await flush()
+    host.querySelector<HTMLButtonElement>('button[aria-label^="Use "]')!.click()
+    await flush()
+
+    host.querySelector<HTMLButtonElement>('[data-test-id="auto-cat-apply"]')!.click()
+    await flush()
+    await flush()
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(toast).not.toHaveBeenCalled()
   })
 })

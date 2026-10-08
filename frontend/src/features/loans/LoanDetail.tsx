@@ -8,10 +8,10 @@
  */
 import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js'
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
-import { todayUtc } from '../../../../shared/loanSchedule'
 import ConfirmButton from '../../components/ConfirmButton'
 import { apiDelete, apiGet, apiPost, apiPut, formatCurrency, showToast } from '../../core/api'
 import { refetchOnActive } from '../../core/pageVisibility'
+import { localToday } from '../../utils/period'
 import LoanCompare from './LoanCompare'
 import { monthLong } from './loanCopy'
 import { engineInput, hasDetails, savedExtras } from './loanData'
@@ -91,7 +91,7 @@ export default function LoanDetail(props: Props) {
     }
   )
 
-  const today = todayUtc()
+  const today = localToday()
   const input = createMemo(() => {
     const r = record()
     return r && r.id === props.row?.id ? engineInput(r) : null

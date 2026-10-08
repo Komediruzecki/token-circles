@@ -19,8 +19,8 @@ import {
 import type { Page } from '@playwright/test'
 
 /**
- * Categories > Add. An icon is typed in, because saving without one is a separate, known bug in
- * local-first (see the "without an icon" case below), and the profile cases are not about icons.
+ * Categories > Add, with an icon typed in unless a case leaves it blank (`icon` null), as the
+ * "without an icon" case below does.
  */
 async function addCategory(page: Page, name: string, icon: string | null = 'cart'): Promise<void> {
   await goPage(page, 'categories', 'categories-header')
@@ -121,13 +121,8 @@ for (const [pass, test] of both) {
     })
 
     test('1.2b a category saved without picking an icon @release', async ({ m }) => {
-      // Not a 5.16 regression: prod 5.15.1 has it. The form sends `icon: null` when no icon was
-      // picked; the Worker takes it, the local router's categoryCreateSchema (icon optional
-      // string) refuses it, and the user gets "Failed to save category".
-      test.fail(
-        m.kind === 'local',
-        'local-first: POST /api/categories with icon null fails validation (since 5.15.1)'
-      )
+      // The form sends `icon: null` when no icon was picked. The Worker takes it. The local router's
+      // categoryCreateSchema used to refuse it, and the form said "Failed to save category".
       const { page } = m
       await addCategory(page, `zz-noicon${m.suffix}`.slice(0, 40), null)
       await expect(categoryCards(page, `zz-noicon${m.suffix}`.slice(0, 40))).toHaveCount(1)
@@ -136,13 +131,9 @@ for (const [pass, test] of both) {
     test('1.2c a category made on the page reads back through the typed client @release', async ({
       m,
     }) => {
-      // Not a 5.16 regression: the local create handler and normalizeCategory are unchanged since
-      // 5.15.1. The row lacks `tax_deductible`, CategorySchema requires it, and api.getCategories()
-      // throws, which App's quick add, Transactions, Tags and (new in 5.16) local badges all call.
-      test.fail(
-        m.kind === 'local',
-        'local-first: a category created on the Categories page has no tax_deductible (since 5.15.1)'
-      )
+      // The local create handler used to store the form's body as sent, with no `tax_deductible`,
+      // which CategorySchema requires. api.getCategories() then threw for the whole profile, and
+      // App's quick entry, Transactions, Tags and the local badges all call it.
       const { page } = m
       const name = `zz-typed${m.suffix}`.slice(0, 40)
       await addCategory(page, name)

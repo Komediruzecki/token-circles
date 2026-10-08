@@ -1,6 +1,14 @@
 /**
  * Categories handlers — IndexedDB-backed implementations
  */
+import {
+  CATEGORY_MESSAGES,
+  categoryNameTaken,
+  checkCategoryCreate,
+  checkCategoryEdit,
+  clashingCategoryName,
+  renamesCategory,
+} from '../../../../../shared/categorySchema'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -10,6 +18,7 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 import { normalizeCategory } from './normalize'
 
@@ -20,51 +29,72 @@ export async function categoriesList(query: URLSearchParams): Promise<Response> 
 }
 
 export async function categoriesCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid category data' }, 400)
-  const cat = body as Record<string, unknown>
-  const name = ((cat.name as string) || '').trim()
-  if (!name) return json({ error: 'Category name is required' }, 400)
+  // The Worker's rules and words (shared/categorySchema.ts). The router has already run this
+  // check on the way in; a direct call (tests, other handlers) gets the same answer.
+  const checked = checkCategoryCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const input = checked.value
 
   const pid = await adapter.getCurrentProfileId()
-  cat.profile_id = pid
-  if (!(await currentProfileOwns('categories', cat.parent_id ?? cat.parentId))) {
-    return json({ error: 'Parent category does not belong to this profile' }, 400)
+  // A parent from another profile is refused at that field, as the Worker refuses it.
+  if (!(await currentProfileOwns('categories', input.parent_id))) {
+    return refuse({ parent_id: CATEGORY_MESSAGES.parent })
   }
 
-  // Check for duplicate name within the same profile
   const db = await getDB()
   const existing = await db.getAllFromIndex('categories', 'by_profile', pid)
-  if (existing.some((c) => (c.name as string).toLowerCase().trim() === name.toLowerCase())) {
-    return json({ error: 'Category name already exists for this profile' }, 400)
-  }
+  const clash = clashingCategoryName(existing as { id: unknown; name: unknown }[], input.name)
+  if (clash !== null) return refuse(categoryNameTaken(clash))
 
+  // The row the Worker stores, not the body as it came: the check filled in every default, so no
+  // row can miss a field CategorySchema needs on the next typed read.
+  const row = { ...input, created_at: new Date().toISOString(), profile_id: pid }
   const id = await adapter.createCategory(
-    cat as unknown as Parameters<typeof adapter.createCategory>[0]
+    row as unknown as Parameters<typeof adapter.createCategory>[0]
   )
-  return json({ id, ...cat }, 201)
+  return json({ id, ...row }, 201)
 }
 
 export async function categoriesGet(params: Record<string, string>): Promise<Response> {
   const cat = await currentProfileRecord('categories', idParam(params))
   if (!cat) return notFound('Category')
-  return json(cat)
+  return json(normalizeCategory(cat))
 }
 
 export async function categoriesUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('categories', id))) return notFound('Category')
-  const patch = body as Record<string, unknown>
-  if (
-    ('parent_id' in patch || 'parentId' in patch) &&
-    !(await currentProfileOwns('categories', patch.parent_id ?? patch.parentId))
-  ) {
-    return json({ error: 'Parent category does not belong to this profile' }, 400)
+  const current = await currentProfileRecord('categories', id)
+  if (!current) return notFound('Category')
+  // Only the category fields the body changes, checked as the Worker checks them. A field it
+  // leaves out keeps its value, and so does one it sends back unchanged: that one is not checked
+  // either, so a row saved under older rules (a 3-digit color, a long name) can still be edited.
+  // Keys that are not category fields are not written into the row.
+  const checked = checkCategoryEdit(body, current)
+  if (!checked.ok) {
+    // The router logs this for every body its checks refuse, and the release suite fails a
+    // local-first run that shows one (tests/release/release-fixtures.ts). An edit is checked here,
+    // against the stored row, so it is said here.
+    console.error('[categoriesUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  await adapter.updateCategory(id, patch)
+  const patch = checked.value
+  if (patch.parent_id !== undefined && !(await currentProfileOwns('categories', patch.parent_id))) {
+    return refuse({ parent_id: CATEGORY_MESSAGES.parent })
+  }
+  // A rename may not land on another category's name. A name the edit leaves alone, or changes
+  // in case only, is not checked.
+  if (patch.name !== undefined && renamesCategory(current.name, patch.name)) {
+    const db = await getDB()
+    const others = await db.getAllFromIndex('categories', 'by_profile', current.profile_id)
+    const clash = clashingCategoryName(others as { id: unknown; name: unknown }[], patch.name, id)
+    if (clash !== null) return refuse(categoryNameTaken(clash))
+  }
+  if (Object.keys(patch).length > 0) {
+    await adapter.updateCategory(id, patch as Parameters<typeof adapter.updateCategory>[1])
+  }
   return ok()
 }
 

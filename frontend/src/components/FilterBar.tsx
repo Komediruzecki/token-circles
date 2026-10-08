@@ -3,6 +3,7 @@
  * Single-line filter bar with categories, tags, search, date presets, reconcile
  */
 import { createMemo, createSignal, For } from 'solid-js'
+import { monthPeriod, parseLocalDate, toRange } from '../utils/period'
 import styles from './FilterBar.module.css'
 
 const MONTH_NAMES = [
@@ -174,7 +175,7 @@ export default function FilterBar(props: FilterBarProps) {
   const derivedMonth = createMemo(() => {
     const dr = props.dateRange
     if (dr && dr.from) {
-      const d = new Date(dr.from)
+      const d = parseLocalDate(dr.from)
       if (!isNaN(d.getTime())) return d.getMonth()
     }
     return currentMonth()
@@ -183,7 +184,7 @@ export default function FilterBar(props: FilterBarProps) {
   const derivedYear = createMemo(() => {
     const dr = props.dateRange
     if (dr && dr.from) {
-      const d = new Date(dr.from)
+      const d = parseLocalDate(dr.from)
       if (!isNaN(d.getTime())) return d.getFullYear()
     }
     return currentYear()
@@ -196,13 +197,10 @@ export default function FilterBar(props: FilterBarProps) {
   })
 
   const handleMonthYearChange = (month: number, year: number) => {
-    const firstDay = new Date(year, month, 1)
-    const lastDay = new Date(year, month + 1, 0)
-    const fmt = (d: Date) => d.toISOString().slice(0, 10)
     props.onChange({
       selectedCategories: props.selectedCategories,
       selectedTags: props.selectedTags,
-      dateRange: { from: fmt(firstDay), to: fmt(lastDay) },
+      dateRange: toRange(monthPeriod(year, month)),
       selectedPreset: 'custom',
     })
   }

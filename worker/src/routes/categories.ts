@@ -2,9 +2,17 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
+import {
+  CATEGORY_MESSAGES,
+  categoryNameTaken,
+  checkCategoryCreate,
+  checkCategoryEdit,
+  clashingCategoryName,
+  renamesCategory,
+} from '../../../shared/categorySchema';
 
 // Port of backend/routes/categories.js (repo: backend/repositories/categoriesRepo.js).
 // Tables: categories, category_mappings. The backend's toCamelCase() is an identity
@@ -43,50 +51,50 @@ categoriesRoutes.get('/api/categories', requireAuth, async (c) => {
   return c.json(rows);
 });
 
-categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-
-  const name = b.name;
-  if (!name || typeof name !== 'string' || name.trim() === '') {
-    throw new HttpError(400, 'Category name is required');
-  }
-  const color = b.color ?? '#6b7280';
-  const icon = b.icon ?? 'tag';
-  const type = b.type ?? 'expense';
-  const parent_id = b.parent_id !== undefined ? b.parent_id : b.parentId || null;
-  if (
-    parent_id !== null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(parent_id), pid))
-  ) {
-    throw new HttpError(403, 'Parent category does not belong to this profile');
-  }
-
-  const existing = await db.first(
-    c.env.DB,
-    'SELECT id FROM categories WHERE name = ? AND profile_id = ?',
-    name.trim(),
+/** The profile's categories, for the duplicate-name check both runtimes share. */
+function profileCategoryNames(DB: D1Database, pid: number) {
+  return db.all<{ id: number; name: string }>(
+    DB,
+    'SELECT id, name FROM categories WHERE profile_id = ?',
     pid
   );
-  if (existing) throw new HttpError(400, 'Category name already exists for this profile');
+}
+
+categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
+  const pid = await getProfileId(c);
+  // The rules and their wording are shared with local-first: shared/categorySchema.ts. A blank
+  // icon, color or type takes its default; anything else wrong is a 400 naming its field.
+  const input = accept(checkCategoryCreate(await c.req.json()));
+  // A parent from another profile is a field the form got wrong, so it is refused at that field,
+  // as local-first refuses it.
+  if (
+    input.parent_id !== null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, input.parent_id, pid))
+  ) {
+    throw refuse({ parent_id: CATEGORY_MESSAGES.parent });
+  }
+
+  // Case does not make a new name: "food" next to "Food" is refused, as local-first refuses it.
+  const clash = clashingCategoryName(await profileCategoryNames(c.env.DB, pid), input.name);
+  if (clash !== null) throw refuse(categoryNameTaken(clash));
 
   const res = await db.insert(c.env.DB, 'categories', {
-    name: name.trim(),
-    color: color.trim(),
-    icon: icon || 'tag',
-    type: type.trim(),
-    parent_id,
-    tax_deductible: b.tax_deductible ? 1 : 0,
+    name: input.name,
+    color: input.color,
+    icon: input.icon,
+    type: input.type,
+    parent_id: input.parent_id,
+    tax_deductible: input.tax_deductible ? 1 : 0,
     profile_id: pid,
   });
 
   return c.json({
     id: res.meta.last_row_id,
-    name: name.trim(),
-    color: color.trim(),
-    icon,
-    type: type.trim(),
-    parent_id,
+    name: input.name,
+    color: input.color,
+    icon: input.icon,
+    type: input.type,
+    parent_id: input.parent_id,
     profile_id: pid,
   });
 });
@@ -551,25 +559,37 @@ categoriesRoutes.put('/api/categories/:id', requireAuth, async (c) => {
   );
   if (!existing) throw new HttpError(404, 'Category not found');
 
-  const b = (await c.req.json()) as Record<string, any>;
-  const parent_id = b.parent_id !== undefined ? b.parent_id : b.parentId || null;
+  // An edit changes what it sends and keeps every stored field it leaves out. The Categories and
+  // Budgets forms send name, type, colour and icon; their swatches send the colour alone. The
+  // parent and the tax-deductible flag used to reset to null and 0 on every such edit, and the tax
+  // reports read the flag. Only a field whose value the edit changes is checked, by the shared
+  // rules: one sent back unchanged is not, so a row saved under older rules (a 3-digit color, a
+  // long name) can still be edited (shared/categorySchema.ts).
+  const patch = accept(checkCategoryEdit(await c.req.json(), existing));
   if (
-    parent_id !== null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(parent_id), pid))
+    patch.parent_id !== undefined &&
+    patch.parent_id !== null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, patch.parent_id, pid))
   ) {
-    throw new HttpError(403, 'Parent category does not belong to this profile');
+    throw refuse({ parent_id: CATEGORY_MESSAGES.parent });
   }
+  // A rename may not land on another category's name. A name the edit leaves alone, or changes
+  // in case only, is not checked, so a profile that already holds "Coffee" and "coffee" can still
+  // edit either of them.
+  if (patch.name !== undefined && renamesCategory(existing.name, patch.name)) {
+    const others = await profileCategoryNames(c.env.DB, pid);
+    const clash = clashingCategoryName(others, patch.name, Number(existing.id));
+    if (clash !== null) throw refuse(categoryNameTaken(clash));
+  }
+
+  const columns: Record<string, unknown> = { ...patch };
+  if (patch.tax_deductible !== undefined) columns.tax_deductible = patch.tax_deductible ? 1 : 0;
+  if (Object.keys(columns).length === 0) return c.json({ ok: true });
+
   const res = await db.update(
     c.env.DB,
     'categories',
-    {
-      name: b.name !== undefined ? b.name : existing.name,
-      color: b.color !== undefined ? b.color : existing.color,
-      icon: b.icon !== undefined ? b.icon : existing.icon,
-      type: b.type !== undefined ? b.type : existing.type,
-      parent_id: parent_id || null,
-      tax_deductible: b.tax_deductible ? 1 : 0,
-    },
+    columns,
     'id = ? AND profile_id = ?',
     id,
     pid

@@ -34,9 +34,11 @@ export const tagsRoutes = new Hono<AppEnv>();
 
 tagsRoutes.get('/api/tags', requireAuth, async (c) => {
   const pid = await getProfileId(c);
+  // `profile_id` names each tag's owner, as the local store's rows do: a page holding a list from
+  // before a profile switch tells the other profile's tags apart by it.
   const rows = await db.all(
     c.env.DB,
-    'SELECT id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name',
+    'SELECT id, profile_id, name, color, created_at FROM tags WHERE profile_id = ? ORDER BY name',
     pid
   );
   return c.json(rows);
@@ -495,6 +497,15 @@ tagsRoutes.put('/api/tags/:id', requireAuth, async (c) => {
   const b = (await c.req.json()) as Record<string, any>;
   const name = typeof b.name === 'string' ? b.name.trim() : '';
   if (!name) throw new HttpError(400, 'Tag name is required');
+  // tags(name, profile_id) is UNIQUE: answer what the create route answers, before the write.
+  const dupe = await db.first(
+    c.env.DB,
+    'SELECT id FROM tags WHERE name = ? AND profile_id = ? AND id != ?',
+    name,
+    pid,
+    Number(c.req.param('id'))
+  );
+  if (dupe) throw new HttpError(400, 'Tag already exists');
   const res = await db.update(
     c.env.DB,
     'tags',

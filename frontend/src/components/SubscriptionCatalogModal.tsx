@@ -16,6 +16,7 @@ import { currencySymbol } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
+import { localToday } from '../utils/period'
 import styles from './SubscriptionCatalogModal.module.css'
 import type { CatalogItem } from '../features/subscriptionCatalog'
 
@@ -32,7 +33,7 @@ export interface SubscriptionCatalogModalProps {
   categories: () => CatalogCategory[]
 }
 
-const todayIso = () => new Date().toISOString().slice(0, 10)
+const todayIso = () => localToday()
 const priceOf = (text: string): number => {
   return parseDecimalInput(text) ?? 0
 }

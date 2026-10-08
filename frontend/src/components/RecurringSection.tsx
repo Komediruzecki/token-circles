@@ -5,10 +5,12 @@
 import { createSignal, For, Show } from 'solid-js'
 import { transactionInvariantError } from '../../../shared/transactionInvariant'
 import { api, formatCurrency, toast } from '../core/api'
+import { profileReadScope } from '../core/apiProfileScope'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { localToday } from '../utils/period'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
 
@@ -43,18 +45,39 @@ export default function RecurringSection(props: RecurringSectionProps) {
   const [formType, setFormType] = createSignal('expense')
   const [formFrequency, setFormFrequency] = createSignal('monthly')
   const [formDay, setFormDay] = createSignal('')
-  const [formNextDate, setFormNextDate] = createSignal(new Date().toISOString().slice(0, 10))
+  const [formNextDate, setFormNextDate] = createSignal(localToday())
   const [formCategory, setFormCategory] = createSignal<number | null>(null)
   const [formAccountId, setFormAccountId] = createSignal<number | null>(null)
   const [formTransferAccountId, setFormTransferAccountId] = createSignal<number | null>(null)
   const [formNotes, setFormNotes] = createSignal('')
 
+  // Newest answer wins: the list reloads on every recurring and category write, switch and resume,
+  // and answers can land out of order. One is shown only if nothing asked for after it is on
+  // screen already. `itemsShownFor` is the profiles the rules on screen were asked for.
+  let itemsAsked = 0
+  let itemsShown = 0
+  let itemsShownFor = ''
+
+  /**
+   * Load the rules. A failed load keeps the rules on screen while they are the ones asked for; after
+   * a profile switch they are another profile's, which this profile cannot edit (an edit answers
+   * 404), so a failed load clears them rather than leave them looking current.
+   */
   const loadItems = async () => {
+    const asked = ++itemsAsked
+    const scope = profileReadScope()
     try {
       const data = await api.getRecurring()
-      setItems(Array.isArray(data) ? data : [])
+      if (!Array.isArray(data)) throw new TypeError('The recurring list is not a list')
+      if (asked < itemsShown) return
+      itemsShown = asked
+      itemsShownFor = scope
+      setItems(data)
     } catch {
-      // Recurring items will remain empty
+      if (asked < itemsShown || itemsShownFor === scope) return
+      itemsShown = asked
+      itemsShownFor = scope
+      setItems([])
     }
   }
 
@@ -85,7 +108,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormType(item.type)
     setFormFrequency(item.frequency)
     setFormDay(item.day_of_month?.toString() || '')
-    setFormNextDate(item.next_date || new Date().toISOString().slice(0, 10))
+    setFormNextDate(item.next_date || localToday())
     setFormCategory(item.category_id)
     setFormAccountId(item.account_id ?? null)
     setFormTransferAccountId(item.transfer_account_id ?? null)
@@ -99,7 +122,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
     setFormType('expense')
     setFormFrequency('monthly')
     setFormDay('')
-    setFormNextDate(new Date().toISOString().slice(0, 10))
+    setFormNextDate(localToday())
     setFormCategory(null)
     setFormAccountId(null)
     setFormTransferAccountId(null)

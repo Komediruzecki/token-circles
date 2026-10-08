@@ -2,6 +2,7 @@
  * API Fetch Interceptor
  * Routes API calls to either the real backend (self-hosted) or IndexedDB (serverless)
  */
+import { networkError } from './apiError'
 import { announceDataChanged } from './dataChangedEvent'
 import { invalidateForRequest } from './dataVersions'
 import { getStorageMode } from './storage/storageFactory'
@@ -38,6 +39,29 @@ function toApiPath(url: string): string | null {
 }
 
 /**
+ * The IANA zone the browser keeps its calendar in ("Europe/Zagreb"), sent to the Worker as
+ * X-Time-Zone on every app-API request. The Worker's clock is UTC, so this is how it knows which
+ * day "today" is for the person asking: what is due, what this month is, which date a write
+ * without one gets (worker/src/local-date.ts). Undefined when the browser cannot say; the Worker
+ * then uses the UTC calendar.
+ */
+function browserTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The caller's headers, in whatever shape they came, plus the person's zone unless one is set. */
+function withTimeZone(headers: HeadersInit | undefined): Headers {
+  const merged = new Headers(headers)
+  const zone = browserTimeZone()
+  if (zone && !merged.has('X-Time-Zone')) merged.set('X-Time-Zone', zone)
+  return merged
+}
+
+/**
  * Everything that must happen after a completed app-API request, in one place so the two storage
  * branches below cannot drift apart.
  */
@@ -64,12 +88,22 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
   // origin. Default credentials to 'include' so the session cookie rides along cross-origin.
   if (mode === 'self-hosted') {
     if (apiPath) {
-      const response = await fetch(`${API_ORIGIN}${apiPath}`, {
-        ...init,
-        // Pin credentials last so a caller's own `init.credentials` can't override it
-        // and silently drop the cross-origin session cookie.
-        credentials: 'include',
-      })
+      let response: Response
+      try {
+        response = await fetch(`${API_ORIGIN}${apiPath}`, {
+          ...init,
+          headers: withTimeZone(init?.headers),
+          // Pin credentials last so a caller's own `init.credentials` can't override it
+          // and silently drop the cross-origin session cookie.
+          credentials: 'include',
+        })
+      } catch (error) {
+        // No answer at all: fetch rejects with a TypeError ("Failed to fetch"), which tells a
+        // person nothing. Both client surfaces pass through here, so both get the same ApiError
+        // for it (core/apiError.ts). An abort is the caller's own doing and stays as it is.
+        if (error instanceof TypeError) throw networkError(error)
+        throw error
+      }
       announceWrite(apiPath, init, response.ok)
       return response
     }

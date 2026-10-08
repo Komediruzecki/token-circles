@@ -66,6 +66,20 @@ Every tool takes an optional `profileId`, defaulting to the token's profile.
 | `upsert_tag_rule`         | write  | Persist a categorization rule                              |
 | `upsert_budget`           | write  | Create or adjust a budget                                  |
 
+### Dates are UTC
+
+An MCP client sends no time zone, so the defaults that depend on the date use the UTC calendar:
+the month `get_overview` and `get_budgets_and_goals` report when you pass no `month`, and which
+bills `get_overview` counts as still to come. Between local midnight and UTC midnight that is
+the day or month before (east of UTC) or after (west of UTC) the one you are living in. Pass
+`month` to ask for a particular one. A client that can set request headers can send
+`X-Time-Zone` with an IANA name, such as `Europe/Zagreb`, and is answered on that calendar,
+as the app is.
+
+Rows keep the dates you give them: `create_transactions` takes a date on every row. An upload to
+the import URL dates a row that has none, and opens an account it creates, on the UTC date
+unless the upload sends `X-Time-Zone`.
+
 ## Importing a statement
 
 Files are uploaded over plain HTTP, never through a tool argument: a base64'd spreadsheet inside

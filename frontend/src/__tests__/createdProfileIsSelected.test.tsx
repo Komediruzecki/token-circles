@@ -20,6 +20,7 @@ import {
   bumpProfileVersion,
   setCurrentProfile,
   setIsProfileModalOpen,
+  setIsQuickAddOpen,
   setProfiles,
   setShowDropdown,
   useAppState,
@@ -132,6 +133,7 @@ beforeEach(() => {
   // The store outlives each mount; start every test from a closed sidebar and an empty list.
   setShowDropdown(false)
   setIsProfileModalOpen(false)
+  setIsQuickAddOpen(false)
   setProfiles([])
   setCurrentProfile(null)
   Element.prototype.scrollIntoView = () => {}
@@ -251,13 +253,16 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     expect(state.currentProfile?.id).toBe(travel.id)
     expect(state.profileVersion).toBeGreaterThan(versionBeforeCreateFinished)
 
-    // What the bump is for: the open pages read again, for the new profile only. App's quick-add
-    // category list is one of those reads.
+    // What the bump is for: what reads next reads for the new profile only. App's quick-entry
+    // category list is one of those reads; it reads when a quick entry opens.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }))
+    await settle()
     const lastCategoryRead = net.sent.filter((r) => r.path === '/api/categories').at(-1)
-    expect(lastCategoryRead?.headers).toMatchObject({
-      'X-Profile-Id': String(travel.id),
-      'X-Profile-Ids': JSON.stringify([travel.id]),
-    })
+    expect(lastCategoryRead?.headers['X-Profile-Id']).toBe(String(travel.id))
+    // Asked for the active profile alone, or for a household of just that profile.
+    expect([undefined, JSON.stringify([travel.id])]).toContain(
+      lastCategoryRead?.headers['X-Profile-Ids']
+    )
   })
 
   it('stays selected after the next click outside the sidebar dropdown', async () => {

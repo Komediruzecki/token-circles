@@ -1,6 +1,7 @@
 /**
  * ExportImport handlers — IndexedDB-backed implementations
  */
+import { localToday } from '../../../utils/period'
 import { seedDemoProfiles } from '../idb'
 import {
   adapter,
@@ -405,8 +406,12 @@ export async function dashboardCharts(query: URLSearchParams): Promise<Response>
     const startDate = new Date()
     startDate.setMonth(startDate.getMonth() - monthsCount + 1)
     startDate.setDate(1)
-    const startStr = startDate.toISOString().split('T')[0]
-    const endStr = endDate.toISOString().split('T')[0]
+    // Both ends on the person's calendar. toISOString() gives the UTC date: east of UTC the range
+    // ended yesterday for the first hours of every day and began on the last day of the month
+    // before (local midnight on the 1st is still the day before in UTC); west of UTC it ran into
+    // tomorrow every evening.
+    const startStr = localToday(startDate)
+    const endStr = localToday(endDate)
 
     const allTxns = await adapter.listTransactions()
     const rangeTxns = allTxns.filter((t) => t.date >= startStr && t.date <= endStr)

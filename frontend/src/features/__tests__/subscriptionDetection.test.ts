@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cadenceFromGapDays,
   detectSubscriptions,
@@ -248,5 +248,27 @@ describe('detectSubscriptions', () => {
 
   it('returns an empty list for empty input', () => {
     expect(detect([])).toEqual([])
+  })
+})
+
+describe('detectSubscriptions without a today', () => {
+  const hostZone = process.env.TZ
+  afterEach(() => {
+    vi.useRealTimers()
+    if (hostZone === undefined) delete process.env.TZ
+    else process.env.TZ = hostZone
+  })
+
+  it('rolls the next charge past the person’s today, not the UTC one', () => {
+    // 00:30 on 8 October in Zagreb; UTC is still on the 7th.
+    process.env.TZ = 'Europe/Zagreb'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-07T22:30:00Z'))
+    const [netflix] = detectSubscriptions([
+      txn('NETFLIX.COM', 15.99, '2026-08-07'),
+      txn('NETFLIX.COM', 15.99, '2026-09-07'),
+    ])
+    // Due on 7 October, which is yesterday here.
+    expect(netflix?.suggestedDueDate).toBe('2026-11-07')
   })
 })

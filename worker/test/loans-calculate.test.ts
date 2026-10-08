@@ -1,7 +1,8 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
-import { addCalendarMonths, calculateLoan, loanStatus, todayUtc } from '../../shared/loanSchedule';
+import { calendarDateIn } from '../../shared/calendarDate';
+import { addCalendarMonths, calculateLoan, loanStatus } from '../../shared/loanSchedule';
 import type { LoanInput } from '../../shared/loanSchedule';
 import { PARITY_LOAN } from '../../shared/fixtures/loanParity';
 
@@ -257,7 +258,8 @@ describe('GET /api/loans', () => {
     // 100,000 at 5 % over 120 months whose 60th payment fell due today: owed is the balance after
     // 60 installments, B_60 = P (1+r)^60 - A ((1+r)^60 - 1) / r = 56,204.87. The Loans page used to
     // subtract 60 whole installments from the principal instead, and showed 36,360.69.
-    const today = todayUtc();
+    // These requests send no X-Time-Zone, so the Worker measures against the UTC date.
+    const today = calendarDateIn('UTC');
     const start = addCalendarMonths(today, -59);
     const r = 0.05 / 12;
     const A = (100000 * r * (1 + r) ** 120) / ((1 + r) ** 120 - 1);

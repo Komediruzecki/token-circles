@@ -9,6 +9,7 @@ import { recalcGoalsByCategory } from '../recalc-goals';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { autoApplyTagRules } from '../tag-rules';
 import * as db from '../db';
+import { localToday } from '../local-date';
 
 // Port of backend/routes/transactions.js + backend/repositories/transactionsRepo.js.
 // Table: transactions (snake_case columns), LEFT JOINed to categories. The backend's
@@ -763,7 +764,8 @@ transactionsRoutes.post('/api/transactions', requireAuth, async (c) => {
     throw new HttpError(403, 'Transfer account does not belong to this profile');
   }
 
-  const resolvedDate = date || new Date().toISOString().split('T')[0];
+  // An undated transaction happened today, on the person's calendar.
+  const resolvedDate = date || localToday(c);
 
   // Resolve account_id from means_of_payment (FROM) if not explicitly provided.
   let resolvedAccountId: number | null = account_id || null;

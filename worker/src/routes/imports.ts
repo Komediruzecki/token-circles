@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import { calendarDateIn } from '../../../shared/calendarDate';
 import { parseImportCsv } from '../../../shared/importCsv';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
@@ -20,6 +21,7 @@ import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
 import { resolveProfileBaseCurrency } from '../base-currency';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
+import { localToday } from '../local-date';
 
 // Parse CSV text into headers + data rows. The implementation moved to shared/ so this and the
 // frontend's copy stop drifting; re-exported under the old name so existing call sites and tests
@@ -96,9 +98,11 @@ function getCategoryIcon(name: string): string {
 //
 // The numeric Excel-serial branch is dropped: it relied on spreadsheetService and only fires for
 // binary-spreadsheet imports, which aren't supported on Workers.
-function parseDateString(dateStr: unknown): string {
+//
+// `todayStr` is the fallback, today on the importing person's calendar (ExecuteImportInput.today).
+function parseDateString(dateStr: unknown, todayStr: string): string {
   const pad = (n: number) => String(n).padStart(2, '0');
-  const today = () => new Date().toISOString().split('T')[0];
+  const today = () => todayStr;
   const inRange = (m: number, d: number) => m >= 1 && m <= 12 && d >= 1 && d <= 31;
   const format = (y: number, m: number, d: number) => `${y}-${pad(m)}-${pad(d)}`;
   if (dateStr === null || dateStr === undefined || dateStr === '') return today();
@@ -273,6 +277,9 @@ importRoutes.post('/api/import/file-sheet', requireAuth, async (c) => {
   );
 });
 
+/** A reason fetchGoogleSheetRows writes itself, safe to show in its 501. */
+class SheetUnreadable extends Error {}
+
 // ── fetchGoogleSheetRows — fetch + parse a published sheet as CSV (Workers-safe) ──
 // Extracted from the HTTP handler so the route, the daily cron sync and email-in can all call
 // it. Returns a { status, body } pair. Pure-JS CSV path only; the XLSX fallback (multi-tab
@@ -292,10 +299,10 @@ export async function fetchGoogleSheetRows(
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
       : `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
     const r = await fetch(csvUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!r.ok) throw new SheetUnreadable('HTTP ' + r.status);
     const text = await r.text();
     if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-      throw new Error('Sheet is not publicly accessible (got HTML instead of CSV)');
+      throw new SheetUnreadable('Sheet is not publicly accessible (got HTML instead of CSV)');
     }
     const { headers, rows } = parseCsv(text);
     if (headers.length > 0) {
@@ -309,16 +316,32 @@ export async function fetchGoogleSheetRows(
         },
       };
     }
-    throw new Error('No rows found');
+    throw new SheetUnreadable('No rows found');
   } catch (err) {
     // CSV export failed / returned nothing. The Express fallback parses the XLSX export to
     // enumerate tabs, which the spreadsheet parser can't do on Workers yet.
+    let reason = 'the download did not complete';
+    if (err instanceof SheetUnreadable) {
+      reason = err.message;
+    } else {
+      // Anything else (a network failure, a parser bug) says nothing the user can act on and may
+      // name our internals, so it goes to the logs. No URL: a sheet's share link is its key.
+      const e = err as { message?: string; stack?: string };
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          source: 'google-sheet',
+          message: e?.message ?? String(err),
+          stack: e?.stack ?? null,
+        })
+      );
+    }
     return {
       status: 501,
       body: {
         error:
           'Could not import this Google Sheet via CSV export: ' +
-          (err as Error).message +
+          reason +
           ". Make sure the sheet is shared as 'Anyone with link can view'. " +
           'The XLSX fallback is not available on this deployment yet.',
       },
@@ -352,6 +375,12 @@ export interface ExecuteImportInput {
   dryRun?: boolean;
   approvedCategories?: any;
   defaultCurrency?: any;
+  /**
+   * Today on the importing person's calendar, YYYY-MM-DD: the date a row without one is given, and
+   * an account's starting-balance date. The UTC date when absent, for the imports nobody is
+   * watching (the sheet-sync cron, email-in).
+   */
+  today?: string;
 }
 
 export async function executeImport(
@@ -384,7 +413,8 @@ export async function executeImport(
     )
   );
 
-  const today = () => new Date().toISOString().split('T')[0];
+  const todayStr = input.today ?? calendarDateIn('UTC');
+  const today = () => todayStr;
 
   // name(lowercased) -> accountId, seeded with the profile(s)' existing accounts.
   const accountIdMap = new Map<string, number>();
@@ -744,7 +774,7 @@ export async function executeImport(
     const transferAccountId = catLower ? accountIdMap.get(catLower) || null : null;
 
     const description = pick(row, mapping, 'description') || '';
-    const parsedDate = parseDateString(dateRaw);
+    const parsedDate = parseDateString(dateRaw, todayStr);
     const invariantError = transactionInvariantError({
       type: validatedType,
       amount,
@@ -913,6 +943,7 @@ importRoutes.post('/api/import/execute', requireAuth, async (c) => {
     dryRun: Boolean(b.dry_run ?? b.dryRun),
     approvedCategories: b.approvedCategories ?? b.createCategories,
     defaultCurrency: b.defaultCurrency,
+    today: localToday(c),
   });
   return c.json(body, status as 200);
 });

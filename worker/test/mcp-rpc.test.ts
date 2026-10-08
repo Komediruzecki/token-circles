@@ -93,6 +93,28 @@ describe('JSON-RPC dispatch', () => {
     expect(unknownTool.body.error.code).toBe(-32602);
   });
 
+  // The route reads its body with .catch(() => null), which is what turns the 400 the
+  // malformed-JSON middleware raises (error-response.ts) into the JSON-RPC parse error an MCP
+  // client expects. Drop that catch and these answer 400 with the API's own error body instead.
+  for (const [label, body] of [
+    ['a malformed body', '{"jsonrpc": "2.0", "id": 1, "method": '],
+    ['no body', undefined],
+  ] as const) {
+    it(`answers -32700 Parse error to ${label}`, async () => {
+      const res = await SELF.fetch('https://api.example.com/mcp', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+        body,
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Parse error' },
+      });
+    });
+  }
+
   it('accepts a notification with no id and answers ping', async () => {
     const res = await SELF.fetch('https://api.example.com/mcp', {
       method: 'POST',

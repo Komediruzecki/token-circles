@@ -44,7 +44,6 @@ import {
   setLoading,
   setPage,
   setProfiles as setProfilesStore,
-  setQuickAddCategories as setQuickAddCategoriesStore,
   setShowDropdown as setShowDropdownStore,
   setSidebarCollapsed as setSidebarCollapsedStore,
   useAppState,
@@ -52,6 +51,7 @@ import {
 import { initVersionWatch } from './core/appVersion'
 import { loadBillingPlan } from './core/billingStore'
 import { initDataRevalidation } from './core/dataRevalidation'
+import { entityVersion } from './core/dataVersions'
 import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { isEditableTarget } from './core/domFocus'
 import { resolvePageFromHash } from './core/hashRoute.js'
@@ -59,6 +59,7 @@ import { logger } from './core/logger.js'
 import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { clearPlanIntent, setHighlightedPlan, storedPlanIntent } from './core/planIntent'
+import { createQuickEntryList } from './core/quickEntryLists'
 import { setSettingsTab } from './core/settingsStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
 import {
@@ -71,7 +72,7 @@ import {
 import { getStorageMode, setStorageMode } from './core/storage/storageFactory'
 import { pages as allPages } from './router.tsx'
 import type { PageName } from './router.tsx'
-import type { Category, Profile } from './types/models'
+import type { Account, Category, Profile } from './types/models'
 
 // Loaded on demand: only pristine first-run profiles (or an explicit relaunch
 // from the tour menu) ever open the wizard, so it stays out of the main chunk.
@@ -126,38 +127,28 @@ export function App() {
   const setSidebarCollapsed = (v: boolean) => {
     setSidebarCollapsedStore(v)
   }
-  const quickAddCategories = () => state.quickAddCategories
-  const setQuickAddCategories = (c: Category[]) => {
-    setQuickAddCategoriesStore(c)
-  }
   // Touch-friendly quick entry (Guided Orbit), opened by the floating + button.
   const [isGuidedOpen, setIsGuidedOpen] = createSignal(false)
 
-  // Quick Add categories must follow the ACTIVE profile and stay current. The ⌘K
-  // command bar and the Guided Orbit both parse against / display this list, so a
-  // stale copy meant a switched-to profile showed the PREVIOUS profile's
-  // categories — and an entry could be saved with a category_id that doesn't
-  // belong to the current profile — until a full page reload. Reload it (a) on
-  // every profile switch (profileVersion bumps then) and once the user signs in,
-  // and (b) each time a quick-add opens, so a category added meanwhile shows up.
-  const reloadQuickAddCategories = () => {
-    // Server mode needs a session before /api/categories (avoids a 401).
-    if (serverMode && !isAuthenticated()) return
-    void (async () => {
-      try {
-        const cats = await api.getCategories()
-        if (Array.isArray(cats)) setQuickAddCategories(cats as Category[])
-      } catch {
-        /* non-critical — quick add still works, just without category hints */
-      }
-    })()
-  }
-  createEffect(on([() => state.profileVersion, isAuthenticated], reloadQuickAddCategories))
-  createEffect(
-    on([isQuickAddOpen, isGuidedOpen], () => {
-      if (isQuickAddOpen() || isGuidedOpen()) reloadQuickAddCategories()
-    })
-  )
+  // What both quick entries offer an entry: the ACTIVE profile's categories and accounts, read
+  // while one is open and again whenever the profile or that entity changes, newest answer wins.
+  // An entry is written to the active profile, so a household-wide list offered rows the save
+  // refused, and a list kept from before a switch offered the previous profile's. See
+  // core/quickEntryLists.ts. Cloud mode needs a session before it can read (avoids a 401).
+  const quickEntryOpen = () => isQuickAddOpen() || isGuidedOpen()
+  const quickEntryReadable = () => !serverMode || isAuthenticated()
+  const quickCategories = createQuickEntryList<Category>({
+    isOpen: quickEntryOpen,
+    enabled: quickEntryReadable,
+    track: () => [state.profileVersion, entityVersion('categories')],
+    read: () => api.getCategories('active'),
+  })
+  const quickAccounts = createQuickEntryList<Account>({
+    isOpen: quickEntryOpen,
+    enabled: quickEntryReadable,
+    track: () => [state.profileVersion, entityVersion('accounts')],
+    read: () => api.getAccounts('active'),
+  })
 
   // Keep-alive page mounting: pages stay mounted after first visit, hidden
   // via CSS instead of destroyed. Navigation becomes instant — no re-fetch,
@@ -465,7 +456,7 @@ export function App() {
     const initialPage = resolvePageFromHash(window.location.hash, (name) => name in allPages)
     if (initialPage) setActivePage(initialPage)
 
-    // (Quick Add categories load reactively via the profileVersion effect above.)
+    // (The quick entries' categories and accounts load when one opens; see quickCategories above.)
 
     // Command Bar shortcut: Ctrl/Cmd+K (quick entry) or the legacy Ctrl/Cmd+Shift+T.
     const handleQuickAddKey = (e: KeyboardEvent) => {
@@ -1272,7 +1263,8 @@ export function App() {
               onClose={() => {
                 setIsQuickAddOpen(false)
               }}
-              categories={() => quickAddCategories()}
+              categories={quickCategories}
+              accounts={quickAccounts}
               onSave={() => {
                 toast('Entry added', 'success')
                 bumpProfileVersion()
@@ -1302,7 +1294,8 @@ export function App() {
             <GuidedOrbit
               isOpen={isGuidedOpen}
               onClose={() => setIsGuidedOpen(false)}
-              categories={() => quickAddCategories()}
+              categories={quickCategories}
+              accounts={quickAccounts}
               onSave={() => {
                 toast('Entry added', 'success')
                 bumpProfileVersion()

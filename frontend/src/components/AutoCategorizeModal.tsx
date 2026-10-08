@@ -14,9 +14,13 @@
  * Staging and applying are separate. The footer says "Apply N" and that is the only thing that
  * writes — an earlier version applied on the row click AND again from the footer, so the label
  * lied in both directions.
+ *
+ * A pick that does not save is said so, and stays staged for the next Apply. The modal used to
+ * close the same way whatever came back, so a refused pick looked like a saved one until the row
+ * turned up uncategorized again.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
-import { api, getLocalCurrency } from '../core/api'
+import { api, getLocalCurrency, toast } from '../core/api'
 import { asOneWrite } from '../core/dataVersions'
 import autoCategorizeModalStyles from './AutoCategorizeModal.module.css'
 import type { CategoryMapping } from '../types/models'
@@ -37,10 +41,14 @@ export interface AutoCategorizeModalProps {
   isOpen: () => boolean
   onClose: () => void
   uncategorizedTransactions: () => AutoCategorizeTransaction[]
-  /** Categories on offer for the manual pick, filtered to the row's type where known. */
+  /**
+   * Categories on offer for the manual pick, filtered to the row's type where known. The
+   * transactions' own profile's: an edit refuses another profile's category.
+   */
   categories?: () => Array<{ id: number; name: string; type?: string }>
   /** Resolve an account id to its display name for the row's metadata line. */
   accountName?: (id: number) => string | undefined
+  /** Write one pick. Throws when it did not save. */
   onApply: (transactionId: number, categoryId: number) => void | Promise<void>
 }
 
@@ -100,20 +108,34 @@ export function AutoCategorizeModal(props: AutoCategorizeModalProps) {
 
   const applyAll = async () => {
     setApplying(true)
+    const staged = Object.entries(pendingUpdates())
+    const failed: Record<number, number> = {}
     try {
-      // Sequential on purpose: one failed write should stop before the next, and fifty parallel
-      // PUTs against one profile is how optimistic-concurrency conflicts get manufactured. One
-      // write as far as the data counters go, so everything following them reloads once for the
-      // batch rather than once per row.
+      // Sequential on purpose: fifty parallel PUTs against one profile is how optimistic-concurrency
+      // conflicts get manufactured. One write as far as the data counters go, so everything
+      // following them reloads once for the batch rather than once per row. A pick that fails
+      // does not stop the rest: each row is its own write.
       await asOneWrite(async () => {
-        for (const [transactionId, categoryId] of Object.entries(pendingUpdates())) {
-          await props.onApply(Number(transactionId), categoryId)
+        for (const [transactionId, categoryId] of staged) {
+          try {
+            await props.onApply(Number(transactionId), categoryId)
+          } catch (error) {
+            console.error('Failed to apply category:', error)
+            failed[Number(transactionId)] = categoryId
+          }
         }
       })
-      props.onClose()
     } finally {
       setApplying(false)
     }
+    const failures = Object.keys(failed).length
+    if (failures === 0) {
+      props.onClose()
+      return
+    }
+    // What saved leaves the list as it reloads. What did not stays staged, so Apply tries it again.
+    setPendingUpdates(failed)
+    toast(`Couldn't categorize ${failures} of ${staged.length}. Try again.`, 'error')
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {

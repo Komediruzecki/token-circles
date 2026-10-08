@@ -9,6 +9,7 @@ import {
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
+import { localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { normalizeCurrencyCode } from '../../currencies'
 import { parseImportNumber } from '../../importNumber'
@@ -28,11 +29,9 @@ export function parseAmount(v: unknown): number {
   return parseImportNumber(v) ?? NaN
 }
 
-/** Today as `YYYY-MM-DD` in local time — the fallback for a row whose sheet gave no date. */
+/** Today on the person's calendar, the fallback for a row whose sheet gave no date. */
 export function isoToday(): string {
-  const d = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  return localToday()
 }
 
 function toStr(v: unknown): string {
@@ -838,7 +837,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         lower: catLower,
         type: (acctTypes[catName] || 'giro') as 'giro' | 'savings' | 'ib',
         balance,
-        balanceDate: acctBalanceDates[catName] || new Date().toISOString().split('T')[0],
+        balanceDate: acctBalanceDates[catName] || localToday(),
       })
       configuredAccounts.add(catLower)
     }
@@ -1272,7 +1271,7 @@ export async function importBulk(body: unknown): Promise<Response> {
         profile_id: profileId,
         type: toStr(item.type) || 'expense',
         description: toStr(item.description),
-        date: toStr(item.date) || new Date().toISOString().slice(0, 10),
+        date: toStr(item.date) || localToday(),
         amount,
         category_id: item.category_id ? Number(item.category_id) : null,
         notes: toStr(item.notes),

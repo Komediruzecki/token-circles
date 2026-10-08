@@ -332,6 +332,38 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
     requireReference(row, 'transaction_id', transactionIds, `receipts[${index}]`)
   );
 
+  // The keys D1 holds unique, checked here so a file that repeats one is a 422 naming it rather
+  // than a constraint failure halfway through the staged restore. Same comparison as the
+  // constraint: exact, case-sensitive names.
+  const tagNames = new Set<string>();
+  for (const row of data.tags) {
+    const key = JSON.stringify([Number(row.profile_id), String(row.name ?? '')]);
+    if (tagNames.has(key)) {
+      throw new HttpError(422, `Duplicate tag name "${row.name}" in profile ${row.profile_id}`);
+    }
+    tagNames.add(key);
+  }
+  const receiptTransactions = new Set<number>();
+  for (const row of data.receipts) {
+    if (row.transaction_id === null || row.transaction_id === undefined) continue;
+    const transactionId = Number(row.transaction_id);
+    if (receiptTransactions.has(transactionId)) {
+      throw new HttpError(422, `Duplicate receipt for transaction ${transactionId}`);
+    }
+    receiptTransactions.add(transactionId);
+  }
+  const taggings = new Set<string>();
+  for (const row of data.transactionTags) {
+    const key = `${Number(row.transaction_id)}:${Number(row.tag_id)}`;
+    if (taggings.has(key)) {
+      throw new HttpError(
+        422,
+        `Duplicate tag ${Number(row.tag_id)} on transaction ${Number(row.transaction_id)}`
+      );
+    }
+    taggings.add(key);
+  }
+
   const fileByReceipt = new Map<number, Uint8Array>();
   for (let index = 0; index < data.receiptFiles.length; index++) {
     const file = data.receiptFiles[index]!;

@@ -13,6 +13,7 @@
  * only accepted with a stable, recurring amount.
  */
 
+import { localToday } from '../utils/period'
 import { BRANDS } from './subscriptionBrands'
 import { CATALOG_ITEMS } from './subscriptionCatalog'
 import type { CatalogItem, CatalogPlan } from './subscriptionCatalog'
@@ -332,7 +333,7 @@ export function detectSubscriptions(
   existingBills: ExistingBillLike[] = [],
   opts: DetectSubscriptionsOptions = {}
 ): DetectedSubscription[] {
-  const todayMs = parseDay(opts.today ?? new Date().toISOString())
+  const todayMs = parseDay(opts.today ?? localToday())
 
   // Identities already tracked as a bill/subscription, by normalized name and
   // by resolved merchant identity (a bill named "Netflix Premium" tracks the

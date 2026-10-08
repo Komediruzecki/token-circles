@@ -21,9 +21,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bumpProfileVersion, setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest, invalidateEntity } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
+import { removeToast, toasts } from '../../core/toastStore'
 
-type Cat = { id: number; name: string; type: 'income' | 'expense'; color: string }
-type Acct = { id: number; name: string; currency: string }
+type Cat = {
+  id: number
+  name: string
+  type: 'income' | 'expense'
+  color: string
+  profile_id: number
+}
+type Acct = { id: number; name: string; currency: string; profile_id: number }
+/** A tag as the Worker answered before it named the owner: no `profile_id`. */
+type Tg = { id: number; name: string; color: string; profile_id?: number }
 
 /** The server's lists. Mutable, so another page's create is visible to the next fetch. */
 let serverCategories: Cat[] = []
@@ -31,7 +40,14 @@ let serverAccounts: Acct[] = []
 
 const getCategories = vi.fn(async () => serverCategories)
 const getAccounts = vi.fn(async () => serverAccounts)
-const getTags = vi.fn(async () => [] as Array<{ id: number; name: string; color: string }>)
+let serverTags: Tg[] = []
+const getTags = vi.fn(async () => serverTags.map((t) => ({ ...t })))
+const createAccount = vi.fn(async () => ({ id: 7 }))
+const createTag = vi.fn(async (name: string, color?: string) => ({
+  id: 77,
+  name,
+  color: color ?? '#6e9bff',
+}))
 
 vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -40,6 +56,8 @@ vi.mock('../../core/api', async (importOriginal) => ({
     getCategories: () => getCategories(),
     getTags: () => getTags(),
     getAccounts: () => getAccounts(),
+    createAccount: () => createAccount(),
+    createTag: (name: string, color?: string) => createTag(name, color),
   },
   apiPut: vi.fn(async () => ({ ok: true })),
 }))
@@ -51,11 +69,17 @@ const flush = () => new Promise((r) => setTimeout(r, 0))
 
 beforeEach(() => {
   __resetDataVersionsForTest()
-  serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff' }]
-  serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR' }]
-  getCategories.mockClear()
-  getAccounts.mockClear()
-  getTags.mockClear()
+  // Every row is the active profile's (1), as a real list's are when one profile is selected.
+  localStorage.setItem('currentProfileId', '1')
+  serverCategories = [{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }]
+  serverAccounts = [{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }]
+  serverTags = []
+  // Reset, not cleared: a test that fails half-way must not leave a queued answer to the next.
+  getCategories.mockReset()
+  getAccounts.mockReset()
+  getTags.mockReset()
+  createAccount.mockReset()
+  createTag.mockReset()
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
@@ -78,6 +102,7 @@ afterEach(() => {
   dispose?.()
   host?.remove()
   vi.unstubAllGlobals()
+  for (const t of toasts()) removeToast(t.id)
 })
 
 async function mountTransactions() {
@@ -110,6 +135,63 @@ const offeredCategoryNames = (root: HTMLElement) => optionsOf(root, 'tx-category
 const offersAccount = (root: HTMLElement, name: string) =>
   optionsOf(root, 'tx-account').some((label) => label.includes(name))
 
+/** A request that answers when the test says so. */
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+/**
+ * The names a filter-bar dropdown lists: the household's categories or accounts. Opened by its
+ * button, read, and closed again.
+ */
+async function filterBarNames(root: HTMLElement, opener: () => HTMLElement): Promise<string[]> {
+  opener().click()
+  await flush()
+  const names = Array.from(root.querySelectorAll('[data-test-id="filter-bar"] label'))
+    .map((l) => l.textContent?.trim() ?? '')
+    .filter((name) => name !== '' && !name.startsWith('All '))
+  opener().click()
+  await flush()
+  return names
+}
+const filterBarCategories = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    root.querySelector<HTMLElement>('[data-test-id="transactions-filter-category"]')!
+  )
+const filterBarAccounts = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button')).find((b) =>
+      b.textContent?.includes('All Accounts')
+    )!
+  )
+const filterBarTags = (root: HTMLElement) =>
+  filterBarNames(root, () =>
+    Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button')).find(
+      (b) => b.textContent?.includes('All Tags') || b.textContent?.includes('Selected')
+    )!
+  )
+
+/** The label of the filter bar's tag dropdown: "All Tags", or how many are picked. */
+const tagFilterLabel = (root: HTMLElement) =>
+  Array.from(root.querySelectorAll<HTMLElement>('[data-test-id="filter-bar"] button'))
+    .map((b) => b.textContent?.trim() ?? '')
+    .find((text) => text === 'All Tags' || text.endsWith(' Selected'))
+
+/** The tags the add form offers to put on the new entry, by name. */
+async function formOffersTags(root: HTMLElement): Promise<string[]> {
+  openTransactionForm(root)
+  await flush()
+  root.querySelector<HTMLElement>('[data-test-id="tx-advanced-toggle"]')!.click()
+  await flush()
+  return Array.from(root.querySelectorAll('[data-test-id="tx-tag-options"] button')).map(
+    (b) => b.getAttribute('aria-label')?.replace('Add tag ', '') ?? ''
+  )
+}
+
 describe('Transactions reference data', () => {
   it('loads categories and accounts once on mount, with no duplicate fetch', async () => {
     await mountTransactions()
@@ -133,7 +215,7 @@ describe('Transactions reference data', () => {
     // apiFetch raises the counter for everyone holding a copy.
     serverCategories = [
       ...serverCategories,
-      { id: 2, name: 'Utilities', type: 'expense', color: '#000' },
+      { id: 2, name: 'Utilities', type: 'expense', color: '#000', profile_id: 1 },
     ]
     invalidateEntity('categories')
     await flush()
@@ -149,7 +231,7 @@ describe('Transactions reference data', () => {
     await flush()
     expect(offersAccount(root, 'Savings')).toBe(false)
 
-    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR' }]
+    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 }]
     invalidateEntity('accounts')
     await flush()
     await flush()
@@ -163,8 +245,9 @@ describe('Transactions reference data', () => {
 
     // The switched-to profile owns different rows — categories and accounts are per-profile in the
     // schema, and the worker rejects a foreign category_id with a 400.
-    serverCategories = [{ id: 9, name: 'Rent', type: 'expense', color: '#123' }]
-    serverAccounts = [{ id: 9, name: 'Joint', currency: 'EUR' }]
+    localStorage.setItem('currentProfileId', '2')
+    serverCategories = [{ id: 9, name: 'Rent', type: 'expense', color: '#123', profile_id: 2 }]
+    serverAccounts = [{ id: 9, name: 'Joint', currency: 'EUR', profile_id: 2 }]
     bumpProfileVersion()
     await flush()
     await flush()
@@ -193,6 +276,72 @@ describe('Transactions reference data', () => {
     expect(offeredCategoryNames(root)).toContain('Groceries')
   })
 
+  it('shows the newest category list when two refreshes cross, not the one that lands last', async () => {
+    const root = await mountTransactions()
+    // A refresh that is slow to answer, with the list as it stood when it was asked.
+    const slow = deferred<Cat[]>()
+    getCategories.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('categories')
+    await flush()
+    // A category created meanwhile, and the refresh after it answering at once.
+    serverCategories = [
+      ...serverCategories,
+      { id: 2, name: 'Utilities', type: 'expense', color: '#000', profile_id: 1 },
+    ]
+    invalidateEntity('categories')
+    await flush()
+    await flush()
+    // The slow one lands last.
+    slow.resolve([{ id: 1, name: 'Groceries', type: 'expense', color: '#fff', profile_id: 1 }])
+    await flush()
+    await flush()
+
+    expect(getCategories).toHaveBeenCalledTimes(3)
+    openTransactionForm(root)
+    await flush()
+    expect(offeredCategoryNames(root)).toContain('Utilities')
+  })
+
+  it('shows the newest account list when two refreshes cross, not the one that lands last', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('accounts')
+    await flush()
+    serverAccounts = [...serverAccounts, { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 }]
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+    slow.resolve([{ id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 }])
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(3)
+    openTransactionForm(root)
+    await flush()
+    expect(offersAccount(root, 'Savings')).toBe(true)
+  })
+
+  it('drops the other profile’s lists when the refresh after a switch fails, instead of showing them as current', async () => {
+    const root = await mountTransactions()
+    expect(await filterBarCategories(root)).toEqual(['Groceries'])
+    expect(await filterBarAccounts(root)).toEqual(['Cash'])
+
+    getCategories.mockRejectedValueOnce(new Error('network down'))
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(getCategories).toHaveBeenCalledTimes(2)
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(await filterBarCategories(root)).toEqual([])
+    expect(root.querySelector('[data-test-id="filter-bar"]')!.textContent).not.toContain(
+      'All Accounts'
+    )
+  })
+
   it('does not refetch while the page is hidden, and flushes once when it is shown again', async () => {
     await mountTransactions()
     expect(getCategories).toHaveBeenCalledTimes(1)
@@ -204,7 +353,7 @@ describe('Transactions reference data', () => {
     // each one is the fan-out that keep-alive mounting made possible; pageVisibility defers it.
     serverCategories = [
       ...serverCategories,
-      { id: 3, name: 'Transport', type: 'expense', color: '#0f0' },
+      { id: 3, name: 'Transport', type: 'expense', color: '#0f0', profile_id: 1 },
     ]
     invalidateEntity('categories')
     invalidateEntity('categories')
@@ -219,5 +368,352 @@ describe('Transactions reference data', () => {
     openTransactionForm(host)
     await flush()
     expect(offeredCategoryNames(host)).toContain('Transport')
+  })
+})
+
+describe('a new entry opened before the accounts are in', () => {
+  const accountSelect = (root: HTMLElement) =>
+    root.querySelector<HTMLSelectElement>('[data-test-id="tx-account"]')
+
+  it('gets the account it would have opened with once they arrive', async () => {
+    serverAccounts = [
+      { id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 },
+      { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 },
+    ]
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    expect(accountSelect(root)).toBeNull()
+
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('leaves the account alone once the person has picked, a later reload included', async () => {
+    serverAccounts = [
+      { id: 1, name: 'Cash', currency: 'EUR', profile_id: 1 },
+      { id: 2, name: 'Savings', currency: 'EUR', profile_id: 1 },
+    ]
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    // The person clears the pick ("Select account..."), and the list reloads behind the form, as it
+    // does on any account write or on coming back to the tab.
+    const select = accountSelect(root)!
+    select.value = ''
+    select.dispatchEvent(new Event('input', { bubbles: true }))
+    serverAccounts = serverAccounts.map((a) => ({ ...a })) // a fresh answer, as a real one is
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(accountSelect(root)!.value).toBe('')
+  })
+
+  it('keeps the Cash account the person made from the form over one that appeared meanwhile', async () => {
+    // The profile has no accounts yet, so the form offers to create a Cash account.
+    serverAccounts = []
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    root.querySelector<HTMLElement>('[data-test-id="tx-create-cash-account"]')!.click()
+    await flush()
+    // The create lands as id 7, and the reload it causes brings an account made elsewhere too.
+    serverAccounts = [
+      { id: 1, name: 'Main', currency: 'EUR', profile_id: 1 },
+      { id: 7, name: 'Cash', currency: 'EUR', profile_id: 1 },
+    ]
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(createAccount).toHaveBeenCalledTimes(1)
+    expect(accountSelect(root)!.value).toBe('7')
+  })
+
+  it('says the accounts are loading, and offers no Cash account until they are in', async () => {
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-modal"]')!.textContent).not.toContain(
+      'No accounts yet'
+    )
+
+    // In, and there are none: now the shortcut is the right offer.
+    slow.resolve([])
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).not.toBeNull()
+  })
+
+  it('says so after a switch too, until the profile switched to has its accounts in', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    openTransactionForm(root)
+    await flush()
+
+    // The list on screen is still the other profile's, so the form has none of its own yet.
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+
+    slow.resolve([{ id: 9, name: 'Joint', currency: 'EUR', profile_id: 2 }])
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('9')
+  })
+
+  it('says the accounts did not load, with a way to try again, and offers no Cash account', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    const failed = root.querySelector<HTMLElement>('[data-test-id="tx-accounts-failed"]')
+    expect(failed?.textContent).toContain("Accounts didn't load.")
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+
+    // Try again: loading while it reads, then the accounts.
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!.click()
+    await flush()
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    expect(getAccounts).toHaveBeenCalledTimes(2)
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('says so again when the retry fails too', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+
+    getAccounts.mockRejectedValueOnce(new Error('still down'))
+    root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!.click()
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).toBeNull()
+  })
+
+  it('keeps focus in the form when its "Try again" is pressed from the keyboard', async () => {
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    const retry = root.querySelector<HTMLButtonElement>('[data-test-id="tx-accounts-retry"]')!
+    getAccounts.mockImplementationOnce(() => deferred<Acct[]>().promise)
+
+    retry.focus()
+    retry.click()
+    await flush()
+
+    // The button has gone; focus is on the account field it sat in, not on the page.
+    expect(retry.isConnected).toBe(false)
+    expect(document.activeElement).not.toBe(document.body)
+    expect(
+      document.activeElement?.contains(root.querySelector('[data-test-id="tx-account-loading"]'))
+    ).toBe(true)
+  })
+
+  it('waits for the newest read when an older one fails meanwhile', async () => {
+    let failOlder!: (error: Error) => void
+    getAccounts.mockImplementationOnce(
+      () => new Promise<Acct[]>((_, reject) => (failOlder = reject))
+    )
+    const newer = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => newer.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    invalidateEntity('accounts')
+    await flush()
+    failOlder(new Error('dropped'))
+    await flush()
+    await flush()
+
+    // The newer read is still out: loading, not failed.
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+    expect(root.querySelector('[data-test-id="tx-account-loading"]')).not.toBeNull()
+
+    newer.resolve(serverAccounts)
+    await flush()
+    await flush()
+    expect(accountSelect(root)!.value).toBe('1')
+  })
+
+  it('keeps offering the Cash account when a refresh of an empty list fails', async () => {
+    serverAccounts = []
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-create-cash-account"]')).not.toBeNull()
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+  })
+
+  it('a failed refresh after the accounts are in keeps them, with no failure shown', async () => {
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    getAccounts.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('accounts')
+    await flush()
+    await flush()
+
+    expect(accountSelect(root)!.value).toBe('1')
+    expect(root.querySelector('[data-test-id="tx-accounts-failed"]')).toBeNull()
+  })
+
+  it('counts the account picked for it as no change of the person’s', async () => {
+    const slow = deferred<Acct[]>()
+    getAccounts.mockImplementationOnce(() => slow.promise)
+    const root = await mountTransactions()
+    openTransactionForm(root)
+    await flush()
+    slow.resolve(serverAccounts)
+    await flush()
+    await flush()
+
+    // A switch closes the form, and names what it lost: here, nothing.
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    expect(root.querySelector('[data-test-id="tx-modal"]')!.className).not.toContain('show')
+    expect(toasts().map((t) => t.message)).toEqual([])
+  })
+})
+
+describe('the tag list', () => {
+  it('shows the newest answer when two refreshes cross, not the one that lands last', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316' }]
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    invalidateEntity('tags')
+    await flush()
+    serverTags = [...serverTags, { id: 6, name: 'Work', color: '#3b82f6' }]
+    invalidateEntity('tags')
+    await flush()
+    await flush()
+    slow.resolve([{ id: 5, name: 'Holiday', color: '#f97316' }])
+    await flush()
+    await flush()
+
+    expect(getTags).toHaveBeenCalledTimes(3)
+    expect(await filterBarTags(root)).toEqual(['Holiday', 'Work'])
+  })
+
+  it('offers none of the other profile’s tags just after a switch, rows with no owner included', async () => {
+    // The Worker's rows: no profile_id. The list on screen is profile 1's until 2's is in.
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316' }]
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+
+    expect(await formOffersTags(root)).toEqual([])
+
+    slow.resolve([{ id: 9, name: 'Garden', color: '#84cc16' }])
+    await flush()
+    await flush()
+    expect(
+      Array.from(root.querySelectorAll('[data-test-id="tx-tag-options"] button')).map((b) =>
+        b.getAttribute('aria-label')
+      )
+    ).toEqual(['Add tag Garden'])
+  })
+
+  it('keeps the tags on screen when a refresh within the profile fails', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 }]
+    const root = await mountTransactions()
+    getTags.mockRejectedValueOnce(new Error('network down'))
+    invalidateEntity('tags')
+    await flush()
+    await flush()
+
+    expect(getTags).toHaveBeenCalledTimes(2)
+    expect(await filterBarTags(root)).toEqual(['Holiday'])
+  })
+
+  it('drops the other profile’s tags when the refresh after a switch fails', async () => {
+    serverTags = [{ id: 5, name: 'Holiday', color: '#f97316', profile_id: 1 }]
+    const root = await mountTransactions()
+    getTags.mockRejectedValueOnce(new Error('network down'))
+    localStorage.setItem('currentProfileId', '2')
+    bumpProfileVersion()
+    await flush()
+    await flush()
+
+    // The Tags page links here with a tag picked. Holiday is profile 1's, unknown to profile 2,
+    // so the link is ignored rather than filtering the list by it.
+    try {
+      window.location.hash = '#transactions?tag=5'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      await flush()
+
+      expect(getTags).toHaveBeenCalledTimes(2)
+      expect(tagFilterLabel(root)).toBe('All Tags')
+    } finally {
+      window.location.hash = ''
+    }
+  })
+
+  it('offers a tag made from the form at once, before the list reloads', async () => {
+    const root = await mountTransactions()
+    const slow = deferred<Tg[]>()
+    getTags.mockImplementationOnce(() => slow.promise)
+    openTransactionForm(root)
+    await flush()
+    root.querySelector<HTMLElement>('[data-test-id="tx-advanced-toggle"]')!.click()
+    await flush()
+    const box = root.querySelector<HTMLInputElement>('[data-test-id="tx-tag-new-input"]')!
+    box.value = 'Garden'
+    box.dispatchEvent(new Event('input', { bubbles: true }))
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await flush()
+    await flush()
+
+    expect(createTag).toHaveBeenCalledTimes(1)
+    expect(await filterBarTags(root)).toEqual(['Garden'])
   })
 })

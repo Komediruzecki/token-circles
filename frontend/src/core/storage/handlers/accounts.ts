@@ -1,6 +1,7 @@
 /**
  * Accounts handlers — IndexedDB-backed implementations
  */
+import { isoDate } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { AccountInUseError, getDB } from '../idb'
@@ -108,6 +109,18 @@ export async function accountsHistoryDelete(params: Record<string, string>): Pro
   return ok()
 }
 
+/**
+ * The day a balance snapshot belongs to, on the person's calendar. One recorded through the app
+ * holds an instant (toISOString(), so its first ten characters are the UTC date: at 08:30 in Tokyo
+ * that is yesterday); one an import made holds a bare date, which is already the day.
+ */
+function snapshotDay(recorded: unknown): string {
+  const text = typeof recorded === 'string' ? recorded : ''
+  if (text.length <= 10) return text
+  const instant = new Date(text)
+  return Number.isNaN(instant.getTime()) ? text.slice(0, 10) : isoDate(instant)
+}
+
 export async function accountsTimeline(): Promise<Response> {
   try {
     const db = await getDB()
@@ -122,7 +135,7 @@ export async function accountsTimeline(): Promise<Response> {
       } catch {
         continue
       }
-      const date = ((entry.recorded_at as string) || (entry.date as string) || '').slice(0, 10)
+      const date = snapshotDay(entry.recorded_at ?? entry.date)
       const balance = entry.balance as number
       timeline.set(date, (timeline.get(date) || 0) + balance)
     }

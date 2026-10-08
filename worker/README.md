@@ -27,6 +27,7 @@ worker/
   src/db.ts                 async D1 helpers (all/first/run/insert/update/del) — analog of baseRepo
   src/profile.ts            X-Profile-Id scoping, verified against the JWT user
   src/auth.ts               JWT (HS256) + Google Sign-In + httpOnly cookie session
+  src/local-date.ts         the caller's calendar: X-Time-Zone in, "today" and "this month" out
   src/routes/*.ts           one module per resource (auth, transactions, accounts, …)
   .dev.vars.example         local secrets template
 ```
@@ -53,6 +54,36 @@ Every module in `src/routes/` follows one pattern (requireAuth → `getProfileId
   `sheetName` field).
 - **Tests:** `pnpm run test` — vitest through `@cloudflare/vitest-pool-workers`, so every
   case runs in a real workerd against a real (local, per-run) D1.
+
+## Today is the caller's date
+
+workerd's clock is UTC whatever the host says, so `new Date()` is the UTC date and month. East
+of UTC that is still yesterday for the first hours of every day (00:00 to 02:00 in Zagreb in
+summer), and west of UTC it is already tomorrow every evening. The app dates what a person
+enters with their own calendar, so the Worker has to answer "today", "this month" and "this
+year" on that calendar too.
+
+The app sends its IANA zone on every request as `X-Time-Zone: Europe/Zagreb`
+(`frontend/src/core/apiFetch.ts`, cloud mode only). `src/local-date.ts` holds the rest:
+
+- `readTimeZone`, mounted on every route in `index.ts`, keeps the header when this runtime knows
+  the zone and falls back to `UTC` otherwise. An offset such as `+02:00` is refused: it has no
+  daylight-saving rules, so it would be the wrong date half the year.
+- `localToday(c)` and `localMonth(c)` give `YYYY-MM-DD` and `YYYY-MM` on the caller's calendar.
+- `localNow(c)` is the caller's wall clock as a `Date` whose fields hold it, a drop-in for the
+  `new Date()` a route used to read its month from. It is not the current instant: never store
+  it or compare it with a timestamp.
+
+The zone arithmetic is `shared/calendarDate.ts`, which keeps one formatter per zone (case-blind,
+at most 256 of them, because the header arrives before sign-in).
+
+Requests without the header get the UTC calendar, as every request did before it: API tokens,
+`/api/v1/import` uploads, MCP clients, and the scheduled jobs (reminders, the sheet sync, the
+recurring cron), which have no caller. That is deliberate. Timestamps (`created_at`, expiries,
+rate-limit windows) are instants and stay `new Date()`.
+
+Since `X-Time-Zone` is a custom header, every cross-origin request from the app is preflighted;
+`cors()` sets `maxAge: 7200` so the browser asks once per two hours, not before each call.
 
 ## Local dev (worker + frontend interplay)
 
