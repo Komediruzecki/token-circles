@@ -11,6 +11,8 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { hashPassword, issueSessionCookie } from '../src/auth';
+import { createLoginCode } from '../src/login-codes';
+import { issueLoginCodeCookie } from '../src/routes/email-code';
 
 const UID = 9500;
 const OTHER = 9510;
@@ -70,6 +72,41 @@ const latestLinkTo = (address: string) => linkIn(mailsTo(address).at(-1));
 
 const open = (link: string) => SELF.fetch(link, { redirect: 'manual' });
 
+/** The token in a password reset mail, read the way forgot-password.test.ts reads it. */
+function resetTokenIn(mail: Mail | undefined): string {
+  const found = /#reset-password\?token=([A-Za-z0-9_-]+)/.exec(String(mail?.text));
+  expect(found, `a reset link in ${JSON.stringify(mail?.text)}`).not.toBeNull();
+  return found![1];
+}
+
+const resetPassword = (token: string) =>
+  call('POST', '/api/auth/reset-password', { token, password: 'picked-by-the-old-inbox' }, false);
+
+/** A sign-in code for `email`, minted as /email-code/request mints one, with its ceremony cookie. */
+async function codeFor(email: string): Promise<{ code: string; ceremony: string }> {
+  const { code, id } = await createLoginCode(env, UID, email);
+  return { code, ceremony: (await issueLoginCodeCookie(env, id, email)).split(';')[0] };
+}
+
+const signInWithCode = (email: string, { code, ceremony }: { code: string; ceremony: string }) =>
+  SELF.fetch('https://example.com/api/auth/email-code/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Cookie: ceremony },
+    body: JSON.stringify({ email, code }),
+  });
+
+const unusedResetsAndCodes = async () => {
+  const count = async (table: string) =>
+    (
+      await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ? AND used_at IS NULL`
+      )
+        .bind(UID)
+        .first<{ n: number }>()
+    )?.n;
+  return { resets: await count('password_resets'), codes: await count('login_codes') };
+};
+
 const account = async (id = UID) =>
   env.DB.prepare('SELECT email, email_verified FROM users WHERE id = ?')
     .bind(id)
@@ -104,6 +141,8 @@ async function seed(verified = 1): Promise<void> {
 beforeEach(async () => {
   for (const table of [
     'email_verifications',
+    'password_resets',
+    'login_codes',
     'rate_limits',
     'settings',
     'auth_sessions',
@@ -395,6 +434,46 @@ describe('opening the link', () => {
     await open(latestLinkTo(NEW));
 
     expect(await unusedLinks()).toEqual([]);
+  });
+
+  it('ends the password reset links the old address was sent', async () => {
+    await seed(1);
+    expect((await call('POST', '/api/auth/forgot-password', { email: OLD }, false)).status).toBe(
+      200
+    );
+    const token = resetTokenIn(mailsTo(OLD).at(-1));
+    await save(NEW);
+
+    await open(latestLinkTo(NEW));
+
+    expect((await resetPassword(token)).status).toBe(400);
+    // The password the account had still signs it in, now at the new address.
+    expect((await signIn(NEW)).status).toBe(200);
+  });
+
+  it('ends the sign-in codes the old address was sent', async () => {
+    await seed(1);
+    const sentToOld = await codeFor(OLD);
+    await save(NEW);
+
+    await open(latestLinkTo(NEW));
+
+    expect((await signInWithCode(OLD, sentToOld)).status).toBe(401);
+  });
+
+  it('ends no reset link or sign-in code when the move is refused', async () => {
+    await seed(1);
+    await call('POST', '/api/auth/forgot-password', { email: OLD }, false);
+    await codeFor(OLD);
+    await save(NEW);
+    const link = latestLinkTo(NEW);
+    await call('POST', '/api/auth/register', { email: NEW, password: 'theirs-now' }, false);
+
+    expect((await open(link)).headers.get('Location')).toBe(
+      `${APP}/#everified_error=email_taken&change=1`
+    );
+
+    expect(await unusedResetsAndCodes()).toEqual({ resets: 1, codes: 1 });
   });
 });
 

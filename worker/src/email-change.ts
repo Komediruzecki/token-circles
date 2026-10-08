@@ -148,9 +148,12 @@ export async function applyEmailChange(
   userId: number,
   email: string
 ): Promise<'changed' | 'taken' | 'gone'> {
-  // One batch: the move, and the end of every other link the account has out (a change still
-  // waiting, the confirm link for the address it leaves). The DELETE only matches once the row
-  // has `email`, so a refused move ends nothing.
+  // One batch: the move, and the end of everything else the account has out by mail: a change
+  // still waiting, the confirm link for the address it leaves, and the password reset links and
+  // sign-in codes that address was sent. Each DELETE only matches once the row has `email`, so a
+  // refused move ends nothing.
+  const onceMoved = (sql: string) =>
+    d1.prepare(`${sql} AND (SELECT email FROM users WHERE id = ?) = ?`).bind(userId, userId, email);
   const [moved] = await d1.batch([
     d1
       .prepare(
@@ -158,12 +161,9 @@ export async function applyEmailChange(
          WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE email = ? AND id != ?)`
       )
       .bind(email, userId, email, userId),
-    d1
-      .prepare(
-        `DELETE FROM email_verifications
-         WHERE user_id = ? AND used_at IS NULL AND (SELECT email FROM users WHERE id = ?) = ?`
-      )
-      .bind(userId, userId, email),
+    onceMoved('DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL'),
+    onceMoved('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL'),
+    onceMoved('DELETE FROM login_codes WHERE user_id = ? AND used_at IS NULL'),
   ]);
   if ((moved.meta.changes ?? 0) > 0) return 'changed';
   return (await db.first(d1, 'SELECT id FROM users WHERE id = ?', userId)) ? 'taken' : 'gone';
