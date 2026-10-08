@@ -61,7 +61,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
           (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
         FROM loans l
         WHERE l.profile_id = ?
-        ORDER BY l.created_at DESC`,
+        ORDER BY l.created_at DESC, l.id DESC`,
       pid
     ),
     db.all<LoanRatePeriod & { loan_id: number }>(

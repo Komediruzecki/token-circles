@@ -15,7 +15,11 @@ import type { LoanInput } from '../../../../../shared/loanSchedule'
  * zone the app sends in the Worker (worker/src/local-date.ts).
  */
 export async function loansList(): Promise<Response> {
-  const loans = await adapter.listLoans()
+  // Newest first, as the Worker lists them and the Loans page shows them.
+  const createdAt = (loan: object) => (loan as { created_at?: string }).created_at ?? ''
+  const loans = (await adapter.listLoans()).sort(
+    (a, b) => createdAt(b).localeCompare(createdAt(a)) || (b.id ?? 0) - (a.id ?? 0)
+  )
   const today = localToday()
   const enriched = loans.map((l) => {
     const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined

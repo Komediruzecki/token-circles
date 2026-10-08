@@ -254,4 +254,11 @@ export const loanScenarios = [
     expect(listed.monthly_payment).toBeGreaterThan(0);
     expect(listed.remaining_balance).toBeLessThan(15000);
   }),
+
+  scenario('loans are listed newest first', async (api, expect) => {
+    const first = await loan(api, expect, { name: 'First' });
+    const second = await loan(api, expect, { name: 'Second' });
+    const third = await loan(api, expect, { name: 'Third' });
+    expect((await loans(api, expect)).map((l) => l.id)).toEqual([third, second, first]);
+  }),
 ];
