@@ -1615,6 +1615,19 @@ export class IndexedDBAdapter implements StorageAdapter {
         }
       }
       for (const [key, value] of Object.entries(data.settings)) {
+        // A retirement plan is kept per profile, as `retirement_settings:<profile id>`
+        // (handlers/calculators.ts), and the restore gave every profile a new id: the plan
+        // follows its profile. One for a profile the file does not carry is left out.
+        const perProfile = /^retirement_settings:(\d+)$/.exec(key)
+        if (perProfile) {
+          const restoredId = profileIdMap.get(Number(perProfile[1]))
+          if (restoredId !== undefined) {
+            await tx
+              .objectStore('settings')
+              .put({ key: `retirement_settings:${restoredId}`, value })
+          }
+          continue
+        }
         await tx.objectStore('settings').put({ key, value })
       }
 

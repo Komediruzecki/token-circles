@@ -69,6 +69,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'POST /api/profiles/reseed-demo clears the active profile and gives it the default categories on the Worker; local-first deletes every profile and puts back its three example profiles. The Danger Zone offers it in local-first only. Slice 4 (profiles).',
   'profile-clear-import-sources':
     'DELETE /api/profile/data and DELETE /api/clear-all keep the saved import sources on the Worker and delete them in local-first; on the Worker, a source on the daily schedule fills the cleared profile again at its next sync. Slice 4 (profiles).',
+  'backup-restore-answer':
+    'POST /api/import answers { profiles_restored, rows_restored, first_profile_id } on the Worker and { ok: true, message } in local-first, where Settings restores through the storage adapter rather than this route. Both replace every profile. Slice 4 (import).',
   'export-by-type':
     'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'goal-unsent-defaults':
