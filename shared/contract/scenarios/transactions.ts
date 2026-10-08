@@ -1,0 +1,420 @@
+import { TRANSACTION_MESSAGES } from '../../transactionSchema';
+import { balanceOf, expectMoney, idsOf, listTransactions, transactionForm } from '../helpers';
+import { added, expectOk, scenario } from '../types';
+import type { ContractApi, Expect } from '../types';
+import { account } from './accounts';
+
+/** The body the Transactions form sends (transactionForm in ../helpers). */
+function entry(fields: Record<string, unknown>) {
+  return transactionForm(fields);
+}
+
+async function transaction(api: ContractApi, expect: Expect, fields: Record<string, unknown>) {
+  return added(api, expect, '/api/transactions', entry(fields));
+}
+
+async function category(api: ContractApi, expect: Expect, name: string, type = 'expense') {
+  return added(api, expect, '/api/categories', { name, type, color: '#aa5500', icon: 'tag' });
+}
+
+/** Five rows over two months, two accounts and two categories, and one of another profile. */
+async function ledger(api: ContractApi, expect: Expect) {
+  const everyday = await account(api, expect, 'Everyday', 0);
+  const savings = await account(api, expect, 'Savings', 0);
+  const food = await category(api, expect, 'Food');
+  const pay = await category(api, expect, 'Pay', 'income');
+  const market = await transaction(api, expect, {
+    description: 'Market',
+    amount: 10,
+    date: '2026-02-27',
+    category_id: food,
+    account_id: everyday,
+  });
+  const bakery = await transaction(api, expect, {
+    description: 'Bakery',
+    amount: 20,
+    date: '2026-03-05',
+    category_id: food,
+    account_id: everyday,
+  });
+  const bigBakery = await transaction(api, expect, {
+    description: 'Big bakery order',
+    amount: 30,
+    date: '2026-03-05',
+    category_id: food,
+    account_id: savings,
+  });
+  const salary = await transaction(api, expect, {
+    description: 'Salary',
+    type: 'income',
+    amount: 1000,
+    date: '2026-03-01',
+    category_id: pay,
+    account_id: everyday,
+  });
+  const move = await transaction(api, expect, {
+    description: 'To savings',
+    type: 'transfer',
+    amount: 50,
+    date: '2026-03-15',
+    account_id: everyday,
+    transfer_account_id: savings,
+  });
+  await transaction(api.other, expect, { description: 'Theirs', date: '2026-03-05' });
+  return { everyday, savings, food, pay, market, bakery, bigBakery, salary, move };
+}
+
+export const transactions = [
+  scenario(
+    'a transaction is added, read back, changed and removed, and moves its account',
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 1000);
+      const food = await category(api, expect, 'Food');
+      const body = entry({
+        description: 'Coffee beans',
+        amount: 12.34,
+        date: '2026-03-14',
+        category_id: food,
+        account_id: acct,
+        means_of_payment: 'Card',
+        notes: 'two bags',
+        beneficiary: 'Roastery',
+      });
+      const id = await added(api, expect, '/api/transactions', body);
+
+      const one = await api.get(`/api/transactions/${id}`);
+      expectOk(expect, one, 'GET the transaction');
+      expect(one.body).toMatchObject({
+        id,
+        description: 'Coffee beans',
+        date: '2026-03-14',
+        type: 'expense',
+        category_id: food,
+        account_id: acct,
+        currency: 'EUR',
+        means_of_payment: 'Card',
+        notes: 'two bags',
+        beneficiary: 'Roastery',
+      });
+      expectMoney(expect, one.body.amount, 12.34);
+      const listed = (await listTransactions(api, expect)).find((t) => t.id === id);
+      expect(listed).toMatchObject({ id, category_name: 'Food', category_color: '#aa5500' });
+      expectMoney(expect, await balanceOf(api, expect, acct), 987.66, 'balance');
+
+      // An edit sends the form's whole body again.
+      expectOk(
+        expect,
+        await api.put(`/api/transactions/${id}`, {
+          ...body,
+          description: 'Coffee',
+          amount: 20.5,
+          notes: 'one bag',
+        }),
+        'PUT the transaction'
+      );
+      const edited = (await api.get(`/api/transactions/${id}`)).body;
+      expect(edited).toMatchObject({ id, description: 'Coffee', notes: 'one bag' });
+      expectMoney(expect, edited.amount, 20.5);
+      expectMoney(expect, await balanceOf(api, expect, acct), 979.5, 'balance');
+
+      expectOk(expect, await api.delete(`/api/transactions/${id}`), 'DELETE the transaction');
+      expect((await api.get(`/api/transactions/${id}`)).status).toBe(404);
+      expect(idsOf(await listTransactions(api, expect))).not.toContain(id);
+      expectMoney(expect, await balanceOf(api, expect, acct), 1000, 'balance');
+    }
+  ),
+
+  scenario(
+    "another profile's transaction is not read, changed, removed or drawn on",
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 100);
+      const id = await transaction(api, expect, { amount: 40, account_id: acct });
+      const other = api.other;
+
+      expect((await other.get(`/api/transactions/${id}`)).status).toBe(404);
+      expect(idsOf(await listTransactions(other, expect))).not.toContain(id);
+      expect(
+        (await other.put(`/api/transactions/${id}`, entry({ amount: 1, account_id: acct }))).status
+      ).toBe(404);
+      expect((await other.delete(`/api/transactions/${id}`)).status).toBe(404);
+      expect((await other.patch(`/api/transactions/${id}/reconcile`)).status).toBe(404);
+
+      // A row of their own cannot be filed against my account either: refused at the field, in the
+      // same words in both runtimes.
+      const drawn = await other.post('/api/transactions', entry({ amount: 5, account_id: acct }));
+      expect(drawn.status).toBe(400);
+      expect(drawn.body).toEqual({
+        error: TRANSACTION_MESSAGES.account,
+        fields: { account_id: TRANSACTION_MESSAGES.account },
+      });
+      expect(await listTransactions(other, expect)).toHaveLength(0);
+
+      const mine = (await api.get(`/api/transactions/${id}`)).body;
+      expect(mine).toMatchObject({ id, description: 'Groceries' });
+      expect(Boolean(mine.reconciled)).toBe(false);
+      expectMoney(expect, mine.amount, 40);
+      expectMoney(expect, await balanceOf(api, expect, acct), 60, 'balance');
+    }
+  ),
+
+  scenario(
+    'a transfer moves money between two accounts, and back when removed',
+    async (api, expect) => {
+      const from = await account(api, expect, 'Everyday', 1000);
+      const to = await account(api, expect, 'Savings', 200);
+      const body = entry({
+        description: 'To savings',
+        type: 'transfer',
+        amount: 300,
+        account_id: from,
+        transfer_account_id: to,
+      });
+      const id = await added(api, expect, '/api/transactions', body);
+      expect((await api.get(`/api/transactions/${id}`)).body).toMatchObject({
+        type: 'transfer',
+        account_id: from,
+        transfer_account_id: to,
+      });
+      expectMoney(expect, await balanceOf(api, expect, from), 700, 'from');
+      expectMoney(expect, await balanceOf(api, expect, to), 500, 'to');
+
+      expectOk(
+        expect,
+        await api.put(`/api/transactions/${id}`, { ...body, amount: 250.25 }),
+        'PUT the transfer'
+      );
+      expectMoney(expect, await balanceOf(api, expect, from), 749.75, 'from');
+      expectMoney(expect, await balanceOf(api, expect, to), 450.25, 'to');
+
+      expectOk(expect, await api.delete(`/api/transactions/${id}`), 'DELETE the transfer');
+      expectMoney(expect, await balanceOf(api, expect, from), 1000, 'from');
+      expectMoney(expect, await balanceOf(api, expect, to), 200, 'to');
+    }
+  ),
+
+  scenario(
+    'the list comes newest first, the last entered first within a day',
+    async (api, expect) => {
+      const { move, bigBakery, bakery, salary, market } = await ledger(api, expect);
+      expect(idsOf(await listTransactions(api, expect))).toEqual([
+        move,
+        bigBakery,
+        bakery,
+        salary,
+        market,
+      ]);
+    }
+  ),
+
+  scenario(
+    'the list filters by month, account, category, type, text and reconciled, and pages',
+    async (api, expect) => {
+      const { savings, food, pay, move, bigBakery, bakery, salary, market } = await ledger(
+        api,
+        expect
+      );
+      expectOk(expect, await api.patch(`/api/transactions/${bakery}/reconcile`), 'reconcile');
+
+      const list = async (query: string) => idsOf(await listTransactions(api, expect, query));
+      expect(await list('?startDate=2026-03-01&endDate=2026-03-31')).toEqual([
+        move,
+        bigBakery,
+        bakery,
+        salary,
+      ]);
+      expect(await list(`?account_id=${savings}`)).toEqual([move, bigBakery]);
+      expect(await list(`?category_ids=${food}`)).toEqual([bigBakery, bakery, market]);
+      expect(await list(`?category_ids=${food},${pay}&type=income`)).toEqual([salary]);
+      expect(await list('?search=bakery')).toEqual([bigBakery, bakery]);
+      expect(await list('?reconciled=1')).toEqual([bakery]);
+      expect(await list('?reconciled=0')).toEqual([move, bigBakery, salary, market]);
+      expect(await list('?limit=2')).toEqual([move, bigBakery]);
+      // The Analytics heatmap's day drill-down asks for one day of one type.
+      expect(await list('?startDate=2026-03-05&endDate=2026-03-05&type=expense&limit=20')).toEqual([
+        bigBakery,
+        bakery,
+      ]);
+      expect(await listTransactions(api.other, expect, `?account_id=${savings}`)).toHaveLength(0);
+    }
+  ),
+
+  scenario(
+    'a bulk edit recategorises and retypes rows, and a bulk delete removes them',
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 1000);
+      const food = await category(api, expect, 'Food');
+      const treats = await category(api, expect, 'Treats');
+      const a = await transaction(api, expect, {
+        amount: 10.5,
+        category_id: food,
+        account_id: acct,
+      });
+      const b = await transaction(api, expect, {
+        amount: 20.25,
+        category_id: food,
+        account_id: acct,
+      });
+      const kept = await transaction(api, expect, {
+        amount: 5,
+        category_id: food,
+        account_id: acct,
+      });
+      expectMoney(expect, await balanceOf(api, expect, acct), 964.25, 'balance');
+
+      const moved = await api.put('/api/transactions/bulk', {
+        ids: [a, b],
+        action: 'update',
+        data: { category_id: treats },
+      });
+      expectOk(expect, moved, 'bulk category');
+      expect(moved.body).toMatchObject({ ok: true, updated: 2 });
+      expect((await api.get(`/api/transactions/${a}`)).body).toMatchObject({ category_id: treats });
+      expect((await api.get(`/api/transactions/${kept}`)).body).toMatchObject({
+        category_id: food,
+      });
+
+      const retyped = await api.put('/api/transactions/bulk', {
+        ids: [a, b],
+        action: 'update',
+        data: { type: 'income' },
+      });
+      expectOk(expect, retyped, 'bulk type');
+      expect((await api.get(`/api/transactions/${b}`)).body).toMatchObject({ type: 'income' });
+      expectMoney(expect, await balanceOf(api, expect, acct), 1025.75, 'balance');
+
+      // Another profile's ids in the list are left alone.
+      const theirs = await transaction(api.other, expect, { amount: 7 });
+      const removed = await api.put('/api/transactions/bulk', {
+        ids: [a, b, theirs],
+        action: 'delete',
+      });
+      expectOk(expect, removed, 'bulk delete');
+      expect(removed.body).toMatchObject({ ok: true, deleted: 2 });
+      expect(idsOf(await listTransactions(api, expect))).toEqual([kept]);
+      expect(idsOf(await listTransactions(api.other, expect))).toEqual([theirs]);
+      expectMoney(expect, await balanceOf(api, expect, acct), 995, 'balance');
+    }
+  ),
+
+  scenario(
+    'reconciling one row, a chosen set, and everything in a range, with the summary',
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 0);
+      const one = await transaction(api, expect, { amount: 1.5, account_id: acct });
+      const two = await transaction(api, expect, { amount: 2.25, account_id: acct });
+      const three = await transaction(api, expect, { amount: 3, account_id: acct });
+      const four = await transaction(api, expect, { amount: 4.75, account_id: acct });
+      const theirs = await transaction(api.other, expect, { amount: 99 });
+
+      const toggled = await api.patch(`/api/transactions/${one}/reconcile`);
+      expectOk(expect, toggled, 'PATCH reconcile');
+      expect(toggled.body).toMatchObject({ reconciled: 1, reconciled_at: expect.any(String) });
+      const untoggled = await api.patch(`/api/transactions/${one}/reconcile`);
+      expect(untoggled.body).toMatchObject({ reconciled: 0, reconciled_at: null });
+
+      const batch = await api.put('/api/transactions/reconcile-batch', {
+        transaction_ids: [one, two, theirs],
+      });
+      expectOk(expect, batch, 'PUT reconcile-batch');
+      expect(batch.body).toMatchObject({ updated: 2 });
+      expect((await api.get(`/api/transactions/${two}`)).body).toMatchObject({ reconciled: 1 });
+      expect(Boolean((await api.other.get(`/api/transactions/${theirs}`)).body.reconciled)).toBe(
+        false
+      );
+
+      let summary = await api.get('/api/transactions/reconcile/summary');
+      expectOk(expect, summary, 'GET the reconcile summary');
+      expect(summary.body).toMatchObject({ reconciled_count: 2, unreconciled_count: 2 });
+      expectMoney(expect, summary.body.unreconciled_total, 7.75, 'unreconciled total');
+
+      // The Reconciliation dialog's "reconcile all" sends the widest range (ReconciliationModal).
+      const all = await api.post('/api/transactions/reconcile/bulk', {
+        date_from: '2000-01-01',
+        date_to: '2099-12-31',
+      });
+      expectOk(expect, all, 'POST reconcile/bulk');
+      expect(all.body).toMatchObject({ count: 2 });
+      expect((await api.get(`/api/transactions/${four}`)).body).toMatchObject({ reconciled: 1 });
+      expect((await api.get(`/api/transactions/${three}`)).body).toMatchObject({ reconciled: 1 });
+      expect(Boolean((await api.other.get(`/api/transactions/${theirs}`)).body.reconciled)).toBe(
+        false
+      );
+
+      summary = await api.get('/api/transactions/reconcile/summary');
+      expect(summary.body).toMatchObject({ reconciled_count: 4, unreconciled_count: 0 });
+      expectMoney(expect, summary.body.unreconciled_total, 0, 'unreconciled total');
+    }
+  ),
+
+  scenario(
+    "removing every transaction resets the balances and leaves the other profile's",
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 300);
+      await transaction(api, expect, { amount: 100, account_id: acct });
+      await transaction(api, expect, { type: 'income', amount: 25, account_id: acct });
+      const theirs = await transaction(api.other, expect, { amount: 7 });
+      expectMoney(expect, await balanceOf(api, expect, acct), 225, 'balance');
+
+      expectOk(expect, await api.delete('/api/transactions'), 'DELETE /api/transactions');
+      expect(await listTransactions(api, expect)).toHaveLength(0);
+      expectMoney(expect, await balanceOf(api, expect, acct), 300, 'balance');
+      expect(idsOf(await listTransactions(api.other, expect))).toEqual([theirs]);
+    }
+  ),
+
+  scenario('the transaction summary totals income and expense', async (api, expect) => {
+    await transaction(api, expect, { amount: 12.5 });
+    await transaction(api, expect, { amount: 7.25, date: '2026-04-02' });
+    await transaction(api, expect, { type: 'income', amount: 100 });
+    await transaction(api.other, expect, { amount: 999 });
+
+    const summary = await api.get('/api/transactions/summary');
+    expectOk(expect, summary, 'GET /api/transactions/summary');
+    expect(summary.body).toMatchObject({ count: 3 });
+    // DIFFERENCE transactions-summary-shape
+    if (api.runtime === 'worker') {
+      expectMoney(expect, summary.body.total_income, 100, 'income');
+      expectMoney(expect, summary.body.total_expense, 19.75, 'expense');
+      expectMoney(expect, summary.body.net_balance, 80.25, 'net');
+    } else {
+      expectMoney(expect, summary.body.totalIncome, 100, 'income');
+      expectMoney(expect, summary.body.totalExpenses, 19.75, 'expense');
+    }
+  }),
+
+  scenario(
+    'a category named like an account links the account on the Worker only',
+    async (api, expect) => {
+      const everyday = await account(api, expect, 'Everyday', 500);
+      const revolut = await account(api, expect, 'Revolut', 0);
+      const sameName = await category(api, expect, 'Revolut');
+      // The Transactions form always sends the account the money moves in: balances agree.
+      const id = await transaction(api, expect, {
+        amount: 15,
+        category_id: sameName,
+        account_id: everyday,
+      });
+      const row = (await api.get(`/api/transactions/${id}`)).body;
+      expectMoney(expect, await balanceOf(api, expect, everyday), 485, 'balance');
+      expectMoney(expect, await balanceOf(api, expect, revolut), 0, 'Revolut balance');
+      // DIFFERENCE transaction-account-from-names
+      if (api.runtime === 'worker') {
+        // The row names Revolut as where the money went, so Revolut cannot be deleted.
+        expect(row.transfer_account_id).toBe(revolut);
+        expect((await api.delete(`/api/accounts/${revolut}`)).status).toBe(409);
+      } else {
+        expect(row.transfer_account_id ?? null).toBeNull();
+      }
+
+      // An income with no account, as the API, the MCP server or an import can write one.
+      await transaction(api, expect, { type: 'income', amount: 40, category_id: sameName });
+      // DIFFERENCE transaction-account-from-names
+      if (api.runtime === 'worker') {
+        expectMoney(expect, await balanceOf(api, expect, revolut), 40, 'Revolut credited');
+      } else {
+        expectMoney(expect, await balanceOf(api, expect, revolut), 0, 'Revolut balance');
+        expectOk(expect, await api.delete(`/api/accounts/${revolut}`), 'DELETE Revolut');
+      }
+    }
+  ),
+];

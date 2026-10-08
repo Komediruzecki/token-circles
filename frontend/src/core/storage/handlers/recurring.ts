@@ -26,7 +26,29 @@ export async function recurringList(): Promise<Response> {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
   try {
-    return json(await db.getAllFromIndex('recurring', 'by_profile', pid))
+    const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
+    // Soonest first, as the Worker orders them (ORDER BY next_date) and the section shows them.
+    rows.sort(
+      (a, b) =>
+        String(a.next_date ?? '').localeCompare(String(b.next_date ?? '')) ||
+        Number(a.id) - Number(b.id)
+    )
+    // Each rule with its category's name, colour and type, joined as the Worker joins them: the
+    // Recurring section and the dashboard card colour a rule by its category.
+    const categories = new Map(
+      (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => [c.id, c])
+    )
+    return json(
+      rows.map((r) => {
+        const c = categories.get(r.category_id as number)
+        return {
+          ...r,
+          category_name: c?.name ?? null,
+          category_color: c?.color ?? null,
+          category_type: c?.type ?? null,
+        }
+      })
+    )
   } catch {
     return json([])
   }

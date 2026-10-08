@@ -565,6 +565,9 @@ export async function executeImport(
     }
   }
 
+  // The accounts this run creates. A dry run stands placeholders in for them just below, so its
+  // rows resolve; its preview must still list them as accounts to create, not as accounts there.
+  const plannedAccounts = new Set(toCreate.map((a) => a.name.trim().toLowerCase()));
   if (dryRun && toCreate.length > 0) {
     // A preview must answer for the state the import will PRODUCE, not the state before it
     // runs. Nothing is inserted in a dry run, so these accounts still have no ids, and every
@@ -628,7 +631,8 @@ export async function executeImport(
     if (!raw || !String(raw).trim()) return;
     const name = String(raw).trim();
     const lower = name.toLowerCase();
-    if (accountIdMap.has(lower) || seenAcct.has(lower)) return;
+    const exists = accountIdMap.has(lower) && !(dryRun && plannedAccounts.has(lower));
+    if (exists || seenAcct.has(lower)) return;
     seenAcct.add(lower);
     newAccts.push(name);
   };

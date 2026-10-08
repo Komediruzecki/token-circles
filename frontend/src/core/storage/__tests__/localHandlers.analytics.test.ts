@@ -134,7 +134,19 @@ describe('localHandlers - analytics and reports', () => {
   })
 
   it('sankey reflects an explicit budget (planned vs actual + unused)', async () => {
-    await budgetsCreate({ category_id: catId, amount: 80, period: 'monthly' })
+    // A month's budgets are the rows that start in it (D13): April's does not plan May.
+    await budgetsCreate({
+      category_id: catId,
+      amount: 500,
+      period: 'monthly',
+      start_date: '2026-04-01',
+    })
+    await budgetsCreate({
+      category_id: catId,
+      amount: 80,
+      period: 'monthly',
+      start_date: '2026-05-01',
+    })
     const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
     const sankey = (await res.json()) as SankeyResult
     expect(sankey.hasBudgets).toBe(true)
@@ -142,6 +154,20 @@ describe('localHandlers - analytics and reports', () => {
     expect(budgetLink?.value).toBe(80)
     const unused = sankey.links.find((l) => l.target === 'Unused Budget')
     expect(unused?.value).toBe(30)
+    assertResolvable(sankey)
+  })
+
+  it('sankey answers for a month that has a budget row without a start date', async () => {
+    // The router's schema requires a start date, so the app never stores such a row; one written
+    // around it belongs to no month and must not fail the month's flow.
+    const db = await getDB()
+    await db.add('budgets', { profile_id: 1, category_id: catId, amount: 80, period: 'monthly' })
+    const res = await analyticsSankey(new URLSearchParams({ year: '2026', month: '5' }))
+    expect(res.status).toBe(200)
+    const sankey = (await res.json()) as SankeyResult
+    expect(sankey.hasBudgets).toBe(false)
+    const budgetLink = sankey.links.find((l) => l.source === 'Total Budget' && l.target === 'Food')
+    expect(budgetLink?.value).toBe(50)
     assertResolvable(sankey)
   })
 

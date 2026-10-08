@@ -311,7 +311,10 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
   const startStr = `${year}-${month}-01`;
   const endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
 
-  // Budgets for this month.
+  // Budgets for this month: the rows that start in it, as the Budgets page reads them (D13).
+  // The Budgets page keeps one row per category and month, with no end_date, so the old test
+  // (started by this month, not yet ended) matched every earlier month's row too, and GROUP BY
+  // kept one of them: March's flow showed February's budget.
   const budgets = await db.all<{
     category_id: number;
     budget_amount: number;
@@ -324,11 +327,10 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
       FROM budgets b
       JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
       WHERE b.profile_id IN (${inClause}) AND (b.period = 'month' OR b.period = 'monthly')
-      AND strftime('%Y-%m', b.start_date) <= ? AND (b.end_date IS NULL OR strftime('%Y-%m', b.end_date) >= ?)
+      AND strftime('%Y-%m', b.start_date) = ?
       GROUP BY b.category_id
     `,
     ...pids,
-    `${year}-${month}`,
     `${year}-${month}`
   );
 

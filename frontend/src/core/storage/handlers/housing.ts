@@ -20,6 +20,10 @@ export async function housingList(): Promise<Response> {
       (s, h) => s + Math.abs(parseFloat(String((h.monthly_amount as number) || 0))),
       0
     )
+    // Soonest due first ("MM-DD"), as the Worker lists them and the Housing page shows them.
+    const dueDay = (h: Record<string, unknown>) =>
+      typeof h.due_date === 'string' ? h.due_date : ''
+    all.sort((a, b) => dueDay(a).localeCompare(dueDay(b)))
     return json({ housings: all, total_monthly: Math.round(total) })
   } catch {
     return json({ housings: [], total_monthly: 0 })

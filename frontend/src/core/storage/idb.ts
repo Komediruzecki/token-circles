@@ -520,6 +520,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       ...profileStores,
       ...(db.objectStoreNames.contains('balanceHistory') ? ['balanceHistory'] : []),
       ...(options.deleteProfiles && db.objectStoreNames.contains('profiles') ? ['profiles'] : []),
+      ...(options.deleteProfiles && db.objectStoreNames.contains('settings') ? ['settings'] : []),
     ]
     const tx = db.transaction(transactionStores, 'readwrite')
 
@@ -561,6 +562,13 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (options.deleteProfiles && transactionStores.includes('profiles')) {
       const profileStore = tx.objectStore('profiles')
       for (const profileId of pidSet) await profileStore.delete(profileId)
+    }
+
+    // A deleted profile's settings go with it, as they do on the Worker. Its retirement plan is
+    // the one kept per profile (handlers/calculators.ts); left behind, it stayed in every backup.
+    if (options.deleteProfiles && transactionStores.includes('settings')) {
+      const settingsStore = tx.objectStore('settings')
+      for (const profileId of pidSet) await settingsStore.delete(`retirement_settings:${profileId}`)
     }
 
     await tx.done
@@ -720,7 +728,10 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     }
 
-    return txns.sort((a, b) => b.date.localeCompare(a.date))
+    // Newest first, and within one day the last entered first: the Worker's
+    // `ORDER BY t.date DESC, t.id DESC`. Sorting on the date alone kept a day's rows in key order,
+    // oldest entry first, so a row just added landed below the ones from earlier that day.
+    return txns.sort((a, b) => b.date.localeCompare(a.date) || (b.id ?? 0) - (a.id ?? 0))
   }
 
   async createTransaction(tx: Transaction): Promise<number> {
@@ -1483,6 +1494,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'categoryMappings',
       'import_logs',
+      // A backup carries no import sources, but the profiles they belong to are replaced: the
+      // Worker deletes them with those profiles, and so does this.
+      'import_sources',
       'settings',
     ]
     const stores = requestedStores.filter((store) => db.objectStoreNames.contains(store))
@@ -1604,6 +1618,19 @@ export class IndexedDBAdapter implements StorageAdapter {
         }
       }
       for (const [key, value] of Object.entries(data.settings)) {
+        // A retirement plan is kept per profile, as `retirement_settings:<profile id>`
+        // (handlers/calculators.ts), and the restore gave every profile a new id: the plan
+        // follows its profile. One for a profile the file does not carry is left out.
+        const perProfile = /^retirement_settings:(\d+)$/.exec(key)
+        if (perProfile) {
+          const restoredId = profileIdMap.get(Number(perProfile[1]))
+          if (restoredId !== undefined) {
+            await tx
+              .objectStore('settings')
+              .put({ key: `retirement_settings:${restoredId}`, value })
+          }
+          continue
+        }
         await tx.objectStore('settings').put({ key, value })
       }
 

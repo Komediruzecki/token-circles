@@ -224,8 +224,9 @@ accountsRoutes.delete('/api/accounts/:id/history', requireAuth, async (c) => {
   return c.json({ message: 'Balance history deleted' });
 });
 
-// Reconciliation summary — accounts don't directly link to transactions, so the
-// counts span all profile transactions (matches the Express implementation).
+// Reconciliation summary for one account: the transactions drawn on it (account_id), as
+// local-first counts them. The Express port counted every transaction of the profile here,
+// from before transactions named their account, so each account reported the whole ledger.
 accountsRoutes.get('/api/accounts/:id/reconciliation-summary', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
@@ -241,13 +242,16 @@ accountsRoutes.get('/api/accounts/:id/reconciliation-summary', requireAuth, asyn
     c.env.DB,
     `SELECT COUNT(*) as count, COALESCE(SUM(${amountSql}), 0) as total
      FROM transactions
-     WHERE profile_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
-    pid
+     WHERE profile_id = ? AND account_id = ? AND (reconciled = 0 OR reconciled IS NULL)`,
+    pid,
+    account.id
   );
   const reconciled = await db.first<{ count: number }>(
     c.env.DB,
-    `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ? AND reconciled = 1`,
-    pid
+    `SELECT COUNT(*) as count FROM transactions
+     WHERE profile_id = ? AND account_id = ? AND reconciled = 1`,
+    pid,
+    account.id
   );
   const unreconciledCount = unreconciled?.count ?? 0;
   const reconciledCount = reconciled?.count ?? 0;

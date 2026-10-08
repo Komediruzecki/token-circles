@@ -12,6 +12,7 @@ import {
   getAmount,
   idParam,
   json,
+  monthLabel,
   monthStart,
   nextMonth,
   notFound,
@@ -624,6 +625,11 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
     if (!category_id || amount === null) {
       return json({ error: 'Category ID and amount are required' }, 400)
     }
+    // A household view lists every selected profile's categories; the budget is the current
+    // profile's, so it may only be for one of its own categories (as budgetsCreate checks).
+    if (!(await currentProfileOwns('categories', category_id, pid))) {
+      return json({ error: 'Category does not belong to this profile' }, 400)
+    }
 
     const month = query.get('month') || localMonth()
     const start_date = `${month}-01`
@@ -903,11 +909,29 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
         (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
     )
 
-    const tx = db.transaction('budgets', 'readwrite')
-    for (const b of existingBudgets) await tx.store.delete(b.id as number)
+    // A budget the month already has is never replaced: only a category with no budget in it yet
+    // gets last month's, one budget per category (the newest, should last month hold two), with
+    // its rollover switch. A rollover amount set by hand is not copied: it was carried into last
+    // month, and this month rolls over what last month left unspent instead. The answer says how
+    // many were copied and how many categories already had one. (This deleted the month's budgets
+    // first, so a copy overwrote the amounts a person had set and dropped the categories last
+    // month did not budget.)
+    const already = new Set(
+      existingBudgets.map((b: Record<string, unknown>) => Number(b.category_id))
+    )
+    const copies = new Map<number, Record<string, unknown>>()
+    for (const b of prevBudgets as Record<string, unknown>[]) {
+      if (!already.has(Number(b.category_id))) copies.set(Number(b.category_id), b)
+    }
+    const alreadyBudgeted = new Set(
+      prevBudgets
+        .map((b: Record<string, unknown>) => Number(b.category_id))
+        .filter((id: number) => already.has(id))
+    ).size
 
+    const tx = db.transaction('budgets', 'readwrite')
     const createdAt = new Date().toISOString()
-    for (const b of prevBudgets) {
+    for (const b of copies.values()) {
       await tx.store.add({
         category_id: b.category_id,
         amount: b.amount,
@@ -915,14 +939,14 @@ export async function budgetsDuplicateLast(body: unknown): Promise<Response> {
         start_date: currStart,
         end_date: null,
         profile_id: pid,
-        rollover_enabled: (b as Record<string, unknown>).rollover_enabled || false,
-        rollover_amount: (b as Record<string, unknown>).rollover_amount || 0,
+        rollover_enabled: b.rollover_enabled || false,
+        rollover_amount: 0,
         created_at: createdAt,
       })
     }
     await tx.done
 
-    return json({ ok: true, count: prevBudgets.length })
+    return json({ ok: true, count: copies.size, already_budgeted: alreadyBudgeted })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
@@ -1066,10 +1090,7 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       const d = histMap[mo]
       return {
         month: mo,
-        label: new Date(`${mo}-01`).toLocaleDateString('en-US', {
-          month: 'short',
-          year: 'numeric',
-        }),
+        label: monthLabel(mo),
         total_budget: d.budget,
         total_spent: d.spent,
         adherence: d.budget > 0 ? Math.min(100, (d.spent / d.budget) * 100) : 0,

@@ -484,6 +484,8 @@ calculatorsRoutes.get('/api/calculator/emergency-fund', requireAuth, async (c) =
   return c.json({
     avgMonthlyExpenses: Math.round(avgMonthlyExpenses),
     totalEmergencyFund: Math.round(totalEmergencyFund),
+    // The Emergency Fund page shows how many months the average is taken over.
+    monthsWithData,
     coverage,
     monthsOfCoverage:
       avgMonthlyExpenses > 0 ? Math.round(totalEmergencyFund / avgMonthlyExpenses) : 999,

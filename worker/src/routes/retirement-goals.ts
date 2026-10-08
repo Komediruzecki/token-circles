@@ -84,7 +84,7 @@ async function loadFacts(c: Context<AppEnv>) {
     db.first<{ current_age: number }>(
       c.env.DB,
       `SELECT current_age FROM retirement_goals WHERE profile_id IN (${inClause})
-       ORDER BY created_at DESC LIMIT 1`,
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
       ...pids
     ),
   ]);
@@ -103,7 +103,8 @@ retirementGoalsRoutes.get('/api/retirement-goals', requireAuth, async (c) => {
   const inClause = pids.map(() => '?').join(',');
   const rows = await db.all(
     c.env.DB,
-    `SELECT * FROM retirement_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC`,
+    // created_at has whole seconds: goals saved within one tie, and the later id is the newer.
+    `SELECT * FROM retirement_goals WHERE profile_id IN (${inClause}) ORDER BY created_at DESC, id DESC`,
     ...pids
   );
   const settings = await db.first<{ value: string }>(
