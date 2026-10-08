@@ -309,6 +309,43 @@ describe('while the form sends', () => {
   })
 })
 
+describe('a submit button with nothing new to send', () => {
+  it('says so, keeps focus, and a click on it submits nothing', async () => {
+    // A settings form that is saved, like the retirement planner's: its button reads "Saved".
+    const [unchanged, setUnchanged] = createSignal(true)
+    const submits = vi.fn((event: Event) => {
+      event.preventDefault()
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form onSubmit={submits}>
+          <SubmitButton busy={false} unchanged={unchanged()}>
+            {unchanged() ? 'Saved' : 'Save'}
+          </SubmitButton>
+        </form>
+      ),
+      host
+    )
+    const button = host.querySelector('button')!
+    button.focus()
+    button.click()
+    await tick()
+
+    expect(submits).not.toHaveBeenCalled()
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.disabled).toBe(false)
+    expect(document.activeElement).toBe(button)
+
+    setUnchanged(false)
+    expect(button.hasAttribute('aria-disabled')).toBe(false)
+    button.click()
+    await tick()
+    expect(submits).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('after a submit', () => {
   it('re-checks a marked field as it changes, so the message goes once it is fixed', async () => {
     mount()
