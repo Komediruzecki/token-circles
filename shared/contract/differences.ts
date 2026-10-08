@@ -37,6 +37,12 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "An over-budget row of GET /api/budgets/zero-based/summary says 'Over budget by $-10.00' from 100% exclusive on the Worker, and 'Over budget by $10.00' from 100% inclusive in local-first; the Budgets page does not show these sentences. Slice 3 (budgets).",
   'budget-trend-spending':
     "The months of GET /api/budgets/improvements and of the forecast's history count only the spending of budgeted categories on the Worker, but every expense of the month, unbudgeted and uncategorised included, in local-first, so the Budgets page's trend and average adherence differ between modes. Slice 3 (budgets).",
+  'bill-day-of-month':
+    'A bill added without a day of the month (the Bills form sends none) stores day_of_month NULL on the Worker and 1 in local-first. Slice 3 (bills).',
+  'bill-delete-missing':
+    "DELETE /api/bills/:id answers 200 { ok: true } on the Worker when there is no such bill of the profile, another profile's included, and 404 in local-first; neither deletes anything. Slice 3 (bills).",
+  'bills-upcoming':
+    'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset), rolling a bill due today to next month, on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
   'category-apply-mappings':
     'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
   'category-mapping-upsert':
