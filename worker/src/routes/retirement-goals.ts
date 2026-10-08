@@ -199,6 +199,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
     annualReturn = 7,
     annualExpenses = 30000,
     withdrawalRate = 4,
+    inflationRate = 0,
     expensesAtRetirement = null,
     country = '',
   } = b;
@@ -227,8 +228,9 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
       monthlyIncome: monthlyContribution,
       monthlyExpenses: 0,
       annualReturnPct: returnPct,
-      // This endpoint has no inflation input, so it projects in nominal money throughout.
-      annualInflationPct: 0,
+      // The caller's inflation rate, as local-first takes it: 0, nominal money throughout, when
+      // none is sent. It used to be dropped here, so the answer ignored what was asked for.
+      annualInflationPct: inflationRate,
       horizonMonths,
       safeWithdrawalRatePct: withdrawalRate,
       lifestyles: [{ id: 'fire', label: 'FIRE', monthlySpendToday: adjustedExpenses / 12 }],
@@ -302,6 +304,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
       annualReturn,
       adjustedExpenses,
       withdrawalRate,
+      inflationRate,
       country,
       expensesAtRetirement,
     },
