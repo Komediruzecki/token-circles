@@ -20,11 +20,13 @@ const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const MAX_EMAIL_LENGTH = 254;
 
 // One address gets at most three links an hour, the cap sign-in codes have (routes/email-code.ts),
-// and asking again shares it. One account asks for at most five changes an hour, whatever the
-// addresses, so a session cannot mail its way down a list.
+// and asking again shares it. One account asks for at most five changes an hour and ten a day,
+// whatever the addresses, so a session cannot mail its way down a list.
 const PER_ADDRESS_LIMIT = 3;
 const PER_ACCOUNT_LIMIT = 5;
+const PER_ACCOUNT_DAILY_LIMIT = 10;
 const LIMIT_WINDOW_SEC = 3600;
+const DAY_SEC = 86_400;
 
 const appBase = (c: Context<AppEnv>) =>
   c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
@@ -58,6 +60,7 @@ async function limitEmailChange(
 ): Promise<Response | null> {
   return (
     (await enforce(c, `email-change-account:${userId}`, PER_ACCOUNT_LIMIT, LIMIT_WINDOW_SEC)) ??
+    (await enforce(c, `email-change-account-day:${userId}`, PER_ACCOUNT_DAILY_LIMIT, DAY_SEC)) ??
     (await enforce(c, `email-change:${email}`, PER_ADDRESS_LIMIT, LIMIT_WINDOW_SEC))
   );
 }

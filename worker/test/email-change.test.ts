@@ -9,7 +9,7 @@
  * each test follows the link the Worker actually mails.
  */
 import { env, SELF } from 'cloudflare:test';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword, issueSessionCookie } from '../src/auth';
 import { createLoginCode } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
@@ -320,6 +320,27 @@ describe('saving a new address', () => {
 
     expect(sixth.status).toBe(429);
     expect(mailsTo('home-6@example.com')).toEqual([]);
+  });
+
+  it('lets one account ask for at most ten changes a day', async () => {
+    await seed(1);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      const start = Date.now();
+      for (let i = 1; i <= 10; i++) {
+        // Five an hour is the hourly cap, so the second five come an hour later.
+        if (i === 6) vi.setSystemTime(start + 61 * 60_000);
+        expect((await save(`day-${i}@example.com`)).status).toBe(200);
+      }
+      vi.setSystemTime(start + 122 * 60_000);
+
+      const eleventh = await save('day-11@example.com');
+
+      expect(eleventh.status).toBe(429);
+      expect(mailsTo('day-11@example.com')).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('leaves the link that confirms the current address working', async () => {
