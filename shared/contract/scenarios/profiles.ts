@@ -118,6 +118,63 @@ async function fillProfile(api: ContractApi, expect: Expect): Promise<Owned> {
 }
 
 export const profiles = [
+  scenario(
+    'a profile is added, listed, renamed, and removed with everything in it',
+    async (api, expect) => {
+      const id = await addProfile(api, expect, 'Holiday house');
+      expect(await profileList(api, expect)).toEqual([
+        expect.objectContaining({ id: api.profile, name: 'Me' }),
+        expect.objectContaining({ id: api.other.profile, name: 'Partner' }),
+        expect.objectContaining({
+          id,
+          name: 'Holiday house',
+          transaction_count: 0,
+          account_count: 0,
+          budget_count: 0,
+        }),
+      ]);
+
+      // The app switches to the new profile, and everything it writes lands there.
+      const holiday = api.as(id);
+      const owned = await fillProfile(holiday, expect);
+      const mine = await fillProfile(api, expect);
+      expect((await profileList(api, expect)).find((p) => p.id === id)).toMatchObject({
+        transaction_count: 1,
+        account_count: 1,
+        budget_count: 1,
+      });
+
+      // Renamed by either verb; Settings sends PUT.
+      const renamed = await api.put(`/api/profiles/${id}`, { name: 'Beach house' });
+      expectOk(expect, renamed, 'PUT');
+      // DIFFERENCE profile-answers
+      expect(renamed.body).toEqual(
+        api.runtime === 'worker'
+          ? { id, name: 'Beach house', user_id: expect.any(Number), created_at: expect.any(String) }
+          : { ok: true }
+      );
+      expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Beach house');
+      expectOk(expect, await api.patch(`/api/profiles/${id}`, { name: 'Lake house' }), 'PATCH');
+      expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Lake house');
+
+      const before = await api.stored(id, owned);
+      for (const kind of STORED_KINDS) {
+        expect(before[kind], `${kind} before the delete`).toBeGreaterThan(0);
+      }
+      const mineBefore = await api.stored(api.profile, mine);
+
+      // Settings deletes the profile it is on (handleDeleteProfile), then moves to the first left.
+      expectOk(expect, await holiday.delete(`/api/profiles/${id}`), 'DELETE /api/profiles/:id');
+      expect((await profileList(api, expect)).map((p) => p.id)).toEqual([
+        api.profile,
+        api.other.profile,
+      ]);
+      expect(await api.stored(id, owned)).toEqual(NONE);
+      expect(await api.stored(api.profile, mine)).toEqual(mineBefore);
+      expect((await api.delete(`/api/profiles/${id}`)).status).toBe(404);
+    }
+  ),
+
   scenario("a profile's data is cleared, and the profile kept", async (api, expect) => {
     const mine = await fillProfile(api, expect);
     const theirs = await fillProfile(api.other, expect);

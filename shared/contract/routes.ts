@@ -207,8 +207,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/export/:type',
   'GET /api/health',
   'POST /api/import',
-  'PATCH /api/profiles/:id',
-  'PUT /api/profiles/:id',
   'POST /api/receipts',
   'DELETE /api/receipts/:id',
   'GET /api/receipts/:id',

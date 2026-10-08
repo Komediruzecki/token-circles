@@ -520,6 +520,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       ...profileStores,
       ...(db.objectStoreNames.contains('balanceHistory') ? ['balanceHistory'] : []),
       ...(options.deleteProfiles && db.objectStoreNames.contains('profiles') ? ['profiles'] : []),
+      ...(options.deleteProfiles && db.objectStoreNames.contains('settings') ? ['settings'] : []),
     ]
     const tx = db.transaction(transactionStores, 'readwrite')
 
@@ -561,6 +562,13 @@ export class IndexedDBAdapter implements StorageAdapter {
     if (options.deleteProfiles && transactionStores.includes('profiles')) {
       const profileStore = tx.objectStore('profiles')
       for (const profileId of pidSet) await profileStore.delete(profileId)
+    }
+
+    // A deleted profile's settings go with it, as they do on the Worker. Its retirement plan is
+    // the one kept per profile (handlers/calculators.ts); left behind, it stayed in every backup.
+    if (options.deleteProfiles && transactionStores.includes('settings')) {
+      const settingsStore = tx.objectStore('settings')
+      for (const profileId of pidSet) await settingsStore.delete(`retirement_settings:${profileId}`)
     }
 
     await tx.done
