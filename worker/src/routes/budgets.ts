@@ -1,9 +1,17 @@
 import { Hono } from 'hono';
+import {
+  BUDGET_MESSAGES,
+  checkAllocation,
+  checkBudgetCreate,
+  checkBudgetEdit,
+  checkBudgetMonth,
+  checkRollover,
+} from '../../../shared/budgetSchema';
 import { addCalendarMonths } from '../../../shared/calendarMonths';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localMonth, localNow } from '../local-date';
 
@@ -34,22 +42,22 @@ budgetsRoutes.get('/api/budgets', requireAuth, async (c) => {
   return c.json(rows);
 });
 
+// The rules and their words are shared/budgetSchema.ts, which local-first and the budget dialogs
+// run too. A refused body answers 400 { error, fields }. A category of another profile is a 400 at
+// `category_id`; it was a 403 with no field.
 budgetsRoutes.post('/api/budgets', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))) {
-    throw new HttpError(403, 'Category does not belong to this profile');
+  const b = await c.req.json();
+  const budget = accept(checkBudgetCreate(b, { monthStart: `${localMonth(c)}-01` }));
+  if (!(await db.categoryBelongsToProfile(c.env.DB, budget.category_id, pid))) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
   }
   const res = await db.insert(c.env.DB, 'budgets', {
-    category_id: b.category_id,
-    amount: b.amount,
-    period: b.period || 'monthly',
-    start_date: b.start_date,
-    end_date: b.end_date || null,
-    rollover_enabled: b.rollover_enabled ? 1 : 0,
+    ...budget,
+    rollover_enabled: budget.rollover_enabled ? 1 : 0,
     profile_id: pid,
   });
-  return c.json({ id: res.meta.last_row_id, ...b, profile_id: pid });
+  return c.json({ id: res.meta.last_row_id, ...budget, profile_id: pid });
 });
 
 // ── Analytical / zero-based / forecast endpoints ──────────────────────────────
@@ -753,19 +761,11 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
 // POST /api/budgets/allocate — create a monthly budget for a category after existence check.
 budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const { category_id, amount, period } = b;
-
-  if (!category_id || amount == null) {
-    throw new HttpError(400, 'Category ID and amount are required');
+  const month = accept(checkBudgetMonth(c.req.query('month'), localMonth(c)));
+  const { category_id, amount, period: budgetPeriod } = accept(checkAllocation(await c.req.json()));
+  if (!(await db.categoryBelongsToProfile(c.env.DB, category_id, pid))) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
   }
-  if (!(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-
-  const budgetPeriod = period || 'monthly';
-
-  const month = c.req.query('month') || localMonth(c);
   const start_date = `${month}-01`;
 
   // budgetsRepo.getByCategoryForMonth
@@ -1027,42 +1027,31 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
 
 // ── Parametric /:id routes — registered last so static segments above win ─────
 
+// An edit checks and writes only the fields whose value it changes (decision 2): a field it leaves
+// out keeps its value, where it used to be written as NULL (the amount, the dates) or off
+// (rollover).
 budgetsRoutes.put('/api/budgets/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (
-    b.category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(b.category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  // Write only the fields the edit sends, as local-first does. An absent field stays as it is,
-  // where it used to be bound as undefined (a 500) or, for the rollover switch, cleared.
-  const fields: Record<string, unknown> = {};
-  for (const key of ['category_id', 'amount', 'period', 'start_date']) {
-    if (b[key] !== undefined) fields[key] = b[key];
-  }
-  if (b.end_date !== undefined) fields.end_date = b.end_date || null;
-  if (b.rollover_enabled !== undefined) fields.rollover_enabled = b.rollover_enabled ? 1 : 0;
-  if (Object.keys(fields).length === 0) {
-    const row = await db.first(
-      c.env.DB,
-      'SELECT id FROM budgets WHERE id = ? AND profile_id = ?',
-      c.req.param('id'),
-      pid
-    );
-    if (!row) throw new HttpError(404, 'Not found');
-    return c.json({ ok: true });
-  }
-  const res = await db.update(
+  const id = c.req.param('id');
+  const existing = await db.first<BudgetRow>(
     c.env.DB,
-    'budgets',
-    fields,
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
+    'SELECT * FROM budgets WHERE id = ? AND profile_id = ?',
+    id,
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Not found');
+  const edit = accept(checkBudgetEdit(await c.req.json(), existing));
+  if (
+    edit.category_id !== undefined &&
+    !(await db.categoryBelongsToProfile(c.env.DB, edit.category_id, pid))
+  ) {
+    throw refuse({ category_id: BUDGET_MESSAGES.category });
+  }
+  const data: Record<string, unknown> = { ...edit };
+  if (edit.rollover_enabled !== undefined) data.rollover_enabled = edit.rollover_enabled ? 1 : 0;
+  if (Object.keys(data).length > 0) {
+    await db.update(c.env.DB, 'budgets', data, 'id = ? AND profile_id = ?', id, pid);
+  }
   return c.json({ ok: true });
 });
 
@@ -1083,7 +1072,7 @@ budgetsRoutes.delete('/api/budgets/:id', requireAuth, async (c) => {
 budgetsRoutes.put('/api/budgets/:id/rollover', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const b = (await c.req.json()) as Record<string, any>;
+  const b = accept(checkRollover(await c.req.json()));
 
   const updates: string[] = [];
   const values: unknown[] = [];
@@ -1099,7 +1088,6 @@ budgetsRoutes.put('/api/budgets/:id/rollover', requireAuth, async (c) => {
     updates.push('rollover_enabled = ?');
     values.push(b.rollover_enabled ? 1 : 0);
   }
-  if (updates.length === 0) throw new HttpError(400, 'No rollover fields provided');
 
   values.push(id, pid);
   const res = await db.run(

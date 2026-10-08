@@ -15,10 +15,11 @@
 import './zodConfig'
 import { z } from 'zod/v4'
 import { checkAccountCreate } from '../../../shared/accountSchema'
+import { checkBudgetCreate } from '../../../shared/budgetSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
-import { localToday } from '../utils/period'
+import { localMonth, localToday } from '../utils/period'
 import { getLocalCurrency } from './api'
 import type { Checked, FieldErrors } from '../../../shared/refusal'
 import type { TransactionDefaults } from '../../../shared/transactionSchema'
@@ -43,20 +44,7 @@ export function localTransactionDefaults(): TransactionDefaults {
 // Not a zod schema: shared/accountSchema.ts, which the Worker route runs too.
 
 // ── Budget ─────────────────────────────────────────────────────────────────────
-
-export const budgetCreateSchema = z.object({
-  category_id: z.number().int().positive(),
-  amount: z.number().nonnegative(),
-  period: z.enum(['monthly', 'weekly', 'yearly']),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  end_date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable()
-    .optional(),
-})
-
-export const budgetUpdateSchema = budgetCreateSchema.partial()
+// Not a zod schema: shared/budgetSchema.ts, which the Worker route runs too.
 
 // ── Bill ───────────────────────────────────────────────────────────────────────
 
@@ -199,8 +187,9 @@ const schemaMap: Record<string, BodyRule> = {
   // (checkTransactionEdit, checkCategoryEdit and checkAccountEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
   'POST:/api/accounts': checkAccountCreate,
-  'POST:/api/budgets': budgetCreateSchema,
-  'PUT:/api/budgets': budgetUpdateSchema,
+  // No PUT entry for budgets, bills or savings goals either: their handlers check an edit against
+  // the stored row (checkBudgetEdit, checkBillEdit and checkGoalEdit in shared/).
+  'POST:/api/budgets': (body) => checkBudgetCreate(body, { monthStart: `${localMonth()}-01` }),
   'POST:/api/bills': billCreateSchema,
   'PUT:/api/bills': billUpdateSchema,
   'POST:/api/loans': loanCreateSchema,

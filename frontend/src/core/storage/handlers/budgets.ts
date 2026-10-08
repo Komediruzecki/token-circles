@@ -1,6 +1,14 @@
 /**
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
+import {
+  BUDGET_MESSAGES,
+  checkAllocation,
+  checkBudgetCreate,
+  checkBudgetEdit,
+  checkBudgetMonth,
+  checkRollover,
+} from '../../../../../shared/budgetSchema'
 import { localMonth } from '../../../utils/period'
 import { getDB } from '../idb'
 import {
@@ -18,20 +26,33 @@ import {
   notFound,
   ok,
   prevMonth,
+  refuse,
 } from './helpers'
 import { normalizeBudget } from './normalize'
+import type { BudgetDefaults } from '../../../../../shared/budgetSchema'
 
 export async function budgetsList(): Promise<Response> {
   const budgets = await adapter.listBudgets()
   return json(budgets.map(normalizeBudget))
 }
 
+/** What a blank budget field means in local-first: the first of this month on this device. */
+export function localBudgetDefaults(): BudgetDefaults {
+  return { monthStart: `${localMonth()}-01` }
+}
+
+// The rules and their words are shared/budgetSchema.ts, which the Worker and the budget dialogs run
+// too. Only the checked fields are stored: the body used to be stored as it came.
 export async function budgetsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid budget data' }, 400)
-  const budget = body as Record<string, unknown>
-  budget.profile_id = await adapter.getCurrentProfileId()
-  if (!(await currentProfileOwns('categories', budget.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+  const checked = checkBudgetCreate(body, localBudgetDefaults())
+  if (!checked.ok) return refuse(checked.fields)
+  if (!(await currentProfileOwns('categories', checked.value.category_id))) {
+    return refuse({ category_id: BUDGET_MESSAGES.category })
+  }
+  const budget = {
+    ...checked.value,
+    rollover_amount: 0,
+    profile_id: await adapter.getCurrentProfileId(),
   }
   const id = await adapter.createBudget(
     budget as unknown as Parameters<typeof adapter.createBudget>[0]
@@ -49,14 +70,25 @@ export async function budgetsUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('budgets', id))) return notFound('Budget')
-  const patch = body as Record<string, unknown>
-  if ('category_id' in patch && !(await currentProfileOwns('categories', patch.category_id))) {
-    return json({ error: 'Category does not belong to this profile' }, 400)
+  const before = await currentProfileRecord('budgets', id)
+  if (!before) return notFound('Budget')
+  // Only the fields whose value the edit changes are checked and written (decision 2).
+  const checked = checkBudgetEdit(body, before)
+  if (!checked.ok) {
+    console.error('[budgetsUpdate] Validation failed', { id, body, fields: checked.fields })
+    return refuse(checked.fields)
   }
-  await adapter.updateBudget(id, patch)
+  const edit = checked.value
+  if (
+    edit.category_id !== undefined &&
+    !(await currentProfileOwns('categories', edit.category_id))
+  ) {
+    return refuse({ category_id: BUDGET_MESSAGES.category })
+  }
+  if (Object.keys(edit).length > 0) {
+    await adapter.updateBudget(id, edit as Parameters<typeof adapter.updateBudget>[1])
+  }
   return ok()
 }
 
@@ -620,20 +652,18 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
 export async function budgetsAllocate(query: URLSearchParams, body: unknown): Promise<Response> {
   try {
     const pid = await adapter.getCurrentProfileId()
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const { category_id, amount, period } = body as Record<string, unknown>
-    if (!category_id || amount === null) {
-      return json({ error: 'Category ID and amount are required' }, 400)
-    }
+    const checkedMonth = checkBudgetMonth(query.get('month'), localMonth())
+    if (!checkedMonth.ok) return refuse(checkedMonth.fields)
+    const checked = checkAllocation(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const { category_id, amount, period: budgetPeriod } = checked.value
     // A household view lists every selected profile's categories; the budget is the current
-    // profile's, so it may only be for one of its own categories (as budgetsCreate checks).
+    // profile's, so it may only be for one of its own (as the Worker's allocate checks).
     if (!(await currentProfileOwns('categories', category_id, pid))) {
-      return json({ error: 'Category does not belong to this profile' }, 400)
+      return refuse({ category_id: BUDGET_MESSAGES.category })
     }
 
-    const month = query.get('month') || localMonth()
-    const start_date = `${month}-01`
-    const budgetPeriod = (period as string) || 'monthly'
+    const start_date = `${checkedMonth.value}-01`
 
     const db = await getDB()
     const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid)).find(
@@ -644,7 +674,7 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
     // Allocate is an upsert: re-allocating a category for the same month updates the amount
     // instead of erroring, so users can freely change an allocation from the same action.
     if (existing) {
-      await adapter.updateBudget(existing.id as number, { amount: amount as number })
+      await adapter.updateBudget(existing.id as number, { amount })
       return json({
         id: existing.id,
         category_id,
@@ -657,9 +687,9 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
     }
 
     const id = await adapter.createBudget({
-      category_id: category_id as number,
-      amount: amount as number,
-      period: budgetPeriod as 'monthly' | 'weekly' | 'yearly',
+      category_id,
+      amount,
+      period: budgetPeriod,
       start_date,
       profile_id: pid,
       rollover_enabled: false,
@@ -691,25 +721,18 @@ export async function budgetsRollover(
     const pid = await adapter.getCurrentProfileId()
     const id = idParam(params)
 
-    if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-    const { rollover_amount, rollover_used, rollover_enabled } = body as Record<string, unknown>
-
-    if (
-      rollover_amount === undefined &&
-      rollover_used === undefined &&
-      rollover_enabled === undefined
-    ) {
-      return json({ error: 'No rollover fields provided' }, 400)
-    }
+    const checked = checkRollover(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const { rollover_amount, rollover_used, rollover_enabled } = checked.value
 
     const budget = await db.get('budgets', id)
     if (!budget || (budget.profile_id as number) !== pid) {
       return json({ error: 'Budget not found' }, 404)
     }
 
-    if (rollover_amount !== undefined) budget.rollover_amount = rollover_amount as number
-    if (rollover_used !== undefined) budget.rollover_used = rollover_used as number
-    if (rollover_enabled !== undefined) budget.rollover_enabled = rollover_enabled ? true : false
+    if (rollover_amount !== undefined) budget.rollover_amount = rollover_amount
+    if (rollover_used !== undefined) budget.rollover_used = rollover_used
+    if (rollover_enabled !== undefined) budget.rollover_enabled = rollover_enabled
 
     await db.put('budgets', budget)
 

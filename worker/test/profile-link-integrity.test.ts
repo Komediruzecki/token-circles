@@ -2,6 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { issueSessionCookie } from '../src/auth';
+import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 
 const USER = 91;
 const CURRENT = 910;
@@ -178,16 +179,18 @@ describe('Worker profile-link integrity', () => {
         })
       ).status
     ).toBe(403);
-    expect(
-      (
-        await post('/api/budgets', {
-          amount: 100,
-          category_id: 9222,
-          period: 'monthly',
-          start_date: '2026-01-01',
-        })
-      ).status
-    ).toBe(403);
+    // A budget, a bill and a goal answer a 400 at the field (shared/budgetSchema.ts and its
+    // siblings), as a transaction does; the others are still a 403 until their slice.
+    const budget = await post('/api/budgets', {
+      amount: 100,
+      category_id: 9222,
+      period: 'monthly',
+      start_date: '2026-01-01',
+    });
+    expect(budget.status).toBe(400);
+    expect(((await budget.json()) as { fields: object }).fields).toEqual({
+      category_id: BUDGET_MESSAGES.category,
+    });
     expect(
       (
         await post('/api/savings-goals', {

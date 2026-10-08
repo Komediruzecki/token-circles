@@ -241,17 +241,30 @@ describe('validation - a zod refusal in plain words', () => {
 
   it('says what to do with a number out of range, a list value and a date', async () => {
     expect(
-      await fieldsOf('/api/budgets', {
-        category_id: 0,
-        amount: -5,
-        period: 'daily',
+      await fieldsOf('/api/loans', {
+        name: 'Car',
+        principal: 0,
+        interest_rate: -1,
         start_date: '1 May',
+        term_months: 12,
       })
     ).toEqual({
-      category_id: 'Choose the category from the list.',
-      amount: "The amount can't be negative.",
-      period: 'Choose the period from the list.',
+      principal: 'Make the principal more than zero.',
+      interest_rate: "The interest rate can't be negative.",
       start_date: 'Enter a valid start date.',
+    })
+    expect(
+      await fieldsOf('/api/recurring', {
+        description: 'Rent',
+        amount: 900,
+        type: 'expense',
+        frequency: 'fortnightly',
+        next_date: '2026-06-01',
+        category_id: 0,
+      })
+    ).toEqual({
+      frequency: 'Choose the frequency from the list.',
+      category_id: 'Choose the category from the list.',
     })
   })
 
