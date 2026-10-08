@@ -69,10 +69,8 @@ export const loanScenarios = [
     expect(one.rate_periods[0]).toMatchObject({ rate: 6, start_month: 13, end_month: 24 });
 
     const listed = (await loans(api, expect)).find((l) => l.id === id);
-    expect(listed).toMatchObject({ name: 'Car', prepayment_count: 0 });
+    expect(listed).toMatchObject({ name: 'Car', prepayment_count: 0, total_prepaid: 0 });
     expectMoney(expect, listed.principal, 15000);
-    // DIFFERENCE loan-total-prepaid-none
-    expect(listed.total_prepaid).toBe(api.runtime === 'worker' ? null : 0);
 
     expectOk(
       expect,

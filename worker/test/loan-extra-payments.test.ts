@@ -171,3 +171,31 @@ describe('POST /api/loans/:id/prepayments', () => {
     expect(count?.n).toBe(1);
   });
 });
+
+describe('GET /api/loans', () => {
+  // The list summed a loan's extra payments in SQL: null for a loan without any, where local-first
+  // answered 0 (the contract's loan-total-prepaid-none). Both runtimes now total them to the cent
+  // (shared/loanSchema.ts, extraPaymentTotals).
+  it("totals a loan's extra payments to the cent, and 0 for a loan without any", async () => {
+    const bike = { name: 'Bike', principal: 1000, interest_rate: 0, term_months: 10 };
+    const ids: number[] = [];
+    for (const name of ['Bike', 'Boat']) {
+      const res = await api('POST', '/api/loans', { ...bike, name, start_date: '2026-01-01' });
+      ids.push(((await res.json()) as { id: number }).id);
+    }
+    const [some, none] = ids;
+    for (const amount of [0.1, 0.2]) {
+      const res = await api('POST', `/api/loans/${some}/prepayments`, { month: 4, amount });
+      expect(res.status).toBe(200);
+    }
+    const listed = (await (await api('GET', '/api/loans')).json()) as Record<string, unknown>[];
+    expect(listed.find((l) => l.id === some)).toMatchObject({
+      total_prepaid: 0.3,
+      prepayment_count: 2,
+    });
+    expect(listed.find((l) => l.id === none)).toMatchObject({
+      total_prepaid: 0,
+      prepayment_count: 0,
+    });
+  });
+});

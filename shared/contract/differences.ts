@@ -39,8 +39,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/recurring/upcoming answers { transactions, byCategory, totalMonthly, currency }, every occurrence of the next 30 days, on the Worker, and the active rules themselves in local-first; nothing in the app calls it. Slice 5 (recurring).',
   'recurring-pause':
     "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
-  'loan-total-prepaid-none':
-    'GET /api/loans answers total_prepaid null for a loan with no extra payments on the Worker (SUM over no rows) and 0 in local-first; the Loans page does not read it. Slice 4 (loans).',
   'emergency-fund-extras':
     'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
   'fire-inflation':

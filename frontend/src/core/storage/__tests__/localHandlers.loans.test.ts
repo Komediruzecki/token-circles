@@ -399,6 +399,25 @@ describe('localHandlers - extra payments, by their id', () => {
 
   // POST /loans/:id/prepayment, singular, was served for api.addLoanPrepayment, which nothing
   // called; the Worker never had it. An extra payment is added with POST .../prepayments.
+  // Summed as they came, 0.1 and 0.2 made 0.30000000000000004. Both runtimes now total them to
+  // the cent, and answer 0 for a loan without any (shared/loanSchema.ts, extraPaymentTotals).
+  it("lists a loan's extra payments totalled to the cent, and 0 for a loan without any", async () => {
+    const some = await loanWith([
+      { month: 4, amount: 0.1, note: '' },
+      { month: 4, amount: 0.2, note: '' },
+    ])
+    const none = await loanWith([])
+    const listed = (await (await route('/loans', 'GET')).json()) as Record<string, unknown>[]
+    expect(listed.find((l) => l.id === some)).toMatchObject({
+      total_prepaid: 0.3,
+      prepayment_count: 2,
+    })
+    expect(listed.find((l) => l.id === none)).toMatchObject({
+      total_prepaid: 0,
+      prepayment_count: 0,
+    })
+  })
+
   it('has no singular /prepayment route', async () => {
     const id = await loanWith([])
     const res = await route(`/loans/${id}/prepayment`, 'POST', { month: 2, amount: 10 })

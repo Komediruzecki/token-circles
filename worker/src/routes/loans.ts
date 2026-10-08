@@ -7,6 +7,7 @@ import {
   checkLoanEdit,
   checkRatePeriodCreate,
   checkRatePeriodEdit,
+  extraPaymentTotals,
 } from '../../../shared/loanSchema'
 import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
@@ -52,21 +53,21 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
   return groups
 }
 
-// List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
-// stands today: remaining_balance (after every payment due by today, extra payments and rate
-// periods included), monthly_payment (the next one due; 0 once paid off) and payoff_date. They come
-// from the shared engine, as in the local-first list, so the Loans page and API clients read the
-// same figures. Rate periods and extra payments are fetched in one query each for all the loans,
-// ordered as the calculate route orders them. Additions only: every column the list had is kept.
-// "Today" is the person's date (local-date.ts), as it is in the local-first list.
+// List loans with prepayment rollups, plus where each loan stands today: remaining_balance (after
+// every payment due by today, extra payments and rate periods included), monthly_payment (the next
+// one due; 0 once paid off) and payoff_date. They come from the shared engine, as in the
+// local-first list, so the Loans page and API clients read the same figures. Rate periods and extra
+// payments are fetched in one query each for all the loans, ordered as the calculate route orders
+// them. Additions only: every column the list had is kept. total_prepaid is the extra payments'
+// total to the cent, 0 for a loan without any (shared/loanSchema.ts), as local-first answers it;
+// a SUM in SQL answered null there. "Today" is the person's date (local-date.ts), as it is in the
+// local-first list.
 loansRoutes.get('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const [rows, ratePeriods, prepayments] = await Promise.all([
     db.all<Record<string, any>>(
       c.env.DB,
-      `SELECT l.*,
-          (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid,
-          (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
+      `SELECT l.*
         FROM loans l
         WHERE l.profile_id = ?
         ORDER BY l.created_at DESC, l.id DESC`,
@@ -93,6 +94,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
   return c.json(
     rows.map((loan) => ({
       ...loan,
+      ...extraPaymentTotals(extrasOf.get(loan.id)),
       ...loanStatus(
         engineInput(loan, periodsOf.get(loan.id) ?? [], extrasOf.get(loan.id) ?? []),
         today

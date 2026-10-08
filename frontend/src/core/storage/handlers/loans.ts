@@ -13,6 +13,7 @@ import {
   checkLoanEdit,
   checkRatePeriodCreate,
   checkRatePeriodEdit,
+  extraPaymentTotals,
 } from '../../../../../shared/loanSchema'
 import { localToday } from '../../../utils/period'
 import { getDB } from '../idb'
@@ -36,13 +37,10 @@ export async function loansList(): Promise<Response> {
   const enriched = loans.map((l) => {
     // A loan stored without ids is answered with the ones loansGet stores on its first read.
     giveIds(l)
-    const prepayments = (l as any).prepayments as Array<{ amount: number }> | undefined
-    const total_prepaid = prepayments?.reduce((s, p) => s + (p.amount || 0), 0) || 0
-    const prepayment_count = prepayments?.length || 0
     return {
       ...normalizeLoan(l),
-      total_prepaid,
-      prepayment_count,
+      // Their total to the cent, 0 for a loan without any, as the Worker's list answers it.
+      ...extraPaymentTotals((l as { prepayments?: { amount?: unknown }[] }).prepayments),
       ...loanStatus(loanInput(l as Record<string, any>), today),
     }
   })
