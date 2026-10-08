@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { toCents } from '../../../../shared/money'
 import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
 import {
@@ -795,7 +796,8 @@ export class IndexedDBAdapter implements StorageAdapter {
     } as unknown as Transaction
     await this._assertTransactionLinks(t, row)
     const transactionId = (await t.objectStore('transactions').add(row)) as number
-    await this._applyDeltasInTx(t, computeBalanceDeltas(row), profileId)
+    // To the cent, as the Worker's mark-paid: 10.3 less 0.1 less 0.2 is 10, not 10.000000000000002.
+    await this._applyDeltasInTx(t, computeBalanceDeltas(row), profileId, { toCents: true })
     await t
       .objectStore('bills')
       .put({ ...bill, last_paid_date: payment.date, last_paid: payment.date })
@@ -907,7 +909,8 @@ export class IndexedDBAdapter implements StorageAdapter {
       }
     },
     deltas: { accountId: number; delta: number }[],
-    profileId?: number
+    profileId?: number,
+    options: { toCents?: boolean } = {}
   ): Promise<void> {
     if (deltas.length === 0) return
     const byAccount = new Map<number, number>()
@@ -918,7 +921,8 @@ export class IndexedDBAdapter implements StorageAdapter {
     for (const [accountId, delta] of byAccount) {
       const acct = await store.get(accountId)
       if (acct && (profileId === undefined || acct.profile_id === profileId)) {
-        acct.balance = (acct.balance ?? 0) + delta
+        const balance = (acct.balance ?? 0) + delta
+        acct.balance = options.toCents ? toCents(balance) : balance
         await store.put(acct)
       }
     }

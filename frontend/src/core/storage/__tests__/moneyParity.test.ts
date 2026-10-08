@@ -1,12 +1,12 @@
 /**
- * Money that budgets and goals move, to the cent, in local-first: the twin of
+ * Money that budgets, goals and bills move, to the cent, in local-first: the twin of
  * worker/test/money-parity.test.ts, with the same rows made the same way (every one POSTed, as the
  * app makes them) and the same figures expected, through `routeApiRequest`, the router `apiFetch`
  * calls.
  *
- * Adding to a goal, allocating, rolling a budget over, copying a month and setting a month from
- * last month's spending each answer an amount that a person reads as money: 739.65, not
- * 739.6500000000001.
+ * Paying a bill, adding to a goal, allocating, rolling a budget over, copying a month and setting
+ * a month from last month's spending each answer an amount that a person reads as money: 739.65,
+ * not 739.6500000000001.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDB } from '../idb'
@@ -65,6 +65,43 @@ async function spend(categoryId: number, date: string, amount: number): Promise<
     category_id: categoryId,
   })
 }
+
+describe('paying a bill', () => {
+  it('takes each amount off the account, to the cent', async () => {
+    const giro = (
+      await post<{ id: number }>('/api/accounts', {
+        name: 'Giro',
+        type: 'giro',
+        currency: 'EUR',
+        balance: 10.3,
+        starting_balance: 10.3,
+      })
+    ).id
+    for (const [name, amount] of [
+      ['Power', 0.1],
+      ['Water', 0.2],
+    ] as const) {
+      const bill = (
+        await post<{ id: number }>('/api/bills', {
+          name,
+          amount,
+          dueDate: '2026-07-15',
+          account_id: giro,
+        })
+      ).id
+      await post(`/api/bills/${bill}/mark-paid`, {})
+    }
+
+    const accounts = await get<{ id: number; balance: number }[]>('/api/accounts')
+    expect(accounts.find((a) => a.id === giro)).toMatchObject({ balance: 10 })
+    // Local-first answers the list itself; the Worker answers it as `rows`.
+    const spent = await get<{ amount: number; type: string }[]>('/api/transactions')
+    expect(spent.map((t) => [t.type, t.amount]).sort()).toEqual([
+      ['expense', 0.1],
+      ['expense', 0.2],
+    ])
+  })
+})
 
 describe('adding to a goal', () => {
   it('adds to the cent', async () => {

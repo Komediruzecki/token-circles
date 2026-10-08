@@ -368,7 +368,8 @@ export function markPaidStatements(
   if (bill.account_id != null) {
     stmts.push(
       DB.prepare(
-        `UPDATE accounts SET balance = balance - ?4
+        // To the cent: 10.3 less 0.1 less 0.2 is 10, not 10.000000000000002.
+        `UPDATE accounts SET balance = ROUND(balance - ?4, 2)
          WHERE id = ?5 AND profile_id = ?2 AND ${guard(6)}`
       ).bind(id, pid, todayStr, bill.amount, bill.account_id, periodStart)
     );
