@@ -281,10 +281,13 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
       (t) => t.type === 'expense' && t.date >= startStr && t.date <= endStr
     )
 
-    const actualMap = new Map<number, number>()
+    // Spending without a category is one row, as on the Worker: a row stored without the key and
+    // one stored with null made two Uncategorized nodes of one name.
+    const actualMap = new Map<number | null, number>()
     for (const t of profileTxns) {
-      const prev = actualMap.get(t.category_id!) || 0
-      actualMap.set(t.category_id!, prev + getAmount(t as unknown as Record<string, unknown>))
+      const key = t.category_id ?? null
+      const prev = actualMap.get(key) || 0
+      actualMap.set(key, prev + getAmount(t as unknown as Record<string, unknown>))
     }
 
     const catMap = new Map(cats.map((c) => [c.id, c]))
@@ -306,7 +309,7 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     const links: SankeyLink[] = []
 
     // Categories to show: any with a budget or actual spending this month.
-    const catIds = new Set<number>([...budgetMap.keys(), ...actualMap.keys()])
+    const catIds = new Set<number | null>([...budgetMap.keys(), ...actualMap.keys()])
     // Nothing to visualize — let the UI show its empty state instead of an
     // orphan "Total Budget"/"Total Actual" pair with no flow between them.
     if (catIds.size === 0) return json({ nodes: [], links: [], hasBudgets: false })
@@ -323,10 +326,10 @@ export async function analyticsSankey(query: URLSearchParams): Promise<Response>
     let totalBudget = 0
     let totalActual = 0
     for (const catId of catIds) {
-      const cat = catMap.get(catId)
+      const cat = catId === null ? undefined : catMap.get(catId)
       const catName = cat?.name || 'Uncategorized'
       const actual = actualMap.get(catId) || 0
-      const explicit = budgetMap.get(catId)
+      const explicit = catId === null ? undefined : budgetMap.get(catId)
       const budget = explicit ? explicit.amount : actual
       if (budget <= 0 && actual <= 0) continue
       nodes.push({ name: catName, category: 'category', color: cat?.color })

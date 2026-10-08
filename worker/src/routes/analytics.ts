@@ -379,10 +379,12 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
   const nodes: SankeyNode[] = [];
   const links: SankeyLink[] = [];
 
-  // Categories to show: any with a budget or actual spending this month.
-  const catIds = new Set<number>([
+  // Categories to show: any with a budget or actual spending this month. Spending without a
+  // category is one of them, as Uncategorized: it was left out, so Total Actual was short of what
+  // the month cost by exactly that much, and local-first showed it.
+  const catIds = new Set<number | null>([
     ...budgetMap.keys(),
-    ...actualSpending.map((a) => a.category_id).filter((id): id is number => id != null),
+    ...actualSpending.map((a) => a.category_id),
   ]);
   // Nothing to visualize — let the UI show its empty state.
   if (catIds.size === 0) {
@@ -401,11 +403,11 @@ analyticsRoutes.get('/api/analytics/sankey', requireAuth, async (c) => {
   let totalBudget = 0;
   let totalActual = 0;
   for (const catId of catIds) {
-    const cat = catMap.get(catId);
+    const cat = catId === null ? undefined : catMap.get(catId);
     const catName = cat?.name || 'Uncategorized';
     const actualRow = actualMap.get(catId);
     const actual = actualRow ? actualRow.actual_amount : 0;
-    const explicit = budgetMap.get(catId);
+    const explicit = catId === null ? undefined : budgetMap.get(catId);
     const budget = explicit ? explicit.budget_amount : actual;
     if (budget <= 0 && actual <= 0) continue;
     nodes.push({ name: catName, category: 'category', color: cat?.color });
