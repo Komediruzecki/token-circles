@@ -24,6 +24,10 @@
  *   sent. A reset in between, as when a dialog is cancelled and opened again, drops it, as it
  *   drops a refusal that lands late. A success toast does not wait for that: it reports a write
  *   that happened, which the reset did not undo, so it belongs in `send`, after the write.
+ * - A value can be a list of rows (a loan's rate periods), each with fields of its own. A row's
+ *   field is named `<list>.<index>.<field>`, as the runtimes name it in a refusal, and its marks
+ *   follow the row when a row before it is removed. A server's mark on it goes when that field
+ *   changes, as one on any field does.
  *
  * `Field` registers each control here, which is how the kit knows which fields this form shows and
  * where to move focus. See docs/plans/2026-10-07-form-errors.md.
@@ -35,6 +39,16 @@ import type { FieldErrors } from '../../../../shared/refusal'
 
 /** Any object of named values: an interface works as well as a type literal. */
 export type FormValues = object
+
+/** The field of a row in each list value: `periods.0.rate` for `periods: { rate: string }[]`. */
+type RowFieldName<T> = {
+  [K in keyof T & string]: T[K] extends readonly (infer Row)[]
+    ? `${K}.${number}.${keyof Row & string}`
+    : never
+}[keyof T & string]
+
+/** What a field of a form is called: one of its values, or a field of a row in a list value. */
+export type FieldName<T> = (keyof T & string) | RowFieldName<T>
 
 export interface FormOptions<T extends FormValues, R = unknown> {
   /** What a fresh form holds, and what `reset()` with no argument returns to. */
@@ -72,7 +86,7 @@ export interface Form<T extends FormValues> {
   /** Starts over from `values` (or `initial`) with nothing marked. */
   reset: (values?: T) => void
   /** The message under a field, or `undefined`. */
-  error: (name: keyof T & string) => string | undefined
+  error: (name: FieldName<T>) => string | undefined
   /** The form-level message, or `undefined`. */
   notice: () => string | undefined
   /**
@@ -81,7 +95,7 @@ export interface Form<T extends FormValues> {
    * change, and on the next submit or reset. Words for a field this form does not show go in the
    * notice. `undefined` takes the mark away. Focus stays where the person is.
    */
-  mark: (name: keyof T & string, message: string | undefined) => void
+  mark: (name: FieldName<T>, message: string | undefined) => void
   /** True while `send` runs. */
   submitting: () => boolean
   /** The `<form>`'s `onSubmit`. */
@@ -101,6 +115,22 @@ function messages(errors: Readonly<Record<string, string | undefined>>): [string
   return Object.entries(errors).filter(
     (entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].trim() !== ''
   )
+}
+
+/** `name` as the field of a row of `list`, `<list>.<index>.<field>`, or null when it is not one. */
+function rowField(list: string, name: string): { index: number; field: string } | null {
+  if (!name.startsWith(`${list}.`)) return null
+  const rest = name.slice(list.length + 1)
+  const dot = rest.indexOf('.')
+  const index = Number(rest.slice(0, dot))
+  if (dot <= 0 || !Number.isInteger(index) || index < 0) return null
+  return { index, field: rest.slice(dot + 1) }
+}
+
+function fieldOf(row: unknown, field: string): unknown {
+  return row !== null && typeof row === 'object'
+    ? (row as Record<string, unknown>)[field]
+    : undefined
 }
 
 export function createForm<T extends FormValues, R = unknown>(options: FormOptions<T, R>): Form<T> {
@@ -155,14 +185,57 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
     target?.focus()
   }
 
+  /**
+   * A list value was set: each row's marks follow the row to its place in the new list. A row is
+   * found by identity, so removing one moves the rows after it up, and by its place when the list
+   * kept its length, since the row a person changed is a new object. A row that is gone takes its
+   * marks with it, and a server's mark goes when its field changed.
+   */
+  const followRows = (list: string, before: readonly unknown[], after: readonly unknown[]) => {
+    const rows = after.map((row) => unwrap(row))
+    const placeOf = (index: number): number | undefined => {
+      const found = rows.indexOf(before[index])
+      if (found >= 0) return found
+      return before.length === after.length ? index : undefined
+    }
+    const names = [...new Set([...Object.keys(errors), ...watched, ...fromServer])].filter(
+      (name) => rowField(list, name) !== null
+    )
+    if (names.length === 0) return
+    const nextWatched: string[] = []
+    const nextServer: string[] = []
+    const words: [string, string | undefined][] = []
+    for (const name of names) {
+      const { index, field } = rowField(list, name)!
+      const place = placeOf(index)
+      if (place === undefined) continue
+      const server = fromServer.has(name)
+      if (server && fieldOf(before[index], field) !== fieldOf(rows[place], field)) continue
+      const to = `${list}.${place}.${field}`
+      if (watched.has(name)) nextWatched.push(to)
+      if (server) nextServer.push(to)
+      words.push([to, errors[name]])
+    }
+    for (const name of names) {
+      watched.delete(name)
+      fromServer.delete(name)
+      setErrors(name, undefined)
+    }
+    for (const name of nextWatched) watched.add(name)
+    for (const name of nextServer) fromServer.add(name)
+    for (const [name, text] of words) if (text !== undefined) setErrors(name, text)
+  }
+
   const set: Form<T>['set'] = (name, value) => {
     batch(() => {
+      const before: unknown = unwrap(values)[name]
       setValues(
         produce((draft: T) => {
           draft[name] = value
         })
       )
       if (fromServer.delete(name)) setErrors(name, undefined)
+      if (Array.isArray(before) && Array.isArray(value)) followRows(name, before, value)
       if (watched.size === 0) return
       const found = check()
       for (const field of watched) {

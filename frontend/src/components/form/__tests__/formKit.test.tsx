@@ -9,7 +9,7 @@
  * of them, let the message go as soon as the field is fixed, and put a server's per-field reasons
  * on the same fields.
  */
-import { createSignal, Show } from 'solid-js'
+import { createSignal, Index, Show } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../core/apiError'
@@ -828,5 +828,165 @@ export function nameMustBeAField(form: Form<Values>) {
     <Field form={form} name="nickname" label="Nickname">
       {(control) => <input {...control} />}
     </Field>
+  )
+}
+
+describe('a field in a row of a list', () => {
+  interface Period {
+    rate: string
+  }
+  interface ListValues {
+    title: string
+    periods: Period[]
+  }
+
+  const rateWords = 'Enter the rate for these payments.'
+
+  /** A form with a list of rows, each with its own field: `periods.<index>.rate`. */
+  function mountList(send: (values: ListValues) => unknown = () => undefined) {
+    const form = createForm<ListValues>({
+      initial: { title: 'Car', periods: [{ rate: '5' }, { rate: '' }, { rate: '7' }] },
+      check: (values) => {
+        const errors: FieldErrors = {}
+        values.periods.forEach((period, i) => {
+          if (!period.rate.trim()) errors[`periods.${i}.rate`] = rateWords
+        })
+        return errors
+      },
+      send,
+      failure: "Couldn't save it. Try again.",
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form {...form.attrs}>
+          <FormNotice form={form} />
+          <Index each={form.values.periods}>
+            {(period, i) => (
+              <Field form={form} name={`periods.${i}.rate`} label={`Rate ${i + 1}`}>
+                {(control) => (
+                  <input
+                    {...control}
+                    value={period().rate}
+                    onInput={(e) => {
+                      const rate = e.currentTarget.value
+                      form.set(
+                        'periods',
+                        form.values.periods.map((p, j) => (j === i ? { ...p, rate } : p))
+                      )
+                    }}
+                  />
+                )}
+              </Field>
+            )}
+          </Index>
+          <SubmitButton busy={form.submitting()}>Save</SubmitButton>
+        </form>
+      ),
+      host
+    )
+    return form
+  }
+
+  const removeRow = (form: Form<ListValues>, index: number) =>
+    form.set(
+      'periods',
+      form.values.periods.filter((_, j) => j !== index)
+    )
+
+  it('is marked by a check that names it, and gets focus', async () => {
+    const send = vi.fn()
+    mountList(send)
+
+    await submit()
+
+    expect(send).not.toHaveBeenCalled()
+    expect(labelled('Rate 2').getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(labelled('Rate 2'))).toEqual([rateWords])
+    expect(document.activeElement).toBe(labelled('Rate 2'))
+    expect(labelled('Rate 1').getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('takes the server’s words for it, which go when that row’s field changes', async () => {
+    const said = 'Enter a rate from 0 to 100.'
+    mountList(
+      vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(400, said, { 'periods.0.rate': said, 'periods.2.rate': said })
+        )
+    )
+    type(labelled('Rate 2'), '6')
+    await submit()
+    expect(labelled('Rate 1').getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(labelled('Rate 1'))
+
+    type(labelled('Rate 1'), '4')
+
+    expect(labelled('Rate 1').getAttribute('aria-invalid')).toBeNull()
+    // Another row's mark stays: only the server knows whether it still holds.
+    expect(describedBy(labelled('Rate 3'))).toEqual([said])
+    expect(notice().textContent).toBe('')
+  })
+
+  it('moves the marks of the rows after a removed row along with them', async () => {
+    const said = 'Enter a rate from 0 to 100.'
+    const form = mountList(
+      vi
+        .fn()
+        .mockRejectedValue(
+          new ApiError(400, said, { 'periods.1.rate': said, 'periods.2.rate': 'Too high.' })
+        )
+    )
+    type(labelled('Rate 2'), '6')
+    await submit()
+
+    removeRow(form, 0)
+
+    // The second row is now the first and the third the second, each with its own words.
+    expect(describedBy(labelled('Rate 1'))).toEqual([said])
+    expect(describedBy(labelled('Rate 2'))).toEqual(['Too high.'])
+    expect(notice().textContent).toBe('')
+
+    removeRow(form, 0)
+
+    // The removed row's words went with it.
+    expect(describedBy(labelled('Rate 1'))).toEqual(['Too high.'])
+    expect(notice().textContent).toBe('')
+  })
+
+  it('is re-checked where the row now is when a row before it is removed', async () => {
+    const form = mountList()
+    await submit()
+    expect(labelled('Rate 2').getAttribute('aria-invalid')).toBe('true')
+
+    removeRow(form, 0)
+
+    // The blank rate moved up to the first row, and is marked there.
+    expect(labelled('Rate 1').getAttribute('aria-invalid')).toBe('true')
+    expect(labelled('Rate 2').getAttribute('aria-invalid')).toBeNull()
+    expect(notice().textContent).toBe('')
+  })
+})
+
+/** Compile-time: a row's field is named `<list>.<index>.<field>`, for a list of the form's own. */
+export function rowFieldMustBeAListField(
+  form: Form<{ title: string; periods: { rate: string }[] }>
+) {
+  return (
+    <>
+      <Field form={form} name="periods.0.rate" label="Rate">
+        {(control) => <input {...control} />}
+      </Field>
+      {/* @ts-expect-error -- 'title' is not a list */}
+      <Field form={form} name="title.0.rate" label="Title">
+        {(control) => <input {...control} />}
+      </Field>
+      {/* @ts-expect-error -- a period has no 'note' */}
+      <Field form={form} name="periods.0.note" label="Note">
+        {(control) => <input {...control} />}
+      </Field>
+    </>
   )
 }
