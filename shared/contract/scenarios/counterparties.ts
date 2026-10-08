@@ -12,7 +12,8 @@ export const counterparties = [
   scenario('who money went to and came from, netted per name', async (api, expect) => {
     const entry = (fields: Record<string, unknown>) => addTransaction(api, expect, fields);
     await entry({ description: 'Groceries', amount: 45.5, beneficiary: 'Corner Shop' });
-    await entry({ description: 'Groceries', amount: 30.25, beneficiary: 'Corner Shop' });
+    // The same name typed with a space after it, as an import can bring it.
+    await entry({ description: 'Groceries', amount: 30.25, beneficiary: 'Corner Shop ' });
     await entry({ description: 'Rent', amount: 800, beneficiary: 'Landlord' });
     await entry({ description: 'Refund', amount: 10, type: 'income', payor: 'Corner Shop' });
     await entry({ description: 'Salary', amount: 2500, type: 'income', payor: 'Employer' });
