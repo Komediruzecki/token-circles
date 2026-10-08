@@ -21,7 +21,10 @@
 }
 
 /* --danger-text, not --danger: the message is small text, and --danger is under 4.5:1 on a
-   modal's surface in both themes. */
+   modal's surface in both themes.
+   overflow-wrap: anywhere, because a message can quote what someone typed, and a long name is one
+   word to the browser. At 390px it ran past the dialog's edge. `anywhere`, not `break-word`: only
+   it lowers the text's min-content width, which is what lets a flex item this narrow shrink. */
 .error {
   display: flex;
   align-items: flex-start;
@@ -30,6 +33,7 @@
   font-size: 13px;
   line-height: 1.4;
   color: var(--danger-text);
+  overflow-wrap: anywhere;
 }
 
 .error svg,
@@ -58,6 +62,7 @@
   color: var(--danger-text);
   font-size: 14px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 /* A submit button while its form sends: it keeps focus, so it is aria-disabled, not disabled, and

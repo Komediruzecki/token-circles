@@ -75,6 +75,17 @@ async function deleteCategory(page: Page, id: number): Promise<void> {
   }, id)
 }
 
+/** Adds a category the way the app does, in whichever storage mode the page runs. */
+async function createCategory(page: Page, name: string): Promise<{ id: number }> {
+  return page.evaluate(async (wanted) => {
+    const spec = '/src/core/api.ts'
+    const mod = (await import(/* @vite-ignore */ spec)) as {
+      apiPost: (url: string, body: unknown) => Promise<{ id: number }>
+    }
+    return mod.apiPost('/api/categories', { name: wanted })
+  }, name)
+}
+
 /** Every category POST the page sends over the network (local-first sends none: no server). */
 function watchCategoryPosts(page: Page): string[] {
   const posts: string[] = []
@@ -126,6 +137,30 @@ for (const mode of MODES) {
       )
       await expect(page.getByTestId('category-modal-overlay')).toBeVisible()
       await expect(errorToasts(page)).toHaveCount(0)
+    })
+
+    // A name is one long word as far as the browser knows, and the message quotes it: at phone
+    // width it ran 136px past the dialog's edge.
+    test('a long name already in use wraps inside the dialog at phone width', async ({ page }) => {
+      const name = `GroceriesAndHouseholdSuppliesFromTheBigWeeklyShop${Date.now().toString(36)}`
+      const taken = await createCategory(page, name)
+      // The fixture profile is shared by every spec and outlives the run locally, so the category
+      // goes even when the check fails.
+      try {
+        await page.setViewportSize({ width: 390, height: 844 })
+        await nameField(page).fill(name)
+
+        await submit(page)
+
+        await expect(nameField(page)).toHaveAccessibleDescription(/already have a category/)
+        const overflow = await dialogForm(page).evaluate((form) => {
+          const dialog = form.parentElement!
+          return dialog.scrollWidth - dialog.clientWidth
+        })
+        expect(overflow).toBe(0)
+      } finally {
+        if (mode.name === 'cloud') await deleteCategory(page, taken.id)
+      }
     })
 
     test('a category with no icon picked saves, with the default icon', async ({ page }) => {
