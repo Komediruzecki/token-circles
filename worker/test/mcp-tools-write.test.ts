@@ -6,6 +6,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
+import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 
 const USER_ID = 9600;
 const PROFILE_ID = 9601;
@@ -234,6 +235,41 @@ describe('write tools', () => {
       .bind(created.id)
       .first<{ amount: number }>();
     expect(row?.amount).toBe(350);
+  });
+
+  // The tool took any positive number and any date-shaped text, so it stored 12.345 and
+  // 2026-02-30, refused a budget of zero, and answered another profile's category with a 403
+  // where the app answers a 400 at the category. It runs the app's checks now.
+  it('upsert_budget checks a budget as the app does', async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96021, 'Food', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const refused = async (args: Record<string, unknown>): Promise<string> => {
+      const result = await call('upsert_budget', args);
+      expect(result.isError, JSON.stringify(args)).toBe(true);
+      return result.content[0].text;
+    };
+    const food = { categoryId: 96021, startDate: '2026-03-01' };
+
+    expect(await refused({ ...food, amount: 12.345 })).toBe(BUDGET_MESSAGES.amountCents);
+    expect(await refused({ ...food, amount: -5 })).toBe(BUDGET_MESSAGES.amountNegative);
+    expect(await refused({ ...food, amount: 10, startDate: '2026-02-30' })).toBe(
+      BUDGET_MESSAGES.startDate
+    );
+    expect(await refused({ ...food, categoryId: 96099, amount: 10 })).toBe(
+      BUDGET_MESSAGES.category
+    );
+    const stored = await env.DB.prepare('SELECT COUNT(*) AS n FROM budgets WHERE profile_id = ?')
+      .bind(PROFILE_ID)
+      .first<{ n: number }>();
+    expect(stored?.n).toBe(0);
+
+    expect(unwrap(await call('upsert_budget', { ...food, amount: 0 }))).toMatchObject({
+      created: true,
+      amount: 0,
+    });
   });
 
   it('upsert_tag_rule creates the tag if it does not exist', async () => {
