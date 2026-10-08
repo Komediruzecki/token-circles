@@ -10,10 +10,10 @@ import {
   checkRetirementGoalCreate,
   checkRetirementGoalEdit,
 } from '../../../../../shared/retirementGoalSchema'
+import { checkRetirementPlan } from '../../../../../shared/retirementPlanSchema'
 import {
   buildFacts,
   deriveSettings,
-  normalizeSettings,
   settingsToInput,
 } from '../../../../../shared/retirementSettings'
 import { localMonth, localToday } from '../../../utils/period'
@@ -436,8 +436,12 @@ export async function retirementSettingsGet(): Promise<Response> {
 
 export async function retirementSettingsUpdate(body: unknown): Promise<Response> {
   try {
-    // Normalised before storage, so the row can only ever hold something the model accepts.
-    const settings = normalizeSettings(body)
+    // Checked by the rules the Worker and the planner run too (shared/retirementPlanSchema.ts): a
+    // value outside its range is refused at its field rather than moved into it, and a plan that
+    // fits is stored as normalizeSettings stores it.
+    const checked = checkRetirementPlan(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const settings = checked.value
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
     await db.put('settings', { key: settingsKeyFor(pid), value: settings })

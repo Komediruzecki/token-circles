@@ -1,4 +1,5 @@
 import { RETIREMENT_GOAL_MESSAGES as M } from '../../retirementGoalSchema';
+import { RETIREMENT_PLAN_MESSAGES as P } from '../../retirementPlanSchema';
 import { addTransaction, dayOf, expectMoney } from '../helpers';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -280,6 +281,49 @@ export const retirement = [
       expect(theirs.settings.birthMonth).toBeNull();
       expect(theirs.missing).toEqual(expect.arrayContaining(['birthMonth', 'monthlyIncome']));
       expect((await listed(api.other, expect)).settings).toEqual({});
+    }
+  ),
+
+  scenario(
+    'a retirement plan is refused at each field that does not fit, and nothing is saved',
+    async (api, expect) => {
+      const before = await settingsOf(api, expect);
+      // A save used to move each of these into range or drop it, without a word.
+      const refused = await api.put('/api/retirement/settings', {
+        ...before.settings,
+        lifeExpectancyAge: 30,
+        annualReturnPct: 9000,
+        safeWithdrawalRatePct: 0,
+        incomeSteps: [{ fromMonth: 'whenever', monthlyAmount: 1 }],
+        expensePeriods: [{ fromMonth: '2030-05', toMonth: '2030-01', monthlyAmount: 300 }],
+        lifestyles: [{ id: 'default', label: 'Modest', monthlySpendToday: 0 }],
+      });
+      expect(refused.status).toBe(400);
+      expect(refused.body.fields).toEqual({
+        lifeExpectancyAge: P.lifeExpectancyAge,
+        annualReturnPct: P.annualReturnPct,
+        safeWithdrawalRatePct: P.safeWithdrawalRatePct,
+        'incomeSteps.0.fromMonth': P.stepMonth,
+        'expensePeriods.0.toMonth': P.periodEnd,
+        'lifestyles.0.monthlySpendToday': P.lifestyleSpend,
+      });
+      expect(refused.body.error).toBe(Object.values(refused.body.fields).join(' '));
+      expect(await settingsOf(api, expect)).toEqual(before);
+      expect((await listed(api, expect)).settings).toEqual({});
+
+      // At the ends of each range, it saves.
+      const edges = await api.put('/api/retirement/settings', {
+        ...before.settings,
+        lifeExpectancyAge: 40,
+        annualReturnPct: 50,
+        safeWithdrawalRatePct: 0.1,
+      });
+      expectOk(expect, edges, 'PUT /api/retirement/settings');
+      expect(edges.body.settings).toMatchObject({
+        lifeExpectancyAge: 40,
+        annualReturnPct: 50,
+        safeWithdrawalRatePct: 0.1,
+      });
     }
   ),
 ];

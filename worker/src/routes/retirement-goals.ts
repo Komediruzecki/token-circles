@@ -12,11 +12,11 @@ import {
   checkRetirementGoalCreate,
   checkRetirementGoalEdit,
 } from '../../../shared/retirementGoalSchema';
+import { checkRetirementPlan } from '../../../shared/retirementPlanSchema';
 import {
   buildFacts,
   deriveSettings,
   monthOf,
-  normalizeSettings,
   settingsToInput,
 } from '../../../shared/retirementSettings';
 import type { CashflowRow, RetirementSettings } from '../../../shared/retirementSettings';
@@ -321,9 +321,10 @@ retirementGoalsRoutes.get('/api/retirement/settings', requireAuth, async (c) => 
 
 retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  // Normalised before storage, so the row can only ever hold something the model accepts —
-  // whatever the client sent, and whatever an older client sends later.
-  const settings = normalizeSettings(await c.req.json());
+  // Checked by the rules local-first and the planner run too (shared/retirementPlanSchema.ts): a
+  // value outside its range is refused at its field rather than moved into it, and a plan that
+  // fits is stored as normalizeSettings stores it, so the row only ever holds what the model takes.
+  const settings = accept(checkRetirementPlan(await c.req.json()));
   await db.run(
     c.env.DB,
     'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)',
