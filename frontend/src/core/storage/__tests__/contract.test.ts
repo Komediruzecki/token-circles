@@ -218,19 +218,31 @@ for (const [entity, list] of Object.entries(SCENARIOS)) {
   })
 }
 
+function expectEveryRouteSent() {
+  const missing = unsent(CONTRACT_ROUTES, hits)
+  expect(
+    missing.filter((k) => !UNCOVERED.includes(k)),
+    'no scenario sends these'
+  ).toEqual([])
+  expect(
+    UNCOVERED.filter((k) => !missing.includes(k)),
+    'a scenario sends these now: take them off UNCOVERED'
+  ).toEqual([])
+}
+let routesChecked = false
+
+// A shuffled run (--sequence.shuffle) can reach the check below before the scenarios, which then
+// skips itself. This hook runs after every test in the file, so it makes the check instead.
+afterAll(() => {
+  if (ran === total && !routesChecked) expectEveryRouteSent()
+})
+
 describe('contract: every route', () => {
   it('sends every contract route, and each answers 2xx', (ctx) => {
     // A filtered or failed run sent fewer routes than a full one: it proves nothing here.
-    if (ran < total) ctx.skip()
-    const missing = unsent(CONTRACT_ROUTES, hits)
-    expect(
-      missing.filter((k) => !UNCOVERED.includes(k)),
-      'no scenario sends these'
-    ).toEqual([])
-    expect(
-      UNCOVERED.filter((k) => !missing.includes(k)),
-      'a scenario sends these now: take them off UNCOVERED'
-    ).toEqual([])
+    if (ran < total) ctx.skip(`${ran} of ${total} scenarios had run`)
+    routesChecked = true
+    expectEveryRouteSent()
   })
 
   it('serves every contract route, and lists every route it serves', () => {
