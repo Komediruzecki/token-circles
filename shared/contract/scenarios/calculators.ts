@@ -1,4 +1,6 @@
-import { expectOk, scenario } from '../types';
+import { addTransaction, dayOf } from '../helpers';
+import { added, expectOk, scenario } from '../types';
+import { account, accountBody } from './accounts';
 
 /** The body the FIRE calculator would send: nothing in the app calls it today. */
 const fireBody = {
@@ -49,6 +51,88 @@ export const calculators = [
       ['Optimistic', 113669],
     ]);
   }),
+
+  scenario(
+    "the emergency fund calculator averages the profile's spending and counts its savings",
+    async (api, expect) => {
+      await added(api, expect, '/api/accounts', {
+        ...accountBody('Rainy day', 4500.75),
+        type: 'savings',
+      });
+      await account(api, expect, 'Everyday', 1000);
+      for (const [offset, spent] of [
+        [-1, 1000.25],
+        [-2, 1200],
+        [-3, 799.75],
+      ] as const) {
+        await addTransaction(api, expect, { amount: spent, date: dayOf(offset, 12) });
+      }
+      await addTransaction(api, expect, {
+        description: 'Salary',
+        type: 'income',
+        amount: 3000,
+        date: dayOf(-1, 5),
+      });
+      // Older than the twelve months the calculator looks back over.
+      await addTransaction(api, expect, { amount: 9999, date: dayOf(-14, 12) });
+      await added(api.other, expect, '/api/accounts', {
+        ...accountBody('Their savings', 99999),
+        type: 'savings',
+      });
+
+      const reply = await api.get('/api/calculator/emergency-fund');
+      expectOk(expect, reply, 'GET /api/calculator/emergency-fund');
+      // The page shows the average, the fund, the months of data and the three levels.
+      expect(reply.body).toMatchObject({
+        avgMonthlyExpenses: 1000,
+        totalEmergencyFund: 4501,
+        monthsWithData: 3,
+      });
+      expect(reply.body.coverage).toEqual([
+        {
+          months: 3,
+          label: 'Starter',
+          required: 3000,
+          current: 4501,
+          coveragePct: 100,
+          status: 'complete',
+        },
+        {
+          months: 6,
+          label: 'Standard',
+          required: 6000,
+          current: 4501,
+          coveragePct: 75,
+          status: 'partial',
+        },
+        {
+          months: 12,
+          label: 'Conservative',
+          required: 12000,
+          current: 4501,
+          coveragePct: 38,
+          status: 'low',
+        },
+      ]);
+      // DIFFERENCE emergency-fund-extras
+      if (api.runtime === 'worker') {
+        expect(reply.body.monthsOfCoverage).toBe(5);
+        expect(reply.body.totalBalance).toBeUndefined();
+      } else {
+        expect(reply.body.totalBalance).toBe(5501);
+        expect(reply.body.accounts).toEqual([expect.objectContaining({ name: 'Rainy day' })]);
+        expect(reply.body.monthsOfCoverage).toBeUndefined();
+      }
+
+      const theirs = await api.other.get('/api/calculator/emergency-fund');
+      expectOk(expect, theirs, 'GET /api/calculator/emergency-fund for the other profile');
+      expect(theirs.body).toMatchObject({
+        avgMonthlyExpenses: 0,
+        totalEmergencyFund: 99999,
+        monthsWithData: 0,
+      });
+    }
+  ),
 
   scenario('the FIRE calculator', async (api, expect) => {
     const reply = await api.post('/api/calculator/retire', fireBody);
