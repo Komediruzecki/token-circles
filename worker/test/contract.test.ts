@@ -6,7 +6,14 @@ import { unsent, type Hit, type RouteKey } from '../../shared/contract/guard';
 import { outbound } from '../../shared/contract/outbound';
 import { CONTRACT_ROUTES, UNCOVERED, WORKER_ONLY } from '../../shared/contract/routes';
 import { SCENARIOS } from '../../shared/contract/scenarios';
-import type { ContractApi, Expect, Method, Reply } from '../../shared/contract/types';
+import type {
+  ContractApi,
+  Expect,
+  Method,
+  Owned,
+  Reply,
+  StoredKind,
+} from '../../shared/contract/types';
 
 // The CRUD contract (shared/contract) against the Worker and a real D1. Local-first runs the same
 // scenarios in frontend/src/core/storage/__tests__/contract.test.ts. The last block checks that
@@ -57,8 +64,9 @@ function apiFor(cookie: string, profile: number, partner: () => ContractApi): Co
     hits.push({ method, path, status: res.status });
     return { status: res.status, body: parsed };
   };
-  return {
+  const api: ContractApi = {
     runtime: 'worker',
+    profile,
     get: (path) => send('GET', path),
     post: (path, body) => send('POST', path, body),
     put: (path, body) => send('PUT', path, body),
@@ -67,10 +75,72 @@ function apiFor(cookie: string, profile: number, partner: () => ContractApi): Co
     get other() {
       return partner();
     },
+    as: (id) => apiFor(cookie, id, () => api),
+    stored,
   };
+  return api;
 }
 
-/** A new person with two profiles, signed in. Every scenario gets its own, so none sees another's rows. */
+/** Each profile-scoped kind `stored` counts, by its table. */
+const PROFILE_TABLES: Partial<Record<StoredKind, string>> = {
+  accounts: 'accounts',
+  bills: 'bills',
+  budgets: 'budgets',
+  categories: 'categories',
+  'category mappings': 'category_mappings',
+  goals: 'savings_goals',
+  holdings: 'portfolio_holdings',
+  housing: 'housings',
+  'import logs': 'import_logs',
+  'import sources': 'import_sources',
+  loans: 'loans',
+  recurring: 'recurring_transactions',
+  'retirement goals': 'retirement_goals',
+  'tag rules': 'tag_rules',
+  tags: 'tags',
+  transactions: 'transactions',
+};
+
+/** What D1 holds for a profile (ContractApi.stored). */
+async function stored(profile: number, owned: Owned = {}): Promise<Record<StoredKind, number>> {
+  const count = async (sql: string, ...values: unknown[]) =>
+    (await env.DB.prepare(sql)
+      .bind(...values)
+      .first<{ n: number }>())!.n;
+  // The ids are the scenario's own numbers; an empty list matches nothing.
+  const ids = (list: readonly number[] = []) => (list.length ? list.map(Number).join(',') : 'NULL');
+  const counts: Partial<Record<StoredKind, number>> = {};
+  for (const [kind, table] of Object.entries(PROFILE_TABLES)) {
+    counts[kind as StoredKind] = await count(
+      `SELECT COUNT(*) AS n FROM ${table} WHERE profile_id = ?`,
+      profile
+    );
+  }
+  counts['retirement settings'] = await count(
+    "SELECT COUNT(*) AS n FROM settings WHERE profile_id = ? AND key = 'retirement_settings'",
+    profile
+  );
+  counts['loan rate periods'] = await count(
+    `SELECT COUNT(*) AS n FROM loan_rate_periods WHERE loan_id IN (${ids(owned.loans)})`
+  );
+  counts['loan extra payments'] = await count(
+    `SELECT COUNT(*) AS n FROM loan_prepayments WHERE loan_id IN (${ids(owned.loans)})`
+  );
+  counts['balance history'] = await count(
+    `SELECT COUNT(*) AS n FROM account_balance_history WHERE account_id IN (${ids(owned.accounts)})`
+  );
+  counts['transaction tags'] = await count(
+    `SELECT COUNT(*) AS n FROM transaction_tags WHERE transaction_id IN (${ids(owned.transactions)})`
+  );
+  return counts as Record<StoredKind, number>;
+}
+
+/**
+ * A new person with two profiles, signed in. Every scenario gets its own, so none sees another's
+ * rows. Local-first has no plans, so the person holds the plan with every feature: a scenario
+ * compares what the runtimes do with data, and what a plan sells is tested on its own
+ * (plan-gates.test.ts).
+ */
 async function person(): Promise<ContractApi> {
   people += 1;
   const user = 990_000 + people;
@@ -78,7 +148,7 @@ async function person(): Promise<ContractApi> {
   const partner = user * 10 + 2;
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, ?, 'password', 1)"
+      "INSERT INTO users (id, email, auth_provider, token_version, plan) VALUES (?, ?, 'password', 1, 'ultimate')"
     ).bind(user, `contract-${user}@example.com`),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Me')").bind(me, user),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Partner')").bind(

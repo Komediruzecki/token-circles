@@ -4,7 +4,7 @@ import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
 /** The body the Portfolio form saves (features/Portfolio.tsx, handleSubmit). */
-function holdingForm(fields: Record<string, unknown> = {}) {
+export function holdingForm(fields: Record<string, unknown> = {}) {
   return {
     ticker: 'ACME',
     shares: 10,

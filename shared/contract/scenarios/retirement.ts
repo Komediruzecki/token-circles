@@ -4,7 +4,7 @@ import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
 /** The body the Retirement page saves (features/Retirement.tsx, handleSubmit): every field is required. */
-function retirementForm(fields: Record<string, unknown> = {}) {
+export function retirementForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Retire at 60',
     target_amount: 750000,

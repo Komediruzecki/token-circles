@@ -3,7 +3,7 @@ import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
 /** The body the Loans form saves (features/Loans.tsx, handleSubmit). */
-function loanForm(fields: Record<string, unknown> = {}) {
+export function loanForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Car',
     principal: 15000,

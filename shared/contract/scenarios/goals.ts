@@ -3,7 +3,7 @@ import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
 /** The body the Goals form saves (features/Goals.tsx, handleSubmit), for a goal with no category. */
-function goalForm(fields: Record<string, unknown> = {}) {
+export function goalForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Holiday',
     target_amount: 2500.5,

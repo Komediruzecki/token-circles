@@ -11,7 +11,7 @@ import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
 /** The body the Bills form posts (features/billForm.ts, buildBillMutationPayload). */
-function billForm(fields: Record<string, unknown> = {}) {
+export function billForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Water',
     amount: 40.25,

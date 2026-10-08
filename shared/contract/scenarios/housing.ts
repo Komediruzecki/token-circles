@@ -3,7 +3,7 @@ import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
 /** The body the Housing form posts (features/Housing.tsx, handleSubmit). */
-function housingForm(fields: Record<string, unknown> = {}) {
+export function housingForm(fields: Record<string, unknown> = {}) {
   return {
     property_name: 'Flat rent',
     monthly_amount: 850.5,

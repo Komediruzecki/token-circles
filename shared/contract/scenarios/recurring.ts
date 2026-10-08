@@ -4,7 +4,7 @@ import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
 /** The body the Recurring section's form saves (components/RecurringSection.tsx, handleSave). */
-function ruleForm(fields: Record<string, unknown> = {}) {
+export function ruleForm(fields: Record<string, unknown> = {}) {
   return {
     description: 'Rent',
     amount: 850.5,

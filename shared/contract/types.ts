@@ -28,6 +28,8 @@ export interface Reply {
  */
 export interface ContractApi {
   readonly runtime: Runtime;
+  /** The id of the profile this API acts as. */
+  readonly profile: number;
   get(path: string): Promise<Reply>;
   post(path: string, body?: unknown): Promise<Reply>;
   put(path: string, body?: unknown): Promise<Reply>;
@@ -35,6 +37,47 @@ export interface ContractApi {
   delete(path: string): Promise<Reply>;
   /** The same person, acting as their second profile. */
   readonly other: ContractApi;
+  /** The same person, acting as another profile of theirs: one a scenario made, or a restore gave. */
+  as(profile: number): ContractApi;
+  /**
+   * What storage holds for a profile, read below the API, so a deleted profile can still be looked
+   * at: the rows of each kind that carry its id, and the rows that hang off the loans, accounts and
+   * transactions given (an extra payment belongs to a loan, not to a profile).
+   */
+  stored(profile: number, owned?: Owned): Promise<Record<StoredKind, number>>;
+}
+
+/** The kinds of row `ContractApi.stored` counts. */
+export const STORED_KINDS = [
+  'accounts',
+  'balance history',
+  'bills',
+  'budgets',
+  'categories',
+  'category mappings',
+  'goals',
+  'holdings',
+  'housing',
+  'import logs',
+  'import sources',
+  'loan extra payments',
+  'loan rate periods',
+  'loans',
+  'recurring',
+  'retirement goals',
+  'retirement settings',
+  'tag rules',
+  'tags',
+  'transaction tags',
+  'transactions',
+] as const;
+export type StoredKind = (typeof STORED_KINDS)[number];
+
+/** The rows a profile's own rows own in turn, by their ids. */
+export interface Owned {
+  loans?: readonly number[];
+  accounts?: readonly number[];
+  transactions?: readonly number[];
 }
 
 /** The part of vitest's `expect` the scenarios use. Each runner passes vitest's own. */

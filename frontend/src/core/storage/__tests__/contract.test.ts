@@ -7,7 +7,14 @@ import { SCENARIOS } from '../../../../../shared/contract/scenarios'
 import { getDB } from '../idb.js'
 import { localRoutes, routeApiRequest } from '../localApiRouter.js'
 import type { Hit, RouteKey } from '../../../../../shared/contract/guard'
-import type { ContractApi, Expect, Method, Reply } from '../../../../../shared/contract/types'
+import type {
+  ContractApi,
+  Expect,
+  Method,
+  Owned,
+  Reply,
+  StoredKind,
+} from '../../../../../shared/contract/types'
 
 // The CRUD contract (shared/contract) against local-first: the real router and handlers on
 // IndexedDB (fake-indexeddb, src/test-setup.ts). The Worker runs the same scenarios in
@@ -64,8 +71,9 @@ function apiFor(profile: number, partner: () => ContractApi): ContractApi {
     hits.push({ method, path, status: res.status })
     return { status: res.status, body: parsed }
   }
-  return {
+  const api: ContractApi = {
     runtime: 'local',
+    profile,
     get: (path) => send('GET', path),
     post: (path, body) => send('POST', path, body),
     put: (path, body) => send('PUT', path, body),
@@ -74,7 +82,62 @@ function apiFor(profile: number, partner: () => ContractApi): ContractApi {
     get other() {
       return partner()
     },
+    as: (id) => apiFor(id, () => api),
+    stored,
   }
+  return api
+}
+
+/** Each profile-scoped kind `stored` counts, by its object store. */
+const PROFILE_STORES: Partial<Record<StoredKind, string>> = {
+  accounts: 'accounts',
+  bills: 'bills',
+  budgets: 'budgets',
+  categories: 'categories',
+  'category mappings': 'categoryMappings',
+  goals: 'goals',
+  holdings: 'portfolioHoldings',
+  housing: 'housings',
+  'import logs': 'import_logs',
+  'import sources': 'import_sources',
+  loans: 'loans',
+  recurring: 'recurring',
+  'retirement goals': 'retirement_goals',
+  'tag rules': 'tagRules',
+  tags: 'tags',
+  transactions: 'transactions',
+}
+
+type Row = Record<string, unknown>
+
+/**
+ * What IndexedDB holds for a profile (ContractApi.stored). A loan carries its rate periods and
+ * extra payments, and a transaction its tag ids, so those are counted inside the rows still there.
+ */
+async function stored(profile: number, owned: Owned = {}): Promise<Record<StoredKind, number>> {
+  const db = await getDB()
+  const all = async (store: string) => (await db.getAll(store as never)) as Row[]
+  const counts: Partial<Record<StoredKind, number>> = {}
+  for (const [kind, store] of Object.entries(PROFILE_STORES)) {
+    counts[kind as StoredKind] = (await all(store)).filter((r) => r.profile_id === profile).length
+  }
+  counts['retirement settings'] = (await db.get('settings', `retirement_settings:${profile}`))
+    ? 1
+    : 0
+  const within = (rows: Row[], ids: readonly number[] = []) =>
+    rows.filter((r) => ids.includes(Number(r.id)))
+  const lengthOf = (value: unknown) => (Array.isArray(value) ? value.length : 0)
+  const loans = within(await all('loans'), owned.loans)
+  counts['loan rate periods'] = loans.reduce((n, l) => n + lengthOf(l.rate_periods), 0)
+  counts['loan extra payments'] = loans.reduce((n, l) => n + lengthOf(l.prepayments), 0)
+  counts['balance history'] = (await all('balanceHistory')).filter((r) =>
+    (owned.accounts ?? []).includes(Number(r.account_id))
+  ).length
+  counts['transaction tags'] = within(await all('transactions'), owned.transactions).reduce(
+    (n, t) => n + lengthOf(t.tag_ids),
+    0
+  )
+  return counts as Record<StoredKind, number>
 }
 
 /** An empty browser with two profiles. Every scenario starts from one. */

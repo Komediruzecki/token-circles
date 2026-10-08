@@ -5,7 +5,7 @@ import { account } from './accounts';
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/contract-sheet/edit#gid=0';
 
 /** The body Connected Sources saves for a new sheet (features/import/ConnectedSources.tsx, addSource). */
-function sourceForm(fields: Record<string, unknown> = {}) {
+export function sourceForm(fields: Record<string, unknown> = {}) {
   return {
     kind: 'google_sheet',
     label: 'Bank ledger',

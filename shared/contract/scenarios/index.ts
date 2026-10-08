@@ -10,6 +10,7 @@ import { imports } from './imports';
 import { importSources } from './importSources';
 import { loanScenarios } from './loans';
 import { portfolio } from './portfolio';
+import { profiles } from './profiles';
 import { recurring } from './recurring';
 import { retirement } from './retirement';
 import { tags } from './tags';
@@ -28,6 +29,7 @@ export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   importSources,
   loans: loanScenarios,
   portfolio,
+  profiles,
   recurring,
   retirement,
   tags,
