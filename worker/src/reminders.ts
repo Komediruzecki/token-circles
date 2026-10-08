@@ -10,6 +10,7 @@ import {
   renderSpendingReport,
 } from './emailTemplates';
 import type { RenderedEmail, UpcomingBillRow } from './emailTemplates';
+import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 
 // Reminder emails (budget alerts + spending reports + upcoming bills), ported from
 // backend/services/reminderService.js to async D1. The data queries stay faithful to the
@@ -98,6 +99,9 @@ async function getBudgetAlerts(
   const now = asOf ?? new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString().split('T')[0];
+  // The month's budgets are the ones that start in it, as the Budgets page reads them
+  // (routes/budgets.ts, D13). Every month has its own row, so `end_date IS NULL OR end_date >= ?`
+  // read every budget the category ever had, each against this month's spending.
   const budgets = await db.all<{
     category_id: number | null;
     amount: number;
@@ -107,9 +111,10 @@ async function getBudgetAlerts(
     env.DB,
     `SELECT b.category_id, b.amount, c.name as category_name, c.color as category_color
      FROM budgets b LEFT JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id = ? AND (b.end_date IS NULL OR b.end_date >= ?)`,
+     WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?`,
     profileId,
-    monthStart
+    monthStart,
+    monthEnd
   );
   const spentRows = await db.all<{ category_id: number | null; total: number }>(
     env.DB,
@@ -347,30 +352,31 @@ export async function sendSpendingReportForUser(env: Env, u: UserRow): Promise<b
 }
 
 // ── Upcoming bills (ported from the legacy bills reminder that never made it to the worker) ──
+// The bills the Bills page calls overdue or due within a week (shared/billSchedule.ts), on the date
+// of `asOf`: the person's for a preview, the UTC one for the scheduled send. A bill's stored due
+// date is its first, and paying never moves it, so reading that listed every bill set up before
+// today as overdue, paid or not, on the date it was set up with.
 async function getUpcomingBills(
   env: Env,
   profileId: number,
   asOf?: Date
 ): Promise<UpcomingBillRow[]> {
-  const bills = await db.all<{ name: string; amount: number; due_date: string | null }>(
+  const bills = await db.all<ScheduledBill & { name: string; amount: number }>(
     env.DB,
-    "SELECT name, amount, due_date FROM bills WHERE profile_id = ? AND is_active = 1 AND type = 'bill'",
+    `SELECT name, amount, frequency, day_of_month, due_date, last_paid_date, is_active
+       FROM bills WHERE profile_id = ? AND is_active = 1 AND type = 'bill'`,
     profileId
   );
-  const today = asOf ?? new Date();
-  const upcoming: UpcomingBillRow[] = [];
-  for (const bill of bills) {
-    if (!bill.due_date) continue;
-    const dueDate = new Date(bill.due_date);
-    if (isNaN(dueDate.getTime())) continue;
-    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0) {
-      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: true });
-    } else if (diffDays <= 7) {
-      upcoming.push({ ...bill, daysUntilDue: diffDays, overdue: false });
-    }
-  }
-  return upcoming.sort((a, b) => a.daysUntilDue - b.daysUntilDue);
+  const today = (asOf ?? new Date()).toISOString().slice(0, 10);
+  return comingUp(bills, today)
+    .filter((bill) => bill.days_until <= 7)
+    .map((bill) => ({
+      name: bill.name,
+      amount: bill.amount,
+      due_date: bill.next_due_date,
+      daysUntilDue: bill.days_until,
+      overdue: bill.is_overdue,
+    }));
 }
 
 export async function sendBillsRemindersForUser(env: Env, u: UserRow): Promise<boolean> {
