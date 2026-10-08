@@ -389,7 +389,8 @@ describe('the link, when it should not work', () => {
   });
 
   it('says so when another account has taken the address since, and changes nothing', async () => {
-    await seed(1);
+    // Unconfirmed, so a refused link that marked the address it leaves as confirmed would show.
+    await seed(0);
     await save(NEW);
     // Before the sign-up, whose welcome mail to the same address carries a link of its own.
     const link = latestLinkTo(NEW);
@@ -401,7 +402,7 @@ describe('the link, when it should not work', () => {
     const res = await open(link);
 
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=email_taken&change=1`);
-    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+    expect(await account()).toEqual({ email: OLD, email_verified: 0 });
     const holders = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(NEW).all();
     expect(holders.results).toHaveLength(1);
   });
@@ -409,7 +410,7 @@ describe('the link, when it should not work', () => {
 
 describe('the link, for an account that is gone', () => {
   it('refuses it rather than reporting a change', async () => {
-    await seed(1);
+    await seed(0);
     await save(NEW);
     const link = latestLinkTo(NEW);
     // Profiles first, as account deletion does: they point at the user row.
@@ -421,6 +422,9 @@ describe('the link, for an account that is gone', () => {
     const res = await open(link);
 
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=invalid_or_used`);
+    expect(await account()).toBeNull();
+    const holders = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(NEW).all();
+    expect(holders.results).toEqual([]);
   });
 });
 
