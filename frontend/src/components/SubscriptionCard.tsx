@@ -12,6 +12,7 @@ import { Show } from 'solid-js'
 import { formatCurrency } from '../core/api'
 import { showConfirm } from '../core/confirmStore'
 import { frequencySuffix } from '../core/subscriptionMath'
+import { daysToDue, dueDateLabel, nextDue } from '../features/billDue'
 import { matchBrand } from '../features/subscriptionBrands'
 import { subscriptionCategoryLabel } from '../features/subscriptionFilters'
 import OverflowMenu from './OverflowMenu'
@@ -22,6 +23,8 @@ export interface SubscriptionCardBill {
   name: string
   amount: number
   due_date: string
+  /** When it falls due next: the date the card shows (features/billDue.ts). */
+  next_due_date?: string | null
   frequency: string
   is_active?: number
   paid?: boolean
@@ -41,36 +44,19 @@ interface SubscriptionCardProps {
   markingPaid: () => Set<number>
 }
 
-/* ── Due date helpers ── */
+/* ── Due date helpers: from the date it falls due next, not the first one it was saved with ── */
 
-function dueText(dateStr: string): string {
-  const target = new Date(dateStr)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  target.setHours(0, 0, 0, 0)
-  const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diff < 0) return `${Math.abs(diff)}d overdue`
-  if (diff === 0) return 'Due today'
-  if (diff === 1) return 'Due tomorrow'
-  return `Due in ${diff}d`
+function dueText(days: number): string {
+  if (days < 0) return `${-days}d overdue`
+  if (days === 0) return 'Due today'
+  if (days === 1) return 'Due tomorrow'
+  return `Due in ${days}d`
 }
 
-function dueClass(dateStr: string): string {
-  const target = new Date(dateStr)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  target.setHours(0, 0, 0, 0)
-  const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diff < 0) return styles.dueOverdue
-  if (diff <= 1) return styles.dueSoon
+function dueClass(days: number): string {
+  if (days < 0) return styles.dueOverdue
+  if (days <= 1) return styles.dueSoon
   return styles.dueNormal
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 export default function SubscriptionCard(props: SubscriptionCardProps) {
@@ -106,7 +92,7 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
         <p class={styles.meta}>
           {subscriptionCategoryLabel(sub())}
           {' · '}
-          <span title={sub().due_date}>{formatDate(sub().due_date)}</span>
+          <span title={nextDue(sub())}>{dueDateLabel(nextDue(sub()), false)}</span>
         </p>
       </div>
 
@@ -117,8 +103,8 @@ export default function SubscriptionCard(props: SubscriptionCardProps) {
             <span class={styles.frequency}>/{frequencySuffix(sub().frequency)}</span>
           </span>
           <Show when={isActive()} fallback={<span class={styles.pausedBadge}>Paused</span>}>
-            <span class={`${styles.due} ${dueClass(sub().due_date)}`}>
-              {dueText(sub().due_date)}
+            <span class={`${styles.due} ${dueClass(daysToDue(sub()))}`}>
+              {dueText(daysToDue(sub()))}
             </span>
           </Show>
         </div>

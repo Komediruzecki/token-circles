@@ -72,6 +72,7 @@ import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import BillCalendar from './BillCalendar'
+import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
 import { createBillForm } from './billForm'
 import styles from './BillsPage.module.css'
 import { createCategoryForm } from './categoryForm'
@@ -94,7 +95,8 @@ interface Bill {
   name: string
   amount: number
   due_date: string
-  category?: string
+  /** When it falls due next (features/billDue.ts): the date the cards show. */
+  next_due_date?: string | null
   category_id?: number | null
   category_name?: string
   category_color?: string
@@ -290,40 +292,8 @@ export default function Bills() {
     }
   }
 
-  // Days until due
-  const daysUntil = (dateStr: string): string => {
-    const target = new Date(dateStr)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    target.setHours(0, 0, 0, 0)
-    const diff = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    if (diff < 0) return `${Math.abs(diff)} days overdue`
-    if (diff === 0) return 'Due today'
-    if (diff === 1) return 'Due tomorrow'
-    return `Due in ${diff} days`
-  }
-
-  const isOverdue = (dateStr: string): boolean => {
-    const target = new Date(dateStr)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    target.setHours(0, 0, 0, 0)
-    return target < today
-  }
-
-  // Format date
-  const formatDate = (dateStr: string): string => {
-    const date = new Date(dateStr)
-    if (isNaN(date.getTime())) {
-      console.error('Invalid date:', dateStr, 'Date object:', date)
-      return 'Invalid Date'
-    }
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  /** Unpaid, and its day has passed. */
+  const isOverdue = (bill: Bill): boolean => !bill.paid && daysToDue(bill) < 0
 
   return (
     <div class={`${styles.billsPage} page page-bills page-enter`}>
@@ -581,7 +551,7 @@ export default function Bills() {
                   {(bill) => (
                     <div
                       data-test-id="bill-card"
-                      class={`${styles.billCard} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                      class={`${styles.billCard} ${isOverdue(bill) ? styles.overdue : ''}`}
                     >
                       <div class={styles.billMain}>
                         <div data-test-id="bill-icon" class={styles.billIcon}>
@@ -614,8 +584,8 @@ export default function Bills() {
                             {bill.name}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
-                            {daysUntil(bill.due_date)} •{' '}
+                            <span data-test-id="bill-due-date">{dueDateLabel(nextDue(bill))}</span>{' '}
+                            • {dueInWords(daysToDue(bill))} •{' '}
                             <span data-test-id="bill-frequency">
                               {frequencyLabel(bill.frequency)}
                             </span>
@@ -624,7 +594,7 @@ export default function Bills() {
                       </div>
                       <div
                         data-test-id="bill-amount-container"
-                        class={`${styles.billAmount} ${isOverdue(bill.due_date) ? styles.overdue : ''}`}
+                        class={`${styles.billAmount} ${isOverdue(bill) ? styles.overdue : ''}`}
                       >
                         <div data-test-id="bill-amount" class={styles.amountValue}>
                           {formatCurrency(bill.amount)}
@@ -669,7 +639,7 @@ export default function Bills() {
                 <For each={paidBills()}>
                   {(bill) => (
                     <div
-                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill.due_date) && !bill.paid ? styles.overdue : ''}`}
+                      class={`${styles.billCard} ${bill.paid ? styles.paid : ''} ${isOverdue(bill) ? styles.overdue : ''}`}
                     >
                       <div class={styles.billMain}>
                         <div data-test-id="bill-icon" class={styles.billIcon}>
@@ -707,11 +677,14 @@ export default function Bills() {
                             )}
                           </h3>
                           <p data-test-id="bill-details" class={styles.billDetails}>
-                            <span data-test-id="bill-due-date">{formatDate(bill.due_date)}</span> •{' '}
+                            <span data-test-id="bill-due-date">
+                              Next due {dueDateLabel(nextDue(bill))}
+                            </span>{' '}
+                            •{' '}
                             <span data-test-id="bill-frequency">
                               {frequencyLabel(bill.frequency)}
                             </span>
-                            {bill.category && ` • ${bill.category}`}
+                            {bill.category_name && ` • ${bill.category_name}`}
                           </p>
                         </div>
                       </div>
@@ -739,7 +712,7 @@ export default function Bills() {
                             >
                               {markingPaid().has(bill.id)
                                 ? 'Paying...'
-                                : isOverdue(bill.due_date)
+                                : isOverdue(bill)
                                   ? 'Mark as Paid (Overdue)'
                                   : 'Mark Paid'}
                             </button>

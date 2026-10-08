@@ -52,3 +52,13 @@ describe('filterSubscriptions', () => {
     expect(filterSubscriptions(fleet, 'paused').map((s) => s.id)).toEqual([5])
   })
 })
+
+describe('the order of the cards', () => {
+  it('goes by the date each falls due next, not the first one it was saved with', () => {
+    const saved = [
+      sub({ id: 1, name: 'Paper', due_date: '2026-01-25', next_due_date: '2026-10-25' }),
+      sub({ id: 2, name: 'Music', due_date: '2026-09-20', next_due_date: '2026-10-20' }),
+    ]
+    expect(filterSubscriptions(saved, 'all').map((s) => s.name)).toEqual(['Music', 'Paper'])
+  })
+})
