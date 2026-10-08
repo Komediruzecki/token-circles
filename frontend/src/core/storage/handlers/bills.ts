@@ -148,7 +148,10 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
     } else if (b.day_of_month) {
       day = Number(b.day_of_month) || 1
     }
-    if (day < 1 || day > lastDay) continue
+    // A day the month does not have falls on its last day, as shared/calendarMonths.ts moves a
+    // monthly date: a bill due on the 31st was not drawn at all in February, April or June.
+    day = Math.min(day, lastDay)
+    if (day < 1) continue
 
     const billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     const isPaid = isBillPaidForCurrentPeriod(b, now)

@@ -262,16 +262,17 @@ billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
     if (b.due_date) {
       const dDate = new Date(b.due_date);
       day = dDate.getDate();
-      billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     } else if (b.day_of_month) {
       day = b.day_of_month;
-      billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     } else {
       day = 1; // Fallback
-      billDateStr = `${year}-${String(month).padStart(2, '0')}-01`;
     }
+    // A day the month does not have falls on its last day, as shared/calendarMonths.ts moves a
+    // monthly date: a bill due on the 31st was not drawn at all in February, April or June.
+    day = Math.min(day, lastDay);
+    billDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-    if (day >= 1 && day <= lastDay) {
+    if (day >= 1) {
       const isPaid = isBillPaidForCurrentPeriod(b, now);
 
       // Calculate is_overdue for the specific bill occurrence in this month
