@@ -31,7 +31,7 @@ export class ApiError extends Error {
 export function statusMessage(status: number): string {
   if (status === 401) return 'Your session has ended. Sign in again to carry on.'
   if (status === 403) return "You don't have access to that."
-  if (status === 404) return "That isn't there any more. It may have been deleted."
+  if (status === 404) return "That isn't there anymore. It may have been deleted."
   if (status === 409)
     return 'That changed somewhere else. Reload to see the latest, then try again.'
   if (status === 413) return "That's too large to send."

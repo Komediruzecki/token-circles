@@ -164,7 +164,7 @@ describe('the words for an answer with none of its own', () => {
   it.each([
     [401, 'Your session has ended. Sign in again to carry on.'],
     [403, "You don't have access to that."],
-    [404, "That isn't there any more. It may have been deleted."],
+    [404, "That isn't there anymore. It may have been deleted."],
     [409, 'That changed somewhere else. Reload to see the latest, then try again.'],
     [413, "That's too large to send."],
     [429, "That's a lot of requests in a row. Wait a moment and try again."],
