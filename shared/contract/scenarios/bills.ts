@@ -184,6 +184,71 @@ export const bills = [
     }
   ),
 
+  scenario("the bill list and calendar carry each bill's category", async (api, expect) => {
+    const utilities = await api.post('/api/categories', {
+      name: 'Utilities',
+      type: 'expense',
+      color: '#2266aa',
+      icon: 'bolt',
+    });
+    expectOk(expect, utilities, 'POST the category');
+    const water = await bill(api, expect, { category_id: utilities.body.id });
+    await bill(api, expect, {
+      name: 'Gym',
+      amount: 30,
+      dueDate: '2026-01-31',
+      type: 'subscription',
+    });
+    const paused = await bill(api, expect, { name: 'Paused', dueDate: '2026-03-15' });
+    expectOk(expect, await api.put(`/api/bills/${paused}`, { is_active: 0 }), 'pause');
+    await bill(api.other, expect, { name: 'Theirs', dueDate: '2026-03-15' });
+
+    // The Bill Calendar shows the category's name and colour, Housing the subscription's colour.
+    expect(await billsList(api, expect)).toContainEqual(
+      expect.objectContaining({
+        id: water,
+        category_name: 'Utilities',
+        category_color: '#2266aa',
+      })
+    );
+
+    const march = await api.get('/api/bills/calendar?year=2026&month=3');
+    expectOk(expect, march, 'GET /api/bills/calendar');
+    expect(march.body).toMatchObject({
+      year: 2026,
+      month: 3,
+      monthLabel: 'March 2026',
+      firstDow: 0,
+    });
+    expect(Object.keys(march.body.days)).toHaveLength(31);
+    expect(march.body.days['15']).toEqual([
+      expect.objectContaining({
+        id: water,
+        name: 'Water',
+        date: '2026-03-15',
+        category_id: utilities.body.id,
+        category_name: 'Utilities',
+        category_color: '#2266aa',
+        paid: false,
+        type: 'bill',
+        is_overdue: true,
+      }),
+    ]);
+    expect(march.body.days['31']).toEqual([
+      expect.objectContaining({ name: 'Gym', date: '2026-03-31', type: 'subscription' }),
+    ]);
+    expectMoney(expect, march.body.summary.totalAmount, 70.25, 'March total');
+    expect(march.body.summary).toMatchObject({ paidAmount: 0, billCount: 2 });
+
+    // February has no 31st: the Gym is not drawn.
+    const february = await api.get('/api/bills/calendar?year=2026&month=2');
+    expect(Object.keys(february.body.days)).toHaveLength(28);
+    expect(february.body.summary).toMatchObject({ billCount: 1 });
+
+    expect((await api.get('/api/bills/calendar?year=2026&month=13')).status).toBe(400);
+    expect((await api.get('/api/bills/calendar?year=1800&month=3')).status).toBe(400);
+  }),
+
   scenario('upcoming bills', async (api, expect) => {
     const today = isoDay(new Date());
     const day = Number(today.slice(8, 10));

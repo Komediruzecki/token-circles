@@ -45,6 +45,23 @@ function isBillPaidForCurrentPeriod(bill: Record<string, unknown>, now: Date): b
   return false
 }
 
+/**
+ * The name and colour of each profile's categories, by id, for the bills that point at them: the
+ * Worker joins them onto its bill rows, and the Bill Calendar and Housing show them.
+ */
+async function categoryLooks(
+  pids: number[]
+): Promise<Map<number, { name: unknown; color: unknown }>> {
+  const db = await getDB()
+  const looks = new Map<number, { name: unknown; color: unknown }>()
+  for (const pid of pids) {
+    for (const c of await db.getAllFromIndex('categories', 'by_profile', pid)) {
+      looks.set(c.id as number, { name: c.name, color: c.color })
+    }
+  }
+  return looks
+}
+
 export async function billsList(query?: URLSearchParams): Promise<Response> {
   const db = await getDB()
   const pids = adapter.getCurrentProfileIds()
@@ -56,8 +73,11 @@ export async function billsList(query?: URLSearchParams): Promise<Response> {
     }
 
     const now = new Date()
+    const looks = await categoryLooks(pids)
     const billsWithStatus: Record<string, unknown>[] = all.map((b) => ({
       ...normalizeBill(b),
+      category_name: looks.get(b.category_id as number)?.name ?? null,
+      category_color: looks.get(b.category_id as number)?.color ?? null,
       autopay: b.autopay === 1 || b.autopay === true,
       paid: isBillPaidForCurrentPeriod(b, now),
     }))
@@ -115,6 +135,7 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
   let totalAmount = 0
   let paidAmount = 0
   let billCount = 0
+  const looks = await categoryLooks(pids)
 
   for (const b of bills) {
     // Occurrence day in the given month: due_date's day-of-month, else day_of_month field.
@@ -144,8 +165,8 @@ export async function billsCalendar(query?: URLSearchParams): Promise<Response> 
       amount,
       frequency: b.frequency,
       category_id: b.category_id ?? null,
-      category_name: (b.category_name as string) ?? null,
-      category_color: (b.category_color as string) ?? null,
+      category_name: looks.get(b.category_id as number)?.name ?? null,
+      category_color: looks.get(b.category_id as number)?.color ?? null,
       date: billDateStr,
       paid: isPaid,
       type: (b.type as string) || 'bill',
