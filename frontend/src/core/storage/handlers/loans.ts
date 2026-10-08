@@ -1,11 +1,22 @@
 /**
  * Loans handlers — IndexedDB-backed implementations
+ *
+ * A loan, its rate periods and its extra payments are checked by shared/loanSchema.ts, as the
+ * Worker's routes check them: a refused body answers 400 with what is wrong at each field, and an
+ * edit checks and writes only what it changes.
  */
-import { readExtraPayment } from '../../../../../shared/loanExtraPayment'
 import { calculateLoan, loanStatus } from '../../../../../shared/loanSchedule'
+import {
+  checkExtraPaymentCreate,
+  checkExtraPaymentEdit,
+  checkLoanCreate,
+  checkLoanEdit,
+  checkRatePeriodCreate,
+  checkRatePeriodEdit,
+} from '../../../../../shared/loanSchema'
 import { localToday } from '../../../utils/period'
 import { getDB } from '../idb'
-import { adapter, currentProfileRecord, idParam, json, notFound, ok } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, ok, refuse } from './helpers'
 import { normalizeLoan } from './normalize'
 import type { LoanInput } from '../../../../../shared/loanSchedule'
 
@@ -38,12 +49,16 @@ export async function loansList(): Promise<Response> {
   return json(enriched)
 }
 
+/** A new loan as checked, with its rate periods; keys the app never reads are not stored. */
 export async function loansCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid loan data' }, 400)
-  const loan = body as Record<string, unknown>
-  loan.profile_id = await adapter.getCurrentProfileId()
-  loan.rate_periods = loan.rate_periods || []
-  loan.prepayments = loan.prepayments || []
+  const checked = checkLoanCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const loan: Record<string, unknown> = {
+    ...checked.value,
+    profile_id: await adapter.getCurrentProfileId(),
+    prepayments: [],
+  }
+  giveIds(loan)
   const id = await adapter.createLoan(loan as unknown as Parameters<typeof adapter.createLoan>[0])
   return json({ id, ...loan }, 201)
 }
@@ -83,14 +98,24 @@ export async function loansGet(params: Record<string, string>): Promise<Response
   return json(normalizeLoan(loan))
 }
 
+/**
+ * An edit of a loan: only what it changes is checked and written, so a loan an older version
+ * stored under other rules can still be renamed. Rate periods sent replace the stored ones when
+ * they differ from them; sent back unchanged, they are left as they are, ids and all.
+ */
 export async function loansUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const id = idParam(params)
-  if (!(await currentProfileRecord('loans', id))) return notFound('Loan')
-  await adapter.updateLoan(id, body as Record<string, unknown>)
+  const loan = await currentProfileRecord('loans', id)
+  if (!loan) return notFound('Loan')
+  const checked = checkLoanEdit(body, loan)
+  if (!checked.ok) return refuse(checked.fields)
+  if (Object.keys(checked.value).length === 0) return ok()
+  const edit: Record<string, unknown> = { ...checked.value }
+  if (edit.rate_periods !== undefined) giveIds(edit)
+  await adapter.updateLoan(id, edit)
   return ok()
 }
 
@@ -115,16 +140,18 @@ export async function loanRatesAdd(
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  const checked = checkRatePeriodCreate(body, loan.term_months)
+  if (!checked.ok) return refuse(checked.fields)
   giveIds(loan)
   const rates = loan.rate_periods || []
   const id = rates.reduce((max: number, r: any) => Math.max(max, Number(r.id) || 0), 0) + 1
-  rates.push({ ...(body as Record<string, unknown>), id })
+  rates.push({ ...checked.value, id })
   loan.rate_periods = rates
   await db.put('loans', loan)
   return json({ id }, 201)
 }
 
+/** Change the rate period whose id is `p2`: only what the body changes is checked and written. */
 export async function loanRateUpdate(
   params: Record<string, string>,
   body: unknown
@@ -132,13 +159,14 @@ export async function loanRateUpdate(
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const rateId = idParam(params, 'p2') // p2 is the rateId
   giveIds(loan)
   const rates = loan.rate_periods || []
   const index = rates.findIndex((r: any) => Number(r.id) === rateId)
   if (index < 0) return notFound('Rate period')
-  rates[index] = { ...rates[index], ...(body as Record<string, unknown>), id: rateId }
+  const checked = checkRatePeriodEdit(body, rates[index], loan.term_months)
+  if (!checked.ok) return refuse(checked.fields)
+  rates[index] = { ...rates[index], ...checked.value, id: rateId }
   loan.rate_periods = rates
   await db.put('loans', loan)
   return ok()
@@ -174,8 +202,8 @@ export async function loanPrepaymentAdd(
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  const extra = readExtraPayment(body, loan.term_months)
-  if (!extra.ok) return json({ error: extra.error }, 400)
+  const extra = checkExtraPaymentCreate(body, loan.term_months)
+  if (!extra.ok) return refuse(extra.fields)
   giveIds(loan)
   const prepayments = loan.prepayments || []
   const id = prepayments.reduce((max: number, p: { id: number }) => Math.max(max, p.id), 0) + 1
@@ -185,7 +213,10 @@ export async function loanPrepaymentAdd(
   return json({ id }, 201)
 }
 
-/** Change the extra payment whose id is `p2`, checked as an added one is. */
+/**
+ * Change the extra payment whose id is `p2`: only what the body changes is checked and written, so
+ * one that goes with a payment a since-shortened term has passed keeps its month.
+ */
 export async function loanPrepaymentUpdate(
   params: Record<string, string>,
   body: unknown
@@ -193,13 +224,13 @@ export async function loanPrepaymentUpdate(
   const db = await getDB()
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
-  const extra = readExtraPayment(body, loan.term_months)
-  if (!extra.ok) return json({ error: extra.error }, 400)
   giveIds(loan)
   const prepayId = idParam(params, 'p2')
   const prepayments = loan.prepayments || []
   const index = prepayments.findIndex((p: { id: number }) => p.id === prepayId)
   if (index < 0) return notFound('Extra payment')
+  const extra = checkExtraPaymentEdit(body, prepayments[index], loan.term_months)
+  if (!extra.ok) return refuse(extra.fields)
   prepayments[index] = { ...prepayments[index], ...extra.value }
   loan.prepayments = prepayments
   await db.put('loans', loan)

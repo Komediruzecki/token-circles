@@ -117,11 +117,11 @@ describe('unexpected errors', () => {
   // cannot see whether the real app uses it. This one goes through the real app (SELF), so a
   // src/index.ts whose onError says err.message again, or is gone, fails here.
   //
-  // The failure is made, not found: a route that fails today by mistake (POST /api/loans with no
-  // body escapes as a D1_TYPE_ERROR) gets fixed, and the guard would go with it. Here the table
-  // behind GET /api/import-logs is moved aside for one request, so the route's own query fails
-  // the way any unexpected D1 error does. Storage is shared between tests (vitest.config.ts:
-  // isolatedStorage false), so the table is always put back.
+  // The failure is made, not found: a route that fails by mistake gets fixed, and the guard would
+  // go with it (POST /api/loans with no body escaped as a D1_TYPE_ERROR until shared/loanSchema.ts
+  // refused it at its fields). Here the table behind GET /api/import-logs is moved aside for one
+  // request, so the route's own query fails the way any unexpected D1 error does. Storage is shared
+  // between tests (vitest.config.ts: isolatedStorage false), so the table is always put back.
   it("answers a real route's unexpected failure through the app's own onError", async () => {
     await env.DB.prepare('ALTER TABLE import_logs RENAME TO import_logs_aside').run();
     let res: Response;

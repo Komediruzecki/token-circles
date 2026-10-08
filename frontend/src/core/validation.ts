@@ -19,6 +19,7 @@ import { checkBillCreate } from '../../../shared/billSchema'
 import { checkBudgetCreate } from '../../../shared/budgetSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
+import { checkLoanCreate } from '../../../shared/loanSchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
@@ -52,16 +53,7 @@ export function localTransactionDefaults(): TransactionDefaults {
 // Not a zod schema: shared/billSchema.ts, which the Worker route runs too.
 
 // ── Loan ───────────────────────────────────────────────────────────────────────
-
-export const loanCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  principal: z.number().positive(),
-  interest_rate: z.number().nonnegative(),
-  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  term_months: z.number().int().positive(),
-})
-
-export const loanUpdateSchema = loanCreateSchema.partial()
+// Not a zod schema: shared/loanSchema.ts, which the Worker route runs too.
 
 // ── Savings Goal ───────────────────────────────────────────────────────────────
 // Not a zod schema: shared/goalSchema.ts, which the Worker route runs too.
@@ -157,12 +149,12 @@ const schemaMap: Record<string, BodyRule> = {
   // (checkTransactionEdit, checkCategoryEdit and checkAccountEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
   'POST:/api/accounts': checkAccountCreate,
-  // No PUT entry for budgets, bills or savings goals either: their handlers check an edit against
-  // the stored row (checkBudgetEdit, checkBillEdit and checkGoalEdit in shared/).
+  // No PUT entry for budgets, bills, loans or savings goals either: their handlers check an edit
+  // against the stored row (checkBudgetEdit, checkBillEdit, checkLoanEdit and checkGoalEdit in
+  // shared/).
   'POST:/api/budgets': (body) => checkBudgetCreate(body, { monthStart: `${localMonth()}-01` }),
   'POST:/api/bills': checkBillCreate,
-  'POST:/api/loans': loanCreateSchema,
-  'PUT:/api/loans': loanUpdateSchema,
+  'POST:/api/loans': checkLoanCreate,
   'POST:/api/savings-goals': (body) => checkGoalCreate(body, { today: localToday() }),
   'POST:/api/recurring': recurringCreateSchema,
   'PUT:/api/recurring': recurringUpdateSchema,

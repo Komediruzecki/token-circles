@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PARITY_LOAN } from '../../../../../shared/fixtures/loanParity'
 import { calculateLoan, loanStatus } from '../../../../../shared/loanSchedule'
+import { LOAN_MESSAGES as M } from '../../../../../shared/loanSchema'
 import { getDB } from '../idb.js'
 import { routeApiRequest } from '../localApiRouter'
 import {
@@ -21,6 +22,25 @@ async function storeLoan(loan: typeof PARITY_LOAN): Promise<number> {
     expect((await loanPrepaymentAdd({ p1: String(created.id) }, { ...p })).status).toBe(201)
   }
   return created.id
+}
+
+/**
+ * A loan an older version saved without a start date, which a new loan can no longer be: stored
+ * as it was, for the engine to read.
+ */
+async function storeUndated(): Promise<number> {
+  const db = await getDB()
+  const loan = {
+    profile_id: 1,
+    name: 'Undated',
+    principal: 1200,
+    interest_rate: 0,
+    term_months: 12,
+    created_at: '2026-01-01T00:00:00.000Z',
+    rate_periods: [],
+    prepayments: [],
+  }
+  return (await db.add('loans', loan as never)) as number
 }
 
 describe('localHandlers - loans', () => {
@@ -70,6 +90,7 @@ describe('localHandlers - loans', () => {
       principal: 15000,
       interest_rate: 5,
       term_months: 60,
+      start_date: '2026-01-01',
     })
     const created = await createRes.json()
 
@@ -93,6 +114,7 @@ describe('localHandlers - loans', () => {
       principal: 1000,
       interest_rate: 10,
       term_months: 12,
+      start_date: '2026-01-01',
     })
     const created = await createRes.json()
 
@@ -170,10 +192,7 @@ describe('localHandlers - loans', () => {
   })
 
   it('calculates a loan saved without a start date instead of failing', async () => {
-    const created = await (
-      await loansCreate({ name: 'Undated', principal: 1200, interest_rate: 0, term_months: 12 })
-    ).json()
-    const res = await loansCalculate({ p1: String(created.id) })
+    const res = await loansCalculate({ p1: String(await storeUndated()) })
     expect(res.status).toBe(200)
     const { schedule, summary } = await res.json()
     expect(schedule).toHaveLength(12)
@@ -265,7 +284,7 @@ describe('localHandlers - where each listed loan stands today', () => {
   })
 
   it('owes the whole principal on a loan saved without a start date', async () => {
-    await loansCreate({ name: 'Undated', principal: 1200, interest_rate: 0, term_months: 12 })
+    await storeUndated()
     const [row] = await (await loansList()).json()
     expect(row.remaining_balance).toBe(1200)
     expect(row.monthly_payment).toBe(100)
@@ -363,11 +382,14 @@ describe('localHandlers - extra payments, by their id', () => {
     expect(loan.prepayments.map((p: { id: number }) => p.id)).toEqual([57, 58, 59])
   })
 
-  it('refuses a change it would refuse as a new one, and keeps the payment as it was', async () => {
+  it('refuses a change it would refuse in a new one, and keeps the payment as it was', async () => {
     const id = await loanWith([{ month: 3, amount: 500, note: '' }])
     const zero = await route(`/loans/${id}/prepayments/1`, 'PUT', { month: 3, amount: 0 })
     expect(zero.status).toBe(400)
-    expect(await zero.json()).toEqual({ error: 'Enter an amount above zero.' })
+    expect(await zero.json()).toEqual({
+      error: M.amountPositive,
+      fields: { amount: M.amountPositive },
+    })
     // The loan has 60 payments.
     const late = await route(`/loans/${id}/prepayments/1`, 'PUT', { month: 61, amount: 10 })
     expect(late.status).toBe(400)
@@ -388,15 +410,15 @@ describe('localHandlers - extra payments, by their id', () => {
   it('stores an added extra payment as checked, not the body as sent', async () => {
     const id = await loanWith([])
     const added = await route(`/loans/${id}/prepayments`, 'POST', {
-      month: 2,
-      amount: 99.999,
+      month: '2',
+      amount: '99.99',
       note: ' x ',
       other: 'field',
     })
     expect(added.status).toBe(201)
     const db = await getDB()
     expect((await db.get('loans', id))?.prepayments).toEqual([
-      { month: 2, amount: 100, note: 'x', id: 1 },
+      { month: 2, amount: 99.99, note: 'x', id: 1 },
     ])
     const refused = await route(`/loans/${id}/prepayments`, 'POST', { month: 2, amount: -1 })
     expect(refused.status).toBe(400)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { BUDGET_MESSAGES } from '../../../../shared/budgetSchema'
 import { GOAL_MESSAGES } from '../../../../shared/goalSchema'
+import { LOAN_MESSAGES } from '../../../../shared/loanSchema'
 import { TRANSACTION_MESSAGES } from '../../../../shared/transactionSchema'
 import { validateBody } from '../validation'
 
@@ -121,7 +122,7 @@ describe('validation - validateBody', () => {
     ).not.toBeNull()
   })
 
-  it('answers a budget, a bill and a savings goal in the Worker’s rules and words (shared/)', async () => {
+  it('answers a budget, a bill, a savings goal and a loan in the Worker’s rules and words (shared/)', async () => {
     const fieldsOf = async (path: string, body: unknown) =>
       (await validateBody('POST', path, body)!.json()).fields
     expect(await fieldsOf('/api/budgets', { category_id: 1, amount: -5 })).toEqual({
@@ -133,6 +134,8 @@ describe('validation - validateBody', () => {
     expect(await fieldsOf('/api/savings-goals', { name: 'Car', target_amount: 0 })).toEqual({
       target_amount: GOAL_MESSAGES.targetPositive,
     })
+    const loan = { name: 'Car', principal: 15000, term_months: 60, start_date: '2026-01-15' }
+    expect(await fieldsOf('/api/loans', loan)).toEqual({ interest_rate: LOAN_MESSAGES.rate })
   })
 
   it('validates bill create body', () => {
@@ -258,18 +261,19 @@ describe('validation - a zod refusal in plain words', () => {
 
   it('says what to do with a number out of range, a list value and a date', async () => {
     expect(
-      await fieldsOf('/api/loans', {
-        name: 'Car',
-        principal: 0,
-        interest_rate: -1,
-        start_date: '1 May',
-        term_months: 12,
-      })
+      await fieldsOf('/api/housings', { name: 'Flat', purchase_price: 0, interest_rate: -1 })
     ).toEqual({
-      principal: 'Make the principal more than zero.',
+      purchase_price: 'Make the purchase price more than zero.',
       interest_rate: "The interest rate can't be negative.",
-      start_date: 'Enter a valid start date.',
     })
+    expect(
+      await fieldsOf('/api/portfolio/holdings', {
+        ticker: 'VWCE',
+        shares: 10,
+        purchase_price: 100,
+        purchase_date: '1 May',
+      })
+    ).toEqual({ purchase_date: 'Enter a valid purchase date.' })
     expect(
       await fieldsOf('/api/recurring', {
         description: 'Rent',

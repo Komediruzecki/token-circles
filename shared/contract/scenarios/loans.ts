@@ -1,4 +1,4 @@
-import { EXTRA_PAYMENT_ERRORS } from '../../loanExtraPayment';
+import { LOAN_MESSAGES as M, periodEndMessage, periodStartMessage } from '../../loanSchema';
 import { expectMoney } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -219,14 +219,17 @@ export const loanScenarios = [
       expect.objectContaining({ id: second.id, month: 30, amount: 750.25, note: 'Bonus' }),
     ]);
 
-    // A change is checked as a new payment is, and a refused one changes nothing.
+    // A change is checked for what it changes, and a refused one changes nothing.
     const refused = await api.put(`/api/loans/${id}/prepayments/${second.id}`, {
       month: 30,
       amount: 0,
       note: '',
     });
     expect(refused.status).toBe(400);
-    expect(refused.body).toMatchObject({ error: EXTRA_PAYMENT_ERRORS.amount });
+    expect(refused.body).toEqual({
+      error: M.amountPositive,
+      fields: { amount: M.amountPositive },
+    });
 
     // An id the loan does not have, and the loan seen from another profile, are not found.
     const missing = await api.put(
@@ -306,6 +309,56 @@ export const loanScenarios = [
     const listed = (await loans(api, expect)).find((l) => l.id === id);
     expect(listed.monthly_payment).toBeGreaterThan(0);
     expect(listed.remaining_balance).toBeLessThan(15000);
+  }),
+
+  scenario('a loan is refused in the same words, at the same fields', async (api, expect) => {
+    // The Worker answered 500 for a loan without a name, and saved one without a rate at 5 %.
+    const { name: _name, interest_rate: _rate, ...bare } = loanForm();
+    const refused = await api.post('/api/loans', bare);
+    expect(refused.status).toBe(400);
+    expect(refused.body).toEqual({
+      error: `${M.name} ${M.rate}`,
+      fields: { name: M.name, interest_rate: M.rate },
+    });
+
+    // A rate period is refused at the field of its row.
+    const period = await api.post(
+      '/api/loans',
+      loanForm({
+        rate_periods: [
+          { rate: 6, start_month: 13, end_month: 24 },
+          { rate: 101, start_month: 61, end_month: 70 },
+        ],
+      })
+    );
+    expect(period.status).toBe(400);
+    expect(period.body.fields).toEqual({
+      'rate_periods.1.rate': M.rateRange,
+      'rate_periods.1.start_month': periodStartMessage(60),
+      'rate_periods.1.end_month': periodEndMessage(1, 60),
+    });
+    expect(await loans(api, expect)).toEqual([]);
+
+    // An extra payment says everything that is wrong with it at once.
+    const id = await loan(api, expect);
+    const extra = await api.post(`/api/loans/${id}/prepayments`, {
+      month: 61,
+      amount: 10.005,
+      note: 7,
+    });
+    expect(extra.status).toBe(400);
+    expect(extra.body).toEqual({
+      error: `${M.extraMonth} ${M.extraAmountCents} ${M.note}`,
+      fields: { month: M.extraMonth, amount: M.extraAmountCents, note: M.note },
+    });
+    expect((await loanDetail(api, expect, id)).prepayments).toEqual([]);
+
+    // An edit is checked for what it changes: the loan's own values sent back save.
+    expectOk(expect, await api.put(`/api/loans/${id}`, loanForm()), 'PUT the loan unchanged');
+    const emptied = await api.put(`/api/loans/${id}`, loanForm({ principal: '' }));
+    expect(emptied.status).toBe(400);
+    expect(emptied.body).toEqual({ error: M.principal, fields: { principal: M.principal } });
+    expectMoney(expect, (await loanDetail(api, expect, id)).principal, 15000);
   }),
 
   scenario('loans are listed newest first', async (api, expect) => {
