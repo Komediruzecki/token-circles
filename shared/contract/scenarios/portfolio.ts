@@ -74,6 +74,19 @@ export const portfolio = [
     });
   }),
 
+  scenario("another profile's holding is not changed or removed", async (api, expect) => {
+    const { id } = await addHolding(api, expect);
+    const other = api.other;
+    expect(await holdings(other, expect)).toEqual([]);
+    expect(
+      (await other.put(`/api/portfolio/holdings/${id}`, holdingForm({ shares: 1 }))).status
+    ).toBe(404);
+    expect((await other.delete(`/api/portfolio/holdings/${id}`)).status).toBe(404);
+    expect(await holdings(api, expect)).toEqual([
+      expect.objectContaining({ id, ticker: 'ACME', shares: 10 }),
+    ]);
+  }),
+
   scenario('live prices for the tickers held', async (api, expect) => {
     // The Portfolio page's refresh sends every ticker it holds.
     const reply = await api.post('/api/portfolio/prices', { tickers: ['ACME', 'NOPE'] });

@@ -2,7 +2,7 @@
  * Portfolio handlers — IndexedDB-backed implementations
  */
 import { getDB } from '../idb'
-import { adapter, idParam, json, notFound } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound } from './helpers'
 
 export async function portfolioHoldingsList(): Promise<Response> {
   try {
@@ -74,7 +74,8 @@ export async function portfolioHoldingsUpdate(
     const id = idParam(params)
     const data = body as Record<string, unknown>
     const db = await getDB()
-    const existing = await db.get('portfolioHoldings', id)
+    // The active profile's own holding only, as the Worker's `AND profile_id = ?`.
+    const existing = await currentProfileRecord('portfolioHoldings', id)
     if (!existing) return notFound('Holding')
     const updTicker = typeof data.ticker === 'string' ? data.ticker.toUpperCase() : existing.ticker
     const updShares =
@@ -108,8 +109,7 @@ export async function portfolioHoldingsDelete(params: Record<string, string>): P
   try {
     const id = idParam(params)
     const db = await getDB()
-    const existing = await db.get('portfolioHoldings', id)
-    if (!existing) return notFound('Holding')
+    if (!(await currentProfileRecord('portfolioHoldings', id))) return notFound('Holding')
     await db.delete('portfolioHoldings', id)
     return json({ ok: true })
   } catch (err) {
