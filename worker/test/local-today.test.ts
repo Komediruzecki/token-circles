@@ -25,6 +25,7 @@ import { issueSessionCookie } from '../src/auth';
 import { mintApiToken } from '../src/apitoken';
 import { composeReminderPreview } from '../src/reminders';
 import { wallClockIn } from '../../shared/calendarDate';
+import { signCapability } from '../src/signed-url';
 
 const USER = 81;
 const PROFILE = 810;
@@ -52,6 +53,9 @@ beforeEach(async () => {
     'loans',
     'loan_rate_periods',
     'loan_prepayments',
+    'retirement_goals',
+    'import_logs',
+    'account_balance_history',
     'accounts',
     'categories',
     'api_tokens',
@@ -557,5 +561,242 @@ describe('the reminder preview reads the person’s calendar', () => {
     const preview = await composeReminderPreview(env, USER, 'spending', wallClockIn(TOKYO));
     expect(preview, 'the report ended yesterday and found nothing to send').not.toBeNull();
     expect(preview!.html).toContain('75.00');
+  });
+});
+
+/** The text a pdf-lib report draws, with its content streams inflated. */
+async function pdfText(res: Response): Promise<string> {
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const raw = new TextDecoder('latin1').decode(bytes);
+  const parts: string[] = [];
+  const marker = /stream\r?\n/g;
+  for (let m = marker.exec(raw); m; m = marker.exec(raw)) {
+    const start = m.index + m[0].length;
+    const end = raw.indexOf('endstream', start);
+    if (end < 0) break;
+    // The stream's data ends before the newline that precedes `endstream`.
+    let stop = end;
+    while (stop > start && (bytes[stop - 1] === 0x0a || bytes[stop - 1] === 0x0d)) stop--;
+    const body = bytes.slice(start, stop);
+    try {
+      const inflated = new Response(
+        new Blob([body]).stream().pipeThrough(new DecompressionStream('deflate'))
+      );
+      parts.push(new TextDecoder('latin1').decode(await inflated.arrayBuffer()));
+    } catch {
+      parts.push(new TextDecoder('latin1').decode(body));
+    }
+    marker.lastIndex = end;
+  }
+  const text: string[] = [];
+  for (const chunk of parts) {
+    for (const [, hex] of chunk.matchAll(/<([0-9A-Fa-f]+)>\s*Tj/g)) {
+      text.push(hex!.replace(/../g, (h) => String.fromCharCode(parseInt(h, 16))));
+    }
+    for (const [, literal] of chunk.matchAll(/\(((?:[^()\\]|\\.)*)\)\s*Tj/g)) text.push(literal!);
+  }
+  return text.join('\n');
+}
+
+// Every route below read "today", "this month" or "this year" off the Worker's UTC clock before
+// X-Time-Zone, and each case fails if its route goes back to doing that.
+describe('more routes that answer on the person’s calendar', () => {
+  it('the bill list calls a bill paid in October unpaid once November begins (/api/bills)', async () => {
+    await at(LAST_OF_OCTOBER);
+    await bill('Rent', '2026-11-01', { last_paid_date: '2026-10-15', day_of_month: 1 });
+    const paid = async (zone?: string) =>
+      (await json<{ paid: boolean }[]>('GET', '/api/bills', zone))[0]!.paid;
+    expect(await paid(TOKYO)).toBe(false);
+    expect(await paid()).toBe(true);
+  });
+
+  it('a weekly bill never paid comes up a week from today (/api/bills/upcoming)', async () => {
+    await at(LATE_ON_THE_7TH);
+    await bill('Cleaner', '2026-10-01', { frequency: 'weekly' });
+    const next = async (zone?: string) =>
+      (await json<{ next_due_date: string }[]>('GET', '/api/bills/upcoming', zone))[0]!
+        .next_due_date;
+    expect(await next(TOKYO)).toBe('2026-10-15');
+    expect(await next()).toBe('2026-10-14');
+  });
+
+  it('the budget summary defaults to the local month (/api/budgets/summary)', async () => {
+    await at(LAST_OF_OCTOBER);
+    await env.DB.prepare(
+      "INSERT INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, 300, 'monthly', '2026-11-01')"
+    )
+      .bind(PROFILE, FOOD)
+      .run();
+    expect(await json<unknown[]>('GET', '/api/budgets/summary', TOKYO)).toHaveLength(1);
+    expect(await json<unknown[]>('GET', '/api/budgets/summary')).toHaveLength(0);
+  });
+
+  it('zero-based budgeting opens on the local month (/api/budgets/zero-based)', async () => {
+    await at(LAST_OF_OCTOBER);
+    const plan = await json<{ period: string }>('GET', '/api/budgets/zero-based', TOKYO);
+    expect(plan.period).toBe('2026-11');
+    const summary = await json<{ period: string }>('GET', '/api/budgets/zero-based/summary', TOKYO);
+    expect(summary.period).toBe('2026-11');
+  });
+
+  it('budgets from last month’s spending land in the local month (/api/budgets/from-expenses)', async () => {
+    await at(LAST_OF_OCTOBER);
+    await expense('2026-10-10', 50);
+    const made = await json<{ ok: boolean }>('POST', '/api/budgets/from-expenses', TOKYO, {});
+    expect(made.ok).toBe(true);
+    const row = await env.DB.prepare('SELECT start_date FROM budgets WHERE profile_id = ?')
+      .bind(PROFILE)
+      .first<{ start_date: string }>();
+    expect(row?.start_date).toBe('2026-11-01');
+  });
+
+  it('last month’s budgets are copied into the local month (/api/budgets/duplicate-last)', async () => {
+    await at(LAST_OF_OCTOBER);
+    await env.DB.prepare(
+      "INSERT INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, 300, 'monthly', '2026-10-01')"
+    )
+      .bind(PROFILE, FOOD)
+      .run();
+    const made = await json<{ ok: boolean }>('POST', '/api/budgets/duplicate-last', TOKYO, {});
+    expect(made.ok).toBe(true);
+    const rows = await env.DB.prepare(
+      'SELECT start_date FROM budgets WHERE profile_id = ? ORDER BY start_date'
+    )
+      .bind(PROFILE)
+      .all<{ start_date: string }>();
+    expect(rows.results.map((r) => r.start_date)).toEqual(['2026-10-01', '2026-11-01']);
+  });
+
+  it('Budget vs Actual for January is next year’s January on 1 January (/api/analytics/sankey)', async () => {
+    await at(NEW_YEARS_EVE);
+    await env.DB.prepare(
+      "INSERT INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, 300, 'monthly', '2027-01-01')"
+    )
+      .bind(PROFILE, FOOD)
+      .run();
+    const sankey = (zone?: string) =>
+      json<{ hasBudgets?: boolean }>('GET', '/api/analytics/sankey?month=1', zone);
+    expect((await sankey(TOKYO)).hasBudgets).toBe(true);
+    expect((await sankey()).hasBudgets).not.toBe(true);
+  });
+
+  it('the annual PDF defaults to the local year (/api/reports/annual-pdf)', async () => {
+    await at(NEW_YEARS_EVE);
+    const res = await call('GET', '/api/reports/annual-pdf', { zone: TOKYO });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Disposition')).toContain('annual-2027.pdf');
+  });
+
+  it('every PDF report is dated with the local today', async () => {
+    await at(LATE_ON_THE_7TH);
+    for (const path of [
+      '/api/reports/monthly-pdf',
+      '/api/reports/tax-summary-pdf?year=2026',
+      '/api/reports/pl-summary-pdf?year=2026',
+      '/api/reports/annual-pdf',
+    ]) {
+      const res = await call('GET', path, { zone: TOKYO });
+      expect(res.status, path).toBe(200);
+      expect(await pdfText(res), path).toContain('Generated 2026-10-08');
+    }
+  });
+
+  it('a test email is built on the local calendar (/api/notifications/test-email)', async () => {
+    await at(LATE_ON_THE_7TH);
+    await expense('2026-10-08', 75, 'entered at 08:30 on the 8th');
+    // The spending report ends today; on UTC's calendar the only spending is tomorrow's.
+    const local = await call('POST', '/api/notifications/test-email', {
+      zone: TOKYO,
+      body: { type: 'spending' },
+    });
+    expect(local.status).toBe(200);
+    const utc = await call('POST', '/api/notifications/test-email', { body: { type: 'spending' } });
+    expect(utc.status).toBe(400);
+  });
+
+  it('an account an /api/v1 upload creates opens on the uploader’s today (/api/v1/import)', async () => {
+    await at(LATE_ON_THE_7TH);
+    const upload = async (zone?: string) => {
+      const sig = await signCapability(
+        { tokenId: 'tok-today', userId: USER, profileId: PROFILE, purpose: 'import' },
+        'test-jwt-secret-not-for-prod'
+      );
+      const form = new FormData();
+      const csv = 'Date,Description,Amount,Means of Payment\n2026-10-01,Coffee,-3.50,Wallet\n';
+      form.append('file', new File([csv], 'export.csv', { type: 'text/csv' }));
+      const qs = new URLSearchParams({ sig, mode: 'commit', autoCreateAccounts: 'true' });
+      return SELF.fetch(`https://api.example.com/api/v1/import?${qs}`, {
+        method: 'POST',
+        body: form,
+        headers: zone ? { 'X-Time-Zone': zone } : {},
+      });
+    };
+    expect((await upload(TOKYO)).status).toBe(200);
+    const opened = await env.DB.prepare(
+      "SELECT starting_date FROM accounts WHERE profile_id = ? AND name = 'Wallet'"
+    )
+      .bind(PROFILE)
+      .first<{ starting_date: string }>();
+    expect(opened?.starting_date).toBe('2026-10-08');
+  });
+
+  it('a saved retirement plan derives the birth month from the local month (PUT /api/retirement/settings)', async () => {
+    await at(LAST_OF_OCTOBER);
+    await env.DB.prepare(
+      "INSERT INTO retirement_goals (profile_id, name, target_amount, current_age) VALUES (?, 'FIRE', 1000000, 40)"
+    )
+      .bind(PROFILE)
+      .run();
+    const saved = (zone?: string) =>
+      json<{ settings: { birthMonth: string | null } }>(
+        'PUT',
+        '/api/retirement/settings',
+        zone,
+        {}
+      );
+    expect((await saved(TOKYO)).settings.birthMonth).toBe('1986-11');
+    expect((await saved()).settings.birthMonth).toBe('1986-10');
+  });
+
+  it('the retirement projection starts in the local month (/api/retirement/projection)', async () => {
+    await at(LAST_OF_OCTOBER);
+    const { projection } = await json<{ projection: { rows: { month: string }[] } }>(
+      'GET',
+      '/api/retirement/projection',
+      TOKYO
+    );
+    expect(projection.rows[0]?.month).toBe('2026-11');
+  });
+});
+
+describe('the MCP budget tool answers on the caller’s calendar, and on UTC without one', () => {
+  it('get_budgets_and_goals: this month', async () => {
+    await at(LAST_OF_OCTOBER);
+    const { secret } = await mintApiToken(env.DB, USER, {
+      name: 'budgets',
+      scopes: ['read'],
+      defaultProfileId: PROFILE,
+    });
+    const month = async (zone?: string) => {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${secret}`,
+        'Content-Type': 'application/json',
+      };
+      if (zone) headers['X-Time-Zone'] = zone;
+      const res = await SELF.fetch('https://api.example.com/mcp', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/call',
+          params: { name: 'get_budgets_and_goals', arguments: {} },
+        }),
+      });
+      const body = (await res.json()) as { result: { structuredContent: { month: string } } };
+      return body.result.structuredContent.month;
+    };
+    expect(await month(TOKYO)).toBe('2026-11');
+    expect(await month()).toBe('2026-10');
   });
 });
