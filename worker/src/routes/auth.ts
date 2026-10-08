@@ -17,6 +17,7 @@ import {
   TOKEN_TTL_SECONDS,
 } from '../auth';
 import { sendMail } from '../email';
+import { applyEmailChange } from '../email-change';
 import {
   createEmailVerification,
   randomToken,
@@ -408,6 +409,10 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // The emailed confirm link. A top-level navigation, so the outcome comes back to the app as a
 // fragment (#everified=1 / #everified_error=…) the way the Google callback does — there is no
 // page to render here and nothing for the user to type.
+//
+// Two kinds of link land here (migration 0031): one confirms the address the account has, the
+// other moves the account to the address it was mailed to. The second adds `change=1` to every
+// answer that names its outcome, so the app can say which happened.
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -416,7 +421,8 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   const returnTo = isAllowedReturnTo(requested, c.env) ? requested : base;
   const back = (fragment: string) =>
     new Response(null, { status: 302, headers: { Location: `${returnTo}/#${fragment}` } });
-  const fail = (reason: string) => back(`everified_error=${encodeURIComponent(reason)}`);
+  const fail = (reason: string, change = false) =>
+    back(`everified_error=${encodeURIComponent(reason)}${change ? '&change=1' : ''}`);
 
   const token = c.req.query('token') ?? '';
   if (!token) return fail('missing_token');
@@ -424,10 +430,10 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   // whether it is still spendable. Checking `used_at` here as well would let the read say yes
   // while the write says no.
   const row = await c.env.DB.prepare(
-    'SELECT id, user_id, email, expires_at FROM email_verifications WHERE token_hash = ?'
+    'SELECT id, user_id, email, expires_at, purpose FROM email_verifications WHERE token_hash = ?'
   )
     .bind(await sha256Hex(token))
-    .first<{ id: number; user_id: number; email: string; expires_at: string }>();
+    .first<{ id: number; user_id: number; email: string; expires_at: string; purpose: string }>();
   // One message for an unknown token and one for an already-used one would let a caller probe
   // token state, so both land here.
   if (!row) return fail('invalid_or_used');
@@ -441,7 +447,16 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
     .bind(row.id)
     .run();
   if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
-  if (Date.parse(row.expires_at) < Date.now()) return fail('expired');
+  const change = row.purpose === 'change';
+  if (Date.parse(row.expires_at) < Date.now()) return fail('expired', change);
+  if (change) {
+    // The account moves to the address this link was mailed to, unless another account has it
+    // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
+    const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
+    if (outcome === 'taken') return fail('email_taken', true);
+    if (outcome === 'gone') return fail('invalid_or_used');
+    return back('everified=1&change=1');
+  }
   const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
     .bind(row.user_id)
     .first<{ email: string | null }>();

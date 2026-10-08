@@ -1,0 +1,133 @@
+/**
+ * A new account email takes effect once the new address confirms it.
+ *
+ * Asking for a different address (Settings saves it with PUT /api/notifications/settings) stores a
+ * pending change: an email_verifications row with purpose 'change' (migration 0031), whose link is
+ * mailed to the new address. The account keeps its address, and whether that address is
+ * confirmed, until the link is opened; GET /api/auth/verify-email then calls applyEmailChange.
+ */
+import type { Context } from 'hono';
+import type { AppEnv } from './index';
+import * as db from './db';
+import { sendMail } from './email';
+import { createEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './email-verification';
+import { renderEmailChange } from './emailTemplates';
+import { HttpError } from './http';
+import { enforce } from './ratelimit';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// The longest address SMTP carries (RFC 5321). The address is written into mail, so it is bounded.
+const MAX_EMAIL_LENGTH = 254;
+
+// One address gets at most three links an hour, the cap sign-in codes have (routes/email-code.ts),
+// and asking again shares it. One account asks for at most five changes an hour, whatever the
+// addresses, so a session cannot mail its way down a list.
+const PER_ADDRESS_LIMIT = 3;
+const PER_ACCOUNT_LIMIT = 5;
+const LIMIT_WINDOW_SEC = 3600;
+
+const appBase = (c: Context<AppEnv>) =>
+  c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+
+/** The address a change is waiting on, while its link can still be opened. */
+export async function pendingEmailChange(d1: D1Database, userId: number): Promise<string | null> {
+  // expires_at is an ISO string (createEmailVerification), so "now" is one too. Against
+  // datetime('now'), whose space sorts before ISO's 'T', a link that expired earlier the same day
+  // would still read as live.
+  const row = await db.first<{ email: string }>(
+    d1,
+    `SELECT email FROM email_verifications
+     WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL AND expires_at > ?
+     ORDER BY id DESC LIMIT 1`,
+    userId,
+    new Date().toISOString()
+  );
+  return row?.email ?? null;
+}
+
+/** Whether another account has `email`. A pending change holds nothing, so it never counts. */
+async function emailInUse(d1: D1Database, email: string, userId: number): Promise<boolean> {
+  return !!(await db.first(d1, 'SELECT id FROM users WHERE email = ? AND id != ?', email, userId));
+}
+
+/** The 429 to send when `userId` may not mail `email` a link now, or null when it may. */
+async function limitEmailChange(
+  c: Context<AppEnv>,
+  userId: number,
+  email: string
+): Promise<Response | null> {
+  return (
+    (await enforce(c, `email-change-account:${userId}`, PER_ACCOUNT_LIMIT, LIMIT_WINDOW_SEC)) ??
+    (await enforce(c, `email-change:${email}`, PER_ADDRESS_LIMIT, LIMIT_WINDOW_SEC))
+  );
+}
+
+/** Mint the link that moves `userId` to `email`, replacing any change still waiting, and mail it. */
+async function mailEmailChangeLink(
+  c: Context<AppEnv>,
+  userId: number,
+  email: string
+): Promise<void> {
+  const base = appBase(c);
+  const token = await createEmailVerification(c.env.DB, userId, email, 'change');
+  const mail = renderEmailChange({
+    link: verifyLink(new URL(c.req.url).origin, token, base),
+    ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    assetOrigin: base,
+  });
+  await sendMail(c.env, email, mail.subject, mail.html, { text: mail.text });
+}
+
+/**
+ * Ask to move `userId` to `email` (trimmed and lowercased by the caller, and different from the
+ * address the account has). Throws 400 for something that is not an address and 409 for one
+ * another account has; returns the 429 past the limits above, and null once the link has gone.
+ */
+export async function requestEmailChange(
+  c: Context<AppEnv>,
+  userId: number,
+  email: string
+): Promise<Response | null> {
+  if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
+    throw new HttpError(400, 'A valid email is required');
+  }
+  if (await emailInUse(c.env.DB, email, userId)) {
+    throw new HttpError(409, 'That email is already in use');
+  }
+  const limited = await limitEmailChange(c, userId, email);
+  if (limited) return limited;
+  await mailEmailChangeLink(c, userId, email);
+  return null;
+}
+
+/**
+ * Move `userId` to `email`, which the link mailed there has just proved, and mark it confirmed.
+ *
+ * 'taken' when another account has the address by now (a pending change holds nothing, so someone
+ * may have signed up with it meanwhile), and then nothing changes. 'gone' when the account is.
+ */
+export async function applyEmailChange(
+  d1: D1Database,
+  userId: number,
+  email: string
+): Promise<'changed' | 'taken' | 'gone'> {
+  // One batch: the move, and the end of every other link the account has out (a change still
+  // waiting, the confirm link for the address it leaves). The DELETE only matches once the row
+  // has `email`, so a refused move ends nothing.
+  const [moved] = await d1.batch([
+    d1
+      .prepare(
+        `UPDATE users SET email = ?, email_verified = 1
+         WHERE id = ? AND NOT EXISTS (SELECT 1 FROM users WHERE email = ? AND id != ?)`
+      )
+      .bind(email, userId, email, userId),
+    d1
+      .prepare(
+        `DELETE FROM email_verifications
+         WHERE user_id = ? AND used_at IS NULL AND (SELECT email FROM users WHERE id = ?) = ?`
+      )
+      .bind(userId, userId, email),
+  ]);
+  if ((moved.meta.changes ?? 0) > 0) return 'changed';
+  return (await db.first(d1, 'SELECT id FROM users WHERE id = ?', userId)) ? 'taken' : 'gone';
+}

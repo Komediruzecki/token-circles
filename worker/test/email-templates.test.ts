@@ -5,6 +5,7 @@ import {
   renderAccountExists,
   renderBillsReminder,
   renderBudgetAlert,
+  renderEmailChange,
   renderPasswordReset,
   renderSpendingReport,
   renderSupportAck,
@@ -63,6 +64,18 @@ describe('email templates', () => {
     expect(mail.html).toContain('https://t.co/x?token=abc123');
     expect(mail.text).toContain('https://t.co/x?token=abc123');
     expect(mail.html).toContain('2 hours');
+  });
+
+  it('email change carries its link in html AND text, says when it expires and that nothing changes until then', () => {
+    const link = 'https://api.x/api/auth/verify-email?token=abc123&returnTo=https%3A%2F%2Fapp.x';
+    const mail = renderEmailChange({ link, ttlHours: 24 });
+    expectBrandedShell(mail);
+    expect(mail.subject).toMatch(/confirm your new/i);
+    expect(mail.html).toContain(`href="${link}"`);
+    expect(mail.text).toContain(link);
+    expect(mail.html).toContain('24 hours');
+    expect(mail.text).toContain('nothing changes');
+    expect(mail.html).not.toContain('email/orbit.gif');
   });
 
   it('budget alert renders rows with the profile currency and escapes names', () => {

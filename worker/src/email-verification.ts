@@ -1,5 +1,6 @@
-// The confirm-your-address link: minting it, and the URL that goes in the mail. The route that
-// spends it is GET /api/auth/verify-email (routes/auth.ts).
+// Links that prove someone reads an address: minting one, and the URL that goes in the mail. The
+// route that spends them is GET /api/auth/verify-email (routes/auth.ts). One kind confirms the
+// address an account already has; the other moves the account to a new one (email-change.ts).
 
 // 256-bit URL-safe token (hex). The raw token goes in the email link; only its hash is stored.
 export function randomToken(): string {
@@ -23,25 +24,38 @@ export async function sha256Hex(input: string): Promise<string> {
 export const VERIFY_TOKEN_TTL_HOURS = 24;
 
 /**
- * Mint a single-use confirm token for `userId`, superseding any link already outstanding, and
- * store only its hash. Returns the raw token for the email.
+ * What opening the link does: 'confirm' marks the account's current address verified, 'change'
+ * moves the account to the address the link was mailed to (migration 0031).
+ */
+export type VerificationPurpose = 'confirm' | 'change';
+
+/**
+ * Mint a single-use token for `userId`, superseding any link of the same purpose still
+ * outstanding, and store only its hash. Returns the raw token for the email.
+ *
+ * Only the same purpose: sending the confirm link again must not cancel a change that is
+ * waiting, and asking for a change must not kill the link that confirms the address the account
+ * still has.
  */
 export async function createEmailVerification(
   db: D1Database,
   userId: number,
-  email: string
+  email: string,
+  purpose: VerificationPurpose = 'confirm'
 ): Promise<string> {
   await db
-    .prepare('DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL')
-    .bind(userId)
+    .prepare(
+      'DELETE FROM email_verifications WHERE user_id = ? AND purpose = ? AND used_at IS NULL'
+    )
+    .bind(userId, purpose)
     .run();
   const token = randomToken();
   const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
   await db
     .prepare(
-      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at) VALUES (?, ?, ?, ?)'
+      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, ?, ?)'
     )
-    .bind(userId, email, await sha256Hex(token), expiresAt)
+    .bind(userId, email, await sha256Hex(token), expiresAt, purpose)
     .run();
   return token;
 }

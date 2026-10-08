@@ -5,6 +5,7 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { sendMail } from '../email';
+import { pendingEmailChange, requestEmailChange } from '../email-change';
 import { renderTestBasic } from '../emailTemplates';
 import {
   composeReminderPreview,
@@ -22,7 +23,8 @@ import { localNow } from '../local-date';
 // the email address lives on the user. Mirrors backend/routes/notifications.js.
 export const notificationsRoutes = new Hono<AppEnv>();
 
-// GET — current email + toggles for the active profile (each flag defaults ON).
+// GET — current email, a new one waiting to be confirmed (or null), and the toggles for the
+// active profile (each flag defaults ON).
 notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
@@ -40,6 +42,7 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
   const flag = (k: string) => map.get(k) !== 'false';
   return c.json({
     email: user?.email ?? '',
+    pendingEmail: await pendingEmailChange(c.env.DB, userId),
     emailNotifications: flag('email_notifications'),
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
@@ -47,21 +50,27 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
   });
 });
 
-// PUT — update the email (UNIQUE-checked) and toggles.
+// PUT — the toggles, and a new email. A different address does not replace the account's here:
+// it is stored as a change waiting for that address to open the link mailed to it
+// (email-change.ts), and the answer names it as `pendingEmail`. An address another account has is
+// a 409, and a refused address refuses the whole save.
 notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
   const b = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  let pendingEmail: string | null = null;
   if (typeof b.email === 'string' && b.email.trim()) {
     const email = b.email.trim().toLowerCase();
-    const taken = await db.first(
+    const user = await db.first<{ email: string | null }>(
       c.env.DB,
-      'SELECT id FROM users WHERE email = ? AND id != ?',
-      email,
+      'SELECT email FROM users WHERE id = ?',
       userId
     );
-    if (taken) throw new HttpError(409, 'That email is already in use');
-    await db.run(c.env.DB, 'UPDATE users SET email = ? WHERE id = ?', email, userId);
+    if (email !== (user?.email ?? '').toLowerCase()) {
+      const limited = await requestEmailChange(c, userId, email);
+      if (limited) return limited;
+      pendingEmail = email;
+    }
   }
   const set = (key: string, on: unknown) =>
     db.run(
@@ -75,7 +84,7 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
-  return c.json({ ok: true });
+  return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
 });
 
 // POST — send a test email to the user's own address. Optional body { type }:
