@@ -51,7 +51,9 @@ export interface ContractApi {
   /**
    * What storage holds for a profile, read below the API, so a deleted profile can still be looked
    * at: the rows of each kind that carry its id, and the rows that hang off the loans, accounts and
-   * transactions given (an extra payment belongs to a loan, not to a profile).
+   * transactions given (an extra payment belongs to a loan, not to a profile). A row that hangs off
+   * one now in another profile is not counted (a local-first restore gives rows their old ids
+   * back); one whose loan, account or transaction is gone is: it was left behind.
    */
   stored(profile: number, owned?: Owned): Promise<Record<StoredKind, number>>;
 }

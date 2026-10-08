@@ -125,7 +125,9 @@ async function stored(profile: number, owned: Owned = {}): Promise<Record<Stored
     (await env.DB.prepare(sql)
       .bind(...values)
       .first<{ n: number }>())!.n;
-  // The ids are the scenario's own numbers; an empty list matches nothing.
+  // The ids are the scenario's own numbers; an empty list matches nothing. D1 gives no id out twice
+  // (AUTOINCREMENT), so a row counted here never hangs off another profile's loan, account or
+  // transaction; one whose parent is gone still counts.
   const ids = (list: readonly number[] = []) => (list.length ? list.map(Number).join(',') : 'NULL');
   const counts: Partial<Record<StoredKind, number>> = {};
   for (const [kind, table] of Object.entries(PROFILE_TABLES)) {

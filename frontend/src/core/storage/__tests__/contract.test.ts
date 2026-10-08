@@ -160,6 +160,10 @@ type Row = Record<string, unknown>
 /**
  * What IndexedDB holds for a profile (ContractApi.stored). A loan carries its rate periods and
  * extra payments, and a transaction its tag ids, so those are counted inside the rows still there.
+ *
+ * A restore gives every row its old id back, under the restored profile, so an id is counted for
+ * this profile only while its row is this profile's: the replaced profile does not count what the
+ * restore put back. A balance entry whose account is gone still counts: it was left behind.
  */
 async function stored(profile: number, owned: Owned = {}): Promise<Record<StoredKind, number>> {
   const db = await getDB()
@@ -172,13 +176,17 @@ async function stored(profile: number, owned: Owned = {}): Promise<Record<Stored
     ? 1
     : 0
   const within = (rows: Row[], ids: readonly number[] = []) =>
-    rows.filter((r) => ids.includes(Number(r.id)))
+    rows.filter((r) => ids.includes(Number(r.id)) && r.profile_id === profile)
   const lengthOf = (value: unknown) => (Array.isArray(value) ? value.length : 0)
   const loans = within(await all('loans'), owned.loans)
   counts['loan rate periods'] = loans.reduce((n, l) => n + lengthOf(l.rate_periods), 0)
   counts['loan extra payments'] = loans.reduce((n, l) => n + lengthOf(l.prepayments), 0)
-  counts['balance history'] = (await all('balanceHistory')).filter((r) =>
-    (owned.accounts ?? []).includes(Number(r.account_id))
+  const elsewhere = new Set(
+    (await all('accounts')).filter((a) => a.profile_id !== profile).map((a) => Number(a.id))
+  )
+  counts['balance history'] = (await all('balanceHistory')).filter(
+    (r) =>
+      (owned.accounts ?? []).includes(Number(r.account_id)) && !elsewhere.has(Number(r.account_id))
   ).length
   counts['transaction tags'] = within(await all('transactions'), owned.transactions).reduce(
     (n, t) => n + lengthOf(t.tag_ids),

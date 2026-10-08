@@ -25,14 +25,24 @@ async function ownedNow(api: ContractApi, expect: Expect): Promise<Owned> {
   };
 }
 
+/** Two sets of ids as one. */
+function both(a: Owned, b: Owned): Owned {
+  const join = (x: readonly number[] = [], y: readonly number[] = []) => [...new Set([...x, ...y])];
+  return {
+    loans: join(a.loans, b.loans),
+    accounts: join(a.accounts, b.accounts),
+    transactions: join(a.transactions, b.transactions),
+  };
+}
+
 /**
  * Fills this profile and puts an account in the other, takes the whole-account backup as Settings
- * does (no profile header), and restores it. Answers what this profile held, and the profiles the
- * restore gave back.
+ * does (no profile header), and restores it. Answers what this profile held, the ids that owned
+ * rows of their own in each profile before the restore, and the profiles the restore gave back.
  */
 async function backUpAndRestore(api: ContractApi, expect: Expect) {
   const mine = await fillProfile(api, expect);
-  await account(api.other, expect, 'Theirs', 5);
+  const theirs: Owned = { accounts: [await account(api.other, expect, 'Theirs', 5)] };
   const before = await api.stored(api.profile, mine);
 
   const taken = await api.unscoped.get('/api/export');
@@ -62,18 +72,20 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
   const me = listed.find((p) => p.name === 'Me')!.id as number;
   const partner = listed.find((p) => p.name === 'Partner')!.id as number;
   expect([me, partner]).not.toContain(api.profile);
-  return { before, me, partner };
+  return { before, mine, theirs, me, partner };
 }
 
 export const backup = [
   scenario(
     'a backup is taken and restored, and everything in it comes back',
     async (api, expect) => {
-      const { before, me, partner } = await backUpAndRestore(api, expect);
+      const { before, mine, me, partner } = await backUpAndRestore(api, expect);
       const back = api.as(me);
-      // Everything the file carried is back, under the restored profile. A backup carries no
-      // import sources, in either runtime, so a restore loses them.
-      const after = await api.stored(me, await ownedNow(back, expect));
+      // Everything the file carried is back, under the restored profile, and once: the rows that
+      // hang off a loan, an account or a transaction are counted under the replaced ids as well as
+      // the restored ones, so one the restore left behind beside its copy counts twice. A backup
+      // carries no import sources, in either runtime, so a restore loses them.
+      const after = await api.stored(me, both(mine, await ownedNow(back, expect)));
       expect(after).toEqual({ ...before, 'import sources': 0 });
       const accounts = (await back.get('/api/accounts')).body as Json[];
       const everyday = accounts.find((a) => a.name === 'Everyday');
@@ -83,9 +95,12 @@ export const backup = [
   ),
 
   scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {
-    await backUpAndRestore(api, expect);
-    expect(await api.stored(api.profile)).toEqual(NONE);
-    expect(await api.stored(api.other.profile)).toEqual(NONE);
+    const { mine, theirs } = await backUpAndRestore(api, expect);
+    // Rate periods, extra payments, balance history and transaction tags belong to their loan,
+    // account or transaction, not to a profile: they are counted under the ids those had before
+    // the restore.
+    expect(await api.stored(api.profile, mine)).toEqual(NONE);
+    expect(await api.stored(api.other.profile, theirs)).toEqual(NONE);
   }),
 
   scenario('one kind of row is exported as a spreadsheet or as JSON', async (api, expect) => {
