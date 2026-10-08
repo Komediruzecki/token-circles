@@ -377,6 +377,33 @@ describe('the rate period routes', () => {
   });
 });
 
+describe('removing a rate period or an extra payment', () => {
+  it('answers 404 for a period the loan does not have, which answered 200', async () => {
+    expect(await answer(await call('DELETE', `/api/loans/${PLAIN}/rates/${OLD_PERIOD}`))).toEqual({
+      status: 404,
+      body: { error: 'Rate period not found' },
+    });
+    expect(await storedPeriods(OLD)).toHaveLength(1);
+  });
+
+  it('answers 404 for an extra payment the loan does not have, which answered 200', async () => {
+    expect(
+      await answer(await call('DELETE', `/api/loans/${PLAIN}/prepayments/${LATE_EXTRA}`))
+    ).toEqual({ status: 404, body: { error: 'Extra payment not found' } });
+    expect(await storedExtras(SHORTENED)).toHaveLength(1);
+  });
+
+  it('removes the one asked for, and answers 404 the second time', async () => {
+    expect((await call('DELETE', `/api/loans/${PLAIN}/rates/${PLAIN_PERIOD}`)).status).toBe(200);
+    expect(await storedPeriods(PLAIN)).toEqual([]);
+    expect((await call('DELETE', `/api/loans/${PLAIN}/rates/${PLAIN_PERIOD}`)).status).toBe(404);
+    const extra = `/api/loans/${SHORTENED}/prepayments/${LATE_EXTRA}`;
+    expect((await call('DELETE', extra)).status).toBe(200);
+    expect(await storedExtras(SHORTENED)).toEqual([]);
+    expect((await call('DELETE', extra)).status).toBe(404);
+  });
+});
+
 describe('the extra payment routes', () => {
   it('refuse every field that is wrong at once, at each field', async () => {
     expect(

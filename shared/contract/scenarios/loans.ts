@@ -179,10 +179,11 @@ export const loanScenarios = [
     expectMoney(expect, listed.total_prepaid, 2500.5, 'total prepaid');
 
     // The page deletes an extra payment by the id the loan's detail gives it.
-    expect(extras[0].id).toEqual(expect.any(Number));
+    const removed = extras[0].id;
+    expect(removed).toEqual(expect.any(Number));
     expectOk(
       expect,
-      await api.delete(`/api/loans/${id}/prepayments/${extras[0].id}`),
+      await api.delete(`/api/loans/${id}/prepayments/${removed}`),
       'DELETE the extra payment'
     );
     extras = (await loanDetail(api, expect, id)).prepayments as Json[];
@@ -190,6 +191,11 @@ export const loanScenarios = [
     expect((await api.other.delete(`/api/loans/${id}/prepayments/${extras[0].id}`)).status).toBe(
       404
     );
+    // One the loan no longer has is not found. The Worker answered 200 and deleted nothing.
+    const again = await api.delete(`/api/loans/${id}/prepayments/${removed}`);
+    expect(again.status).toBe(404);
+    expect(again.body).toEqual({ error: 'Extra payment not found' });
+    expect((await loanDetail(api, expect, id)).prepayments).toEqual(extras);
   }),
 
   scenario('an extra payment is changed by its id, and keeps it', async (api, expect) => {
@@ -281,6 +287,21 @@ export const loanScenarios = [
         await api.delete(`/api/loans/${id}/rates/${periods[0].id}`),
         'DELETE the rate period'
       );
+      expect((await loanDetail(api, expect, id)).rate_periods).toEqual([]);
+
+      // One the loan no longer has is not found, changed or removed. The Worker answered 200 to
+      // both and wrote nothing.
+      for (const reply of [
+        await api.put(`/api/loans/${id}/rates/${periods[0].id}`, {
+          rate: 5,
+          start_month: 13,
+          end_month: 36,
+        }),
+        await api.delete(`/api/loans/${id}/rates/${periods[0].id}`),
+      ]) {
+        expect(reply.status).toBe(404);
+        expect(reply.body).toEqual({ error: 'Rate period not found' });
+      }
       expect((await loanDetail(api, expect, id)).rate_periods).toEqual([]);
     }
   ),

@@ -247,7 +247,8 @@ loansRoutes.delete('/api/loans/:id/rates/:rateId', requireAuth, async (c) => {
   const id = c.req.param('id')
   const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
   if (!loan) throw new HttpError(404, 'Loan not found')
-  await db.del(c.env.DB, 'loan_rate_periods', 'id = ? AND loan_id = ?', c.req.param('rateId'), id)
+  const res = await db.del(c.env.DB, 'loan_rate_periods', 'id = ? AND loan_id = ?', c.req.param('rateId'), id)
+  if (!res.meta.changes) throw new HttpError(404, 'Rate period not found')
   return c.json({ ok: true })
 })
 
@@ -294,7 +295,8 @@ loansRoutes.delete('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c
   const id = c.req.param('id')
   const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
   if (!loan) throw new HttpError(404, 'Loan not found')
-  await db.del(c.env.DB, 'loan_prepayments', 'id = ? AND loan_id = ?', c.req.param('prepayId'), id)
+  const res = await db.del(c.env.DB, 'loan_prepayments', 'id = ? AND loan_id = ?', c.req.param('prepayId'), id)
+  if (!res.meta.changes) throw new HttpError(404, 'Extra payment not found')
   return c.json({ ok: true })
 })
 
