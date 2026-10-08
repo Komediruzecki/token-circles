@@ -973,8 +973,7 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
   const currYear = year || now.getFullYear();
   const currMonth = month || now.getMonth() + 1;
 
-  // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match,
-  // then INSERT OR REPLACE into the current-month start_date.
+  // budgetsRepo.duplicateLast — recomputes its own previous month via a LIKE match.
   const dlPrevMonth = currMonth === 1 ? 12 : currMonth - 1;
   const dlPrevYear = currMonth === 1 ? currYear - 1 : currYear;
   const dlPrevBudgets = await db.all<BudgetRow>(
@@ -984,19 +983,33 @@ budgetsRoutes.post('/api/budgets/duplicate-last', requireAuth, async (c) => {
     `${dlPrevYear}-${String(dlPrevMonth).padStart(2, '0')}%`
   );
   const startDate = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
-  let count = 0;
-  for (const b of dlPrevBudgets) {
-    await db.run(
-      c.env.DB,
-      'INSERT OR REPLACE INTO budgets (profile_id, category_id, amount, period, start_date) VALUES (?, ?, ?, ?, ?)',
-      pid,
-      b.category_id,
-      b.amount,
-      b.period,
-      startDate
-    );
-    count++;
-  }
+  const endDate =
+    currMonth === 12
+      ? `${currYear + 1}-01-01`
+      : `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`;
+
+  // The copy replaces this month's budgets, as local-first and from-expenses do, and keeps each
+  // budget's rollover. (This was INSERT OR REPLACE, but budgets has no unique key to replace on,
+  // so copying twice made two of every budget.)
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?'
+    ).bind(pid, startDate, endDate),
+    ...dlPrevBudgets.map((b) =>
+      c.env.DB.prepare(
+        'INSERT INTO budgets (profile_id, category_id, amount, period, start_date, rollover_enabled, rollover_amount) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      ).bind(
+        pid,
+        b.category_id,
+        b.amount,
+        b.period,
+        startDate,
+        b.rollover_enabled ? 1 : 0,
+        b.rollover_amount || 0
+      )
+    ),
+  ]);
+  const count = dlPrevBudgets.length;
 
   return c.json({ ok: true, count });
 });
