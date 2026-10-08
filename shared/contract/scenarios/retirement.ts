@@ -116,6 +116,13 @@ export const retirement = [
     ]);
   }),
 
+  scenario('retirement goals are listed newest first', async (api, expect) => {
+    const first = (await addGoal(api, expect, { name: 'First' })).id;
+    const second = (await addGoal(api, expect, { name: 'Second' })).id;
+    const third = (await addGoal(api, expect, { name: 'Third' })).id;
+    expect((await listed(api, expect)).goals.map((g) => g.id)).toEqual([third, second, first]);
+  }),
+
   scenario(
     "the retirement plan fills what was not set from the profile's own data, until it is saved",
     async (api, expect) => {
@@ -136,6 +143,8 @@ export const retirement = [
       }
       // Older than the twelve months the plan looks back over.
       await addTransaction(api, expect, { amount: 9999, date: dayOf(-14, 12) });
+      // The age on the newest goal is the one the plan takes, however close together they were saved.
+      await addGoal(api, expect, { name: 'Earlier plan', current_age: 35 });
       await addGoal(api, expect, { current_age: 40 });
       // Another profile's data is not this profile's.
       await account(api.other, expect, 'Theirs', 1000000);
