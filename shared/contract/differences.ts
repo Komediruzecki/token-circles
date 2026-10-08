@@ -83,6 +83,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/auth/me answers the signed-in account on the Worker and a fixed local user ({ id: 1, username: 'local', role: 'admin' }) in local-first, which has no accounts; POST /api/auth/logout ends the Worker's session and changes nothing in local-first. Slice 6 (auth).",
   'health-answer':
     "GET /api/health answers { ok, env, captcha } on the Worker and { status: 'ok', timestamp } in local-first; nothing in the app reads it. Slice 6 (auth and support).",
+  'stats-monthly-shape':
+    'GET /api/stats/monthly answers only the months that have income or expense, each with its net, on the Worker, and every month of the window, empty ones as zeros and without a net, in local-first; Analytics reads only month, income and expense, so its monthly chart leaves out empty months in cloud mode only. Slice 2 (transactions), whose data it reads.',
+  'analytics-month-to-date':
+    "GET /api/stats/monthly counts the current month up to today on the Worker and the whole month in local-first, so an expense dated later this month is in Analytics' monthly figures and savings rate in local-first only. Slice 2 (transactions), whose data it reads.",
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':

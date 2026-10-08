@@ -1,5 +1,6 @@
 import type { Scenario } from '../types';
 import { accounts } from './accounts';
+import { analytics } from './analytics';
 import { backup } from './backup';
 import { bills } from './bills';
 import { budgets } from './budgets';
@@ -23,6 +24,7 @@ import { transactions } from './transactions';
 /** Every scenario, by the entity it writes. Both runners run all of them. */
 export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   accounts,
+  analytics,
   backup,
   bills,
   budgets,

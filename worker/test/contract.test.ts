@@ -41,11 +41,14 @@ let people = 0;
 let ran = 0;
 const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0);
 
+/** Which profile headers a request carries: the active profile's, both of the household's, none. */
+type Scope = 'active' | 'household' | 'none';
+
 function apiFor(
   cookie: string,
   profile: number,
   partner: () => ContractApi,
-  scoped = true
+  scope: Scope = 'active'
 ): ContractApi {
   const send = async (method: Method, path: string, body?: unknown): Promise<Reply> => {
     const form = body instanceof FormData;
@@ -55,7 +58,10 @@ function apiFor(
         Cookie: cookie,
         // A form sets its own multipart type, boundary included.
         ...(form ? {} : { 'Content-Type': 'application/json' }),
-        ...(scoped ? { 'X-Profile-Id': String(profile) } : {}),
+        ...(scope === 'none' ? {} : { 'X-Profile-Id': String(profile) }),
+        ...(scope === 'household'
+          ? { 'X-Profile-Ids': JSON.stringify([profile, partner().profile]) }
+          : {}),
       },
       body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     });
@@ -82,7 +88,10 @@ function apiFor(
     },
     as: (id) => apiFor(cookie, id, () => api),
     get unscoped() {
-      return apiFor(cookie, profile, partner, false);
+      return apiFor(cookie, profile, partner, 'none');
+    },
+    get household() {
+      return apiFor(cookie, profile, partner, 'household');
     },
     stored,
   };

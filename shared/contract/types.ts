@@ -42,6 +42,11 @@ export interface ContractApi {
   /** This profile sending no profile header, as the app sends a whole-account backup or restore. */
   readonly unscoped: ContractApi;
   /**
+   * This profile with the second one selected too, reading across both as the household switcher
+   * has the app read (`apiHouseholdGet`).
+   */
+  readonly household: ContractApi;
+  /**
    * What storage holds for a profile, read below the API, so a deleted profile can still be looked
    * at: the rows of each kind that carry its id, and the rows that hang off the loans, accounts and
    * transactions given (an extra payment belongs to a loan, not to a profile).

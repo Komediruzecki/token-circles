@@ -47,17 +47,23 @@ const hits: Hit[] = []
 let ran = 0
 const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0)
 
-function apiFor(profile: number, partner: () => ContractApi, scoped = true): ContractApi {
+/** Which profile headers a request carries: the active profile's, both of the household's, none. */
+type Scope = 'active' | 'household' | 'none'
+
+function apiFor(profile: number, partner: () => ContractApi, scope: Scope = 'active'): ContractApi {
   const send = async (method: Method, path: string, body?: unknown): Promise<Reply> => {
-    // What the app has in place while this profile is the active one.
+    // What the app has in place while this profile is the active one, and the household's
+    // selection when both are selected.
+    const selected = scope === 'household' ? [profile, partner().profile] : [profile]
     localStorage.setItem('currentProfileId', String(profile))
-    localStorage.setItem('selectedProfileIds', JSON.stringify([profile]))
+    localStorage.setItem('selectedProfileIds', JSON.stringify(selected))
     const form = body instanceof FormData
     const res = await routeApiRequest(`http://localhost${path}`, {
       method,
       headers: {
         ...(form ? {} : { 'Content-Type': 'application/json' }),
-        ...(scoped ? { 'X-Profile-Id': String(profile) } : {}),
+        ...(scope === 'none' ? {} : { 'X-Profile-Id': String(profile) }),
+        ...(scope === 'household' ? { 'X-Profile-Ids': JSON.stringify(selected) } : {}),
       },
       body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     })
@@ -84,7 +90,10 @@ function apiFor(profile: number, partner: () => ContractApi, scoped = true): Con
     },
     as: (id) => apiFor(id, () => api),
     get unscoped() {
-      return apiFor(profile, partner, false)
+      return apiFor(profile, partner, 'none')
+    },
+    get household() {
+      return apiFor(profile, partner, 'household')
     },
     stored,
   }
