@@ -101,6 +101,7 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'POST /api/loans/:id/calculate',
   'POST /api/loans/:id/prepayments',
   'DELETE /api/loans/:id/prepayments/:prepayId',
+  'PUT /api/loans/:id/prepayments/:prepayId',
   'POST /api/loans/:id/rates',
   'DELETE /api/loans/:id/rates/:rateId',
   'PUT /api/loans/:id/rates/:rateId',

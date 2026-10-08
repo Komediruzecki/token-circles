@@ -71,7 +71,6 @@ const KNOWN: Record<string, string[]> = {
   'components/Layout.module.css': ['sidebarNav'],
   'features/BillsPage.module.css': ['billsSection'],
   'features/BudgetsPage.module.css': ['categoriesSection', 'categoryChartSection'],
-  'features/LoansPage.module.css': ['loansPage'],
   'features/TransactionsPage.module.css': ['modalFooter', 'modalTitle'],
 }
 

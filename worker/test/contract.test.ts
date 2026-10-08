@@ -223,14 +223,24 @@ function workerRoutes(): { served: Set<string>; unreadable: string[] } {
   return { served, unreadable };
 }
 
+// A scenario is a whole journey of up to a few hundred requests through SELF.fetch on D1, not one
+// call. The heaviest (a profile holding every kind of row, then removed or cleared) take 12-16s
+// on CI's shared vCPUs, against the 20s every other test gets, and one run crossed it. A minute
+// still fails a scenario that hangs.
+const SCENARIO_TIMEOUT = 60_000;
+
 for (const [entity, list] of Object.entries(SCENARIOS)) {
   describe(`contract: ${entity}`, () => {
     for (const s of list) {
-      it(s.name, async () => {
-        expect.hasAssertions();
-        await s.run(await person(), expect as unknown as Expect);
-        ran += 1;
-      });
+      it(
+        s.name,
+        async () => {
+          expect.hasAssertions();
+          await s.run(await person(), expect as unknown as Expect);
+          ran += 1;
+        },
+        SCENARIO_TIMEOUT
+      );
     }
   });
 }
