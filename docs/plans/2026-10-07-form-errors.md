@@ -574,11 +574,16 @@ goal saved at 0 % showed, and opened, at 7 %, and one without a date said "Inval
 local-first restored a backup's 0 % goal at 7 %; and local-first served a `POST
 /loans/:id/prepayment` that nothing called.
 
-Open for the owner: the goal dialog's date is optional, as both runtimes always took it, where the
-dialog had made it required; a new goal must give both ages and a return, where the API filled in
-30, 65 and 7 %; a plan saved through the API is refused where it was clamped; the FIRE calculator
-took the inflation rate rather than dropping it in local-first; and the wording of the new toasts
-and messages.
+Open for the owner, each a change no decision covers: a new loan must give a rate and an edit
+cannot empty one, where the Worker saved 5 % and kept the stored rate; a third decimal on an extra
+payment is refused where it was rounded; a new goal must give both ages and a return, where the API
+filled in 30, 65 and 7 %; the goal dialog's date is optional, as both runtimes always took it,
+where the dialog had made it required; the ranges (ages 18 to 100, a goal's return 0 to 20 %, a
+loan's rate 0 to 100 % and its term 1 to 1200 months); a plan saved through the API is refused
+where it was clamped; a loan's extra payment total of 0 for none, and the FIRE calculator taking
+`inflationRate` in both runtimes, as local-first did; an extra payment's month and amount read from
+text; the wording of the new messages and toasts; and the planner's "Saved" button, the kit's
+`unchanged` state.
 
 ## Rollout, one PR each
 
