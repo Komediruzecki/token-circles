@@ -17,4 +17,10 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "GET /api/accounts/history/timeline dates each day with one of that day's full recorded_at timestamps on the Worker and with YYYY-MM-DD in local-first. Slice 2 (accounts).",
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
+  'foreign-link-status':
+    "A write that links another profile's account, category or tag is refused with 403 on the Worker and 400 in local-first; both store nothing. Slice 2 (transactions), where the plan already moves a foreign category parent to 400.",
+  'transactions-summary-shape':
+    'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
+  'transaction-account-from-names':
+    'A new transaction with no destination account is linked to the account named like its category (and with no source account, to the one named like its means of payment) on the Worker only, so on the Worker that account then counts it and cannot be deleted. Slice 2 (transactions).',
 };

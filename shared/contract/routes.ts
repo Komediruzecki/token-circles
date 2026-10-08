@@ -330,19 +330,13 @@ export const UNCOVERED: readonly RouteKey[] = [
   'PUT /api/tags/rules/:ruleId',
   'POST /api/tags/rules/preview',
   'GET /api/tags/summary',
-  'DELETE /api/transactions',
-  'GET /api/transactions',
-  'GET /api/transactions/:id',
-  'PUT /api/transactions/:id',
   'GET /api/transactions/:id/tags',
   'POST /api/transactions/:id/tags',
   'PUT /api/transactions/:id/tags',
-  'PUT /api/transactions/bulk',
   'GET /api/transactions/by-tag/:tagId',
   'PUT /api/transactions/reconcile-batch',
   'POST /api/transactions/reconcile/bulk',
   'GET /api/transactions/reconcile/summary',
-  'GET /api/transactions/summary',
 ];
 
 export const WORKER_ONLY: Readonly<Record<string, string>> = {
