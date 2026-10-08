@@ -35,30 +35,34 @@
  * Retirement Component
  * Retirement goals, and the planner that projects what they add up to.
  */
-import { createSignal, For } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiGet, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { createRetirementGoalForm } from './retirementGoalForm'
 import styles from './RetirementPage.module.css'
 import RetirementPlanner from './RetirementPlanner'
+import type { EditableRetirementGoal } from './retirementGoalForm'
 
-interface RetirementGoal {
-  id: number
-  name: string
+/**
+ * A goal as stored. A field an older version left without a value is null, and the card says so
+ * rather than show a guess: a 0 % return used to be shown, and opened for editing, as 7 %.
+ */
+interface RetirementGoal extends EditableRetirementGoal {
   target_amount: number
   current_amount: number
-  target_date: string
-  monthly_contribution: number
-  expected_return_rate: number
-  current_age: number
-  retirement_age: number
   profile_id: number
 }
+
+/** A number as stored, or null for none. */
+const storedNumber = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null
 
 export default function Retirement() {
   const state = useAppState()
@@ -66,33 +70,41 @@ export default function Retirement() {
   const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
   const [editingGoal, setEditingGoal] = createSignal<RetirementGoal | null>(null)
-  const [formData, setFormData] = createSignal({
-    name: '',
-    target_amount: '',
-    current_amount: '',
-    target_date: '',
-    monthly_contribution: '',
-    expected_return_rate: '',
-    current_age: '',
-    retirement_age: '',
+  const goalForm = createRetirementGoalForm({
+    onSaved: () => {
+      closeGoalModal()
+    },
   })
+
+  const openGoalModal = (goal: RetirementGoal | null) => {
+    setEditingGoal(goal)
+    goalForm.open(goal)
+    setShowAddModal(true)
+  }
+
+  function closeGoalModal() {
+    setShowAddModal(false)
+    setEditingGoal(null)
+  }
 
   // Load retirement goals
   const loadGoals = async () => {
     try {
-      const data = await apiGet<{ settings: any; goals: RetirementGoal[] }>('/api/retirement-goals')
+      const data = await apiGet<{ settings: any; goals: Record<string, unknown>[] }>(
+        '/api/retirement-goals'
+      )
       setGoals(
-        (data.goals || []).map((g: any) => ({
-          id: g.id,
-          name: g.name || '',
-          target_amount: g.target_amount || 0,
-          current_amount: g.current_amount || 0,
-          target_date: g.deadline || g.target_date || '',
-          monthly_contribution: g.monthly_contribution || 0,
-          expected_return_rate: g.expected_return_rate || 7,
-          current_age: g.current_age || 30,
-          retirement_age: g.retirement_age || 65,
-          profile_id: g.profile_id || 0,
+        (data.goals || []).map((g) => ({
+          id: g.id as number,
+          name: typeof g.name === 'string' ? g.name : '',
+          target_amount: storedNumber(g.target_amount) ?? 0,
+          current_amount: storedNumber(g.current_amount) ?? 0,
+          deadline: ((g.deadline || g.target_date) as string | undefined) || null,
+          monthly_contribution: storedNumber(g.monthly_contribution),
+          expected_return_rate: storedNumber(g.expected_return_rate),
+          current_age: storedNumber(g.current_age),
+          retirement_age: storedNumber(g.retirement_age),
+          profile_id: (g.profile_id as number | undefined) ?? 0,
         }))
       )
     } catch (err) {
@@ -100,48 +112,6 @@ export default function Retirement() {
       showToast('Failed to load retirement goals', 'error')
     } finally {
       setInitialLoad(false)
-    }
-  }
-
-  // Handle form submit
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = {
-      name: formData().name,
-      target_amount: parseFloat(formData().target_amount),
-      current_amount: parseFloat(formData().current_amount),
-      target_date: formData().target_date,
-      monthly_contribution: parseFloat(formData().monthly_contribution),
-      expected_return_rate: parseFloat(formData().expected_return_rate),
-      current_age: parseInt(formData().current_age),
-      retirement_age: parseInt(formData().retirement_age),
-    }
-
-    try {
-      if (editingGoal()) {
-        await apiPut(`/api/retirement-goals/${editingGoal()!.id}`, data)
-      } else {
-        await apiPost('/api/retirement-goals', data)
-      }
-      showToast(
-        editingGoal() ? 'Goal updated successfully' : 'Goal created successfully',
-        'success'
-      )
-      setShowAddModal(false)
-      setEditingGoal(null)
-      setFormData({
-        name: '',
-        target_amount: '',
-        current_amount: '',
-        target_date: '',
-        monthly_contribution: '',
-        expected_return_rate: '',
-        current_age: '',
-        retirement_age: '',
-      })
-    } catch (err) {
-      console.error('Failed to save retirement goal', err)
-      showToast('Failed to save retirement goal', 'error')
     }
   }
 
@@ -154,22 +124,6 @@ export default function Retirement() {
       console.error('Failed to delete retirement goal', err)
       showToast('Failed to delete retirement goal', 'error')
     }
-  }
-
-  // Open edit modal
-  const editGoal = (goal: RetirementGoal) => {
-    setEditingGoal(goal)
-    setFormData({
-      name: goal.name,
-      target_amount: goal.target_amount.toString(),
-      current_amount: goal.current_amount.toString(),
-      target_date: goal.target_date.slice(0, 10),
-      monthly_contribution: goal.monthly_contribution.toString(),
-      expected_return_rate: goal.expected_return_rate.toString(),
-      current_age: goal.current_age.toString(),
-      retirement_age: goal.retirement_age.toString(),
-    })
-    setShowAddModal(true)
   }
 
   // Get progress percentage
@@ -232,7 +186,9 @@ export default function Retirement() {
             data-test-id="add-retirement-goal-btn"
             data-tour="retirement-add"
             class={styles.btnPrimary}
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              openGoalModal(null)
+            }}
           >
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -263,7 +219,12 @@ export default function Retirement() {
             <div class={styles.emptyState}>
               <p>No retirement goals yet</p>
               <p>Add your first retirement goal to start planning.</p>
-              <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+              <button
+                class={styles.btnPrimary}
+                onClick={() => {
+                  openGoalModal(null)
+                }}
+              >
                 Add Goal
               </button>
             </div>
@@ -291,18 +252,25 @@ export default function Retirement() {
                           <h3 data-test-id="retirement-goal-name" class={styles.goalName}>
                             {goal.name}
                           </h3>
-                          <span data-test-id="retirement-age-badge" style={{ display: 'contents' }}>
-                            <Badge status={getRetirementBadgeStatus(goal.retirement_age)}>
-                              Retire at {formatAge(goal.retirement_age)}
-                            </Badge>
-                          </span>
+                          <Show when={goal.retirement_age}>
+                            {(age) => (
+                              <span
+                                data-test-id="retirement-age-badge"
+                                style={{ display: 'contents' }}
+                              >
+                                <Badge status={getRetirementBadgeStatus(age())}>
+                                  Retire at {formatAge(age())}
+                                </Badge>
+                              </span>
+                            )}
+                          </Show>
                         </div>
                         <div class={styles.goalActions}>
                           <button
                             data-test-id="retirement-goal-edit-btn"
                             class={`${styles.btnSm} ${styles.btnGhost}`}
                             onClick={() => {
-                              editGoal(goal)
+                              openGoalModal(goal)
                             }}
                           >
                             <svg
@@ -369,7 +337,7 @@ export default function Retirement() {
                             data-test-id="retirement-monthly-contribution"
                             class={styles.detailValue}
                           >
-                            {formatAmount(goal.monthly_contribution)}
+                            {formatAmount(goal.monthly_contribution ?? 0)}
                           </span>
                         </div>
                         <div data-test-id="retirement-detail-item" class={styles.detailItem}>
@@ -378,13 +346,15 @@ export default function Retirement() {
                             data-test-id="retirement-expected-return"
                             class={styles.detailValue}
                           >
-                            {goal.expected_return_rate}%
+                            {goal.expected_return_rate === null
+                              ? 'Not set'
+                              : `${goal.expected_return_rate}%`}
                           </span>
                         </div>
                         <div data-test-id="retirement-detail-item" class={styles.detailItem}>
                           <span class={styles.detailLabel}>Target Date</span>
                           <span data-test-id="retirement-target-date" class={styles.detailValue}>
-                            {formatDate(goal.target_date)}
+                            {goal.deadline ? formatDate(goal.deadline) : 'No target date'}
                           </span>
                         </div>
                       </div>
@@ -405,20 +375,7 @@ export default function Retirement() {
           role="dialog"
           aria-modal="true"
           onclick={(e) => {
-            if (e.target === e.currentTarget) {
-              setShowAddModal(false)
-              setEditingGoal(null)
-              setFormData({
-                name: '',
-                target_amount: '',
-                current_amount: '',
-                target_date: '',
-                monthly_contribution: '',
-                expected_return_rate: '',
-                current_age: '',
-                retirement_age: '',
-              })
-            }
+            if (e.target === e.currentTarget) closeGoalModal()
           }}
         >
           <div
@@ -435,19 +392,9 @@ export default function Retirement() {
               <button
                 data-test-id="retirement-modal-close"
                 class={styles.modalClose}
+                aria-label="Close"
                 onClick={() => {
-                  setShowAddModal(false)
-                  setEditingGoal(null)
-                  setFormData({
-                    name: '',
-                    target_amount: '',
-                    current_amount: '',
-                    target_date: '',
-                    monthly_contribution: '',
-                    expected_return_rate: '',
-                    current_age: '',
-                    retirement_age: '',
-                  })
+                  closeGoalModal()
                 }}
               >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -455,151 +402,195 @@ export default function Retirement() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Goal Name</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., Full Retirement, Early Retirement"
-                  data-test-id="retirement-form-name"
-                  value={formData().name}
-                  oninput={(e) => setFormData({ ...formData(), name: e.target.value })}
-                  required
-                />
+            <form class={styles.modalBody} {...goalForm.attrs}>
+              <FormNotice form={goalForm} testId="retirement-form-notice" />
+              <Field
+                form={goalForm}
+                name="name"
+                label="Goal Name"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., Full Retirement, Early Retirement"
+                    data-test-id="retirement-form-name"
+                    value={goalForm.values.name}
+                    onInput={(e) => goalForm.set('name', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <div class={styles.formRow}>
+                <Field
+                  form={goalForm}
+                  name="target_amount"
+                  label="Target Amount"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="1000000"
+                      data-test-id="retirement-form-target-amount"
+                      value={goalForm.values.target_amount}
+                      onInput={(e) => goalForm.set('target_amount', e.currentTarget.value)}
+                      required
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={goalForm}
+                  name="current_amount"
+                  label="Current Amount"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="50000"
+                      data-test-id="retirement-form-current-amount"
+                      value={goalForm.values.current_amount}
+                      onInput={(e) => goalForm.set('current_amount', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </div>
               <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Target Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    class={styles.formControl}
-                    placeholder="1000000"
-                    data-test-id="retirement-form-target-amount"
-                    value={formData().target_amount}
-                    oninput={(e) => setFormData({ ...formData(), target_amount: e.target.value })}
-                    required
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Current Amount</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    class={styles.formControl}
-                    placeholder="50000"
-                    data-test-id="retirement-form-current-amount"
-                    value={formData().current_amount}
-                    oninput={(e) => setFormData({ ...formData(), current_amount: e.target.value })}
-                    required
-                  />
-                </div>
+                <Field
+                  form={goalForm}
+                  name="current_age"
+                  label="Current Age"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="numeric"
+                      class={styles.formControl}
+                      placeholder="30"
+                      data-test-id="retirement-form-current-age"
+                      value={goalForm.values.current_age}
+                      onInput={(e) => goalForm.set('current_age', e.currentTarget.value)}
+                      required
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={goalForm}
+                  name="retirement_age"
+                  label="Retirement Age"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="numeric"
+                      class={styles.formControl}
+                      placeholder="65"
+                      data-test-id="retirement-form-retirement-age"
+                      value={goalForm.values.retirement_age}
+                      onInput={(e) => goalForm.set('retirement_age', e.currentTarget.value)}
+                      required
+                    />
+                  )}
+                </Field>
               </div>
               <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Current Age</label>
-                  <input
-                    type="number"
-                    min="18"
-                    max="100"
-                    class={styles.formControl}
-                    placeholder="30"
-                    data-test-id="retirement-form-current-age"
-                    value={formData().current_age}
-                    oninput={(e) => setFormData({ ...formData(), current_age: e.target.value })}
-                    required
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Retirement Age</label>
-                  <input
-                    type="number"
-                    min="18"
-                    max="100"
-                    class={styles.formControl}
-                    placeholder="65"
-                    data-test-id="retirement-form-retirement-age"
-                    value={formData().retirement_age}
-                    oninput={(e) => setFormData({ ...formData(), retirement_age: e.target.value })}
-                    required
-                  />
-                </div>
+                <Field
+                  form={goalForm}
+                  name="deadline"
+                  label="Target Date (optional)"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="date"
+                      class={styles.formControl}
+                      data-test-id="retirement-form-target-date"
+                      value={goalForm.values.deadline}
+                      onInput={(e) => goalForm.set('deadline', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={goalForm}
+                  name="monthly_contribution"
+                  label="Monthly Contribution"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="500"
+                      data-test-id="retirement-form-monthly-contribution"
+                      value={goalForm.values.monthly_contribution}
+                      onInput={(e) => goalForm.set('monthly_contribution', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </div>
-              <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Target Date</label>
+              <Field
+                form={goalForm}
+                name="expected_return_rate"
+                label="Expected Annual Return (%)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
-                    type="date"
+                    {...control}
+                    type="text"
+                    inputmode="decimal"
                     class={styles.formControl}
-                    data-test-id="retirement-form-target-date"
-                    value={formData().target_date}
-                    oninput={(e) => setFormData({ ...formData(), target_date: e.target.value })}
+                    placeholder="7"
+                    data-test-id="retirement-form-expected-return"
+                    value={goalForm.values.expected_return_rate}
+                    onInput={(e) => goalForm.set('expected_return_rate', e.currentTarget.value)}
                     required
                   />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Monthly Contribution</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    class={styles.formControl}
-                    placeholder="500"
-                    data-test-id="retirement-form-monthly-contribution"
-                    value={formData().monthly_contribution}
-                    oninput={(e) =>
-                      setFormData({ ...formData(), monthly_contribution: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Expected Annual Return (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="20"
-                  class={styles.formControl}
-                  placeholder="7"
-                  data-test-id="retirement-form-expected-return"
-                  value={formData().expected_return_rate}
-                  oninput={(e) =>
-                    setFormData({ ...formData(), expected_return_rate: e.target.value })
-                  }
-                  required
-                />
-              </div>
+                )}
+              </Field>
               <div data-test-id="retirement-modal-footer" class={styles.modalFooter}>
                 <button
                   data-test-id="retirement-modal-cancel"
                   type="button"
                   class={styles.btnSecondary}
                   onClick={() => {
-                    setShowAddModal(false)
-                    setEditingGoal(null)
-                    setFormData({
-                      name: '',
-                      target_amount: '',
-                      current_amount: '',
-                      target_date: '',
-                      monthly_contribution: '',
-                      expected_return_rate: '',
-                      current_age: '',
-                      retirement_age: '',
-                    })
+                    closeGoalModal()
                   }}
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                <SubmitButton
                   data-test-id="retirement-modal-submit"
                   class={styles.btnPrimary}
+                  busy={goalForm.submitting()}
+                  busyLabel={editingGoal() ? undefined : 'Adding…'}
                 >
-                  {editingGoal() ? 'Update' : 'Add'} Goal
-                </button>
+                  {editingGoal() ? 'Update Goal' : 'Add Goal'}
+                </SubmitButton>
               </div>
             </form>
           </div>

@@ -4,7 +4,7 @@ import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
-/** The body the Retirement page saves (features/Retirement.tsx): every field it shows. */
+/** The body the Retirement page saves (features/retirementGoalForm.ts, retirementGoalBody). */
 export function retirementForm(fields: Record<string, unknown> = {}) {
   return {
     name: 'Retire at 60',
