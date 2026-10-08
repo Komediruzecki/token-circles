@@ -274,4 +274,26 @@ describe('a weekly bill', () => {
     });
     expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
   });
+
+  // Paid two days before its first due date, the payment pays that date. The bill showed as paid
+  // with that date as its next, then overdue for it once it had passed, and took a second payment.
+  it('counts a payment made before its first due date for that date', async () => {
+    await on('2026-10-08');
+    const id = await bill('Cleaner', { dueDate: '2026-10-10', frequency: 'weekly', amount: 25 });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+    await on('2026-10-11');
+    expect((await upcoming())[0]).toMatchObject({
+      next_due_date: '2026-10-17',
+      days_until: 6,
+      paid: true,
+    });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(409);
+    await on('2026-10-17');
+    expect((await upcoming())[0]).toMatchObject({
+      next_due_date: '2026-10-17',
+      days_until: 0,
+      paid: false,
+    });
+    expect((await send('POST', `/api/bills/${id}/mark-paid`)).status).toBe(200);
+  });
 });

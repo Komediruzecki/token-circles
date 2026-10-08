@@ -24,9 +24,10 @@
  *
  * Paid up means a payment on or after the start of the current period: the first of this month
  * for a monthly bill, 1 January for a yearly one, the date a weekly or biweekly one last fell due.
- * The next due date is the current period's when the bill is not paid up (in the past, it is
- * overdue until the period ends), and the next period's when it is. Never before the bill's own
- * first due date.
+ * A weekly or biweekly bill paid up to a step before its first due date has paid that date. The
+ * next due date is the current period's when the bill is not paid up (in the past, it is overdue
+ * until the period ends), and the next period's when it is. Never before the bill's own first due
+ * date.
  *
  * GET /api/bills/upcoming answers every active bill this way, the most overdue first; the
  * Dashboard lists the ones due from today through the next 30 days.
@@ -101,8 +102,12 @@ export function paidFrom(bill: BillTiming, today: string): string {
   const step = STEP_DAYS.get(frequency);
   if (step !== undefined) {
     const anchor = anchorOf(bill, today);
-    // Before its first due date: the last 7 or 14 days, today included.
-    return today >= anchor ? stepOnOrBefore(anchor, step, today) : addDays(today, -(step - 1));
+    // From a step before the first due date until the second one, any payment made since that step
+    // began has paid the first date. Earlier still, the steps count back from the first due date,
+    // so a payment there pays up only the step it was made in, and pays no date of the bill.
+    const early = addDays(anchor, -step);
+    if (today >= early && today < addDays(anchor, step)) return early;
+    return stepOnOrBefore(anchor, step, today);
   }
   if (frequency === 'yearly') return `${today.slice(0, 4)}-01-01`;
   return `${today.slice(0, 7)}-01`;
@@ -133,10 +138,17 @@ export function nextDueDate(bill: BillTiming, today: string): string {
   if (step !== undefined) {
     const anchor = anchorOf(bill, today);
     const paid = dateOf(bill.last_paid_date);
-    if (paidUp && paid !== null && paid >= anchor) {
+    if (paidUp && paid !== null) {
       // The date after the one the payment paid, on the bill's own weekday: paid two days late,
-      // a Monday bill is still due next Monday, not next Wednesday.
-      next = addDays(stepOnOrBefore(anchor, step, paid), step);
+      // a Monday bill is still due next Monday, not next Wednesday. A payment up to a step before
+      // the first due date paid that one; one further back paid none.
+      const covered =
+        paid >= anchor
+          ? stepOnOrBefore(anchor, step, paid)
+          : paid >= addDays(anchor, -step)
+            ? anchor
+            : null;
+      next = covered === null ? anchor : addDays(covered, step);
     } else {
       // Not paid since its last date: that date, overdue once it has passed. Before its first
       // due date, that one.

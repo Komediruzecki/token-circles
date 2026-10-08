@@ -164,6 +164,34 @@ describe('the next due date of a weekly or biweekly bill', () => {
   })
 })
 
+describe('a payment made before a weekly bill first falls due', () => {
+  // Paid two days early, it pays the first due date: paid through that week, next due a week after
+  // it. It showed as paid with the first date as its next, then overdue for that date once it had
+  // passed, and could be paid for it again.
+  it('pays the first due date', () => {
+    const cleaner = { frequency: 'weekly', due_date: '2026-10-10', last_paid_date: '2026-10-08' }
+    for (const today of ['2026-10-09', '2026-10-11', '2026-10-16']) {
+      expect(nextDueDate(cleaner, today)).toBe('2026-10-17')
+      expect(isPaidUp(cleaner, today)).toBe(true)
+    }
+    expect(paidFrom(cleaner, '2026-10-11')).toBe('2026-10-03')
+    expect(nextDueDate(cleaner, '2026-10-17')).toBe('2026-10-17')
+    expect(isPaidUp(cleaner, '2026-10-17')).toBe(false)
+  })
+
+  it('pays nothing when it is more than a week before it, and is not taken twice', () => {
+    const early = { frequency: 'weekly', due_date: '2026-10-10', last_paid_date: '2026-09-20' }
+    expect(nextDueDate(early, '2026-10-11')).toBe('2026-10-10')
+    expect(isPaidUp(early, '2026-10-11')).toBe(false)
+    // Paid on 1 October for a bill first due on the 31st: paid up for that week, so a second tap
+    // takes nothing, and its first date is still the one due.
+    const autumn = { frequency: 'weekly', due_date: '2026-10-31', last_paid_date: '2026-10-01' }
+    expect(isPaidUp(autumn, '2026-10-02')).toBe(true)
+    expect(nextDueDate(autumn, '2026-10-02')).toBe('2026-10-31')
+    expect(isPaidUp(autumn, '2026-10-09')).toBe(false)
+  })
+})
+
 describe('days from today', () => {
   it('counts whole days, negative when past', () => {
     expect(daysFrom('2026-10-08', '2026-10-15')).toBe(7)
