@@ -11,7 +11,7 @@ import { holdingForm } from './portfolio';
 import { ruleForm } from './recurring';
 import { retirementForm } from './retirement';
 
-async function profileList(api: ContractApi, expect: Expect): Promise<Json[]> {
+export async function profileList(api: ContractApi, expect: Expect): Promise<Json[]> {
   const reply = await api.get('/api/profiles');
   expectOk(expect, reply, 'GET /api/profiles');
   return reply.body as Json[];
@@ -31,7 +31,7 @@ async function addProfile(api: ContractApi, expect: Expect, name: string): Promi
 }
 
 /** Nothing of any kind. */
-const NONE = Object.fromEntries(STORED_KINDS.map((kind) => [kind, 0])) as Record<
+export const NONE = Object.fromEntries(STORED_KINDS.map((kind) => [kind, 0])) as Record<
   StoredKind,
   number
 >;
@@ -40,7 +40,7 @@ const NONE = Object.fromEntries(STORED_KINDS.map((kind) => [kind, 0])) as Record
  * One of everything a profile holds, each written as the app writes it. Answers the rows that own
  * rows of their own: a loan's extra payments, an account's history, a transaction's tags.
  */
-async function fillProfile(api: ContractApi, expect: Expect): Promise<Owned> {
+export async function fillProfile(api: ContractApi, expect: Expect): Promise<Owned> {
   const everyday = await account(api, expect, 'Everyday', 1000);
   expectOk(
     expect,

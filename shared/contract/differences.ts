@@ -68,7 +68,9 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'profile-reseed-demo':
     'POST /api/profiles/reseed-demo clears the active profile and gives it the default categories on the Worker; local-first deletes every profile and puts back its three example profiles. The Danger Zone offers it in local-first only. Slice 4 (profiles).',
   'profile-clear-import-sources':
-    "DELETE /api/profile/data keeps the profile's saved import sources on the Worker and deletes them in local-first; on the Worker, a source on the daily schedule fills the cleared profile again at its next sync. Slice 4 (profiles).",
+    'DELETE /api/profile/data and DELETE /api/clear-all keep the saved import sources on the Worker and delete them in local-first; on the Worker, a source on the daily schedule fills the cleared profile again at its next sync. Slice 4 (profiles).',
+  'export-by-type':
+    'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':

@@ -39,6 +39,8 @@ export interface ContractApi {
   readonly other: ContractApi;
   /** The same person, acting as another profile of theirs: one a scenario made, or a restore gave. */
   as(profile: number): ContractApi;
+  /** This profile sending no profile header, as the app sends a whole-account backup or restore. */
+  readonly unscoped: ContractApi;
   /**
    * What storage holds for a profile, read below the API, so a deleted profile can still be looked
    * at: the rows of each kind that carry its id, and the rows that hang off the loans, accounts and

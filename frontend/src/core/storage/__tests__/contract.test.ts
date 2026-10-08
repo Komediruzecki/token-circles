@@ -47,7 +47,7 @@ const hits: Hit[] = []
 let ran = 0
 const total = Object.values(SCENARIOS).reduce((n, list) => n + list.length, 0)
 
-function apiFor(profile: number, partner: () => ContractApi): ContractApi {
+function apiFor(profile: number, partner: () => ContractApi, scoped = true): ContractApi {
   const send = async (method: Method, path: string, body?: unknown): Promise<Reply> => {
     // What the app has in place while this profile is the active one.
     localStorage.setItem('currentProfileId', String(profile))
@@ -57,7 +57,7 @@ function apiFor(profile: number, partner: () => ContractApi): ContractApi {
       method,
       headers: {
         ...(form ? {} : { 'Content-Type': 'application/json' }),
-        'X-Profile-Id': String(profile),
+        ...(scoped ? { 'X-Profile-Id': String(profile) } : {}),
       },
       body: body === undefined ? undefined : form ? body : JSON.stringify(body),
     })
@@ -83,6 +83,9 @@ function apiFor(profile: number, partner: () => ContractApi): ContractApi {
       return partner()
     },
     as: (id) => apiFor(id, () => api),
+    get unscoped() {
+      return apiFor(profile, partner, false)
+    },
     stored,
   }
   return api
