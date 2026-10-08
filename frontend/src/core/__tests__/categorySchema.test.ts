@@ -259,6 +259,12 @@ describe('a duplicate name', () => {
       name: 'You already have a category called "Eating out". Choose another name.',
     })
   })
+
+  it('quotes that name without the stray spaces an older version stored it with', () => {
+    expect(categoryNameTaken(' Gym  ')).toEqual({
+      name: 'You already have a category called "Gym". Choose another name.',
+    })
+  })
 })
 
 describe('the refusal answer', () => {

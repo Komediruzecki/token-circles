@@ -40,6 +40,7 @@ const SAVINGS = 981112; // a type the app cannot read
 const KIDS = 981113; // a parent in another profile
 const PADDED = 981114; // a name over 100 characters, stored with a trailing space
 const SPACES = 981115; // a name of nothing but spaces
+const GYM = 981116; // "Gym " with a trailing space
 // A second profile of the same user, and a category in it.
 const OTHER_PROFILE = 98111;
 const ELSEWHERE = 981110;
@@ -115,6 +116,9 @@ beforeEach(async () => {
     env.DB.prepare(
       "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, '   ', 'expense', '#6e9bff', 'tag')"
     ).bind(SPACES, PROFILE),
+    env.DB.prepare(
+      "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, 'Gym ', 'expense', '#e0708a', 'tag')"
+    ).bind(GYM, PROFILE),
   ]);
   cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
 });
@@ -480,6 +484,14 @@ describe('editing a row saved under older rules', () => {
 
     expect(body.fields).toEqual({
       name: 'You already have a category called "Coffee". Choose another name.',
+    });
+  });
+
+  it('quotes a taken name without the stray space it was stored with', async () => {
+    const body = await refusal(await call('PUT', `/api/categories/${RENT}`, { name: 'gym' }));
+
+    expect(body.fields).toEqual({
+      name: 'You already have a category called "Gym". Choose another name.',
     });
   });
 });

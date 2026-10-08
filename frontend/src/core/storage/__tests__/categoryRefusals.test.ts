@@ -38,6 +38,7 @@ const SAVINGS = 20 // a type the app cannot read
 const KIDS = 21 // a parent in another profile
 const PADDED = 22 // a name over 100 characters, stored with a trailing space
 const SPACES = 23 // a name of nothing but spaces
+const GYM = 24 // "Gym " with a trailing space
 // A second profile and a category in it.
 const OTHER_PROFILE = 2
 const ELSEWHERE = 30
@@ -159,6 +160,13 @@ beforeEach(async () => {
     ...legacy,
     id: SPACES,
     name: '   ',
+    type: 'expense',
+    color: '#59d2a2',
+  })
+  await db.add('categories', {
+    ...legacy,
+    id: GYM,
+    name: 'Gym ',
     type: 'expense',
     color: '#59d2a2',
   })
@@ -476,6 +484,14 @@ describe('editing a local-first row saved under older rules', () => {
       name: 'You already have a category called "Coffee". Choose another name.',
     })
     expect((await stored(FUEL)).name).toBe('Fuel')
+  })
+
+  it('quotes a taken name without the stray space it was stored with', async () => {
+    const body = await refusal(await call('PUT', `/api/categories/${FUEL}`, { name: 'gym' }))
+
+    expect(body.fields).toEqual({
+      name: 'You already have a category called "Gym". Choose another name.',
+    })
   })
 })
 

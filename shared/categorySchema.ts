@@ -37,10 +37,13 @@ export const CATEGORY_MESSAGES = {
   taxDeductible: 'Set tax deductible to true or false.',
 } as const;
 
-/** The refusal for a name the profile already has, quoting the category that holds it. */
+/**
+ * The refusal for a name the profile already has, quoting the category that holds it. Without
+ * the stray spaces an older version may have stored it with: `"Gym "` reads as a typo.
+ */
 export function categoryNameTaken(existingName: string): FieldErrors {
   return {
-    name: `You already have a category called "${existingName}". Choose another name.`,
+    name: `You already have a category called "${existingName.trim()}". Choose another name.`,
   };
 }
 
