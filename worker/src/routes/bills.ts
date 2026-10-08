@@ -12,7 +12,7 @@ import { localNow } from '../local-date';
 // kept identical (snake_case) to the Express backend.
 export const billsRoutes = new Hono<AppEnv>();
 
-interface BillRow {
+export interface BillRow {
   id: number;
   name: string;
   amount: number;
@@ -35,35 +35,36 @@ function billResponse(bill: BillRow) {
   return { ...bill, autopay: bill.autopay === 1 };
 }
 
-// Copied faithfully from backend/routes/bills.js. `now` is the person's wall clock (localNow), so
-// "the current month" is theirs: a stored YYYY-MM-DD parses as UTC midnight and is compared on the
-// same UTC-field calendar.
+// The earliest last_paid_date that settles a bill for the current period, YYYY-MM-DD: the first of
+// this month for a monthly bill, 1 January for a yearly one, seven or fourteen days ago for a
+// weekly or biweekly one. `now` is the caller's wall clock (localNow), so the period is theirs.
+//
+// "On or after", not "in": two clients can be on different calendars. At 23:30 UTC on 31 October it
+// is already 1 November in Tokyo, so a phone there stamps a payment 2026-11-01 while a client with
+// no zone (UTC) is still in October. Asked "is the payment in my month?", each said no to the
+// other's date and paid again. A payment dated after the period began has settled it, whichever
+// calendar stamped it.
+function paidFromDate(frequency: string, now: Date): string {
+  const today = now.toISOString().slice(0, 10);
+  const daysBack = (days: number) => {
+    const d = new Date(`${today}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - days);
+    return d.toISOString().slice(0, 10);
+  };
+  if (frequency === 'monthly') return `${today.slice(0, 7)}-01`;
+  if (frequency === 'weekly') return daysBack(7);
+  if (frequency === 'biweekly') return daysBack(14);
+  if (frequency === 'yearly') return `${today.slice(0, 4)}-01-01`;
+  // No period: only a payment made today (or stamped later by a calendar ahead of this one).
+  return today;
+}
+
+// Ported from backend/routes/bills.js, which compared the payment's month (or year) with the
+// current one; see paidFromDate for why it is now "on or after the period's start".
 function isBillPaidForCurrentPeriod(bill: BillRow, now: Date): boolean {
   if (!bill.last_paid_date) return false;
-  const lastPaid = new Date(bill.last_paid_date);
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-
-  if (bill.frequency === 'monthly') {
-    // Paid if last_paid is in the current month
-    return (
-      lastPaid.getMonth() === today.getMonth() && lastPaid.getFullYear() === today.getFullYear()
-    );
-  } else if (bill.frequency === 'weekly') {
-    // Paid if last_paid is within the last 7 days
-    const weekAgo = new Date(today);
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return lastPaid >= weekAgo;
-  } else if (bill.frequency === 'biweekly') {
-    // Paid if last_paid is within the last 14 days
-    const twoWeeksAgo = new Date(today);
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-    return lastPaid >= twoWeeksAgo;
-  } else if (bill.frequency === 'yearly') {
-    // Paid if last_paid is in the current year
-    return lastPaid.getFullYear() === today.getFullYear();
-  }
-  return false;
+  if (!['monthly', 'weekly', 'biweekly', 'yearly'].includes(bill.frequency)) return false;
+  return bill.last_paid_date.slice(0, 10) >= paidFromDate(bill.frequency, now);
 }
 
 billsRoutes.get('/api/bills', requireAuth, async (c) => {
@@ -443,6 +444,77 @@ billsRoutes.delete('/api/bills/:id', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * The writes that mark `bill` paid today on the calendar of `now` (the caller's wall clock): the
+ * expense, the account debit, and the claim on the bill, as one batch. Exported for the test that
+ * runs two of them built from the same stale read.
+ */
+export function markPaidStatements(
+  DB: D1Database,
+  bill: BillRow,
+  pid: number,
+  now: Date,
+  baseCurrency: string
+): D1PreparedStatement[] {
+  // Paid today on the person's calendar: the date the payment and last_paid_date carry.
+  const todayStr = now.toISOString().split('T')[0];
+
+  // Every statement carries the same guard: the bill has not been paid since its period began.
+  //
+  // Reading `last_paid_date` and then writing was a check against a value that could already be
+  // stale by the time the batch ran — two taps (a phone that felt slow, or a phone and a laptop)
+  // both saw an unpaid bill, and both inserted a transaction and both debited the account. The
+  // money left twice.
+  //
+  // A batch is one transaction, so a second batch either runs entirely before or entirely after
+  // the first; running after, it sees a `last_paid_date` on or after the period's start and every
+  // guarded statement matches nothing. "Paid today" was not enough: a phone in Tokyo and a client
+  // on UTC tapping at the same moment around midnight have different todays. The UPDATE goes LAST
+  // so the two before it still see the pre-state.
+  const paidFrom = paidFromDate(bill.frequency, now);
+  const guard = (param: number) => `(SELECT COUNT(*) FROM bills
+                   WHERE id = ?1 AND profile_id = ?2
+                     AND (last_paid_date IS NULL OR last_paid_date < ?${param})) = 1`;
+
+  const stmts: D1PreparedStatement[] = [];
+  const id = bill.id;
+
+  stmts.push(
+    DB.prepare(
+      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, currency, amount_local)
+       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9, ?10, ?6 WHERE ${guard(11)}`
+    ).bind(
+      id,
+      pid,
+      todayStr,
+      pid,
+      bill.name,
+      bill.amount,
+      bill.category_id,
+      bill.account_id ?? null,
+      bill.notes || '',
+      baseCurrency,
+      paidFrom
+    )
+  );
+
+  if (bill.account_id != null) {
+    stmts.push(
+      DB.prepare(
+        `UPDATE accounts SET balance = balance - ?4
+         WHERE id = ?5 AND profile_id = ?2 AND ${guard(6)}`
+      ).bind(id, pid, todayStr, bill.amount, bill.account_id, paidFrom)
+    );
+  }
+
+  stmts.push(
+    DB.prepare(
+      `UPDATE bills SET last_paid_date = ?3 WHERE id = ?1 AND profile_id = ?2 AND ${guard(4)}`
+    ).bind(id, pid, todayStr, paidFrom)
+  );
+  return stmts;
+}
+
 billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
@@ -454,31 +526,12 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   );
   if (!bill) throw new HttpError(404, 'Not found');
 
-  // Pre-flight, for the message: "already paid this month" is a period question the SQL guard
-  // below does not try to answer. It is NOT what makes this safe — see the guard.
+  // Pre-flight, for the message: it asks the guard's question before anything is written. It is
+  // NOT what makes this safe — see the guard in markPaidStatements.
   const now = localNow(c);
   if (isBillPaidForCurrentPeriod(bill, now)) {
     throw new HttpError(409, 'Bill already paid for current period');
   }
-
-  // Paid today on the person's calendar: the date the payment and last_paid_date carry.
-  const todayStr = now.toISOString().split('T')[0];
-
-  // Every statement carries the same guard: the bill has not already been marked paid today.
-  //
-  // Reading `last_paid_date` and then writing was a check against a value that could already be
-  // stale by the time the batch ran — two taps (a phone that felt slow, or a phone and a laptop)
-  // both saw an unpaid bill, and both inserted a transaction and both debited the account. The
-  // money left twice.
-  //
-  // A batch is one transaction, so a second batch either runs entirely before or entirely after
-  // the first; running after, it sees `last_paid_date = today` and every guarded statement
-  // matches nothing. The UPDATE goes LAST so the two before it still see the pre-state.
-  const guard = `(SELECT COUNT(*) FROM bills
-                   WHERE id = ?1 AND profile_id = ?2
-                     AND (last_paid_date IS NULL OR last_paid_date <> ?3)) = 1`;
-
-  const stmts: D1PreparedStatement[] = [];
 
   // A bill has no currency field — its amount is in the profile's base currency by construction.
   // Say so on the transaction (currency = base, amount_local = amount), or the schema's
@@ -486,39 +539,7 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
   // bill the user entered in their own currency. Same source + default as the recurring cron.
   const baseCurrency = (await configuredBaseCurrency(c.env.DB, pid)) ?? 'EUR';
 
-  stmts.push(
-    c.env.DB.prepare(
-      `INSERT INTO transactions (profile_id, description, amount, type, category_id, account_id, date, notes, currency, amount_local)
-       SELECT ?4, ?5, ?6, 'expense', ?7, ?8, ?3, ?9, ?10, ?6 WHERE ${guard}`
-    ).bind(
-      id,
-      pid,
-      todayStr,
-      pid,
-      bill.name,
-      bill.amount,
-      bill.category_id,
-      bill.account_id ?? null,
-      bill.notes || '',
-      baseCurrency
-    )
-  );
-
-  if (bill.account_id != null) {
-    stmts.push(
-      c.env.DB.prepare(
-        `UPDATE accounts SET balance = balance - ?4
-         WHERE id = ?5 AND profile_id = ?2 AND ${guard}`
-      ).bind(id, pid, todayStr, bill.amount, bill.account_id)
-    );
-  }
-
-  stmts.push(
-    c.env.DB.prepare(
-      `UPDATE bills SET last_paid_date = ?3 WHERE id = ?1 AND profile_id = ?2 AND ${guard}`
-    ).bind(id, pid, todayStr)
-  );
-
+  const stmts = markPaidStatements(c.env.DB, bill, pid, now, baseCurrency);
   const results = await c.env.DB.batch(stmts);
   // The claim is the last statement. Zero rows changed means another request got there first
   // between our read and our write, and this one wrote nothing at all.
