@@ -264,6 +264,35 @@
   border-color: var(--primary);
 }
 
+/* ── A new account address waiting for the link mailed to it (Email reminders) ── */
+.pending-email {
+  margin-top: 10px;
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+}
+
+.pending-email p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.pending-email strong {
+  color: var(--text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.pending-email-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 /* ── Branded native checkbox (household multi-select, migrate opt-in) ── */
 .checkbox {
   width: 16px;
