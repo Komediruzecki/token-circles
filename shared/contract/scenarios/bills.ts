@@ -240,7 +240,9 @@ export const bills = [
     expectMoney(expect, march.body.summary.totalAmount, 70.25, 'March total');
     expect(march.body.summary).toMatchObject({ paidAmount: 0, billCount: 2 });
 
-    // February has no 31st: the Gym is not drawn.
+    // KNOWN BUG, in both runtimes; slice 3 (bills) fixes it. February has no 31st, and the Gym,
+    // due on the 31st, is left out of February instead of falling due on its last day, the 28th.
+    // Fixed, February draws the Gym on the 28th and counts 2 bills: change this expectation then.
     const february = await api.get('/api/bills/calendar?year=2026&month=2');
     expect(Object.keys(february.body.days)).toHaveLength(28);
     expect(february.body.summary).toMatchObject({ billCount: 1 });

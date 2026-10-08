@@ -139,7 +139,10 @@ export const analytics = [
       { category: 'Food', color: '#2e7d32', data: days(31, { 10: 45.5, 22: 35 }) },
     ]);
 
-    // Its weeks, and one week of it: the 8th to the 14th, a Saturday to a Friday.
+    // Its weeks, and one week of it. KNOWN BUG, in both runtimes; a follow-up PR fixes it. No week
+    // holds March 30 and 31: a month's last days that start a new week are dropped. And week 2 of
+    // category trends is March 8 to 14, a Saturday to a Friday, where the weeks list labels week 2
+    // March 2 to 8. Fixed, both answers change: change these expectations then.
     expect(await read(api, expect, '/api/analytics/weeks?year=2025&month=3')).toEqual({
       weeks: [
         { week: 1, label: 'Week 1 (2025-02-23 - 2025-03-01)' },
