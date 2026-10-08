@@ -35,9 +35,7 @@ const appBase = (c: Context<AppEnv>) =>
 
 /** The address a change is waiting on, while its link can still be opened. */
 export async function pendingEmailChange(d1: D1Database, userId: number): Promise<string | null> {
-  // expires_at is an ISO string (createEmailVerification), so "now" is one too. Against
-  // datetime('now'), whose space sorts before ISO's 'T', a link that expired earlier the same day
-  // would still read as live.
+  // expires_at is ISO 8601, so it is compared with an ISO now.
   const row = await db.first<{ email: string }>(
     d1,
     `SELECT email FROM email_verifications
