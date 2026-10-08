@@ -704,17 +704,21 @@ transactionsRoutes.put('/api/transactions/bulk', requireAuth, async (c) => {
 // ── Reconciliation routes ─────────────────────────────────────────────────────
 // Registered before /api/transactions/:id so they aren't shadowed.
 
-// POST /api/transactions/reconcile/bulk — bulk reconcile by date range.
+// POST /api/transactions/reconcile/bulk — bulk reconcile by date range. The app sends the range as
+// date_from/date_to (core/api.ts reconcileByDateRange, which local-first reads too); startDate and
+// endDate, the names this route was ported with, still work.
 transactionsRoutes.post('/api/transactions/reconcile/bulk', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;
-  const { startDate, endDate } = b;
-  if (!startDate || !endDate) throw new HttpError(400, 'startDate and endDate are required');
+  const startDate = b.date_from ?? b.startDate;
+  const endDate = b.date_to ?? b.endDate;
+  if (!startDate || !endDate) throw new HttpError(400, 'date_from and date_to are required');
 
+  // Unreconciled as the summary counts it: a NULL is unreconciled too.
   const result = await db.run(
     c.env.DB,
     `UPDATE transactions SET reconciled = 1, reconciled_at = datetime('now')
-     WHERE profile_id = ? AND date >= ? AND date <= ? AND reconciled = 0`,
+     WHERE profile_id = ? AND date >= ? AND date <= ? AND COALESCE(reconciled, 0) = 0`,
     pid,
     startDate,
     endDate

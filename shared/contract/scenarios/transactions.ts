@@ -300,6 +300,56 @@ export const transactions = [
   ),
 
   scenario(
+    'reconciling one row, a chosen set, and everything in a range, with the summary',
+    async (api, expect) => {
+      const acct = await account(api, expect, 'Everyday', 0);
+      const one = await transaction(api, expect, { amount: 1.5, account_id: acct });
+      const two = await transaction(api, expect, { amount: 2.25, account_id: acct });
+      const three = await transaction(api, expect, { amount: 3, account_id: acct });
+      const four = await transaction(api, expect, { amount: 4.75, account_id: acct });
+      const theirs = await transaction(api.other, expect, { amount: 99 });
+
+      const toggled = await api.patch(`/api/transactions/${one}/reconcile`);
+      expectOk(expect, toggled, 'PATCH reconcile');
+      expect(toggled.body).toMatchObject({ reconciled: 1, reconciled_at: expect.any(String) });
+      const untoggled = await api.patch(`/api/transactions/${one}/reconcile`);
+      expect(untoggled.body).toMatchObject({ reconciled: 0, reconciled_at: null });
+
+      const batch = await api.put('/api/transactions/reconcile-batch', {
+        transaction_ids: [one, two, theirs],
+      });
+      expectOk(expect, batch, 'PUT reconcile-batch');
+      expect(batch.body).toMatchObject({ updated: 2 });
+      expect((await api.get(`/api/transactions/${two}`)).body).toMatchObject({ reconciled: 1 });
+      expect(Boolean((await api.other.get(`/api/transactions/${theirs}`)).body.reconciled)).toBe(
+        false
+      );
+
+      let summary = await api.get('/api/transactions/reconcile/summary');
+      expectOk(expect, summary, 'GET the reconcile summary');
+      expect(summary.body).toMatchObject({ reconciled_count: 2, unreconciled_count: 2 });
+      expectMoney(expect, summary.body.unreconciled_total, 7.75, 'unreconciled total');
+
+      // The Reconciliation dialog's "reconcile all" sends the widest range (ReconciliationModal).
+      const all = await api.post('/api/transactions/reconcile/bulk', {
+        date_from: '2000-01-01',
+        date_to: '2099-12-31',
+      });
+      expectOk(expect, all, 'POST reconcile/bulk');
+      expect(all.body).toMatchObject({ count: 2 });
+      expect((await api.get(`/api/transactions/${four}`)).body).toMatchObject({ reconciled: 1 });
+      expect((await api.get(`/api/transactions/${three}`)).body).toMatchObject({ reconciled: 1 });
+      expect(Boolean((await api.other.get(`/api/transactions/${theirs}`)).body.reconciled)).toBe(
+        false
+      );
+
+      summary = await api.get('/api/transactions/reconcile/summary');
+      expect(summary.body).toMatchObject({ reconciled_count: 4, unreconciled_count: 0 });
+      expectMoney(expect, summary.body.unreconciled_total, 0, 'unreconciled total');
+    }
+  ),
+
+  scenario(
     "removing every transaction resets the balances and leaves the other profile's",
     async (api, expect) => {
       const acct = await account(api, expect, 'Everyday', 300);
