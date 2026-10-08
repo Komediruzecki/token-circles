@@ -275,7 +275,7 @@ export function renderEmailChange(opts: {
   const footerReason = `Sent because this address was entered as the new email for a ${BRAND} account.`;
   const body = `
     ${h1('Confirm your new email')}
-    ${p(`Open the link below to make this the email address of your ${BRAND} account. You sign in with it from then on, and account mail comes here.`)}
+    ${p(`Open the link below to make this the email address of your ${BRAND} account. From then on, mail about your account comes here.`)}
     <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm new email')}</div>
     ${p(`The link works once and expires in ${ttl}. Until you open it, nothing changes.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`If you didn't ask for this, ignore this email.`, `font-size:12.5px;color:${C.faint}`)}
@@ -291,7 +291,7 @@ export function renderEmailChange(opts: {
       orbit: false,
       assetOrigin: opts.assetOrigin,
     }),
-    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}):\n${opts.link}\n\nYou sign in with it from then on. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
+    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}):\n${opts.link}\n\nFrom then on, mail about your account comes here. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
   };
 }
 

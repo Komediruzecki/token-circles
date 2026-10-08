@@ -79,6 +79,14 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
+  it('email change link says only what is true for every account, Google ones included', () => {
+    const mail = renderEmailChange({ link: 'https://api.example.com/verify', ttlHours: 24 });
+    expect(mail.html).not.toMatch(/sign in with it/i);
+    expect(mail.text).not.toMatch(/sign in with it/i);
+    expect(mail.html).toContain('From then on, mail about your account comes here.');
+    expect(mail.text).toContain('From then on, mail about your account comes here.');
+  });
+
   it('email change notice names the new address, points at Settings, and carries no confirm link', () => {
     const mail = renderEmailChangeNotice({
       newEmail: 'new@example.com',
