@@ -44,11 +44,16 @@ afterEach(() => {
 })
 
 /** A form with a text field, a number-ish text field and a group of swatches. */
-function mount(send: (values: Values) => unknown = () => undefined, busyLabel?: string) {
+function mount(
+  send: (values: Values) => unknown = () => undefined,
+  busyLabel?: string,
+  saved?: (result: unknown) => void
+) {
   const form = createForm<Values>({
     initial: INITIAL,
     check,
     send,
+    saved,
     failure: "Couldn't save it. Try again.",
   })
   host = document.createElement('div')
@@ -473,6 +478,46 @@ describe('reset', () => {
 
     expect(labelled('Name').getAttribute('aria-invalid')).toBeNull()
     expect(notice().textContent).toBe('')
+    expect(form.submitting()).toBe(false)
+  })
+})
+
+describe('after a save', () => {
+  it('runs saved with what send returned', async () => {
+    const saved = vi.fn()
+    const form = mount(() => Promise.resolve('Saved it.'), undefined, saved)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+
+    await submit()
+
+    expect(saved).toHaveBeenCalledTimes(1)
+    expect(saved).toHaveBeenCalledWith('Saved it.')
+    expect(form.submitting()).toBe(false)
+  })
+
+  // A dialog cancelled and opened again while its save was out has been reset by the opening.
+  // The save landing late used to close it, and what was being typed in it went too.
+  it('does not run saved for a save that lands after the form was reset', async () => {
+    let land!: (said: string) => void
+    const saved = vi.fn()
+    const form = mount(
+      () =>
+        new Promise<string>((resolve) => {
+          land = resolve
+        }),
+      undefined,
+      saved
+    )
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    await submit()
+
+    form.reset()
+    land('Saved it.')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(saved).not.toHaveBeenCalled()
     expect(form.submitting()).toBe(false)
   })
 })

@@ -292,7 +292,8 @@ export function plainMessage(error: unknown, fallback: string): string;
 const form = createForm({
   initial: { name: '', type: 'expense', color: DEFAULT_COLOR, icon: '' },
   check: (values) => fieldErrorsOf(checkCategoryCreate(values)), // {} when fine
-  send: async (values) => { await saveCategory(values); close() }, // throw to refuse
+  send: (values) => saveCategory(values), // throw to refuse
+  saved: () => close(), // only while this is still the form that sent
   failure: "Couldn't save the category. Try again.", // when the error carries no words
 })
 
@@ -347,6 +348,10 @@ form.attrs                  // spread on the <form>: noValidate, onSubmit, aria-
   `disabled`: a disabled button loses focus, which drops a keyboard user at the top of the page.
   A click on it while busy submits nothing. The kit's stylesheet gives it the look a page's own
   `:disabled` rule would have.
+- What follows a save goes in `saved`, which gets what `send` returned. The kit runs it only while
+  the form is still the one that sent, as it drops a late refusal: a dialog cancelled and opened
+  again while its save was out has been reset, and the late save used to close it, with what was
+  being typed in it. The category dialogs' toast and close are their `saved`.
 - It follows solid-forms rules 1 to 4; it renders no list of editable rows and no number field.
 
 The category's form logic lives once, in `features/categoryForm.ts` (the values, the shared check,

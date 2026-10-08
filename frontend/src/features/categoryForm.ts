@@ -57,7 +57,7 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
   /** What an edit opened with: a value still the same is not checked. Null for a new category. */
   let opened: CategoryFormValues | null = null
 
-  const form = createForm<CategoryFormValues>({
+  const form = createForm<CategoryFormValues, string>({
     initial: blank,
     check: (values) =>
       fieldErrorsOf(opened ? checkCategoryEdit(values, opened) : checkCategoryCreate(values)),
@@ -79,11 +79,16 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
       const editing = options.editing?.()
       if (editing) {
         await apiPut(`/api/categories/${editing.id}`, body)
-        showToast(shown ? `Saved your changes to "${shown}".` : 'Saved your changes.', 'success')
-      } else {
-        await apiPost('/api/categories', body)
-        showToast(`Added "${shown}" to your categories.`, 'success')
+        return shown ? `Saved your changes to "${shown}".` : 'Saved your changes.'
       }
+      await apiPost('/api/categories', body)
+      return `Added "${shown}" to your categories.`
+    },
+    // Only while this is still the dialog that sent. Cancelled and opened again while the save
+    // was out, it is another category's dialog, and closing it would throw away what is typed in
+    // it. The list behind shows the saved category either way.
+    saved: (said) => {
+      showToast(said, 'success')
       options.onSaved()
     },
     failure: "Couldn't save the category. Try again.",

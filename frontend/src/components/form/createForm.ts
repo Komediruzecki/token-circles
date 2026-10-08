@@ -14,6 +14,9 @@
  * - A server's mark goes on the field's next change: only the server knows whether it still holds.
  * - While `send` runs, the form is `aria-busy` and a second submit does nothing. `SubmitButton`
  *   says so on the button.
+ * - What follows a save (`saved`: say so, close the dialog) runs only while the form is still the
+ *   one that sent. A reset in between, as when a dialog is cancelled and opened again, drops it,
+ *   as it drops a refusal that lands late.
  *
  * `Field` registers each control here, which is how the kit knows which fields this form shows and
  * where to move focus. See docs/plans/2026-10-07-form-errors.md.
@@ -26,13 +29,18 @@ import type { FieldErrors } from '../../../../shared/refusal'
 /** Any object of named values: an interface works as well as a type literal. */
 export type FormValues = object
 
-export interface FormOptions<T extends FormValues> {
+export interface FormOptions<T extends FormValues, R = unknown> {
   /** What a fresh form holds, and what `reset()` with no argument returns to. */
   initial: T
   /** Each field's problem in words, or `{}` when the values can be sent. Pure and synchronous. */
   check?: (values: T) => FieldErrors
   /** Sends the values. Throw to refuse; it gets a plain copy, never the store. */
-  send: (values: T) => unknown
+  send: (values: T) => R | Promise<R>
+  /**
+   * After `send` succeeds, with what it returned: say so, close the dialog. Not run when the form
+   * was reset while it sent: the dialog in front of the person by then is not the one that sent.
+   */
+  saved?: (result: R) => void
   /** The notice when `send` throws something that is not an `ApiError`. */
   failure: string
 }
@@ -79,7 +87,7 @@ function messages(errors: FieldErrors): [string, string][] {
   return Object.entries(errors).filter(([, message]) => message.trim() !== '')
 }
 
-export function createForm<T extends FormValues>(options: FormOptions<T>): Form<T> {
+export function createForm<T extends FormValues, R = unknown>(options: FormOptions<T, R>): Form<T> {
   const [values, setValues] = createStore<T>({ ...options.initial })
   const [errors, setErrors] = createStore<Record<string, string | undefined>>({})
   const [notice, setNotice] = createSignal<string>()
@@ -187,13 +195,20 @@ export function createForm<T extends FormValues>(options: FormOptions<T>): Form<
       setSubmitting(true)
     })
     const mine = generation
+    let result: R
     try {
-      await options.send(snapshot())
+      result = await options.send(snapshot())
     } catch (error) {
-      if (mine === generation) refused(error)
-    } finally {
-      if (mine === generation) setSubmitting(false)
+      if (mine === generation) {
+        refused(error)
+        setSubmitting(false)
+      }
+      return
     }
+    // A reset while it sent means this answer is about a form no longer on screen.
+    if (mine !== generation) return
+    setSubmitting(false)
+    options.saved?.(result)
   }
 
   const register: Form<T>['register'] = (name, controlId) => {

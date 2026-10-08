@@ -140,10 +140,8 @@ away from the field, it goes on its own, and a screen reader hears it out of con
 const form = createForm({
   initial: { name: '', icon: '' },
   check: (values) => fieldErrorsOf(checkCategoryCreate(values)), // {} when it can be sent
-  send: async (values) => {
-    await apiPost('/api/categories', values); // throws ApiError, with the server's fields
-    close();
-  },
+  send: (values) => apiPost('/api/categories', values), // throws ApiError, with the server's fields
+  saved: () => close(), // only while this is still the form that sent
   failure: "Couldn't save the category. Try again.", // for an error with no words of its own
 });
 ```
@@ -173,6 +171,10 @@ const form = createForm({
 - `SubmitButton`, never `disabled={form.submitting()}`: while the form sends it reads "Saving…"
   (or the form's own verb, `busyLabel`) and is `aria-disabled`, so it keeps focus. A `disabled`
   button drops a keyboard user at the top of the page.
+- What follows a save (the toast, closing the dialog) goes in `saved`, never after the `await` in
+  `send`. The kit runs `saved` only while the form is still the one that sent: a dialog cancelled
+  and opened again while its save was out has been reset, and a late save closing it throws away
+  what the person is typing.
 - The check is the entity's schema in `shared/`, the one the local-first router and the Worker
   also run, so the form and the server refuse the same values in the same words.
 - An edit checks only what it changes (`checkCategoryEdit(values, opened)`), as the server does:

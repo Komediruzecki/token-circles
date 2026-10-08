@@ -28,6 +28,8 @@ interface Surface {
   module: string
   /** Opens the category dialog from wherever this page offers it. */
   open: () => Promise<void>
+  /** Opens it again after it was cancelled, from where the page leaves the person. */
+  reopen: () => Promise<void>
   /** Opens the dialog to edit the one category on the page, where this page offers that. */
   edit?: () => Promise<void>
 }
@@ -49,19 +51,25 @@ async function clickWhenThere(find: () => HTMLElement | null | undefined): Promi
   el!.click()
 }
 
+const openCategories = () =>
+  clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="add-category-btn"]'))
+const openBudgets = () => clickWhenThere(() => byText('Add Category'))
+const openInline = () => clickWhenThere(() => byText('+ Add Category'))
+
 const SURFACES: Surface[] = [
   {
     page: 'categories',
     module: '../Categories',
-    open: () =>
-      clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="add-category-btn"]')),
+    open: openCategories,
+    reopen: openCategories,
     edit: () =>
       clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="edit-category-btn"]')),
   },
   {
     page: 'budgets',
     module: '../Budgets',
-    open: () => clickWhenThere(() => byText('Add Category')),
+    open: openBudgets,
+    reopen: openBudgets,
     edit: () => clickWhenThere(() => host.querySelector<HTMLElement>('button[title="Edit"]')),
   },
   {
@@ -69,16 +77,19 @@ const SURFACES: Surface[] = [
     module: '../Bills',
     open: async () => {
       await clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="add-bill-btn"]'))
-      await clickWhenThere(() => byText('+ Add Category'))
+      await openInline()
     },
+    // Cancelling the category dialog leaves the bill form open under it.
+    reopen: openInline,
   },
   {
     page: 'goals',
     module: '../Goals',
     open: async () => {
       await clickWhenThere(() => host.querySelector<HTMLElement>('[data-test-id="add-goal-btn"]'))
-      await clickWhenThere(() => byText('+ Add Category'))
+      await openInline()
     },
+    reopen: openInline,
   },
 ]
 
@@ -253,6 +264,50 @@ describe.each(SURFACES)('the category dialog on $page', (surface) => {
     expect(successToasts()).toEqual(['Added "Coffee" to your categories.'])
   })
 })
+
+// Save, then Cancel while the save is out, then open the dialog again for another category. The
+// first save landing used to close the second dialog, and what was typed in it went with it.
+describe.each(SURFACES)(
+  'a save that lands after the dialog was opened again, on $page',
+  (surface) => {
+    it('leaves the dialog open now alone, with what is being typed in it', async () => {
+      let land!: () => void
+      const held = new Promise<void>((resolve) => {
+        land = resolve
+      })
+      const post = api.apiPost
+      vi.spyOn(api, 'apiPost').mockImplementation(async (url, body, options) => {
+        await held
+        return post(url, body, options)
+      })
+      await mount(surface)
+      type(nameField(), 'Coffee')
+      submitDialog()
+      await settle()
+      Array.from(dialogForm().querySelectorAll('button'))
+        .find((b) => b.textContent?.trim() === 'Cancel')!
+        .click()
+      await vi.waitFor(() => {
+        expect(dialogOpen()).toBe(false)
+      })
+      await surface.reopen()
+      type(nameField(), 'Tea')
+
+      land()
+      await vi.waitFor(async () => {
+        expect(await storedNames()).toContain('Coffee')
+      })
+      await settle()
+
+      expect(dialogOpen()).toBe(true)
+      expect(nameField().value).toBe('Tea')
+      expect(dialogForm().getAttribute('aria-busy')).toBeNull()
+      // The list behind shows the category; a toast about a dialog no longer open would be news
+      // about something the person cancelled, over the one they are typing in.
+      expect(successToasts()).toEqual([])
+    })
+  }
+)
 
 // A name over 100 characters and a 3-digit color: both refused on a new category, both stored by
 // older versions. The edit dialog sends every field it shows back on each save.
