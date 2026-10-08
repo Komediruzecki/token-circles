@@ -202,6 +202,26 @@ export const recurring = [
     expect((await rules(api, expect)).map((r) => r.id)).toEqual([march, april, may]);
   }),
 
+  scenario("a recurring rule carries its category's name and colour", async (api, expect) => {
+    const rent = await api.post('/api/categories', {
+      name: 'Rent',
+      type: 'expense',
+      color: '#2266aa',
+      icon: 'home',
+    });
+    expectOk(expect, rent, 'POST the category');
+    const id = await rule(api, expect, { category_id: rent.body.id });
+    // The Recurring section and the dashboard card colour each rule by its category.
+    expect(await rules(api, expect)).toEqual([
+      expect.objectContaining({
+        id,
+        category_name: 'Rent',
+        category_color: '#2266aa',
+        category_type: 'expense',
+      }),
+    ]);
+  }),
+
   scenario('upcoming recurring transactions, and a paused rule', async (api, expect) => {
     const coffee = await addCategory(api, expect, 'Coffee');
     const today = isoDay(new Date());
