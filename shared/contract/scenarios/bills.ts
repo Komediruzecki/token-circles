@@ -127,6 +127,22 @@ export const bills = [
       category_id: 'Choose a category from the list, or leave it blank.',
     });
     expect(await billsList(api, expect)).toHaveLength(1);
+
+    // On another profile's account and category both, a new bill and an edit are refused at the
+    // same field in both runtimes: the account, checked first. Local-first checked the category
+    // first.
+    const theirAccount = await account(other, expect, 'Their giro', 0);
+    const onBoth = billForm({ category_id: theirs, account_id: theirAccount });
+    for (const reply of [
+      await api.post('/api/bills', onBoth),
+      await api.put(`/api/bills/${id}`, onBoth),
+    ]) {
+      expect(reply.status).toBe(400);
+      expect(reply.body.fields).toEqual({
+        account_id: 'Choose one of your accounts from the list, or leave it blank.',
+      });
+    }
+    expect(await billsList(api, expect)).toHaveLength(1);
   }),
 
   scenario(

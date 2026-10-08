@@ -174,11 +174,13 @@ export async function billsCreate(body: unknown): Promise<Response> {
   const checked = checkBillCreate(body)
   if (!checked.ok) return refuse(checked.fields)
   const bill = checked.value
-  if (!(await currentProfileOwns('categories', bill.category_id))) {
-    return refuse({ category_id: BILL_MESSAGES.category })
-  }
+  // The account first, then the category, as the Worker checks them: a bill on another profile's
+  // account and category is refused at the same field in both runtimes.
   if (!(await currentProfileOwns('accounts', bill.account_id))) {
     return refuse({ account_id: BILL_MESSAGES.account })
+  }
+  if (!(await currentProfileOwns('categories', bill.category_id))) {
+    return refuse({ category_id: BILL_MESSAGES.category })
   }
   const record = {
     profile_id: await adapter.getCurrentProfileId(),
@@ -216,14 +218,15 @@ export async function billsUpdate(
     return refuse(checked.fields)
   }
   const edit = checked.value
+  // The account first, then the category, as the Worker checks them.
+  if (edit.account_id !== undefined && !(await currentProfileOwns('accounts', edit.account_id))) {
+    return refuse({ account_id: BILL_MESSAGES.account })
+  }
   if (
     edit.category_id !== undefined &&
     !(await currentProfileOwns('categories', edit.category_id))
   ) {
     return refuse({ category_id: BILL_MESSAGES.category })
-  }
-  if (edit.account_id !== undefined && !(await currentProfileOwns('accounts', edit.account_id))) {
-    return refuse({ account_id: BILL_MESSAGES.account })
   }
   const row: Record<string, unknown> = { ...bill, ...edit }
   if (edit.autopay !== undefined) row.autopay = edit.autopay ? 1 : 0
