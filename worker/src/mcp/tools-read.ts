@@ -4,6 +4,8 @@ import { HttpError } from '../http';
 import { signCapability, CAPABILITY_TTL_SECONDS } from '../signed-url';
 import * as db from '../db';
 import { localMonth, localToday } from '../local-date';
+import { dueWithin, type ScheduledBill } from '../../../shared/billSchedule';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
 
 /** Every tool accepts this; rpc.ts reads `profileId` off the parsed args to resolve the profile. */
 import { profileArg, DATE, MONTH } from './args';
@@ -268,21 +270,30 @@ defineTool({
       month
     );
     const of = (type: string) => totals.find((r) => r.type === type)?.total ?? 0;
-    // Due today or later on the caller's calendar; SQLite's date('now') is the UTC one.
-    const bills = await db.all<Record<string, unknown>>(
+    // The Dashboard's Upcoming Bills (shared/billSchedule.ts): the active bills that fall due from
+    // the caller's today through 30 days on, on the dates they fall due. A bill's stored due date is
+    // its first, and paying never moves it, so it is not one of them.
+    const bills = await db.all<ScheduledBill & { id: number; name: string; amount: number }>(
       c.env.DB,
-      `SELECT id, name, amount, due_date FROM bills
-        WHERE profile_id = ? AND due_date >= ?
-        ORDER BY due_date LIMIT 10`,
-      profileId,
-      localToday(c)
+      `SELECT id, name, amount, frequency, day_of_month, due_date, last_paid_date, is_active
+         FROM bills WHERE profile_id = ?`,
+      profileId
     );
+    const upcomingBills = dueWithin(bills, localToday(c), 30)
+      .slice(0, 10)
+      .map((b) => ({
+        id: b.id,
+        name: b.name,
+        amount: b.amount,
+        next_due_date: b.next_due_date,
+        days_until: b.days_until,
+      }));
     return guardSize({
       monthKey: month,
       accounts,
       netWorth: accounts.reduce((sum, a) => sum + (a.balance ?? 0), 0),
       month: { income: of('income'), expense: of('expense'), net: of('income') + of('expense') },
-      upcomingBills: bills,
+      upcomingBills,
     });
   },
 });
@@ -296,6 +307,8 @@ defineTool({
   input: z.object({ ...profileArg, month: z.string().regex(MONTH).optional() }).strict(),
   handler: async (c, args, profileId) => {
     const month = args.month ?? localMonth(c);
+    // The month's budgets are the ones that start in it, as the Budgets page reads them: every
+    // month has its own, and the tool answered them all, each against this month's spending.
     const budgets = await db.all<{
       id: number;
       category_id: number;
@@ -315,10 +328,12 @@ defineTool({
               ), 0) AS spent
          FROM budgets b
          LEFT JOIN categories c ON c.id = b.category_id AND c.profile_id = b.profile_id
-        WHERE b.profile_id = ?
+        WHERE b.profile_id = ? AND b.start_date >= ? AND b.start_date < ?
         ORDER BY b.id`,
       month,
-      profileId
+      profileId,
+      `${month}-01`,
+      addCalendarMonths(`${month}-01`, 1)
     );
     return guardSize({
       month,
