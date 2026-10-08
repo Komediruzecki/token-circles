@@ -15,9 +15,11 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES as M } from '../../../../shared/billSchema'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
+import { confirmRequests, resolveConfirm } from '../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
+import { localToday } from '../../utils/period'
 
 const RENT = 1
 const UTILITIES = 11
@@ -400,5 +402,38 @@ describe('editing a bill', () => {
       expect(await rent()).toMatchObject({ name: 'Flat rent', amount: 0, frequency: 'daily' })
     })
     expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('deleting a bill', () => {
+  // Deleted in another tab or on another device first, the bill answers 404. Gone is what was
+  // asked, so the page says so and drops the card. It said "Failed to delete bill" and kept the
+  // card until a reload.
+  it('drops a bill another tab deleted, without an error', async () => {
+    const db = await getDB()
+    // Paid, so its card offers Delete.
+    await db.put('bills', { ...(await rent()), last_paid_date: localToday() })
+    const { default: Bills } = await import('../Bills')
+    dispose = render(() => <Bills />, host)
+    const deleteButton = () =>
+      host.querySelector<HTMLButtonElement>('[data-test-id="bill-delete-btn"] button')
+    await vi.waitFor(() => {
+      expect(deleteButton()).not.toBeNull()
+    })
+    await db.delete('bills', RENT)
+
+    deleteButton()!.click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="bills-empty"]')).not.toBeNull()
+    })
+    expect(failureToasts()).toEqual([])
+    expect(toasts().map((t) => [t.type, t.message])).toEqual([
+      ['info', 'That bill was already deleted.'],
+    ])
   })
 })

@@ -66,7 +66,7 @@ import SubscriptionCatalogModal from '../components/SubscriptionCatalogModal'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPost, apiPut, errorStatus, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
@@ -281,12 +281,19 @@ export default function Bills() {
     }
   }
 
-  // Delete bill
+  // Delete bill. One deleted in another tab or on another device first answers 404: gone is what
+  // was asked, so the page says so and drops the card. A failed write bumps no counter, so this
+  // refetch has to be asked for.
   const deleteBill = async (id: number) => {
     try {
       await apiDelete(`/api/bills/${id}`)
       showToast('Bill deleted successfully', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That bill was already deleted.', 'info')
+        await refetchBills()
+        return
+      }
       console.error('Failed to delete bill:', err)
       showToast('Failed to delete bill', 'error')
     }
