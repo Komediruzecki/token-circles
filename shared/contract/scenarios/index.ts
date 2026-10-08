@@ -12,6 +12,7 @@ import { importSources } from './importSources';
 import { loanScenarios } from './loans';
 import { portfolio } from './portfolio';
 import { profiles } from './profiles';
+import { receipts } from './receipts';
 import { recurring } from './recurring';
 import { retirement } from './retirement';
 import { settings } from './settings';
@@ -33,6 +34,7 @@ export const SCENARIOS: Readonly<Record<string, readonly Scenario[]>> = {
   loans: loanScenarios,
   portfolio,
   profiles,
+  receipts,
   recurring,
   retirement,
   settings,
