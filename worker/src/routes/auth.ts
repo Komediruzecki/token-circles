@@ -454,26 +454,33 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
   if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
   const change = row.purpose === 'change';
   if (Date.parse(row.expires_at) < Date.now()) return fail('expired', change);
-  if (change) {
-    // The account moves to the address this link was mailed to, unless another account has it
-    // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
-    const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
-    if (outcome === 'taken') return fail('email_taken', true);
-    if (outcome === 'gone') return fail('invalid_or_used');
-    return back('everified=1&change=1');
+  // The link is spent. Whatever goes wrong from here goes back to the app as a reason: the person
+  // arrived by opening a link in a mail, so an error page would leave them nowhere.
+  try {
+    if (change) {
+      // The account moves to the address this link was mailed to, unless another account has it
+      // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
+      const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
+      if (outcome === 'taken') return fail('email_taken', true);
+      if (outcome === 'gone') return fail('invalid_or_used');
+      return back('everified=1&change=1');
+    }
+    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
+      .bind(row.user_id)
+      .first<{ email: string | null }>();
+    // The address has to still be the one this link was sent to. Otherwise changing the address
+    // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
+    if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
+      return fail('invalid_or_used');
+    }
+    await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
+      .bind(row.user_id)
+      .run();
+    return back('everified=1');
+  } catch (e) {
+    console.error('An email link failed after it was spent:', e);
+    return fail('server_error', change);
   }
-  const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
-    .bind(row.user_id)
-    .first<{ email: string | null }>();
-  // The address has to still be the one this link was sent to. Otherwise changing the address
-  // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
-  if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
-    return fail('invalid_or_used');
-  }
-  await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
-    .bind(row.user_id)
-    .run();
-  return back('everified=1');
 });
 
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to

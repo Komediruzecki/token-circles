@@ -478,6 +478,42 @@ describe('the link, when it should not work', () => {
   });
 });
 
+describe('the link, when the work behind it fails', () => {
+  const failUpdatesOf = (column: string) =>
+    env.DB.prepare(
+      `CREATE TRIGGER fail_email_link BEFORE UPDATE OF ${column} ON users BEGIN SELECT RAISE(ABORT, 'refused by the test'); END`
+    ).run();
+
+  afterEach(async () => {
+    await env.DB.prepare('DROP TRIGGER IF EXISTS fail_email_link').run();
+  });
+
+  it('sends the browser back to the app with a reason, not an error page', async () => {
+    await seed(1);
+    await save(NEW);
+    const link = latestLinkTo(NEW);
+    await failUpdatesOf('email');
+
+    const res = await open(link);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=server_error&change=1`);
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+  });
+
+  it('does the same for the link that confirms the current address', async () => {
+    await seed(0);
+    expect((await call('POST', '/api/auth/resend-verification')).status).toBe(200);
+    const link = latestLinkTo(OLD);
+    await failUpdatesOf('email_verified');
+
+    const res = await open(link);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=server_error`);
+  });
+});
+
 describe('the link, for an account that is gone', () => {
   it('refuses it rather than reporting a change', async () => {
     await seed(0);
