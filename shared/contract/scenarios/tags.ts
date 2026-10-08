@@ -1,4 +1,4 @@
-import { expectMoney, listTransactions, rowsOf } from '../helpers';
+import { expectMoney, listTransactions, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
@@ -16,15 +16,7 @@ async function category(api: ContractApi, expect: Expect, name: string) {
 }
 
 async function spend(api: ContractApi, expect: Expect, fields: Record<string, unknown>) {
-  return added(api, expect, '/api/transactions', {
-    description: 'Groceries',
-    amount: 10,
-    date: '2026-03-10',
-    type: 'expense',
-    category_id: null,
-    currency: 'EUR',
-    ...fields,
-  });
+  return added(api, expect, '/api/transactions', transactionForm(fields));
 }
 
 /** The names of a transaction's tags, as `GET /api/transactions/:id/tags` answers them. */

@@ -1,4 +1,4 @@
-import { addTransaction, rowsOf } from '../helpers';
+import { addTransaction, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { billForm } from './bills';
@@ -6,14 +6,7 @@ import { goalForm } from './goals';
 import { ruleForm } from './recurring';
 
 async function uncategorised(api: ContractApi, expect: Expect, description: string) {
-  return added(api, expect, '/api/transactions', {
-    description,
-    amount: 15.99,
-    date: '2026-03-10',
-    type: 'expense',
-    category_id: null,
-    currency: 'EUR',
-  });
+  return added(api, expect, '/api/transactions', transactionForm({ description, amount: 15.99 }));
 }
 
 export const categories = [

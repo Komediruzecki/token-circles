@@ -93,19 +93,32 @@ export async function addCategory(
   return added(api, expect, '/api/categories', { name, type, color: '#aa5500', icon: 'tag' });
 }
 
-/** A transaction, as the Transactions form sends it (features/Transactions.tsx, the Save handler). */
+/**
+ * A new transaction's body as the Transactions form builds it (features/transactionForm.ts,
+ * transactionBody): every field the form shows, the ones left blank as empty text, and an
+ * exchange rate of 1. `fields` are what a person filled in or picked.
+ */
+export function transactionForm(fields: Record<string, unknown> = {}) {
+  return {
+    type: 'expense',
+    description: 'Groceries',
+    amount: 10,
+    currency: 'EUR',
+    date: '2026-03-10',
+    category_id: null,
+    beneficiary: '',
+    payor: '',
+    exchange_rate: 1,
+    notes: '',
+    ...fields,
+  };
+}
+
+/** Adds a transaction as the Transactions form does and answers its id. */
 export async function addTransaction(
   api: ContractApi,
   expect: Expect,
   fields: Record<string, unknown>
 ): Promise<number> {
-  return added(api, expect, '/api/transactions', {
-    description: 'Groceries',
-    amount: 10,
-    date: '2026-03-10',
-    type: 'expense',
-    category_id: null,
-    currency: 'EUR',
-    ...fields,
-  });
+  return added(api, expect, '/api/transactions', transactionForm(fields));
 }

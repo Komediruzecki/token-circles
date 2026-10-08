@@ -1,8 +1,8 @@
-import { balanceOf, expectMoney, isoDay, rowsOf } from '../helpers';
+import { balanceOf, expectMoney, isoDay, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect } from '../types';
 
-/** The body the Accounts form sends for a new account (features/Accounts.tsx handleSubmit). */
+/** The body the Accounts dialog sends for a new account (features/accountForm.ts, createBody). */
 export function accountBody(name: string, balance: number) {
   return {
     name,
@@ -27,15 +27,12 @@ async function expense(
   amount: number,
   date = '2026-03-10'
 ) {
-  return added(api, expect, '/api/transactions', {
-    type: 'expense',
-    amount,
-    description: 'Groceries',
-    date,
-    category_id: null,
-    account_id: accountId,
-    currency: 'EUR',
-  });
+  return added(
+    api,
+    expect,
+    '/api/transactions',
+    transactionForm({ amount, date, account_id: accountId })
+  );
 }
 
 export const accounts = [
@@ -201,15 +198,18 @@ export const accounts = [
     async (api, expect) => {
       const id = await account(api, expect, 'Everyday', 1000);
       await expense(api, expect, id, 120.4);
-      await added(api, expect, '/api/transactions', {
-        type: 'income',
-        amount: 50.15,
-        description: 'Refund',
-        date: '2026-03-11',
-        category_id: null,
-        account_id: id,
-        currency: 'EUR',
-      });
+      await added(
+        api,
+        expect,
+        '/api/transactions',
+        transactionForm({
+          type: 'income',
+          amount: 50.15,
+          description: 'Refund',
+          date: '2026-03-11',
+          account_id: id,
+        })
+      );
       const theirs = await account(api.other, expect, 'Theirs', 70);
 
       const recomputed = await api.post('/api/accounts/recompute-balances');

@@ -1,20 +1,12 @@
 import { TRANSACTION_MESSAGES } from '../../transactionSchema';
-import { balanceOf, expectMoney, idsOf, listTransactions } from '../helpers';
+import { balanceOf, expectMoney, idsOf, listTransactions, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect } from '../types';
 import { account } from './accounts';
 
-/** The body the Transactions form sends (features/Transactions.tsx, the Save handler). */
+/** The body the Transactions form sends (transactionForm in ../helpers). */
 function entry(fields: Record<string, unknown>) {
-  return {
-    description: 'Groceries',
-    amount: 10,
-    date: '2026-03-10',
-    type: 'expense',
-    category_id: null,
-    currency: 'EUR',
-    ...fields,
-  };
+  return transactionForm(fields);
 }
 
 async function transaction(api: ContractApi, expect: Expect, fields: Record<string, unknown>) {
