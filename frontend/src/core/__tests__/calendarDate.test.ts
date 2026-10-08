@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { calendarDateIn, isTimeZone, wallClockIn } from '../../../../shared/calendarDate'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  calendarDateIn,
+  isTimeZone,
+  MAX_CACHED_ZONES,
+  wallClockIn,
+} from '../../../../shared/calendarDate'
 
 // The helpers take the zone as an argument and must never read the host's. Pinning the host far
 // from every zone below makes a leak show up as a wrong date. Node re-reads TZ on assignment, and
@@ -115,5 +120,64 @@ describe('wallClockIn', () => {
 
   it('throws for a zone the runtime does not know, so callers check isTimeZone first', () => {
     expect(() => wallClockIn('Mars/Olympus_Mons')).toThrow(RangeError)
+  })
+})
+
+// The Worker runs isTimeZone on every request, ahead of sign-in, on whatever X-Time-Zone says. A
+// formatter costs about 28 KB in workerd, so what the cache keeps must not be up to the sender.
+describe('the formatter cache', () => {
+  const RealDateTimeFormat = Intl.DateTimeFormat
+
+  afterEach(() => {
+    ;(Intl as { DateTimeFormat: unknown }).DateTimeFormat = RealDateTimeFormat
+  })
+
+  /**
+   * Counts the formatters the module builds. With `anyZone`, every name is built as UTC, so a test
+   * can offer more distinct names than the time-zone database has.
+   */
+  function countConstructions(options: { anyZone?: boolean } = {}): { count: number } {
+    const counter = { count: 0 }
+    ;(Intl as { DateTimeFormat: unknown }).DateTimeFormat = new Proxy(RealDateTimeFormat, {
+      construct(target, args: [string, Intl.DateTimeFormatOptions]) {
+        counter.count++
+        const [locale, opts] = args
+        return Reflect.construct(
+          target,
+          options.anyZone ? [locale, { ...opts, timeZone: 'UTC' }] : args
+        ) as object
+      },
+    })
+    return counter
+  }
+
+  it('builds one formatter for a zone however its name is capitalised', () => {
+    const built = countConstructions()
+    // The runtime matches zone names without regard to case, so all four are the same zone.
+    const spellings = [
+      'America/Argentina/Catamarca',
+      'america/argentina/catamarca',
+      'AMERICA/ARGENTINA/CATAMARCA',
+      'aMeRiCa/ArGeNtInA/cAtAmArCa',
+    ]
+    for (const zone of spellings) expect(isTimeZone(zone), zone).toBe(true)
+    expect(built.count).toBe(1)
+    expect(calendarDateIn('AMERICA/argentina/CATAMARCA', new Date('2026-10-08T02:30:00Z'))).toBe(
+      '2026-10-07'
+    )
+    expect(built.count).toBe(1)
+  })
+
+  it(`keeps at most ${MAX_CACHED_ZONES} formatters, and still answers past that`, () => {
+    const built = countConstructions({ anyZone: true })
+    const names = Array.from({ length: MAX_CACHED_ZONES * 2 }, (_, i) => `Probe/Zone_${i}`)
+    for (const zone of names) expect(isTimeZone(zone)).toBe(true)
+    const firstPass = built.count
+    expect(firstPass).toBe(names.length)
+
+    // Asked again, a name the cache kept costs nothing and one it refused is built afresh. If the
+    // cache had kept every name, the second pass would build none.
+    for (const zone of names) expect(isTimeZone(zone)).toBe(true)
+    expect(built.count - firstPass).toBeGreaterThanOrEqual(names.length - MAX_CACHED_ZONES)
   })
 })

@@ -19,26 +19,34 @@
 const ZONE_NAME = /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/;
 const MAX_ZONE_LENGTH = 64;
 
-// One formatter per zone, made once. Only zones the runtime accepted are ever stored, so the map
-// is bounded by the time-zone database (about 600 names), not by what clients send.
+// One formatter per zone, made once and kept for the life of the isolate. X-Time-Zone reaches
+// isTimeZone on every request, before sign-in, so what this keeps must not be up to the sender:
+//
+// - The key is the name in lower case. The runtime matches zone names without regard to case, so
+//   "Europe/Zagreb" and "eUrOpE/zAgReB" are one zone, and keyed as sent each spelling cost its own
+//   formatter (about 28 KB in workerd; a few thousand spellings reach the isolate's 128 MB).
+// - The map stops growing at MAX_CACHED_ZONES, which is more zones than one isolate meets from
+//   real people (the whole database has about 600 names, aliases included). Past the limit a zone
+//   is still answered, with a formatter built for the call and not kept.
+export const MAX_CACHED_ZONES = 256;
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(timeZone: string): Intl.DateTimeFormat {
-  let formatter = formatters.get(timeZone);
-  if (!formatter) {
-    // Throws a RangeError for a zone this runtime does not know; nothing is stored then.
-    formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone,
-      hourCycle: 'h23',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-    });
-    formatters.set(timeZone, formatter);
-  }
+  const key = timeZone.toLowerCase();
+  const cached = formatters.get(key);
+  if (cached) return cached;
+  // Throws a RangeError for a zone this runtime does not know; nothing is stored then.
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  });
+  if (formatters.size < MAX_CACHED_ZONES) formatters.set(key, formatter);
   return formatter;
 }
 
