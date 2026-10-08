@@ -1494,6 +1494,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'categoryMappings',
       'import_logs',
+      // A backup carries no import sources, but the profiles they belong to are replaced: the
+      // Worker deletes them with those profiles, and so does this.
+      'import_sources',
       'settings',
     ]
     const stores = requestedStores.filter((store) => db.objectStoreNames.contains(store))

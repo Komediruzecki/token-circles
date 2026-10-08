@@ -82,6 +82,12 @@ export const backup = [
     }
   ),
 
+  scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {
+    await backUpAndRestore(api, expect);
+    expect(await api.stored(api.profile)).toEqual(NONE);
+    expect(await api.stored(api.other.profile)).toEqual(NONE);
+  }),
+
   scenario('one kind of row is exported as a spreadsheet or as JSON', async (api, expect) => {
     const everyday = await account(api, expect, 'Everyday', 1000);
     const food = await addCategory(api, expect, 'Food');
