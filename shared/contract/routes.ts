@@ -225,7 +225,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'POST /api/import/file-sheet',
   'POST /api/import/googlesheet',
   'POST /api/import/upload',
-  'DELETE /api/loans/:id/prepayments/:prepayId',
   'POST /api/loans/:id/rates',
   'DELETE /api/loans/:id/rates/:rateId',
   'PUT /api/loans/:id/rates/:rateId',

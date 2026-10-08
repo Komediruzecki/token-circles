@@ -154,6 +154,43 @@ export const loanScenarios = [
     }
   ),
 
+  scenario('extra payments are added, listed and removed', async (api, expect) => {
+    const id = await loan(api, expect);
+    // The Loans page's extra payment form.
+    expectOk(
+      expect,
+      await api.post(`/api/loans/${id}/prepayments`, { month: 12, amount: 2000, note: 'Bonus' }),
+      'POST an extra payment'
+    );
+    expectOk(
+      expect,
+      await api.post(`/api/loans/${id}/prepayments`, { month: 24, amount: 500.5, note: '' }),
+      'POST another'
+    );
+
+    let extras = (await loanDetail(api, expect, id)).prepayments as Json[];
+    expect(extras).toEqual([
+      expect.objectContaining({ month: 12, amount: 2000, note: 'Bonus' }),
+      expect.objectContaining({ month: 24, amount: 500.5 }),
+    ]);
+    const listed = (await loans(api, expect)).find((l) => l.id === id);
+    expect(listed.prepayment_count).toBe(2);
+    expectMoney(expect, listed.total_prepaid, 2500.5, 'total prepaid');
+
+    // The page deletes an extra payment by the id the loan's detail gives it.
+    expect(extras[0].id).toEqual(expect.any(Number));
+    expectOk(
+      expect,
+      await api.delete(`/api/loans/${id}/prepayments/${extras[0].id}`),
+      'DELETE the extra payment'
+    );
+    extras = (await loanDetail(api, expect, id)).prepayments as Json[];
+    expect(extras).toEqual([expect.objectContaining({ month: 24, amount: 500.5 })]);
+    expect((await api.other.delete(`/api/loans/${id}/prepayments/${extras[0].id}`)).status).toBe(
+      404
+    );
+  }),
+
   scenario('the amortization schedule, and what an extra payment saves', async (api, expect) => {
     const id = await loan(api, expect);
     let plan = await schedule(api, expect, id);

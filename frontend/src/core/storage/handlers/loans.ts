@@ -41,9 +41,30 @@ export async function loansCreate(body: unknown): Promise<Response> {
   return json({ id, ...loan }, 201)
 }
 
+/**
+ * Gives each of a loan's extra payments that has none an id, one past the largest it has, as the
+ * Worker's rows have. The Loans page deletes an extra payment by the id the loan's detail gives
+ * it; local-first stored them without one, so the page asked to delete `undefined` and nothing
+ * matched. Answers whether any row got an id, so the caller can store the loan.
+ */
+function giveIds(loan: Record<string, any>): boolean {
+  const rows = (loan.prepayments ?? []) as Array<Record<string, unknown>>
+  let next = rows.reduce((max, r) => Math.max(max, Number(r.id) || 0), 0)
+  let changed = false
+  for (const row of rows) {
+    if (row.id === undefined || row.id === null) {
+      row.id = ++next
+      changed = true
+    }
+  }
+  return changed
+}
+
 export async function loansGet(params: Record<string, string>): Promise<Response> {
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
+  // A loan stored before its extra payments had ids gets them the first time it is read.
+  if (giveIds(loan)) await (await getDB()).put('loans', loan)
   return json(normalizeLoan(loan))
 }
 
@@ -136,11 +157,13 @@ export async function loanPrepaymentAdd(
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
+  giveIds(loan)
   const prepayments = loan.prepayments || []
-  prepayments.push(body as Record<string, unknown>)
+  const id = prepayments.reduce((max: number, p: any) => Math.max(max, Number(p.id) || 0), 0) + 1
+  prepayments.push({ ...(body as Record<string, unknown>), id })
   loan.prepayments = prepayments
   await db.put('loans', loan)
-  return json({ ok: true }, 201)
+  return json({ id }, 201)
 }
 
 export async function loanPrepaymentsDelete(params: Record<string, string>): Promise<Response> {
@@ -148,14 +171,14 @@ export async function loanPrepaymentsDelete(params: Record<string, string>): Pro
   const loan = await currentProfileRecord('loans', idParam(params))
   if (!loan) return notFound('Loan')
   const prepayId = idParam(params, 'p2')
+  giveIds(loan)
   const prepayments = loan.prepayments || []
-  if (prepayId >= 0 && prepayId < prepayments.length) {
-    prepayments.splice(prepayId, 1)
-    loan.prepayments = prepayments
-    await db.put('loans', loan)
-    return ok()
-  }
-  return notFound('Prepayment')
+  const index = prepayments.findIndex((p: any) => Number(p.id) === prepayId)
+  if (index < 0) return notFound('Prepayment')
+  prepayments.splice(index, 1)
+  loan.prepayments = prepayments
+  await db.put('loans', loan)
+  return ok()
 }
 
 /**
