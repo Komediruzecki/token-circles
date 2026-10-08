@@ -259,11 +259,6 @@ export const UNCOVERED: readonly RouteKey[] = [
   'GET /api/retirement/projection',
   'GET /api/retirement/settings',
   'PUT /api/retirement/settings',
-  'GET /api/savings-goals',
-  'POST /api/savings-goals',
-  'DELETE /api/savings-goals/:id',
-  'PUT /api/savings-goals/:id',
-  'POST /api/savings-goals/:id/contribute',
   'GET /api/settings',
   'PUT /api/settings',
   'POST /api/settings/set-storage',
@@ -385,7 +380,7 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'GET ^\\/budgets\\/(\\d+)$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'GET ^\\/savings-goals\\/(\\d+)$':
-    'OPEN: only local-first serves this. Does the app call it when signed in?',
+    'A single goal read, for api.getGoal, which nothing in the app calls: the Goals page reads the list, in both modes.',
   'GET ^\\/loans\\/(\\d+)\\/rate-periods$':
     'OPEN: only local-first serves this. Does the app call it when signed in?',
   'PUT ^\\/loans\\/(\\d+)\\/rate$':
