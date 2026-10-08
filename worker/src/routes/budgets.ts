@@ -698,16 +698,23 @@ budgetsRoutes.get('/api/budgets/forecast', requireAuth, async (c) => {
     total_spent: number | null;
   }>(
     c.env.DB,
-    `SELECT
-        strftime('%Y-%m', start_date) as month,
-        SUM(b.amount) as total_budget,
-        COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as total_spent
-      FROM budgets b
-      LEFT JOIN transactions t ON t.category_id = b.category_id
-        AND t.profile_id = b.profile_id
-        AND t.date >= b.start_date
-        AND t.date < date(b.start_date, '+1 month')
-      WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', start_date) <= ?
+    // Each budget's spending first, then the month's sums. Summed straight off the join, a
+    // budget's amount counted once per expense against it.
+    `WITH per_budget AS (
+        SELECT
+          strftime('%Y-%m', b.start_date) as month,
+          b.amount as budget_amount,
+          COALESCE(SUM(CASE WHEN t.type = 'expense' THEN COALESCE(t.amount_local, t.amount) ELSE 0 END), 0) as spent
+        FROM budgets b
+        LEFT JOIN transactions t ON t.category_id = b.category_id
+          AND t.profile_id = b.profile_id
+          AND t.date >= b.start_date
+          AND t.date < date(b.start_date, '+1 month')
+        WHERE b.profile_id IN (${inClause}) AND strftime('%Y-%m', b.start_date) <= ?
+        GROUP BY b.id
+      )
+      SELECT month, SUM(budget_amount) as total_budget, SUM(spent) as total_spent
+      FROM per_budget
       GROUP BY month
       ORDER BY month DESC
       LIMIT ?`,

@@ -561,4 +561,30 @@ export const budgets = [
     const one = await api.get('/api/budgets/improvements?months=1');
     expect((one.body as Json[]).map((m) => m.month)).toEqual(['2026-03']);
   }),
+
+  scenario("the forecast's history counts each budget once", async (api, expect) => {
+    await twoMonths(api, expect);
+
+    const forecast = await api.get('/api/budgets/forecast?month=2026-04');
+    expectOk(expect, forecast, 'GET /api/budgets/forecast');
+    expect(forecast.body.period).toBe('2026-04');
+    expectMoney(expect, forecast.body.total_budget, 600, 'every budget to April');
+    const history = forecast.body.history as Json[];
+    expect(history.map((m) => m.month)).toEqual(['2026-03', '2026-02']);
+    // Food's March budget has two expenses against it and still counts 300, not 600.
+    expectMoney(expect, history[0].total_budget, 400, 'March budget');
+    expectMoney(expect, history[1].total_budget, 200, 'February budget');
+    expectMoney(expect, history[1].total_spent, 150, 'February spent');
+    expectMoney(expect, history[1].adherence, 75, 'February adherence');
+    // DIFFERENCE budget-trend-spending
+    if (api.runtime === 'worker') {
+      expectMoney(expect, history[0].total_spent, 290, 'March spent');
+      expectMoney(expect, history[0].adherence, 72.5, 'March adherence');
+      expect(forecast.body.avg_adherence).toBe(74);
+    } else {
+      expectMoney(expect, history[0].total_spent, 815, 'March spent');
+      expectMoney(expect, history[0].adherence, 100, 'March adherence');
+      expect(forecast.body.avg_adherence).toBe(88);
+    }
+  }),
 ];
