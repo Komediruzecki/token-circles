@@ -107,21 +107,16 @@ loansRoutes.post('/api/loans', requireAuth, async (c) => {
   })
   const loanId = res.meta.last_row_id
 
-  if (b.rate_periods && b.rate_periods.length > 0) {
-    for (const rp of b.rate_periods) {
-      await db.insert(c.env.DB, 'loan_rate_periods', {
-        loan_id: loanId,
-        rate: rp.rate,
-        start_month: rp.start_month,
-        end_month: rp.end_month || null,
-      })
-    }
-  } else {
+  // Only the periods sent. The loan's own interest_rate is the engine's base rate for every month
+  // no period covers (shared/loanSchedule.ts); a period copying it from month 1 used to be added
+  // here, and since the Loans form sends a loan's periods back on every edit, that copy then
+  // outranked any new interest rate the form saved.
+  for (const rp of b.rate_periods ?? []) {
     await db.insert(c.env.DB, 'loan_rate_periods', {
       loan_id: loanId,
-      rate: interestRate,
-      start_month: 1,
-      end_month: null,
+      rate: rp.rate,
+      start_month: rp.start_month,
+      end_month: rp.end_month || null,
     })
   }
 

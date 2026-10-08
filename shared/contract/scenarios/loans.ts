@@ -39,6 +39,15 @@ async function schedule(api: ContractApi, expect: Expect, id: number): Promise<J
   return reply.body;
 }
 
+/** A rate period as the Loans form sends it back: the fields it edits, none of the row's own. */
+function asForm(period: Json) {
+  return {
+    rate: period.rate,
+    start_month: period.start_month,
+    end_month: period.end_month ?? null,
+  };
+}
+
 export const loanScenarios = [
   scenario('a loan is added, read back, changed and removed', async (api, expect) => {
     const id = await loan(api, expect, {
@@ -120,6 +129,28 @@ export const loanScenarios = [
         interest_rate: 4.5,
         prepayments: [],
       });
+    }
+  ),
+
+  scenario(
+    'a loan saved without rate periods has none, so its own rate is the one charged',
+    async (api, expect) => {
+      // The Loans form always sends its rate periods, an empty list when there are none.
+      const id = await loan(api, expect);
+      expect((await loanDetail(api, expect, id)).rate_periods).toEqual([]);
+
+      // Editing: the form loads the loan's periods, and sends them back with the new rate.
+      const loaded = (await loanDetail(api, expect, id)).rate_periods as Json[];
+      expectOk(
+        expect,
+        await api.put(
+          `/api/loans/${id}`,
+          loanForm({ interest_rate: 3, rate_periods: loaded.map(asForm) })
+        ),
+        'PUT a new rate'
+      );
+      // 15000 over 60 months at 3%.
+      expectMoney(expect, (await schedule(api, expect, id)).schedule[0].payment, 269.53, 'payment');
     }
   ),
 
