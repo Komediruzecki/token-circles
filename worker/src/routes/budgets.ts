@@ -466,12 +466,14 @@ budgetsRoutes.get('/api/budgets/zero-based/summary', requireAuth, async (c) => {
     });
   }
 
+  // Over budget by what was spent past the allocation: the remaining amount is negative there, and
+  // this said "Over budget by $-10.00" (the contract's `budget-allocation-alerts`).
   summary.forEach((item) => {
     if (item.percent_used >= 90) {
       item.alerts.push(`Approaching limit: ${Math.round(item.percent_used)}% used`);
     }
     if (item.percent_used > 100) {
-      item.alerts.push(`Over budget by $${item.remaining.toFixed(2)}`);
+      item.alerts.push(`Over budget by $${(-item.remaining).toFixed(2)}`);
     }
   });
 

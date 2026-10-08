@@ -248,6 +248,40 @@ export async function budgetsHistory(query: URLSearchParams): Promise<Response> 
 
 // ── Budget improvements ──────────────────────────────────────────────────────
 
+/**
+ * What each budget's category spent in the budget's month, as the Worker's join counts it: the
+ * category's expenses from the budget's start date to the same day a month on. A month's trend
+ * and adherence compare the budgets with this, not with every expense of the month: spending in a
+ * category without a budget, or without a category, has no budget to be measured against.
+ */
+function budgetSpending(
+  txns: Record<string, unknown>[]
+): (budget: Record<string, unknown>) => number {
+  const byCategoryMonth = new Map<string, number>()
+  for (const t of txns) {
+    if (t.type !== 'expense' || t.category_id === null || t.category_id === undefined) continue
+    const key = `${Number(t.category_id)} ${(t.date as string).slice(0, 7)}`
+    byCategoryMonth.set(key, (byCategoryMonth.get(key) ?? 0) + getAmount(t))
+  }
+  return (budget) => {
+    const start = budget.start_date as string
+    // A budget that starts on the 1st spends in its calendar month: one lookup.
+    if (start.slice(8, 10) === '01') {
+      return byCategoryMonth.get(`${Number(budget.category_id)} ${start.slice(0, 7)}`) ?? 0
+    }
+    const end = endOfNextMonth(start)
+    return txns
+      .filter(
+        (t) =>
+          t.type === 'expense' &&
+          t.category_id === budget.category_id &&
+          (t.date as string) >= start &&
+          (t.date as string) < end
+      )
+      .reduce((sum, t) => sum + getAmount(t), 0)
+  }
+}
+
 export async function budgetsImprovements(query: URLSearchParams): Promise<Response> {
   try {
     const numMonths = parseInt(query.get('months')!) || 6
@@ -257,18 +291,16 @@ export async function budgetsImprovements(query: URLSearchParams): Promise<Respo
     const budgets = await getAllForProfiles('budgets')
     const txns = await getAllForProfiles('transactions')
 
+    // Each month's budgets, and what their categories spent: every expense of the month was
+    // counted, unbudgeted and uncategorised included, where the Worker counts the budgeted
+    // categories' (the contract's `budget-trend-spending`).
+    const spentOf = budgetSpending(txns)
     const monthlyMap: Record<string, { budget: number; spent: number }> = {}
     for (const b of budgets) {
       const mo = (b.start_date as string).slice(0, 7)
       if (!monthlyMap[mo]) monthlyMap[mo] = { budget: 0, spent: 0 }
       monthlyMap[mo].budget += (b.amount as number) || 0
-    }
-    for (const t of txns) {
-      if (t.type !== 'expense') continue
-      const mo = (t.date as string).slice(0, 7)
-      if (monthlyMap[mo]) {
-        monthlyMap[mo].spent += getAmount(t)
-      }
+      monthlyMap[mo].spent += spentOf(b)
     }
 
     const months = Object.keys(monthlyMap).sort().reverse().slice(0, numMonths)
@@ -490,13 +522,15 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
     for (const b of budgets) alreadyBudgeted += (b.amount as number) || 0
     const unassignedBudget = Math.max(0, income - alreadyBudgeted)
 
+    // A category without a budget has none: an amount of 0 and nothing used, as on the Worker. Its
+    // spending was given as its budget, 100% used, so the Budgets page called it near its limit in
+    // local-first only (the contract's `budget-zero-based-unbudgeted`).
     const allocations = cats.map((cat: Record<string, unknown>) => {
       const budget = budgetMap[cat.id as number]
       const spentAmt = spentMap[cat.id as number] || 0
       const budgetAmount = (budget?.amount as number) || 0
-      const effectiveAmount = budgetAmount > 0 ? budgetAmount : spentAmt
-      const remainingBudget = effectiveAmount - spentAmt
-      const percentUsed = effectiveAmount > 0 ? (spentAmt / effectiveAmount) * 100 : 0
+      const remainingBudget = budget ? budgetAmount - spentAmt : 0
+      const percentUsed = budget && budgetAmount > 0 ? (spentAmt / budgetAmount) * 100 : 0
 
       return {
         budget_id: budget?.id ?? null,
@@ -504,7 +538,7 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
         category_name: cat.name,
         category_color: cat.color,
         category_icon: cat.icon,
-        amount: effectiveAmount,
+        amount: budgetAmount,
         spent: spentAmt,
         remaining_budget: remainingBudget,
         percent_used: Math.min(100, Math.round(percentUsed)),
@@ -625,12 +659,14 @@ export async function budgetsZeroBasedSummary(query: URLSearchParams): Promise<R
       })
     }
 
+    // Over budget is spending past the allocation, as `status` says: not at exactly 100%, where
+    // this said "Over budget by $0.00" (the contract's `budget-allocation-alerts`).
     for (const item of summary) {
       if (item.percent_used >= 90) {
         item.alerts.push(`Approaching limit: ${Math.round(item.percent_used)}% used`)
       }
-      if (item.percent_used >= 100) {
-        item.alerts.push(`Over budget by $${Math.abs(item.remaining).toFixed(2)}`)
+      if (item.percent_used > 100) {
+        item.alerts.push(`Over budget by $${(-item.remaining).toFixed(2)}`)
       }
     }
 
@@ -1106,16 +1142,14 @@ export async function budgetsForecast(query: URLSearchParams): Promise<Response>
       }
     })
 
+    // The months' budgets against what their categories spent, as in budgetsImprovements.
+    const spentOf = budgetSpending(txns)
     const histMap: Record<string, { budget: number; spent: number }> = {}
     for (const b of budgets) {
       const mo = (b.start_date as string).slice(0, 7)
       if (!histMap[mo]) histMap[mo] = { budget: 0, spent: 0 }
       histMap[mo].budget += (b.amount as number) || 0
-    }
-    for (const t of txns) {
-      if (t.type !== 'expense') continue
-      const mo = (t.date as string).slice(0, 7)
-      if (histMap[mo]) histMap[mo].spent += getAmount(t)
+      histMap[mo].spent += spentOf(b)
     }
 
     const historyMonths = Object.keys(histMap)
