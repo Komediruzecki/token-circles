@@ -1,8 +1,14 @@
 import { Hono } from 'hono';
+import {
+  checkContribution,
+  checkGoalCreate,
+  checkGoalEdit,
+  GOAL_MESSAGES,
+} from '../../../shared/goalSchema';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import { recalcAllGoals, recalcGoalsByCategory } from '../recalc-goals';
 import * as db from '../db';
 import { localToday } from '../local-date';
@@ -29,101 +35,52 @@ savingsGoalsRoutes.get('/api/savings-goals', requireAuth, async (c) => {
   return c.json(rows);
 });
 
-// The frontend sends `target_date`; the column is `deadline`. Accept either.
-const readDeadline = (b: Record<string, any>): string | null | undefined => {
-  if (b.deadline !== undefined) return b.deadline || null;
-  if (b.target_date !== undefined) return b.target_date || null;
-  return undefined;
-};
-
+// The rules and their words are shared/goalSchema.ts, which local-first and the Goals dialog run
+// too: a refused body answers 400 { error, fields }, and a category of another profile is a 400 at
+// `category_id` (it was a 403 with no field). The date may come as `deadline`, the column, or
+// `target_date`, the name the Goals form sends.
 savingsGoalsRoutes.post('/api/savings-goals', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (!b.name || b.target_amount == null)
-    throw new HttpError(400, 'Name and target amount are required');
-  const categoryId = b.category_id || null;
+  const goal = accept(checkGoalCreate(await c.req.json(), { today: localToday(c) }));
   if (
-    categoryId !== null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(categoryId), pid))
+    goal.category_id !== null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, goal.category_id, pid))
   ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
+    throw refuse({ category_id: GOAL_MESSAGES.category });
   }
-  const res = await db.insert(c.env.DB, 'savings_goals', {
-    profile_id: pid,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: readDeadline(b) ?? null,
-    notes: b.notes || '',
-    monthly_contribution: b.monthly_contribution ?? 0,
-    category_id: categoryId,
-    // Category progress counts transactions from this day on; default to today (the person's
-    // date) so a freshly-linked goal starts at 0 rather than inheriting the category's history.
-    tracking_start_date: b.tracking_start_date || localToday(c),
-  });
+  const res = await db.insert(c.env.DB, 'savings_goals', { ...goal, profile_id: pid });
   // Compute progress now so a category-linked goal shows the right starting value.
-  if (categoryId) await recalcGoalsByCategory(c.env.DB, categoryId, [pid]);
+  if (goal.category_id) await recalcGoalsByCategory(c.env.DB, goal.category_id, [pid]);
   return c.json({ id: res.meta.last_row_id }, 201);
 });
 
+// An edit checks and writes only the fields whose value it changes (decision 2), so a goal an
+// older version stored under other rules can still be renamed.
 savingsGoalsRoutes.put('/api/savings-goals/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  // Partial update: only set fields that were actually provided. Binding an
-  // undefined value (e.g. current_amount, which the edit form doesn't send) makes
-  // D1 throw a 500, and blindly writing null would wipe the saved progress.
-  const fields: Record<string, unknown> = {};
-  if (b.name !== undefined) fields.name = b.name;
-  if (b.target_amount !== undefined) fields.target_amount = b.target_amount;
-  if (b.current_amount !== undefined) fields.current_amount = b.current_amount;
-  const deadline = readDeadline(b);
-  if (deadline !== undefined) fields.deadline = deadline;
-  if (b.notes !== undefined) fields.notes = b.notes || '';
-  if (b.monthly_contribution !== undefined)
-    fields.monthly_contribution = b.monthly_contribution ?? 0;
-  if (b.category_id !== undefined) fields.category_id = b.category_id ?? null;
-  if (
-    fields.category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(fields.category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  if (b.tracking_start_date !== undefined)
-    fields.tracking_start_date = b.tracking_start_date || null;
-
-  // Nothing to change: confirm the goal exists so the client still gets a clean result.
-  if (Object.keys(fields).length === 0) {
-    const exists = await db.first(
-      c.env.DB,
-      'SELECT id FROM savings_goals WHERE id = ? AND profile_id = ?',
-      c.req.param('id'),
-      pid
-    );
-    if (!exists) throw new HttpError(404, 'Not found');
-    return c.json({ ok: true });
-  }
-
-  const res = await db.update(
+  const id = c.req.param('id');
+  const existing = await db.first<Record<string, unknown>>(
     c.env.DB,
-    'savings_goals',
-    fields,
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
+    'SELECT * FROM savings_goals WHERE id = ? AND profile_id = ?',
+    id,
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Not found');
+  const fields = accept(checkGoalEdit(await c.req.json(), existing));
+  if (
+    fields.category_id != null &&
+    !(await db.categoryBelongsToProfile(c.env.DB, fields.category_id, pid))
+  ) {
+    throw refuse({ category_id: GOAL_MESSAGES.category });
+  }
+  if (Object.keys(fields).length === 0) return c.json({ ok: true });
+
+  await db.update(c.env.DB, 'savings_goals', fields, 'id = ? AND profile_id = ?', id, pid);
   // Category link or tracking window may have changed — recompute progress.
   const catId =
     fields.category_id !== undefined
-      ? (fields.category_id as number | null)
-      : ((
-          await db.first<{ category_id: number | null }>(
-            c.env.DB,
-            'SELECT category_id FROM savings_goals WHERE id = ? AND profile_id = ?',
-            c.req.param('id'),
-            pid
-          )
-        )?.category_id ?? null);
+      ? fields.category_id
+      : ((existing.category_id as number | null) ?? null);
   if (catId) await recalcGoalsByCategory(c.env.DB, catId, [pid]);
   return c.json({ ok: true });
 });
@@ -141,25 +98,34 @@ savingsGoalsRoutes.delete('/api/savings-goals/:id', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
+// A contribution is an amount more than zero, to the cent. One the Worker could not read as a
+// number added nothing and answered that it had. The sum is worked out in the UPDATE, so two
+// contributions at once both count.
 savingsGoalsRoutes.post('/api/savings-goals/:id/contribute', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const id = c.req.param('id');
-  const goal = await db.first<{ current_amount: number }>(
+  const goal = await db.first<{ id: number }>(
+    c.env.DB,
+    'SELECT id FROM savings_goals WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  );
+  if (!goal) throw new HttpError(404, 'Goal not found');
+  const { amount } = accept(checkContribution(await c.req.json()));
+  // A write, so db.run: it retries only what never ran, never a blip after the commit.
+  await db.run(
+    c.env.DB,
+    `UPDATE savings_goals SET current_amount = ROUND(COALESCE(current_amount, 0) + ?, 2)
+      WHERE id = ? AND profile_id = ?`,
+    amount,
+    id,
+    pid
+  );
+  const saved = await db.first<{ current_amount: number }>(
     c.env.DB,
     'SELECT current_amount FROM savings_goals WHERE id = ? AND profile_id = ?',
     id,
     pid
   );
-  if (!goal) throw new HttpError(404, 'Goal not found');
-  const b = (await c.req.json()) as Record<string, any>;
-  const newAmount = (goal.current_amount || 0) + (parseFloat(b.amount) || 0);
-  await db.update(
-    c.env.DB,
-    'savings_goals',
-    { current_amount: newAmount },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
-  );
-  return c.json({ ok: true, current_amount: newAmount });
+  return c.json({ ok: true, current_amount: saved?.current_amount ?? amount });
 });

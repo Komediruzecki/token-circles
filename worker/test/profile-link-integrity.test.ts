@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { issueSessionCookie } from '../src/auth';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
+import { GOAL_MESSAGES } from '../../shared/goalSchema';
 
 const USER = 91;
 const CURRENT = 910;
@@ -191,15 +192,15 @@ describe('Worker profile-link integrity', () => {
     expect(((await budget.json()) as { fields: object }).fields).toEqual({
       category_id: BUDGET_MESSAGES.category,
     });
-    expect(
-      (
-        await post('/api/savings-goals', {
-          name: 'Goal',
-          target_amount: 100,
-          category_id: 9222,
-        })
-      ).status
-    ).toBe(403);
+    const goal = await post('/api/savings-goals', {
+      name: 'Goal',
+      target_amount: 100,
+      category_id: 9222,
+    });
+    expect(goal.status).toBe(400);
+    expect(((await goal.json()) as { fields: object }).fields).toEqual({
+      category_id: GOAL_MESSAGES.category,
+    });
     expect(
       (
         await post('/api/categories/mappings', {

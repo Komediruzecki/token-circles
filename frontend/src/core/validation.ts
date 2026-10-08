@@ -17,6 +17,7 @@ import { z } from 'zod/v4'
 import { checkAccountCreate } from '../../../shared/accountSchema'
 import { checkBudgetCreate } from '../../../shared/budgetSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
+import { checkGoalCreate } from '../../../shared/goalSchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
@@ -85,16 +86,7 @@ export const loanCreateSchema = z.object({
 export const loanUpdateSchema = loanCreateSchema.partial()
 
 // ── Savings Goal ───────────────────────────────────────────────────────────────
-
-export const goalCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  target_amount: z.number().positive(),
-  current_amount: z.number().nonnegative().optional(),
-  deadline: z.string().nullable().optional(),
-  notes: z.string().optional(),
-})
-
-export const goalUpdateSchema = goalCreateSchema.partial()
+// Not a zod schema: shared/goalSchema.ts, which the Worker route runs too.
 
 // ── Recurring Transaction ──────────────────────────────────────────────────────
 
@@ -194,8 +186,7 @@ const schemaMap: Record<string, BodyRule> = {
   'PUT:/api/bills': billUpdateSchema,
   'POST:/api/loans': loanCreateSchema,
   'PUT:/api/loans': loanUpdateSchema,
-  'POST:/api/savings-goals': goalCreateSchema,
-  'PUT:/api/savings-goals': goalUpdateSchema,
+  'POST:/api/savings-goals': (body) => checkGoalCreate(body, { today: localToday() }),
   'POST:/api/recurring': recurringCreateSchema,
   'PUT:/api/recurring': recurringUpdateSchema,
   'POST:/api/tags': tagCreateSchema,
