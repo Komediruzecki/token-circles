@@ -8,6 +8,7 @@ import {
   checkTransactionCreate,
   checkTransactionEdit,
   checkTransactionFields,
+  editedLocalAmount,
   hasCents,
   isCalendarDate,
   TRANSACTION_MESSAGES as M,
@@ -487,5 +488,29 @@ describe('the helpers', () => {
     expect(hasCents(12.5)).toBe(true)
     expect(hasCents(0.07)).toBe(true)
     expect(hasCents(12.501)).toBe(false)
+  })
+})
+
+describe('the local amount an edit of the amount gives a row', () => {
+  const hotel = { amount: 100, amount_local: 92, exchange_rate: 0.92 }
+
+  it('converts a local amount of its own at the rate the edit sends, or the row has', () => {
+    expect(editedLocalAmount(hotel, { amount: 110 })).toBeCloseTo(101.2, 6)
+    expect(editedLocalAmount(hotel, { amount: 110, exchange_rate: 0.9 })).toBe(99)
+    expect(editedLocalAmount({ ...hotel, exchange_rate: null }, { amount: 110 })).toBeNull()
+  })
+
+  it('moves a local amount that is a copy of the amount to the new amount, whatever the rate', () => {
+    // What the Worker stores for 100 USD at 0.92 saved without a local amount.
+    expect(editedLocalAmount({ ...hotel, amount_local: 100 }, { amount: 110 })).toBe(110)
+    expect(
+      editedLocalAmount({ ...hotel, amount_local: 100 }, { amount: 120, exchange_rate: 0.95 })
+    ).toBe(120)
+  })
+
+  it('leaves the local amount alone when the edit sends one, keeps no amount, or has none', () => {
+    expect(editedLocalAmount(hotel, { amount: 110, amount_local: 100 })).toBeUndefined()
+    expect(editedLocalAmount(hotel, { description: 'Hotel, two nights' } as never)).toBeUndefined()
+    expect(editedLocalAmount({ ...hotel, amount_local: null }, { amount: 110 })).toBeUndefined()
   })
 })

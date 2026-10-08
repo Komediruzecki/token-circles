@@ -115,3 +115,39 @@ describe('an edit of the amount alone', () => {
     expect(await balance()).toBeCloseTo(995, 6);
   });
 });
+
+describe('a foreign-currency entry saved without a local amount', () => {
+  // What the Transactions form sends for 100 USD at 0.92 with no local amount. Both runtimes move
+  // the account by 100 at create, and the Worker stores 100 as the local amount.
+  async function museum(): Promise<number> {
+    const res = await SELF.fetch('https://example.com/api/transactions', {
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/json',
+        'X-Profile-Id': String(PROFILE),
+      },
+      body: JSON.stringify({
+        type: 'expense',
+        description: 'Museum',
+        amount: 100,
+        currency: 'USD',
+        exchange_rate: 0.92,
+        date: '2026-10-03',
+        account_id: ACCOUNT,
+        category_id: null,
+      }),
+    });
+    expect(res.status).toBeLessThan(300);
+    return ((await res.json()) as { id: number }).id;
+  }
+
+  it('moves the balance by the new amount, as local-first does', async () => {
+    const id = await museum();
+    expect(await balance()).toBeCloseTo(900, 6);
+    expect((await edit(id, { amount: 110 })).status).toBe(200);
+    expect(await balance()).toBeCloseTo(890, 6);
+    expect((await edit(id, { amount: 120, exchange_rate: 0.95 })).status).toBe(200);
+    expect(await balance()).toBeCloseTo(880, 6);
+  });
+});

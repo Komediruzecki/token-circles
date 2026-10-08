@@ -409,3 +409,32 @@ function holds(
   const kept = reader(stored, defaults);
   return 'value' in sent && 'value' in kept && sent.value === kept.value;
 }
+
+/**
+ * The local amount an edit gives a row when it changes the amount and sends no local amount of its
+ * own; undefined leaves the stored one as it is. Both runtimes take this step: the Worker's PUT and
+ * local-first's updateTransaction.
+ *
+ * - A row without a local amount keeps none, and its balance follows the amount.
+ * - A local amount equal to the amount is a copy of it, which the Worker stores on every row it
+ *   creates (`amount_local ?? amount`), so it becomes the new amount. Converted at the row's rate
+ *   instead, a 100 USD entry saved at 0.92 without a local amount and edited to 110 moved its
+ *   account by 101.20 in cloud and by 110 in local-first, which stores none.
+ * - Any other local amount is the amount converted, so it is the new amount at the row's rate
+ *   (the rate the edit sends, or the row's own), and none when there is no rate.
+ */
+export function editedLocalAmount(
+  row: { amount?: unknown; amount_local?: unknown; exchange_rate?: unknown },
+  edit: { amount?: unknown; amount_local?: unknown; exchange_rate?: unknown }
+): number | null | undefined {
+  if (typeof edit.amount !== 'number' || edit.amount_local !== undefined) return undefined;
+  if (typeof row.amount_local !== 'number') return undefined;
+  if (row.amount_local === row.amount) return edit.amount;
+  const rate =
+    typeof edit.exchange_rate === 'number'
+      ? edit.exchange_rate
+      : typeof row.exchange_rate === 'number'
+        ? row.exchange_rate
+        : 0;
+  return rate > 0 ? Math.round(edit.amount * rate * 100) / 100 : null;
+}

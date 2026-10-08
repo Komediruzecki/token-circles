@@ -444,3 +444,38 @@ describe('an edit in local-first', () => {
     await expectBalances({ [EVERYDAY]: 990.8 })
   })
 })
+
+describe('a foreign-currency entry saved without a local amount, in local-first', () => {
+  const museum = (change: Row = {}) =>
+    create({
+      type: 'expense',
+      description: 'Museum',
+      amount: 100,
+      currency: 'USD',
+      exchange_rate: 0.92,
+      date: '2026-10-03',
+      account_id: EVERYDAY,
+      category_id: null,
+      ...change,
+    })
+
+  it('moves the balance by the new amount, as the Worker does', async () => {
+    const res = await museum()
+    expect(res.status).toBeLessThan(300)
+    const { id } = (await res.json()) as { id: number }
+    await expectBalances({ [EVERYDAY]: 900 })
+    expect((await edit(id, { amount: 110 })).status).toBe(200)
+    await expectBalances({ [EVERYDAY]: 890 })
+    expect((await edit(id, { amount: 120, exchange_rate: 0.95 })).status).toBe(200)
+    await expectBalances({ [EVERYDAY]: 880 })
+  })
+
+  it('moves a local amount that is a copy of the amount, as a cloud backup stores it, to the new amount', async () => {
+    const res = await museum({ amount_local: 100 })
+    const { id } = (await res.json()) as { id: number }
+    await expectBalances({ [EVERYDAY]: 900 })
+    expect((await edit(id, { amount: 110 })).status).toBe(200)
+    await expectBalances({ [EVERYDAY]: 890 })
+    expect((await stored(id)).amount_local).toBe(110)
+  })
+})

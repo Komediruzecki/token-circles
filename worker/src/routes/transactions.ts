@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import { fieldErrorsOf } from '../../../shared/refusal';
 import {
+  editedLocalAmount,
   checkTransactionCreate,
   checkTransactionEdit,
   checkTransactionFields,
@@ -986,20 +987,13 @@ transactionsRoutes.put('/api/transactions/:id', requireAuth, async (c) => {
   // Only the links the edit changes: an unchanged link on a legacy row must not block it.
   await refuseForeignLinks(c.env.DB, pid, patch);
 
-  // A new amount without a local amount of its own moves the local amount with it, at the row's
-  // exchange rate, as local-first does (core/storage/idb.ts, updateTransaction): a 100 USD hotel
-  // worth 92 EUR, edited to 110 USD, is worth 101.20 EUR, and its account moves by that. The
-  // route used to clear the local amount, so the balance moved by 110. A row that never had a
-  // local amount keeps none, and its balance follows the raw amount, as before.
-  if (
-    patch.amount !== undefined &&
-    patch.amount_local === undefined &&
-    typeof oldTx.amount_local === 'number'
-  ) {
-    const rate =
-      patch.exchange_rate ?? (typeof oldTx.exchange_rate === 'number' ? oldTx.exchange_rate : 0);
-    patch.amount_local = rate > 0 ? Math.round(patch.amount * rate * 100) / 100 : null;
-  }
+  // A new amount without a local amount of its own moves the local amount with it, as local-first
+  // does (shared/transactionSchema.ts, editedLocalAmount): a 100 USD hotel worth 92 EUR, edited to
+  // 110 USD, is worth 101.20 EUR, and its account moves by that. The route used to clear the local
+  // amount, so the balance moved by 110. A local amount that is a copy of the amount follows it,
+  // and a row that never had one keeps none.
+  const local = editedLocalAmount(oldTx, patch);
+  if (local !== undefined) patch.amount_local = local;
 
   const updates: string[] = [];
   const params: unknown[] = [];
