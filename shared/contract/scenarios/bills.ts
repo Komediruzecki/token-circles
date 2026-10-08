@@ -1,11 +1,4 @@
-import {
-  addCategory,
-  balanceOf,
-  expectMoney,
-  isoDay,
-  listTransactions,
-  monthStart,
-} from '../helpers';
+import { addCategory, balanceOf, expectMoney, isoDay, listTransactions } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
@@ -268,10 +261,13 @@ export const bills = [
     expect(rows.map((b) => b.id)).toEqual([dueToday]);
     // DIFFERENCE bills-upcoming
     if (api.runtime === 'worker') {
-      // Due today, and answered as due next month.
-      expect(rows[0]).toMatchObject({ is_overdue: false, paid: false });
-      expect(rows[0].next_due_date >= monthStart(1), rows[0].next_due_date).toBe(true);
-      expect(rows[0].days_until).toBeGreaterThan(27);
+      // Due today, and answered as due today.
+      expect(rows[0]).toMatchObject({
+        next_due_date: today,
+        days_until: 0,
+        is_overdue: false,
+        paid: false,
+      });
     } else {
       expect(rows[0]).toMatchObject({ due_date: today, is_active: 1 });
       expect(rows[0].next_due_date).toBeNull();

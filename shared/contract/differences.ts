@@ -106,7 +106,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'goal-unsent-defaults':
     "A savings goal saved without a monthly amount or a tracking date (the Goals form sends null and leaves the date out when the goal has no category) stores monthly_contribution 0 and today's tracking_start_date on the Worker, but null and no tracking date in local-first; the Goals page reads both through `|| 0` and `|| null`, and a goal without a tracking date counts from the day it was created. Slice 3 (goals).",
   'bills-upcoming':
-    'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset), rolling a bill due today to next month, on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
+    'GET /api/bills/upcoming answers every active bill with a next_due_date worked out from day_of_month alone (1 when unset) on the Worker, but the stored rows whose due day of the month is today or later, with no next_due_date, in local-first; nothing in the app calls it. Slice 3 (bills).',
   'category-apply-mappings':
     'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
   'category-mapping-upsert':
