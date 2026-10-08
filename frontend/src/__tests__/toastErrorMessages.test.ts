@@ -14,10 +14,12 @@
  *   fallback for anything else.
  *
  * This scans every source file with the TypeScript parser, finds the toasts inside a `catch`
- * block or a `.catch()` callback, and flags each one whose message reads the caught error's
- * `.message`, directly or through a local variable assigned from it. The files below did so
- * before the rule; each is held at its count. A new one fails, and so does a file that has fewer
- * than its count, so that the list only ever shrinks: take the entry out when you fix one.
+ * block or a `.catch()` callback, and flags each one whose message turns the caught error into
+ * words: its `.message`, `String()` of it, its `.toString()`, a template literal or a `+` with it
+ * in, or the error itself. Under its own name, under an alias (`const e2 = err as Error`), or
+ * through a local that holds its words (`const { message } = err`). The files below did so before
+ * the rule; each is held at its count. A new one fails, and so does a file that has fewer than its
+ * count, so that the list only ever shrinks: take the entry out when you fix one.
  */
 /* eslint-disable security/detect-non-literal-fs-filename -- every path is walked from src/, not
    supplied by anything outside this file. */
@@ -63,22 +65,57 @@ function unwrap(node: ts.Expression): ts.Expression {
   return inner
 }
 
-/** Does `node` read `<name>.message` anywhere inside it? */
-function readsMessageOf(node: ts.Node, name: string): boolean {
+/** Is `node`, once unwrapped, one of `names`? */
+function isOneOf(node: ts.Expression, names: Set<string>): boolean {
+  const inner = unwrap(node)
+  return ts.isIdentifier(inner) && names.has(inner.text)
+}
+
+/**
+ * Does `node` turn the caught error into words anywhere inside it? `errors` holds the caught
+ * error's names (its own and its aliases), `words` the locals already holding its words. Its
+ * `.message`, `String()` of it, its `.toString()`, a template literal with it in, or a string
+ * joined to it with `+`.
+ */
+function printsTheError(node: ts.Node, errors: Set<string>, words: Set<string>): boolean {
+  const either = new Set([...errors, ...words])
   let found = false
   const visit = (n: ts.Node) => {
     if (found) return
-    if (ts.isPropertyAccessExpression(n) && n.name.text === 'message') {
-      const target = unwrap(n.expression)
-      if (ts.isIdentifier(target) && target.text === name) {
-        found = true
-        return
-      }
+    if (
+      (ts.isPropertyAccessExpression(n) &&
+        n.name.text === 'message' &&
+        isOneOf(n.expression, errors)) ||
+      (ts.isCallExpression(n) &&
+        ts.isIdentifier(n.expression) &&
+        n.expression.text === 'String' &&
+        n.arguments.some((arg) => isOneOf(arg, either))) ||
+      (ts.isCallExpression(n) &&
+        ts.isPropertyAccessExpression(n.expression) &&
+        n.expression.name.text === 'toString' &&
+        isOneOf(n.expression.expression, either)) ||
+      (ts.isTemplateSpan(n) && isOneOf(n.expression, either)) ||
+      (ts.isBinaryExpression(n) &&
+        n.operatorToken.kind === ts.SyntaxKind.PlusToken &&
+        (isOneOf(n.left, either) || isOneOf(n.right, either)))
+    ) {
+      found = true
+      return
     }
     ts.forEachChild(n, visit)
   }
   visit(node)
   return found
+}
+
+/** The names `{ message }` or `{ message: text }` binds, from a pattern. */
+function messageNames(pattern: ts.ObjectBindingPattern): string[] {
+  return pattern.elements.flatMap((element) => {
+    const key = element.propertyName ?? element.name
+    return ts.isIdentifier(key) && key.text === 'message' && ts.isIdentifier(element.name)
+      ? [element.name.text]
+      : []
+  })
 }
 
 /** Does `node` use any of `names` as a value (not as a property name)? */
@@ -111,27 +148,45 @@ export function rawErrorToasts(source: string, fileName = 'sample.tsx'): number[
   )
   const flagged = new Set<number>()
 
-  const scan = (scope: ts.Node, caught: string) => {
-    // Locals assigned from the caught error's message: `const message = err instanceof Error ?
-    // err.message : '...'`, then `toast(message)` a few lines on.
-    const derived = new Set<string>()
-    const collect = (n: ts.Node) => {
-      if (
-        ts.isVariableDeclaration(n) &&
-        ts.isIdentifier(n.name) &&
-        n.initializer &&
-        readsMessageOf(n.initializer, caught)
-      ) {
-        derived.add(n.name.text)
-      }
-      ts.forEachChild(n, collect)
+  const scan = (scope: ts.Node, caught: ts.BindingName) => {
+    // The caught error under other names: `const e2 = err as Error`, and aliases of those.
+    const errors = new Set<string>(ts.isIdentifier(caught) ? [caught.text] : [])
+    // Locals holding its words: `const message = err instanceof Error ? err.message : '...'`,
+    // `const { message } = err`, `const text = String(e2)`, then `toast(message)` a few lines on.
+    const words = new Set<string>(ts.isObjectBindingPattern(caught) ? messageNames(caught) : [])
+    let grew = true
+    const add = (names: Set<string>, name: string) => {
+      if (names.has(name)) return
+      names.add(name)
+      grew = true
     }
-    collect(scope)
+    while (grew) {
+      grew = false
+      const collect = (n: ts.Node) => {
+        if (ts.isVariableDeclaration(n) && n.initializer) {
+          const init = n.initializer
+          if (ts.isIdentifier(n.name)) {
+            if (isOneOf(init, errors)) add(errors, n.name.text)
+            else if (isOneOf(init, words) || printsTheError(init, errors, words)) {
+              add(words, n.name.text)
+            }
+          } else if (ts.isObjectBindingPattern(n.name) && isOneOf(init, errors)) {
+            for (const name of messageNames(n.name)) add(words, name)
+          }
+        }
+        ts.forEachChild(n, collect)
+      }
+      collect(scope)
+    }
 
     const visit = (n: ts.Node) => {
       if (ts.isCallExpression(n) && isToast(n.expression) && n.arguments.length > 0) {
         const message = n.arguments[0]
-        if (readsMessageOf(message, caught) || mentions(message, derived)) {
+        if (
+          isOneOf(message, errors) ||
+          printsTheError(message, errors, words) ||
+          mentions(message, words)
+        ) {
           flagged.add(n.getStart(file))
         }
       }
@@ -143,7 +198,7 @@ export function rawErrorToasts(source: string, fileName = 'sample.tsx'): number[
   const walk = (n: ts.Node) => {
     if (ts.isCatchClause(n)) {
       const name = n.variableDeclaration?.name
-      if (name && ts.isIdentifier(name)) scan(n.block, name.text)
+      if (name) scan(n.block, name)
     }
     if (
       ts.isCallExpression(n) &&
@@ -152,7 +207,7 @@ export function rawErrorToasts(source: string, fileName = 'sample.tsx'): number[
     ) {
       const handler = n.arguments.at(0)
       const param = handler && ts.isFunctionLike(handler) ? handler.parameters.at(0) : undefined
-      if (handler && param && ts.isIdentifier(param.name)) scan(handler, param.name.text)
+      if (handler && param) scan(handler, param.name)
     }
     ts.forEachChild(n, walk)
   }
@@ -198,6 +253,35 @@ describe('the scanner', () => {
     ],
     ['a .catch() callback', `save().catch((err) => showToast((err as Error).message, 'error'))`],
     ['a store method', `try { save() } catch (err) { store.addToast(err!.message) }`],
+    // The ways round the first version of this scan, each found by the review of #602.
+    [
+      'the message of an alias',
+      `try { save() } catch (err) { const e2 = err as Error; showToast(e2.message, 'error') }`,
+    ],
+    ['String() of it', `try { save() } catch (err) { showToast(String(err), 'error') }`],
+    [
+      'the error in a template literal',
+      'try { save() } catch (err) { toast(`Save failed: ${err}`) }',
+    ],
+    ['its toString()', `try { save() } catch (err) { toast(err.toString()) }`],
+    ['a string joined to it', `try { save() } catch (err) { toast('Save failed: ' + err) }`],
+    ['the error itself', `save().catch((err) => toast(err))`],
+    [
+      'a message taken out of it',
+      `try { save() } catch (err) { const { message } = err as Error; toast(message) }`,
+    ],
+    [
+      'an alias of an alias, in a template literal',
+      'try { save() } catch (err) { const e = err; const f = e; toast(`${f}`) }',
+    ],
+    [
+      'a local made from String() of it',
+      `try { save() } catch (err) { const text = String(err); toast(text) }`,
+    ],
+    [
+      'a message taken out in the catch itself',
+      `try { save() } catch ({ message }) { toast(message) }`,
+    ],
   ])('flags %s', (_name, code) => {
     expect(flags(code)).toBe(1)
   })
@@ -217,6 +301,18 @@ describe('the scanner', () => {
       `try { save() } catch (err) { const message = err.message; toast(result.message) }`,
     ],
     ['a toast outside any catch', `const err = new Error('x'); toast(err.message)`],
+    [
+      'plainMessage of an alias',
+      `try { save() } catch (err) { const e = err as Error; toast(plainMessage(e, 'Could not save.')) }`,
+    ],
+    [
+      'a choice made on the error, in words of its own',
+      `try { save() } catch (err) { toast(isOffline(err) ? 'You are offline.' : 'Could not save.') }`,
+    ],
+    [
+      'a template literal of something else',
+      'try { save() } catch (err) { toast(`Could not save ${name}.`) }',
+    ],
   ])('leaves %s alone', (_name, code) => {
     expect(flags(code)).toBe(0)
   })
