@@ -21,7 +21,9 @@ export async function housingList(): Promise<Response> {
       0
     )
     // Soonest due first ("MM-DD"), as the Worker lists them and the Housing page shows them.
-    all.sort((a, b) => String(a.due_date ?? '').localeCompare(String(b.due_date ?? '')))
+    const dueDay = (h: Record<string, unknown>) =>
+      typeof h.due_date === 'string' ? h.due_date : ''
+    all.sort((a, b) => dueDay(a).localeCompare(dueDay(b)))
     return json({ housings: all, total_monthly: Math.round(total) })
   } catch {
     return json({ housings: [], total_monthly: 0 })

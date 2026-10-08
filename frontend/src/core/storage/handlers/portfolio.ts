@@ -13,9 +13,9 @@ export async function portfolioHoldingsList(): Promise<Response> {
       holdings.push(...(await db.getAllFromIndex('portfolioHoldings', 'by_profile', pid)))
     }
     // Latest purchase first, as the Worker lists them and the Portfolio page shows them.
-    holdings.sort((a, b) =>
-      String(b.purchase_date ?? '').localeCompare(String(a.purchase_date ?? ''))
-    )
+    const bought = (h: Record<string, unknown>) =>
+      typeof h.purchase_date === 'string' ? h.purchase_date : ''
+    holdings.sort((a, b) => bought(b).localeCompare(bought(a)))
     const result = holdings.map((h: any) => ({
       ...h,
       currentPrice: h.purchase_price,
