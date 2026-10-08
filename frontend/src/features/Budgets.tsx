@@ -55,9 +55,11 @@ import { usePeriod } from '../core/periodStore'
 import { theme } from '../core/theme'
 import { toYYYYMM } from '../utils/period'
 import styles from './BudgetsPage.module.css'
+import { fromSpendingToast } from './budgetToasts'
 import { createCategoryForm } from './categoryForm'
 import { copyLastMonthToast } from './copyLastMonth'
 import type { BudgetImprovement, ZeroBasedAllocation, ZeroBasedResponse } from '../types/models'
+import type { FromSpendingAnswer } from './budgetToasts'
 import type { CategoryFormValues } from './categoryForm'
 import type { CopyLastMonthAnswer } from './copyLastMonth'
 
@@ -234,6 +236,12 @@ export default function Budgets() {
     d.setMonth(d.getMonth() - 1)
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   }
+  // The month being viewed, in the same words, e.g. "July 2026".
+  const monthLabel = () =>
+    new Date(`${month()}-01T00:00:00`).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    })
 
   // Load historical improvements data for trend chart
   const loadImprovements = async () => {
@@ -268,25 +276,23 @@ export default function Budgets() {
     }
   }
 
-  // Set budgets from previous month's expenses
+  // Give each category without a budget this month what it cost last month. A budget the month
+  // already has is kept: the toast says how many were set and how many were already there.
   const setFromExpenses = async () => {
     const [year, mon] = month().split('-')
     try {
-      const result = await apiPost<{ ok: boolean; count?: number; message?: string }>(
-        '/api/budgets/from-expenses',
-        {
-          year: parseInt(year),
-          month: parseInt(mon),
-        }
+      const result = await apiPost<FromSpendingAnswer>('/api/budgets/from-expenses', {
+        year: parseInt(year),
+        month: parseInt(mon),
+      })
+      const said = fromSpendingToast(result, prevMonthLabel(), monthLabel())
+      showToast(said.text, said.kind)
+      // No refetch here: the POST bumped the budgets counter.
+    } catch (err) {
+      showToast(
+        plainMessage(err, "Couldn't set budgets from last month's spending. Try again."),
+        'error'
       )
-      if (result.ok) {
-        showToast(`Set ${result.count} budgets from ${prevMonthLabel()} expenses`, 'success')
-        // No refetch here: the POST bumped the budgets counter.
-      } else {
-        showToast(result.message || 'No expenses found', 'info')
-      }
-    } catch (_err) {
-      showToast('Failed to set budgets from expenses', 'error')
     }
   }
 
@@ -824,7 +830,7 @@ export default function Budgets() {
               </OrbitalAction>
               <OrbitalAction
                 onClick={setFromExpenses}
-                title={`Set this month's budgets to what you actually spent in ${prevMonthLabel()}`}
+                title={`Give each category without a budget what you spent on it in ${prevMonthLabel()}`}
                 icon={
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path

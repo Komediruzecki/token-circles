@@ -720,6 +720,11 @@ export async function budgetsRollover(
 }
 
 // ── Budget from-expenses ─────────────────────────────────────────────────────
+// Sets budgets for the month from last month's spending, for the categories the month has no
+// budget for yet. It used to delete the month's budgets first and write last month's spending in
+// their place, without asking. Like "Copy last month", it never deletes or overwrites a budget the
+// month has, and says how many it set and how many already had one. The Worker's twin is
+// POST /api/budgets/from-expenses in worker/src/routes/budgets.ts.
 
 export async function budgetsFromExpenses(body: unknown): Promise<Response> {
   try {
@@ -734,44 +739,49 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
 
     const pm = prevMonth(targetYear, targetMonth)
     const prevStart = monthStart(pm.year, pm.month)
-    const prevEnd = monthStart(targetYear, targetMonth)
+    const currStart = monthStart(targetYear, targetMonth)
+    const nm = nextMonth(targetYear, targetMonth)
+    const currEnd = monthStart(nm.year, nm.month)
 
+    // The profile's own categories, as the Worker's JOIN reads them: spending on a category that
+    // is gone sets no budget.
+    const categories = new Set(
+      (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => c.id as number)
+    )
     const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
       (t: Record<string, unknown>) =>
         t.type === 'expense' &&
-        t.category_id !== null &&
+        categories.has(t.category_id as number) &&
         (t.date as string) >= prevStart &&
-        (t.date as string) < prevEnd
+        (t.date as string) < currStart
     )
 
-    const expensesByCat: Record<number, number> = {}
+    const expensesByCat = new Map<number, number>()
     for (const t of txns) {
       const cid = t.category_id as number
-      expensesByCat[cid] = (expensesByCat[cid] || 0) + getAmount(t)
+      expensesByCat.set(cid, (expensesByCat.get(cid) ?? 0) + getAmount(t))
     }
-
-    const entries = Object.entries(expensesByCat)
-    if (entries.length === 0) {
+    if (expensesByCat.size === 0) {
       return json({ ok: false, message: 'No expenses found for previous month' })
     }
 
-    const currStart = monthStart(targetYear, targetMonth)
-    const currEnd =
-      targetMonth === 12 ? monthStart(targetYear + 1, 1) : monthStart(targetYear, targetMonth + 1)
-
-    const existingBudgets = (await db.getAllFromIndex('budgets', 'by_profile', pid)).filter(
-      (b: Record<string, unknown>) =>
-        (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
-    )
-
+    // Read and write in one transaction, so the month's budgets cannot change in between.
     const tx = db.transaction('budgets', 'readwrite')
-    for (const b of existingBudgets) await tx.store.delete(b.id as number)
-
+    const budgeted = new Set(
+      (await tx.store.index('by_profile').getAll(pid))
+        .filter(
+          (b: Record<string, unknown>) =>
+            (b.start_date as string) >= currStart && (b.start_date as string) < currEnd
+        )
+        .map((b: Record<string, unknown>) => b.category_id as number)
+    )
     const createdAt = new Date().toISOString()
-    for (const [catId, total] of entries) {
+    let count = 0
+    for (const [categoryId, total] of expensesByCat) {
+      if (budgeted.has(categoryId)) continue
       await tx.store.add({
-        category_id: parseInt(catId),
-        amount: total,
+        category_id: categoryId,
+        amount: Math.round(total * 100) / 100,
         period: 'monthly',
         start_date: currStart,
         end_date: null,
@@ -780,10 +790,11 @@ export async function budgetsFromExpenses(body: unknown): Promise<Response> {
         rollover_amount: 0,
         created_at: createdAt,
       })
+      count++
     }
     await tx.done
 
-    return json({ ok: true, count: entries.length })
+    return json({ ok: true, count, already_budgeted: expensesByCat.size - count })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

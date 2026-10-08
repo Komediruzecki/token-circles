@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
@@ -818,7 +819,13 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
   });
 });
 
-// POST /api/budgets/from-expenses — replace current-month budgets from last month's expenses.
+// POST /api/budgets/from-expenses — set budgets for the month from last month's spending, for the
+// categories the month has no budget for yet.
+//
+// It used to delete the month's budgets first and write last month's spending in their place,
+// without asking, so a budget set by hand went back to whatever was spent. Like "Copy last month",
+// it never deletes or overwrites a budget the month has: it fills the categories without one, and
+// says how many it set and how many already had a budget.
 budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const body = (await c.req.json()) as Record<string, any>;
@@ -826,15 +833,11 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
 
   // The month these default to is the person's, not the Worker's UTC one.
   const now = localNow(c);
-  let prevYear = year || now.getFullYear();
-  let prevMonth = (month || now.getMonth() + 1) - 1;
-  if (prevMonth === 0) {
-    prevMonth = 12;
-    prevYear--;
-  }
-
-  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-  const prevEnd = `${prevYear}-${String(prevMonth + 1).padStart(2, '0')}-01`;
+  const currYear = year || now.getFullYear();
+  const currMonth = month || now.getMonth() + 1;
+  const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
+  const prevStart = addCalendarMonths(currStart, -1);
+  const nextStart = addCalendarMonths(currStart, 1);
 
   const expenses = await db.all<{ category_id: number; name: string; total: number }>(
     c.env.DB,
@@ -845,37 +848,28 @@ budgetsRoutes.post('/api/budgets/from-expenses', requireAuth, async (c) => {
        GROUP BY t.category_id`,
     pid,
     prevStart,
-    prevEnd
+    currStart
   );
 
   if (expenses.length === 0) {
     return c.json({ ok: false, message: 'No expenses found for previous month' });
   }
 
-  const currYear = year || now.getFullYear();
-  const currMonth = month || now.getMonth() + 1;
-  const currStart = `${currYear}-${String(currMonth).padStart(2, '0')}-01`;
-
-  // budgetsRepo.deleteByDateRange — clear existing budgets for the current month.
-  await db.run(
-    c.env.DB,
-    'DELETE FROM budgets WHERE profile_id = ? AND start_date >= ? AND start_date < ?',
-    pid,
-    currStart,
-    `${currYear}-${String(currMonth + 1).padStart(2, '0')}-01`
+  // One guarded INSERT per category, in one batch: a category with a budget in the month already
+  // matches nothing, so two taps at once cannot set the same category twice.
+  const stmts = expenses.map((item) =>
+    c.env.DB.prepare(
+      `INSERT INTO budgets (category_id, amount, period, start_date, profile_id)
+       SELECT ?1, ?2, 'monthly', ?3, ?4
+        WHERE NOT EXISTS (SELECT 1 FROM budgets
+                           WHERE profile_id = ?4 AND category_id = ?1
+                             AND start_date >= ?3 AND start_date < ?5)`
+    ).bind(item.category_id, Math.round(item.total * 100) / 100, currStart, pid, nextStart)
   );
+  const results = await c.env.DB.batch(stmts);
+  const count = results.reduce((sum, result) => sum + (result.meta?.changes ?? 0), 0);
 
-  // Batch all INSERTs into a single D1 batch call to avoid N+1 round-trips.
-  if (expenses.length > 0) {
-    const stmts = expenses.map((item) =>
-      c.env.DB.prepare(
-        'INSERT INTO budgets (category_id, amount, period, start_date, profile_id) VALUES (?, ?, ?, ?, ?)'
-      ).bind(item.category_id, item.total, 'monthly', currStart, pid)
-    );
-    await c.env.DB.batch(stmts);
-  }
-
-  return c.json({ ok: true, count: expenses.length });
+  return c.json({ ok: true, count, already_budgeted: expenses.length - count });
 });
 
 // POST /api/budgets/backfill-from-spending — for every month in the range, set each
