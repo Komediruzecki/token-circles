@@ -568,7 +568,7 @@ const OWN_WRITES: OwnWrite[] = [
     },
     helper: 'apiPost',
     method: 'POST',
-    url: '/api/budgets',
+    url: '/api/budgets/allocate',
   },
   {
     does: 'edits a loan',

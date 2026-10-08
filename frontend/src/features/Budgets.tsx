@@ -465,13 +465,12 @@ export default function Budgets() {
   const updateCatBudget = async (amount: number) => {
     if (!selectedCat()) return
     try {
-      const now = new Date()
-      const startDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-      await apiPost('/api/budgets', {
+      // The month on screen's one budget for the category, changed when it has one: a POST to
+      // /api/budgets added another budget on every save.
+      await apiPost(`/api/budgets/allocate?month=${month()}`, {
         category_id: selectedCat()!.id,
         amount,
         period: 'monthly',
-        start_date: startDate,
       })
       showToast('Budget set successfully', 'success')
       setShowCatBudgetModal(false)

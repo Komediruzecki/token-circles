@@ -1,9 +1,12 @@
 /**
  * The dialogs that set a category's budget for a month, run against the real local-first router on
- * fake-indexeddb: the Budgets page's Allocate.
+ * fake-indexeddb: the Budgets page's Allocate, its Set Budget on a category card, and the Set
+ * Budget on a Categories page card.
  *
  * Allocate sent no month, so a budget allocated while another month was on screen was set on this
- * month instead, where the page did not show it.
+ * month instead, where the page did not show it. Both Set Budget dialogs added a budget on every
+ * save (POST /api/budgets), so a category set twice had two budgets that month, and the Budgets
+ * page's set this month's whatever month was on screen.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,7 +28,11 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
 beforeAll(async () => {
-  await Promise.all([import('../Budgets'), import('../../core/storage/localApiRouter')])
+  await Promise.all([
+    import('../Budgets'),
+    import('../Categories'),
+    import('../../core/storage/localApiRouter'),
+  ])
 }, 120_000)
 
 beforeEach(async () => {
@@ -143,6 +150,90 @@ describe('Allocate', () => {
     await vi.waitFor(async () => {
       expect(await budgets()).toEqual([
         expect.objectContaining({ category_id: GROCERIES, amount: 250, start_date: other.start }),
+      ])
+    })
+  })
+})
+
+/** This month's first day, as the runtimes write a budget's start. */
+function thisMonthStart(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+async function setBudgetOn(open: () => void, amount: string): Promise<void> {
+  open()
+  let input: HTMLInputElement | null = null
+  await vi.waitFor(() => {
+    input = host.querySelector<HTMLInputElement>('input[placeholder="500.00"]')
+    expect(input).not.toBeNull()
+  })
+  type(input!, amount)
+  byText(host, 'Save Budget').click()
+  await vi.waitFor(() => {
+    expect(host.querySelector('input[placeholder="500.00"]')).toBeNull()
+  })
+}
+
+describe('Set Budget on a Budgets page card', () => {
+  const openSetBudget = () => {
+    host
+      .querySelector<HTMLButtonElement>(
+        '[data-test-id="budgets-category-actions"] button[title="Set Budget"]'
+      )!
+      .click()
+  }
+
+  it("changes the month's budget instead of adding one", async () => {
+    await mountBudgets()
+
+    await setBudgetOn(openSetBudget, '250')
+    await setBudgetOn(openSetBudget, '300')
+
+    await vi.waitFor(async () => {
+      expect(await budgets()).toEqual([
+        expect.objectContaining({
+          category_id: GROCERIES,
+          amount: 300,
+          start_date: thisMonthStart(),
+        }),
+      ])
+    })
+  })
+
+  it('sets the budget of the month on screen', async () => {
+    const other = anotherMonth()
+    setPeriod(other.period)
+    await mountBudgets()
+
+    await setBudgetOn(openSetBudget, '250')
+
+    await vi.waitFor(async () => {
+      expect(await budgets()).toEqual([
+        expect.objectContaining({ category_id: GROCERIES, amount: 250, start_date: other.start }),
+      ])
+    })
+  })
+})
+
+describe('Set Budget on a Categories page card', () => {
+  it("changes this month's budget instead of adding one", async () => {
+    const { default: Categories } = await import('../Categories')
+    await mount('categories', Categories)
+    const openSetBudget = () => {
+      byText(host, 'Budget').click()
+    }
+
+    await setBudgetOn(openSetBudget, '250')
+    await setBudgetOn(openSetBudget, '300')
+
+    await vi.waitFor(async () => {
+      expect(await budgets()).toEqual([
+        expect.objectContaining({
+          category_id: GROCERIES,
+          amount: 300,
+          start_date: thisMonthStart(),
+        }),
       ])
     })
   })
