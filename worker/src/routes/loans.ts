@@ -132,7 +132,7 @@ loansRoutes.get('/api/loans/:id', requireAuth, async (c) => {
     id,
     pid
   )
-  if (!loan) throw new HttpError(404, 'Not found')
+  if (!loan) throw new HttpError(404, 'Loan not found')
   loan.rate_periods = await db.all(
     c.env.DB,
     'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month',
@@ -159,7 +159,7 @@ loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
     id,
     pid
   )
-  if (!existing) throw new HttpError(404, 'Not found')
+  if (!existing) throw new HttpError(404, 'Loan not found')
   existing.rate_periods = await db.all(
     c.env.DB,
     'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month, id',
@@ -193,7 +193,7 @@ loansRoutes.delete('/api/loans/:id', requireAuth, async (c) => {
     c.env.DB.prepare(`DELETE FROM loan_prepayments WHERE ${owned}`).bind(id, pid),
     c.env.DB.prepare('DELETE FROM loans WHERE id = ? AND profile_id = ?').bind(id, pid),
   ])
-  if (!results[2]?.meta.changes) throw new HttpError(404, 'Not found')
+  if (!results[2]?.meta.changes) throw new HttpError(404, 'Loan not found')
   return c.json({ ok: true })
 })
 
@@ -317,7 +317,7 @@ loansRoutes.post('/api/loans/:id/calculate', requireAuth, async (c) => {
     id,
     pid
   )
-  if (!loan) throw new HttpError(404, 'Not found')
+  if (!loan) throw new HttpError(404, 'Loan not found')
 
   const [ratePeriods, prepayments] = await Promise.all([
     db.all<LoanRatePeriod>(

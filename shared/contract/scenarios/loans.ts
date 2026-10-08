@@ -97,9 +97,18 @@ export const loanScenarios = [
     expectMoney(expect, changed.principal, 14000);
 
     expectOk(expect, await api.delete(`/api/loans/${id}`), 'DELETE the loan');
-    expect((await api.get(`/api/loans/${id}`)).status).toBe(404);
     expect(await loans(api, expect)).not.toContainEqual(expect.objectContaining({ id }));
-    expect((await api.delete(`/api/loans/${id}`)).status).toBe(404);
+    // A loan that is not there is said the same way by every route. The Worker said "Not found"
+    // where local-first said "Loan not found", and the Loans dialog shows it in its notice.
+    for (const reply of [
+      await api.get(`/api/loans/${id}`),
+      await api.put(`/api/loans/${id}`, loanForm()),
+      await api.post(`/api/loans/${id}/calculate`, {}),
+      await api.delete(`/api/loans/${id}`),
+    ]) {
+      expect(reply.status).toBe(404);
+      expect(reply.body).toEqual({ error: 'Loan not found' });
+    }
   }),
 
   scenario(
