@@ -16,6 +16,7 @@ import {
   Switch,
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { handFocusTo, isEditableTarget } from '../core/domFocus'
 import { quickEntrySave } from '../core/quickEntryLists'
 import { localToday } from '../utils/period'
@@ -212,7 +213,8 @@ export function GuidedOrbit(props: GuidedOrbitProps) {
       })
     } catch (err) {
       console.error('Guided orbit create failed:', err)
-      toast('Failed to save entry', 'error')
+      // A refused entry says what to change, in the API's words.
+      toast(plainMessage(err, "Couldn't save the entry. Try again."), 'error')
     } finally {
       setSubmitting(false)
     }
