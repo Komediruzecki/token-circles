@@ -36,7 +36,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import IconPicker from '../components/IconPicker'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, apiPut, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, apiPut, errorStatus, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
@@ -66,13 +66,14 @@ export default function Categories() {
   const state = useAppState()
 
   // Categories resource — fetches categories + budget summary
-  const [categoriesResource] = createResource(
+  const [categoriesResource, { refetch: refetchCategories }] = createResource(
     // Gated on visibility: a profile switch, or a category or budget write anywhere, refetches
     // now only while this page is visible; hidden, it is marked stale and refetches once on the
     // next show. This also drives the initial load, replacing the old onMount + profileVersion
     // effect. The budget summary counts spending, which transaction writes reach through the
     // `budgets` fan-out. This page's own writes bump both counters through apiFetch, so none of
-    // them refetches by hand.
+    // them refetches by hand, except a delete of a category that was already gone, which bumps
+    // nothing.
     gatedSource('categories', () =>
       [state.profileVersion, entityVersion('categories'), entityVersion('budgets')].join('|')
     ),
@@ -128,12 +129,18 @@ export default function Categories() {
     setShowAddModal(true)
   }
 
-  // Delete category
+  // Delete category. One deleted in another tab or on another device first answers 404: gone is
+  // what was asked, so the page says so and drops the row, as Bills does for a bill.
   const deleteCategory = async (id: number) => {
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That category was already deleted.', 'info')
+        await refetchCategories()
+        return
+      }
       console.error('Failed to delete category:', err)
       showToast(plainMessage(err, "Couldn't delete the category. Try again."), 'error')
     }

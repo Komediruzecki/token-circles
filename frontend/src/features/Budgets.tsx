@@ -44,7 +44,15 @@ import PeriodBar from '../components/PeriodBar'
 import SectionRail from '../components/SectionRail'
 import { SkeletonCard } from '../components/Skeleton'
 import { getLocalCurrency } from '../core/api'
-import { apiDelete, apiGet, apiHouseholdGet, apiPost, apiPut, showToast } from '../core/api'
+import {
+  apiDelete,
+  apiGet,
+  apiHouseholdGet,
+  apiPost,
+  apiPut,
+  errorStatus,
+  showToast,
+} from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
@@ -420,13 +428,20 @@ export default function Budgets() {
     }
   }
 
-  // Delete category
+  // Delete category. One deleted in another tab or on another device first answers 404: gone is
+  // what was asked, so the page says so and drops the row, as Bills does for a bill. A failed
+  // write bumps no counter, so this reload has to be asked for.
   const deleteCategory = async (id: number) => {
     try {
       await apiDelete(`/api/categories/${id}`)
       showToast('Category deleted successfully', 'success')
       // No reload here: the DELETE bumped the categories counter.
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That category was already deleted.', 'info')
+        await loadCategories()
+        return
+      }
       console.error('Failed to delete category:', err)
       showToast(plainMessage(err, "Couldn't delete the category. Try again."), 'error')
     }

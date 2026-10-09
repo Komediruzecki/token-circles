@@ -479,12 +479,25 @@ describe('Budgets, when an action fails', () => {
     await saidOnly("Couldn't backfill budgets from your spending. Try again.")
   })
 
-  it('says a category deleted elsewhere first is not there', async () => {
+  // Gone is what was asked, so the page says so and drops the row, as Bills does for a bill. It
+  // said the answer's words as an error, and the cloud's are a bare "Not found".
+  it('drops a category deleted elsewhere first, and says it was already deleted', async () => {
     await mount('budgets', budgetsShown)
     await elsewhere('categories', GROCERIES, null)
     await deleteCategory()
 
-    await saidOnly('Category not found')
+    await toldOnly('That category was already deleted.')
+    await vi.waitFor(() => {
+      expect(button('button[aria-label="Delete category"]')).toBeNull()
+    })
+  })
+
+  it("never shows the cloud's bare words for a category deleted elsewhere", async () => {
+    await mount('budgets', budgetsShown)
+    answerInstead('DELETE', `/api/categories/${GROCERIES}`, saying(404, 'Not found'))
+    await deleteCategory()
+
+    await toldOnly('That category was already deleted.')
   })
 
   it('says a plain sentence when deleting a category fails with no words of its own', async () => {
@@ -503,12 +516,23 @@ describe('Categories, when deleting one fails', () => {
     await confirm()
   }
 
-  it('says a category deleted elsewhere first is not there', async () => {
+  it('drops a category deleted elsewhere first, and says it was already deleted', async () => {
     await mount('categories', categoriesShown)
     await elsewhere('categories', GROCERIES, null)
     await deleteCategory()
 
-    await saidOnly('Category not found')
+    await toldOnly('That category was already deleted.')
+    await vi.waitFor(() => {
+      expect(button('button[aria-label="Delete category"]')).toBeNull()
+    })
+  })
+
+  it("never shows the cloud's bare words for a category deleted elsewhere", async () => {
+    await mount('categories', categoriesShown)
+    answerInstead('DELETE', `/api/categories/${GROCERIES}`, saying(404, 'Not found'))
+    await deleteCategory()
+
+    await toldOnly('That category was already deleted.')
   })
 
   it('says a plain sentence when deleting fails with no words of its own', async () => {
