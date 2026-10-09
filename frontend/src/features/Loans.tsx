@@ -14,10 +14,11 @@
  * THEN every figure follows: the write bumps the `loans` data version and the page reloads from it
  */
 import { createEffect, createMemo, createSignal, on, onCleanup, onMount, Show } from 'solid-js'
-import { apiDelete, apiHouseholdGet, getLocalCurrency, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, errorStatus, getLocalCurrency, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { activeProfileId } from '../core/apiProfileScope'
 import { useAppState } from '../core/appStore'
-import { entityVersion } from '../core/dataVersions'
+import { entityVersion, invalidateEntity } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { localToday } from '../utils/period'
@@ -133,17 +134,28 @@ export default function Loans() {
     if (step?.requiredPage === 'loans' && route().view === 'loan') navigate({ view: 'overview' })
   })
 
+  // A loan another tab deleted first answers 404: gone is what was asked, so the page says so and
+  // reads the list again. A failed write bumps no counter, so that read has to be asked for.
   const deleteLoan = async (row: LoanRow) => {
-    try {
-      await apiDelete(`/api/loans/${row.id}`)
-      showToast('Loan deleted', 'success')
+    const leave = () => {
       const current = route()
       if (current.view === 'loan' && current.loanId === row.id) {
         navigate({ view: 'overview' }, { replace: true })
       }
+    }
+    try {
+      await apiDelete(`/api/loans/${row.id}`)
+      showToast('Loan deleted', 'success')
+      leave()
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That loan was already deleted.', 'info')
+        invalidateEntity('loans')
+        leave()
+        return
+      }
       console.error('Failed to delete loan:', err)
-      showToast('The loan was not deleted. Check your connection and try again.', 'error')
+      showToast(plainMessage(err, "Couldn't delete the loan. Try again."), 'error')
     }
   }
 

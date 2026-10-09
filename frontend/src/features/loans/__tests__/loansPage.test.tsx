@@ -9,7 +9,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet, apiPost, apiPut, showToast } from '../../../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../../../core/api'
 import { ApiError } from '../../../core/apiError'
 import { setPage } from '../../../core/appStore'
 import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
@@ -444,6 +444,52 @@ describe('the tour', () => {
     const target = root.querySelector('[data-tour="loans-what-if"]')
     expect(target?.getAttribute('data-test-id')).toBe('loans-item-what-if')
     expect(target?.closest('[data-test-id="loans-item"]')?.textContent).toContain('Mortgage')
+  })
+})
+
+describe('deleting a loan', () => {
+  /** Press the card's Delete and confirm it. */
+  async function deleteFromCard(root: HTMLElement, name: string) {
+    root.querySelector<HTMLButtonElement>(`[aria-label="Delete ${name}"]`)!.click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+    await settle()
+  }
+
+  it('drops a loan another tab deleted, and says it was already deleted', async () => {
+    const root = await mount('#loans')
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(1)
+    // Another tab deleted it: this page still lists it.
+    listed = []
+    vi.mocked(showToast).mockClear()
+
+    await deleteFromCard(root, 'Mortgage')
+
+    expect(vi.mocked(showToast).mock.calls).toEqual([['That loan was already deleted.', 'info']])
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(0)
+  })
+
+  it('says why a delete failed in the words it came with, or plainly when it has none', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = await mount('#loans')
+    vi.mocked(showToast).mockClear()
+    vi.mocked(apiDelete)
+      .mockRejectedValueOnce(
+        new ApiError(500, 'Something went wrong on our side. Try again in a moment.')
+      )
+      .mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'id')"))
+
+    await deleteFromCard(root, 'Mortgage')
+    await deleteFromCard(root, 'Mortgage')
+
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ['Something went wrong on our side. Try again in a moment.', 'error'],
+      ["Couldn't delete the loan. Try again.", 'error'],
+    ])
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(1)
+    quiet.mockRestore()
   })
 })
 
