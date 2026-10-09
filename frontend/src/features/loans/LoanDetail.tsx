@@ -9,8 +9,9 @@
 import { createEffect, createMemo, createSignal, For, Match, Show, Switch } from 'solid-js'
 import { nextPaymentMonth, runScenario, templateOptions } from '../../../../shared/loanScenarios'
 import ConfirmButton from '../../components/ConfirmButton'
-import { apiDelete, apiGet, formatCurrency, showToast } from '../../core/api'
+import { apiDelete, apiGet, errorStatus, formatCurrency, showToast } from '../../core/api'
 import { plainMessage } from '../../core/apiError'
+import { invalidateEntity } from '../../core/dataVersions'
 import { refetchOnActive } from '../../core/pageVisibility'
 import { localToday } from '../../utils/period'
 import LoanCompare from './LoanCompare'
@@ -152,6 +153,10 @@ export default function LoanDetail(props: Props) {
     props.navigate({ ...props.route, tab: 'compare', b, a }, { replace: true })
   }
 
+  // One another tab removed first answers 404: gone is what was asked, so the page says so and
+  // reads the loan again. A failed write bumps no counter, so that read has to be asked for, or
+  // the row stays listed and every Remove repeats the error. The page removes a rate period only
+  // through the loan's own save, so this is its one remove.
   const deleteExtra = async (extra: SavedExtra) => {
     const row = props.row
     if (!row) return
@@ -159,6 +164,11 @@ export default function LoanDetail(props: Props) {
       await apiDelete(`/api/loans/${row.id}/prepayments/${extra.ref}`)
       showToast('Extra payment removed', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That extra payment was already removed.', 'info')
+        invalidateEntity('loans')
+        return
+      }
       showToast(plainMessage(err, "Couldn't remove the extra payment. Try again."), 'error')
     }
   }

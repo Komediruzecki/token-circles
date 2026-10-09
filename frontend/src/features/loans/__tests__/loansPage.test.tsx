@@ -12,6 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { apiGet, apiPost, apiPut, showToast } from '../../../core/api'
 import { ApiError } from '../../../core/apiError'
 import { setPage } from '../../../core/appStore'
+import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
 let listed: Record<string, unknown>[] = []
@@ -35,7 +36,20 @@ vi.mock('../../../core/api', async (importOriginal) => {
       invalidateForRequest(path, 'POST', true)
       return { ok: true }
     }),
+    // A removal takes the row out of the store. One the store no longer has, because another tab
+    // removed it first, is a 404 in the words both runtimes use, and bumps nothing.
     apiDelete: vi.fn(async (path: string) => {
+      const ref = /\/prepayments\/(\d+)$/.exec(path)?.[1]
+      if (ref !== undefined) {
+        const extras = (loanOf(path)?.prepayments ?? []) as Record<string, unknown>[]
+        const at = extras.findIndex((p) => String(p.id) === ref)
+        if (at < 0) throw new ApiError(404, 'Extra payment not found')
+        extras.splice(at, 1)
+      } else {
+        const loan = loanOf(path)
+        if (!loan) throw new ApiError(404, 'Loan not found')
+        listed = listed.filter((l) => l !== loan)
+      }
       invalidateForRequest(path, 'DELETE', true)
       return { ok: true }
     }),
@@ -470,6 +484,31 @@ describe('the loan page', () => {
     await click(root, 'loans-tab-compare')
     expect(text(root, 'loans-compare-a-payoff')).toBe('Oct 2034')
     expect(root.textContent).toContain('With your saved extra payment')
+  })
+
+  it('drops an extra payment another tab removed, and says it was already removed', async () => {
+    ;(listed[0].prepayments as unknown[]).push({ id: 7, month: 12, amount: 1000, note: '' })
+    const root = await mount('#loans/1/extras')
+    expect(root.querySelectorAll('[data-test-id="loans-extra-item"]')).toHaveLength(1)
+    // Another tab removed it: this page still lists it.
+    listed[0].prepayments = []
+    vi.mocked(showToast).mockClear()
+
+    root
+      .querySelector<HTMLButtonElement>('[aria-label="Remove the extra payment with payment 12"]')!
+      .click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+    await settle()
+
+    // Gone is what was asked: no error, and the page reads the loan again, without it.
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ['That extra payment was already removed.', 'info'],
+    ])
+    expect(root.querySelectorAll('[data-test-id="loans-extra-item"]')).toHaveLength(0)
+    expect(el(root, 'loans-extras-empty')).not.toBeNull()
   })
 
   it('says a failed add in plain words in the form, and keeps what was typed', async () => {

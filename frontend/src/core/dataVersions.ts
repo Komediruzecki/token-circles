@@ -83,7 +83,11 @@ export function entityVersion(tag: string): number {
   return slot(tag)[0]()
 }
 
-/** Bump one entity's counter. Called by `apiFetch`; call it directly only from a test. */
+/**
+ * Bump one entity's counter. Called by `apiFetch`. Call it directly only from a test, or when a
+ * refused write shows the page's copy is out of date: a 404 on a delete another tab already made
+ * bumps nothing, though the row on screen is gone.
+ */
 export function invalidateEntity(tag: string): void {
   slot(tag)[1]((n) => n + 1)
 }
