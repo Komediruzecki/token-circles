@@ -16,6 +16,7 @@ import {
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
+import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
 import {
   ACCESS_TABLES,
   accessRows,
@@ -32,6 +33,11 @@ import {
 
 const BASE = 'https://api.example.com';
 const EMAIL = 'codeuser@example.com';
+/** A code that does not sign in, at the code field, as the form shows it. */
+const CODE_REFUSED = {
+  error: SIGN_IN_MESSAGES.emailCodeRefused,
+  fields: { code: SIGN_IN_MESSAGES.emailCodeRefused },
+};
 /** An account with every kind of access set up on it (helpers/account-access.ts). */
 const SEEDED = 6610;
 const SEEDED_ADDRESS = 'household-code@example.com';
@@ -173,6 +179,8 @@ describe('verifying a code', () => {
     const res = await post('/api/auth/email-code/verify', { email: EMAIL, code });
     expect(res.status).toBe(401);
     expect(cookieValue(res, 'fm_session')).toBeNull();
+    // The same answer as a wrong code: at the code field.
+    expect(await res.json()).toEqual(CODE_REFUSED);
   });
 
   it('says the password was cleared on an unconfirmed account that had nothing else', async () => {
@@ -202,6 +210,7 @@ describe('verifying a code', () => {
     const res = await post('/api/auth/email-code/verify', { email: EMAIL, code: '000000' }, cookie);
     expect(res.status).toBe(401);
     expect(cookieValue(res, 'fm_session')).toBeNull();
+    expect(await res.json()).toEqual(CODE_REFUSED);
   });
 
   it('rejects an expired code', async () => {

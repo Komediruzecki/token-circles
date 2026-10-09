@@ -38,8 +38,19 @@ import {
 import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { refusalOf } from '../../../shared/refusal';
+import {
+  addressProblems,
+  emailCodeProblems,
+  noProblems,
+  SIGN_IN_MESSAGES,
+} from '../../../shared/signInSchema';
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/**
+ * The answer to a code that does not sign in: wrong, spent, expired, or asked for in another
+ * browser. One answer for all of them, at the code field, in the words the form uses.
+ */
+const CODE_REFUSED = refusalOf({ code: SIGN_IN_MESSAGES.emailCodeRefused });
 
 // ── The ceremony cookie: which code row this browser may attempt ─────────────
 export const LOGINCODE_COOKIE = 'fm_logincode';
@@ -110,7 +121,8 @@ emailCodeRoutes.post('/api/auth/email-code/request', async (c) => {
   const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-address cap on top of per-IP (the forgot-password layering): one inbox can't be bombed
   // from rotating IPs, and the neutral 429 stays neutral for existing and unknown alike.
   const emailRl = await enforce(c, `logincode-email:${email}`, 3, 3600);
@@ -148,21 +160,20 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { email?: string; code?: string };
   const email = (body.email ?? '').trim().toLowerCase();
   const code = (body.code ?? '').trim();
-  if (!EMAIL_RE.test(email) || !code) {
-    return c.json({ error: 'Email and code are required' }, 400);
-  }
+  const refused = emailCodeProblems({ email, code });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Only the browser that requested the code holds its ceremony cookie; without it there is
   // nothing to guess against. The email must match the one the ceremony was minted for.
   const ceremony = await readCodeCeremony(c.req.raw, c.env);
   if (!ceremony || ceremony.email !== email) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'code_ceremony_missing', email });
-    return c.json({ error: 'Invalid or expired code' }, 401);
+    return c.json(CODE_REFUSED, 401);
   }
 
   const userId = await verifyLoginCode(c.env, ceremony.codeId, email, code);
   if (userId === null) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_code', email });
-    return c.json({ error: 'Invalid or expired code' }, 401);
+    return c.json(CODE_REFUSED, 401);
   }
   // Proof of humanity and possession: the shared per-IP budget resets so one office/CGNAT
   // address can keep signing its users in (the auth.ts clear-on-success rule).
@@ -181,7 +192,7 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
   const after = results.at(-1)?.results[0] as { token_version: number } | undefined;
   c.header('Set-Cookie', cookie(LOGINCODE_COOKIE, '', 0, c.env), { append: true });
-  if (!after) return c.json({ error: 'Invalid or expired code' }, 401);
+  if (!after) return c.json(CODE_REFUSED, 401);
   const signIn = { userId, provider: 'email', tokenVersion: after.token_version };
 
   // Second factor: identical rule to password login — the inbox is one factor, not two.

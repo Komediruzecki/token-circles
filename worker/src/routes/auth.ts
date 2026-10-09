@@ -51,8 +51,14 @@ import { clearRateLimit, enforce, clientIp } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
-
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+import { refusalOf } from '../../../shared/refusal';
+import {
+  addressProblems,
+  noProblems,
+  registrationProblems,
+  resetPasswordProblems,
+  signInProblems,
+} from '../../../shared/signInSchema';
 
 // A fixed, valid-format PBKDF2 hash (same 600k cost as a freshly minted real one) that no password
 // matches. Login verifies against this when the account or its hash is absent, so the response time
@@ -191,8 +197,9 @@ authRoutes.post('/api/auth/register', async (c) => {
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
-  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  // The field each problem is about, in the words the form uses (shared/signInSchema.ts).
+  const refused = registrationProblems({ email, password });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-email cap (on top of the per-IP cap) so one address can't be email-bombed / junk-registered
   // from rotating IPs. Mirrors forgot-password; the response stays neutral (429 for existing + new).
   const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
@@ -286,7 +293,9 @@ authRoutes.post('/api/auth/login', async (c) => {
   }
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
-  if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
+  // Only a field left empty is named. A wrong address or password names neither (below).
+  const missing = signInProblems({ email, password });
+  if (!noProblems(missing)) return c.json(refusalOf(missing), 400);
   // Per-account throttle (on top of per-IP) so a single account can't be brute-forced from rotating
   // IPs. Mirrors the layered approach used in forgot-password.
   const emailBucket = `login-email:${email}`;
@@ -347,7 +356,8 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
   const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-email cap (on top of per-IP) so one address can't be bombed from rotating IPs.
   const emailRl = await enforce(c, `forgot-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
@@ -399,7 +409,8 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   const token = (body.token ?? '').trim();
   const password = body.password ?? '';
   if (!token) return c.json({ error: 'Missing reset token' }, 400);
-  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  const refused = resetPasswordProblems({ password });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
 
   // Deliberately does NOT filter on `used_at IS NULL`. Whether the link is still unspent is
   // decided by the conditional UPDATE below and nowhere else — two gates for one fact means the
