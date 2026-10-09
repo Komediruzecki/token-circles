@@ -24,6 +24,8 @@ export const IMPORT_UPLOAD_MESSAGES = {
   tooLarge: 'That file is over 10 MB. Split it into smaller files and upload each one.',
   noSheets: 'That spreadsheet has no sheets. Choose another file.',
   unreadable: "That file couldn't be read. Upload a CSV or Excel file.",
+  tooSlow:
+    'That file took too long to read. Upload it as a CSV file, or split it into smaller files.',
 } as const;
 
 /**

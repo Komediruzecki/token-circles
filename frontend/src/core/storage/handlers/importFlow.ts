@@ -9,11 +9,7 @@ import {
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
 import { checkSheetFetch } from '../../../../../shared/importSourceSchema'
-import {
-  IMPORT_UPLOAD_MESSAGES,
-  readUploadedSheet,
-  uploadRefusal,
-} from '../../../../../shared/importUpload'
+import { IMPORT_UPLOAD_MESSAGES, uploadRefusal } from '../../../../../shared/importUpload'
 import { refusalOf } from '../../../../../shared/refusal'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { localToday } from '../../../utils/period'
@@ -23,6 +19,7 @@ import { parseImportNumber } from '../../importNumber'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json, refuse } from './helpers'
+import { readUploadWithin, uploadReader } from './uploadRead'
 import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
@@ -205,7 +202,8 @@ async function detectNewAccounts(
 /**
  * A file uploaded on the Import page, read as the Worker reads it (shared/importUpload.ts): its
  * header row, the rows under it as lists of cells, and the workbook's sheets. Stateless: the page
- * chooses another sheet by uploading the file again with that sheet's `sheetName`.
+ * chooses another sheet by uploading the file again with that sheet's `sheetName`. The file is
+ * read off the page's thread, with a time limit (uploadRead.ts).
  */
 export async function importUpload(body: unknown): Promise<Response> {
   const form = body instanceof FormData ? body : null
@@ -217,9 +215,8 @@ export async function importUpload(body: unknown): Promise<Response> {
     return json(refusalOf(answer.fields), answer.status)
   }
   const requested = form?.get('sheetName')
-  const XLSX = await import('xlsx')
-  const sheet = readUploadedSheet(
-    XLSX,
+  const sheet = await readUploadWithin(
+    uploadReader(),
     {
       name: file.name,
       type: file.type,
