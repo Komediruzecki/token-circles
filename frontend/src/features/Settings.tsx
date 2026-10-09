@@ -1047,7 +1047,7 @@ export default function Settings() {
   }
 
   // The household view's rename (features/profileForm.ts). A save renames the profile where the
-  // page and the sidebar show it; it used to reload the whole page.
+  // page, the sidebar and the Danger Zone show it; it used to reload the whole page.
   const appState = useAppState()
   const renameForm = createProfileRenameForm({
     onRenamed: (renamed) => {
@@ -2007,7 +2007,11 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
-              <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
+              <DangerZone
+                profiles={appState.profiles}
+                onReset={handleReset}
+                onDeleteProfile={handleDeleteProfile}
+              />
             </Show>
 
             {/* ─────────────── BILLING (server mode only) ─────────────── */}

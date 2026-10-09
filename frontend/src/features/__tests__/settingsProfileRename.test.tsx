@@ -102,11 +102,36 @@ const save = () => input()!.form!.querySelector<HTMLButtonElement>('button[type=
 const cancel = () =>
   Array.from(input()!.form!.querySelectorAll('button')).find((b) => b.textContent === 'Cancel')!
 
+const editButton = (id: number) =>
+  row(id)!.querySelector<HTMLButtonElement>('button[title="Rename profile"]')!
+
 async function startRename(id: number): Promise<void> {
-  row(id)!.querySelector<HTMLButtonElement>('button[title="Rename profile"]')!.click()
+  editButton(id).click()
   await vi.waitFor(() => {
     expect(input()).not.toBeNull()
   })
+}
+
+async function rename(id: number, name: string): Promise<void> {
+  await startRename(id)
+  type(name)
+  save().click()
+  await vi.waitFor(() => {
+    expect(input()).toBeNull()
+  })
+}
+
+const dangerSelect = () => host.querySelector<HTMLSelectElement>('#danger-profile-select')!
+const dangerOptions = () =>
+  Array.from(dangerSelect().options).map((option) => [Number(option.value), option.textContent])
+const buttonNamed = (name: string) =>
+  Array.from(host.querySelectorAll('button')).find((b) => b.textContent?.trim() === name)
+
+/** Picks a profile in the Danger Zone the way a person does: by the name it shows. */
+function chooseInDangerZone(name: string): void {
+  const option = Array.from(dangerSelect().options).find((o) => o.textContent === name)!
+  dangerSelect().value = option.value
+  dangerSelect().dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 function type(value: string): void {
@@ -226,5 +251,32 @@ describe('renaming a profile in the household view', () => {
       expect(input()).toBeNull()
     })
     expect(net.sent).toEqual([])
+  })
+})
+
+describe('the Danger Zone', () => {
+  it('names a renamed profile by its new name, and deletes the one it names', async () => {
+    await openHousehold()
+    await rename(2, 'Freelance')
+    await rename(3, 'Side business')
+
+    await vi.waitFor(() => {
+      expect(dangerOptions()).toEqual([
+        [1, 'Household'],
+        [2, 'Freelance'],
+        [3, 'Side business'],
+      ])
+    })
+    chooseInDangerZone('Side business')
+    buttonNamed('Delete Profile')!.click()
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain('Delete profile "Side business"?')
+    })
+    buttonNamed('Yes, Delete Profile')!.click()
+
+    await vi.waitFor(async () => {
+      expect(await names()).toEqual(['Household', 'Freelance'])
+    })
+    expect(net.sent).toContain('DELETE /api/profiles/3')
   })
 })
