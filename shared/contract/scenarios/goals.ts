@@ -61,7 +61,16 @@ export const goalScenarios = [
 
       expectOk(expect, await api.delete(`/api/savings-goals/${id}`), 'DELETE the goal');
       expect(await goalRow(api, expect, id)).toBeUndefined();
-      expect((await api.delete(`/api/savings-goals/${id}`)).status).toBe(404);
+      // A goal that is not there is said the same way by every route. The Worker said "Not found"
+      // to an edit or a delete, where local-first said "Goal not found".
+      for (const reply of [
+        await api.put(`/api/savings-goals/${id}`, goalForm()),
+        await api.post(`/api/savings-goals/${id}/contribute`, { amount: 5 }),
+        await api.delete(`/api/savings-goals/${id}`),
+      ]) {
+        expect(reply.status).toBe(404);
+        expect(reply.body).toEqual({ error: 'Goal not found' });
+      }
     }
   ),
 
@@ -81,13 +90,14 @@ export const goalScenarios = [
     const other = api.other;
 
     expect(await goals(other, expect)).toEqual([]);
-    expect((await other.put(`/api/savings-goals/${id}`, goalForm({ name: 'Theirs' }))).status).toBe(
-      404
-    );
-    expect((await other.post(`/api/savings-goals/${id}/contribute`, { amount: 5 })).status).toBe(
-      404
-    );
-    expect((await other.delete(`/api/savings-goals/${id}`)).status).toBe(404);
+    for (const reply of [
+      await other.put(`/api/savings-goals/${id}`, goalForm({ name: 'Theirs' })),
+      await other.post(`/api/savings-goals/${id}/contribute`, { amount: 5 }),
+      await other.delete(`/api/savings-goals/${id}`),
+    ]) {
+      expect(reply.status).toBe(404);
+      expect(reply.body).toEqual({ error: 'Goal not found' });
+    }
 
     const row = await goalRow(api, expect, id);
     expect(row).toMatchObject({ name: 'Holiday' });

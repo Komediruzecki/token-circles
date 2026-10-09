@@ -128,3 +128,29 @@ describe('GET /api/transactions — total', () => {
     expect(body.total).toBe(2);
   });
 });
+
+describe('GET /api/transactions — the 1000-row page', () => {
+  // The browser draws the PDF reports in cloud too, from this list (clientPdfReports.ts). It asks
+  // for a whole year with no limit, and relies on this: a limit is capped at 1000 rows, no limit is
+  // every row.
+  beforeEach(async () => {
+    await env.DB.prepare(
+      `INSERT INTO transactions (date, description, amount, type, account_id, category_id, profile_id)
+       WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 1200)
+       SELECT date('2025-01-01', '+' || (i % 365) || ' days'), 'Row ' || i, 2, 'expense', 1, 1, 1
+       FROM n`
+    ).run();
+  });
+
+  it('answers every row of a range when no limit is sent', async () => {
+    const body = await list('?startDate=2025-01-01&endDate=2025-12-31');
+    expect(body.rows).toHaveLength(1200);
+    expect(body.total).toBe(1200);
+  });
+
+  it('caps a limit at 1000 rows', async () => {
+    const body = await list('?startDate=2025-01-01&endDate=2025-12-31&limit=100000');
+    expect(body.rows).toHaveLength(1000);
+    expect(body.total).toBe(1200);
+  });
+});

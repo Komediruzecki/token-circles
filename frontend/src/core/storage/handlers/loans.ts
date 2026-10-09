@@ -124,13 +124,6 @@ export async function loansDelete(params: Record<string, string>): Promise<Respo
   return ok()
 }
 
-// Loan rate periods
-export async function loanRates(params: Record<string, string>): Promise<Response> {
-  const loan = await currentProfileRecord('loans', idParam(params))
-  if (!loan) return notFound('Loan')
-  return json(loan.rate_periods || [])
-}
-
 export async function loanRatesAdd(
   params: Record<string, string>,
   body: unknown
@@ -183,14 +176,6 @@ export async function loanRateDelete(params: Record<string, string>): Promise<Re
   loan.rate_periods = rates
   await db.put('loans', loan)
   return ok()
-}
-
-// Loan prepayments
-export async function loanPrepayments(params: Record<string, string>): Promise<Response> {
-  const loan = await currentProfileRecord('loans', idParam(params))
-  if (!loan) return notFound('Loan')
-  if (giveIds(loan)) await (await getDB()).put('loans', loan)
-  return json(loan.prepayments || [])
 }
 
 export async function loanPrepaymentAdd(

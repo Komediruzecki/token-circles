@@ -15,6 +15,11 @@ export interface ApiClientOptions {
   headers?: Record<string, string>
   body?: JsonObject | null
   profileScope?: ApiProfileScope
+  /**
+   * Statuses the caller expects and handles itself, which the client does not log as errors: a
+   * 404 for a row deleted elsewhere while it was being read, say. It still throws the ApiError.
+   */
+  expectedStatuses?: readonly number[]
 }
 
 export interface ApiClientError {

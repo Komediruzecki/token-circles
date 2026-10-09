@@ -38,7 +38,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import SankeyChart from '../components/SankeyChart'
 import SectionRail from '../components/SectionRail'
 import { api, formatCurrency } from '../core/api'
-import { apiHouseholdGet, showToast } from '../core/api'
+import { apiHouseholdGet, listRows, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource, refetchOnActive } from '../core/pageVisibility'
@@ -357,15 +357,11 @@ export default function Analytics() {
     setHeatmapModal({ dateStr, amount, transactions: [], loading: true })
     try {
       const type = heatmapType()
-      const res = await apiHouseholdGet<{ transactions?: Transaction[]; rows?: Transaction[] }>(
+      // The Worker answers { rows, total, ... } and local-first a bare array.
+      const res = await apiHouseholdGet(
         `/api/transactions?startDate=${dateStr}&endDate=${dateStr}&type=${type}&limit=20`
       )
-      const list = Array.isArray(res?.transactions)
-        ? res.transactions
-        : Array.isArray(res?.rows)
-          ? res.rows
-          : []
-      setHeatmapModal({ dateStr, amount, transactions: list, loading: false })
+      setHeatmapModal({ dateStr, amount, transactions: listRows<Transaction>(res), loading: false })
     } catch (_e) {
       console.error('Failed to load day transactions')
       setHeatmapModal({ dateStr, amount, transactions: [], loading: false })
@@ -887,7 +883,11 @@ export default function Analytics() {
                     value={stackedYear()}
                     onchange={(e) => {
                       setStackedYear(Number(e.currentTarget.value))
+                      // As a new month does: the weeks are the month's of this year, and the
+                      // week picked in another year may not be one of them.
+                      setSelectedWeek('')
                       loadStackedData()
+                      loadWeeks()
                     }}
                     data-test-id="analytics-trends-year"
                   >

@@ -493,84 +493,6 @@ reportsRoutes.get('/api/reports/annual-pdf', requireAuth, async (c) => {
   return pdfResponse(pdf, `annual-${year}.pdf`);
 });
 
-// ── Overview Report ──────────────────────────────────────────────────
-reportsRoutes.get('/api/reports/overview', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const startDate = c.req.query('startDate');
-  const endDate = c.req.query('endDate');
-  const type = c.req.query('type');
-  const includeCategories = c.req.query('includeCategories');
-
-  let incomeWhere = `profile_id = ? AND type = 'income'`;
-  let expenseWhere = `profile_id = ? AND type = 'expense'`;
-  const incomeParams: unknown[] = [pid];
-  const expenseParams: unknown[] = [pid];
-
-  if (startDate) {
-    incomeWhere += ` AND date >= ?`;
-    expenseWhere += ` AND date >= ?`;
-    incomeParams.push(startDate);
-    expenseParams.push(startDate);
-  }
-  if (endDate) {
-    incomeWhere += ` AND date <= ?`;
-    expenseWhere += ` AND date <= ?`;
-    incomeParams.push(endDate);
-    expenseParams.push(endDate);
-  }
-
-  const totalIncome =
-    (
-      await db.first<{ total: number }>(
-        c.env.DB,
-        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions WHERE ${incomeWhere}`,
-        ...incomeParams
-      )
-    )?.total || 0;
-  const totalExpenses =
-    (
-      await db.first<{ total: number }>(
-        c.env.DB,
-        `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions WHERE ${expenseWhere}`,
-        ...expenseParams
-      )
-    )?.total || 0;
-
-  const countParams: unknown[] = type
-    ? [pid, type, ...(startDate ? [startDate] : []), ...(endDate ? [endDate] : [])]
-    : [pid];
-
-  let countQuery = `SELECT COUNT(*) as count FROM transactions WHERE profile_id = ?`;
-  if (type) countQuery += ` AND type = ?`;
-  if (startDate) countQuery += ` AND date >= ?`;
-  if (endDate) countQuery += ` AND date <= ?`;
-
-  const transactionCount =
-    (await db.first<{ count: number }>(c.env.DB, countQuery, ...countParams))?.count || 0;
-
-  const response: Record<string, unknown> = {
-    totalIncome,
-    totalExpenses,
-    netBalance: totalIncome - totalExpenses,
-    transactionCount,
-  };
-
-  if (includeCategories === 'true') {
-    response.categoryBreakdown = await db.all(
-      c.env.DB,
-      `SELECT c.name, c.id, SUM(COALESCE(t.amount_local, t.amount)) as total
-         FROM transactions t
-         LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-         WHERE t.profile_id = ?
-         GROUP BY c.id
-         ORDER BY total DESC`,
-      pid
-    );
-  }
-
-  return c.json(response);
-});
-
 // ── Custom Report CRUD ───────────────────────────────────────────────
 reportsRoutes.get('/api/reports/custom/:id', requireAuth, async (c) => {
   const id = parseInt(c.req.param('id'));
@@ -632,48 +554,6 @@ reportsRoutes.delete('/api/reports/custom/:id', requireAuth, async (c) => {
   );
   if (!result.meta.changes) return c.json({ error: 'Report not found' }, 404);
   return c.json({ ok: true });
-});
-
-// ── Report Comparison ────────────────────────────────────────────────
-reportsRoutes.get('/api/reports/compare', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const comparison: Array<{ month: string; income: number; expenses: number; net: number }> = [];
-  // The last three months, counted back from the person's month.
-  const now = localNow(c);
-  for (let i = 0; i < 3; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const startDate = d.toISOString().split('T')[0];
-    const endDate = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
-    const income =
-      (
-        await db.first<{ total: number }>(
-          c.env.DB,
-          `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'income' AND date >= ? AND date <= ?`,
-          pid,
-          startDate,
-          endDate
-        )
-      )?.total || 0;
-    const expenses =
-      (
-        await db.first<{ total: number }>(
-          c.env.DB,
-          `SELECT COALESCE(SUM(COALESCE(amount_local, amount)), 0) as total FROM transactions
-           WHERE profile_id = ? AND type = 'expense' AND date >= ? AND date <= ?`,
-          pid,
-          startDate,
-          endDate
-        )
-      )?.total || 0;
-    comparison.push({
-      month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      income,
-      expenses,
-      net: income - expenses,
-    });
-  }
-  return c.json({ comparison });
 });
 
 // ── Saved Reports ────────────────────────────────────────────────────

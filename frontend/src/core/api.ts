@@ -84,12 +84,14 @@ export class ApiClient {
 
         // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
         // A 503 is a transient "retry shortly" (e.g. D1 briefly locked by a backup export) — also
-        // not worth an error line; the request will succeed on a later load.
+        // not worth an error line; the request will succeed on a later load. So is a status the
+        // caller said it expects and handles itself.
         const expected =
           response.status === 401 ||
           response.status === 403 ||
           response.status === 503 ||
-          endpoint.startsWith('/auth/')
+          endpoint.startsWith('/auth/') ||
+          (options.expectedStatuses ?? []).includes(response.status)
         if (!expected) {
           logger.error(
             'API Error',
@@ -562,13 +564,6 @@ export class ApiClient {
   }
 
   /**
-   * Get a single budget
-   */
-  async getBudget(id: number): Promise<Models.Budget> {
-    return this.request<Models.Budget>(`/budgets/${id}`, Schemas.BudgetSchema)
-  }
-
-  /**
    * Create a budget
    */
   async createBudget(data: ApiTypes.BudgetCreateParams): Promise<Models.Budget> {
@@ -608,13 +603,6 @@ export class ApiClient {
         profileScope: 'household',
       }
     )
-  }
-
-  /**
-   * Get a single savings goal
-   */
-  async getGoal(id: number): Promise<Models.SavingsGoal> {
-    return this.request<Models.SavingsGoal>(`/savings-goals/${id}`, Schemas.SavingsGoalSchema)
   }
 
   /**
@@ -666,10 +654,13 @@ export class ApiClient {
   }
 
   /**
-   * Get a single loan
+   * Get a single loan. `expected` names statuses the caller handles itself, which are not logged.
    */
-  async getLoan(id: number): Promise<Models.Loan> {
-    return this.request<Models.Loan>(`/loans/${id}`, Schemas.LoanSchema)
+  async getLoan(
+    id: number,
+    expected?: Pick<ApiTypes.ApiClientOptions, 'expectedStatuses'>
+  ): Promise<Models.Loan> {
+    return this.request<Models.Loan>(`/loans/${id}`, Schemas.LoanSchema, expected)
   }
 
   /**
@@ -697,13 +688,6 @@ export class ApiClient {
    */
   async deleteLoan(id: number): Promise<void> {
     await this.request(`/loans/${id}`, undefined, { method: 'DELETE' })
-  }
-
-  /**
-   * Get rate periods for a loan
-   */
-  async getLoanRatePeriods(id: number): Promise<Models.LoanRatePeriod[]> {
-    return this.request<Models.LoanRatePeriod[]>(`/loans/${id}/rate-periods`, Schemas.GenericSchema)
   }
 
   // ============ BILLS ============
@@ -842,15 +826,6 @@ export class ApiClient {
   }
 
   /**
-   * Get analytics summary
-   */
-  async getAnalytics(): Promise<Models.AnalyticsSummary> {
-    return this.request<Models.AnalyticsSummary>('/analytics', Schemas.GenericSchema, {
-      profileScope: 'household',
-    })
-  }
-
-  /**
    * Get dashboard chart data (monthly income/expense, category breakdown, cash flow)
    */
   async getDashboardCharts(months?: number): Promise<Models.DashboardChartsResponse> {
@@ -872,26 +847,6 @@ export class ApiClient {
   }
 
   /**
-   * Export transactions as CSV
-   */
-  async exportTransactions(params?: { date_from?: string; date_to?: string }): Promise<Blob> {
-    const queryParams = new URLSearchParams()
-    if (params?.date_from !== undefined) queryParams.append('date_from', params.date_from)
-    if (params?.date_to !== undefined) queryParams.append('date_to', params.date_to)
-
-    const response = await apiFetch(`${API_BASE}/transactions/export?${queryParams.toString()}`, {
-      headers: profileRequestHeaders('household'),
-      credentials: 'include',
-    })
-
-    if (!response.ok) {
-      throw new Error(`Failed to export: ${response.statusText}`)
-    }
-
-    return response.blob()
-  }
-
-  /**
    * Import transactions from CSV
    */
   async importTransactions(file: File): Promise<Models.ImportResult> {
@@ -906,46 +861,6 @@ export class ApiClient {
     })
 
     return await response.json()
-  }
-
-  // ============ RETIREMENT ============
-
-  /**
-   * Get retirement projection
-   */
-  async getRetirementProjection(params?: {
-    current_age?: number
-    retirement_age?: number
-    life_expectancy?: number
-    current_savings?: number
-    monthly_contribution?: number
-    current_annual_income?: number
-    annual_return?: number
-    inflation_rate?: number
-    monthly_expenses?: number
-  }): Promise<Models.RetirementProjection> {
-    return this.request<Models.RetirementProjection>('/retirement', Schemas.GenericSchema, {
-      method: 'POST',
-      body: params,
-    })
-  }
-
-  // ============ HOUSING CALCULATOR ============
-
-  /**
-   * Calculate housing costs
-   */
-  async calculateHousing(params: {
-    gross_income: number
-    living_expenses: number
-    transport_cost: number
-    utilities_cost: number
-    savings_target: number
-  }): Promise<Models.HousingCalculation> {
-    return this.request<Models.HousingCalculation>('/housing/calculate', Schemas.GenericSchema, {
-      method: 'POST',
-      body: params,
-    })
   }
 
   // ============ EXCHANGE RATES ============

@@ -5,6 +5,7 @@ import { getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { localNow } from '../local-date';
+import { daysOfWeek, weekLabel, weeksAsked, weeksOfMonth } from '../../../shared/calendarWeeks';
 
 // Port of backend/routes/analytics.js — read-only stats/analytics aggregations.
 // All response objects are built by hand with their exact key casing (labels,
@@ -117,30 +118,15 @@ analyticsRoutes.get('/api/analytics/weeks', requireAuth, async (c) => {
   // the week list itself is computed purely from the calendar.
   await getProfileIds(c);
   const year = parseInt(c.req.query('year') || '');
-  const monthQ = c.req.query('month');
-  const month = monthQ ? String(monthQ).padStart(2, '0') : null;
   if (!year) {
     return c.json({ weeks: [] });
   }
-  const weeks: { week: number; label: string }[] = [];
-  const firstDay = month ? new Date(year, parseInt(month) - 1, 1) : new Date(year, 0, 1);
-  const last = month ? new Date(year, parseInt(month), 0).getDate() : 31;
-  const lastDay = month ? new Date(year, parseInt(month) - 1, last) : new Date(year, 11, 31);
-  let w = 1;
-  const current = new Date(firstDay);
-  while (current <= lastDay) {
-    const weekStart = new Date(current);
-    weekStart.setDate(current.getDate() - current.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    weeks.push({
-      week: w,
-      label: `Week ${w} (${weekStart.toISOString().slice(0, 10)} - ${weekEnd.toISOString().slice(0, 10)})`,
-    });
-    current.setDate(current.getDate() + 7);
-    w++;
-  }
-  return c.json({ weeks });
+  // Sunday to Saturday, every week that holds a day of the month (shared/calendarWeeks.ts, as
+  // local-first lists them). Stepping a week at a time from the 1st stopped at the week of the
+  // 29th, so a month's last days that start a new week were in none. A month that is not one,
+  // an empty one included, has no weeks: only no month at all is the year's.
+  const weeks = weeksAsked(year, c.req.query('month'));
+  return c.json({ weeks: weeks.map((w) => ({ week: w.week, label: weekLabel(w) })) });
 });
 
 // ── GET /api/analytics/category-trends ────────────────────────────────────────
@@ -152,23 +138,26 @@ analyticsRoutes.get('/api/analytics/category-trends', requireAuth, async (c) => 
   const month = monthQ ? String(monthQ).padStart(2, '0') : null;
   const week = c.req.query('week') ? parseInt(c.req.query('week')!) : null;
   const type = c.req.query('type') || 'expense';
+  // A week of the month as /api/analytics/weeks lists and labels it, Sunday to Saturday
+  // (shared/calendarWeeks.ts). This used to read week N as days 7N-6 to 7N of the month, so week
+  // 2 answered the 8th to the 14th under the label of the 2nd to the 8th.
+  const picked =
+    month && week ? weeksOfMonth(year, parseInt(month)).find((w) => w.week === week) : undefined;
+  // A week the month does not have (week 6 of February 2025) names no days, so it answers none:
+  // the whole month under a week's label would be wrong data.
+  if (month && week && !picked) return c.json({ labels: [], datasets: [], numDays: 0 });
 
   // Date range.
   let startStr: string;
   let endStr: string;
-  if (month) {
+  if (picked) {
+    startStr = picked.start;
+    endStr = picked.end;
+  } else if (month) {
+    // Full month.
     const lastDay = new Date(year, parseInt(month), 0).getDate();
-    if (week) {
-      // Specific week within a month.
-      const weekStartDay = (week - 1) * 7 + 1;
-      const weekEndDay = Math.min(week * 7, lastDay);
-      startStr = `${year}-${month}-${String(weekStartDay).padStart(2, '0')}`;
-      endStr = `${year}-${month}-${String(weekEndDay).padStart(2, '0')}`;
-    } else {
-      // Full month.
-      startStr = `${year}-${month}-01`;
-      endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
-    }
+    startStr = `${year}-${month}-01`;
+    endStr = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
   } else {
     // Full year.
     startStr = `${year}-01-01`;
@@ -238,16 +227,13 @@ analyticsRoutes.get('/api/analytics/category-trends', requireAuth, async (c) => 
     'December',
   ];
 
-  if (week && month) {
-    // Week view: show days of the week (Sun-Sat) for that month.
-    const lastDay = new Date(year, parseInt(month), 0).getDate();
-    const weekStartDay = (week - 1) * 7 + 1;
-    const weekEndDay = Math.min(week * 7, lastDay);
-    for (let d = weekStartDay; d <= weekEndDay; d++) {
-      const date = new Date(year, parseInt(month) - 1, d);
-      labels.push(dayNames[date.getDay()]!);
-      periodMap.set(`${year}-${month}-${String(d).padStart(2, '0')}`, labels.length - 1);
-    }
+  if (picked) {
+    // Week view: its seven days, Sunday to Saturday, the first or last of them in the month next
+    // door when the week crosses into one, as its label says.
+    daysOfWeek(picked).forEach((day, i) => {
+      labels.push(dayNames[i]!);
+      periodMap.set(day, i);
+    });
   } else if (month) {
     // Month view: show day numbers.
     const lastDay = new Date(year, parseInt(month), 0).getDate();

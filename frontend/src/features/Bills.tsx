@@ -67,6 +67,7 @@ import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, apiPost, apiPut, errorStatus, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
@@ -224,9 +225,14 @@ export default function Bills() {
       // re-submitted computed fields (`paid`, category joins) the update never meant to touch.
       // Both backends treat PUT as partial: the worker falls back `?? existing` per field.
       await apiPut(`/api/bills/${id}`, { is_active: next })
-    } catch {
+    } catch (err) {
       showToast(
-        next === 0 ? 'Failed to pause subscription' : 'Failed to resume subscription',
+        plainMessage(
+          err,
+          next === 0
+            ? "Couldn't pause the subscription. Try again."
+            : "Couldn't resume the subscription. Try again."
+        ),
         'error'
       )
     }
@@ -270,7 +276,7 @@ export default function Bills() {
       showToast('Bill marked as paid', 'success')
     } catch (err) {
       console.error('Failed to mark bill as paid:', err)
-      showToast('Failed to mark bill as paid', 'error')
+      showToast(plainMessage(err, "Couldn't mark the bill paid. Try again."), 'error')
       // Revert the optimistic update. A failed write bumps no counter, so this is the one
       // refetch on this page that has to be asked for.
       await refetchBills()
@@ -295,7 +301,7 @@ export default function Bills() {
         return
       }
       console.error('Failed to delete bill:', err)
-      showToast('Failed to delete bill', 'error')
+      showToast(plainMessage(err, "Couldn't delete the bill. Try again."), 'error')
     }
   }
 

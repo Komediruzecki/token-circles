@@ -16,6 +16,7 @@ import {
   untrack,
 } from 'solid-js'
 import { api, getLocalCurrency, toast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { handFocusTo } from '../core/domFocus'
 import { parseEntry } from '../core/entry/parseEntry'
 import { quickEntrySave } from '../core/quickEntryLists'
@@ -211,7 +212,8 @@ export function CommandBar(props: CommandBarProps) {
       })
     } catch (err) {
       console.error('Command bar create failed:', err)
-      toast('Failed to save entry', 'error')
+      // A refused entry says what to change, in the API's words.
+      toast(plainMessage(err, "Couldn't save the entry. Try again."), 'error')
     } finally {
       setSubmitting(false)
     }

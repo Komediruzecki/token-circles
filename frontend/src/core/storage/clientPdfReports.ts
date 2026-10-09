@@ -76,8 +76,12 @@ function getProfileId(): number {
  * canvas, so the rich (charted) PDFs are always composed client-side and only
  * the DATA comes from the server. Dynamic imports avoid a static module cycle
  * (apiFetch → localApiRouter → handlers/reports → this file).
+ *
+ * The server is asked for the whole range, with no limit: the Worker caps a page at 1000 rows and
+ * answers every row when no limit is sent, as it does for the Transactions page. The old
+ * `limit=100000` was capped to 1000, newest first, so a year with more lost its oldest rows.
  */
-async function loadReportSource(
+export async function loadReportSource(
   dateFrom: string,
   dateTo: string
 ): Promise<{ txns: Transaction[]; cats: Category[] }> {
@@ -91,7 +95,7 @@ async function loadReportSource(
     const { profileRequestHeaders } = await import('../apiProfileScope')
     const headers: Record<string, string> = profileRequestHeaders('household')
     const [txRes, catRes] = await Promise.all([
-      apiFetch(`/api/transactions?startDate=${dateFrom}&endDate=${dateTo}&limit=100000`, {
+      apiFetch(`/api/transactions?startDate=${dateFrom}&endDate=${dateTo}`, {
         credentials: 'include',
         headers,
       }),
