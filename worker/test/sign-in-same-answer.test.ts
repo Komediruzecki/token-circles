@@ -3,11 +3,15 @@
  * creating an account answer with the same status, content type and body for an address that has
  * an account and for one that has none, and so does each route's limit on one address once it is
  * reached. The cookie a sign-in code request sets is a new random handle on every request.
+ *
+ * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
+ * sent or is held. The two that store a row for the address after their answer (a reset link, a
+ * sign-in code) answer ok while that row cannot be written.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
-import { fetchSettled } from './helpers/after-answer';
+import { fetchSettled, fetchUnsettled } from './helpers/after-answer';
 
 const BASE = 'https://api.example.com';
 const HAS_ACCOUNT = 'same-answer-account@example.com';
@@ -15,26 +19,35 @@ const NO_ACCOUNT = 'same-answer-nobody@example.com';
 
 let ip = 0;
 
-/**
- * Each request from its own address, so only the limit on one email address can be reached. It
- * comes back once the work the route does after its answer is done too, so nothing it left running
- * reaches the next test.
- */
-async function answer(path: string, body: unknown) {
+/** Each request from its own address, so only the limit on one email address can be reached. */
+function sending(body: unknown): RequestInit {
   ip += 1;
-  const res = await fetchSettled(`${BASE}${path}`, {
+  return {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'CF-Connecting-IP': `10.88.${ip >> 8}.${ip & 255}`,
     },
     body: JSON.stringify(body),
-  });
+  };
+}
+
+async function read(res: Response) {
   return {
     status: res.status,
     type: res.headers.get('content-type'),
     body: await res.text(),
   };
+}
+
+type Answer = Awaited<ReturnType<typeof read>>;
+
+/**
+ * The answer to one request, read once the work the route does after its answer is done too, so
+ * nothing it left running reaches the next test.
+ */
+async function answer(path: string, body: unknown): Promise<Answer> {
+  return read(await fetchSettled(`${BASE}${path}`, sending(body)));
 }
 
 const ROUTES: { path: string; body: (email: string) => unknown; status: number; limit: number }[] =
@@ -58,12 +71,72 @@ const ROUTES: { path: string; body: (email: string) => unknown; status: number; 
 /** What a route that takes the request answers: ok, as JSON. */
 const OK = { status: 200, type: 'application/json', body: '{"ok":true}' };
 
-/** The tables a route writes for an address after its answer, each refused for one test below. */
-const STORED = ['login_codes', 'password_resets'];
+const bodyFor = (path: string) => ROUTES.find((r) => r.path === path)!.body;
+
+/**
+ * The routes that mail an address after their answer: what each logs when its mail cannot be
+ * sent, and who gets a mail.
+ */
+const MAILING: { path: string; logged: string[]; mailedTo: string[] }[] = [
+  {
+    path: '/api/auth/forgot-password',
+    logged: ['Password reset link could not be sent:'],
+    mailedTo: [HAS_ACCOUNT],
+  },
+  {
+    path: '/api/auth/email-code/request',
+    logged: ['Sign-in code could not be sent:'],
+    mailedTo: [HAS_ACCOUNT],
+  },
+];
+
+/** The routes that store something for an address after their answer, and what they log. */
+const STORING: { path: string; table: string; logged: string }[] = [
+  {
+    path: '/api/auth/forgot-password',
+    table: 'password_resets',
+    logged: 'Password reset link could not be sent:',
+  },
+  {
+    path: '/api/auth/email-code/request',
+    table: 'login_codes',
+    logged: 'Sign-in code could not be sent:',
+  },
+];
+
+const realFetch = globalThis.fetch;
+/** The addresses the Worker's mails went to, in the order the mail service took them. */
+let mailed: string[] = [];
+
+/**
+ * Give the Worker a mail service that cannot be reached ('fail'), or that holds every mail until
+ * `release` is called ('hold').
+ */
+function mailService(answers: 'fail' | 'hold'): { release: () => void } {
+  (env as unknown as Record<string, string>).RESEND_API_KEY = 'rk_test';
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (!url.includes('api.resend.com')) return realFetch(input as RequestInfo, init);
+    if (answers === 'fail') throw new TypeError('the mail service cannot be reached');
+    await held;
+    mailed.push((JSON.parse(String(init?.body)) as { to: string }).to);
+    return new Response('{"id":"re_1"}', { headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  return { release };
+}
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  for (const table of STORED) await env.DB.prepare(`DROP TRIGGER IF EXISTS refuse_${table}`).run();
+  globalThis.fetch = realFetch;
+  delete (env as unknown as Record<string, string>).RESEND_API_KEY;
+  mailed = [];
+  for (const { table } of STORING) {
+    await env.DB.prepare(`DROP TRIGGER IF EXISTS refuse_${table}`).run();
+  }
 });
 
 beforeEach(async () => {
@@ -113,15 +186,7 @@ describe('an address with an account and one without', () => {
 
 /** The cookie a sign-in code request for `email` sets: its whole Set-Cookie line, and its value. */
 async function codeRequestCookie(email: string): Promise<{ line: string; value: string }> {
-  ip += 1;
-  const res = await fetchSettled(`${BASE}/api/auth/email-code/request`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'CF-Connecting-IP': `10.88.${ip >> 8}.${ip & 255}`,
-    },
-    body: JSON.stringify({ email }),
-  });
+  const res = await fetchSettled(`${BASE}/api/auth/email-code/request`, sending({ email }));
   expect(res.status).toBe(200);
   const line = res.headers.getSetCookie().find((c) => c.startsWith('fm_logincode='));
   expect(line, 'a fm_logincode cookie').toBeDefined();
@@ -150,27 +215,59 @@ describe('the cookie a sign-in code request sets', () => {
   });
 });
 
+describe('while the mail cannot be sent', () => {
+  for (const { path, logged } of MAILING) {
+    it(`${path} answers ok`, async () => {
+      mailService('fail');
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      for (const email of [HAS_ACCOUNT, NO_ACCOUNT]) {
+        expect(await answer(path, bodyFor(path)(email)), email).toEqual(OK);
+      }
+      // The mail that failed is in the log, after the answer.
+      for (const line of logged) expect(errors).toHaveBeenCalledWith(line, expect.any(TypeError));
+    });
+  }
+});
+
+describe('while the mail is held', () => {
+  for (const { path, mailedTo } of MAILING) {
+    it(`${path} answers first, and ok`, async () => {
+      const service = mailService('hold');
+      const sent = [HAS_ACCOUNT, NO_ACCOUNT].map((email) =>
+        fetchUnsettled(`${BASE}${path}`, sending(bodyFor(path)(email)))
+      );
+      try {
+        const answers = await Promise.race([
+          Promise.all(sent.map(async (one) => read(await one.answer))),
+          new Promise<'no answer'>((resolve) => setTimeout(() => resolve('no answer'), 5_000)),
+        ]);
+        expect(answers, 'the answers, while the mail is held').toEqual([OK, OK]);
+        expect(mailed).toEqual([]);
+      } finally {
+        service.release();
+        await Promise.all(sent.map((one) => one.settled()));
+      }
+      // Once the service lets the mail go, it reaches the address it was for.
+      expect([...mailed].sort()).toEqual([...mailedTo].sort());
+    });
+  }
+});
+
 describe('while the row a route stores cannot be written', () => {
-  for (const { path, table, failure } of [
-    {
-      path: '/api/auth/email-code/request',
-      table: 'login_codes',
-      failure: 'Sign-in code could not be sent:',
-    },
-  ]) {
+  for (const { path, table, logged } of STORING) {
     it(`${path} answers ok`, async () => {
       await env.DB.prepare(
         `CREATE TRIGGER refuse_${table} BEFORE INSERT ON ${table}
          BEGIN SELECT RAISE(ABORT, 'refused for the test'); END`
       ).run();
-      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-      const route = ROUTES.find((r) => r.path === path)!;
+      const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       for (const email of [HAS_ACCOUNT, NO_ACCOUNT]) {
-        expect(await answer(path, route.body(email)), email).toEqual(OK);
+        expect(await answer(path, bodyFor(path)(email)), email).toEqual(OK);
       }
       // The write that failed is in the log, after the answer.
-      expect(logged).toHaveBeenCalledWith(failure, expect.anything());
+      expect(errors).toHaveBeenCalledWith(logged, expect.anything());
     });
   }
 });

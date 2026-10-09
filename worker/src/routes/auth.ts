@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { AppEnv } from '../index';
+import type { AppEnv, Env } from '../index';
 import * as db from '../db';
 import { deviceLabel } from '../deviceLabel';
 import {
@@ -344,6 +344,33 @@ authRoutes.post('/api/auth/login', async (c) => {
   return c.json({ id: user.id, email });
 });
 
+/**
+ * The work a reset request does after its answer: when `email` has an account, end the links it
+ * has not used, mint a new one and mail it. A failure here changes no answer; the person asks
+ * again.
+ */
+async function mailResetLinkIfAccount(env: Env, email: string, base: string): Promise<void> {
+  const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (!user) return;
+  // Invalidate any previous unused links for this user, then mint a fresh one.
+  await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
+    .bind(user.id)
+    .run();
+  const token = randomToken();
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  await env.DB.prepare(
+    'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+  )
+    .bind(user.id, tokenHash, expiresAt)
+    .run();
+  const link = `${base}/#reset-password?token=${token}`;
+  const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
+  await sendMail(env, email, reset.subject, reset.html, { text: reset.text });
+}
+
 // Forgot password: email a magic reset link. Always returns 200 with no hint about whether
 // the account exists (anti-enumeration). Only one active token per user at a time.
 authRoutes.post('/api/auth/forgot-password', async (c) => {
@@ -362,27 +389,14 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
   const emailRl = await enforce(c, `forgot-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
 
-  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (user) {
-    // Invalidate any previous unused links for this user, then mint a fresh one.
-    await c.env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
-      .bind(user.id)
-      .run();
-    const token = randomToken();
-    const tokenHash = await sha256Hex(token);
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_HOURS * 3_600_000).toISOString();
-    await c.env.DB.prepare(
-      'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
-    )
-      .bind(user.id, tokenHash, expiresAt)
-      .run();
-    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-    const link = `${base}/#reset-password?token=${token}`;
-    const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
-    await sendMail(c.env, email, reset.subject, reset.html, { text: reset.text });
-  }
+  // The answer comes first. Looking the address up, minting its link and mailing it come after
+  // the answer (mailResetLinkIfAccount), and a failure there is logged, not answered.
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailResetLinkIfAccount(c.env, email, base).catch((e: unknown) => {
+      console.error('Password reset link could not be sent:', e);
+    })
+  );
   return c.json({ ok: true });
 });
 

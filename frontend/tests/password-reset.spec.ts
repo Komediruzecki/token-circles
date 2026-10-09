@@ -5,7 +5,8 @@
  *
  * The reset link's raw token only exists in the mail, which no test can read, so the spec gives
  * the row the request created a token hash it knows, through the local-D1 side door the other
- * link specs use, and opens the link the mail carries with that token.
+ * link specs use, and opens the link the mail carries with that token. The request creates the row
+ * after its answer, so the spec waits for the row first.
  *
  * Each case signs up an account made for the run and deletes it at the end, also when a step
  * fails.
@@ -68,7 +69,13 @@ async function askForReset(page: Page, email: string): Promise<void> {
 }
 
 /** The link the reset mail carries, with a token the spec gave the request's row. */
-function plantResetLink(email: string): string {
+async function plantResetLink(email: string): Promise<string> {
+  const unused = () =>
+    sqlRows<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM password_resets
+       WHERE used_at IS NULL AND user_id = (SELECT id FROM users WHERE email = '${email}')`
+    )[0]?.n ?? 0
+  await expect.poll(unused, { timeout: 15_000 }).toBeGreaterThan(0)
   const token = randomBytes(32).toString('hex')
   sql(
     `UPDATE password_resets SET token_hash = '${sha256Hex(token)}'
@@ -124,7 +131,7 @@ for (const boot of BOOTS) {
         await openSignIn(page, boot, E2E_BASE)
         await askForReset(page, email)
 
-        const opened = await setNewPassword(browser, boot, plantResetLink(email))
+        const opened = await setNewPassword(browser, boot, await plantResetLink(email))
         // A confirmed account loses nothing else, so the sign-in screen has nothing to add.
         await expect(opened.page.getByTestId('auth-notice')).toHaveCount(0)
 
@@ -152,7 +159,7 @@ for (const boot of BOOTS) {
         await openSignIn(page, boot, E2E_BASE)
         await askForReset(page, email)
 
-        const opened = await setNewPassword(browser, boot, plantResetLink(email))
+        const opened = await setNewPassword(browser, boot, await plantResetLink(email))
 
         await expect(opened.page.getByTestId('auth-notice')).toHaveText(
           'Your new password is set. Confirming your email removed what was set up before it: passkeys, two-factor authentication, API tokens and sign-ins on other devices. Sign in, then add what you need again in Settings.'

@@ -14,6 +14,7 @@ import { hashPassword } from '../src/auth';
 import { sessionCookie } from './helpers/session';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
+import { fetchSettled } from './helpers/after-answer';
 
 const UID = 9500;
 const OTHER = 9510;
@@ -35,8 +36,9 @@ const realFetch = globalThis.fetch;
 let sent: Mail[] = [];
 let cookie = '';
 
+/** Each request comes back once the work its route does after the answer (a mail) is done. */
 function call(method: string, path: string, body?: unknown, withCookie = true) {
-  return SELF.fetch(`https://example.com${path}`, {
+  return fetchSettled(`https://example.com${path}`, {
     method,
     headers: {
       ...(withCookie ? { Cookie: cookie } : {}),
