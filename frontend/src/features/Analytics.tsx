@@ -883,7 +883,11 @@ export default function Analytics() {
                     value={stackedYear()}
                     onchange={(e) => {
                       setStackedYear(Number(e.currentTarget.value))
+                      // As a new month does: the weeks are the month's of this year, and the
+                      // week picked in another year may not be one of them.
+                      setSelectedWeek('')
                       loadStackedData()
+                      loadWeeks()
                     }}
                     data-test-id="analytics-trends-year"
                   >
