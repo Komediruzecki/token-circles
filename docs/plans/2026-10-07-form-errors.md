@@ -3,7 +3,8 @@
 Status: **slice 1 (categories) merged in #602; slice 2 (transactions and accounts) built on
 `feat/forms-transactions`, see [Slice 2](#slice-2-transactions-and-accounts-2026-10-08); slice 4a
 (loans and retirement) built on `feat/forms-loans`, see
-[Slice 4a](#slice-4a-loans-and-retirement-2026-10-08)**
+[Slice 4a](#slice-4a-loans-and-retirement-2026-10-08); slice 4b (profiles, Settings and import) built
+on `feat/forms-profiles`, see [Slice 4b](#slice-4b-profiles-settings-and-import-2026-10-09)**
 Date: 2026-10-07, decisions recorded 2026-10-08. Written on PR #599 (`fix/dev-check-polish`,
 664fd0c6); rebased onto main (d92626fe) once #599 and #601 merged.
 
@@ -605,6 +606,74 @@ date, where the Worker stored any text for both and local-first checked only a l
 2026-02-30 saved; a rate period's rate from 0 to 100 and payments inside the term; the goal dialog's
 Current Amount, no longer required, a blank one saved as 0; the goal card's "Not set" and "No target
 date"; and a second Remove of an extra payment, a 404 the page now says was already done.
+
+## Slice 4b: profiles, Settings and import (2026-10-09)
+
+On `feat/forms-profiles`, from f368caa7 (slice 4a's tip, merged into main as b51ec632).
+
+- **One set of rules each, in `shared/`.** `shared/profileSchema.ts` (a profile's name, created and
+  renamed), `shared/settingsSchema.ts` (what `PUT /api/settings` stores, and the keys it leaves to
+  the routes that own them), `shared/importSourceSchema.ts` (a connected source and a Google Sheet
+  link), `shared/categoryMappingSchema.ts` (a learned category mapping, applying mappings and
+  auto-map), `shared/autoCategorize.ts` (the suggestions both runtimes make), `shared/exportColumns.ts`
+  (the file each kind exports) and `shared/importUpload.ts` (an uploaded file, read alike). The
+  Worker routes, the local-first handlers and the forms run them, and both runtimes answer a
+  refusal with 400 `{ error, fields }`.
+- **The forms are on the kit.** The Create Profile dialog and the sidebar's create
+  (`components/ProfileModal.tsx`), Settings' profile rename (`features/profileForm.ts`), base
+  currency (`features/baseCurrencyForm.ts`) and email reminders (`features/notificationsForm.ts`,
+  the waiting change from #608 kept), Connected Sources' "Add a sheet"
+  (`features/import/sheetSourceForm.ts`), the Import page's Google Sheets link
+  (`sheetLinkForm.ts`) and Paste CSV (`pasteForm.ts`), and the Bank Imports rules editor, its rules
+  as rows (`BankRulesEditor.tsx`, with `core/bankImport/rulesCheck.ts`, since the rules live in the
+  browser only). Settings leaves the toast guard's known list: its four toasts of a caught error
+  go through `plainMessage`.
+
+What the runtimes now agree on:
+
+| Question                                                                                        | Before                                                                                                                      | Now, in both                                                                                               |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| A profile name blank, over 100 characters, or another profile's in other case                   | Stored on the Worker, or refused at no field                                                                                | Refused at `name`; re-casing a profile's own name is allowed                                               |
+| A profile created                                                                               | 200 on the Worker                                                                                                           | 201                                                                                                        |
+| Deleting a profile                                                                              | Local-first refused one not in use and deleted the last one                                                                 | Any profile but the last; the last is refused                                                              |
+| Clearing a profile, or all data                                                                 | The Worker kept its connected sources                                                                                       | Deleted with the rest                                                                                      |
+| A backup                                                                                        | Carried no connected sources; local-first's file for one profile carried another's plan and badges                          | Carries each profile's sources and only its own settings; a restore answers what it put back               |
+| `POST /api/profiles/reseed-demo`                                                                | Cleared and reseeded on the Worker, a demo reseed in local-first                                                            | 410 on the Worker; local-first keeps its demo reseed                                                       |
+| A setting another route owns (`retirement_settings`, `email_*`, a backup's extensions, a cache) | Stored through `PUT /api/settings`                                                                                          | Refused at that key, and nothing in the request stored                                                     |
+| A base currency `''`, `EURO` or `12`; `usd`                                                     | Stored on the Worker; `usd` refused there (422)                                                                             | Refused at `currency`; `usd` saved as USD                                                                  |
+| A base currency once a profile has data                                                         | 409 with no field                                                                                                           | 409 at `currency`, in words that say why                                                                   |
+| The storage mode                                                                                | The Worker answered `type: sqlite`; local-first's POST switched the browser                                                 | `{ mode }`, and a POST that switches nothing                                                               |
+| An uploaded file's cells                                                                        | Numbers and Excel date serials on the Worker; a session answer in local-first                                               | Every cell as text, a date as its day; a broken file refused at `file`                                     |
+| A category mapping for another profile's category                                               | 403 on the Worker; 400 at no field in local-first                                                                           | 400 at `category_id`                                                                                       |
+| Mappings listed, saved again, applied, auto-mapped                                              | Local-first listed every selected profile's, added a twin, filed nothing                                                    | The profile's own; saved again updates it; applying files the listed transactions and learns               |
+| A kind exported on its own                                                                      | Local-first's own columns and JSON, any backup kind, every profile                                                          | The Worker's columns, a header for no rows, the list as JSON, the request's profiles; another kind refused |
+| A connected source's kind, schedule, name, settings or account                                  | "Invalid kind"; a long name cut; text or settings stored empty; another profile's account taken; a sheet saved with no link | Refused at each field; an edit checks only what it sends                                                   |
+| A Google Sheet link that is not a sheet's                                                       | "Invalid Google Sheets URL or ID", or "URL is required", at no field                                                        | Refused at `url`                                                                                           |
+
+The contract's `profile-answers`, `profile-delete-selection`, `profile-delete-last`,
+`profile-clear-import-sources`, `backup-restore-answer`, `profile-reseed-demo`,
+`storage-mode-answers`, `import-upload-answer`, `category-apply-mappings`,
+`category-mapping-upsert`, `category-auto-map` and `export-by-type` are settled and their pins
+removed. `settings-scope` stays pinned for the owner to decide.
+
+Fixed on the way, each with a test that failed before: Settings' rename reloaded the page and now
+changes the name in place; the base currency select had no label and said every failure was the
+lock; an uploaded file went to the mapping step with no columns detected, and a sheet chosen after
+an upload read the first sheet again; local-first named a detected investment account by a key of
+its own rather than as the sheet spells it; a failed checkout, portal or test email toasted a caught
+error's words; a backup that was not restored said "Backup restore failed:" and the check's own
+words; a refused email address was a toast with nothing marked; a sheet that could not be read, or
+saved, was a toast with nothing marked; a bank rule half filled in was dropped beside "Rules saved.";
+and a paste of one line was a banner at the top of the page.
+
+Open for the owner, each a change no decision covers: settings kept per profile on the Worker and
+once per browser in local-first (`settings-scope`); `reseed-demo` retired on the Worker; a learned
+mapping list now the current profile's only in local-first; a confidence of 0 refused; local-first's
+export columns, JSON shape and unknown-kind refusal, and the Worker's header for an empty export;
+a connected source's name refused over 200 characters where it was cut, its settings and account
+refused where they were stored; a base currency in lower case accepted; the wording of the new
+messages and toasts; and the mapping step, which still lets a person continue with the date or the
+amount column unmapped, where the page says they are required.
 
 ## Rollout, one PR each
 
