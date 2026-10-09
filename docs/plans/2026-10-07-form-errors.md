@@ -624,10 +624,10 @@ On `feat/forms-profiles`, from f368caa7 (slice 4a's tip, merged into main as b51
   currency (`features/baseCurrencyForm.ts`) and email reminders (`features/notificationsForm.ts`,
   the waiting change from #608 kept), Connected Sources' "Add a sheet"
   (`features/import/sheetSourceForm.ts`), the Import page's Google Sheets link
-  (`sheetLinkForm.ts`) and Paste CSV (`pasteForm.ts`), and the Bank Imports rules editor, its rules
-  as rows (`BankRulesEditor.tsx`, with `core/bankImport/rulesCheck.ts`, since the rules live in the
-  browser only). Settings leaves the toast guard's known list: its four toasts of a caught error
-  go through `plainMessage`.
+  (`sheetLinkForm.ts`), Paste CSV (`pasteForm.ts`) and File Upload (`uploadForm.ts`), and the Bank
+  Imports rules editor, its rules as rows (`BankRulesEditor.tsx`, with
+  `core/bankImport/rulesCheck.ts`, since the rules live in the browser only). Settings leaves the
+  toast guard's known list: its four toasts of a caught error go through `plainMessage`.
 
 What the runtimes now agree on:
 
@@ -664,7 +664,8 @@ its own rather than as the sheet spells it; a failed checkout, portal or test em
 error's words; a backup that was not restored said "Backup restore failed:" and the check's own
 words; a refused email address was a toast with nothing marked; a sheet that could not be read, or
 saved, was a toast with nothing marked; a bank rule half filled in was dropped beside "Rules saved.";
-and a paste of one line was a banner at the top of the page.
+a paste of one line was a banner at the top of the page; and a file that could not be read was a
+banner too, from a file input no keyboard could reach.
 
 Open for the owner, each a change no decision covers: settings kept per profile on the Worker and
 once per browser in local-first (`settings-scope`); `reseed-demo` retired on the Worker; a learned
