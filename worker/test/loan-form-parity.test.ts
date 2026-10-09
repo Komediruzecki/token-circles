@@ -1,15 +1,18 @@
 /**
- * A loan saved from the Loans dialog, in the body the dialog sends, schedules to the figures worked
- * out in closed form: its installment, total interest and payoff date, to the cent.
+ * A loan saved from the Loans dialog, in the body the dialog sends, with the extra payments the
+ * Extra payments tab adds, schedules to the figures worked out in closed form: its installment,
+ * the extra payments it applies, total interest and payoff date, to the cent. Its row in the list
+ * counts every extra payment saved, one after the loan is paid off included.
  *
  * The local-first twin, frontend/src/core/storage/__tests__/loanFormParity.test.ts, saves the same
- * bodies through the local-first router and requires the same figures, and checks the dialog sends
+ * bodies through the local-first router and requires the same figures, and checks the forms send
  * exactly these bodies. Together they make the two runtimes give a loan the same schedule.
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
-import { FORM_LOANS, scheduleFigures } from '../../shared/fixtures/loanFormParity';
+import { FORM_LOANS, listedFigures, scheduleFigures } from '../../shared/fixtures/loanFormParity';
+import type { FormLoan } from '../../shared/fixtures/loanFormParity';
 import type { LoanCalculation } from '../../shared/loanSchedule';
 
 const USER = 6330;
@@ -50,17 +53,36 @@ function api(method: string, path: string, body?: unknown): Promise<Response> {
   });
 }
 
+/** Save the loan as the dialog sends it, then its extra payments as the Extra payments tab does. */
+async function save(loan: FormLoan): Promise<number> {
+  const created = await api('POST', '/api/loans', loan.body);
+  expect(created.status).toBe(200);
+  const { id } = (await created.json()) as { id: number };
+  for (const extra of loan.extras) {
+    const added = await api('POST', `/api/loans/${id}/prepayments`, extra.body);
+    expect(added.status).toBe(200);
+  }
+  return id;
+}
+
 describe('a loan saved from the Loans dialog', () => {
   for (const loan of FORM_LOANS) {
     it(`schedules ${loan.label} to the figures worked out by hand`, async () => {
-      const created = await api('POST', '/api/loans', loan.body);
-      expect(created.status).toBe(200);
-      const { id } = (await created.json()) as { id: number };
+      const id = await save(loan);
 
       const res = await api('POST', `/api/loans/${id}/calculate`, {});
       expect(res.status).toBe(200);
       const answer = (await res.json()) as LoanCalculation;
       expect(scheduleFigures(answer, loan.expected)).toEqual(loan.expected);
+    });
+
+    it(`lists what the extra payments on ${loan.label} come to`, async () => {
+      const id = await save(loan);
+
+      const res = await api('GET', '/api/loans');
+      expect(res.status).toBe(200);
+      const rows = (await res.json()) as Record<string, unknown>[];
+      expect(listedFigures(rows.find((row) => row.id === id)!)).toEqual(loan.listed);
     });
   }
 });
