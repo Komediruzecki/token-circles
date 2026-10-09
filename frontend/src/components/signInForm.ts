@@ -8,8 +8,8 @@
  *   every way an address reaches an account (registration, a change of address, Google) uses the
  *   same format.
  * - A wrong address or password is one message for the whole form, never a mark on either field,
- *   whatever the answer carries. The answer is the same for an address with an account and one
- *   without, and a mark on one field would say which of the two was wrong.
+ *   whatever the answer carries. The Worker's status and words are the same for an address with
+ *   an account and one without, and a mark on one field would say which of the two was wrong.
  * - A limit reached (429) is said in the route's words, which say when to try again. A request
  *   the captcha stopped is said in the captcha's (captchaGate.ts). Neither marks a field.
  * - Signing in reloads into the app, and the button stays busy until the page goes.

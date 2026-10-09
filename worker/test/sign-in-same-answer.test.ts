@@ -1,8 +1,8 @@
 /**
- * Whether an address has an account is never in an answer. Signing in with a wrong password,
- * asking for a reset link, asking for a sign-in code and creating an account answer with the same
- * status and the same body for an address that has an account and for one that has none, and so
- * does each route's limit on one address once it is reached.
+ * Signing in with a wrong password, asking for a reset link, asking for a sign-in code and
+ * creating an account answer with the same status, content type and body for an address that has
+ * an account and for one that has none, and so does each route's limit on one address once it is
+ * reached.
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -70,14 +70,14 @@ beforeEach(async () => {
 
 describe('an address with an account and one without', () => {
   for (const route of ROUTES) {
-    it(`get the same answer from ${route.path}`, async () => {
+    it(`get the same status, content type and body from ${route.path}`, async () => {
       const withAccount = await answer(route.path, route.body(HAS_ACCOUNT));
       const without = await answer(route.path, route.body(NO_ACCOUNT));
       expect(withAccount.status).toBe(route.status);
       expect(without).toEqual(withAccount);
     });
 
-    it(`get the same answer from ${route.path} once its limit on the address is reached`, async () => {
+    it(`get the same status, content type and body from ${route.path} once its limit on the address is reached`, async () => {
       const last = async (email: string) => {
         for (let i = 0; i < route.limit; i += 1) await answer(route.path, route.body(email));
         return answer(route.path, route.body(email));

@@ -8,8 +8,8 @@
  * field it names, never what a route accepts.
  *
  * Whether an address has an account is never a check here, and never a field's message. A wrong
- * address or password is one answer for the whole form, and it is the same for an address with an
- * account and one without (worker/src/routes/auth.ts).
+ * address or password is one answer for the whole form, with the same status and words for an
+ * address with an account and one without (worker/src/routes/auth.ts).
  */
 import type { FieldErrors } from './refusal';
 

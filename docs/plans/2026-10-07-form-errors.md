@@ -700,12 +700,12 @@ shown, never what the Worker accepts.
   `api.verifySecondFactor`); `SupportContact` keeps its own `fetch`, so it works in any storage
   mode, and reads a refusal with `apiErrorFrom`. Every field has a label; the sign-in fields keep
   their ids (`login-email`, `login-password`), which a kit `Field` now takes.
-- **Nothing tells an address with an account from one without.** A wrong address or password is
-  one message for the whole form and marks neither field, whatever the answer carries
-  (`forTheWholeForm`). The Worker's answers to signing in with a wrong password, asking for a reset
-  link, asking for a sign-in code and creating an account are the same status, content type and
-  body for both, and so is each route's answer once its limit on one address is reached, the wait
-  it names aside (`worker/test/sign-in-same-answer.test.ts`); through the form, signing in and
+- **The same status and words for an address with an account and one without.** A wrong address
+  or password is one message for the whole form and marks neither field, whatever the answer
+  carries (`forTheWholeForm`). The Worker's answers to signing in with a wrong password, asking for
+  a reset link, asking for a sign-in code and creating an account are the same status, content type
+  and body for both, and so is each route's answer once its limit on one address is reached, the
+  wait it names aside (`worker/test/sign-in-same-answer.test.ts`); through the form, signing in and
   asking for a reset link give the same status, body and words on the screen
   (`frontend/tests/sign-in-form-errors.spec.ts`).
 - **A limit and the captcha have their own words, and mark no field.** A 429 shows the Worker's

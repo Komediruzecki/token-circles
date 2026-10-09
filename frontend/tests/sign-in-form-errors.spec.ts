@@ -1,14 +1,14 @@
 /**
  * The sign-in screen's forms in the real app against the local Worker, booted both ways
- * (boot.ts): what is wrong is marked at the field it is about, and nothing on the screen tells an
- * address with an account from one without.
+ * (boot.ts): what is wrong is marked at the field it is about, and the screen says the same for an
+ * address with an account and one without.
  *
  * A wrong password for an account, and any password for an address with no account, get the same
- * answer from the Worker and the same words on the screen, and neither field is marked. Asking
- * for a reset link answers the same for both. A field left empty, or filled in a way the Worker
- * would refuse, is marked with its message as its accessible description, and nothing is sent:
- * on the sign-in, account, email-code and support forms, and on the new-password screen a reset
- * link opens.
+ * status and body from the Worker and the same words on the screen, and neither field is marked.
+ * Asking for a reset link gets the same status, body and words for both. A field left empty, or
+ * filled in a way the Worker would refuse, is marked with its message as its accessible
+ * description, and nothing is sent: on the sign-in, account, email-code and support forms, and on
+ * the new-password screen a reset link opens.
  *
  * Each case signs up an account made for the run (an example.com address) and deletes it at the
  * end, also when a step fails.
@@ -103,7 +103,7 @@ async function expectUnmarked(page: Page) {
 
 for (const boot of BOOTS) {
   test.describe(`booted as ${boot === 'prod' ? 'a fresh browser on production' : 'dev boots'}`, () => {
-    test(`a wrong password and an address with no account get the same answer, and no field is marked (${boot}) @smoke`, async ({
+    test(`a wrong password and an address with no account get the same status, body and words, and no field is marked (${boot}) @smoke`, async ({
       page,
       context,
       request,
@@ -138,7 +138,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`asking for a reset link answers the same for an address with an account and one without (${boot})`, async ({
+    test(`asking for a reset link gets the same status, body and words for an address with an account and one without (${boot})`, async ({
       page,
       context,
       request,
