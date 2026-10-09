@@ -53,8 +53,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'settings-scope':
     "Settings are kept per profile on the Worker and once per browser in local-first, so a base currency or an onboarding state saved on one profile is every profile's in local-first (the achievement record names its profile in its key there). Slice 4 (settings).",
-  'storage-mode-answers':
-    "GET /api/storage-mode answers { mode: 'self-hosted', type: 'sqlite' } on the Worker and the browser's own mode in local-first; POST /api/storage-mode and POST /api/settings/set-storage only acknowledge on the Worker, but switch the browser's mode in local-first and answer it. Settings sends only POST /api/storage-mode, and sets the mode itself after. Slice 4 (settings).",
   'receipt-answers':
     'A receipt upload answers 201 with the stored row on the Worker and 200 with the row and a url in local-first; GET /api/receipts/transaction/:id answers the receipt on the Worker and a list of it in local-first; DELETE /api/receipts/:id answers { message } on the Worker and { ok: true } in local-first. The app finds a receipt through its transaction row, and reads none of these. Slice 2 (transactions).',
   'auth-local-user':

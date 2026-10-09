@@ -14,6 +14,9 @@
  * It refused a lowercase currency code with 422, which local-first stored in capitals, and its
  * refusals named no field. Now each refusal is a 400 at the setting it is about, a locked base
  * currency is a 409 at the currency, and a refused write stores none of the body.
+ *
+ * The storage mode is here too: `POST /api/storage-mode` acknowledges a mode there is such a
+ * thing as, and refuses any other at the mode.
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -155,5 +158,23 @@ describe('PUT /api/settings', () => {
     });
     expect(await answer(res)).toEqual({ status: 200, body: { ok: true } });
     expect(await stored()).toEqual({ ...BEFORE, onboarding: 'skipped', achievements: badges });
+  });
+});
+
+describe('the storage mode', () => {
+  it('names the Worker, acknowledges a switch, and refuses a mode there is no such thing as', async () => {
+    expect(await answer(await send('GET', '/api/storage-mode'))).toEqual({
+      status: 200,
+      body: { mode: 'self-hosted' },
+    });
+    for (const path of ['/api/storage-mode', '/api/settings/set-storage']) {
+      expect(await answer(await send('POST', path, { mode: 'serverless' }))).toEqual({
+        status: 200,
+        body: { ok: true, mode: 'serverless' },
+      });
+      expect(await answer(await send('POST', path, { mode: 'cloud' }))).toEqual(
+        refusal({ mode: M.mode })
+      );
+    }
   });
 });

@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { checkSettingsUpdate } from '../../../shared/settingsSchema';
+import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema';
 import { accept } from '../http';
 import * as db from '../db';
 import { setProfileBaseCurrency } from '../base-currency';
@@ -51,21 +51,19 @@ settingsRoutes.put('/api/settings', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
-settingsRoutes.post('/api/settings/set-storage', requireAuth, async (c) => {
-  const b = (await c.req.json()) as Record<string, any>;
-  const message =
-    b.type === 'postgresql'
-      ? 'PostgreSQL storage configured. Please restart the application.'
-      : 'SQLite storage configured. Please restart the application.';
-  return c.json({ ok: true, message });
-});
-
 // Storage-mode endpoints the frontend Settings page calls. The worker IS the
 // self-hosted (D1/SQLite) backend and the active mode actually lives client-side
 // (localStorage 'finance_storage_mode'), so GET reports self-hosted and POST just
-// acknowledges the switch. Public — touches no user data.
-settingsRoutes.get('/api/storage-mode', (c) => c.json({ mode: 'self-hosted', type: 'sqlite' }));
+// acknowledges the switch, which Settings then makes itself. Public — touches no user data.
+// Local-first answers both the same way (shared/settingsSchema.ts, checkStorageMode).
+settingsRoutes.get('/api/storage-mode', (c) => c.json({ mode: 'self-hosted' }));
 settingsRoutes.post('/api/storage-mode', async (c) => {
-  await c.req.json().catch(() => ({}));
-  return c.json({ ok: true });
+  const { mode } = accept(checkStorageMode(await c.req.json().catch(() => null)));
+  return c.json({ ok: true, mode });
+});
+// The Express server's name for the same switch. Nothing in the app sends it any more; it answers
+// as POST /api/storage-mode does.
+settingsRoutes.post('/api/settings/set-storage', requireAuth, async (c) => {
+  const { mode } = accept(checkStorageMode(await c.req.json().catch(() => null)));
+  return c.json({ ok: true, mode });
 });

@@ -1,11 +1,10 @@
 /**
  * Settings handlers — IndexedDB-backed implementations
  */
-import { checkSettingsUpdate } from '../../../../../shared/settingsSchema'
+import { checkSettingsUpdate, checkStorageMode } from '../../../../../shared/settingsSchema'
 import { BaseCurrencyConflictError, setBaseCurrency } from '../baseCurrency'
-import { getStorageMode, setStorageMode } from '../storageFactory'
+import { getStorageMode } from '../storageFactory'
 import { adapter, json, ok, refuse } from './helpers'
-import type { StorageMode } from '../storageFactory'
 
 export async function settingsGet(): Promise<Response> {
   const settings = await adapter.getSettings()
@@ -40,11 +39,13 @@ export async function storageModeGet(): Promise<Response> {
   return json({ mode: getStorageMode() })
 }
 
+/**
+ * Settings sends the mode it is about to switch to, then sets it in this browser itself. As on
+ * the Worker, which cannot switch a browser, the answer acknowledges a mode there is such a thing
+ * as and switches nothing (shared/settingsSchema.ts, checkStorageMode).
+ */
 export async function storageModeSet(body: unknown): Promise<Response> {
-  if (body && typeof body === 'object' && 'mode' in body) {
-    const mode = (body as Record<string, unknown>).mode as StorageMode
-    setStorageMode(mode)
-    return ok({ mode })
-  }
-  return json({ error: 'Mode required' }, 400)
+  const checked = checkStorageMode(body)
+  if (!checked.ok) return refuse(checked.fields)
+  return ok({ mode: checked.value.mode })
 }

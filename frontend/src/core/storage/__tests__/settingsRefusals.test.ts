@@ -8,6 +8,9 @@
  * parked backup extensions, the exchange-rate cache). An array body became keys "0", "1" and so
  * on. A currency code that is not one answered 409, as if it were the lock on the base currency,
  * and the lock named no field.
+ *
+ * Its `POST /api/storage-mode` switched the browser's mode itself, which the Worker cannot do, and
+ * took any mode at all. Now both acknowledge a mode there is such a thing as, and Settings sets it.
  */
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { SETTINGS_MESSAGES as M } from '../../../../../shared/settingsSchema'
@@ -156,5 +159,25 @@ describe('PUT /api/settings in local-first', () => {
     })
     expect(await answer(res)).toEqual({ status: 200, body: { ok: true } })
     expect(await stored()).toEqual({ ...BEFORE, onboarding: 'skipped', 'achievements:1': badges })
+  })
+})
+
+describe('the storage mode in local-first', () => {
+  it('names this browser, acknowledges a switch without making it, and refuses a mode there is no such thing as', async () => {
+    expect(await answer(await call('GET', '/api/storage-mode'))).toEqual({
+      status: 200,
+      body: { mode: 'serverless' },
+    })
+    for (const path of ['/api/storage-mode', '/api/settings/set-storage']) {
+      expect(await answer(await call('POST', path, { mode: 'self-hosted' }))).toEqual({
+        status: 200,
+        body: { ok: true, mode: 'self-hosted' },
+      })
+      // Settings sets the mode itself, after the answer.
+      expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+      expect(await answer(await call('POST', path, { mode: 'cloud' }))).toEqual(
+        refusal({ mode: M.mode })
+      )
+    }
   })
 })

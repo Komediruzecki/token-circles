@@ -22,7 +22,7 @@ import { checkGoalCreate } from '../../../shared/goalSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
 import { checkProfileCreate } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
-import { checkSettingsUpdate } from '../../../shared/settingsSchema'
+import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
 import { getLocalCurrency } from './api'
@@ -150,6 +150,8 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/settings': checkSettingsUpdate,
+  'POST:/api/storage-mode': checkStorageMode,
+  'POST:/api/settings/set-storage': checkStorageMode,
   // A rename is checked by its handler against the stored name (checkProfileRename).
   'POST:/api/profiles': checkProfileCreate,
   'POST:/api/housings': housingCreateSchema,
