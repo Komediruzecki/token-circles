@@ -330,8 +330,10 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
       result = await options.send(snapshot())
     } catch (error) {
       if (mine === generation) {
-        refused(error)
+        // Not busy first: a field disabled while the form sent can only take the focus once it
+        // is enabled again.
         setSubmitting(false)
+        refused(error)
       }
       return
     }

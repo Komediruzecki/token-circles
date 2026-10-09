@@ -394,6 +394,55 @@ describe('a refusal from the server', () => {
     expect(notice().textContent).toBe('')
   })
 
+  it('focuses a field that was disabled while the form was sending', async () => {
+    // Settings' base currency is a select that saves the moment a currency is chosen, and is
+    // disabled until the answer is in: the focus has to wait until it can be taken.
+    const form = createForm<{ currency: string }>({
+      initial: { currency: 'EUR' },
+      send: () =>
+        Promise.reject(
+          new ApiError(409, 'Stays EUR.', {
+            currency: 'The base currency stays EUR once you have accounts or transactions.',
+          })
+        ),
+      failure: "Couldn't change the base currency. Try again.",
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form {...form.attrs}>
+          <Field form={form} name="currency" label="Base currency">
+            {(control) => (
+              <select
+                {...control}
+                disabled={form.submitting()}
+                onChange={(e) => {
+                  form.set('currency', e.currentTarget.value)
+                  void form.submit()
+                }}
+              >
+                <option value="EUR">EUR</option>
+                <option value="USD">USD</option>
+              </select>
+            )}
+          </Field>
+        </form>
+      ),
+      host
+    )
+    const select = labelled('Base currency') as HTMLSelectElement
+
+    select.value = 'USD'
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+    expect(select.disabled).toBe(true)
+    await tick()
+
+    expect(select.disabled).toBe(false)
+    expect(select.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(select)
+  })
+
   it('lets a server mark go on the field’s next change', async () => {
     mount(vi.fn().mockRejectedValue(new ApiError(400, 'Taken.', { name: 'That name is taken.' })))
     type(labelled('Name'), 'coffee')

@@ -157,6 +157,8 @@ describe('the base currency in Settings', () => {
       )
     })
     expect(select()!.getAttribute('aria-invalid')).toBe('true')
+    // Focus goes to the select, which was disabled while the currency was being saved.
+    expect(document.activeElement).toBe(select())
     expect(select()!.value).toBe('EUR')
     expect(await storedCurrency()).toBe('EUR')
     expect(localStorage.getItem('localCurrency')).toBe('EUR')
