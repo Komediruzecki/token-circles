@@ -28,6 +28,12 @@ export interface AuthLogEntry {
   cookieCount?: number;
 }
 
+/**
+ * Sign-in history is kept for this many days. The Worker's scheduled run, which fires at least
+ * once a day (the 0 8 * * * cron), deletes every row older than that with sweepAuthLogs.
+ */
+export const AUTH_LOG_RETENTION_DAYS = 90;
+
 /** Whether this outcome earns a row that outlives the Workers-Logs retention window. */
 function worthPersisting(entry: AuthLogEntry): boolean {
   if (entry.event !== 'session') return true;
@@ -96,5 +102,29 @@ export function logAuthEvent(c: Context<AppEnv>, entry: AuthLogEntry): void {
     // No executionCtx outside a request lifecycle (unit tests). The insert still runs; it just
     // cannot be deferred to the platform.
     void insert;
+  }
+}
+
+/**
+ * Delete sign-in history older than AUTH_LOG_RETENTION_DAYS. Called from the scheduled handler
+ * on every cron, like sweepRateLimits and sweepExpiredSessions.
+ *
+ * Bounded: each statement deletes at most `batchSize` rows and one run stops after `maxBatches`,
+ * so a backlog (the first run meets every row written since 0023 that is older than 90 days)
+ * never becomes one statement that outlives the run. Whatever is left goes on the next run.
+ */
+export async function sweepAuthLogs(
+  env: Env,
+  { batchSize = 1000, maxBatches = 50 }: { batchSize?: number; maxBatches?: number } = {}
+): Promise<void> {
+  for (let i = 0; i < maxBatches; i++) {
+    const res = await env.DB.prepare(
+      `DELETE FROM auth_logs WHERE id IN (
+         SELECT id FROM auth_logs WHERE created_at < datetime('now', ?) LIMIT ?
+       )`
+    )
+      .bind(`-${AUTH_LOG_RETENTION_DAYS} days`, batchSize)
+      .run();
+    if ((res.meta.changes ?? 0) < batchSize) return;
   }
 }
