@@ -1,9 +1,15 @@
 /**
  * TwofaSettings — the Settings card: enroll (secret + confirm code -> recovery codes shown
  * exactly once), status display, and the disable flow that demands a code.
+ *
+ * Both code steps are kit forms: a code left empty is marked and focused before anything is
+ * sent, a code the Worker does not take is marked at the field in the Worker's words, and the rest
+ * of what the Worker says is the form's notice, with the field unmarked.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { refusalOf } from '../../../../shared/refusal'
+import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -57,6 +63,30 @@ function type(selector: string, value: string) {
   input.focus()
   input.value = value
   input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+const field = (testId: string) =>
+  host.querySelector<HTMLInputElement>(`[data-test-id="${testId}"]`)!
+const describedBy = (el: HTMLElement): string[] =>
+  (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`)
+const marked = (el: HTMLElement) => el.getAttribute('aria-invalid') === 'true'
+const notice = () => host.querySelector('[data-test-id="twofa-error"]')?.textContent ?? ''
+/** The label the browser gives the control: the one its id points a `<label>` at. */
+const labelOf = (el: HTMLElement) => host.querySelector(`label[for="${el.id}"]`)?.textContent
+
+async function confirm(testId: 'twofa-enroll' | 'twofa-disable', code: string) {
+  type(`[data-test-id="${testId}-code"]`, code)
+  host.querySelector<HTMLButtonElement>(`[data-test-id="${testId}-confirm"]`)!.click()
+  await flush()
+}
+
+async function startEnroll() {
+  await mount()
+  host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
+  await flush()
 }
 
 beforeEach(() => {
@@ -143,19 +173,41 @@ describe('enrollment', () => {
     for (const code of CODES) expect(codesBox.textContent).toContain(code)
   })
 
-  it('a rejected code keeps the enroll step and shows the message', async () => {
-    enableResponse = () => Promise.resolve(json({ error: 'That code did not match' }, 401))
-    await mount()
-    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enable-btn"]')!.click()
-    await flush()
-    type('[data-test-id="twofa-enroll-code"]', '000000')
-    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-enroll-confirm"]')!.click()
-    await flush()
+  it('a rejected code keeps the enroll step and marks the code, in the Worker words', async () => {
+    enableResponse = () => Promise.resolve(json(refusalOf({ code: SAY.appCodeRefused }), 401))
+    await startEnroll()
+    await confirm('twofa-enroll', '000000')
 
-    expect(host.querySelector('[data-test-id="twofa-error"]')!.textContent).toContain(
-      'That code did not match'
-    )
-    expect(host.querySelector('[data-test-id="twofa-enroll-code"]')).not.toBeNull()
+    expect(marked(field('twofa-enroll-code'))).toBe(true)
+    expect(describedBy(field('twofa-enroll-code'))).toContain(SAY.appCodeRefused)
+    expect(document.activeElement).toBe(field('twofa-enroll-code'))
+    expect(notice()).toBe('')
+    expect(toasts).toEqual([])
+  })
+
+  it('labels the code with the step that asks for it', async () => {
+    await startEnroll()
+
+    expect(labelOf(field('twofa-enroll-code'))).toBe('2. Enter the 6-digit code the app shows:')
+  })
+
+  it('marks an empty code and sends nothing', async () => {
+    await startEnroll()
+    await confirm('twofa-enroll', '  ')
+
+    expect(marked(field('twofa-enroll-code'))).toBe(true)
+    expect(describedBy(field('twofa-enroll-code'))).toContain(SAY.appCode)
+    expect(document.activeElement).toBe(field('twofa-enroll-code'))
+    expect(requests.map((r) => r.url)).not.toContain('/api/auth/2fa/enable')
+  })
+
+  it('says a setup that is no longer there in the notice, and marks no field', async () => {
+    enableResponse = () => Promise.resolve(json({ error: 'No 2FA setup in progress' }, 400))
+    await startEnroll()
+    await confirm('twofa-enroll', '123456')
+
+    expect(notice()).toBe('No 2FA setup in progress')
+    expect(marked(field('twofa-enroll-code'))).toBe(false)
   })
 })
 
@@ -177,6 +229,52 @@ describe('enabled state and disable', () => {
     statusResponse = () => Promise.resolve(json({ enabled: true, recoveryCodesLeft: 2 }))
     await mount()
     expect(host.querySelector('[data-test-id="twofa-codes-low"]')).not.toBeNull()
+  })
+
+  it('labels the code with what it is for', async () => {
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-disable-btn"]')!.click()
+    await flush()
+
+    expect(labelOf(field('twofa-disable-code'))).toBe(
+      'Enter a current authenticator code (or a recovery code) to turn two-factor authentication off.'
+    )
+  })
+
+  it('marks an empty code and sends nothing', async () => {
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-disable-btn"]')!.click()
+    await flush()
+    await confirm('twofa-disable', '')
+
+    expect(marked(field('twofa-disable-code'))).toBe(true)
+    expect(describedBy(field('twofa-disable-code'))).toContain(SAY.secondFactor)
+    expect(requests.map((r) => r.url)).not.toContain('/api/auth/2fa/disable')
+  })
+
+  it('marks a code the Worker does not take, in its words, and stays on the step', async () => {
+    disableResponse = () => Promise.resolve(json(refusalOf({ code: SAY.secondFactorRefused }), 401))
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-disable-btn"]')!.click()
+    await flush()
+    await confirm('twofa-disable', '000000')
+
+    expect(marked(field('twofa-disable-code'))).toBe(true)
+    expect(describedBy(field('twofa-disable-code'))).toContain(SAY.secondFactorRefused)
+    expect(document.activeElement).toBe(field('twofa-disable-code'))
+    expect(host.querySelector('[data-test-id="twofa-enable-btn"]')).toBeNull()
+  })
+
+  it('says to wait when the limit is reached, and marks no field', async () => {
+    disableResponse = () =>
+      Promise.resolve(json({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429))
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-disable-btn"]')!.click()
+    await flush()
+    await confirm('twofa-disable', '000000')
+
+    expect(notice()).toBe('Too many attempts. Please try again in 15 minutes.')
+    expect(marked(field('twofa-disable-code'))).toBe(false)
   })
 
   it('disable demands a code, posts it, and returns to the disabled state', async () => {

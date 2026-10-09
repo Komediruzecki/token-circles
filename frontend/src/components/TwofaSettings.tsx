@@ -1,13 +1,23 @@
 import { createSignal, For, onMount, Show } from 'solid-js'
 import { renderSVG } from 'uqr'
+import { SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { toast } from '../core/api'
+import { apiErrorFrom } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
+import { createForm, Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
+import { SIGN_IN_FAILED } from './signInForm'
+import styles from './TwofaSettings.module.css'
+import type { FieldErrors } from '../../../shared/refusal'
 
 /**
  * Settings card for TOTP two-factor auth: enroll (shared secret + confirmation code), the
  * one-time recovery-codes reveal, and the disable flow — every state change demands a valid
  * code, so a walk-up attacker with an unlocked laptop cannot quietly switch 2FA off.
+ *
+ * The two code steps are kit forms: a code left empty is marked and focused before anything is
+ * sent, and a code the Worker does not take is marked at the field, in its words. Anything else
+ * the Worker says (no setup in progress, a limit reached) is the form's notice.
  */
 type Status = { enabled: boolean; recoveryCodesLeft: number }
 
@@ -23,13 +33,25 @@ async function postJson(url: string, body?: unknown): Promise<{ ok: boolean; dat
 
 const errorOf = (data: unknown, fallback: string) => (data as { error?: string })?.error || fallback
 
+/** Posts a code step, and throws the Worker's refusal as an `ApiError` for the form to show. */
+async function sendCode<T>(url: string, code: string): Promise<T> {
+  const res = await apiFetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  if (!res.ok) throw await apiErrorFrom(res)
+  return (await res.json().catch(() => ({}))) as T
+}
+
+const required = (code: string, words: string): FieldErrors =>
+  code.trim() === '' ? { code: words } : {}
+
 export default function TwofaSettings() {
   const [status, setStatus] = createSignal<Status | null>(null)
   const [view, setView] = createSignal<'idle' | 'enroll' | 'codes' | 'disable'>('idle')
   const [secret, setSecret] = createSignal('')
   const [otpauth, setOtpauth] = createSignal('')
-  const [code, setCode] = createSignal('')
-  const [error, setError] = createSignal('')
   const [recoveryCodes, setRecoveryCodes] = createSignal<string[]>([])
   const [busy, setBusy] = createSignal(false)
 
@@ -45,9 +67,35 @@ export default function TwofaSettings() {
     void loadStatus()
   })
 
+  const enrollForm = createForm<{ code: string }, string[]>({
+    initial: { code: '' },
+    check: (values) => required(values.code, SIGN_IN_MESSAGES.appCode),
+    send: async (values) =>
+      (await sendCode<{ recoveryCodes?: string[] }>('/api/auth/2fa/enable', values.code.trim()))
+        .recoveryCodes ?? [],
+    saved: (codes) => {
+      setRecoveryCodes(codes)
+      setView('codes')
+      void loadStatus()
+    },
+    failure: SIGN_IN_FAILED,
+  })
+
+  const disableForm = createForm<{ code: string }>({
+    initial: { code: '' },
+    check: (values) => required(values.code, SIGN_IN_MESSAGES.secondFactor),
+    send: (values) => sendCode('/api/auth/2fa/disable', values.code.trim()),
+    saved: () => {
+      toast('Two-factor authentication disabled', 'success')
+      resetFlow()
+      void loadStatus()
+    },
+    failure: SIGN_IN_FAILED,
+  })
+
   const resetFlow = () => {
-    setCode('')
-    setError('')
+    enrollForm.reset()
+    disableForm.reset()
     setView('idle')
   }
 
@@ -62,36 +110,10 @@ export default function TwofaSettings() {
       const d = data as { secret: string; otpauthUri: string }
       setSecret(d.secret)
       setOtpauth(d.otpauthUri)
-      setCode('')
-      setError('')
+      enrollForm.reset()
       setView('enroll')
     } catch {
       toast('Network problem — try again', 'error')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const confirmEnroll = async () => {
-    const value = code().trim()
-    if (!value) {
-      setError('Enter the 6-digit code from your authenticator app')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      const { ok, data } = await postJson('/api/auth/2fa/enable', { code: value })
-      if (!ok) {
-        setError(errorOf(data, 'That code did not match — try again'))
-        return
-      }
-      setRecoveryCodes((data as { recoveryCodes: string[] }).recoveryCodes ?? [])
-      setCode('')
-      setView('codes')
-      void loadStatus()
-    } catch {
-      setError('Network problem — try again')
     } finally {
       setBusy(false)
     }
@@ -123,30 +145,6 @@ export default function TwofaSettings() {
     URL.revokeObjectURL(url)
   }
 
-  const confirmDisable = async () => {
-    const value = code().trim()
-    if (!value) {
-      setError('Enter a 6-digit or recovery code to confirm')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      const { ok, data } = await postJson('/api/auth/2fa/disable', { code: value })
-      if (!ok) {
-        setError(errorOf(data, 'That code did not match — try again'))
-        return
-      }
-      toast('Two-factor authentication disabled', 'success')
-      resetFlow()
-      void loadStatus()
-    } catch {
-      setError('Network problem — try again')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const codeInputStyle = {
     padding: '8px 10px',
     'border-radius': '8px',
@@ -156,16 +154,7 @@ export default function TwofaSettings() {
     'font-size': '14px',
     width: '140px',
   }
-  const errorLine = (
-    <Show when={error()}>
-      <div
-        data-test-id="twofa-error"
-        style={{ color: 'var(--danger, #ef4444)', 'font-size': '13px', margin: '6px 0 0' }}
-      >
-        {error()}
-      </div>
-    </Show>
-  )
+  const codeRow = { display: 'flex', gap: '8px', 'flex-wrap': 'wrap' } as const
 
   return (
     <div style={{ 'margin-top': '16px' }}>
@@ -243,8 +232,7 @@ export default function TwofaSettings() {
           data-test-id="twofa-disable-btn"
           class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
           onClick={() => {
-            setCode('')
-            setError('')
+            disableForm.reset()
             setView('disable')
           }}
         >
@@ -297,32 +285,47 @@ export default function TwofaSettings() {
           >
             {secret()}
           </code>
-          <p style={{ margin: '10px 0 6px' }}>2. Enter the 6-digit code the app shows:</p>
-          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
-            <input
-              type="text"
-              data-test-id="twofa-enroll-code"
-              placeholder="123456"
-              value={code()}
-              onInput={(e) => setCode(e.currentTarget.value)}
-              autocomplete="one-time-code"
-              inputmode="numeric"
-              maxlength={6}
-              style={codeInputStyle}
-            />
-            <button
-              data-test-id="twofa-enroll-confirm"
-              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-              disabled={busy()}
-              onClick={() => void confirmEnroll()}
+          <FormNotice form={enrollForm} testId="twofa-error" />
+          <form {...enrollForm.attrs}>
+            <Field
+              form={enrollForm}
+              name="code"
+              label="2. Enter the 6-digit code the app shows:"
+              labelClass={styles.stepLabel}
             >
-              Turn on
-            </button>
-            <button class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`} onClick={resetFlow}>
-              Cancel
-            </button>
-          </div>
-          {errorLine}
+              {(control) => (
+                <div style={codeRow}>
+                  <input
+                    {...control}
+                    type="text"
+                    data-test-id="twofa-enroll-code"
+                    placeholder="123456"
+                    value={enrollForm.values.code}
+                    onInput={(e) => enrollForm.set('code', e.currentTarget.value)}
+                    autocomplete="one-time-code"
+                    inputmode="numeric"
+                    maxlength={6}
+                    style={codeInputStyle}
+                  />
+                  <SubmitButton
+                    data-test-id="twofa-enroll-confirm"
+                    busy={enrollForm.submitting()}
+                    busyLabel="Turning on…"
+                    class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
+                  >
+                    Turn on
+                  </SubmitButton>
+                  <button
+                    type="button"
+                    class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+                    onClick={resetFlow}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </Field>
+          </form>
         </div>
       </Show>
 
@@ -379,33 +382,45 @@ export default function TwofaSettings() {
       {/* ── Disable: prove a factor first ── */}
       <Show when={view() === 'disable'}>
         <div style={{ margin: '8px 0 0', 'font-size': '13px' }}>
-          <p style={{ margin: '0 0 6px', color: 'var(--text-secondary)' }}>
-            Enter a current authenticator code (or a recovery code) to turn two-factor
-            authentication off.
-          </p>
-          <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
-            <input
-              type="text"
-              data-test-id="twofa-disable-code"
-              placeholder="123456"
-              value={code()}
-              onInput={(e) => setCode(e.currentTarget.value)}
-              autocomplete="one-time-code"
-              style={codeInputStyle}
-            />
-            <button
-              data-test-id="twofa-disable-confirm"
-              class={`${layoutStyles.btn} ${layoutStyles.btnDanger ?? layoutStyles.btnSecondary}`}
-              disabled={busy()}
-              onClick={() => void confirmDisable()}
+          <FormNotice form={disableForm} testId="twofa-error" />
+          <form {...disableForm.attrs}>
+            <Field
+              form={disableForm}
+              name="code"
+              label="Enter a current authenticator code (or a recovery code) to turn two-factor authentication off."
+              labelClass={styles.disableLabel}
             >
-              Disable
-            </button>
-            <button class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`} onClick={resetFlow}>
-              Cancel
-            </button>
-          </div>
-          {errorLine}
+              {(control) => (
+                <div style={codeRow}>
+                  <input
+                    {...control}
+                    type="text"
+                    data-test-id="twofa-disable-code"
+                    placeholder="123456"
+                    value={disableForm.values.code}
+                    onInput={(e) => disableForm.set('code', e.currentTarget.value)}
+                    autocomplete="one-time-code"
+                    style={codeInputStyle}
+                  />
+                  <SubmitButton
+                    data-test-id="twofa-disable-confirm"
+                    busy={disableForm.submitting()}
+                    busyLabel="Turning off…"
+                    class={`${layoutStyles.btn} ${layoutStyles.btnDanger ?? layoutStyles.btnSecondary}`}
+                  >
+                    Disable
+                  </SubmitButton>
+                  <button
+                    type="button"
+                    class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+                    onClick={resetFlow}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </Field>
+          </form>
         </div>
       </Show>
     </div>
