@@ -24,6 +24,7 @@ import {
 } from '../../../shared/categoryMappingSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
+import { checkImportSourceCreate, checkSheetFetch } from '../../../shared/importSourceSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
 import { checkProfileCreate } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
@@ -162,6 +163,9 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/settings/set-storage': checkStorageMode,
   // A rename is checked by its handler against the stored name (checkProfileRename).
   'POST:/api/profiles': checkProfileCreate,
+  // An edit of a source is checked by its handler against the stored kind (checkImportSourceEdit).
+  'POST:/api/import-sources': checkImportSourceCreate,
+  'POST:/api/import/googlesheet': checkSheetFetch,
   'POST:/api/housings': housingCreateSchema,
   'PUT:/api/housings': housingCreateSchema.partial(),
   'POST:/api/counterparties': counterpartyCreateSchema,

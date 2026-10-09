@@ -8,6 +8,7 @@ import {
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
+import { checkSheetFetch } from '../../../../../shared/importSourceSchema'
 import {
   IMPORT_UPLOAD_MESSAGES,
   readUploadedSheet,
@@ -243,16 +244,10 @@ export async function importFileSheet(): Promise<Response> {
 }
 
 export async function importGoogleSheet(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'URL is required' }, 400)
-  const { url, sheetName } = body as Record<string, string>
-  if (!url) return json({ error: 'URL is required' }, 400)
-
-  // Extract sheet ID and gid from URL
-  const idMatch = url.match(/\/d\/([a-zA-Z0-9-_]+)/)
-  if (!idMatch) return json({ error: 'Invalid Google Sheets URL or ID' }, 400)
-  const sheetId = idMatch[1]
-  const gidMatch = url.match(/[?&#]gid=(\d+)/)
-  const gid = gidMatch ? gidMatch[1] : null
+  // The Worker's rule and words for the link (shared/importSourceSchema.ts).
+  const checked = checkSheetFetch(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const { id: sheetId, gid, sheetName } = checked.value
 
   // CSV parse helper (handles quoted fields, commas in values)
   const parseCSV = (text: string): { headers: string[]; rows: string[][] } => parseImportCsv(text)

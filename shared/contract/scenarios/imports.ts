@@ -1,4 +1,5 @@
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
+import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
 import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
@@ -205,9 +206,15 @@ export const imports = [
     });
     expect(SHEETS['contract-sheet']).toContain('Groceries');
 
-    expect(
-      (await api.post('/api/import/googlesheet', { url: 'https://example.com/not-a-sheet' })).status
-    ).toBe(400);
+    // A link that is not a Google Sheet's is refused at the link, in the words the page shows.
+    const refused = await api.post('/api/import/googlesheet', {
+      url: 'https://example.com/not-a-sheet',
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body).toEqual({
+      error: IMPORT_SOURCE_MESSAGES.url,
+      fields: { url: IMPORT_SOURCE_MESSAGES.url },
+    });
   }),
 
   scenario('a spreadsheet file is uploaded for the mapping step', async (api, expect) => {
