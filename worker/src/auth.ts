@@ -442,20 +442,82 @@ export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
 }
 
 /**
+ * Every way into an account that can be set up before its address is confirmed, under the name
+ * clearedAccess reports it by: each session (token_version also reaches tokens older than
+ * auth_sessions), the password, passkeys, TOTP and its recovery codes, API tokens (the MCP
+ * server's credentials too), and the unused reset links, sign-in codes and email links.
+ */
+const UNCONFIRMED_ACCESS = [
+  ['tokenVersion', 'UPDATE users SET token_version = token_version + 1 WHERE id = ?'],
+  ['password', 'UPDATE users SET password_hash = NULL WHERE id = ? AND password_hash IS NOT NULL'],
+  ['sessions', 'DELETE FROM auth_sessions WHERE user_id = ?'],
+  ['passkeys', 'DELETE FROM webauthn_credentials WHERE user_id = ?'],
+  ['twoFactor', 'DELETE FROM totp_credentials WHERE user_id = ?'],
+  ['recoveryCodes', 'DELETE FROM recovery_codes WHERE user_id = ?'],
+  ['apiTokens', 'DELETE FROM api_tokens WHERE user_id = ?'],
+  ['resetLinks', 'DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL'],
+  ['signInCodes', 'DELETE FROM login_codes WHERE user_id = ? AND used_at IS NULL'],
+  ['emailLinks', 'DELETE FROM email_verifications WHERE user_id = ? AND used_at IS NULL'],
+] as const;
+
+/** How many rows of each kind the clearing removed. */
+export type ClearedAccess = Record<(typeof UNCONFIRMED_ACCESS)[number][0], number>;
+
+/**
+ * The statements that clear UNCONFIRMED_ACCESS from an account.
+ *
+ * Each statement checks that the address is still unconfirmed when it runs, so the batch it goes
+ * into acts on what that batch sees, not on a read made before it. A route that has just seen
+ * proof that someone reads the address (Google sign-in, an emailed sign-in code, a reset link)
+ * puts these at the front of the batch that confirms it: the confirming write has to come last,
+ * and clearedAccess reads the results by position. On a confirmed account every statement here
+ * does nothing.
+ */
+export function clearUnconfirmedAccess(db: D1Database, userId: number): D1PreparedStatement[] {
+  return UNCONFIRMED_ACCESS.map(([, sql]) =>
+    db
+      .prepare(`${sql} AND EXISTS (SELECT 1 FROM users WHERE id = ? AND email_verified = 0)`)
+      .bind(userId, userId)
+  );
+}
+
+/** What the clearing removed, from the results of a batch that starts with its statements. */
+export function clearedAccess(results: D1Result[]): ClearedAccess {
+  return Object.fromEntries(
+    UNCONFIRMED_ACCESS.map(([kind], i) => [kind, results[i]?.meta.changes ?? 0])
+  ) as ClearedAccess;
+}
+
+/**
+ * Whether the clearing removed something the person set up and would miss, which the app then
+ * tells them. A reset replaces the password and signs every device out on any account, so after
+ * a reset only what it would otherwise have kept counts.
+ */
+export function clearedWorthSaying(cleared: ClearedAccess, by: 'sign-in' | 'reset'): boolean {
+  const kept = cleared.passkeys + cleared.twoFactor + cleared.recoveryCodes + cleared.apiTokens;
+  return (by === 'reset' ? kept : kept + cleared.password + cleared.sessions) > 0;
+}
+
+/**
  * Find-or-create the user for a verified Google account. `created` is true only
  * for a brand-new account (the caller sends the welcome email then — matching
  * the email/password registration path); linking Google to an existing account
- * is not a new signup.
+ * is not a new signup. `cleared` is true when linking removed something the
+ * person would miss (clearedWorthSaying), so the app can say what.
+ *
+ * Linking to an account whose address was never confirmed first clears what was set up on it
+ * before the address was confirmed (clearUnconfirmedAccess). Its data stays. A confirmed account
+ * is linked and nothing else changes.
  */
 export async function resolveGoogleUser(
   db: D1Database,
   claims: GoogleClaims
-): Promise<{ userId: number; created: boolean; email: string | null }> {
+): Promise<{ userId: number; created: boolean; email: string | null; cleared: boolean }> {
   const byProvider = await db
     .prepare("SELECT id FROM users WHERE auth_provider = 'google' AND provider_id = ?")
     .bind(claims.sub)
     .first<{ id: number }>();
-  if (byProvider) return { userId: byProvider.id, created: false, email: null };
+  if (byProvider) return { userId: byProvider.id, created: false, email: null, cleared: false };
 
   // Addresses are kept in lower case, as registration keeps them, and the match ignores case, so
   // a row kept with capitals is found too.
@@ -468,13 +530,19 @@ export async function resolveGoogleUser(
       .bind(email)
       .first<{ id: number }>();
     if (byEmail) {
-      await db
-        .prepare(
-          "UPDATE users SET auth_provider = 'google', provider_id = ?, email_verified = 1 WHERE id = ?"
-        )
-        .bind(claims.sub, byEmail.id)
-        .run();
-      return { userId: byEmail.id, created: false, email: null };
+      // One batch, so a failure anywhere leaves the account as it was. The clearing touches the
+      // account only if its address is still unconfirmed as the batch runs; a confirmed account
+      // is just linked.
+      const results = await db.batch([
+        ...clearUnconfirmedAccess(db, byEmail.id),
+        db
+          .prepare(
+            "UPDATE users SET auth_provider = 'google', provider_id = ?, email_verified = 1 WHERE id = ?"
+          )
+          .bind(claims.sub, byEmail.id),
+      ]);
+      const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
+      return { userId: byEmail.id, created: false, email: null, cleared };
     }
   }
 
@@ -494,5 +562,5 @@ export async function resolveGoogleUser(
     .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
     .bind('Personal Profile', userId)
     .run();
-  return { userId, created: true, email: verified ? email : null };
+  return { userId, created: true, email: verified ? email : null, cleared: false };
 }

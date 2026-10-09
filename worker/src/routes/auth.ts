@@ -4,6 +4,9 @@ import type { AppEnv } from '../index';
 import * as db from '../db';
 import { deviceLabel } from '../deviceLabel';
 import {
+  clearedAccess,
+  clearedWorthSaying,
+  clearUnconfirmedAccess,
   requireAuth,
   verifyGoogleIdToken,
   signState,
@@ -115,7 +118,7 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
   if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const { userId, created, email: newEmail } = await resolveGoogleUser(c.env.DB, claims);
+  const { userId, created, email: newEmail, cleared } = await resolveGoogleUser(c.env.DB, claims);
   // Brand-new Google signups get the same welcome as email/password registrations
   // (best-effort — a mail failure must never break the OAuth redirect).
   if (created && newEmail) {
@@ -142,10 +145,18 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
     });
   }
   const sessionCookie = await issueSessionCookie(userId, 'google', c.env, sessionOrigin(c));
+  // Joining cleared what the account had set up before its address was confirmed: ?cleared=1
+  // lets the app say what. Joining clears the TOTP too, so this never meets ?twofa=1.
+  let location = state.returnTo;
+  if (cleared) {
+    const dest = new URL(state.returnTo);
+    dest.searchParams.set('cleared', '1');
+    location = dest.toString();
+  }
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
     status: 302,
-    headers: { Location: state.returnTo, 'Set-Cookie': sessionCookie },
+    headers: { Location: location, 'Set-Cookie': sessionCookie },
   });
 });
 
@@ -395,7 +406,12 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // One batch, so the password change and the retiring of the account's other pending links
   // either both happen or neither does. They used to be separate awaited writes: a failure
   // between them left live reset links pointing at an account whose password had just changed.
-  await c.env.DB.batch([
+  const results = await c.env.DB.batch([
+    // On an account whose address was not confirmed yet, every way in that was set up before goes
+    // first (clearUnconfirmedAccess), the old password with it. It has to come before the write
+    // below: that write confirms the address, after which these do nothing, and it sets the new
+    // password, which has to be the one that stays. A confirmed account keeps everything it has.
+    ...clearUnconfirmedAccess(c.env.DB, row.user_id),
     // Set the password, mark the email verified (they proved control), and bump token_version
     // to revoke every previously issued session.
     c.env.DB.prepare(
@@ -407,8 +423,10 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   ]);
   // Do NOT auto-login: send the user back to the sign-in screen to log in with the new
   // password (avoids a half-authenticated state). The token_version bump above already
-  // revoked any existing sessions.
-  return c.json({ ok: true });
+  // revoked any existing sessions. `cleared` lets the app say what else went, if anything.
+  return c.json(
+    clearedWorthSaying(clearedAccess(results), 'reset') ? { ok: true, cleared: true } : { ok: true }
+  );
 });
 
 // ── Email verification ─────────────────────────────────────────────────────────────────────────

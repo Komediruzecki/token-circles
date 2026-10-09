@@ -3,10 +3,11 @@
  * (the request endpoint answers identically for unknown addresses, cookie included), single-use,
  * 10-minute TTL — and the verify step is BOUND to the browser that requested it by a signed
  * ceremony cookie, so a code can only be guessed at by the party that triggered it: five wrong
- * attempts burn it. The 2FA challenge still applies after the code.
+ * attempts burn it. On a confirmed account the 2FA challenge still applies after the code; on one
+ * whose address was never confirmed, the code first removes every way in that was set up before.
  */
 import { env, SELF } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createLoginCode,
   LOGIN_CODE_MAX_ATTEMPTS,
@@ -15,9 +16,25 @@ import {
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
+import {
+  ACCESS_TABLES,
+  accessRows,
+  accountRow,
+  callMcp,
+  dataRows,
+  me,
+  removeAccounts,
+  seedAccount,
+  seededData,
+  signIn,
+  type AccessRows,
+} from './helpers/account-access';
 
 const BASE = 'https://api.example.com';
 const EMAIL = 'codeuser@example.com';
+/** An account with every kind of access set up on it (helpers/account-access.ts). */
+const SEEDED = 6610;
+const SEEDED_ADDRESS = 'household-code@example.com';
 
 function cookieValue(res: Response, name: string): string | null {
   for (const c of res.headers.getSetCookie()) {
@@ -35,11 +52,18 @@ async function post(path: string, body: unknown, cookie?: string): Promise<Respo
 }
 
 /** Mint a code at the store level and its matching ceremony cookie, as /request would. */
-async function mintWithCookie(email = EMAIL): Promise<{ code: string; cookie: string }> {
-  const { code, id } = await createLoginCode(env, userId, email);
+async function mintWithCookie(
+  email = EMAIL,
+  user = userId
+): Promise<{ code: string; cookie: string; id: number }> {
+  const { code, id } = await createLoginCode(env, user, email);
   const cookie = (await issueLoginCodeCookie(env, id, email)).split(';')[0]!;
-  return { code, cookie };
+  return { code, cookie, id };
 }
+
+/** The login codes as they were, with code `id` spent the way checking it spends it. */
+const withSpent = (codes: AccessRows['login_codes'], id: number) =>
+  codes.map((row) => (row.id === id ? { ...row, used_at: expect.any(String) } : row));
 
 let userId: number;
 
@@ -62,6 +86,11 @@ beforeEach(async () => {
     .bind(EMAIL)
     .run();
   userId = res.meta.last_row_id as number;
+});
+
+afterEach(async () => {
+  await env.DB.prepare('DROP TRIGGER IF EXISTS fail_code_confirm').run();
+  await removeAccounts(`SELECT ${SEEDED}`);
 });
 
 describe('requesting a code', () => {
@@ -146,6 +175,19 @@ describe('verifying a code', () => {
     expect(cookieValue(res, 'fm_session')).toBeNull();
   });
 
+  it('says the password was cleared on an unconfirmed account that had nothing else', async () => {
+    const { code, cookie } = await mintWithCookie();
+    const res = await post('/api/auth/email-code/verify', { email: EMAIL, code }, cookie);
+    expect(await res.json()).toEqual({ id: userId, email: EMAIL, cleared: true });
+  });
+
+  it('says nothing was cleared on a confirmed account', async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId).run();
+    const { code, cookie } = await mintWithCookie();
+    const res = await post('/api/auth/email-code/verify', { email: EMAIL, code }, cookie);
+    expect(await res.json()).toEqual({ id: userId, email: EMAIL });
+  });
+
   it('proving inbox control marks the address verified', async () => {
     const { code, cookie } = await mintWithCookie();
     await post('/api/auth/email-code/verify', { email: EMAIL, code }, cookie);
@@ -228,8 +270,9 @@ describe('account deletion', () => {
   });
 });
 
-describe('with 2FA enabled', () => {
+describe('with 2FA enabled on a confirmed account', () => {
   it('the email code is only the first factor: challenge cookie, then TOTP completes', async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId).run();
     const secret = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
     await enrollTotp(env, userId, secret);
     await confirmTotp(env, userId);
@@ -249,5 +292,98 @@ describe('with 2FA enabled', () => {
     );
     expect(verify.status).toBe(200);
     expect(cookieValue(verify, 'fm_session')).toBeTruthy();
+  });
+});
+
+describe('a code for an account whose address was never confirmed', () => {
+  it('removes every way in that was set up before, then signs in', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    // Each of them gets in beforehand.
+    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    expect((await me(session)).status).toBe(200);
+    expect((await callMcp(apiToken)).status).toBe(200);
+    const { code, cookie, id } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
+
+    const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
+    expect(res.status).toBe(200);
+    // Straight in, with no second-factor step: the TOTP went with the rest. The answer says that
+    // something was cleared, so the app can say what.
+    expect(await res.json()).toEqual({ id: SEEDED, email: SEEDED_ADDRESS, cleared: true });
+    const signedIn = cookieValue(res, 'fm_session');
+    expect(signedIn, 'a session cookie').toBeTruthy();
+    const who = await me(signedIn!);
+    expect(who.status).toBe(200);
+    expect(await who.json()).toMatchObject({
+      id: SEEDED,
+      email: SEEDED_ADDRESS,
+      email_verified: 1,
+    });
+    expect(await accountRow(SEEDED)).toMatchObject({ password_hash: null, email_verified: 1 });
+
+    // Nothing set up before gets in any more.
+    expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);
+    expect((await me(session)).status).toBe(401);
+    expect((await callMcp(apiToken)).status).toBe(401);
+    const rows = await accessRows(SEEDED);
+    expect(rows.auth_sessions).toEqual([expect.objectContaining({ provider: 'email' })]);
+    // The code just used stays, spent. The one sent before it is gone with the other links.
+    expect(rows.login_codes).toEqual([
+      expect.objectContaining({ id, used_at: expect.any(String) }),
+    ]);
+    for (const table of ACCESS_TABLES.filter((t) => t !== 'auth_sessions' && t !== 'login_codes')) {
+      expect(rows[table], table).toEqual([]);
+    }
+
+    // The data stays.
+    expect(await dataRows(SEEDED)).toEqual(seededData(SEEDED));
+  });
+
+  it('leaves the account as it was when any part of the change fails', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    const { code, cookie, id } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
+    const before = await accountRow(SEEDED);
+    const rowsBefore = await accessRows(SEEDED);
+    // Confirming the address is the last write, so everything before it has run when it fails.
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_code_confirm BEFORE UPDATE OF email_verified ON users
+       WHEN NEW.id = ${SEEDED}
+       BEGIN SELECT RAISE(ABORT, 'forced failure'); END`
+    ).run();
+
+    const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
+    expect(res.status).toBe(500);
+    expect(cookieValue(res, 'fm_session')).toBeNull();
+
+    expect(await accountRow(SEEDED)).toEqual(before);
+    expect(await accessRows(SEEDED)).toEqual({
+      ...rowsBefore,
+      login_codes: withSpent(rowsBefore.login_codes, id),
+    });
+    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    expect((await me(session)).status).toBe(200);
+    expect((await callMcp(apiToken)).status).toBe(200);
+  });
+});
+
+describe('a code for a confirmed account', () => {
+  it('leaves every other way in as it was, and asks for the second factor', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 1);
+    const { code, cookie, id } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
+    const before = await accountRow(SEEDED);
+    const rowsBefore = await accessRows(SEEDED);
+
+    const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ twofaRequired: true });
+    expect(cookieValue(res, 'fm_session')).toBeNull();
+
+    expect(await accountRow(SEEDED)).toEqual(before);
+    expect(await accessRows(SEEDED)).toEqual({
+      ...rowsBefore,
+      login_codes: withSpent(rowsBefore.login_codes, id),
+    });
+    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    expect((await me(session)).status).toBe(200);
+    expect((await callMcp(apiToken)).status).toBe(200);
   });
 });
