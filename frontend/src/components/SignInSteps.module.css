@@ -1,0 +1,79 @@
+/*
+ * The sign-in steps that sit inside the sign-in screen and the sign-in dialog: a code by email and
+ * the second factor. Each is a short form with one field, labelled above it as the sign-in form's
+ * fields are. The form kit adds the marked state (Form.module.css).
+ */
+
+.lead {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  text-align: left;
+}
+
+.lead strong {
+  color: var(--text);
+}
+
+.field {
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #e6e8eb);
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--bg, #0b0e14);
+  color: var(--text, #e6e8eb);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* A code is read digit by digit: bigger, spaced, centred. */
+.code {
+  font-size: 16px;
+  letter-spacing: 4px;
+  text-align: center;
+}
+
+.hint {
+  margin: 2px 0 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.submit {
+  width: 100%;
+  justify-content: center;
+}
+
+.links {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.link {
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+
+.linkQuiet {
+  color: var(--text-secondary);
+}

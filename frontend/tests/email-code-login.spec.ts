@@ -17,6 +17,7 @@ import { BOOTS, bootApp, openSignIn } from './boot'
 import { E2E_BASE } from './e2e-constants'
 import { sql } from './db'
 import { getByTestId } from './test-helpers'
+import { SIGN_IN_MESSAGES } from '../../shared/signInSchema'
 
 /** One account per boot, so the two runs of the case never share a code. */
 const emailFor = (boot: string) =>
@@ -62,10 +63,13 @@ for (const boot of BOOTS) {
      WHERE id = (SELECT MAX(id) FROM login_codes WHERE email = '${EMAIL}')`
     )
 
-    // ── Wrong guess: neutral rejection, form stays ─────────────────────────────────────────────
+    // ── Wrong guess: said under the code field, and the form stays ─────────────────────────────
     await getByTestId(page, 'emailcode-code').fill('999999')
     await getByTestId(page, 'emailcode-verify').click()
-    await expect(getByTestId(page, 'emailcode-error')).toBeVisible()
+    await expect(getByTestId(page, 'emailcode-code')).toHaveAttribute('aria-invalid', 'true')
+    await expect(getByTestId(page, 'emailcode-code')).toHaveAccessibleDescription(
+      SIGN_IN_MESSAGES.emailCodeRefused
+    )
 
     // ── Right code: signed in ──────────────────────────────────────────────────────────────────
     await getByTestId(page, 'emailcode-code').fill(KNOWN_CODE)

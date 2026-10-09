@@ -228,6 +228,35 @@ export class ApiClient {
   }
 
   /**
+   * Ask for a sign-in code by email (worker: POST /api/auth/email-code/request). The answer is the
+   * same whether or not the address has an account; it also sets the cookie the code is traded
+   * with, so only this browser can use the code.
+   */
+  async requestEmailCode(email: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/email-code/request', undefined, {
+      method: 'POST',
+      body: { email, turnstileToken },
+    })
+  }
+
+  /**
+   * Trade a sign-in code for the session (worker: POST /api/auth/email-code/verify), or for the
+   * second-factor step when the account has one. `cleared` is true when confirming the address
+   * this way also cleared what the account had set up.
+   */
+  async verifyEmailCode(
+    email: string,
+    code: string
+  ): Promise<{ twofaRequired: boolean; cleared: boolean }> {
+    const answer = await this.request<{ twofaRequired?: boolean; cleared?: boolean }>(
+      '/auth/email-code/verify',
+      undefined,
+      { method: 'POST', body: { email, code } }
+    )
+    return { twofaRequired: answer?.twofaRequired === true, cleared: answer?.cleared === true }
+  }
+
+  /**
    * Logout
    */
   async logout(): Promise<void> {
