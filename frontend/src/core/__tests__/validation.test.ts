@@ -271,18 +271,23 @@ describe('validation - the shared checks', () => {
     // The path the old zod schema was registered under is called by nothing.
     expect(validateBody('POST', '/api/housings', {})).toBeNull()
   })
-})
 
-describe('validation - a zod refusal in plain words', () => {
-  it('says what to do with a number out of range, a list value and a date', async () => {
+  it('checks a new holding, and leaves an edit to its handler', async () => {
     expect(
       await fieldsOf('/api/portfolio/holdings', {
-        ticker: 'VWCE',
+        ticker: 'SAMPL',
         shares: 10,
         purchase_price: 100,
         purchase_date: '1 May',
       })
-    ).toEqual({ purchase_date: 'Enter a valid purchase date.' })
+    ).toEqual({ purchase_date: 'Enter a real date, written like 2026-02-10.' })
+    // An edit that sends one field is checked against the stored holding (checkHoldingEdit).
+    expect(validateBody('PUT', '/api/portfolio/holdings/4', { notes: 'Paused' })).toBeNull()
+  })
+})
+
+describe('validation - a zod refusal in plain words', () => {
+  it('says what to do with a list value and an id', async () => {
     expect(
       await fieldsOf('/api/recurring', {
         description: 'Rent',

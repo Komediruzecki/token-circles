@@ -24,6 +24,7 @@ import {
 } from '../../../shared/categoryMappingSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
+import { checkHoldingCreate } from '../../../shared/holdingSchema'
 import { checkHousingCreate } from '../../../shared/housingSchema'
 import { checkImportSourceCreate, checkSheetFetch } from '../../../shared/importSourceSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
@@ -86,14 +87,7 @@ export const recurringUpdateSchema = recurringCreateSchema.partial()
 // Not a zod schema: shared/tagSchema.ts, which the Worker route runs too.
 
 // ── Portfolio Holding ──────────────────────────────────────────────────────────
-
-export const portfolioHoldingCreateSchema = z.object({
-  ticker: z.string().min(1).max(10),
-  shares: z.number().positive(),
-  purchase_price: z.number().positive(),
-  purchase_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  notes: z.string().optional(),
-})
+// Not a zod schema: shared/holdingSchema.ts, which the Worker route runs too.
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 // Not a zod schema: shared/settingsSchema.ts, which the Worker route runs too.
@@ -146,8 +140,8 @@ const schemaMap: Record<string, BodyRule> = {
   // A new tag's colour, when it has none, depends on the profile's tags: its handler fills it in.
   // An edit is checked by its handler against the stored tag (checkTagEdit).
   'POST:/api/tags': (body) => checkTagCreate(body, defaultTagColor(0)),
-  'POST:/api/portfolio/holdings': portfolioHoldingCreateSchema,
-  'PUT:/api/portfolio/holdings': portfolioHoldingCreateSchema,
+  // An edit is checked by its handler against the stored holding (checkHoldingEdit).
+  'POST:/api/portfolio/holdings': checkHoldingCreate,
   'PUT:/api/settings': checkSettingsUpdate,
   'POST:/api/storage-mode': checkStorageMode,
   'POST:/api/settings/set-storage': checkStorageMode,
