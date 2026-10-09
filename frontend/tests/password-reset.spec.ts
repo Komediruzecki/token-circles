@@ -84,8 +84,8 @@ async function setNewPassword(browser: Browser, boot: (typeof BOOTS)[number], li
   await bootApp(context, boot)
   const page = await context.newPage()
   await page.goto(link)
-  await page.getByPlaceholder('New password', { exact: true }).fill(NEW_PASSWORD)
-  await page.getByPlaceholder('Confirm new password').fill(NEW_PASSWORD)
+  await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD)
+  await page.getByLabel('Confirm new password').fill(NEW_PASSWORD)
   await page.getByRole('button', { name: 'Set new password' }).click()
   // The app lands on the sign-in screen, in account mode, a local-first browser included.
   await expect(page.locator('#login-email')).toBeVisible({ timeout: 30_000 })

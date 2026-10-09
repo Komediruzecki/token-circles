@@ -1,15 +1,26 @@
 import { createSignal, onMount, Show } from 'solid-js'
+import { resetPasswordProblems, SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
+import { ApiError } from '../core/apiError'
 import { setStorageMode } from '../core/storage/storageFactory'
+import { createForm, Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
+import { SIGN_IN_FAILED } from './signInForm'
+import styles from './SignInSteps.module.css'
 import SupportContact from './SupportContact'
+import type { FieldErrors } from '../../../shared/refusal'
 
 /**
  * Full-page "set a new password" screen, reached from the magic link in a reset email
  * (#reset-password?token=…). Validates the token up front, then lets the user pick a new
  * password; the worker deliberately does not sign them in, so on success we drop into
  * server mode and reload onto the sign-in screen.
+ *
+ * A kit form: a password shorter than 8 characters, and a second entry that differs from the
+ * first, are marked under their fields before anything is sent. A link that stopped working while
+ * the page was open (spent elsewhere, or expired) shows the same screen as one that never worked,
+ * which says to ask for a new one.
  */
 function tokenFromHash(): string {
   const hash = window.location.hash.slice(1) // e.g. "reset-password?token=abc"
@@ -17,13 +28,17 @@ function tokenFromHash(): string {
   return new URLSearchParams(qs).get('token') ?? ''
 }
 
+interface NewPassword {
+  password: string
+  confirm: string
+}
+
+/** What a send led to: the password is set, or the link no longer works. */
+type ResetOutcome = 'done' | 'link-gone'
+
 export default function ResetPassword() {
   const token = tokenFromHash()
   const [status, setStatus] = createSignal<'checking' | 'ready' | 'invalid' | 'done'>('checking')
-  const [password, setPassword] = createSignal('')
-  const [confirm, setConfirm] = createSignal('')
-  const [error, setError] = createSignal('')
-  const [loading, setLoading] = createSignal(false)
 
   onMount(async () => {
     if (!token) {
@@ -41,22 +56,33 @@ export default function ResetPassword() {
     }
   })
 
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    setError('')
-    if (password().length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-    if (password() !== confirm()) {
-      setError('Passwords do not match')
-      return
-    }
-    setLoading(true)
-    try {
-      const { cleared } = await api.resetPassword(token, password())
-      // The sign-in screen this reloads onto says what else the reset cleared.
-      if (cleared) markAccessCleared('reset')
+  const form = createForm<NewPassword, ResetOutcome>({
+    initial: { password: '', confirm: '' },
+    check: (values): FieldErrors => ({
+      ...resetPasswordProblems(values),
+      ...(values.confirm === values.password ? {} : { confirm: SIGN_IN_MESSAGES.confirmPassword }),
+    }),
+    send: async (values) => {
+      try {
+        const { cleared } = await api.resetPassword(token, values.password)
+        // The sign-in screen this reloads onto says what else the reset cleared.
+        if (cleared) markAccessCleared('reset')
+        return 'done'
+      } catch (error) {
+        // A refusal that names no field is about the link: it was spent or it expired.
+        const aboutTheLink =
+          error instanceof ApiError &&
+          error.status === 400 &&
+          Object.keys(error.fields).length === 0
+        if (aboutTheLink) return 'link-gone'
+        throw error
+      }
+    },
+    saved: (outcome) => {
+      if (outcome === 'link-gone') {
+        setStatus('invalid')
+        return
+      }
       setStatus('done')
       // A reset only makes sense for a server account — land in server mode at the sign-in
       // screen. The worker no longer auto-logs-in, so the user signs in with the new password.
@@ -65,27 +91,13 @@ export default function ResetPassword() {
         window.location.hash = ''
         window.location.reload()
       }, 1200)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not reset your password')
-      setLoading(false)
-    }
-  }
+    },
+    failure: SIGN_IN_FAILED,
+  })
 
   const goToLogin = () => {
     window.location.hash = ''
     window.location.reload()
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    'margin-bottom': '10px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    'box-sizing': 'border-box' as const,
   }
 
   return (
@@ -146,42 +158,51 @@ export default function ResetPassword() {
           <p style={{ margin: '0 0 20px', color: 'var(--text-secondary)', 'font-size': '14px' }}>
             Choose a new password.
           </p>
-          <form onSubmit={submit}>
-            <input
-              type="password"
-              placeholder="New password"
-              value={password()}
-              onInput={(e) => setPassword(e.currentTarget.value)}
-              autocomplete="new-password"
-              style={inputStyle}
-            />
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirm()}
-              onInput={(e) => setConfirm(e.currentTarget.value)}
-              autocomplete="new-password"
-              style={inputStyle}
-            />
-            <Show when={error()}>
-              <div
-                style={{
-                  color: 'var(--danger, #ef4444)',
-                  'font-size': '13px',
-                  margin: '2px 0 10px',
-                }}
-              >
-                {error()}
-              </div>
-            </Show>
-            <button
-              type="submit"
-              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-              style={{ width: '100%', 'justify-content': 'center' }}
-              disabled={loading()}
+          <FormNotice form={form} testId="reset-error" />
+          <form {...form.attrs}>
+            <Field
+              form={form}
+              name="password"
+              label="New password"
+              class={styles.field}
+              labelClass={styles.label}
             >
-              {loading() ? 'Please wait…' : 'Set new password'}
-            </button>
+              {(control) => (
+                <input
+                  {...control}
+                  type="password"
+                  value={form.values.password}
+                  onInput={(e) => form.set('password', e.currentTarget.value)}
+                  autocomplete="new-password"
+                  class={styles.input}
+                />
+              )}
+            </Field>
+            <Field
+              form={form}
+              name="confirm"
+              label="Confirm new password"
+              class={styles.field}
+              labelClass={styles.label}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="password"
+                  value={form.values.confirm}
+                  onInput={(e) => form.set('confirm', e.currentTarget.value)}
+                  autocomplete="new-password"
+                  class={styles.input}
+                />
+              )}
+            </Field>
+            <SubmitButton
+              busy={form.submitting()}
+              busyLabel="Setting your password…"
+              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
+            >
+              Set new password
+            </SubmitButton>
           </form>
           <button
             onClick={goToLogin}
