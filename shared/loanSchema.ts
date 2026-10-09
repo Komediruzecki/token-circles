@@ -429,9 +429,13 @@ export function checkExtraPaymentEdit(
 }
 
 /**
- * What a loan's list row says about its extra payments: how many, and their total to the cent. A
- * loan without any has a total of 0. The Worker's list summed them in SQL, which answers null for
- * no rows (the contract's `loan-total-prepaid-none`), and local-first answered 0.
+ * What a loan's list row says about its extra payments: how many are saved, and their total to the
+ * cent. It adds up the saved ones, not what the schedule applies: one with a payment after the
+ * loan is paid off counts, though the schedule never reaches it (shared/fixtures/loanFormParity.ts
+ * holds both runtimes to that), and one larger than what is left counts in full, though the
+ * schedule takes only what is owed. A loan without any has a total of 0. The Worker's list summed
+ * them in SQL, which answers null for no rows (the contract's `loan-total-prepaid-none`), and
+ * local-first answered 0.
  */
 export function extraPaymentTotals(extras: readonly { amount?: unknown }[] | null | undefined): {
   total_prepaid: number;
