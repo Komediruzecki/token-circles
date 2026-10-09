@@ -1,3 +1,4 @@
+import { SETTINGS_MESSAGES } from '../../settingsSchema';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
@@ -68,34 +69,25 @@ export const settings = [
     }
   }),
 
-  scenario('the storage mode is read and switched', async (api, expect) => {
+  scenario('the storage mode is read, and a switch acknowledged', async (api, expect) => {
     const read = await api.get('/api/storage-mode');
     expectOk(expect, read, 'GET /api/storage-mode');
-    // Settings' switch without moving data sends the mode it switches to, then reloads.
-    const switched = await api.post('/api/storage-mode', { mode: 'self-hosted' });
-    expectOk(expect, switched, 'POST /api/storage-mode');
-    // Nothing in the app sends this one; it answers as the Express server did.
-    const legacy = await api.post('/api/settings/set-storage', { mode: 'self-hosted' });
-    expectOk(expect, legacy, 'POST /api/settings/set-storage');
-    // DIFFERENCE storage-mode-answers
-    if (api.runtime === 'worker') {
-      expect(read.body).toEqual({ mode: 'self-hosted', type: 'sqlite' });
-      expect(switched.body).toEqual({ ok: true });
-      expect(legacy.body).toEqual({
-        ok: true,
-        message: 'SQLite storage configured. Please restart the application.',
-      });
-    } else {
-      expect(read.body).toEqual({ mode: 'serverless' });
+    // Each runtime names itself: the Worker is the cloud, local-first this browser.
+    expect(read.body).toEqual({ mode: api.runtime === 'worker' ? 'self-hosted' : 'serverless' });
+    // Settings' switch without moving data sends the mode it switches to, then sets it in the
+    // browser itself and reloads. The answer acknowledges the mode and switches nothing. Nothing in
+    // the app sends the Express server's name for it, which answers the same.
+    for (const path of ['/api/storage-mode', '/api/settings/set-storage']) {
+      const switched = await api.post(path, { mode: 'self-hosted' });
+      expectOk(expect, switched, `POST ${path}`);
       expect(switched.body).toEqual({ ok: true, mode: 'self-hosted' });
-      expect(legacy.body).toEqual({ ok: true, mode: 'self-hosted' });
-      expect((await api.get('/api/storage-mode')).body).toEqual({ mode: 'self-hosted' });
+      const refused = await api.post(path, { mode: 'cloud' });
+      expect(refused.status).toBe(400);
+      expect(refused.body).toEqual({
+        error: SETTINGS_MESSAGES.mode,
+        fields: { mode: SETTINGS_MESSAGES.mode },
+      });
     }
-    // Back to where this browser was.
-    expectOk(
-      expect,
-      await api.post('/api/storage-mode', { mode: read.body.mode }),
-      'POST the mode back'
-    );
+    expect((await api.get('/api/storage-mode')).body).toEqual(read.body);
   }),
 ];

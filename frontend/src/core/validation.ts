@@ -17,17 +17,23 @@ import { z } from 'zod/v4'
 import { checkAccountCreate } from '../../../shared/accountSchema'
 import { checkBillCreate } from '../../../shared/billSchema'
 import { checkBudgetCreate } from '../../../shared/budgetSchema'
+import {
+  checkApplyMappings,
+  checkAutoMap,
+  checkCategoryMapping,
+} from '../../../shared/categoryMappingSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
+import { checkImportSourceCreate, checkSheetFetch } from '../../../shared/importSourceSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
+import { checkProfileCreate } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
+import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
 import { getLocalCurrency } from './api'
 import type { Checked, FieldErrors } from '../../../shared/refusal'
 import type { TransactionDefaults } from '../../../shared/transactionSchema'
-
-const currencyCodeSchema = z.string().regex(/^[A-Z]{3}$/)
 
 // ── Transaction ────────────────────────────────────────────────────────────────
 // Not a zod schema: shared/transactionSchema.ts, which the Worker route runs too.
@@ -96,23 +102,10 @@ export const portfolioHoldingCreateSchema = z.object({
 })
 
 // ── Settings ───────────────────────────────────────────────────────────────────
-
-export const settingsUpdateSchema = z
-  .object({
-    local_currency: currencyCodeSchema.optional(),
-    theme: z.enum(['light', 'dark']).optional(),
-    primary_currency: currencyCodeSchema.optional(),
-    language: z.enum(['en', 'de', 'fr', 'es']).optional(),
-  })
-  .loose()
+// Not a zod schema: shared/settingsSchema.ts, which the Worker route runs too.
 
 // ── Profile ────────────────────────────────────────────────────────────────────
-
-export const profileCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-})
-
-export const profileUpdateSchema = profileCreateSchema.partial()
+// Not a zod schema: shared/profileSchema.ts, which the Worker route runs too.
 
 // ── Housing ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +141,9 @@ const schemaMap: Record<string, BodyRule> = {
   // against the stored row, since a value the row already holds is never refused
   // (checkTransactionEdit, checkCategoryEdit and checkAccountEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
+  'POST:/api/categories/mappings': checkCategoryMapping,
+  'POST:/api/categories/apply-mappings': checkApplyMappings,
+  'POST:/api/categories/auto-map': checkAutoMap,
   'POST:/api/accounts': checkAccountCreate,
   // No PUT entry for budgets, bills, loans or savings goals either: their handlers check an edit
   // against the stored row (checkBudgetEdit, checkBillEdit, checkLoanEdit and checkGoalEdit in
@@ -162,10 +158,14 @@ const schemaMap: Record<string, BodyRule> = {
   'PUT:/api/tags': tagUpdateSchema,
   'POST:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/portfolio/holdings': portfolioHoldingCreateSchema,
-  'PUT:/api/settings': settingsUpdateSchema,
-  'POST:/api/profiles': profileCreateSchema,
-  'PUT:/api/profiles': profileUpdateSchema,
-  'PATCH:/api/profiles': profileUpdateSchema,
+  'PUT:/api/settings': checkSettingsUpdate,
+  'POST:/api/storage-mode': checkStorageMode,
+  'POST:/api/settings/set-storage': checkStorageMode,
+  // A rename is checked by its handler against the stored name (checkProfileRename).
+  'POST:/api/profiles': checkProfileCreate,
+  // An edit of a source is checked by its handler against the stored kind (checkImportSourceEdit).
+  'POST:/api/import-sources': checkImportSourceCreate,
+  'POST:/api/import/googlesheet': checkSheetFetch,
   'POST:/api/housings': housingCreateSchema,
   'PUT:/api/housings': housingCreateSchema.partial(),
   'POST:/api/counterparties': counterpartyCreateSchema,

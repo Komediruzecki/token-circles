@@ -1,6 +1,15 @@
 import type { Env } from './index';
 import { HttpError } from './http';
 import * as db from './db';
+import { planHasFeature } from './plans';
+import {
+  AUTOMATED_IMPORT_SCHEDULES,
+  isImportSourceKind,
+  isImportSourceSchedule,
+  sourceJsonObject,
+} from '../../shared/importSourceSchema';
+import { distinctProfileNames } from '../../shared/profileSchema';
+import { splitLocalProfileSettingKey } from '../../shared/profileSettings';
 
 export const BACKUP_VERSION = '3.0.0';
 
@@ -40,6 +49,11 @@ export interface BackupData {
   receiptFiles: ReceiptFileBackup[];
   balanceHistoryRows: Row[];
   importLogs: Row[];
+  /**
+   * Saved import sources, with config, mapping and category types as objects, as
+   * GET /api/import-sources answers them. Older backups have none.
+   */
+  importSources: Row[];
   customReports: Row[];
   settingsRows: Row[];
   settings: Record<string, unknown>;
@@ -80,6 +94,7 @@ const PROFILE_SCOPED_KEYS = [
   'categoryMappings',
   'receipts',
   'importLogs',
+  'importSources',
   'settingsRows',
 ] as const;
 
@@ -87,6 +102,7 @@ const PROFILE_TABLES = [
   'receipts',
   'category_mappings',
   'import_logs',
+  'import_sources',
   'recurring_transactions',
   'bills',
   'housings',
@@ -131,14 +147,58 @@ function uniqueIds(source: Row[], field: string): Set<number> {
   return result;
 }
 
+/** An object for a TEXT column that holds JSON, or NULL. */
+function jsonColumn(value: Record<string, unknown> | null): string | null {
+  return value === null ? null : JSON.stringify(value);
+}
+
 function settingValue(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+/**
+ * A retirement plan and a badge record belong to one profile (shared/profileSettings.ts). This
+ * Worker keeps each as a row of its profile under the plain key; a file from local-first names
+ * the profile in the key instead (`retirement_settings:<id>`). Such a row is restored as a row of
+ * the profile its key names, under the plain key, and stands in for a row the file has for that
+ * profile under the plain key: it is the one local-first kept current. One naming a profile the
+ * file does not carry is left out.
+ */
+function profileSettingsInWorkerForm(source: Row[], profileIds: Set<number>): Row[] {
+  const named = new Map<string, Row>();
+  for (const row of source) {
+    const local = splitLocalProfileSettingKey(String(row.key ?? ''));
+    if (!local || !profileIds.has(local.profileId)) continue;
+    named.set(`${local.profileId}:${local.key}`, {
+      ...row,
+      key: local.key,
+      profile_id: local.profileId,
+    });
+  }
+  const plain = source.filter(
+    (row) =>
+      splitLocalProfileSettingKey(String(row.key ?? '')) === null &&
+      !named.has(`${Number(row.profile_id)}:${String(row.key)}`)
+  );
+  return [...plain, ...named.values()];
+}
+
+/**
+ * The profiles with names no two of which differ only in case: this Worker took such names before
+ * the rule, and a backup must restore. The later of two comes back as "Name (2)".
+ */
+function withDistinctNames(profiles: Row[]): Row[] {
+  const names = profiles.map((profile) => String(profile.name ?? ''));
+  const distinct = distinctProfileNames(names);
+  return profiles.map((profile, index) =>
+    distinct[index] === names[index] ? profile : { ...profile, name: distinct[index] }
+  );
 }
 
 function normalizeBackup(input: unknown): NormalizedBackup {
   if (!input || typeof input !== 'object') throw new HttpError(400, 'Invalid backup payload');
   const data = input as Record<string, unknown>;
-  const profiles = rows(data.profiles, 'profiles');
+  const profiles = withDistinctNames(rows(data.profiles, 'profiles'));
   if (profiles.length === 0) throw new HttpError(422, 'A backup must contain at least one profile');
 
   const loans = rows(data.loans, 'loans');
@@ -186,6 +246,10 @@ function normalizeBackup(input: unknown): NormalizedBackup {
       profile_id: firstProfileId,
     }));
   }
+  settingsRows = profileSettingsInWorkerForm(
+    settingsRows,
+    new Set(profiles.map((profile) => Number(profile.id)))
+  );
 
   const receiptFilesRaw = data.receiptFiles;
   const receiptFiles =
@@ -236,6 +300,7 @@ function normalizeBackup(input: unknown): NormalizedBackup {
       'balanceHistoryRows'
     ),
     importLogs: rows(data.importLogs, 'importLogs'),
+    importSources: rows(data.importSources, 'importSources'),
     customReports: rows(data.customReports, 'customReports'),
     settingsRows,
     settings,
@@ -259,13 +324,10 @@ function requireReference(
 
 function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   const profileIds = uniqueIds(data.profiles, 'profiles');
-  const profileNames = new Set<string>();
+  // Names that differ only in case are numbered by now (withDistinctNames).
   for (let index = 0; index < data.profiles.length; index++) {
     const name = String(data.profiles[index]!.name ?? '').trim();
     if (!name) throw new HttpError(422, `profiles[${index}].name is required`);
-    const key = name.toLowerCase();
-    if (profileNames.has(key)) throw new HttpError(422, `Duplicate profile name "${name}"`);
-    profileNames.add(key);
   }
 
   for (const key of PROFILE_SCOPED_KEYS) {
@@ -331,7 +393,6 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   data.receipts.forEach((row, index) =>
     requireReference(row, 'transaction_id', transactionIds, `receipts[${index}]`)
   );
-
   // The keys D1 holds unique, checked here so a file that repeats one is a 422 naming it rather
   // than a constraint failure halfway through the staged restore. Same comparison as the
   // constraint: exact, case-sensitive names.
@@ -442,6 +503,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     receipts,
     balanceHistoryRows,
     importLogs,
+    importSourceRows,
     customReports,
     settingsRows,
   ] = await Promise.all([
@@ -480,6 +542,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     scoped('receipts'),
     child('account_balance_history', 'accounts', 'account_id'),
     scoped('import_logs'),
+    scoped('import_sources', 'ORDER BY id'),
     db.all<Row>(env.DB, 'SELECT * FROM custom_reports WHERE user_id = ? ORDER BY id', userId),
     scoped('settings'),
   ]);
@@ -532,6 +595,14 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     }
   }
 
+  // As GET /api/import-sources answers them, which is how local-first stores them too.
+  const importSources = importSourceRows.map((row) => ({
+    ...row,
+    config: sourceJsonObject(row.config, {}),
+    mapping: sourceJsonObject(row.mapping, null),
+    category_types: sourceJsonObject(row.category_types, null),
+  }));
+
   const settings: Record<string, unknown> = {};
   for (const row of settingsRows) {
     if (Number(row.profile_id) === pids[0]) settings[String(row.key)] = row.value;
@@ -565,6 +636,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     receiptFiles,
     balanceHistoryRows,
     importLogs,
+    importSources,
     customReports,
     settingsRows,
     settings,
@@ -865,6 +937,30 @@ export async function restoreBackup(
     await insertRows('import_logs', data.importLogs, (row, index) =>
       withProfile(row, `importLogs[${index}]`)
     );
+    // A source on a schedule our machines run comes back on it only if the plan includes that;
+    // otherwise it comes back manual, as the import-sources routes would have it. A kind or a
+    // schedule there is no such thing as comes back as a sheet on manual, for the person to open
+    // and fix, as local-first restores it. A default account the file does not carry is no
+    // default.
+    const plan = await db.first<{ plan: string | null }>(
+      DB,
+      'SELECT plan FROM users WHERE id = ?',
+      userId
+    );
+    const automated = planHasFeature(plan?.plan ?? 'free', 'automatedImports');
+    await insertRows('import_sources', data.importSources, (row, index) => {
+      const schedule = isImportSourceSchedule(row.schedule) ? row.schedule : 'manual';
+      const defaultAccount = Number(row.default_account_id);
+      return {
+        ...withProfile(row, `importSources[${index}]`),
+        kind: isImportSourceKind(row.kind) ? row.kind : 'google_sheet',
+        config: JSON.stringify(sourceJsonObject(row.config, {})),
+        mapping: jsonColumn(sourceJsonObject(row.mapping, null)),
+        category_types: jsonColumn(sourceJsonObject(row.category_types, null)),
+        default_account_id: accountMap.get(defaultAccount) ?? null,
+        schedule: AUTOMATED_IMPORT_SCHEDULES.includes(schedule) && !automated ? 'manual' : schedule,
+      };
+    });
     await insertRows('settings', data.settingsRows, (row, index) => ({
       ...withProfile(row, `settingsRows[${index}]`),
       value: settingValue(row.value),

@@ -5,49 +5,27 @@
  * stored as plain objects (IndexedDB is schemaless) and returned as-is, matching the worker's
  * parsed API shape so both runtimes present the same contract to the client.
  */
+import {
+  checkImportSourceCreate,
+  checkImportSourceEdit,
+  foreignSourceAccount,
+  IMPORT_SOURCE_MESSAGES,
+} from '../../../../../shared/importSourceSchema'
 import { getDB } from '../idb'
-import { adapter, idParam, json, writeProfileIdFromHeaders } from './helpers'
+import {
+  adapter,
+  currentProfileOwns,
+  idParam,
+  json,
+  refuse,
+  writeProfileIdFromHeaders,
+} from './helpers'
+import type { ImportSourceWrite } from '../../../../../shared/importSourceSchema'
 
-const KINDS = new Set(['google_sheet', 'google_drive_folder', 'bank_aggregator'])
-const SCHEDULES = new Set(['manual', 'on_open', 'daily'])
-
-type Writable = Record<string, unknown>
-
-/** Extract writable fields from a body; `partial` keeps only the keys present (for update). */
-function readWritable(
-  b: Record<string, unknown>,
-  partial: boolean
-): { data: Writable; error?: string } {
-  const data: Writable = {}
-  if (!partial || 'kind' in b) {
-    const kind = typeof b.kind === 'string' ? b.kind : 'google_sheet'
-    if (!KINDS.has(kind)) return { data, error: 'Invalid kind' }
-    data.kind = kind
-  }
-  if (!partial || 'label' in b)
-    data.label = typeof b.label === 'string' ? b.label.slice(0, 200) : ''
-  if (!partial || 'config' in b)
-    data.config = b.config && typeof b.config === 'object' ? b.config : {}
-  if ('mapping' in b) data.mapping = b.mapping && typeof b.mapping === 'object' ? b.mapping : null
-  if ('category_types' in b)
-    data.category_types =
-      b.category_types && typeof b.category_types === 'object' ? b.category_types : null
-  if ('default_account_id' in b)
-    data.default_account_id =
-      typeof b.default_account_id === 'number' && Number.isFinite(b.default_account_id)
-        ? Math.floor(b.default_account_id)
-        : null
-  if (!partial || 'schedule' in b) {
-    const schedule = typeof b.schedule === 'string' ? b.schedule : 'manual'
-    if (!SCHEDULES.has(schedule)) return { data, error: 'Invalid schedule' }
-    data.schedule = schedule
-  }
-  if ('last_synced_at' in b)
-    data.last_synced_at =
-      typeof b.last_synced_at === 'string' ? b.last_synced_at.slice(0, 40) : null
-  if ('last_cursor' in b)
-    data.last_cursor = typeof b.last_cursor === 'string' ? b.last_cursor.slice(0, 200) : null
-  return { data }
+/** Whether a checked body's default account, if it names one, is the profile's. */
+async function ownAccount(value: ImportSourceWrite, profileId: number): Promise<boolean> {
+  const id = value.default_account_id
+  return id === undefined || id === null || currentProfileOwns('accounts', id, profileId)
 }
 
 export async function importSourcesList(): Promise<Response> {
@@ -63,13 +41,15 @@ export async function importSourcesList(): Promise<Response> {
 }
 
 export async function importSourcesCreate(body: unknown, headers?: HeadersInit): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid source' }, 400)
-  const { data, error } = readWritable(body as Record<string, unknown>, false)
-  if (error) return json({ error }, 400)
+  // The Worker's rules and words (shared/importSourceSchema.ts).
+  const checked = checkImportSourceCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const profileId = await writeProfileIdFromHeaders(headers)
+  if (!(await ownAccount(checked.value, profileId))) return refuse(foreignSourceAccount())
   const db = await getDB()
   const now = new Date().toISOString()
   const row = {
-    profile_id: await writeProfileIdFromHeaders(headers),
+    profile_id: profileId,
     kind: 'google_sheet',
     label: '',
     config: {},
@@ -79,7 +59,7 @@ export async function importSourcesCreate(body: unknown, headers?: HeadersInit):
     schedule: 'manual',
     last_synced_at: null,
     last_cursor: null,
-    ...data,
+    ...checked.value,
     created_at: now,
     updated_at: now,
   }
@@ -92,15 +72,17 @@ export async function importSourcesUpdate(
   body: unknown,
   headers?: HeadersInit
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid source' }, 400)
-  const { data, error } = readWritable(body as Record<string, unknown>, true)
-  if (error) return json({ error }, 400)
   const db = await getDB()
   const id = idParam(params)
   const pid = await writeProfileIdFromHeaders(headers)
   const existing = (await db.get('import_sources', id)) as Record<string, unknown> | undefined
-  if (!existing || existing.profile_id !== pid) return json({ error: 'Source not found' }, 404)
-  Object.assign(existing, data, { updated_at: new Date().toISOString() })
+  if (!existing || existing.profile_id !== pid) {
+    return json({ error: IMPORT_SOURCE_MESSAGES.notFound }, 404)
+  }
+  const checked = checkImportSourceEdit(body, existing)
+  if (!checked.ok) return refuse(checked.fields)
+  if (!(await ownAccount(checked.value, pid))) return refuse(foreignSourceAccount())
+  Object.assign(existing, checked.value, { updated_at: new Date().toISOString() })
   await db.put('import_sources', existing)
   return json(existing)
 }

@@ -153,3 +153,20 @@ describe('POST /api/auth/login', () => {
     expect((await send(1, 'POST', '/api/auth/login', { password: 'x' })).status).toBe(400)
   })
 })
+
+describe('POST /api/profiles/reseed-demo', () => {
+  it("replaces every profile with the demo's three example profiles", async () => {
+    await account(1, 'Everyday')
+    await account(2, 'Theirs')
+
+    const reply = await send(1, 'POST', '/api/profiles/reseed-demo')
+    expect(reply).toEqual({ status: 200, body: { ok: true, message: 'Demo data reseeded' } })
+    const db = await getDB()
+    const names = ((await db.getAll('profiles')) as Row[]).map((p) => p.name)
+    expect(names).toEqual(['Example Low Income', 'Example Mid Income', 'Example High Income'])
+    // The example profiles come with their own accounts; the two made here are gone.
+    const accounts = ((await db.getAll('accounts')) as Row[]).map((a) => a.name)
+    expect(accounts).not.toContain('Everyday')
+    expect(accounts).not.toContain('Theirs')
+  })
+})

@@ -31,6 +31,7 @@ import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import LegalLinks from '../components/LegalLinks'
 import { LogViewer } from '../components/LogViewer'
@@ -43,10 +44,17 @@ import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
-import { apiErrorFrom, plainMessage } from '../core/apiError'
+import { ApiError, apiErrorFrom, plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
-import { bumpProfileVersion, getProfileVersion, setPage } from '../core/appStore'
+import {
+  bumpProfileVersion,
+  getProfileVersion,
+  setCurrentProfile,
+  setPage,
+  setProfiles,
+  useAppState,
+} from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
@@ -69,6 +77,9 @@ import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
+import { createBaseCurrencyForm } from './baseCurrencyForm'
+import { createNotificationsForm, notificationValues } from './notificationsForm'
+import { createProfileRenameForm } from './profileForm'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
 import type { SettingsTab } from '../core/settingsStore'
@@ -384,15 +395,26 @@ function CardHead(props: { icon: JSX.Element; title: string; desc?: string; tag?
   )
 }
 
+/** What a failed checkout or test email says when the answer brought no words of its own. */
+const CHECKOUT_FAILED = "Couldn't start checkout. Try again."
+const TEST_EMAIL_FAILED = "Couldn't send the test email. Try again."
+
 /** Why the active profile's household checkbox cannot be cleared. Shown on hover and read by screen readers. */
 const HOUSEHOLD_LOCKED_HINT =
   'This is your active profile, so it is always included: new transactions, categories and accounts are saved to it. To change it, switch profiles in the sidebar.'
+
+/** Said when a backup was not restored and the runtime gave no words of its own. */
+const RESTORE_FAILED =
+  "Couldn't restore that backup. Check it's a backup file Token Circles saved. Your data is as it was."
 
 export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
   // not a hardcoded USD that mismatches how amounts actually render.
   const [localCurrency, setLocalCurrency] = createSignal(getLocalCurrency())
-  const [currencyBusy, setCurrencyBusy] = createSignal(false)
+  const currencyForm = createBaseCurrencyForm({
+    stored: localCurrency,
+    onChanged: setLocalCurrency,
+  })
   const [darkMode, setDarkMode] = createSignal(false)
   const [chartExportSettings, setChartExportSettings] =
     createSignal<ChartExportSettings>(loadChartExportSettings())
@@ -606,7 +628,7 @@ export default function Settings() {
         resumed?: boolean
         error?: string
       }
-      if (!res.ok) throw new Error(data.error || 'Could not start checkout')
+      if (!res.ok) throw new ApiError(res.status, data.error || CHECKOUT_FAILED)
       if (data.url) {
         // Leave the button reading "Redirecting…" — the page is on its way out, and flipping it
         // back to "Upgrade" mid-navigation looks like the click did nothing.
@@ -631,7 +653,7 @@ export default function Settings() {
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
+      toast(plainMessage(e, CHECKOUT_FAILED), 'error')
     } finally {
       if (!leaving) setBillingBusyKey(null)
     }
@@ -643,9 +665,9 @@ export default function Settings() {
       const res = await apiFetch(path, { method: 'POST', credentials: 'include' })
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
-      else throw new Error(data.error || failMsg)
+      else throw new ApiError(res.status, data.error || failMsg)
     } catch (e) {
-      toast(e instanceof Error ? e.message : failMsg, 'error')
+      toast(plainMessage(e, failMsg), 'error')
       setBillingBusyKey(null)
     }
   }
@@ -672,48 +694,22 @@ export default function Settings() {
       const res = await apiFetch('/api/notifications/settings', { credentials: 'include' })
       const data = res.ok ? await res.json() : null
       setNotif(data)
+      notifForm.reset(notificationValues(data))
       setAccountEmail(data?.email ?? '')
       setPendingTaken(false)
     } catch {
       setNotif(null)
     }
   }
-  const saveNotifications = async () => {
-    const n = notif()
-    if (!n) return
-    setNotifBusy(true)
-    try {
-      const res = await apiFetch('/api/notifications/settings', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: n.email,
-          emailNotifications: n.emailNotifications,
-          budgetAlerts: n.budgetAlerts,
-          spendingReport: n.spendingReport,
-          billsReminders: n.billsReminders,
-        }),
-      })
-      if (!res.ok) throw await apiErrorFrom(res)
-      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
-      if (data.pendingEmail) {
-        // The account keeps its address until the new one opens the link, so the field goes back
-        // to it and the new address shows as waiting.
-        await loadNotifications()
-        toast(
-          `Saved. Open the link we sent to ${data.pendingEmail} to finish the change.`,
-          'success'
-        )
-      } else {
-        toast('Notification settings saved.', 'success')
-      }
-    } catch (e) {
-      toast(plainMessage(e, 'Could not save your settings. Try again.'), 'error')
-    } finally {
-      setNotifBusy(false)
-    }
-  }
+  // The address and the switches, saved together on the form kit (notificationsForm.ts): a refused
+  // address is marked under the field.
+  const notifForm = createNotificationsForm({
+    onSaved: (answer) => {
+      // The account keeps its address until the new one opens the link, so the field goes back to
+      // it and the new address shows as waiting.
+      if (answer.pendingEmail) void loadNotifications()
+    },
+  })
   const resendEmailChange = async () => {
     setEmailChangeBusy(true)
     try {
@@ -771,7 +767,7 @@ export default function Settings() {
         body: JSON.stringify({ type }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not send')
+      if (!res.ok) throw new ApiError(res.status, data.error || TEST_EMAIL_FAILED)
       toast(
         data.skipped
           ? 'Email is not configured on the server yet (no-op in dev).'
@@ -785,7 +781,7 @@ export default function Settings() {
         data.skipped ? 'info' : 'success'
       )
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not send', 'error')
+      toast(plainMessage(e, TEST_EMAIL_FAILED), 'error')
     } finally {
       setNotifBusy(false)
     }
@@ -795,13 +791,17 @@ export default function Settings() {
   onMount(() => {
     const savedCurrency = getLocalCurrency()
     setLocalCurrency(savedCurrency)
+    currencyForm.reset({ currency: savedCurrency })
     // localStorage was the historical source of truth. Establish that value in the
     // active storage engine once; if the profile already has a locked base currency,
     // use the persisted value instead of silently relabelling historical amounts.
     void apiPut('/api/settings', { currency: savedCurrency }).catch(async () => {
       try {
         const settings = await apiGet<{ currency?: string }>('/api/settings')
-        if (settings.currency) setLocalCurrency(settings.currency)
+        if (settings.currency) {
+          setLocalCurrency(settings.currency)
+          currencyForm.reset({ currency: settings.currency })
+        }
       } catch {
         // Keep the local value when settings are temporarily unavailable.
       }
@@ -867,24 +867,6 @@ export default function Settings() {
   createEffect(() => {
     localStorage.setItem('localCurrency', localCurrency())
   })
-
-  // Handle local currency change
-  const handleLocalCurrencyChange = async (event: Event) => {
-    const target = event.target as HTMLSelectElement
-    const next = target.value
-    if (next === localCurrency() || currencyBusy()) return
-    setCurrencyBusy(true)
-    try {
-      await apiPut('/api/settings', { currency: next })
-      setLocalCurrency(next)
-      toast(`Base currency set to ${next}`, 'success')
-    } catch {
-      target.value = localCurrency()
-      toast(`Base currency is locked to ${localCurrency()} after financial data is added.`, 'error')
-    } finally {
-      setCurrencyBusy(false)
-    }
-  }
 
   // Handle storage type change
   const handleStorageModeChange = (event: Event) => {
@@ -1048,10 +1030,9 @@ export default function Settings() {
       window.location.reload()
     } catch (error) {
       console.error('Backup restore failed:', error)
-      toast(
-        `Backup restore failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error'
-      )
+      // The runtime's own words when it refused the file (the Worker says what is wrong with it);
+      // anything else, a reason the person can act on.
+      toast(plainMessage(error, RESTORE_FAILED), 'error')
     } finally {
       setRestoringBackup(false)
     }
@@ -1065,54 +1046,35 @@ export default function Settings() {
     window.location.reload()
   }
 
-  const [renamingProfileId, setRenamingProfileId] = createSignal<number | null>(null)
-  const [renameValue, setRenameValue] = createSignal('')
-  const [renaming, setRenaming] = createSignal(false)
-
-  const startRename = (id: number, currentName: string) => {
-    setRenamingProfileId(id)
-    setRenameValue(currentName)
+  // The household view's rename (features/profileForm.ts). A save renames the profile where the
+  // page, the sidebar and the Danger Zone show it; it used to reload the whole page.
+  const appState = useAppState()
+  // The row's Edit button takes the focus back when its rename closes, saved or not: the editor
+  // that had it is gone, and a save builds the row again under the new name.
+  let returnFocusTo: number | null = null
+  const editButtonRef = (id: number) => (button: HTMLButtonElement) => {
+    if (returnFocusTo !== id) return
+    returnFocusTo = null
+    queueMicrotask(() => {
+      button.focus()
+    })
   }
-
-  const cancelRename = () => {
-    setRenamingProfileId(null)
-    setRenameValue('')
+  const closeRename = (id: number) => {
+    returnFocusTo = id
+    renameForm.close()
   }
-
-  const submitRename = async () => {
-    const pid = renamingProfileId()
-    const name = renameValue().trim()
-    if (!pid || !name) return
-    setRenaming(true)
-    try {
-      const res = await apiFetch(`/api/profiles/${pid}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        if (data.error === 'Unauthorized') {
-          toast(
-            'You cannot rename default demo profiles. Log in to manage your own profiles.',
-            'warning'
-          )
-        } else {
-          toast(data.error || 'Failed to rename profile', 'error')
-        }
-      } else {
-        setRenamingProfileId(null)
-        setRenameValue('')
-        loadHouseholdProfiles()
-        window.location.reload()
-      }
-    } catch {
-      toast('Failed to rename profile', 'error')
-    } finally {
-      setRenaming(false)
-    }
-  }
+  const renameForm = createProfileRenameForm({
+    onRenamed: (renamed) => {
+      returnFocusTo = renamed.id
+      const rename = <T extends { id: number; name: string }>(list: readonly T[]): T[] =>
+        list.map((p) => (p.id === renamed.id ? { ...p, name: renamed.name } : p))
+      setAllProfiles((list) => rename(list))
+      setProfiles(rename(appState.profiles))
+      const current = appState.currentProfile
+      if (current?.id === renamed.id) setCurrentProfile({ ...current, name: renamed.name })
+    },
+  })
+  const renamingRow = (id: number) => renameForm.renaming()?.id === id
 
   const handleDeleteProfile = async (profileId?: string | number) => {
     const pid = profileId ? profileId.toString() : localStorage.getItem('currentProfileId') || '1'
@@ -1342,17 +1304,40 @@ export default function Settings() {
                   title="Base Currency"
                   desc="The unit used by balances, budgets, and reports."
                 />
-                <select
-                  class={styles.formControl}
-                  value={localCurrency()}
-                  onchange={(event) => void handleLocalCurrencyChange(event)}
-                  disabled={currencyBusy()}
-                  style="max-width: 340px;"
-                >
-                  <For each={CURRENCY_OPTIONS}>
-                    {(currency) => <option value={currency.code}>{currency.name}</option>}
-                  </For>
-                </select>
+                <form class={styles.currencyForm} {...currencyForm.attrs}>
+                  <FormNotice form={currencyForm} />
+                  <Field
+                    form={currencyForm}
+                    name="currency"
+                    label="Base currency"
+                    labelClass={styles.visuallyHidden}
+                  >
+                    {(control) => (
+                      <select
+                        {...control}
+                        class={styles.formControl}
+                        data-test-id="settings-currency-select"
+                        onChange={(event) => {
+                          currencyForm.choose(event.currentTarget.value)
+                        }}
+                        disabled={currencyForm.submitting()}
+                      >
+                        {/* Each option says whether it is the one chosen: the select's own value is
+                            set before its options are there to take it. */}
+                        <For each={CURRENCY_OPTIONS}>
+                          {(currency) => (
+                            <option
+                              value={currency.code}
+                              selected={currency.code === currencyForm.values.currency}
+                            >
+                              {currency.name}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    )}
+                  </Field>
+                </form>
               </div>
 
               <div class={styles.card} data-tour="settings-storage">
@@ -1478,165 +1463,191 @@ export default function Settings() {
                       to enable budget alerts and spending reports.
                     </p>
                   </Show>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>Email address</label>
-                    <input
-                      class={styles.formControl}
-                      type="email"
-                      data-test-id="settings-email-input"
-                      value={notif()!.email}
-                      onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
-                      placeholder="you@example.com"
-                      style="max-width: 340px;"
-                    />
-                    {/* Outside the plan-locked actions below: a change already waiting can always
+                  <form
+                    {...notifForm.attrs}
+                    onSubmit={(event) => {
+                      // A plan without email alerts can't save here, as the dimmed buttons say, so
+                      // Enter in the address does nothing either.
+                      if (emailAlertsLocked()) event.preventDefault()
+                      else void notifForm.submit(event)
+                    }}
+                    data-test-id="settings-notifications-form"
+                  >
+                    <FormNotice form={notifForm} />
+                    <div class={styles.formGroup}>
+                      <Field
+                        form={notifForm}
+                        name="email"
+                        label="Email address"
+                        labelClass={styles.formLabel}
+                      >
+                        {(control) => (
+                          <input
+                            {...control}
+                            class={styles.formControl}
+                            type="email"
+                            autocomplete="email"
+                            data-test-id="settings-email-input"
+                            value={notifForm.values.email}
+                            onInput={(e) => notifForm.set('email', e.currentTarget.value)}
+                            placeholder="you@example.com"
+                            style="max-width: 340px;"
+                          />
+                        )}
+                      </Field>
+                      {/* Outside the plan-locked actions below: a change already waiting can always
                         be sent again or canceled. */}
-                    <Show when={notif()?.pendingEmail}>
-                      {(pending) => (
-                        <div class={styles.pendingEmail} data-test-id="settings-email-pending">
-                          <Show
-                            when={!pendingTaken()}
-                            fallback={
-                              <p>
-                                Another account uses <strong>{pending()}</strong> now, so this
-                                change can't finish. Cancel it, or save a different address.
-                              </p>
-                            }
-                          >
-                            <p>
-                              We sent a link to <strong>{pending()}</strong>. Your sign-in address
-                              changes when you open it.
-                            </p>
-                          </Show>
-                          <div class={styles.pendingEmailActions}>
-                            <Show when={!pendingTaken()}>
-                              <button
-                                class={styles.iconAction}
-                                data-test-id="settings-email-resend"
-                                onclick={() => void resendEmailChange()}
-                                disabled={emailChangeBusy()}
-                                title={`Send the link to ${pending()} again`}
-                              >
-                                <IconSend />
-                                Send again
-                              </button>
-                            </Show>
-                            <button
-                              class={styles.iconAction}
-                              data-test-id="settings-email-cancel"
-                              onclick={() => void cancelEmailChange()}
-                              disabled={emailChangeBusy()}
-                              title="Keep your current address and stop the link from working"
+                      <Show when={notif()?.pendingEmail}>
+                        {(pending) => (
+                          <div class={styles.pendingEmail} data-test-id="settings-email-pending">
+                            <Show
+                              when={!pendingTaken()}
+                              fallback={
+                                <p>
+                                  Another account uses <strong>{pending()}</strong> now, so this
+                                  change can't finish. Cancel it, or save a different address.
+                                </p>
+                              }
                             >
-                              <IconX />
-                              Cancel change
-                            </button>
+                              <p>
+                                We sent a link to <strong>{pending()}</strong>. Your sign-in address
+                                changes when you open it.
+                              </p>
+                            </Show>
+                            <div class={styles.pendingEmailActions}>
+                              <Show when={!pendingTaken()}>
+                                <button
+                                  type="button"
+                                  class={styles.iconAction}
+                                  data-test-id="settings-email-resend"
+                                  onclick={() => void resendEmailChange()}
+                                  disabled={emailChangeBusy()}
+                                  title={`Send the link to ${pending()} again`}
+                                >
+                                  <IconSend />
+                                  Send again
+                                </button>
+                              </Show>
+                              <button
+                                type="button"
+                                class={styles.iconAction}
+                                data-test-id="settings-email-cancel"
+                                onclick={() => void cancelEmailChange()}
+                                disabled={emailChangeBusy()}
+                                title="Keep your current address and stop the link from working"
+                              >
+                                <IconX />
+                                Cancel change
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </Show>
-                  </div>
-                  <div class={styles.row}>
-                    <span class={styles.rowLabel}>Enable email notifications</span>
-                    <Toggle
-                      checked={() => notif()!.emailNotifications}
-                      disabled={emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, emailNotifications: v })}
-                      aria-label="Enable email notifications"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Budget alerts (weekly)</span>
-                    <Toggle
-                      checked={() => notif()!.budgetAlerts}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, budgetAlerts: v })}
-                      aria-label="Budget alerts (weekly)"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Spending report (biweekly)</span>
-                    <Toggle
-                      checked={() => notif()!.spendingReport}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, spendingReport: v })}
-                      aria-label="Spending report (biweekly)"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Upcoming bills (daily)</span>
-                    <Toggle
-                      checked={() => notif()!.billsReminders}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, billsReminders: v })}
-                      aria-label="Upcoming bills (daily)"
-                    />
-                  </div>
-                  <div
-                    class={styles.actions}
-                    style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
-                  >
-                    <button
-                      class={`${styles.iconAction} ${styles.iconActionPrimary}`}
-                      data-test-id="settings-notifications-save"
-                      onclick={() => void saveNotifications()}
-                      disabled={notifBusy()}
-                      title="Save notification settings"
-                      aria-label="Save notification settings"
+                        )}
+                      </Show>
+                    </div>
+                    <div class={styles.row}>
+                      <span class={styles.rowLabel}>Enable email notifications</span>
+                      <Toggle
+                        checked={() => notifForm.values.emailNotifications}
+                        disabled={emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('emailNotifications', v)}
+                        aria-label="Enable email notifications"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconCheck />
-                      {notifBusy() ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail()}
-                      disabled={notifBusy()}
-                      title="Send a test email to check delivery"
-                      aria-label="Send a test email to check delivery"
+                      <span class={styles.rowLabel}>Budget alerts (weekly)</span>
+                      <Toggle
+                        checked={() => notifForm.values.budgetAlerts}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('budgetAlerts', v)}
+                        aria-label="Budget alerts (weekly)"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconSend />
-                      Test
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('spending')}
-                      disabled={notifBusy()}
-                      title="Emails you the real spending report, built from your data, right now"
-                      aria-label="Emails you the real spending report, built from your data, right now"
+                      <span class={styles.rowLabel}>Spending report (biweekly)</span>
+                      <Toggle
+                        checked={() => notifForm.values.spendingReport}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('spendingReport', v)}
+                        aria-label="Spending report (biweekly)"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconFileText />
-                      Spending
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('budget')}
-                      disabled={notifBusy()}
-                      title="Emails you the real budget alert, built from your data, right now"
-                      aria-label="Emails you the real budget alert, built from your data, right now"
+                      <span class={styles.rowLabel}>Upcoming bills (daily)</span>
+                      <Toggle
+                        checked={() => notifForm.values.billsReminders}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('billsReminders', v)}
+                        aria-label="Upcoming bills (daily)"
+                      />
+                    </div>
+                    <div
+                      class={styles.actions}
+                      style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
                     >
-                      <IconBell />
-                      Budget
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('bills')}
-                      disabled={notifBusy()}
-                      title="Emails you the real upcoming-bills reminder, built from your data, right now"
-                      aria-label="Emails you the real upcoming-bills reminder, built from your data, right now"
-                    >
-                      <IconFileText />
-                      Bills
-                    </button>
-                  </div>
+                      <SubmitButton
+                        class={`${styles.iconAction} ${styles.iconActionPrimary}`}
+                        busy={notifForm.submitting()}
+                        data-test-id="settings-notifications-save"
+                        title="Save notification settings"
+                      >
+                        <IconCheck />
+                        Save
+                      </SubmitButton>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail()}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Send a test email to check delivery"
+                        aria-label="Send a test email to check delivery"
+                      >
+                        <IconSend />
+                        Test
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('spending')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real spending report, built from your data, right now"
+                        aria-label="Emails you the real spending report, built from your data, right now"
+                      >
+                        <IconFileText />
+                        Spending
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('budget')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real budget alert, built from your data, right now"
+                        aria-label="Emails you the real budget alert, built from your data, right now"
+                      >
+                        <IconBell />
+                        Budget
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('bills')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real upcoming-bills reminder, built from your data, right now"
+                        aria-label="Emails you the real upcoming-bills reminder, built from your data, right now"
+                      >
+                        <IconFileText />
+                        Bills
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </Show>
             </Show>
@@ -1732,47 +1743,61 @@ export default function Settings() {
                     </span>
                     <For each={allProfiles()}>
                       {(profile) => (
-                        <label
+                        <div
                           data-test-id={`household-profile-${profile.id}`}
                           title={
                             profile.id === lockedProfileId() ? HOUSEHOLD_LOCKED_HINT : undefined
                           }
                           style={{
                             display: 'flex',
+                            'flex-wrap': 'wrap',
                             'align-items': 'center',
                             gap: '10px',
                             padding: '8px 0',
-                            cursor: profile.id === lockedProfileId() ? 'default' : 'pointer',
                             'border-bottom': '1px solid var(--border)',
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            class={styles.checkbox}
-                            checked={
-                              householdIds().includes(profile.id) ||
-                              profile.id === lockedProfileId()
-                            }
-                            disabled={profile.id === lockedProfileId()}
-                            aria-describedby={
-                              profile.id === lockedProfileId() ? 'household-locked-hint' : undefined
-                            }
-                            onchange={() => {
-                              toggleHouseholdProfile(profile.id)
+                          <label
+                            style={{
+                              display: 'flex',
+                              'align-items': 'center',
+                              gap: '10px',
+                              cursor: profile.id === lockedProfileId() ? 'default' : 'pointer',
                             }}
-                          />
+                          >
+                            <input
+                              type="checkbox"
+                              class={styles.checkbox}
+                              checked={
+                                householdIds().includes(profile.id) ||
+                                profile.id === lockedProfileId()
+                              }
+                              disabled={profile.id === lockedProfileId()}
+                              aria-describedby={
+                                profile.id === lockedProfileId()
+                                  ? 'household-locked-hint'
+                                  : undefined
+                              }
+                              onchange={() => {
+                                toggleHouseholdProfile(profile.id)
+                              }}
+                            />
+                            <span
+                              class={renamingRow(profile.id) ? styles.visuallyHidden : undefined}
+                              style="font-size: 14px; color: var(--text);"
+                            >
+                              {profile.name}
+                            </span>
+                          </label>
                           <Show
-                            when={renamingProfileId() === profile.id}
+                            when={renamingRow(profile.id)}
                             fallback={
                               <>
-                                <span style="font-size: 14px; color: var(--text);">
-                                  {profile.name}
-                                </span>
                                 <button
+                                  ref={editButtonRef(profile.id)}
                                   class={styles.iconBtn}
-                                  onclick={(e) => {
-                                    e.preventDefault()
-                                    startRename(profile.id, profile.name)
+                                  onclick={() => {
+                                    renameForm.open(profile)
                                   }}
                                   title="Rename profile"
                                   style="margin-left: auto; padding: 2px 6px; font-size: 11px; opacity: 0.6;"
@@ -1802,40 +1827,55 @@ export default function Settings() {
                               </>
                             }
                           >
-                            <input
-                              value={renameValue()}
-                              oninput={(e) => setRenameValue(e.currentTarget.value)}
-                              onkeypress={(e) => {
-                                if (e.key === 'Enter') submitRename()
-                                if (e.key === 'Escape') cancelRename()
+                            <form
+                              {...renameForm.attrs}
+                              class={styles.householdRename}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') closeRename(profile.id)
                               }}
-                              style={{
-                                'font-size': '14px',
-                                padding: '2px 6px',
-                                border: '1px solid var(--primary)',
-                                'border-radius': '4px',
-                                background: 'var(--bg)',
-                                color: 'var(--text)',
-                                'min-width': '120px',
-                              }}
-                            />
-                            <button
-                              class={styles.iconBtn}
-                              onclick={submitRename}
-                              disabled={renaming()}
-                              style="padding: 2px 6px; font-size: 11px; color: var(--primary);"
                             >
-                              Save
-                            </button>
-                            <button
-                              class={styles.iconBtn}
-                              onclick={cancelRename}
-                              style="padding: 2px 6px; font-size: 11px; opacity: 0.6;"
-                            >
-                              Cancel
-                            </button>
+                              <FormNotice form={renameForm} />
+                              <div class={styles.householdRenameRow}>
+                                <Field
+                                  form={renameForm}
+                                  name="name"
+                                  label={`New name for ${profile.name}`}
+                                  labelClass={styles.visuallyHidden}
+                                  class={styles.householdRenameField}
+                                >
+                                  {(control) => (
+                                    <input
+                                      {...control}
+                                      data-test-id="household-rename-input"
+                                      value={renameForm.values.name}
+                                      onInput={(e) => renameForm.set('name', e.currentTarget.value)}
+                                      autofocus
+                                      required
+                                    />
+                                  )}
+                                </Field>
+                                <SubmitButton
+                                  class={styles.iconBtn}
+                                  busy={renameForm.submitting()}
+                                  unchanged={renameForm.unchanged()}
+                                  style="padding: 2px 6px; font-size: 11px; color: var(--primary);"
+                                >
+                                  Save
+                                </SubmitButton>
+                                <button
+                                  type="button"
+                                  class={styles.iconBtn}
+                                  onclick={() => {
+                                    closeRename(profile.id)
+                                  }}
+                                  style="padding: 2px 6px; font-size: 11px; opacity: 0.6;"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
                           </Show>
-                        </label>
+                        </div>
                       )}
                     </For>
                   </div>
@@ -1984,7 +2024,11 @@ export default function Settings() {
                   </div>
                 </div>
               </div>
-              <DangerZone onReset={handleReset} onDeleteProfile={handleDeleteProfile} />
+              <DangerZone
+                profiles={appState.profiles}
+                onReset={handleReset}
+                onDeleteProfile={handleDeleteProfile}
+              />
             </Show>
 
             {/* ─────────────── BILLING (server mode only) ─────────────── */}
@@ -2007,7 +2051,7 @@ export default function Settings() {
                       onClick={() =>
                         redirectToStripe(
                           '/api/billing/portal',
-                          'Could not open billing portal',
+                          "Couldn't open the billing portal. Try again.",
                           'manage'
                         )
                       }
@@ -2053,7 +2097,7 @@ export default function Settings() {
                   onManage={() =>
                     redirectToStripe(
                       '/api/billing/portal',
-                      'Could not open billing portal',
+                      "Couldn't open the billing portal. Try again.",
                       'manage'
                     )
                   }

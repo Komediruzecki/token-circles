@@ -1,5 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { IMPORT_SOURCE_MESSAGES as M } from '../../shared/importSourceSchema';
 import { sessionCookie } from './helpers/session';
 
 // Saved import origins — "Connected Sources" (migration 0020, routes/import-sources.ts). A row
@@ -131,8 +132,8 @@ describe('import sources — CRUD', () => {
     expect(await list()).toEqual([created]);
   });
 
-  it('fills in defaults for a bare create', async () => {
-    const res = await create({});
+  it('fills in defaults for a create that gives only the link', async () => {
+    const res = await create({ config: { url: SHEET.config.url } });
     expect(res.status).toBe(201);
     const created = (await res.json()) as ApiSource;
     // Defaults matter: `schedule` decides whether the cron will act on this row, and a create
@@ -140,8 +141,17 @@ describe('import sources — CRUD', () => {
     expect(created.kind).toBe('google_sheet');
     expect(created.schedule).toBe('manual');
     expect(created.label).toBe('');
-    expect(created.config).toEqual({});
+    expect(created.config).toEqual({ url: SHEET.config.url });
     expect(created.mapping).toBeNull();
+  });
+
+  it('refuses a bare create at the link a sheet is fetched from', async () => {
+    const res = await create({});
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { fields: object }).fields).toEqual({
+      'config.url': M.url,
+    });
+    expect(await list()).toHaveLength(0);
   });
 
   it('lists newest first', async () => {
@@ -201,7 +211,7 @@ describe('import sources — validation', () => {
   it('rejects a kind outside the known set', async () => {
     const res = await create({ ...SHEET, kind: 'ftp_drop' });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe('Invalid kind');
+    expect(await res.json()).toEqual({ error: M.kind, fields: { kind: M.kind } });
     expect(await list()).toHaveLength(0);
   });
 
@@ -210,7 +220,7 @@ describe('import sources — validation', () => {
     // silently never runs.
     const res = await create({ ...SHEET, schedule: 'hourly' });
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe('Invalid schedule');
+    expect(await res.json()).toEqual({ error: M.schedule, fields: { schedule: M.schedule } });
   });
 
   it('rejects an invalid enum on update without touching the row', async () => {
@@ -222,21 +232,24 @@ describe('import sources — validation', () => {
     expect(after.kind).toBe('google_sheet');
   });
 
-  it('clamps an overlong label and coerces a non-object config', async () => {
-    const created = (await (
-      await create({ ...SHEET, label: 'x'.repeat(500), config: 'not-an-object' })
-    ).json()) as ApiSource;
-    expect(created.label).toHaveLength(200);
-    expect(created.config).toEqual({});
+  it('refuses an overlong label and settings that are not an object, at their fields', async () => {
+    const res = await create({ ...SHEET, label: 'x'.repeat(500), config: 'not-an-object' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { fields: object }).fields).toEqual({
+      label: M.labelLength,
+      config: M.config,
+    });
+    expect(await list()).toHaveLength(0);
   });
 
-  it('nulls a default_account_id that is not a finite number, and floors one that is', async () => {
-    const bad = (await (
-      await create({ ...SHEET, default_account_id: 'seven' })
-    ).json()) as ApiSource;
-    expect(bad.default_account_id).toBeNull();
-    const good = (await (await create({ ...SHEET, default_account_id: 12.9 })).json()) as ApiSource;
-    expect(good.default_account_id).toBe(12);
+  it('refuses a default account that is not an account id', async () => {
+    for (const default_account_id of ['seven', 12.9]) {
+      const res = await create({ ...SHEET, default_account_id });
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { fields: object }).fields).toEqual({
+        default_account_id: M.account,
+      });
+    }
   });
 
   it('rejects a non-numeric id', async () => {
@@ -257,8 +270,9 @@ describe('import sources — validation', () => {
       headers: auth(),
       body: '}{',
     });
-    // Malformed JSON falls back to an empty body → a defaulted row, never a 500.
-    expect(res.status).toBe(201);
+    // Malformed JSON reads as an empty body, which a sheet is refused for: never a 500.
+    expect(res.status).toBe(400);
+    expect(await list()).toHaveLength(0);
   });
 });
 

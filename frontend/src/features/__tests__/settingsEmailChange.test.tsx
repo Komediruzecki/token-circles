@@ -17,6 +17,7 @@ const { server, calls } = vi.hoisted(() => ({
     pendingEmail: null as string | null,
     resendStatus: 200,
     putStatus: 200,
+    plan: 'advanced',
   },
   calls: [] as { url: string; method: string; body?: Record<string, unknown> }[],
 }))
@@ -36,6 +37,12 @@ vi.mock('../../core/apiFetch', () => ({
       })
     if (url === '/api/notifications/settings' && method === 'PUT' && server.putStatus === 409) {
       return reply({ error: 'That email is already in use' }, 409)
+    }
+    if (url === '/api/notifications/settings' && method === 'PUT' && server.putStatus === 400) {
+      return reply({ error: 'A valid email is required' }, 400)
+    }
+    if (url === '/api/notifications/settings' && method === 'PUT' && server.putStatus === 429) {
+      return reply({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
     }
     if (url === '/api/notifications/settings' && method === 'PUT') {
       const asked = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
@@ -69,7 +76,7 @@ vi.mock('../../core/apiFetch', () => ({
       server.pendingEmail = null
       return reply({ ok: true })
     }
-    if (url === '/api/billing/status') return reply({ plan: 'advanced' })
+    if (url === '/api/billing/status') return reply({ plan: server.plan })
     if (url.startsWith('/api/profiles')) return reply([])
     return reply({})
   }),
@@ -88,6 +95,7 @@ beforeEach(() => {
   server.pendingEmail = null
   server.resendStatus = 200
   server.putStatus = 200
+  server.plan = 'advanced'
   calls.length = 0
   for (const t of toasts()) removeToast(t.id)
   localStorage.clear()
@@ -127,6 +135,22 @@ const button = (id: string) => host.querySelector<HTMLButtonElement>(`[data-test
 const field = () => host.querySelector<HTMLInputElement>('[data-test-id="settings-email-input"]')
 const pending = () => byId('settings-email-pending')
 const lastToast = () => toasts().at(-1)
+const failureToasts = () => toasts().filter((t) => t.type === 'error' || t.type === 'warning')
+const puts = () =>
+  calls.filter((c) => c.url === '/api/notifications/settings' && c.method === 'PUT')
+const describedBy = (el: HTMLElement): string =>
+  (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' | ')
+const notice = () =>
+  host.querySelector('[data-test-id="settings-notifications-form"] [role="alert"]')
+
+function typeAddress(address: string): void {
+  field()!.value = address
+  field()!.dispatchEvent(new Event('input', { bubbles: true }))
+}
 
 describe('an email change that is waiting', () => {
   it('shows the address it waits on, and keeps the field on the current one', async () => {
@@ -163,16 +187,19 @@ describe('an email change that is waiting', () => {
     expect(lastToast()!.message).toContain('new@example.com')
   })
 
-  it('says why a refused save was refused, in the words of the answer', async () => {
+  it('marks an address another account has under the field, in the words of the answer', async () => {
     server.putStatus = 409
     await openSettings()
 
-    field()!.value = 'someone-else@example.com'
-    field()!.dispatchEvent(new Event('input', { bubbles: true }))
+    typeAddress('someone-else@example.com')
     button('settings-notifications-save')!.click()
     await settle()
 
-    expect(lastToast()).toMatchObject({ type: 'error', message: 'That email is already in use' })
+    expect(field()!.getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(field()!)).toContain('That email is already in use')
+    expect(document.activeElement).toBe(field())
+    expect(field()!.value).toBe('someone-else@example.com')
+    expect(failureToasts()).toEqual([])
     expect(pending()).toBeNull()
   })
 
@@ -286,6 +313,77 @@ describe('an email change that is waiting', () => {
       type: 'success',
       message: 'Email change canceled. Your account keeps me@example.com.',
     })
+  })
+})
+
+describe('the address and the switches, saved together', () => {
+  it('labels the address', async () => {
+    await openSettings()
+    const label = host.querySelector<HTMLLabelElement>(`label[for="${field()!.id}"]`)
+    expect(label?.textContent).toBe('Email address')
+  })
+
+  it('marks an address the Worker cannot use under the field, and takes the mark off as it changes', async () => {
+    server.putStatus = 400
+    await openSettings()
+
+    typeAddress('not-an-address')
+    button('settings-notifications-save')!.click()
+    await settle()
+
+    expect(field()!.getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(field()!)).toContain('A valid email is required')
+    expect(failureToasts()).toEqual([])
+
+    typeAddress('me2@example.com')
+    expect(field()!.getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('says a limit on sending links in the form, not at the address', async () => {
+    server.putStatus = 429
+    await openSettings()
+
+    typeAddress('new@example.com')
+    button('settings-notifications-save')!.click()
+    await settle()
+
+    expect(notice()?.textContent).toContain('Too many attempts.')
+    expect(field()!.getAttribute('aria-invalid')).toBeNull()
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('sends the address and every switch, and says so', async () => {
+    await openSettings()
+    host.querySelector<HTMLElement>('[aria-label="Budget alerts (weekly)"]')!.click()
+    button('settings-notifications-save')!.click()
+    await settle()
+
+    expect(puts().map((c) => c.body)).toEqual([
+      {
+        email: 'me@example.com',
+        emailNotifications: true,
+        budgetAlerts: false,
+        spendingReport: true,
+        billsReminders: true,
+      },
+    ])
+    expect(lastToast()).toMatchObject({ type: 'success', message: 'Notification settings saved.' })
+  })
+
+  it('saves with Enter in the address', async () => {
+    await openSettings()
+    field()!.form!.requestSubmit()
+    await settle()
+    expect(puts()).toHaveLength(1)
+  })
+
+  it('saves nothing, Enter included, on a plan without email alerts', async () => {
+    server.plan = 'free'
+    await openSettings()
+    typeAddress('new@example.com')
+    field()!.form!.requestSubmit()
+    await settle()
+    expect(puts()).toEqual([])
   })
 })
 

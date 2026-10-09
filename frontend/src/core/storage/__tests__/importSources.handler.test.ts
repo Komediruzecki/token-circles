@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { IMPORT_SOURCE_MESSAGES as M } from '../../../../../shared/importSourceSchema'
 import { getDB } from '../idb.js'
 import { routeApiRequest } from '../localApiRouter.js'
 
@@ -106,16 +107,25 @@ describe('import_sources handler (serverless)', () => {
     expect(await list()).toHaveLength(0)
   })
 
-  it('fills in defaults for a bare create', async () => {
-    const created = (await (await create({})).json()) as ApiSource
+  it('fills in defaults for a create that gives only the link', async () => {
+    const created = (await (
+      await create({ config: { url: SHEET.config.url } })
+    ).json()) as ApiSource
     // `schedule` decides whether the server-side cron acts on this row; defaulting to anything
     // but 'manual' would start importing without the user asking.
     expect(created.kind).toBe('google_sheet')
     expect(created.schedule).toBe('manual')
     expect(created.label).toBe('')
-    expect(created.config).toEqual({})
+    expect(created.config).toEqual({ url: SHEET.config.url })
     expect(created.mapping).toBeNull()
     expect(created.last_synced_at).toBeNull()
+  })
+
+  it('refuses a bare create at the link a sheet is fetched from', async () => {
+    const res = await create({})
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { fields: object }).fields).toEqual({ 'config.url': M.url })
+    expect(await list()).toHaveLength(0)
   })
 
   it('lists newest first', async () => {
@@ -145,21 +155,24 @@ describe('import_sources handler (serverless)', () => {
     expect(after.kind).toBe('google_sheet')
   })
 
-  it('clamps an overlong label and coerces a non-object config', async () => {
-    const created = (await (
-      await create({ ...SHEET, label: 'x'.repeat(500), config: 'not-an-object' })
-    ).json()) as ApiSource
-    expect(created.label).toHaveLength(200)
-    expect(created.config).toEqual({})
+  it('refuses an overlong label and settings that are not an object, at their fields', async () => {
+    const res = await create({ ...SHEET, label: 'x'.repeat(500), config: 'not-an-object' })
+    expect(res.status).toBe(400)
+    expect(((await res.json()) as { fields: object }).fields).toEqual({
+      label: M.labelLength,
+      config: M.config,
+    })
+    expect(await list()).toHaveLength(0)
   })
 
-  it('nulls a default_account_id that is not a finite number, and floors one that is', async () => {
-    const bad = (await (
-      await create({ ...SHEET, default_account_id: 'seven' })
-    ).json()) as ApiSource
-    expect(bad.default_account_id).toBeNull()
-    const good = (await (await create({ ...SHEET, default_account_id: 12.9 })).json()) as ApiSource
-    expect(good.default_account_id).toBe(12)
+  it('refuses a default account that is not an account id', async () => {
+    for (const default_account_id of ['seven', 12.9]) {
+      const res = await create({ ...SHEET, default_account_id })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { fields: object }).fields).toEqual({
+        default_account_id: M.account,
+      })
+    }
   })
 
   it('clears mapping and category_types when the body sends null', async () => {

@@ -34,6 +34,17 @@ beforeAll(() => {
 })
 afterAll(() => vi.unstubAllGlobals())
 
+/** A category of the open profile, for a mapping to name: a mapping must name one. */
+async function category(name: string): Promise<number> {
+  const { routeApiRequest } = await loadModule()
+  const res = await routeApiRequest('http://localhost/api/categories', {
+    method: 'POST',
+    body: JSON.stringify({ name: `${name} ${Date.now()}`, type: 'expense', color: '#225588' }),
+  })
+  expect(res.status).toBe(201)
+  return ((await res.json()) as { id: number }).id
+}
+
 describe('localApiRouter - route matching', () => {
   it('returns 200 for known GET route /api/health', async () => {
     const { routeApiRequest } = await loadModule()
@@ -94,18 +105,18 @@ describe('localApiRouter - category mappings', () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'test', mapping: 'test-mapping' }),
+      body: JSON.stringify({ pattern: 'test-mapping', category_id: await category('Created') }),
     })
-    expect(res.status).toBe(201)
+    expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.id).toBeDefined()
+    expect(data).toEqual({ ok: true, id: expect.any(Number), use_count: 1 })
   })
 
   it('DELETE returns ok', async () => {
     const { routeApiRequest } = await loadModule()
     const created = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'delete-me', mapping: 'delete-me' }),
+      body: JSON.stringify({ pattern: 'delete-me', category_id: await category('Deleted') }),
     })
     const { id } = await created.json()
     const res = await routeApiRequest(`http://localhost/api/categories/mappings/${id}`, {
@@ -160,7 +171,7 @@ describe('localApiRouter - path with params', () => {
     const { routeApiRequest } = await loadModule()
     const created = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'numeric-id', mapping: 'numeric-id' }),
+      body: JSON.stringify({ pattern: 'numeric-id', category_id: await category('Numeric') }),
     })
     const { id } = await created.json()
     const res = await routeApiRequest(`http://localhost/api/categories/mappings/${id}`, {
@@ -182,12 +193,16 @@ describe('localApiRouter - path with params', () => {
 describe('localApiRouter - body parsing', () => {
   it('parses JSON body string', async () => {
     const { routeApiRequest } = await loadModule()
-    // Use a POST route that processes body - categories mappings (stub)
+    // A POST route that reads its body: the mapping is saved under the pattern the string carried.
     const res = await routeApiRequest('http://localhost/api/categories/mappings', {
       method: 'POST',
-      body: JSON.stringify({ name: 'Netflix', amount: 14.99 }),
+      body: JSON.stringify({ pattern: 'Netflix', category_id: await category('Parsed') }),
     })
-    expect(res.status).toBe(201)
+    expect(res.status).toBe(200)
+    const listed = (await (
+      await routeApiRequest('http://localhost/api/categories/mappings')
+    ).json()) as { pattern: string }[]
+    expect(listed).toContainEqual(expect.objectContaining({ pattern: 'Netflix' }))
   })
 })
 

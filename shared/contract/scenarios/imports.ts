@@ -1,3 +1,5 @@
+import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
+import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
 import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
@@ -204,9 +206,15 @@ export const imports = [
     });
     expect(SHEETS['contract-sheet']).toContain('Groceries');
 
-    expect(
-      (await api.post('/api/import/googlesheet', { url: 'https://example.com/not-a-sheet' })).status
-    ).toBe(400);
+    // A link that is not a Google Sheet's is refused at the link, in the words the page shows.
+    const refused = await api.post('/api/import/googlesheet', {
+      url: 'https://example.com/not-a-sheet',
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body).toEqual({
+      error: IMPORT_SOURCE_MESSAGES.url,
+      fields: { url: IMPORT_SOURCE_MESSAGES.url },
+    });
   }),
 
   scenario('a spreadsheet file is uploaded for the mapping step', async (api, expect) => {
@@ -222,21 +230,24 @@ export const imports = [
     );
     const reply = await api.post('/api/import/upload', form);
     expectOk(expect, reply, 'POST /api/import/upload');
-    // DIFFERENCE import-upload-answer
-    if (api.runtime === 'worker') {
-      expect(reply.body).toEqual({
-        headers: ['Date', 'Description', 'Amount'],
-        rows: [
-          ['2026-03-01', 'Salary', '2500'],
-          ['2026-03-02', 'Groceries', '-45.50'],
-        ],
-        selectedSheet: 'CSV',
-        sheetNames: ['CSV'],
-      });
-    } else {
-      expect(reply.body).toMatchObject({ filename: 'statement.csv', row_count: 2 });
-      expect(reply.body.sheetNames).toBeUndefined();
-      expect(reply.body.rows[0]).toMatchObject({ description: 'Salary' });
-    }
+    // The header row, the rows under it as lists of cells, and the sheets: what the mapping step
+    // reads in both modes (shared/importUpload.ts).
+    expect(reply.body).toEqual({
+      headers: ['Date', 'Description', 'Amount'],
+      rows: [
+        ['2026-03-01', 'Salary', '2500'],
+        ['2026-03-02', 'Groceries', '-45.50'],
+      ],
+      selectedSheet: 'CSV',
+      sheetNames: ['CSV'],
+    });
+
+    // No file is refused at the file, in the same words.
+    const empty = await api.post('/api/import/upload', new FormData());
+    expect(empty.status).toBe(400);
+    expect(empty.body).toEqual({
+      error: IMPORT_UPLOAD_MESSAGES.file,
+      fields: { file: IMPORT_UPLOAD_MESSAGES.file },
+    });
   }),
 ];

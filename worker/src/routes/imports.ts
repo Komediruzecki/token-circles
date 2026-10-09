@@ -8,7 +8,15 @@ import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError } from '../http';
+import { refusalOf, summarizeFields } from '../../../shared/refusal';
+import { readSheetUrl } from '../../../shared/importSourceSchema';
+import {
+  IMPORT_UPLOAD_MAX_BYTES,
+  IMPORT_UPLOAD_MESSAGES,
+  readUploadedSheet,
+  uploadRefusal,
+} from '../../../shared/importUpload';
 import { parseImportNumber } from '../import-number';
 import {
   checkImportRowNumbers,
@@ -161,7 +169,7 @@ function parseDateString(dateStr: unknown, todayStr: string): string {
 // Cap the uploaded file size BEFORE parsing (S8). /import/upload parses xlsx/csv entirely in
 // memory, so an unbounded body is a memory-exhaustion vector; 10 MB comfortably covers real
 // bank exports. Mirrors the RECEIPT_MAX_BYTES guard in routes/receipts.ts.
-export const IMPORT_MAX_BYTES = 10 * 1024 * 1024;
+export const IMPORT_MAX_BYTES = IMPORT_UPLOAD_MAX_BYTES;
 
 // Pull a value from a row using any of the casing variants the Express code checks.
 function pick(row: Record<string, any>, mapping: Record<string, any>, key: string): any {
@@ -227,43 +235,33 @@ const INCOME_KEYWORDS = [
 // Stateless: pass an optional `sheetName` field to read a specific tab. The response
 // lists all sheetNames so the client can re-call /upload to switch sheets (this
 // replaces the old stateful upload->fileId->file-sheet flow). The parsed rows then
-// go to POST /api/import/execute.
+// go to POST /api/import/execute. Local-first reads a file the same way, with the same
+// refusals at the `file` field (shared/importUpload.ts).
 importRoutes.post('/api/import/upload', requireAuth, async (c) => {
   const rl = await enforce(c, `import:${c.get('userId')}`, 30, 300);
   if (rl) return rl;
   const body = await c.req.parseBody();
-  const file = body['file'] ?? body['import'];
-  if (!(file instanceof File)) throw new HttpError(400, 'No file uploaded');
+  const entry = body['file'] ?? body['import'];
+  const file = entry instanceof File ? entry : null;
   // Size cap BEFORE parsing (S8): refuse an oversized workbook rather than parse it in memory.
-  if (file.size > IMPORT_MAX_BYTES) {
-    throw new HttpError(
-      413,
-      `File too large (max ${Math.round(IMPORT_MAX_BYTES / 1024 / 1024)}MB)`
-    );
+  const refused = uploadRefusal(file);
+  if (refused || !file) {
+    const fields = refused?.fields ?? { file: IMPORT_UPLOAD_MESSAGES.file };
+    throw new HttpError(refused?.status ?? 400, summarizeFields(fields), fields);
   }
   const requested =
     typeof body['sheetName'] === 'string' ? (body['sheetName'] as string) : undefined;
-  const buf = new Uint8Array(await file.arrayBuffer());
-
-  if (/\.csv$/i.test(file.name) || file.type === 'text/csv') {
-    const { headers, rows } = parseCsv(new TextDecoder().decode(buf));
-    return c.json({ headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] });
-  }
-
-  const wb = XLSX.read(buf, { type: 'array' });
-  const sheetNames = wb.SheetNames;
-  const selected = requested && sheetNames.includes(requested) ? requested : sheetNames[0];
-  if (!selected) throw new HttpError(400, 'Spreadsheet has no sheets');
-  const matrix = XLSX.utils.sheet_to_json<any[]>(wb.Sheets[selected]!, {
-    header: 1,
-    blankrows: false,
-    defval: '',
-  });
-  const headers = (matrix[0] as any[] | undefined)?.map((h) => String(h ?? '')) ?? [];
-  const rows = matrix
-    .slice(1)
-    .filter((r) => Array.isArray(r) && r.some((cell) => cell !== '' && cell != null));
-  return c.json({ headers, rows, selectedSheet: selected, sheetNames });
+  const sheet = readUploadedSheet(
+    XLSX,
+    {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    },
+    requested
+  );
+  return c.json(accept(sheet));
 });
 
 // ── POST /api/import/file-sheet — obsolete on Workers ─────────────────────────
@@ -288,12 +286,10 @@ export async function fetchGoogleSheetRows(
   url: unknown,
   sheetName?: string
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (!url) return { status: 400, body: { error: 'URL is required' } };
-  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!idMatch) return { status: 400, body: { error: 'Invalid Google Sheets URL or ID' } };
-  const sheetId = idMatch[1];
-  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/);
-  const gid = gidMatch ? gidMatch[1] : null;
+  // The link's words are shared with local-first and the Import page (shared/importSourceSchema.ts).
+  const link = readSheetUrl(url);
+  if ('error' in link) return { status: 400, body: { ...refusalOf({ url: link.error }) } };
+  const { id: sheetId, gid } = link.value;
   try {
     const csvUrl = gid
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`

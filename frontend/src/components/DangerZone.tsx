@@ -1,10 +1,15 @@
-import { createSignal, For, onMount, Show } from 'solid-js'
+import { createSignal, For, Show } from 'solid-js'
 import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { getStorageMode } from '../core/storage/storageFactory'
 import styles from './DangerZone.module.css'
 
 export interface DangerZoneProps {
+  /**
+   * The person's profiles, from the page that shows them. A profile renamed on that page is
+   * offered here under its new name at once, so the name picked is always the profile deleted.
+   */
+  profiles: readonly { id: number; name: string }[]
   onReset: () => Promise<void>
   onDeleteProfile: (profileId: string | number) => Promise<void>
 }
@@ -15,41 +20,24 @@ type ConfirmAction =
 export default function DangerZone(props: DangerZoneProps) {
   const [confirming, setConfirming] = createSignal<ConfirmAction>(null)
   const [loading, setLoading] = createSignal(false)
-  const [profiles, setProfiles] = createSignal<Array<{ id: number; name: string }>>([])
-  const [selectedProfileId, setSelectedProfileId] = createSignal<number>(
+  const [chosenProfileId, setChosenProfileId] = createSignal<number>(
     parseInt(localStorage.getItem('currentProfileId') || '1', 10)
   )
 
-  const loadProfiles = async () => {
-    try {
-      const res = await apiFetch('/api/profiles', { credentials: 'include' })
-      if (res.ok) {
-        const data = await res.json()
-        setProfiles(data)
-        const stored = parseInt(localStorage.getItem('currentProfileId') || '1', 10)
-        if (data.length > 0 && !data.some((p: any) => p.id === stored)) {
-          setSelectedProfileId(data[0].id)
-        } else {
-          setSelectedProfileId(stored)
-        }
-      }
-    } catch {
-      /* non-critical */
-    }
+  // The profile chosen, while it is in the list; the first profile otherwise.
+  const selectedProfileId = (): number => {
+    const chosen = chosenProfileId()
+    const list = props.profiles
+    return list.length === 0 || list.some((p) => p.id === chosen) ? chosen : list[0]!.id
   }
 
-  onMount(() => {
-    void loadProfiles()
-  })
-
   const selectedProfileName = () => {
-    const p = profiles().find((prof) => prof.id === selectedProfileId())
+    const p = props.profiles.find((prof) => prof.id === selectedProfileId())
     return p ? p.name : 'Selected Profile'
   }
 
-  const isDeleteProfileDisabled = () => {
-    return selectedProfileId() === 1 || profiles().length <= 1
-  }
+  // Both runtimes delete any profile but the last one.
+  const isDeleteProfileDisabled = () => props.profiles.length <= 1
 
   const executeDelete = async (endpoint: string, successMsg: string) => {
     setLoading(true)
@@ -98,9 +86,9 @@ export default function DangerZone(props: DangerZoneProps) {
             id="danger-profile-select"
             class={styles['profile-select']}
             value={selectedProfileId()}
-            onchange={(e) => setSelectedProfileId(parseInt(e.currentTarget.value, 10))}
+            onchange={(e) => setChosenProfileId(parseInt(e.currentTarget.value, 10))}
           >
-            <For each={profiles()}>
+            <For each={props.profiles}>
               {(p) => (
                 <option value={p.id} selected={p.id === selectedProfileId()}>
                   {p.name}
@@ -296,9 +284,7 @@ export default function DangerZone(props: DangerZoneProps) {
                 <Show when={isDeleteProfileDisabled()}>
                   <span class={styles['danger-zone-note']}>
                     {' '}
-                    {selectedProfileId() === 1
-                      ? '(The default profile cannot be deleted)'
-                      : '(Cannot delete the last remaining profile)'}
+                    (Cannot delete the last remaining profile)
                   </span>
                 </Show>
               </div>

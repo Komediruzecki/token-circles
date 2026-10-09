@@ -4,17 +4,20 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import * as db from '../db';
 import { requireFeature } from '../plan';
+import { accept, refuse } from '../http';
+import {
+  AUTOMATED_IMPORT_SCHEDULES,
+  checkImportSourceCreate,
+  checkImportSourceEdit,
+  foreignSourceAccount,
+  IMPORT_SOURCE_MESSAGES,
+} from '../../../shared/importSourceSchema';
+import type { ImportSourceWrite } from '../../../shared/importSourceSchema';
 
 // Saved import origins ("Connected Sources", migration 0020). A saved Google-Sheet link
 // (later: Drive folder / bank aggregator) the user can re-fetch + import on demand. config,
 // mapping and category_types are stored as JSON strings and returned to the client parsed.
 export const importSourcesRoutes = new Hono<AppEnv>();
-
-const KINDS = new Set(['google_sheet', 'google_drive_folder', 'bank_aggregator']);
-const SCHEDULES = new Set(['manual', 'on_open', 'daily']);
-// 'manual' is the user pressing Import — their own file, their own machine, free forever.
-// Anything else is us doing the work on a schedule, which is what a paid plan buys.
-const AUTOMATED_SCHEDULES = new Set(['on_open', 'daily']);
 
 interface ImportSourceRow {
   id: number;
@@ -59,55 +62,30 @@ const rowToApi = (r: ImportSourceRow) => ({
 });
 
 /**
- * Pull the writable columns out of a request body, stringifying the JSON columns and
- * clamping strings. On create (`partial: false`) kind/label/config/schedule always land
- * (with defaults); on update (`partial: true`) only the keys the body actually carries are
- * touched. Returns an error string for an invalid enum value so the caller can 400.
+ * The writable columns of a checked body as D1 stores them: the JSON columns as text. The checks
+ * and their words are shared with local-first (shared/importSourceSchema.ts).
  */
-function readWritable(
-  b: Record<string, unknown>,
-  partial: boolean
-): { data: Record<string, unknown>; error?: string } {
-  const data: Record<string, unknown> = {};
-  if (!partial || 'kind' in b) {
-    const kind = typeof b.kind === 'string' ? b.kind : 'google_sheet';
-    if (!KINDS.has(kind)) return { data, error: 'Invalid kind' };
-    data.kind = kind;
+function toColumns(value: ImportSourceWrite): Record<string, unknown> {
+  const data: Record<string, unknown> = { ...value };
+  if (value.config !== undefined) data.config = JSON.stringify(value.config);
+  for (const key of ['mapping', 'category_types'] as const) {
+    if (value[key] !== undefined)
+      data[key] = value[key] === null ? null : JSON.stringify(value[key]);
   }
-  if (!partial || 'label' in b) {
-    data.label = typeof b.label === 'string' ? b.label.slice(0, 200) : '';
-  }
-  if (!partial || 'config' in b) {
-    data.config = JSON.stringify(b.config && typeof b.config === 'object' ? b.config : {});
-  }
-  if ('mapping' in b) {
-    data.mapping = b.mapping && typeof b.mapping === 'object' ? JSON.stringify(b.mapping) : null;
-  }
-  if ('category_types' in b) {
-    data.category_types =
-      b.category_types && typeof b.category_types === 'object'
-        ? JSON.stringify(b.category_types)
-        : null;
-  }
-  if ('default_account_id' in b) {
-    data.default_account_id =
-      typeof b.default_account_id === 'number' && Number.isFinite(b.default_account_id)
-        ? Math.floor(b.default_account_id)
-        : null;
-  }
-  if (!partial || 'schedule' in b) {
-    const schedule = typeof b.schedule === 'string' ? b.schedule : 'manual';
-    if (!SCHEDULES.has(schedule)) return { data, error: 'Invalid schedule' };
-    data.schedule = schedule;
-  }
-  if ('last_synced_at' in b) {
-    data.last_synced_at =
-      typeof b.last_synced_at === 'string' ? b.last_synced_at.slice(0, 40) : null;
-  }
-  if ('last_cursor' in b) {
-    data.last_cursor = typeof b.last_cursor === 'string' ? b.last_cursor.slice(0, 200) : null;
-  }
-  return { data };
+  return data;
+}
+
+/** Refuses a default account that is not one of the profile's, at its field. */
+async function requireOwnAccount(d1: D1Database, pid: number, value: ImportSourceWrite) {
+  const id = value.default_account_id;
+  if (id === undefined || id === null) return;
+  const owned = await db.first(
+    d1,
+    'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  );
+  if (!owned) throw refuse(foreignSourceAccount());
 }
 
 /**
@@ -119,7 +97,7 @@ async function requireAutomationIfScheduled(
   c: Parameters<typeof requireFeature>[0],
   schedule: unknown
 ): Promise<void> {
-  if (typeof schedule !== 'string' || !AUTOMATED_SCHEDULES.has(schedule)) return;
+  if (typeof schedule !== 'string' || !AUTOMATED_IMPORT_SCHEDULES.includes(schedule)) return;
   await requireFeature(
     c,
     'automatedImports',
@@ -142,11 +120,10 @@ importSourcesRoutes.get('/api/import-sources', requireAuth, async (c) => {
 // ── POST /api/import-sources — save a new source ───────────────────────────────
 importSourcesRoutes.post('/api/import-sources', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-  const { data, error } = readWritable(b, false);
-  if (error) return c.json({ error }, 400);
-  await requireAutomationIfScheduled(c, data.schedule);
-  const res = await db.insert(c.env.DB, 'import_sources', { profile_id: pid, ...data });
+  const value = accept(checkImportSourceCreate(await c.req.json().catch(() => null)));
+  await requireOwnAccount(c.env.DB, pid, value);
+  await requireAutomationIfScheduled(c, value.schedule);
+  const res = await db.insert(c.env.DB, 'import_sources', { profile_id: pid, ...toColumns(value) });
   const row = await db.first<ImportSourceRow>(
     c.env.DB,
     'SELECT * FROM import_sources WHERE id = ?',
@@ -166,11 +143,11 @@ importSourcesRoutes.put('/api/import-sources/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!existing) return c.json({ error: 'Source not found' }, 404);
-  const b = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
-  const { data, error } = readWritable(b, true);
-  if (error) return c.json({ error }, 400);
-  await requireAutomationIfScheduled(c, data.schedule);
+  if (!existing) return c.json({ error: IMPORT_SOURCE_MESSAGES.notFound }, 404);
+  const value = accept(checkImportSourceEdit(await c.req.json().catch(() => null), existing));
+  await requireOwnAccount(c.env.DB, pid, value);
+  await requireAutomationIfScheduled(c, value.schedule);
+  const data = toColumns(value);
   data.updated_at = new Date().toISOString();
   await db.update(c.env.DB, 'import_sources', data, 'id = ? AND profile_id = ?', id, pid);
   const row = await db.first<ImportSourceRow>(

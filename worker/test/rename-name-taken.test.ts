@@ -82,7 +82,9 @@ describe('renaming a profile', () => {
     it(`${method} refuses a name the user's other profile has`, async () => {
       const res = await send('/api/profiles/921', method, { name: 'Household' });
       expect(res.status).toBe(400);
-      expect(await res.json()).toEqual({ error: 'A profile with this name already exists' });
+      // Its words are shared/profileSchema.ts's since slice 4b; profile-refusals.test.ts has the rest.
+      const taken = 'You already have a profile called "Household". Choose another name.';
+      expect(await res.json()).toEqual({ error: taken, fields: { name: taken } });
       expect(await nameOf('profiles', 921)).toBe('Side business');
     });
   }

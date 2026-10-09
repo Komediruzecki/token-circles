@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import * as XLSX from 'xlsx'
 import { DIFFERENCES } from '../../../../../shared/contract/differences'
 import { namedDifferences, samplePaths, unsent } from '../../../../../shared/contract/guard'
 import { outbound } from '../../../../../shared/contract/outbound'
 import { CONTRACT_ROUTES, LOCAL_ONLY, UNCOVERED } from '../../../../../shared/contract/routes'
 import { SCENARIOS } from '../../../../../shared/contract/scenarios'
+import { readUploadedSheet } from '../../../../../shared/importUpload'
 import { getDB } from '../idb.js'
 import { localRoutes, routeApiRequest } from '../localApiRouter.js'
 import type { Hit, RouteKey } from '../../../../../shared/contract/guard'
@@ -15,6 +17,7 @@ import type {
   Reply,
   StoredKind,
 } from '../../../../../shared/contract/types'
+import type { UploadRequest } from '../handlers/uploadRead'
 
 // The CRUD contract (shared/contract) against local-first: the real router and handlers on
 // IndexedDB (fake-indexeddb, src/test-setup.ts). The Worker runs the same scenarios in
@@ -46,7 +49,9 @@ afterAll(() => {
 // jsdom decodes no images and runs no Web Workers, and local-first's PDF reports draw their charts
 // with both (clientPdfReports.ts). Here an image fails to decode and the chart worker answers with
 // no chart, so a report is made without its charts, as a browser that cannot draw one makes it.
-// Its bytes still arrive: the handler answers them as an ArrayBuffer, not as jsdom's Blob.
+// Its bytes still arrive: the handler answers them as an ArrayBuffer, not as jsdom's Blob. The
+// thread an uploaded file is read on (workers/uploadReader.ts) answers as that thread does, with
+// the shared reader.
 class UndecodableImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
@@ -54,24 +59,35 @@ class UndecodableImage {
     setTimeout(() => this.onerror?.(), 0)
   }
 }
-class BlankChartWorker {
+class StandInWorker {
+  onmessage: ((event: MessageEvent) => void) | null = null
   private listeners: ((event: MessageEvent) => void)[] = []
+  private readonly readsUploads: boolean
+  constructor(url: URL | string) {
+    this.readsUploads = String(url).includes('uploadReader')
+  }
   addEventListener(_type: string, listener: (event: MessageEvent) => void) {
     this.listeners.push(listener)
   }
   removeEventListener(_type: string, listener: (event: MessageEvent) => void) {
     this.listeners = this.listeners.filter((l) => l !== listener)
   }
-  postMessage(request: { id: number }) {
+  postMessage(request: { id: number } | UploadRequest) {
     setTimeout(() => {
-      for (const listener of [...this.listeners])
-        listener({ data: { id: request.id } } as MessageEvent)
+      if (this.readsUploads && 'file' in request) {
+        const data = readUploadedSheet(XLSX, request.file, request.requested)
+        this.onmessage?.({ data } as MessageEvent)
+        return
+      }
+      const id = 'id' in request ? request.id : undefined
+      for (const listener of [...this.listeners]) listener({ data: { id } } as MessageEvent)
     }, 0)
   }
+  terminate() {}
 }
 beforeAll(() => {
   vi.stubGlobal('Image', UndecodableImage)
-  vi.stubGlobal('Worker', BlankChartWorker)
+  vi.stubGlobal('Worker', StandInWorker)
 })
 afterAll(() => {
   vi.unstubAllGlobals()

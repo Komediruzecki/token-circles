@@ -1,3 +1,4 @@
+import { IMPORT_SOURCE_MESSAGES as M } from '../../importSourceSchema';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
@@ -103,4 +104,52 @@ export const importSources = [
     await addSource(api.other, expect, { label: 'Theirs' });
     expect((await sources(api, expect)).map((s) => s.id)).toEqual([third, second, first]);
   }),
+
+  scenario(
+    'a connected source that cannot be stored is refused at its field, and nothing is saved',
+    async (api, expect) => {
+      const theirs = await account(api.other, expect, 'Theirs', 5);
+      const refused = async (fields: Record<string, unknown>) => {
+        const reply = await api.post('/api/import-sources', sourceForm(fields));
+        expect(reply.status, JSON.stringify(reply.body)).toBe(400);
+        return reply.body.fields as Record<string, string>;
+      };
+      expect(
+        await refused({ kind: 'dropbox', schedule: 'hourly', label: 'x'.repeat(201) })
+      ).toEqual({ kind: M.kind, schedule: M.schedule, label: M.labelLength });
+      expect(await refused({ label: 42, config: 'sheet' })).toEqual({
+        label: M.label,
+        config: M.config,
+      });
+      expect(await refused({ config: { url: 'https://example.com/not-a-sheet' } })).toEqual({
+        'config.url': M.url,
+      });
+      expect(await refused({ default_account_id: theirs })).toEqual({
+        default_account_id: M.account,
+      });
+      expect(await sources(api, expect)).toEqual([]);
+
+      // An edit is checked for the fields it sends, and only those.
+      const { id } = await addSource(api, expect);
+      const edit = (fields: Record<string, unknown>) =>
+        api.put(`/api/import-sources/${id}`, fields);
+      expect((await edit({ schedule: 'weekly' })).body.fields).toEqual({ schedule: M.schedule });
+      expect((await edit({ config: { sheetName: 'Sheet2' } })).body.fields).toEqual({
+        'config.url': M.url,
+      });
+      expect((await edit({ default_account_id: theirs })).body.fields).toEqual({
+        default_account_id: M.account,
+      });
+      expectOk(expect, await edit({ label: '  Renamed ' }), 'PUT a new name');
+      expect(await sources(api, expect)).toEqual([
+        expect.objectContaining({
+          id,
+          label: 'Renamed',
+          schedule: 'manual',
+          default_account_id: null,
+          config: { url: SHEET_URL, sheetName: 'Sheet1' },
+        }),
+      ]);
+    }
+  ),
 ];

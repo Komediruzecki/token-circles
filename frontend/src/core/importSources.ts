@@ -7,6 +7,7 @@
  * carries a Drive folder or bank-aggregator connection later. The column mapping is stored BY
  * HEADER NAME (see importMapping.ts) so it survives column reordering.
  */
+import { apiErrorFrom } from './apiError'
 import { apiFetch } from './apiFetch'
 
 export type SourceKind = 'google_sheet' | 'google_drive_folder' | 'bank_aggregator'
@@ -44,13 +45,17 @@ export async function listImportSources(): Promise<ImportSource[]> {
   return Array.isArray(rows) ? (rows as ImportSource[]) : []
 }
 
-export async function createImportSource(input: ImportSourceInput): Promise<ImportSource | null> {
+/**
+ * Saves a new source. Throws an ApiError when it is not saved: a refusal names the fields
+ * (shared/importSourceSchema.ts), for the form to mark them.
+ */
+export async function createImportSource(input: ImportSourceInput): Promise<ImportSource> {
   const res = await apiFetch('/api/import-sources', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...profileHeaders() },
     body: JSON.stringify(input),
   })
-  if (!res.ok) return null
+  if (!res.ok) throw await apiErrorFrom(res)
   return (await res.json()) as ImportSource
 }
 

@@ -292,6 +292,28 @@
   flex-wrap: wrap;
   gap: 10px;
 }
+/* Each input sits in a form-kit field, which carries its message under it. */
+.addField {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 200px;
+}
+.addLabelField {
+  flex: 0 1 220px;
+  max-width: 220px;
+}
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 .input {
   flex: 1;
   min-width: 200px;

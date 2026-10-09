@@ -11,7 +11,10 @@
 
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
+import { readSheetUrl } from '../../../../shared/importSourceSchema'
+import { IMPORT_UPLOAD_MESSAGES } from '../../../../shared/importUpload'
 import { getLocalCurrency, toast } from '../../core/api'
+import { ApiError, apiErrorFrom } from '../../core/apiError'
 import { apiFetch } from '../../core/apiFetch'
 import {
   detectBank,
@@ -36,6 +39,13 @@ import {
 } from './previewFilter'
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../../core/bankImport'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
+
+/** Said when a sheet's link was read but the sheet has no header row to map. */
+export const SHEET_EMPTY =
+  'That sheet has no header row to read. Check the link points at the tab with your transactions.'
+/** Said when the sheet could not be read for a reason the answer did not name. */
+export const SHEET_UNREAD =
+  "Couldn't read that sheet. Check it is shared so anyone with the link can view it, and try again."
 
 /** A within-batch potential duplicate: `index` is identical to the earlier row `matchIndex`. */
 export interface RowDuplicate {
@@ -258,9 +268,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // File upload state
   const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
   const [selectedSheet, setSelectedSheet] = createSignal<string>('')
-  // Getter unused since duplicate detection moved client-side (it was only read by
-  // the removed /api/import/file-sheet call); the setter still records the upload id.
-  const [_fileId, setFileId] = createSignal<string>('')
+  // The file last uploaded. Neither runtime keeps it, so choosing another of its sheets uploads it
+  // again with that sheet's name (shared/importUpload.ts).
+  const [uploadedFile, setUploadedFile] = createSignal<File | null>(null)
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = createSignal<string>('')
@@ -714,9 +724,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const resetForm = () => {
     setActiveStep('upload')
     setUploadResult(null)
+    setUploadedFile(null)
     setSheetResult(null)
     setSelectedSheet('')
-    setFileId('')
     setSheetUrl('')
     setColumnMapping({})
     setCategoryTypes({})
@@ -739,8 +749,15 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setShowBankRules(false)
   }
 
-  // File upload
-  const handleFileUpload = async (file: File) => {
+  // File upload. Both runtimes answer the file's header row, the rows under it as text, and its
+  // sheets (shared/importUpload.ts); local-first used to answer an upload session instead, and the
+  // upload stopped here with "Cannot read properties of undefined (reading '0')".
+  const handleFileUpload = async (
+    file: File,
+    sheetName?: string,
+    options?: { rethrow?: boolean }
+  ) => {
+    const rethrow = options?.rethrow ?? false
     setLoading(true)
     setDropProcessing(true)
     setError(null)
@@ -752,37 +769,78 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       await nextPaint()
       const formData = new FormData()
       formData.append('file', file)
+      if (sheetName) formData.append('sheetName', sheetName)
 
       const response = await apiFetch('/api/import/upload', {
         method: 'POST',
         headers: profileHeaders(),
         body: formData,
       })
+      // A refusal names the file field (shared/importUpload.ts): thrown for a form to mark it.
+      if (!response.ok) throw await apiErrorFrom(response)
 
-      const data = await response.json()
+      const data = (await response.json()) as {
+        headers: string[]
+        rows: string[][]
+        selectedSheet: string
+        sheetNames: string[]
+      }
 
-      if (!response.ok) throw new Error(data.error || 'Upload failed')
-
-      setUploadResult(data)
-      setSelectedSheet(data.sheetNames[0])
-      setFileId(data.fileId)
+      setUploadedFile(file)
+      setUploadResult({
+        fileId: '',
+        filename: file.name,
+        sheetName: data.selectedSheet,
+        sheetNames: data.sheetNames,
+        headers: data.headers,
+        rows: data.rows,
+        totalRows: data.rows.length,
+      })
+      setSelectedSheet(data.selectedSheet)
       setHeaders(data.headers)
-      setRows(
-        data.rows.slice(1).filter((r: string[]) => r.some((c) => c !== undefined && c !== ''))
-      )
-      setActiveStep('mapping')
+      setRows(data.rows)
+      // On to the mapping step with the columns detected, as a pasted CSV and a Google Sheet go.
+      goToMapping()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      if (rethrow) throw err
+      setError(err instanceof ApiError ? err.message : IMPORT_UPLOAD_MESSAGES.unreadable)
     } finally {
       setLoading(false)
       setDropProcessing(false)
     }
   }
 
+  /**
+   * Forgets the file read before, as soon as another is picked: whether or not the new one is
+   * read, the old one's sheet and the way on to the mapping step are not left on the page.
+   */
+  const clearUpload = () => {
+    setUploadResult(null)
+    setUploadedFile(null)
+    setSelectedSheet('')
+    setHeaders([])
+    setRows([])
+  }
+
+  /**
+   * Uploads `file` for the mapping step, and throws when it is not read: an ApiError naming the
+   * `file` field for a refusal, for the Import page's form to mark (uploadForm.ts).
+   */
+  const uploadFile = (file: File) => handleFileUpload(file, undefined, { rethrow: true })
+
+  /** Read another sheet of the uploaded workbook: the file goes up again, with the sheet named. */
+  const chooseUploadedSheet = (sheetName: string) => {
+    const file = uploadedFile()
+    if (!file || sheetName === selectedSheet()) return
+    void handleFileUpload(file, sheetName)
+  }
+
   const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
     const file = target.files?.[0]
-    if (file) void handleFileUpload(file)
+    if (!file) return
+    clearUpload()
+    void handleFileUpload(file)
   }
 
   const handleDragOver = (event: DragEvent) => {
@@ -792,7 +850,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const handleDrop = (event: DragEvent) => {
     event.preventDefault()
     const file = event.dataTransfer?.files[0]
-    if (file) void handleFileUpload(file)
+    if (!file) return
+    clearUpload()
+    void handleFileUpload(file)
   }
 
   // ---- Bank Imports ----
@@ -1157,13 +1217,26 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // mapping/upload. A background "auto sync" / "fetch & preview" passes { navigate: false } to
   // fetch WITHOUT touching the active step, then drives mapping/preview/import itself. Returns
   // whether usable headers came back, so a headless caller can bail on a failed fetch.
-  const fetchGoogleSheet = async (options?: { navigate?: boolean }): Promise<boolean> => {
+  /**
+   * Reads the sheet at `sheetUrl()` (the tab in `selectedSheet()`) for the mapping step. Without
+   * `rethrow`, a failure is said in the page's error banner and the answer is false. With it, the
+   * failure is thrown as an ApiError instead, for a form to mark its link field, and nothing goes
+   * in the banner: a link that is not a sheet's (shared/importSourceSchema.ts), a sheet that could
+   * not be read, and a sheet with no header row are all at `url`.
+   */
+  const fetchGoogleSheet = async (options?: {
+    navigate?: boolean
+    rethrow?: boolean
+  }): Promise<boolean> => {
     const navigate = options?.navigate ?? true
-    const url = sheetUrl()
-    if (!url) {
-      setError('Please enter a Google Sheets URL')
+    const rethrow = options?.rethrow ?? false
+    const fail = (error: ApiError): false => {
+      if (rethrow) throw error
+      setError(error.message)
       return false
     }
+    const link = readSheetUrl(sheetUrl())
+    if ('error' in link) return fail(new ApiError(400, link.error, { url: link.error }))
 
     setLoading(true)
     setError(null)
@@ -1172,13 +1245,22 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const response = await apiFetch('/api/import/googlesheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
-        body: JSON.stringify({ url, sheetName: selectedSheet() }),
+        body: JSON.stringify({ url: link.value.url, sheetName: selectedSheet() }),
       })
+      if (!response.ok) {
+        const refused = await apiErrorFrom(response)
+        // A sheet either runtime could not read is about its link: the words say how to share it.
+        const unread =
+          Object.keys(refused.fields).length === 0 &&
+          (response.status === 422 || response.status === 501)
+        return fail(
+          unread ? new ApiError(refused.status, refused.message, { url: refused.message }) : refused
+        )
+      }
 
       const data = await response.json()
-
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch Google Sheet')
-
+      const hasHeaders = Array.isArray(data.headers) && data.headers.length > 0
+      if (!hasHeaders && rethrow) throw new ApiError(422, SHEET_EMPTY, { url: SHEET_EMPTY })
       setSheetNames(data.sheetNames || [])
       setSheetResult({
         ...data,
@@ -1191,7 +1273,6 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setHeaders(data.headers || [])
       setRows(data.rows || [])
 
-      const hasHeaders = Array.isArray(data.headers) && data.headers.length > 0
       if (navigate) {
         // If returning with specific sheet and we have headers, go to mapping
         if (selectedSheet() && hasHeaders) {
@@ -1202,7 +1283,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       }
       return hasHeaders
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch Google Sheet')
+      if (rethrow) throw err instanceof ApiError ? err : new ApiError(0, SHEET_UNREAD)
+      setError(err instanceof ApiError ? err.message : SHEET_UNREAD)
       return false
     } finally {
       setLoading(false)
@@ -1614,6 +1696,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     toggleApprovedCategory,
     resetForm,
     handleFileSelect,
+    clearUpload,
+    uploadFile,
+    chooseUploadedSheet,
     handleDragOver,
     handleDrop,
     addBankAccount,

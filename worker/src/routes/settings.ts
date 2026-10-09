@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { HttpError } from '../http';
+import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema';
+import { accept } from '../http';
 import * as db from '../db';
 import { setProfileBaseCurrency } from '../base-currency';
 
@@ -29,28 +30,16 @@ settingsRoutes.get('/api/settings', requireAuth, async (c) => {
   return c.json(settings);
 });
 
+// The settings this route stores, checked by the rules local-first runs too
+// (shared/settingsSchema.ts): a key another route owns is refused there, a value is checked before
+// anything is written, and a refused write stores none of the body.
 settingsRoutes.put('/api/settings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (b.currency && !/^[A-Z]{3}$/.test(b.currency)) {
-    throw new HttpError(
-      422,
-      'Invalid currency code. Must be 3-letter ISO 4217 code (e.g., USD, EUR).'
-    );
+  const settings = accept(checkSettingsUpdate(await c.req.json().catch(() => null)));
+  if (settings.currency !== undefined) {
+    settings.currency = await setProfileBaseCurrency(c.env.DB, pid, settings.currency);
   }
-  if (b.locale) {
-    const localeRegex = /^[a-z]{2,3}(?:-[A-Z]{2,3}(?:-[A-Z0-9]+)*)?$/i;
-    if (!localeRegex.test(b.locale)) {
-      throw new HttpError(
-        422,
-        'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).'
-      );
-    }
-  }
-  if (b.currency) {
-    b.currency = await setProfileBaseCurrency(c.env.DB, pid, b.currency);
-  }
-  for (const [k, v] of Object.entries(b)) {
+  for (const [k, v] of Object.entries(settings)) {
     await db.run(
       c.env.DB,
       'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)',
@@ -62,21 +51,19 @@ settingsRoutes.put('/api/settings', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
-settingsRoutes.post('/api/settings/set-storage', requireAuth, async (c) => {
-  const b = (await c.req.json()) as Record<string, any>;
-  const message =
-    b.type === 'postgresql'
-      ? 'PostgreSQL storage configured. Please restart the application.'
-      : 'SQLite storage configured. Please restart the application.';
-  return c.json({ ok: true, message });
-});
-
 // Storage-mode endpoints the frontend Settings page calls. The worker IS the
 // self-hosted (D1/SQLite) backend and the active mode actually lives client-side
 // (localStorage 'finance_storage_mode'), so GET reports self-hosted and POST just
-// acknowledges the switch. Public — touches no user data.
-settingsRoutes.get('/api/storage-mode', (c) => c.json({ mode: 'self-hosted', type: 'sqlite' }));
+// acknowledges the switch, which Settings then makes itself. Public — touches no user data.
+// Local-first answers both the same way (shared/settingsSchema.ts, checkStorageMode).
+settingsRoutes.get('/api/storage-mode', (c) => c.json({ mode: 'self-hosted' }));
 settingsRoutes.post('/api/storage-mode', async (c) => {
-  await c.req.json().catch(() => ({}));
-  return c.json({ ok: true });
+  const { mode } = accept(checkStorageMode(await c.req.json().catch(() => null)));
+  return c.json({ ok: true, mode });
+});
+// The Express server's name for the same switch. Nothing in the app sends it any more; it answers
+// as POST /api/storage-mode does.
+settingsRoutes.post('/api/settings/set-storage', requireAuth, async (c) => {
+  const { mode } = accept(checkStorageMode(await c.req.json().catch(() => null)));
+  return c.json({ ok: true, mode });
 });

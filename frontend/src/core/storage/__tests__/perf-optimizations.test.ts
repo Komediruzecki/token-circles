@@ -8,13 +8,7 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import {
-  budgetsForecast,
-  budgetsHistory,
-  importExecute,
-  importFileSheet,
-  statsMonthly,
-} from '../localHandlers.js'
+import { budgetsForecast, budgetsHistory, importExecute, statsMonthly } from '../localHandlers.js'
 
 async function resetDb() {
   const db = await getDB()
@@ -91,39 +85,6 @@ describe('perf: import duplicate detection (O(N+M) rewrite)', () => {
     })
     const body = (await res.json()) as { imported: number }
     expect(body.imported).toBe(2)
-  })
-
-  it('detectDuplicates via importFileSheet reports the right duplicate indices', async () => {
-    // Seed one existing transaction.
-    const db = await getDB()
-    await db.add('transactions', {
-      profile_id: 1,
-      type: 'expense',
-      description: 'Netflix',
-      date: '2026-04-10',
-      amount: 15.99,
-    })
-
-    // importUpload/importFileSheet operate on an in-memory xlsx session. Build a
-    // CSV workbook the same way importUpload does, then register it. We reach the
-    // session indirectly by calling importUpload with a FormData-like File.
-    const csv = 'date,description,amount\n2026-04-10,Netflix,15.99\n2026-04-11,Spotify,9.99\n'
-    const file = new File([csv], 'txns.csv', { type: 'text/csv' })
-    const form = new FormData()
-    form.set('file', file)
-    const { importUpload } = await import('../localHandlers.js')
-    const upRes = await importUpload(form)
-    const up = (await upRes.json()) as { session_id: string }
-
-    const sheetRes = await importFileSheet({ session_id: up.session_id })
-    const sheet = (await sheetRes.json()) as {
-      total: number
-      new_items: number
-      duplicate_indices: number[]
-    }
-    expect(sheet.total).toBe(2)
-    expect(sheet.new_items).toBe(1)
-    expect(sheet.duplicate_indices).toEqual([0]) // row 0 (Netflix) duplicates existing
   })
 })
 

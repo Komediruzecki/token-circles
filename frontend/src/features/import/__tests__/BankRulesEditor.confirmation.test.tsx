@@ -16,6 +16,11 @@ import type { ImportFlow } from '../importFlow'
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
+/** The save goes through the form kit, which answers after the turn the click ran in. */
+const settle = async () => {
+  for (let i = 0; i < 5; i++) await Promise.resolve()
+}
+
 function mountEditor() {
   const [showBankRules, setShowBankRules] = createSignal(true)
   const [ruleGroup, setRuleGroup] = createSignal('croatian')
@@ -24,7 +29,7 @@ function mountEditor() {
   >([])
   const [transferKeywordDraft, setTransferKeywordDraft] = createSignal('')
   const [counterpartDraft, setCounterpartDraft] = createStore<
-    Array<{ from: string; to: string; keywords: string }>
+    Array<{ signature: string; account: string }>
   >([])
   const saveBankRules = vi.fn()
   const resetBankRules = vi.fn()
@@ -63,11 +68,12 @@ afterEach(() => {
 })
 
 describe('the Save rules confirmation', () => {
-  it('appears beside the button and names what happened', () => {
+  it('appears beside the button and names what happened', async () => {
     const { saveBankRules } = mountEditor()
     expect(host.querySelector('[data-test-id="bank-rules-confirmation"]')).toBeNull()
 
     host.querySelector<HTMLButtonElement>('[data-test-id="bank-rules-save"]')!.click()
+    await settle()
 
     expect(saveBankRules).toHaveBeenCalledTimes(1)
     const note = host.querySelector('[data-test-id="bank-rules-confirmation"]')
@@ -77,17 +83,18 @@ describe('the Save rules confirmation', () => {
     expect(note!.parentElement!.querySelector('[data-test-id="bank-rules-save"]')).not.toBeNull()
   })
 
-  it('leaves on its own instead of hanging around', () => {
+  it('leaves on its own instead of hanging around', async () => {
     vi.useFakeTimers()
     mountEditor()
     host.querySelector<HTMLButtonElement>('[data-test-id="bank-rules-save"]')!.click()
+    await settle()
     expect(host.querySelector('[data-test-id="bank-rules-confirmation"]')).not.toBeNull()
 
     vi.advanceTimersByTime(4100)
     expect(host.querySelector('[data-test-id="bank-rules-confirmation"]')).toBeNull()
   })
 
-  it('a save right after a reset keeps the newer message and the newer clock', () => {
+  it('a save right after a reset keeps the newer message and the newer clock', async () => {
     vi.useFakeTimers()
     mountEditor()
     const reset = [...host.querySelectorAll('button')].find(
@@ -96,6 +103,7 @@ describe('the Save rules confirmation', () => {
     reset.click()
     vi.advanceTimersByTime(3000)
     host.querySelector<HTMLButtonElement>('[data-test-id="bank-rules-save"]')!.click()
+    await settle()
 
     // The reset's 4s clock would have expired here; the save's has not.
     vi.advanceTimersByTime(2000)

@@ -20,12 +20,15 @@ export async function profileList(api: ContractApi, expect: Expect): Promise<Jso
 async function addProfile(api: ContractApi, expect: Expect, name: string): Promise<number> {
   const reply = await api.post('/api/profiles', { name });
   expectOk(expect, reply, 'POST /api/profiles');
-  // DIFFERENCE profile-answers
-  expect(reply.status).toBe(api.runtime === 'worker' ? 200 : 201);
-  expect(reply.body).toMatchObject({
+  // The new profile as the list shows it.
+  expect(reply.status).toBe(201);
+  expect(reply.body).toEqual({
     id: expect.any(Number),
     name,
     created_at: expect.any(String),
+    transaction_count: 0,
+    account_count: 0,
+    budget_count: 0,
   });
   return reply.body.id as number;
 }
@@ -151,12 +154,7 @@ export const profiles = [
       // Renamed by either verb; Settings sends PUT.
       const renamed = await api.put(`/api/profiles/${id}`, { name: 'Beach house' });
       expectOk(expect, renamed, 'PUT');
-      // DIFFERENCE profile-answers
-      expect(renamed.body).toEqual(
-        api.runtime === 'worker'
-          ? { id, name: 'Beach house', user_id: expect.any(Number), created_at: expect.any(String) }
-          : { ok: true }
-      );
+      expect(renamed.body).toEqual({ id, name: 'Beach house', created_at: expect.any(String) });
       expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Beach house');
       expectOk(expect, await api.patch(`/api/profiles/${id}`, { name: 'Lake house' }), 'PATCH');
       expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Lake house');
@@ -189,11 +187,9 @@ export const profiles = [
     expectOk(expect, cleared, 'DELETE /api/profile/data');
     expect(cleared.body).toMatchObject({ ok: true, message: 'Profile data reset successfully' });
 
-    // Both keep the profile's retirement plan.
-    const kept: Partial<Record<StoredKind, number>> = { 'retirement settings': 1 };
-    // DIFFERENCE profile-clear-import-sources
-    if (api.runtime === 'worker') kept['import sources'] = 1;
-    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, ...kept });
+    // Both keep the profile's retirement plan, and delete its import sources with the rest: a
+    // source on the daily schedule would fill the cleared profile again.
+    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, 'retirement settings': 1 });
     expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
     expect(await api.stored(api.other.profile, theirs)).toEqual(theirsBefore);
   }),
@@ -203,17 +199,12 @@ export const profiles = [
     await account(api.as(id), expect, 'Old savings', 10);
 
     // The Danger Zone can target any profile while this one stays active.
-    const reply = await api.delete(`/api/profiles/${id}`);
-    // DIFFERENCE profile-delete-selection
-    if (api.runtime === 'worker') {
-      expectOk(expect, reply, 'DELETE another profile');
-      expect((await profileList(api, expect)).map((p) => p.id)).not.toContain(id);
-      expect((await api.stored(id)).accounts).toBe(0);
-    } else {
-      expect(reply.status).toBe(403);
-      expect((await profileList(api, expect)).map((p) => p.id)).toContain(id);
-      expect((await api.stored(id)).accounts).toBe(1);
-    }
+    expectOk(expect, await api.delete(`/api/profiles/${id}`), 'DELETE another profile');
+    expect((await profileList(api, expect)).map((p) => p.id)).toEqual([
+      api.profile,
+      api.other.profile,
+    ]);
+    expect((await api.stored(id)).accounts).toBe(0);
   }),
 
   scenario('the last profile left is deleted', async (api, expect) => {
@@ -223,41 +214,13 @@ export const profiles = [
       'DELETE the partner profile'
     );
     await account(api, expect, 'Everyday', 1000);
+    // The Danger Zone offers no delete with one profile left; a request that asks is refused.
     const reply = await api.delete(`/api/profiles/${api.profile}`);
-    // DIFFERENCE profile-delete-last: the Danger Zone offers no delete with one profile left.
-    if (api.runtime === 'worker') {
-      expect(reply.status).toBe(400);
-      expect((await profileList(api, expect)).map((p) => p.id)).toEqual([api.profile]);
-      expect((await api.stored(api.profile)).accounts).toBe(1);
-    } else {
-      expectOk(expect, reply, 'DELETE the last profile');
-      expect((await api.stored(api.profile)).accounts).toBe(0);
-    }
-  }),
-
-  scenario('the demo data is reseeded', async (api, expect) => {
-    await account(api, expect, 'Everyday', 1000);
-    await account(api.other, expect, 'Theirs', 5);
-    // The Danger Zone offers this in local-first only; the Worker keeps it for older pages.
-    const reply = await api.post('/api/profiles/reseed-demo');
-    expectOk(expect, reply, 'POST /api/profiles/reseed-demo');
-    // DIFFERENCE profile-reseed-demo
-    if (api.runtime === 'worker') {
-      expect(reply.body).toEqual({ ok: true, message: 'Profile reset with default categories' });
-      expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
-      const stored = await api.stored(api.profile);
-      expect(stored.accounts).toBe(0);
-      expect(stored.categories).toBe(14);
-      expect((await api.stored(api.other.profile)).accounts).toBe(1);
-    } else {
-      expect(reply.body).toEqual({ ok: true, message: 'Demo data reseeded' });
-      expect((await profileList(api, expect)).map((p) => p.name)).toEqual([
-        'Example Low Income',
-        'Example Mid Income',
-        'Example High Income',
-      ]);
-      expect((await api.stored(api.profile)).accounts).toBe(0);
-      expect((await api.stored(api.other.profile)).accounts).toBe(0);
-    }
+    expect(reply.status).toBe(400);
+    expect(reply.body).toEqual({
+      error: 'This is your only profile. Create another one before you delete this one.',
+    });
+    expect((await profileList(api, expect)).map((p) => p.id)).toEqual([api.profile]);
+    expect((await api.stored(api.profile)).accounts).toBe(1);
   }),
 ];
