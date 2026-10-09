@@ -313,6 +313,55 @@ describe('verifying a code', () => {
   });
 });
 
+describe('two codes asked for from two browsers, on a confirmed account', () => {
+  const realFetch = globalThis.fetch;
+  /** The codes the Worker mailed, in the order it mailed them. */
+  let mailed: string[] = [];
+
+  beforeEach(async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId).run();
+    (env as unknown as Record<string, string>).RESEND_API_KEY = 'rk_test';
+    mailed = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.includes('api.resend.com')) return realFetch(input as RequestInfo, init);
+      const { subject } = JSON.parse(String(init?.body)) as { subject: string };
+      mailed.push(/^\d{6}/.exec(subject)![0]);
+      return new Response('{"id":"re_1"}', { headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    delete (env as unknown as Record<string, string>).RESEND_API_KEY;
+  });
+
+  for (const order of [
+    ['first', 'second'],
+    ['second', 'first'],
+  ] as const) {
+    it(`each sign in with the cookie of their own request, the ${order[0]} one traded first`, async () => {
+      const cookies = { first: '', second: '' };
+      for (const which of ['first', 'second'] as const) {
+        const asked = await post('/api/auth/email-code/request', { email: EMAIL });
+        expect(asked.status).toBe(200);
+        cookies[which] = cookieValue(asked, 'fm_logincode')!;
+      }
+      const codes = { first: mailed[0]!, second: mailed[1]! };
+
+      for (const which of order) {
+        const res = await post(
+          '/api/auth/email-code/verify',
+          { email: EMAIL, code: codes[which] },
+          cookies[which]
+        );
+        expect(res.status, `the ${which} code`).toBe(200);
+        expect(cookieValue(res, 'fm_session'), `a session from the ${which} code`).toBeTruthy();
+      }
+    });
+  }
+});
+
 describe('account deletion', () => {
   it('removes the login_codes rows with the account', async () => {
     await createLoginCode(env, userId, EMAIL, newCodeHandle());
