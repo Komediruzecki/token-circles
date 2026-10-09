@@ -78,6 +78,7 @@ import { loadChartExportSettings, saveChartExportSettings } from '../utils/chart
 import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
 import { createBaseCurrencyForm } from './baseCurrencyForm'
+import { createNotificationsForm, notificationValues } from './notificationsForm'
 import { createProfileRenameForm } from './profileForm'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
@@ -693,48 +694,22 @@ export default function Settings() {
       const res = await apiFetch('/api/notifications/settings', { credentials: 'include' })
       const data = res.ok ? await res.json() : null
       setNotif(data)
+      notifForm.reset(notificationValues(data))
       setAccountEmail(data?.email ?? '')
       setPendingTaken(false)
     } catch {
       setNotif(null)
     }
   }
-  const saveNotifications = async () => {
-    const n = notif()
-    if (!n) return
-    setNotifBusy(true)
-    try {
-      const res = await apiFetch('/api/notifications/settings', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: n.email,
-          emailNotifications: n.emailNotifications,
-          budgetAlerts: n.budgetAlerts,
-          spendingReport: n.spendingReport,
-          billsReminders: n.billsReminders,
-        }),
-      })
-      if (!res.ok) throw await apiErrorFrom(res)
-      const data = (await res.json().catch(() => ({}))) as { pendingEmail?: string | null }
-      if (data.pendingEmail) {
-        // The account keeps its address until the new one opens the link, so the field goes back
-        // to it and the new address shows as waiting.
-        await loadNotifications()
-        toast(
-          `Saved. Open the link we sent to ${data.pendingEmail} to finish the change.`,
-          'success'
-        )
-      } else {
-        toast('Notification settings saved.', 'success')
-      }
-    } catch (e) {
-      toast(plainMessage(e, 'Could not save your settings. Try again.'), 'error')
-    } finally {
-      setNotifBusy(false)
-    }
-  }
+  // The address and the switches, saved together on the form kit (notificationsForm.ts): a refused
+  // address is marked under the field.
+  const notifForm = createNotificationsForm({
+    onSaved: (answer) => {
+      // The account keeps its address until the new one opens the link, so the field goes back to
+      // it and the new address shows as waiting.
+      if (answer.pendingEmail) void loadNotifications()
+    },
+  })
   const resendEmailChange = async () => {
     setEmailChangeBusy(true)
     try {
@@ -1473,165 +1448,191 @@ export default function Settings() {
                       to enable budget alerts and spending reports.
                     </p>
                   </Show>
-                  <div class={styles.formGroup}>
-                    <label class={styles.formLabel}>Email address</label>
-                    <input
-                      class={styles.formControl}
-                      type="email"
-                      data-test-id="settings-email-input"
-                      value={notif()!.email}
-                      onInput={(e) => setNotif({ ...notif()!, email: e.currentTarget.value })}
-                      placeholder="you@example.com"
-                      style="max-width: 340px;"
-                    />
-                    {/* Outside the plan-locked actions below: a change already waiting can always
+                  <form
+                    {...notifForm.attrs}
+                    onSubmit={(event) => {
+                      // A plan without email alerts can't save here, as the dimmed buttons say, so
+                      // Enter in the address does nothing either.
+                      if (emailAlertsLocked()) event.preventDefault()
+                      else void notifForm.submit(event)
+                    }}
+                    data-test-id="settings-notifications-form"
+                  >
+                    <FormNotice form={notifForm} />
+                    <div class={styles.formGroup}>
+                      <Field
+                        form={notifForm}
+                        name="email"
+                        label="Email address"
+                        labelClass={styles.formLabel}
+                      >
+                        {(control) => (
+                          <input
+                            {...control}
+                            class={styles.formControl}
+                            type="email"
+                            autocomplete="email"
+                            data-test-id="settings-email-input"
+                            value={notifForm.values.email}
+                            onInput={(e) => notifForm.set('email', e.currentTarget.value)}
+                            placeholder="you@example.com"
+                            style="max-width: 340px;"
+                          />
+                        )}
+                      </Field>
+                      {/* Outside the plan-locked actions below: a change already waiting can always
                         be sent again or canceled. */}
-                    <Show when={notif()?.pendingEmail}>
-                      {(pending) => (
-                        <div class={styles.pendingEmail} data-test-id="settings-email-pending">
-                          <Show
-                            when={!pendingTaken()}
-                            fallback={
-                              <p>
-                                Another account uses <strong>{pending()}</strong> now, so this
-                                change can't finish. Cancel it, or save a different address.
-                              </p>
-                            }
-                          >
-                            <p>
-                              We sent a link to <strong>{pending()}</strong>. Your sign-in address
-                              changes when you open it.
-                            </p>
-                          </Show>
-                          <div class={styles.pendingEmailActions}>
-                            <Show when={!pendingTaken()}>
-                              <button
-                                class={styles.iconAction}
-                                data-test-id="settings-email-resend"
-                                onclick={() => void resendEmailChange()}
-                                disabled={emailChangeBusy()}
-                                title={`Send the link to ${pending()} again`}
-                              >
-                                <IconSend />
-                                Send again
-                              </button>
-                            </Show>
-                            <button
-                              class={styles.iconAction}
-                              data-test-id="settings-email-cancel"
-                              onclick={() => void cancelEmailChange()}
-                              disabled={emailChangeBusy()}
-                              title="Keep your current address and stop the link from working"
+                      <Show when={notif()?.pendingEmail}>
+                        {(pending) => (
+                          <div class={styles.pendingEmail} data-test-id="settings-email-pending">
+                            <Show
+                              when={!pendingTaken()}
+                              fallback={
+                                <p>
+                                  Another account uses <strong>{pending()}</strong> now, so this
+                                  change can't finish. Cancel it, or save a different address.
+                                </p>
+                              }
                             >
-                              <IconX />
-                              Cancel change
-                            </button>
+                              <p>
+                                We sent a link to <strong>{pending()}</strong>. Your sign-in address
+                                changes when you open it.
+                              </p>
+                            </Show>
+                            <div class={styles.pendingEmailActions}>
+                              <Show when={!pendingTaken()}>
+                                <button
+                                  type="button"
+                                  class={styles.iconAction}
+                                  data-test-id="settings-email-resend"
+                                  onclick={() => void resendEmailChange()}
+                                  disabled={emailChangeBusy()}
+                                  title={`Send the link to ${pending()} again`}
+                                >
+                                  <IconSend />
+                                  Send again
+                                </button>
+                              </Show>
+                              <button
+                                type="button"
+                                class={styles.iconAction}
+                                data-test-id="settings-email-cancel"
+                                onclick={() => void cancelEmailChange()}
+                                disabled={emailChangeBusy()}
+                                title="Keep your current address and stop the link from working"
+                              >
+                                <IconX />
+                                Cancel change
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </Show>
-                  </div>
-                  <div class={styles.row}>
-                    <span class={styles.rowLabel}>Enable email notifications</span>
-                    <Toggle
-                      checked={() => notif()!.emailNotifications}
-                      disabled={emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, emailNotifications: v })}
-                      aria-label="Enable email notifications"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Budget alerts (weekly)</span>
-                    <Toggle
-                      checked={() => notif()!.budgetAlerts}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, budgetAlerts: v })}
-                      aria-label="Budget alerts (weekly)"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Spending report (biweekly)</span>
-                    <Toggle
-                      checked={() => notif()!.spendingReport}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, spendingReport: v })}
-                      aria-label="Spending report (biweekly)"
-                    />
-                  </div>
-                  <div
-                    class={`${styles.row} ${styles.rowSub}`}
-                    style={`opacity:${notif()!.emailNotifications ? 1 : 0.5};`}
-                  >
-                    <span class={styles.rowLabel}>Upcoming bills (daily)</span>
-                    <Toggle
-                      checked={() => notif()!.billsReminders}
-                      disabled={!notif()!.emailNotifications || emailAlertsLocked()}
-                      onChange={(v) => setNotif({ ...notif()!, billsReminders: v })}
-                      aria-label="Upcoming bills (daily)"
-                    />
-                  </div>
-                  <div
-                    class={styles.actions}
-                    style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
-                  >
-                    <button
-                      class={`${styles.iconAction} ${styles.iconActionPrimary}`}
-                      data-test-id="settings-notifications-save"
-                      onclick={() => void saveNotifications()}
-                      disabled={notifBusy()}
-                      title="Save notification settings"
-                      aria-label="Save notification settings"
+                        )}
+                      </Show>
+                    </div>
+                    <div class={styles.row}>
+                      <span class={styles.rowLabel}>Enable email notifications</span>
+                      <Toggle
+                        checked={() => notifForm.values.emailNotifications}
+                        disabled={emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('emailNotifications', v)}
+                        aria-label="Enable email notifications"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconCheck />
-                      {notifBusy() ? 'Saving…' : 'Save'}
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail()}
-                      disabled={notifBusy()}
-                      title="Send a test email to check delivery"
-                      aria-label="Send a test email to check delivery"
+                      <span class={styles.rowLabel}>Budget alerts (weekly)</span>
+                      <Toggle
+                        checked={() => notifForm.values.budgetAlerts}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('budgetAlerts', v)}
+                        aria-label="Budget alerts (weekly)"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconSend />
-                      Test
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('spending')}
-                      disabled={notifBusy()}
-                      title="Emails you the real spending report, built from your data, right now"
-                      aria-label="Emails you the real spending report, built from your data, right now"
+                      <span class={styles.rowLabel}>Spending report (biweekly)</span>
+                      <Toggle
+                        checked={() => notifForm.values.spendingReport}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('spendingReport', v)}
+                        aria-label="Spending report (biweekly)"
+                      />
+                    </div>
+                    <div
+                      class={`${styles.row} ${styles.rowSub}`}
+                      style={`opacity:${notifForm.values.emailNotifications ? 1 : 0.5};`}
                     >
-                      <IconFileText />
-                      Spending
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('budget')}
-                      disabled={notifBusy()}
-                      title="Emails you the real budget alert, built from your data, right now"
-                      aria-label="Emails you the real budget alert, built from your data, right now"
+                      <span class={styles.rowLabel}>Upcoming bills (daily)</span>
+                      <Toggle
+                        checked={() => notifForm.values.billsReminders}
+                        disabled={!notifForm.values.emailNotifications || emailAlertsLocked()}
+                        onChange={(v) => notifForm.set('billsReminders', v)}
+                        aria-label="Upcoming bills (daily)"
+                      />
+                    </div>
+                    <div
+                      class={styles.actions}
+                      style={emailAlertsLocked() ? 'opacity:0.55; pointer-events:none;' : undefined}
                     >
-                      <IconBell />
-                      Budget
-                    </button>
-                    <button
-                      class={styles.iconAction}
-                      onclick={() => void sendTestEmail('bills')}
-                      disabled={notifBusy()}
-                      title="Emails you the real upcoming-bills reminder, built from your data, right now"
-                      aria-label="Emails you the real upcoming-bills reminder, built from your data, right now"
-                    >
-                      <IconFileText />
-                      Bills
-                    </button>
-                  </div>
+                      <SubmitButton
+                        class={`${styles.iconAction} ${styles.iconActionPrimary}`}
+                        busy={notifForm.submitting()}
+                        data-test-id="settings-notifications-save"
+                        title="Save notification settings"
+                      >
+                        <IconCheck />
+                        Save
+                      </SubmitButton>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail()}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Send a test email to check delivery"
+                        aria-label="Send a test email to check delivery"
+                      >
+                        <IconSend />
+                        Test
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('spending')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real spending report, built from your data, right now"
+                        aria-label="Emails you the real spending report, built from your data, right now"
+                      >
+                        <IconFileText />
+                        Spending
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('budget')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real budget alert, built from your data, right now"
+                        aria-label="Emails you the real budget alert, built from your data, right now"
+                      >
+                        <IconBell />
+                        Budget
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.iconAction}
+                        onclick={() => void sendTestEmail('bills')}
+                        disabled={notifBusy() || notifForm.submitting()}
+                        title="Emails you the real upcoming-bills reminder, built from your data, right now"
+                        aria-label="Emails you the real upcoming-bills reminder, built from your data, right now"
+                      >
+                        <IconFileText />
+                        Bills
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </Show>
             </Show>
