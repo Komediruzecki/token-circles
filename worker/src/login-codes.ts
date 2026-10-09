@@ -44,11 +44,6 @@ export function generateLoginCode(): string {
   }
 }
 
-/** Equal CPU for the unknown-address branch of /request (anti-enumeration timing parity). */
-export async function hashLoginCode(code: string): Promise<string> {
-  return sha256Hex(code);
-}
-
 /**
  * Mint a fresh code for the request whose handle is `handle`, and return the RAW code plus its row
  * id. The caller mails the code; only the hashes of the code and the handle touch the database.

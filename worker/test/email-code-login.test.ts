@@ -19,6 +19,7 @@ import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
+import { fetchSettled } from './helpers/after-answer';
 import {
   ACCESS_TABLES,
   accessRows,
@@ -56,8 +57,9 @@ function cookieValue(res: Response, name: string): string | null {
   return null;
 }
 
+/** Each request comes back once the work its route does after the answer is done, too. */
 async function post(path: string, body: unknown, cookie?: string): Promise<Response> {
-  return SELF.fetch(`${BASE}${path}`, {
+  return fetchSettled(`${BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify(body),

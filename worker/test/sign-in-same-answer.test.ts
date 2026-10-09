@@ -4,9 +4,10 @@
  * an account and for one that has none, and so does each route's limit on one address once it is
  * reached. The cookie a sign-in code request sets is a new random handle on every request.
  */
-import { env, SELF } from 'cloudflare:test';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { env } from 'cloudflare:test';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
+import { fetchSettled } from './helpers/after-answer';
 
 const BASE = 'https://api.example.com';
 const HAS_ACCOUNT = 'same-answer-account@example.com';
@@ -14,10 +15,14 @@ const NO_ACCOUNT = 'same-answer-nobody@example.com';
 
 let ip = 0;
 
-/** Each request from its own address, so only the limit on one email address can be reached. */
+/**
+ * Each request from its own address, so only the limit on one email address can be reached. It
+ * comes back once the work the route does after its answer is done too, so nothing it left running
+ * reaches the next test.
+ */
 async function answer(path: string, body: unknown) {
   ip += 1;
-  const res = await SELF.fetch(`${BASE}${path}`, {
+  const res = await fetchSettled(`${BASE}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -49,6 +54,17 @@ const ROUTES: { path: string; body: (email: string) => unknown; status: number; 
       limit: 3,
     },
   ];
+
+/** What a route that takes the request answers: ok, as JSON. */
+const OK = { status: 200, type: 'application/json', body: '{"ok":true}' };
+
+/** The tables a route writes for an address after its answer, each refused for one test below. */
+const STORED = ['login_codes', 'password_resets'];
+
+afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const table of STORED) await env.DB.prepare(`DROP TRIGGER IF EXISTS refuse_${table}`).run();
+});
 
 beforeEach(async () => {
   for (const t of ['login_codes', 'password_resets', 'rate_limits', 'email_verifications']) {
@@ -98,7 +114,7 @@ describe('an address with an account and one without', () => {
 /** The cookie a sign-in code request for `email` sets: its whole Set-Cookie line, and its value. */
 async function codeRequestCookie(email: string): Promise<{ line: string; value: string }> {
   ip += 1;
-  const res = await SELF.fetch(`${BASE}/api/auth/email-code/request`, {
+  const res = await fetchSettled(`${BASE}/api/auth/email-code/request`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -132,4 +148,29 @@ describe('the cookie a sign-in code request sets', () => {
     ];
     expect(new Set(values).size).toBe(values.length);
   });
+});
+
+describe('while the row a route stores cannot be written', () => {
+  for (const { path, table, failure } of [
+    {
+      path: '/api/auth/email-code/request',
+      table: 'login_codes',
+      failure: 'Sign-in code could not be sent:',
+    },
+  ]) {
+    it(`${path} answers ok`, async () => {
+      await env.DB.prepare(
+        `CREATE TRIGGER refuse_${table} BEFORE INSERT ON ${table}
+         BEGIN SELECT RAISE(ABORT, 'refused for the test'); END`
+      ).run();
+      const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const route = ROUTES.find((r) => r.path === path)!;
+
+      for (const email of [HAS_ACCOUNT, NO_ACCOUNT]) {
+        expect(await answer(path, route.body(email)), email).toEqual(OK);
+      }
+      // The write that failed is in the log, after the answer.
+      expect(logged).toHaveBeenCalledWith(failure, expect.anything());
+    });
+  }
 });

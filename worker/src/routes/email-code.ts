@@ -1,9 +1,10 @@
 /**
- * "Email me a code" sign-in: POST /request mints a 6-digit code and mails it (identical neutral
- * answer whether or not the address has an account — the forgot-password anti-enumeration rule),
- * POST /verify trades a live code for a session. The 2FA challenge still applies after: an email
- * code proves the inbox, which is one factor, not two. On an account whose address was never
- * confirmed, the code first removes every way in that was set up before (clearUnconfirmedAccess).
+ * "Email me a code" sign-in: POST /request mints a 6-digit code and mails it, after its answer
+ * (identical neutral answer whether or not the address has an account — the forgot-password
+ * anti-enumeration rule), POST /verify trades a live code for a session. The 2FA challenge still
+ * applies after: an email code proves the inbox, which is one factor, not two. On an account whose
+ * address was never confirmed, the code first removes every way in that was set up before
+ * (clearUnconfirmedAccess).
  *
  * The verify step is bound to the browser that requested the code by a ceremony cookie
  * (fm_logincode): a random handle, whose SHA-256 hash the code's row keeps (login-codes.ts). That
@@ -28,8 +29,6 @@ import { sendMail } from '../email';
 import { renderLoginCode } from '../emailTemplates';
 import {
   createLoginCode,
-  generateLoginCode,
-  hashLoginCode,
   LOGIN_CODE_TTL_MINUTES,
   newCodeHandle,
   verifyLoginCode,
@@ -60,6 +59,25 @@ export function issueLoginCodeCookie(env: Env, handle: string): string {
   return cookie(LOGINCODE_COOKIE, handle, CEREMONY_TTL_SECONDS, env);
 }
 
+/**
+ * The work a code request does after its answer: when `email` has an account, mint its code under
+ * the request's handle and mail it. A failure here changes no answer; the person asks again.
+ */
+async function mailCodeIfAccount(
+  env: Env,
+  email: string,
+  handle: string,
+  base: string
+): Promise<void> {
+  const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (!user) return;
+  const { code } = await createLoginCode(env, user.id, email, handle);
+  const mail = renderLoginCode({ code, ttlMinutes: LOGIN_CODE_TTL_MINUTES, assetOrigin: base });
+  await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
+}
+
 export const emailCodeRoutes = new Hono<AppEnv>();
 
 emailCodeRoutes.post('/api/auth/email-code/request', async (c) => {
@@ -80,24 +98,16 @@ emailCodeRoutes.post('/api/auth/email-code/request', async (c) => {
   const emailRl = await enforce(c, `logincode-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
 
+  // The answer comes first: a new handle as the cookie, and ok. Looking the address up, minting
+  // its code and mailing it come after the answer (mailCodeIfAccount), and a failure there is
+  // logged, not answered.
   const handle = newCodeHandle();
-  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (user) {
-    const { code } = await createLoginCode(c.env, user.id, email, handle);
-    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-    const mail = renderLoginCode({ code, ttlMinutes: LOGIN_CODE_TTL_MINUTES, assetOrigin: base });
-    // Off the response path: the awaited Resend round-trip (~100-400ms) was a timing oracle
-    // separating known from unknown addresses, and its failures leaked the same way as 500s.
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, mail.subject, mail.html, { text: mail.text }).catch(() => {})
-    );
-  } else {
-    // Unknown address: hash a code nobody will read, as the known branch does.
-    await hashLoginCode(generateLoginCode());
-  }
-  // The cookie is the request's handle.
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailCodeIfAccount(c.env, email, handle, base).catch((e: unknown) => {
+      console.error('Sign-in code could not be sent:', e);
+    })
+  );
   c.header('Set-Cookie', issueLoginCodeCookie(c.env, handle));
   return c.json({ ok: true });
 });

@@ -2,7 +2,8 @@
  * Email-code sign-in through the real UI: request a code, get rejected on a wrong guess, sign in
  * with the right one. The raw code only exists inside the email, which no test can read — so the
  * spec rewrites the freshly minted row's hash to that of a code it knows, via the same local-D1
- * side door global.setup uses. The ceremony cookie set by the request stays untouched: the spec
+ * side door global.setup uses. The request mints the row after its answer, so the spec waits for
+ * the row before it rewrites it. The ceremony cookie set by the request stays untouched: the spec
  * verifies against exactly the row the browser is bound to.
  *
  * Runs as its own user with no shared storage state. The second case signs up an account of its
@@ -15,7 +16,7 @@ import { expect, request, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn } from './boot'
 import { E2E_BASE } from './e2e-constants'
-import { sql } from './db'
+import { sql, sqlRows } from './db'
 import { getByTestId } from './test-helpers'
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema'
 
@@ -29,6 +30,19 @@ const KNOWN_CODE = '123456'
 test.use({ storageState: { cookies: [], origins: [] } })
 
 const sha256Hex = (s: string) => createHash('sha256').update(s).digest('hex')
+
+/** Wait for the code a request for `email` mints after its answer, then give it a known hash. */
+async function plantKnownCode(email: string): Promise<void> {
+  const unused = () =>
+    sqlRows<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM login_codes WHERE email = '${email}' AND used_at IS NULL`
+    )[0]?.n ?? 0
+  await expect.poll(unused, { timeout: 15_000 }).toBeGreaterThan(0)
+  sql(
+    `UPDATE login_codes SET code_hash = '${sha256Hex(KNOWN_CODE)}'
+     WHERE id = (SELECT MAX(id) FROM login_codes WHERE email = '${email}')`
+  )
+}
 
 for (const boot of BOOTS) {
   test(`request a code, wrong guess rejected, known code signs in (${boot}) @smoke`, async ({
@@ -58,10 +72,7 @@ for (const boot of BOOTS) {
 
     // The browser now holds the ceremony cookie for the newest row; give that row a hash the
     // spec knows. (The mailed code is unreadable here by design.)
-    sql(
-      `UPDATE login_codes SET code_hash = '${sha256Hex(KNOWN_CODE)}'
-     WHERE id = (SELECT MAX(id) FROM login_codes WHERE email = '${EMAIL}')`
-    )
+    await plantKnownCode(EMAIL)
 
     // ── Wrong guess: said under the code field, and the form stays ─────────────────────────────
     await getByTestId(page, 'emailcode-code').fill('999999')
@@ -96,10 +107,7 @@ for (const boot of BOOTS) {
       await getByTestId(page, 'emailcode-email').fill(email)
       await getByTestId(page, 'emailcode-send').click()
       await expect(getByTestId(page, 'emailcode-code')).toBeVisible()
-      sql(
-        `UPDATE login_codes SET code_hash = '${sha256Hex(KNOWN_CODE)}'
-       WHERE id = (SELECT MAX(id) FROM login_codes WHERE email = '${email}')`
-      )
+      await plantKnownCode(email)
       await getByTestId(page, 'emailcode-code').fill(KNOWN_CODE)
       await getByTestId(page, 'emailcode-verify').click()
       await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
