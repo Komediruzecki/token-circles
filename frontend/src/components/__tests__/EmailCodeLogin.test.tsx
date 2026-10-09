@@ -201,6 +201,21 @@ describe('requesting with the captcha enabled', () => {
   })
 })
 
+describe('the ways out', () => {
+  it('offers "Back to sign in" as a button, so the keyboard reaches it', async () => {
+    await mount()
+
+    expect(byTestId('emailcode-back')!.tagName).toBe('BUTTON')
+  })
+
+  it('offers "Send another" as a button, so the keyboard reaches it', async () => {
+    await mount()
+    await requestCode()
+
+    expect(byTestId('emailcode-resend')!.tagName).toBe('BUTTON')
+  })
+})
+
 describe('verifying', () => {
   it('focuses the code field as soon as the send succeeds', async () => {
     await mount()
