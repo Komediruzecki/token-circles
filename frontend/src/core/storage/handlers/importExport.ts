@@ -185,10 +185,67 @@ export async function exportByType(
   return json(data, 200, pretty)
 }
 
+/** The kinds of rows a restore writes, as the Worker counts them in `rows_restored`. */
+const RESTORED_ROWS = [
+  'categories',
+  'accounts',
+  'loans',
+  'tags',
+  'transactions',
+  'budgets',
+  'budgetsZeroBased',
+  'goals',
+  'retirementGoals',
+  'emergencyFundConfig',
+  'portfolioHoldings',
+  'bills',
+  'recurring',
+  'housings',
+  'categoryMappings',
+  'balanceHistoryRows',
+  'tagRules',
+  'importLogs',
+  'importSources',
+  'receipts',
+] as const
+
+/** How many of `key`'s rows the file carries, or of the rows `from` gives when it has none. */
+function rowsIn(data: Record<string, unknown>, key: string, from?: () => number): number {
+  const rows = data[key]
+  if (Array.isArray(rows) && rows.length > 0) return rows.length
+  return from?.() ?? 0
+}
+
+/**
+ * The answer the Worker gives a restore (worker/src/backup.ts restoreBackup): how many profiles
+ * and rows came back, and the first restored profile, which the restore made the active one.
+ */
+function restoreSummary(data: Record<string, unknown>) {
+  const list = (key: string) => (Array.isArray(data[key]) ? (data[key] as unknown[]) : [])
+  const nested = (key: string, field: string) => () =>
+    list(key).reduce<number>((sum, row) => {
+      const inner = (row as Record<string, unknown>)[field]
+      return sum + (Array.isArray(inner) ? inner.length : 0)
+    }, 0)
+  const settings =
+    data.settings && typeof data.settings === 'object' ? Object.keys(data.settings) : []
+  const rows =
+    RESTORED_ROWS.reduce((sum, key) => sum + rowsIn(data, key), 0) +
+    rowsIn(data, 'loanRatePeriods', nested('loans', 'rate_periods')) +
+    rowsIn(data, 'loanPrepayments', nested('loans', 'prepayments')) +
+    rowsIn(data, 'transactionTags', nested('transactions', 'tag_ids')) +
+    rowsIn(data, 'settingsRows', () => settings.length)
+  return {
+    profiles_restored: list('profiles').length,
+    rows_restored: rows,
+    first_profile_id: Number(localStorage.getItem('currentProfileId')),
+  }
+}
+
 export async function importData(body: unknown): Promise<Response> {
   if (!body || typeof body !== 'object') return json({ error: 'Invalid import data' }, 400)
   await adapter.importData(body as Parameters<typeof adapter.importData>[0])
-  return ok({ message: 'Data imported successfully' })
+  return json(restoreSummary(body as Record<string, unknown>))
 }
 
 export async function clearAll(): Promise<Response> {

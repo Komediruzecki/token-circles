@@ -51,8 +51,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
   'profile-reseed-demo':
     'POST /api/profiles/reseed-demo clears the active profile and gives it the default categories on the Worker; local-first deletes every profile and puts back its three example profiles. The Danger Zone offers it in local-first only. Slice 4 (profiles).',
-  'backup-restore-answer':
-    'POST /api/import answers { profiles_restored, rows_restored, first_profile_id } on the Worker and { ok: true, message } in local-first, where Settings restores through the storage adapter rather than this route. Both replace every profile. Slice 4 (import).',
   'export-by-type':
     'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'settings-scope':

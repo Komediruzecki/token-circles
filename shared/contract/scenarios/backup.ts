@@ -57,25 +57,21 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
     expect.objectContaining({ profile_id: api.profile, label: 'Bank ledger' }),
   ]);
 
-  // Restoring replaces every profile with the file's.
+  // Restoring replaces every profile with the file's, and says how much it put back.
   const restored = await api.unscoped.post('/api/import', file);
   expectOk(expect, restored, 'POST /api/import');
-  // DIFFERENCE backup-restore-answer
-  if (api.runtime === 'worker') {
-    expect(restored.body).toMatchObject({
-      profiles_restored: 2,
-      rows_restored: expect.any(Number),
-      first_profile_id: expect.any(Number),
-    });
-  } else {
-    expect(restored.body).toEqual({ ok: true, message: 'Data imported successfully' });
-  }
 
   const listed = await profileList(api.unscoped, expect);
   expect(listed.map((p) => p.name)).toEqual(['Me', 'Partner']);
   const me = listed.find((p) => p.name === 'Me')!.id as number;
   const partner = listed.find((p) => p.name === 'Partner')!.id as number;
   expect([me, partner]).not.toContain(api.profile);
+  expect(restored.body).toEqual({
+    profiles_restored: 2,
+    rows_restored: expect.any(Number),
+    first_profile_id: me,
+  });
+  expect(restored.body.rows_restored).toBeGreaterThanOrEqual(20);
   return { before, mine, theirs, me, partner };
 }
 

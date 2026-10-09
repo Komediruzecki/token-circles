@@ -126,8 +126,12 @@ describe('localHandlers - export/import', () => {
     }
     const res = await importData(importPayload)
     expect(res.status).toBe(200)
-    const result = await res.json()
-    expect(result.message).toContain('imported')
+    // The Worker's answer: one profile, one category and the currency, and the profile restored.
+    expect(await res.json()).toEqual({
+      profiles_restored: 1,
+      rows_restored: 2,
+      first_profile_id: Number(localStorage.getItem('currentProfileId')),
+    })
   })
 
   it('rejects invalid import body', async () => {
