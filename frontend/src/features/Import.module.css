@@ -163,6 +163,48 @@
   min-width: 0;
 }
 
+/* A Bank Imports rule: its fields side by side, each with its message under it. */
+.ruleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.ruleCategoryField,
+.ruleKeywordsField,
+.ruleSignatureField,
+.ruleAccountField {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ruleCategoryField {
+  flex: 0 0 160px;
+}
+
+.ruleKeywordsField {
+  flex: 1 1 220px;
+}
+
+.ruleSignatureField {
+  flex: 0 0 150px;
+}
+
+.ruleAccountField {
+  flex: 0 0 170px;
+}
+
+.ruleTransferField {
+  margin-bottom: 8px;
+}
+
+.ruleArrow {
+  align-self: center;
+  color: var(--text-secondary);
+}
+
 .visuallyHidden {
   position: absolute;
   width: 1px;
