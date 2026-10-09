@@ -10,6 +10,13 @@ import {
 } from '../../../../shared/importSourceSchema'
 import { toCents } from '../../../../shared/money'
 import { distinctProfileNames } from '../../../../shared/profileSchema'
+import {
+  belongsToOneProfile,
+  isProfileSettingKey,
+  localProfileSettingKey,
+  PROFILE_SETTING_KEYS,
+  splitLocalProfileSettingKey,
+} from '../../../../shared/profileSettings'
 import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
 import {
@@ -431,8 +438,7 @@ export function computeBalanceDeltas(tx: {
  * of the whole browser.
  */
 function profileOfSettingKey(key: string): number | null {
-  const match = /^(?:retirement_settings|achievements):(\d+)$/.exec(key)
-  return match ? Number(match[1]) : null
+  return splitLocalProfileSettingKey(key)?.profileId ?? null
 }
 
 export class IndexedDBAdapter implements StorageAdapter {
@@ -581,11 +587,16 @@ export class IndexedDBAdapter implements StorageAdapter {
       for (const profileId of pidSet) await profileStore.delete(profileId)
     }
 
-    // A deleted profile's settings go with it, as they do on the Worker. Its retirement plan is
-    // the one kept per profile (handlers/calculators.ts); left behind, it stayed in every backup.
+    // A deleted profile's settings go with it, as they do on the Worker: its retirement plan and
+    // its badges, the ones kept per profile (shared/profileSettings.ts). Left behind, they stayed
+    // in every backup.
     if (options.deleteProfiles && transactionStores.includes('settings')) {
       const settingsStore = tx.objectStore('settings')
-      for (const profileId of pidSet) await settingsStore.delete(`retirement_settings:${profileId}`)
+      for (const profileId of pidSet) {
+        for (const key of PROFILE_SETTING_KEYS) {
+          await settingsStore.delete(localProfileSettingKey(key, profileId))
+        }
+      }
     }
 
     await tx.done
@@ -1407,20 +1418,31 @@ export class IndexedDBAdapter implements StorageAdapter {
         return owner === null || !pids || pids.has(owner)
       })
     ) as typeof settings
+    const settingRow = (key: string, value: unknown, profileId: number) => ({
+      key,
+      value: typeof value === 'string' ? value : JSON.stringify(value),
+      profile_id: profileId,
+    })
     const settingsRows =
       extensionSettingsRows.length > 0
-        ? extensionSettingsRows
+        ? [
+            // A cloud backup's rows, kept since its restore, carry the settings the Worker keeps
+            // per profile and this browser does not. A profile's plan and badges are this
+            // browser's own and kept current here; the copy in those rows is as old as the restore.
+            ...extensionSettingsRows.filter((row) => !belongsToOneProfile(String(row.key))),
+            ...exportedProfiles.flatMap((profile) =>
+              Object.entries(exportedSettings)
+                .filter(([key]) => profileOfSettingKey(key) === profile.id)
+                .map(([key, value]) => settingRow(key, value, profile.id))
+            ),
+          ]
         : exportedProfiles.flatMap((profile) =>
             Object.entries(exportedSettings)
               .filter(([key]) => {
                 const owner = profileOfSettingKey(key)
                 return owner === null || owner === profile.id
               })
-              .map(([key, value]) => ({
-                key,
-                value: typeof value === 'string' ? value : JSON.stringify(value),
-                profile_id: profile.id,
-              }))
+              .map(([key, value]) => settingRow(key, value, profile.id))
           )
     const loanRatePeriods = exportedLoans.flatMap((loan) =>
       Array.isArray(loan.rate_periods)
@@ -1671,20 +1693,33 @@ export class IndexedDBAdapter implements StorageAdapter {
           })
         }
       }
+      // A retirement plan and a badge record belong to one profile (shared/profileSettings.ts),
+      // kept here under a key that names it, and the restore gave every profile a new id: each
+      // follows its profile, and one of a profile the file does not carry is left out. A cloud
+      // backup keeps them as rows of their profiles, under the plain key; those are filed the
+      // same way, and the plain keys among the first profile's settings are left out, since a
+      // badge record under the plain key is taken over by the first profile to open.
+      const putProfileSetting = async (key: string, fileProfileId: number, value: unknown) => {
+        if (!isProfileSettingKey(key)) return
+        const restoredId = profileIdMap.get(fileProfileId)
+        if (restoredId === undefined) return
+        await tx
+          .objectStore('settings')
+          .put({ key: localProfileSettingKey(key, restoredId), value })
+      }
+      const fromCloud = data.storage_mode !== 'serverless' && (data.settingsRows ?? []).length > 0
+      if (fromCloud) {
+        for (const row of data.settingsRows ?? []) {
+          await putProfileSetting(String(row.key), Number(row.profile_id), row.value)
+        }
+      }
       for (const [key, value] of Object.entries(data.settings)) {
-        // A retirement plan is kept per profile, as `retirement_settings:<profile id>`
-        // (handlers/calculators.ts), and the restore gave every profile a new id: the plan
-        // follows its profile. One for a profile the file does not carry is left out.
-        const perProfile = /^retirement_settings:(\d+)$/.exec(key)
-        if (perProfile) {
-          const restoredId = profileIdMap.get(Number(perProfile[1]))
-          if (restoredId !== undefined) {
-            await tx
-              .objectStore('settings')
-              .put({ key: `retirement_settings:${restoredId}`, value })
-          }
+        const local = splitLocalProfileSettingKey(key)
+        if (local) {
+          await putProfileSetting(local.key, local.profileId, value)
           continue
         }
+        if (fromCloud && isProfileSettingKey(key)) continue
         await tx.objectStore('settings').put({ key, value })
       }
 

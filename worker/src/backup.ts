@@ -9,6 +9,7 @@ import {
   sourceJsonObject,
 } from '../../shared/importSourceSchema';
 import { distinctProfileNames } from '../../shared/profileSchema';
+import { splitLocalProfileSettingKey } from '../../shared/profileSettings';
 
 export const BACKUP_VERSION = '3.0.0';
 
@@ -156,6 +157,33 @@ function settingValue(value: unknown): string {
 }
 
 /**
+ * A retirement plan and a badge record belong to one profile (shared/profileSettings.ts). This
+ * Worker keeps each as a row of its profile under the plain key; a file from local-first names
+ * the profile in the key instead (`retirement_settings:<id>`). Such a row is restored as a row of
+ * the profile its key names, under the plain key, and stands in for a row the file has for that
+ * profile under the plain key: it is the one local-first kept current. One naming a profile the
+ * file does not carry is left out.
+ */
+function profileSettingsInWorkerForm(source: Row[], profileIds: Set<number>): Row[] {
+  const named = new Map<string, Row>();
+  for (const row of source) {
+    const local = splitLocalProfileSettingKey(String(row.key ?? ''));
+    if (!local || !profileIds.has(local.profileId)) continue;
+    named.set(`${local.profileId}:${local.key}`, {
+      ...row,
+      key: local.key,
+      profile_id: local.profileId,
+    });
+  }
+  const plain = source.filter(
+    (row) =>
+      splitLocalProfileSettingKey(String(row.key ?? '')) === null &&
+      !named.has(`${Number(row.profile_id)}:${String(row.key)}`)
+  );
+  return [...plain, ...named.values()];
+}
+
+/**
  * The profiles with names no two of which differ only in case: this Worker took such names before
  * the rule, and a backup must restore. The later of two comes back as "Name (2)".
  */
@@ -218,6 +246,10 @@ function normalizeBackup(input: unknown): NormalizedBackup {
       profile_id: firstProfileId,
     }));
   }
+  settingsRows = profileSettingsInWorkerForm(
+    settingsRows,
+    new Set(profiles.map((profile) => Number(profile.id)))
+  );
 
   const receiptFilesRaw = data.receiptFiles;
   const receiptFiles =
