@@ -5,8 +5,9 @@
  * comment, so it passes on today's behaviour in each runtime and fails the day either changes.
  *
  * Settling one means making both runtimes answer alike, deleting the branch, and deleting the
- * entry. Each runner checks that every id named in a scenario is listed here and every entry is
- * still named by a scenario.
+ * entry. An entry that says it is kept on purpose is a difference by design: it stays, and the
+ * scenario keeps pinning both answers. Each runner checks that every id named in a scenario is
+ * listed here and every entry is still named by a scenario.
  */
 export const DIFFERENCES: Readonly<Record<string, string>> = {
   'transactions-list-shape':
@@ -52,9 +53,9 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'receipt-answers':
     'A receipt upload answers 201 with the stored row on the Worker and 200 with the row and a url in local-first; GET /api/receipts/transaction/:id answers the receipt on the Worker and a list of it in local-first; DELETE /api/receipts/:id answers { message } on the Worker and { ok: true } in local-first. The app finds a receipt through its transaction row, and reads none of these. Slice 2 (transactions).',
   'auth-local-user':
-    "GET /api/auth/me answers the signed-in account on the Worker and a fixed local user ({ id: 1, username: 'local', role: 'admin' }) in local-first, which has no accounts; POST /api/auth/logout ends the Worker's session and changes nothing in local-first. Slice 6 (auth).",
+    "GET /api/auth/me answers the signed-in account on the Worker and a fixed local user ({ id: 1, username: 'local', role: 'admin' }) in local-first, which has no accounts; POST /api/auth/logout ends the Worker's session and changes nothing in local-first. Kept on purpose (slice 6): local-first has no accounts, so there is no account to answer and no session to end.",
   'health-answer':
-    "GET /api/health answers { ok, env, captcha } on the Worker and { status: 'ok', timestamp } in local-first; nothing in the app reads it. Slice 6 (auth and support).",
+    "GET /api/health answers { ok, env, captcha } on the Worker and { status: 'ok', timestamp } in local-first; nothing in the app reads it. Kept on purpose (slice 6): the Worker's answer reports its own environment and captcha setup, which local-first does not have.",
   'stats-monthly-shape':
     'GET /api/stats/monthly answers only the months that have income or expense, each with its net, on the Worker, and every month of the window, empty ones as zeros and without a net, in local-first; Analytics reads only month, income and expense, so its monthly chart leaves out empty months in cloud mode only. Slice 2 (transactions), whose data it reads.',
   'analytics-month-to-date':
