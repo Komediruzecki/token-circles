@@ -4,14 +4,16 @@ import { isTransientD1Error } from './db';
 import { logWorkerError } from './errorlog';
 import { HttpError } from './http';
 import type { AppEnv } from './index';
+import { GENERIC_ERROR } from '../../shared/genericError';
 import type { FieldErrors } from '../../shared/refusal';
 
 /**
  * What a client sees when the Worker fails in a way nobody wrote a message for. The real error
  * (a D1 constraint, a TypeError, a JSON parse failure) goes to the logs instead: its text names
  * tables, columns and code paths, and the person reading it in a toast cannot act on any of it.
+ * The sentence is shared with local-first and the page (shared/genericError.ts).
  */
-export const GENERIC_ERROR = 'Something went wrong on our side. Try again in a moment.';
+export { GENERIC_ERROR };
 
 const RETRY_SHORTLY = 'Service temporarily unavailable, please retry shortly.';
 
