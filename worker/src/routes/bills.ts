@@ -132,30 +132,6 @@ billsRoutes.get('/api/bills/upcoming', requireAuth, async (c) => {
   );
 });
 
-billsRoutes.get('/api/bills/summary', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const bills = await db.all<BillRow>(c.env.DB, 'SELECT * FROM bills WHERE profile_id = ?', pid);
-  const totalAmount = bills.reduce((s, b) => s + (b.amount || 0), 0);
-  return c.json({ totalAmount, activeCount: bills.length, bills });
-});
-
-billsRoutes.get('/api/bills/notifications', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const bills = await db.all<BillRow>(
-    c.env.DB,
-    'SELECT * FROM bills WHERE profile_id = ? ORDER BY due_date ASC',
-    pid
-  );
-  const today = localNow(c);
-  const upcoming = bills.filter((b) => {
-    if (!b.due_date) return false;
-    const dueDate = new Date(b.due_date);
-    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 && diffDays <= 7;
-  });
-  return c.json({ notifications: upcoming, count: upcoming.length });
-});
-
 billsRoutes.get('/api/bills/calendar', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const now = localNow(c);
@@ -275,7 +251,7 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!existing) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Bill not found');
   const edit = accept(checkBillEdit(await c.req.json(), existing));
   if (
     edit.account_id != null &&
@@ -303,7 +279,7 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
 billsRoutes.delete('/api/bills/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const res = await db.del(c.env.DB, 'bills', 'id = ? AND profile_id = ?', c.req.param('id'), pid);
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Bill not found');
   return c.json({ ok: true });
 });
 
@@ -392,7 +368,7 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!bill) throw new HttpError(404, 'Not found');
+  if (!bill) throw new HttpError(404, 'Bill not found');
 
   // Pre-flight, for the message: it asks the guard's question before anything is written. It is
   // NOT what makes this safe — see the guard in markPaidStatements.

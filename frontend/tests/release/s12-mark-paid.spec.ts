@@ -146,9 +146,9 @@ test.describe('5.16.1 s12 mark paid [local]', () => {
 
       await markPaid(page, name)
       // The second tab has not heard of it (across tabs a change arrives only on resume,
-      // section 9), so it still offers Mark Paid.
+      // section 9), so it still offers Mark Paid, and the refusal says why in its own words.
       await unpaidBill(second, name).getByTestId('bill-mark-paid-btn').click()
-      await expect(toast(second, 'Failed to mark bill as paid')).toBeVisible()
+      await expect(toast(second, 'Bill already paid for current period')).toBeVisible()
       await expect.poll(() => refusals.length).toBe(1)
       expect(refusals[0]).toEqual({
         status: 409,

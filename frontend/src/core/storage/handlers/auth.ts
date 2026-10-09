@@ -10,10 +10,6 @@ export async function authLogin(body: unknown): Promise<Response> {
   return json({ error: 'Missing credentials' }, 400)
 }
 
-export async function authCheck(): Promise<Response> {
-  return json({ authenticated: true, user: { id: 1, username: 'local', role: 'admin' } })
-}
-
 export async function authLogout(): Promise<Response> {
   return ok()
 }

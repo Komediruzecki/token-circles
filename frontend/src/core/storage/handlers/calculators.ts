@@ -5,6 +5,7 @@
  * the same module the Worker runs, so browser mode and server mode cannot drift into
  * giving different answers to the same question.
  */
+import { addCalendarMonths } from '../../../../../shared/calendarMonths'
 import { projectRetirement } from '../../../../../shared/retirement'
 import {
   checkRetirementGoalCreate,
@@ -347,9 +348,9 @@ export async function emergencyFund(): Promise<Response> {
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
 
-    const twelveMonthsAgo = new Date()
-    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12)
-    const dateStr = localToday(twelveMonthsAgo)
+    // Twelve months back from today, on the last day of a shorter month: from 29 February,
+    // 28 February. Date#setMonth overflowed into 1 March.
+    const dateStr = addCalendarMonths(localToday(), -12)
 
     const txns = (await db.getAllFromIndex('transactions', 'by_profile', pid)).filter(
       (t: Record<string, unknown>) => t.type === 'expense' && (t.date as string) >= dateStr

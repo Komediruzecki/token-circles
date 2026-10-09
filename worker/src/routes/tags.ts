@@ -480,18 +480,6 @@ tagsRoutes.get('/api/tags/:id/summary', requireAuth, async (c) => {
   });
 });
 
-tagsRoutes.get('/api/tags/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const tag = await db.first(
-    c.env.DB,
-    'SELECT id, name, color, created_at FROM tags WHERE id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
-  );
-  if (!tag) throw new HttpError(404, 'Tag not found');
-  return c.json(tag);
-});
-
 tagsRoutes.put('/api/tags/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const b = (await c.req.json()) as Record<string, any>;

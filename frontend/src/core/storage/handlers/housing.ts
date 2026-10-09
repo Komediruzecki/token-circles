@@ -58,12 +58,6 @@ export async function housingCreate(body: unknown): Promise<Response> {
   return json({ id }, 201)
 }
 
-export async function housingGet(params: Record<string, string>): Promise<Response> {
-  const h = await currentProfileRecord('housings', idParam(params))
-  if (h) h.autopay = h.autopay === 1 || h.autopay === true
-  return h ? json(h) : notFound('Housing expense')
-}
-
 export async function housingUpdate(
   params: Record<string, string>,
   body: unknown
@@ -96,73 +90,4 @@ export async function housingDelete(params: Record<string, string>): Promise<Res
   if (!(await currentProfileRecord('housings', id))) return notFound('Housing expense')
   await db.delete('housings', id)
   return ok()
-}
-
-export async function housingCalculate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  const b = body as Record<string, unknown>
-  const grossIncome = parseFloat(String((b.gross_income as string | number) || 0))
-  const livingExpenses = parseFloat(String((b.living_expenses as string | number) || 0))
-  const transportCost = parseFloat(String((b.transport_cost as string | number) || 0))
-  const utilitiesCost = parseFloat(String((b.utilities_cost as string | number) || 0))
-  const savingsTarget = parseFloat(String((b.savings_target as string | number) || 0))
-
-  // Standard 30% rule: housing should not exceed 30% of gross income
-  const affordableRent = Math.round(grossIncome * 0.3 * 100) / 100
-  const totalNonHousingExpenses = livingExpenses + transportCost + utilitiesCost + savingsTarget
-  const maxAvailable = Math.max(0, grossIncome - totalNonHousingExpenses)
-  const recommendedRent = Math.round(Math.min(affordableRent, maxAvailable) * 100) / 100
-  const housingRatio =
-    grossIncome > 0 ? Math.round((recommendedRent / grossIncome) * 10000) / 100 : 0
-
-  const total = grossIncome
-  const breakdown = [
-    {
-      name: 'Housing (recommended)',
-      amount: recommendedRent,
-      percentage: total > 0 ? Math.round((recommendedRent / total) * 10000) / 100 : 0,
-    },
-    {
-      name: 'Living Expenses',
-      amount: livingExpenses,
-      percentage: total > 0 ? Math.round((livingExpenses / total) * 10000) / 100 : 0,
-    },
-    {
-      name: 'Transport',
-      amount: transportCost,
-      percentage: total > 0 ? Math.round((transportCost / total) * 10000) / 100 : 0,
-    },
-    {
-      name: 'Utilities',
-      amount: utilitiesCost,
-      percentage: total > 0 ? Math.round((utilitiesCost / total) * 10000) / 100 : 0,
-    },
-    {
-      name: 'Savings',
-      amount: savingsTarget,
-      percentage: total > 0 ? Math.round((savingsTarget / total) * 10000) / 100 : 0,
-    },
-    {
-      name: 'Remaining',
-      amount: Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent),
-      percentage:
-        total > 0
-          ? Math.round(
-              (Math.max(0, grossIncome - totalNonHousingExpenses - recommendedRent) / total) * 10000
-            ) / 100
-          : 0,
-    },
-  ]
-
-  return json({
-    grossIncome,
-    livingExpenses,
-    transportCost,
-    utilitiesCost,
-    savingsTarget,
-    housingRatio,
-    affordableRent,
-    recommendedRent,
-    monthlySpendingBreakdown: breakdown,
-  })
 }

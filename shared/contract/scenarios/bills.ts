@@ -97,19 +97,34 @@ export const bills = [
     expect((await api.get(`/api/bills/${id}`)).body.is_active).toBe(1);
 
     expectOk(expect, await api.delete(`/api/bills/${id}`), 'DELETE the bill');
-    expect((await api.get(`/api/bills/${id}`)).status).toBe(404);
     expect(await billsList(api, expect)).not.toContainEqual(expect.objectContaining({ id }));
+    // A bill that is not there is said the same way by every route. The Worker said "Not found"
+    // to an edit, a payment or a delete, where local-first said "Bill not found".
+    for (const reply of [
+      await api.get(`/api/bills/${id}`),
+      await api.put(`/api/bills/${id}`, billForm()),
+      await api.post(`/api/bills/${id}/mark-paid`, {}),
+      await api.delete(`/api/bills/${id}`),
+    ]) {
+      expect(reply.status).toBe(404);
+      expect(reply.body).toEqual({ error: 'Bill not found' });
+    }
   }),
 
   scenario("another profile's bill is not read, changed, paid or removed", async (api, expect) => {
     const id = await bill(api, expect);
     const other = api.other;
 
-    expect((await other.get(`/api/bills/${id}`)).status).toBe(404);
     expect(await billsList(other, expect)).toEqual([]);
-    expect((await other.put(`/api/bills/${id}`, billForm({ name: 'Theirs' }))).status).toBe(404);
-    expect((await other.post(`/api/bills/${id}/mark-paid`, {})).status).toBe(404);
-    expect((await other.delete(`/api/bills/${id}`)).status).toBe(404);
+    for (const reply of [
+      await other.get(`/api/bills/${id}`),
+      await other.put(`/api/bills/${id}`, billForm({ name: 'Theirs' })),
+      await other.post(`/api/bills/${id}/mark-paid`, {}),
+      await other.delete(`/api/bills/${id}`),
+    ]) {
+      expect(reply.status).toBe(404);
+      expect(reply.body).toEqual({ error: 'Bill not found' });
+    }
 
     expect((await api.get(`/api/bills/${id}`)).body).toMatchObject({
       id,
