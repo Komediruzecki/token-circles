@@ -61,12 +61,6 @@ export async function budgetsCreate(body: unknown): Promise<Response> {
   return json({ id, ...budget }, 201)
 }
 
-export async function budgetsGet(params: Record<string, string>): Promise<Response> {
-  const budget = await currentProfileRecord('budgets', idParam(params))
-  if (!budget) return notFound('Budget')
-  return json(normalizeBudget(budget))
-}
-
 export async function budgetsUpdate(
   params: Record<string, string>,
   body: unknown

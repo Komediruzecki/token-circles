@@ -25,11 +25,15 @@ import { routeApiRequest } from '../localApiRouter.js'
 vi.mock('../../toastStore', () => ({ addToast: vi.fn() }))
 vi.mock('../../appStore', () => ({ setPage: vi.fn() }))
 
+/**
+ * `single`: the runtime also reads one row by its id. Neither runtime has such a read for a budget
+ * or a goal.
+ */
 const ENTITIES = [
-  { store: 'budgets', path: '/budgets', schema: BudgetSchema },
-  { store: 'bills', path: '/bills', schema: BillSchema },
-  { store: 'loans', path: '/loans', schema: LoanSchema },
-  { store: 'goals', path: '/savings-goals', schema: SavingsGoalSchema },
+  { store: 'budgets', path: '/budgets', schema: BudgetSchema, single: false },
+  { store: 'bills', path: '/bills', schema: BillSchema, single: true },
+  { store: 'loans', path: '/loans', schema: LoanSchema, single: true },
+  { store: 'goals', path: '/savings-goals', schema: SavingsGoalSchema, single: false },
 ] as const
 
 const DEMO_PROFILES = ['Example Low Income', 'Example Mid Income', 'Example High Income']
@@ -57,10 +61,15 @@ function issuesOf(schema: z.ZodType, data: unknown): string[] {
   return result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`)
 }
 
-/** Every list row and every single-row GET parses, the way ApiClient parses them. */
-async function expectEndpointsParse(path: string, schema: z.ZodType): Promise<Row[]> {
+/** Every list row, and each row read by id where there is such a read, parses as ApiClient does. */
+async function expectEndpointsParse(
+  path: string,
+  schema: z.ZodType,
+  single = false
+): Promise<Row[]> {
   const rows = (await get(path)) as Row[]
   expect(issuesOf(z.array(schema), rows), `GET ${path}`).toEqual([])
+  if (!single) return rows
   for (const row of rows) {
     expect(issuesOf(schema, await get(`${path}/${row.id}`)), `GET ${path}/${row.id}`).toEqual([])
   }
@@ -132,13 +141,13 @@ describe('the demo seed', () => {
   })
 
   for (const profile of DEMO_PROFILES) {
-    for (const { path, schema } of ENTITIES) {
+    for (const { path, schema, single } of ENTITIES) {
       // The demo gives its low-income profile no loans: an empty list parses on any build, so
       // that case would prove nothing.
       if (profile === 'Example Low Income' && path === '/loans') continue
-      it(`${profile}: GET ${path} and GET ${path}/:id parse`, async () => {
+      it(`${profile}: GET ${path}${single ? ` and GET ${path}/:id` : ''} parse`, async () => {
         useProfile(await profileNamed(profile))
-        const rows = await expectEndpointsParse(path, schema)
+        const rows = await expectEndpointsParse(path, schema, single)
         expect(rows.length, `${profile} ${path}`).toBeGreaterThan(0)
       })
     }
@@ -220,8 +229,8 @@ describe('rows stored by earlier builds', () => {
       created_at: '2026-09-01T10:00:00.000Z',
     })
 
-    for (const { path, schema } of ENTITIES) {
-      const rows = await expectEndpointsParse(path, schema)
+    for (const { path, schema, single } of ENTITIES) {
+      const rows = await expectEndpointsParse(path, schema, single)
       expect(rows.length, path).toBeGreaterThan(0)
     }
     const goals = (await get('/savings-goals')) as Row[]

@@ -272,29 +272,12 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
 
 /** Keyed by method and the local router's pattern source, as `routes` in localApiRouter.ts has it. */
 export const LOCAL_ONLY: Readonly<Record<string, string>> = {
-  'GET ^\\/app-info$': 'A fixed name and version; nothing in the app calls it.',
   'POST ^\\/auth\\/login$':
     'A stub of the cloud sign-in that answers a fixed admin user for any username. Nothing in local-first calls it: Sign in switches to cloud mode and reloads first (App.tsx handleLogin).',
-  'GET ^\\/auth\\/check$':
-    'A signed-in check that always says yes; nothing in the app calls it (the app asks GET /api/auth/me, on the contract).',
   'GET ^\\/profiles\\/(\\d+)$':
     'One profile, for api.getProfile, which nothing in the app calls: the profile switcher reads the list, in both modes.',
-  'GET ^\\/analytics$':
-    'A summary for api.getAnalytics, which nothing in the app calls: Analytics reads /api/analytics/* and /api/stats/monthly (on the contract).',
-  'GET ^\\/transactions\\/export$':
-    'A CSV of transactions for api.exportTransactions, which nothing in the app calls: Settings exports through GET /api/export/:type (on the contract).',
   'DELETE ^\\/accounts\\/(\\d+)\\/history\\/(\\d+)$':
-    'Deletes one recorded balance, for api.deleteBalanceEntry, which nothing in the app calls. The Worker serves only a delete of the whole history (DELETE /api/accounts/:id/history), which nothing calls either.',
-  'GET ^\\/budgets\\/(\\d+)$':
-    'One budget, for api.getBudget, which nothing in the app calls: the Budgets page reads the list, in both modes.',
-  'GET ^\\/savings-goals\\/(\\d+)$':
-    'A single goal read, for api.getGoal, which nothing in the app calls: the Goals page reads the list, in both modes.',
-  'GET ^\\/loans\\/(\\d+)\\/rate-periods$':
-    "For api.getLoanRatePeriods, which nothing in the app calls: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
-  'GET ^\\/loans\\/(\\d+)\\/rates$':
-    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
-  'GET ^\\/loans\\/(\\d+)\\/prepayments$':
-    "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
+    'Deletes one recorded balance, for api.deleteBalanceEntry, which nothing in the app calls. The Worker has no route that deletes a recorded balance.',
   'POST ^\\/categories\\/seed$':
     'Puts the default categories in the active profile; nothing in the app calls it.',
   'GET ^\\/tags\\/(\\d+)\\/transactions$':
@@ -306,12 +289,6 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'GET ^\\/exchange-rates$': 'For api.getExchangeRates, which nothing in the app calls.',
   'GET ^\\/exchange-rates\\/([A-Z]{3})\\/([A-Z]{3})$':
     'For api.getExchangeRate, which nothing in the app calls.',
-  'POST ^\\/retirement$':
-    'A projection for api.getRetirementProjection, which nothing in the app calls: the Retirement pages read /api/retirement/settings and the calculators (on the contract).',
-  'GET ^\\/housing\\/(\\d+)$':
-    'A single housing expense, for no caller: the Housing page reads the list, in both modes.',
-  'POST ^\\/housing\\/calculate$':
-    'The housing affordability calculator, for api.calculateHousing, which nothing in the app calls.',
   'GET ^\\/logs$':
     "A log store in IndexedDB that nothing in the app reads: the app's logger keeps its log in localStorage (core/logger.ts).",
   'POST ^\\/logs$':

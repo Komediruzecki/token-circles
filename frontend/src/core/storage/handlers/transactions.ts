@@ -237,39 +237,6 @@ export async function transactionsDelete(
   return ok()
 }
 
-export async function transactionsExport(query: URLSearchParams): Promise<Response> {
-  const filters: Record<string, unknown> = {}
-  const df = query.get('date_from')
-  const dt = query.get('date_to')
-  if (df) filters.date_from = df
-  if (dt) filters.date_to = dt
-  const txns = await adapter.listTransactions(
-    filters as Parameters<typeof adapter.listTransactions>[0] | undefined
-  )
-  const csvQuote = (s: string | null | undefined): string => `"${(s ?? '').replace(/"/g, '""')}"`
-  const csv = ['date,type,description,amount,currency,category_id,notes']
-  for (const t of txns) {
-    csv.push(
-      [
-        t.date,
-        t.type,
-        csvQuote(t.description),
-        t.amount,
-        t.currency || 'EUR',
-        t.category_id || '',
-        csvQuote(t.notes),
-      ].join(',')
-    )
-  }
-  return new Response(csv.join('\n'), {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/csv',
-      'Content-Disposition': 'attachment; filename=transactions.csv',
-    },
-  })
-}
-
 export async function transactionsSummary(): Promise<Response> {
   const txns = await adapter.listTransactions()
   const totalIncome = txns

@@ -54,24 +54,11 @@ function dispatch(
 // ── Route table ──────────────────────────────────────────────────────────────
 
 const routes: RouteDef[] = [
-  // ── Health & app info ──
+  // ── Health ──
   {
     pattern: /^\/health$/,
     methods: ['GET'],
     handler: () => Promise.resolve(json({ status: 'ok', timestamp: new Date().toISOString() })),
-  },
-  {
-    pattern: /^\/app-info$/,
-    methods: ['GET'],
-    handler: () =>
-      Promise.resolve(
-        json({
-          name: 'Token Circles',
-          version: '4.0.0',
-          mode: 'serverless',
-          storage: 'indexeddb',
-        })
-      ),
   },
 
   // ── Auth ──
@@ -79,11 +66,6 @@ const routes: RouteDef[] = [
     pattern: /^\/auth\/login$/,
     methods: ['POST'],
     handler: dispatch({ POST: (ctx) => h.authLogin(ctx.body) }),
-  },
-  {
-    pattern: /^\/auth\/check$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: () => h.authCheck() }),
   },
   {
     pattern: /^\/auth\/logout$/,
@@ -173,11 +155,6 @@ const routes: RouteDef[] = [
 
   // ── Analytics (LS8) ──
   {
-    pattern: /^\/analytics$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
-  },
-  {
     pattern: /^\/analytics\/category-trends$/,
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
@@ -246,11 +223,6 @@ const routes: RouteDef[] = [
     pattern: /^\/transactions\/reconcile-batch$/,
     methods: ['PUT'],
     handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body, ctx.headers) }),
-  },
-  {
-    pattern: /^\/transactions\/export$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }),
   },
 
   // ── Categories ──
@@ -323,9 +295,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/budgets\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.budgetsGet(ctx.params),
       PUT: (ctx) => h.budgetsUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.budgetsDelete(ctx.params),
     }),
@@ -403,9 +374,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/savings-goals\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.goalsGet(ctx.params),
       PUT: (ctx) => h.goalsUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.goalsDelete(ctx.params),
     }),
@@ -435,17 +405,9 @@ const routes: RouteDef[] = [
     }),
   },
   {
-    pattern: /^\/loans\/(\d+)\/rate-periods$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.loanRates(ctx.params) }),
-  },
-  {
     pattern: /^\/loans\/(\d+)\/rates$/,
-    methods: ['GET', 'POST'],
-    handler: dispatch({
-      GET: (ctx) => h.loanRates(ctx.params),
-      POST: (ctx) => h.loanRatesAdd(ctx.params, ctx.body),
-    }),
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.loanRatesAdd(ctx.params, ctx.body) }),
   },
   {
     pattern: /^\/loans\/(\d+)\/rates\/(\d+)$/,
@@ -457,11 +419,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/loans\/(\d+)\/prepayments$/,
-    methods: ['GET', 'POST'],
-    handler: dispatch({
-      GET: (ctx) => h.loanPrepayments(ctx.params),
-      POST: (ctx) => h.loanPrepaymentAdd(ctx.params, ctx.body),
-    }),
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.loanPrepaymentAdd(ctx.params, ctx.body) }),
   },
   {
     pattern: /^\/loans\/(\d+)\/prepayments\/(\d+)$/,
@@ -809,11 +768,6 @@ const routes: RouteDef[] = [
 
   // Calculators (LS10)
   {
-    pattern: /^\/retirement$/,
-    methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.retirementCalculate(ctx.body) }),
-  },
-  {
     pattern: /^\/retirement\/projection$/,
     methods: ['GET'],
     handler: dispatch({ GET: () => h.retirementProjection() }),
@@ -852,18 +806,10 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/housing\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.housingGet(ctx.params),
       PUT: (ctx) => h.housingUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.housingDelete(ctx.params),
-    }),
-  },
-  {
-    pattern: /^\/housing\/calculate$/,
-    methods: ['POST'],
-    handler: dispatch({
-      POST: (ctx) => h.housingCalculate(ctx.body),
     }),
   },
   {

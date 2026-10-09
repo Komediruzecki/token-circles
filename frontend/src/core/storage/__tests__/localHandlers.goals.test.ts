@@ -4,7 +4,6 @@ import {
   goalsContribute,
   goalsCreate,
   goalsDelete,
-  goalsGet,
   goalsList,
   goalsUpdate,
 } from '../localHandlers.js'
@@ -41,12 +40,6 @@ describe('localHandlers - goals', () => {
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe(created.id)
     expect(list[0].target_amount).toBe(5000)
-
-    // Get
-    const getRes = await goalsGet({ p1: created.id.toString() })
-    expect(getRes.status).toBe(200)
-    const fetched = await getRes.json()
-    expect(fetched.id).toBe(created.id)
   })
 
   it('updates a goal', async () => {
@@ -67,8 +60,8 @@ describe('localHandlers - goals', () => {
     )
     expect(updateRes.status).toBe(200)
 
-    const getRes = await goalsGet({ p1: created.id.toString() })
-    const fetched = await getRes.json()
+    // Read back as the Goals page does, from the list.
+    const [fetched] = await (await goalsList()).json()
     expect(fetched.target_amount).toBe(25000)
   })
 
@@ -99,8 +92,7 @@ describe('localHandlers - goals', () => {
     const contributeRes = await goalsContribute({ p1: created.id.toString() }, { amount: 500 })
     expect(contributeRes.status).toBe(200)
 
-    const getRes = await goalsGet({ p1: created.id.toString() })
-    const fetched = await getRes.json()
+    const [fetched] = await (await goalsList()).json()
     expect(fetched.current_amount).toBe(1500)
   })
 })

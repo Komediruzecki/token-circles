@@ -44,15 +44,6 @@ describe('localApiRouter - route matching', () => {
     expect(data.timestamp).toBeDefined()
   })
 
-  it('returns 200 for known GET route /api/app-info', async () => {
-    const { routeApiRequest } = await loadModule()
-    const res = await routeApiRequest('http://localhost/api/app-info')
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.name).toBe('Token Circles')
-    expect(data.mode).toBe('serverless')
-  })
-
   it('returns 404 for unknown path', async () => {
     const { routeApiRequest } = await loadModule()
     const res = await routeApiRequest('http://localhost/api/nonexistent')

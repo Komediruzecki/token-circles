@@ -1,13 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import {
-  housingCalculate,
-  housingCreate,
-  housingDelete,
-  housingGet,
-  housingList,
-  housingUpdate,
-} from '../localHandlers.js'
+import { housingCreate, housingDelete, housingList, housingUpdate } from '../localHandlers.js'
 
 describe('localHandlers - housing', () => {
   beforeEach(async () => {
@@ -40,12 +33,6 @@ describe('localHandlers - housing', () => {
     expect(list.housings).toHaveLength(1)
     expect(list.housings[0].id).toBe(created.id)
     expect(list.housings[0].name).toBe('Primary Residence')
-
-    // Get
-    const getRes = await housingGet({ p1: created.id.toString() })
-    expect(getRes.status).toBe(200)
-    const fetched = await getRes.json()
-    expect(fetched.id).toBe(created.id)
   })
 
   it('updates housing', async () => {
@@ -66,9 +53,9 @@ describe('localHandlers - housing', () => {
     )
     expect(updateRes.status).toBe(200)
 
-    const getRes = await housingGet({ p1: created.id.toString() })
-    const fetched = await getRes.json()
-    expect(fetched.monthly_amount).toBe(1300)
+    // Read back as the Housing page does, from the list.
+    const { housings } = await (await housingList()).json()
+    expect(housings[0].monthly_amount).toBe(1300)
   })
 
   it('deletes housing', async () => {
@@ -86,19 +73,5 @@ describe('localHandlers - housing', () => {
     const listRes = await housingList()
     const list = await listRes.json()
     expect(list.housings).toHaveLength(0)
-  })
-
-  it('calculates housing costs (affordability)', async () => {
-    const calcRes = await housingCalculate({
-      gross_income: 5000,
-      living_expenses: 1000,
-      transport_cost: 200,
-      utilities_cost: 150,
-      savings_target: 500,
-    })
-    expect(calcRes.status).toBe(200)
-    const calc = await calcRes.json()
-    expect(calc.recommendedRent).toBeDefined()
-    expect(calc.affordableRent).toBeDefined()
   })
 })

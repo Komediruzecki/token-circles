@@ -6,7 +6,7 @@
  */
 
 // Auth
-export { authCheck, authLogin, authLogout, authMe } from './handlers/auth'
+export { authLogin, authLogout, authMe } from './handlers/auth'
 
 // Profiles
 export {
@@ -30,7 +30,6 @@ export {
   transactionsBulk,
   transactionsCreate,
   transactionsDelete,
-  transactionsExport,
   transactionsGet,
   transactionsList,
   transactionsSummary,
@@ -64,23 +63,14 @@ export {
 } from './handlers/accounts'
 
 // Goals
-export {
-  goalsContribute,
-  goalsCreate,
-  goalsDelete,
-  goalsGet,
-  goalsList,
-  goalsUpdate,
-} from './handlers/goals'
+export { goalsContribute, goalsCreate, goalsDelete, goalsList, goalsUpdate } from './handlers/goals'
 
 // Loans
 export {
   loanPrepaymentAdd,
-  loanPrepayments,
   loanPrepaymentsDelete,
   loanPrepaymentUpdate,
   loanRateDelete,
-  loanRates,
   loanRatesAdd,
   loanRateUpdate,
   loansCalculate,
@@ -92,14 +82,7 @@ export {
 } from './handlers/loans'
 
 // Housing
-export {
-  housingCalculate,
-  housingCreate,
-  housingDelete,
-  housingGet,
-  housingList,
-  housingUpdate,
-} from './handlers/housing'
+export { housingCreate, housingDelete, housingList, housingUpdate } from './handlers/housing'
 
 // Bills
 export {
@@ -253,7 +236,6 @@ export {
   budgetsDuplicateLast,
   budgetsForecast,
   budgetsFromExpenses,
-  budgetsGet,
   budgetsHistory,
   budgetsImprovements,
   budgetsList,
