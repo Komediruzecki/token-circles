@@ -529,7 +529,7 @@ page. Follow-up: the bill calendar draws every bill once a month, whatever its f
 
 ## Slice 4a: loans and retirement (2026-10-08)
 
-On `feat/forms-loans`, from 149a41e8.
+On `feat/forms-loans`, from 149a41e8 and moved onto main at 39808e0b (#607 in).
 
 - **One set of rules each, in `shared/`.** `shared/loanSchema.ts` (a loan, a rate period and an
   extra payment), `shared/retirementGoalSchema.ts` and `shared/retirementPlanSchema.ts` hold the
@@ -570,7 +570,16 @@ The contract's `loan-total-prepaid-none` and `fire-inflation` are settled and th
 
 Fixed on the way, each with a test that failed before: a goal saved at 0 % showed, and opened, at
 7 %, and one without a date said "Invalid Date"; local-first restored a backup's 0 % goal at 7 %;
-and local-first served a `POST /loans/:id/prepayment` that nothing called.
+local-first served a `POST /loans/:id/prepayment` that nothing called; removing an extra payment
+another tab had removed was an error toast and left the row listed (local-first, and cloud once
+the Worker answers 404), and now says "That extra payment was already removed." and reads the loan
+again; deleting a loan another tab had deleted said "The loan was not deleted. Check your
+connection and try again." and left it listed, and now says "That loan was already deleted.",
+with any other failure in the runtime's words; and a change open on an extra payment lost the
+caret when the list was read again, as on coming back to the page after a minute away. The parity
+guard (`shared/fixtures/loanFormParity.ts`) gained a loan with two extra payments in one month and
+one after payoff, so each runtime's schedule and its list's `total_prepaid` are held to figures
+worked out by hand.
 
 Not a fix to anything shipped: main's dialog never gave a new loan the rate periods of a loan
 edited before it. It replaced the draft's list on every change rather than changing it
@@ -587,8 +596,15 @@ where the dialog had made it required; the ranges (ages 18 to 100, a goal's retu
 loan's rate 0 to 100 % and its term 1 to 1200 months); a plan saved through the API is refused
 where it was clamped; a loan's extra payment total of 0 for none, and the FIRE calculator taking
 `inflationRate` in both runtimes, as local-first did; an extra payment's month and amount read from
-text; the wording of the new messages and toasts; and the planner's "Saved" button, the kit's
-`unchanged` state.
+text; the wording of the new messages and toasts; the planner's "Saved" button, the kit's
+`unchanged` state; a name over 100 characters, refused for a loan on the Worker and for a goal in
+both, where only local-first capped a loan's; two decimals on a loan's amount and a goal's three
+amounts; a goal's target above zero and its saved amount and contribution zero or more, where both
+runtimes stored text or a negative target; real dates for a loan's first payment and a goal's target
+date, where the Worker stored any text for both and local-first checked only a loan's shape, so
+2026-02-30 saved; a rate period's rate from 0 to 100 and payments inside the term; the goal dialog's
+Current Amount, no longer required, a blank one saved as 0; the goal card's "Not set" and "No target
+date"; and a second Remove of an extra payment, a 404 the page now says was already done.
 
 ## Rollout, one PR each
 
