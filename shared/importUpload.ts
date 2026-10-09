@@ -90,7 +90,12 @@ export function cellText(cell: unknown): string {
     if (Number.isNaN(cell.getTime())) return '';
     return `${cell.getFullYear()}-${pad2(cell.getMonth() + 1)}-${pad2(cell.getDate())}`;
   }
-  return String(cell);
+  const text = String(cell);
+  // A number with three digits after the point is written with a fourth, a zero: as "7.534", it
+  // reads like 7,534 with a thousands separator, which a number cell cannot have, and the import
+  // would ask about it (shared/importNumber.ts). "7.5340" is the same number, and reads as one.
+  if (typeof cell === 'number' && /^-?\d+\.\d{3}$/.test(text)) return `${text}0`;
+  return text;
 }
 
 /**

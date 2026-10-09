@@ -120,4 +120,20 @@ describe('POST /api/import/upload', () => {
       body: { error: M.unreadable, fields: { file: M.unreadable } },
     });
   });
+
+  it('answers a number cell as the import reads it: 7.534 as the number it is', async () => {
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      book,
+      XLSX.utils.aoa_to_sheet([
+        ['Date', 'Amount'],
+        ['2026-03-01', 7.534],
+      ]),
+      'March'
+    );
+    const bytes = new Uint8Array(XLSX.write(book, { type: 'array', bookType: 'xlsx' }));
+    expect((await upload(new File([bytes], 'rates.xlsx'))).body).toMatchObject({
+      rows: [['2026-03-01', '7.5340']],
+    });
+  });
 });
