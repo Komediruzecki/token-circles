@@ -20,15 +20,15 @@ export async function profileList(api: ContractApi, expect: Expect): Promise<Jso
 async function addProfile(api: ContractApi, expect: Expect, name: string): Promise<number> {
   const reply = await api.post('/api/profiles', { name });
   expectOk(expect, reply, 'POST /api/profiles');
+  // The new profile as the list shows it.
   expect(reply.status).toBe(201);
-  // DIFFERENCE profile-answers
   expect(reply.body).toEqual({
     id: expect.any(Number),
     name,
     created_at: expect.any(String),
-    ...(api.runtime === 'worker'
-      ? { transaction_count: 0, account_count: 0, budget_count: 0 }
-      : {}),
+    transaction_count: 0,
+    account_count: 0,
+    budget_count: 0,
   });
   return reply.body.id as number;
 }
@@ -154,12 +154,7 @@ export const profiles = [
       // Renamed by either verb; Settings sends PUT.
       const renamed = await api.put(`/api/profiles/${id}`, { name: 'Beach house' });
       expectOk(expect, renamed, 'PUT');
-      // DIFFERENCE profile-answers
-      expect(renamed.body).toEqual(
-        api.runtime === 'worker'
-          ? { id, name: 'Beach house', created_at: expect.any(String) }
-          : { ok: true }
-      );
+      expect(renamed.body).toEqual({ id, name: 'Beach house', created_at: expect.any(String) });
       expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Beach house');
       expectOk(expect, await api.patch(`/api/profiles/${id}`, { name: 'Lake house' }), 'PATCH');
       expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Lake house');

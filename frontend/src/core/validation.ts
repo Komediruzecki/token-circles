@@ -20,6 +20,7 @@ import { checkBudgetCreate } from '../../../shared/budgetSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
+import { checkProfileCreate } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
@@ -107,12 +108,7 @@ export const settingsUpdateSchema = z
   .loose()
 
 // ── Profile ────────────────────────────────────────────────────────────────────
-
-export const profileCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-})
-
-export const profileUpdateSchema = profileCreateSchema.partial()
+// Not a zod schema: shared/profileSchema.ts, which the Worker route runs too.
 
 // ── Housing ────────────────────────────────────────────────────────────────────
 
@@ -163,9 +159,8 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/settings': settingsUpdateSchema,
-  'POST:/api/profiles': profileCreateSchema,
-  'PUT:/api/profiles': profileUpdateSchema,
-  'PATCH:/api/profiles': profileUpdateSchema,
+  // A rename is checked by its handler against the stored name (checkProfileRename).
+  'POST:/api/profiles': checkProfileCreate,
   'POST:/api/housings': housingCreateSchema,
   'PUT:/api/housings': housingCreateSchema.partial(),
   'POST:/api/counterparties': counterpartyCreateSchema,

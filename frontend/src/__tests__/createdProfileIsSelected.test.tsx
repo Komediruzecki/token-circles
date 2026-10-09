@@ -16,6 +16,8 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { clashingProfileName, profileNameTaken } from '../../../shared/profileSchema'
+import { refusalOf } from '../../../shared/refusal'
 import {
   bumpProfileVersion,
   setCurrentProfile,
@@ -89,8 +91,8 @@ function workerStandIn(seed = SEED) {
     if (path === '/api/auth/me') return json({ id: 1, username: 'owner', role: 'admin' })
     if (path === '/api/profiles' && init.method === 'POST') {
       const { name } = JSON.parse(init.body as string) as { name: string }
-      if (profiles.some((p) => p.name === name))
-        return json({ error: 'A profile with this name already exists' }, 400)
+      const taken = clashingProfileName(profiles, name)
+      if (taken !== null) return json(refusalOf(profileNameTaken(taken)), 400)
       const created = { id: profiles.length + 1, name, created_at: CREATED_AT }
       profiles.push(created)
       return json(created, 201)
@@ -292,7 +294,9 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     // Enter, so that no click outside the dropdown re-applies the selection on the way.
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await vi.waitFor(() => {
-      expect(byTestId('profile-modal')?.textContent).toContain('already exists')
+      expect(byTestId('profile-modal')?.textContent).toContain(
+        'You already have a profile called "Family". Choose another name.'
+      )
     }, waitLong)
     await settle()
 
