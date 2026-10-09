@@ -17,6 +17,11 @@ import { z } from 'zod/v4'
 import { checkAccountCreate } from '../../../shared/accountSchema'
 import { checkBillCreate } from '../../../shared/billSchema'
 import { checkBudgetCreate } from '../../../shared/budgetSchema'
+import {
+  checkApplyMappings,
+  checkAutoMap,
+  checkCategoryMapping,
+} from '../../../shared/categoryMappingSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
@@ -135,6 +140,9 @@ const schemaMap: Record<string, BodyRule> = {
   // against the stored row, since a value the row already holds is never refused
   // (checkTransactionEdit, checkCategoryEdit and checkAccountEdit in shared/).
   'POST:/api/categories': checkCategoryCreate,
+  'POST:/api/categories/mappings': checkCategoryMapping,
+  'POST:/api/categories/apply-mappings': checkApplyMappings,
+  'POST:/api/categories/auto-map': checkAutoMap,
   'POST:/api/accounts': checkAccountCreate,
   // No PUT entry for budgets, bills, loans or savings goals either: their handlers check an edit
   // against the stored row (checkBudgetEdit, checkBillEdit, checkLoanEdit and checkGoalEdit in

@@ -73,10 +73,4 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
   'custom-report':
     "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
-  'category-apply-mappings':
-    'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
-  'category-mapping-upsert':
-    'A mapping saved again for a pattern the profile already has updates that row and counts it (use_count 2) on the Worker, which also trims the pattern and lists mappings with their category name, most used first; local-first adds a second row and lists raw rows. Only the auto-categorise dialog reads mappings, and nothing in the app saves one through this route. Slice 4 (import).',
-  'category-auto-map':
-    'POST /api/categories/auto-map only suggests a category per transaction ({ total, mapped, mappings }) on the Worker, but files the rows itself ({ ok, mapped }), without moving a linked goal, in local-first; nothing in the app calls it. Slice 4 (import).',
 };
