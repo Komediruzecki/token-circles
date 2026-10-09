@@ -5,13 +5,32 @@
  * a link from the mail the Worker actually sends.
  *
  * RESEND_API_KEY is set and the call to Resend is caught here, so the mail can be read.
+ *
+ * On an account whose address was never confirmed, the link also removes every way in that was set
+ * up before; a confirmed account keeps them.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { hashPassword } from '../src/auth';
+import {
+  ACCESS_TABLES,
+  accessRows,
+  accountRow,
+  callMcp,
+  dataRows,
+  me,
+  removeAccounts,
+  seedAccount,
+  seededData,
+  signIn,
+  type AccessRows,
+} from './helpers/account-access';
 
 const UID = 9300;
 const EMAIL = 'forgetful@example.com';
+/** An account with every kind of access set up on it (helpers/account-access.ts). */
+const SEEDED = 6620;
+const SEEDED_ADDRESS = 'household-reset@example.com';
 
 const realFetch = globalThis.fetch;
 let sent: Array<Record<string, unknown>>;
@@ -67,10 +86,23 @@ beforeEach(async () => {
   }) as typeof fetch;
 });
 
-afterEach(() => {
+afterEach(async () => {
   globalThis.fetch = realFetch;
   delete (env as unknown as Record<string, string>).RESEND_API_KEY;
+  await env.DB.prepare('DROP TRIGGER IF EXISTS fail_reset_confirm').run();
+  await removeAccounts(`SELECT ${SEEDED}`);
 });
+
+/** Ask for a reset link for `email`, and read its token from the mail. */
+async function resetLinkFor(email: string): Promise<string> {
+  const asked = await post('/api/auth/forgot-password', { email });
+  expect(asked.status).toBe(200);
+  return tokenIn(sent.at(-1)!);
+}
+
+/** The reset links as they were, each spent the way using one spends it. */
+const spent = (links: AccessRows['password_resets']) =>
+  links.map((row) => ({ ...row, used_at: expect.any(String) }));
 
 describe('POST /api/auth/forgot-password', () => {
   it('mails a link to the address, and the link sets a new password', async () => {
@@ -95,6 +127,25 @@ describe('POST /api/auth/forgot-password', () => {
     expect(signIn.status, await signIn.clone().text()).toBe(200);
     const old = await post('/api/auth/login', { email: EMAIL, password: 'the-old-password' });
     expect(old.status).toBe(401);
+  });
+
+  it('refuses a link once it has expired', async () => {
+    await post('/api/auth/forgot-password', { email: EMAIL });
+    const token = tokenIn(sent[0]);
+    // An expiry that has passed, in the ISO 8601 shape the route writes. D1 keeps its own clock,
+    // which vi.setSystemTime does not reach, so the expiry moves instead of the clock.
+    await env.DB.prepare(
+      "UPDATE password_resets SET expires_at = strftime('%Y-%m-%dT00:00:00.000Z', 'now') WHERE user_id = ?"
+    )
+      .bind(UID)
+      .run();
+
+    const checked = await SELF.fetch(`https://example.com/api/auth/reset-password?token=${token}`);
+    expect(await checked.json()).toEqual({ valid: false });
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+    expect(reset.status).toBe(400);
+    const old = await post('/api/auth/login', { email: EMAIL, password: 'the-old-password' });
+    expect(old.status).toBe(200);
   });
 
   it('a second request replaces the first link', async () => {
@@ -125,5 +176,122 @@ describe('POST /api/auth/forgot-password', () => {
     expect(asked.status).toBe(400);
     expect(sent).toEqual([]);
     expect(await unusedLinks()).toEqual([]);
+  });
+});
+
+describe('a reset link for an account whose address was never confirmed', () => {
+  it('removes every way in that was set up before, then sets the new password', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    // Each of them gets in beforehand.
+    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    expect((await me(session)).status).toBe(200);
+    expect((await callMcp(apiToken)).status).toBe(200);
+    const token = await resetLinkFor(SEEDED_ADDRESS);
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+    expect(reset.status, await reset.clone().text()).toBe(200);
+    // The answer says that something a reset would have kept was cleared, so the app can say what.
+    expect(await reset.json()).toEqual({ ok: true, cleared: true });
+    expect(await accountRow(SEEDED)).toMatchObject({
+      password_hash: expect.any(String),
+      email_verified: 1,
+    });
+
+    // Nothing set up before gets in any more.
+    expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);
+    expect((await me(session)).status).toBe(401);
+    expect((await callMcp(apiToken)).status).toBe(401);
+    const rows = await accessRows(SEEDED);
+    // The link just used stays, spent.
+    expect(rows.password_resets).toEqual([
+      expect.objectContaining({ token_hash: await sha256(token), used_at: expect.any(String) }),
+    ]);
+    for (const table of ACCESS_TABLES.filter((t) => t !== 'password_resets')) {
+      expect(rows[table], table).toEqual([]);
+    }
+
+    // The new password signs in, with no second-factor step: the TOTP went with the rest.
+    const signedIn = await signIn(SEEDED_ADDRESS, 'a-new-password');
+    expect(signedIn.status).toBe(200);
+    expect(await signedIn.json()).toEqual({ id: SEEDED, email: SEEDED_ADDRESS });
+
+    // The data stays.
+    expect(await dataRows(SEEDED)).toEqual(seededData(SEEDED));
+  });
+
+  it('leaves the account as it was when any part of the change fails', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    const token = await resetLinkFor(SEEDED_ADDRESS);
+    const before = await accountRow(SEEDED);
+    const rowsBefore = await accessRows(SEEDED);
+    // Confirming the address is the last write that touches it, so everything before has run when
+    // it fails.
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_reset_confirm BEFORE UPDATE OF email_verified ON users
+       WHEN NEW.id = ${SEEDED}
+       BEGIN SELECT RAISE(ABORT, 'forced failure'); END`
+    ).run();
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+    expect(reset.status).toBe(500);
+
+    expect(await accountRow(SEEDED)).toEqual(before);
+    // Only the link is spent: it is claimed before anything else is written.
+    expect(await accessRows(SEEDED)).toEqual({
+      ...rowsBefore,
+      password_resets: spent(rowsBefore.password_resets),
+    });
+    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    expect((await me(session)).status).toBe(200);
+    expect((await callMcp(apiToken)).status).toBe(200);
+  });
+});
+
+describe('a reset link for an unconfirmed account with only a password and a session', () => {
+  it('says nothing was cleared: a reset replaces the password and ends sessions anyway', async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 0 WHERE id = ?').bind(UID).run();
+    const { sessionCookie } = await import('./helpers/session');
+    await sessionCookie(UID, 'password', env);
+    const token = await resetLinkFor(EMAIL);
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+
+    expect(await reset.json()).toEqual({ ok: true });
+    // The clearing ran all the same: the session is gone and the address is confirmed.
+    expect(await accessRows(UID)).toMatchObject({ auth_sessions: [] });
+    expect(await accountRow(UID)).toMatchObject({ email_verified: 1 });
+  });
+});
+
+describe('a reset link for a confirmed account', () => {
+  it('sets the new password and leaves every other way in as it was', async () => {
+    const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 1);
+    const token = await resetLinkFor(SEEDED_ADDRESS);
+    const before = await accountRow(SEEDED);
+    const rowsBefore = await accessRows(SEEDED);
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+    expect(reset.status).toBe(200);
+    expect(await reset.json()).toEqual({ ok: true });
+
+    const after = await accountRow(SEEDED);
+    expect(after).toEqual({
+      ...before,
+      password_hash: expect.any(String),
+      token_version: before!.token_version + 1,
+    });
+    expect(after!.password_hash).not.toBe(before!.password_hash);
+    expect(await accessRows(SEEDED)).toEqual({
+      ...rowsBefore,
+      password_resets: spent(rowsBefore.password_resets),
+    });
+    // The new password signs in, and the account's own second factor still applies. Sessions end
+    // with the reset, as they do on any account; the API token is not a session and keeps working.
+    expect(await (await signIn(SEEDED_ADDRESS, 'a-new-password')).json()).toEqual({
+      twofaRequired: true,
+    });
+    expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);
+    expect((await me(session)).status).toBe(401);
+    expect((await callMcp(apiToken)).status).toBe(200);
   });
 });

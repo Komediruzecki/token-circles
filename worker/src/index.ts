@@ -83,6 +83,8 @@ export type AppEnv = {
   Variables: {
     userId: number;
     sessionId?: string;
+    /** users.token_version as requireAuth read it; writes that add a way in are bound to it. */
+    tokenVersion?: number;
     token?: TokenIdentity;
     /** The IANA zone of the person's calendar, from X-Time-Zone; UTC without one (local-date.ts). */
     timeZone?: string;

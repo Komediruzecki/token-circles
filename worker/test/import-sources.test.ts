@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { IMPORT_SOURCE_MESSAGES as M } from '../../shared/importSourceSchema';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Saved import origins — "Connected Sources" (migration 0020, routes/import-sources.ts). A row
 // here is a standing instruction: the daily cron re-imports whatever the saved URL points at,
@@ -62,8 +62,8 @@ beforeEach(async () => {
       OTHER_USER_ID
     ),
   ]);
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
-  otherCookie = (await issueSessionCookie(OTHER_USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
+  otherCookie = (await sessionCookie(OTHER_USER_ID, 'password', env)).split(';')[0];
 });
 
 const auth = (c = cookie, profileId: number = PROFILE_ID) => ({

@@ -1,4 +1,5 @@
 import { createEffect, createSignal, Show } from 'solid-js'
+import { markAccessCleared } from '../core/accessCleared'
 import { apiFetch } from '../core/apiFetch'
 import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import layoutStyles from './Layout.module.css'
@@ -103,13 +104,18 @@ export default function EmailCodeLogin(props: {
         setLoading(false)
         return
       }
-      const body = (await res.json().catch(() => ({}))) as { twofaRequired?: boolean }
+      const body = (await res.json().catch(() => ({}))) as {
+        twofaRequired?: boolean
+        cleared?: boolean
+      }
       if (body.twofaRequired) {
         // Inbox proven, but the account wants the authenticator too — hand over.
         setLoading(false)
         props.onTwofa()
         return
       }
+      // Confirming the address cleared the account: the app says what, after the reload.
+      if (body.cleared) markAccessCleared('sign-in')
       markPasskeyNudgeAfterLogin()
       window.location.reload()
     } catch {

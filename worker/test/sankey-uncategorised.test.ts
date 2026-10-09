@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6310;
 const PROFILE = 63100;
@@ -51,7 +51,7 @@ beforeEach(async () => {
     // Another month's: in no October flow.
     expense(null, '2026-09-30', 99),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 type Flow = {

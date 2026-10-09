@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const UID = 8600;
 
@@ -25,7 +25,7 @@ async function seed(interval: string | null, plan = 'basic', status: string | nu
 const status = async () =>
   (await (
     await SELF.fetch('https://api.example.com/api/billing/status', {
-      headers: { Cookie: (await issueSessionCookie(UID, 'password', env)).split(';')[0] },
+      headers: { Cookie: (await sessionCookie(UID, 'password', env)).split(';')[0] },
     })
   ).json()) as { plan: string; status: string | null; interval: string | null };
 

@@ -8,14 +8,14 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import type { AppEnv } from '../index';
-import { issueSessionCookie, readCookies, requireAuth } from '../auth';
+import { boundTo, issueSessionCookie, readCookies, requireAuth, TRY_AGAIN } from '../auth';
+import type { SignIn } from '../auth';
 import { logAuthEvent } from '../authlog';
 import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { generateTotpSecret, otpauthUri, verifyTotp } from '../totp';
 import {
   TWOFA_COOKIE,
   clearedTwofaCookie,
-  confirmTotp,
   consumeRecoveryCode,
   disableTotp,
   enrollTotp,
@@ -23,8 +23,8 @@ import {
   getPendingTotpSecret,
   getTotpForLogin,
   markTotpStepUsed,
-  storeRecoveryCodes,
   totpStatus,
+  turnOnTotp,
   verifyTwofaChallenge,
 } from '../twofa';
 
@@ -49,7 +49,9 @@ twofaRoutes.post('/api/auth/2fa/setup', requireAuth, async (c) => {
     .bind(userId)
     .first<{ email: string }>();
   const secret = generateTotpSecret();
-  await enrollTotp(c.env, userId, secret);
+  if (!(await enrollTotp(c.env, userId, secret, boundTo(c)))) {
+    return c.json({ error: TRY_AGAIN }, 409);
+  }
   return c.json({
     secret,
     otpauthUri: otpauthUri(secret, user?.email ?? `user-${userId}`, TOTP_ISSUER),
@@ -66,10 +68,11 @@ twofaRoutes.post('/api/auth/2fa/enable', requireAuth, async (c) => {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'enable_bad_code', userId });
     return c.json({ error: 'That code did not match — check the app and try again' }, 401);
   }
-  await confirmTotp(c.env, userId);
-  await markTotpStepUsed(c.env, userId, matched);
   const recoveryCodes = generateRecoveryCodes();
-  await storeRecoveryCodes(c.env, userId, recoveryCodes);
+  if (!(await turnOnTotp(c.env, boundTo(c), recoveryCodes))) {
+    return c.json({ error: TRY_AGAIN }, 409);
+  }
+  await markTotpStepUsed(c.env, userId, matched);
   // Every session that predates enrollment got in on one factor; an intruder the user is
   // enrolling AGAINST would otherwise keep their foothold. Only the enrolling session survives.
   const sessionId = c.get('sessionId');
@@ -139,7 +142,7 @@ twofaRoutes.post('/api/auth/2fa/disable', requireAuth, async (c) => {
 twofaRoutes.post('/api/auth/2fa/verify', async (c) => {
   if (!c.env.JWT_SECRET) return c.json({ error: 'Auth not configured' }, 500);
   // Try every value the browser sent (cookie identity is name+Domain+Path — see readCookies).
-  let challenge: { userId: number; provider: string } | null = null;
+  let challenge: SignIn | null = null;
   for (const raw of readCookies(c.req.raw, TWOFA_COOKIE)) {
     challenge = await verifyTwofaChallenge(raw, c.env);
     if (challenge) break;
@@ -148,7 +151,7 @@ twofaRoutes.post('/api/auth/2fa/verify', async (c) => {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'challenge_missing' });
     return c.json({ error: 'Sign-in expired — enter your password again' }, 401);
   }
-  const { userId, provider } = challenge;
+  const { userId } = challenge;
   const bucket = `2fa:${userId}`;
   const rl = await enforce(c, bucket, VERIFY_LIMIT, VERIFY_WINDOW_SEC);
   if (rl) {
@@ -164,15 +167,15 @@ twofaRoutes.post('/api/auth/2fa/verify', async (c) => {
   const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
     .bind(userId)
     .first<{ email: string }>();
-  logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'verified', userId });
+  // Bound to the token_version the first factor read: the challenge carries it.
+  const session = await issueSessionCookie(c.env, challenge, {
+    userAgent: c.req.header('user-agent') ?? null,
+    ip: clientIp(c),
+  });
+  // Spent either way: a challenge whose account moved on can never succeed.
   c.header('Set-Cookie', clearedTwofaCookie(c.env), { append: true });
-  c.header(
-    'Set-Cookie',
-    await issueSessionCookie(userId, provider, c.env, {
-      userAgent: c.req.header('user-agent') ?? null,
-      ip: clientIp(c),
-    }),
-    { append: true }
-  );
+  if (!session) return c.json({ error: TRY_AGAIN }, 409);
+  logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'verified', userId });
+  c.header('Set-Cookie', session, { append: true });
   return c.json({ id: userId, email: user?.email ?? null });
 });

@@ -11,7 +11,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EXPORT_MESSAGES } from '../../shared/exportColumns';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER_ID = 6440;
 const PROFILE = 64400;
@@ -78,7 +78,7 @@ beforeEach(async () => {
          (64461, ?, 'Gym', 30, 'expense', 'monthly', 15, '2026-04-15', 0)`
     ).bind(PROFILE, PROFILE),
   ]);
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 });
 
 function get(path: string, headers: Record<string, string> = {}): Promise<Response> {

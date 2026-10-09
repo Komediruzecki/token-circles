@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { mcpRoutes } from '../src/mcp';
 import { unsent, type Hit, type RouteKey } from '../../shared/contract/guard';
 import { outbound } from '../../shared/contract/outbound';
@@ -179,7 +179,7 @@ async function person(): Promise<ContractApi> {
       user
     ),
   ]);
-  const cookie = (await issueSessionCookie(user, 'password', env)).split(';')[0];
+  const cookie = (await sessionCookie(user, 'password', env)).split(';')[0];
   const mine: ContractApi = apiFor(cookie, me, () => theirs);
   const theirs: ContractApi = apiFor(cookie, partner, () => mine);
   return mine;

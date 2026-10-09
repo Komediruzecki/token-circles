@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Base-currency reporting: a foreign-currency transaction carries its base-currency value
 // in amount_local (e.g. 19 HRK stored with amount_local = 2.47 EUR). Every aggregate must
@@ -39,7 +39,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (profile_id, description, amount, amount_local, currency, type, date, category_id) VALUES (301, 'Partner groceries', 8, NULL, 'EUR', 'expense', '2026-03-11', NULL)"
     ),
   ]);
-  cookie = (await issueSessionCookie(30, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(30, 'password', env)).split(';')[0];
 });
 
 async function get(path: string): Promise<any> {

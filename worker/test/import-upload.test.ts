@@ -13,7 +13,7 @@ import { env, SELF } from 'cloudflare:test';
 import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { IMPORT_UPLOAD_MESSAGES as M } from '../../shared/importUpload';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 let cookie = '';
 
@@ -27,7 +27,7 @@ beforeEach(async () => {
     ),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (980, 98, 'Main')"),
   ]);
-  cookie = (await issueSessionCookie(98, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(98, 'password', env)).split(';')[0];
 });
 
 async function upload(

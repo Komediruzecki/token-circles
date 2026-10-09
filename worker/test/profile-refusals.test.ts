@@ -19,7 +19,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { PROFILE_MESSAGES as M } from '../../shared/profileSchema';
 
 const USER = 6402;
@@ -69,7 +69,7 @@ beforeEach(async () => {
       OTHER_USER
     ),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function send(path: string, method: string, body?: unknown): Promise<Response> {

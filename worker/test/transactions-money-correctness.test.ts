@@ -7,7 +7,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 async function reset(): Promise<void> {
   for (const t of [
@@ -45,7 +45,7 @@ let cookie = '';
 beforeEach(async () => {
   await reset();
   await seed();
-  const setCookie = await issueSessionCookie(1, 'password', env);
+  const setCookie = await sessionCookie(1, 'password', env);
   cookie = setCookie.split(';')[0];
 });
 

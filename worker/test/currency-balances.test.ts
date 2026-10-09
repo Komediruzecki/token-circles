@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Account balances must move by the base-currency value (amount_local), not the raw
 // foreign amount — otherwise a foreign-currency transaction shifts the balance by an
@@ -21,7 +21,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (id, profile_id, name, type, currency, balance, starting_balance) VALUES (4000, 400, 'Giro', 'giro', 'EUR', 100, 100)"
     ),
   ]);
-  cookie = (await issueSessionCookie(40, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(40, 'password', env)).split(';')[0];
 });
 
 async function balance(): Promise<number> {

@@ -1,4 +1,5 @@
 import { createSignal, onMount, Show } from 'solid-js'
+import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
@@ -29,6 +30,10 @@ export default function ResetPassword() {
       setStatus('invalid')
       return
     }
+    // A reset is for an account on the server, and the link often opens in a browser that starts
+    // local-first. Account mode from here, as Sign In switches it, so the check and the new
+    // password reach the server. The device's local data is not touched.
+    setStorageMode('self-hosted')
     try {
       setStatus((await api.validateResetToken(token)) ? 'ready' : 'invalid')
     } catch {
@@ -49,7 +54,9 @@ export default function ResetPassword() {
     }
     setLoading(true)
     try {
-      await api.resetPassword(token, password())
+      const { cleared } = await api.resetPassword(token, password())
+      // The sign-in screen this reloads onto says what else the reset cleared.
+      if (cleared) markAccessCleared('reset')
       setStatus('done')
       // A reset only makes sense for a server account — land in server mode at the sign-in
       // screen. The worker no longer auto-logs-in, so the user signs in with the new password.

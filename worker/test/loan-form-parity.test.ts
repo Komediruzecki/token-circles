@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { FORM_LOANS, listedFigures, scheduleFigures } from '../../shared/fixtures/loanFormParity';
 import type { FormLoan } from '../../shared/fixtures/loanFormParity';
 import type { LoanCalculation } from '../../shared/loanSchedule';
@@ -38,7 +38,7 @@ beforeEach(async () => {
       USER
     ),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown): Promise<Response> {

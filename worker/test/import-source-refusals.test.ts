@@ -12,7 +12,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { IMPORT_SOURCE_MESSAGES as M } from '../../shared/importSourceSchema';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER_ID = 6450;
 const PROFILE = 64500;
@@ -45,7 +45,7 @@ beforeEach(async () => {
        VALUES (?, ?, 'google_sheet', 'Old ledger', '{}', ?, 'manual')`
     ).bind(OLD_SOURCE, PROFILE, THEIRS),
   ]);
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 });
 
 function send(method: string, path: string, payload?: unknown): Promise<Response> {

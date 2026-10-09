@@ -11,7 +11,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 9821;
 const PROFILE = 98210;
@@ -60,7 +60,7 @@ beforeEach(async () => {
       "INSERT INTO savings_goals (id, profile_id, name, target_amount, current_amount, category_id, tracking_start_date) VALUES (?, ?, 'Food fund', 500, 0, ?, '2026-01-01')"
     ).bind(FOOD_GOAL, PROFILE, FOOD),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function edit(body: unknown): Promise<Response> {

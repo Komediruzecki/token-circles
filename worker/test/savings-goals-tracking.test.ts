@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Category-linked goals now count only the linked category's transactions dated on/after
 // the goal's tracking_start_date (base-currency value), so pre-existing history doesn't
@@ -36,7 +36,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (profile_id, description, amount, amount_local, currency, type, date, category_id) VALUES (700, 'new2 HRK', 190, 25, 'HRK', 'expense', ?, 9)"
     ).bind(TODAY),
   ]);
-  cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(70, 'password', env)).split(';')[0];
 });
 
 function api(path: string, method: string, body?: unknown): Promise<Response> {

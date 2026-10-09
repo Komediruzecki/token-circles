@@ -8,7 +8,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import {
   errorResponse,
   GENERIC_ERROR,
@@ -33,7 +33,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, name, color, icon, type, profile_id) VALUES (9101, 'Rent', '#6b7280', 'home', 'expense', 910)"
     ),
   ]);
-  cookie = (await issueSessionCookie(91, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(91, 'password', env)).split(';')[0];
   consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 

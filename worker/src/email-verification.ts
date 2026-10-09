@@ -1,6 +1,7 @@
 // Links that prove someone reads an address: minting one, and the URL that goes in the mail. The
 // route that spends them is GET /api/auth/verify-email (routes/auth.ts). One kind confirms the
 // address an account already has; the other moves the account to a new one (email-change.ts).
+import { SAME_TOKEN_VERSION, type Bound } from './auth';
 
 // 256-bit URL-safe token (hex). The raw token goes in the email link; only its hash is stored.
 export function randomToken(): string {
@@ -36,41 +37,98 @@ export type VerificationPurpose = 'confirm' | 'change';
  * Only the same purpose: sending the confirm link again must not cancel a change that is
  * waiting, and asking for a change must not kill the link that confirms the address the account
  * still has.
+ *
+ * With `bound`, only while the account's token_version is still the one the request checked
+ * (SAME_TOKEN_VERSION); null when nothing was written.
  */
 export async function createEmailVerification(
   db: D1Database,
   userId: number,
   email: string,
-  purpose: VerificationPurpose = 'confirm'
-): Promise<string> {
-  await db
-    .prepare(
-      'DELETE FROM email_verifications WHERE user_id = ? AND purpose = ? AND used_at IS NULL'
-    )
-    .bind(userId, purpose)
-    .run();
-  return (await insertEmailVerification(db, userId, email, purpose)).token;
+  purpose?: VerificationPurpose
+): Promise<string>;
+export async function createEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose,
+  bound: Bound
+): Promise<string | null>;
+export async function createEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose = 'confirm',
+  bound?: Bound
+): Promise<string | null> {
+  const { guard, values } = guardFor(bound);
+  const token = randomToken();
+  const results = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM email_verifications WHERE user_id = ? AND purpose = ? AND used_at IS NULL AND ${guard}`
+      )
+      .bind(userId, purpose, ...values),
+    await insertStatement(db, userId, email, purpose, token, guard, values),
+  ]);
+  return (results[1]?.meta.changes ?? 0) > 0 ? token : null;
 }
 
 /**
  * Store a new single-use link for `userId` without retiring any other, and return its raw token
- * and row id. For a caller that retires the others only once the new link has been sent.
+ * and row id. For a caller that retires the others only once the new link has been sent. With
+ * `bound`, only while the account's token_version is still the one the request checked; null
+ * when nothing was written.
  */
 export async function insertEmailVerification(
   db: D1Database,
   userId: number,
   email: string,
   purpose: VerificationPurpose
-): Promise<{ token: string; id: number }> {
+): Promise<{ token: string; id: number }>;
+export async function insertEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose,
+  bound: Bound
+): Promise<{ token: string; id: number } | null>;
+export async function insertEmailVerification(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose,
+  bound?: Bound
+): Promise<{ token: string; id: number } | null> {
+  const { guard, values } = guardFor(bound);
   const token = randomToken();
-  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
-  const res = await db
-    .prepare(
-      'INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, ?, ?)'
-    )
-    .bind(userId, email, await sha256Hex(token), expiresAt, purpose)
-    .run();
+  const res = await (await insertStatement(db, userId, email, purpose, token, guard, values)).run();
+  if ((res.meta.changes ?? 0) === 0) return null;
   return { token, id: res.meta.last_row_id as number };
+}
+
+function guardFor(bound?: Bound): { guard: string; values: number[] } {
+  return bound
+    ? { guard: SAME_TOKEN_VERSION, values: [bound.userId, bound.tokenVersion] }
+    : { guard: '1', values: [] };
+}
+
+async function insertStatement(
+  db: D1Database,
+  userId: number,
+  email: string,
+  purpose: VerificationPurpose,
+  token: string,
+  guard: string,
+  values: number[]
+): Promise<D1PreparedStatement> {
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  return db
+    .prepare(
+      `INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose)
+       SELECT ?, ?, ?, ?, ? WHERE ${guard}`
+    )
+    .bind(userId, email, await sha256Hex(token), expiresAt, purpose, ...values);
 }
 
 /**

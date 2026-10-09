@@ -6,7 +6,8 @@
  * JWT_SECRET orphans TOTP secrets. getTotpForLogin fails CLOSED for that case — a confirmed
  * credential keeps demanding a second factor and the hashed recovery codes still verify.
  */
-import { b64urlDecode, b64urlEncode, cookie, hmacKey } from './auth';
+import { b64urlDecode, b64urlEncode, cookie, hmacKey, SAME_TOKEN_VERSION } from './auth';
+import type { Bound, SignIn } from './auth';
 import type { Env } from './index';
 import { base32Encode } from './totp';
 
@@ -86,31 +87,43 @@ async function sha256Hex(s: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Store a pending enrollment for `userId`. With `bound`, only while the account's token_version
+ * is still the one the request checked (SAME_TOKEN_VERSION). False when nothing was written.
+ */
 export async function enrollTotp(
   env: TwofaEnv & { JWT_SECRET?: string },
   userId: number,
-  secretB32: string
-): Promise<void> {
+  secretB32: string,
+  bound?: Bound
+): Promise<boolean> {
   if (!env.JWT_SECRET) throw new Error('Auth not configured');
   const secretEnc = await encryptTotpSecret(secretB32, env.JWT_SECRET);
   // Replaces only a PENDING enrollment. A confirmed credential is never silently overwritten —
   // the route refuses setup while 2FA is on, and this WHERE backs that up at the data layer.
-  await env.DB.prepare(
-    `INSERT INTO totp_credentials (user_id, secret_enc) VALUES (?, ?)
+  const written = await env.DB.prepare(
+    `INSERT INTO totp_credentials (user_id, secret_enc)
+     SELECT ?, ? WHERE ${bound ? SAME_TOKEN_VERSION : '1'}
      ON CONFLICT(user_id) DO UPDATE SET
        secret_enc = excluded.secret_enc, last_used_step = NULL, created_at = datetime('now')
      WHERE totp_credentials.confirmed_at IS NULL`
   )
-    .bind(userId, secretEnc)
+    .bind(userId, secretEnc, ...(bound ? [bound.userId, bound.tokenVersion] : []))
     .run();
+  return (written.meta.changes ?? 0) > 0;
+}
+
+function confirmStatement(db: D1Database, userId: number, bound?: Bound): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE totp_credentials SET confirmed_at = datetime('now')
+       WHERE user_id = ?${bound ? ` AND ${SAME_TOKEN_VERSION}` : ''}`
+    )
+    .bind(userId, ...(bound ? [bound.userId, bound.tokenVersion] : []));
 }
 
 export async function confirmTotp(env: TwofaEnv, userId: number): Promise<void> {
-  await env.DB.prepare(
-    "UPDATE totp_credentials SET confirmed_at = datetime('now') WHERE user_id = ?"
-  )
-    .bind(userId)
-    .run();
+  await confirmStatement(env.DB, userId).run();
 }
 
 export async function disableTotp(env: TwofaEnv, userId: number): Promise<void> {
@@ -164,22 +177,48 @@ export async function markTotpStepUsed(env: TwofaEnv, userId: number, step: numb
     .run();
 }
 
+/** The statements that replace an account's recovery codes, bound when `bound` is given. */
+async function recoveryCodeStatements(
+  db: D1Database,
+  userId: number,
+  codes: string[],
+  bound?: Bound
+): Promise<D1PreparedStatement[]> {
+  const hashes = await Promise.all(codes.map((c) => sha256Hex(normalizeRecoveryCode(c))));
+  const guard = bound ? SAME_TOKEN_VERSION : '1';
+  const guardValues = bound ? [bound.userId, bound.tokenVersion] : [];
+  return [
+    db
+      .prepare(`DELETE FROM recovery_codes WHERE user_id = ? AND ${guard}`)
+      .bind(userId, ...guardValues),
+    ...hashes.map((h) =>
+      db
+        .prepare(`INSERT INTO recovery_codes (user_id, code_hash) SELECT ?, ? WHERE ${guard}`)
+        .bind(userId, h, ...guardValues)
+    ),
+  ];
+}
+
 /** Replaces any previous batch — old sheets of codes stop working the moment new ones exist. */
 export async function storeRecoveryCodes(
   env: TwofaEnv,
   userId: number,
   codes: string[]
 ): Promise<void> {
-  const hashes = await Promise.all(codes.map((c) => sha256Hex(normalizeRecoveryCode(c))));
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM recovery_codes WHERE user_id = ?').bind(userId),
-    ...hashes.map((h) =>
-      env.DB.prepare('INSERT INTO recovery_codes (user_id, code_hash) VALUES (?, ?)').bind(
-        userId,
-        h
-      )
-    ),
+  await env.DB.batch(await recoveryCodeStatements(env.DB, userId, codes));
+}
+
+/**
+ * Turn the account's pending enrollment on and give it `codes` as its recovery codes, in one
+ * batch, while its token_version is still the one the request checked. False when the account
+ * moved on, and then nothing changed.
+ */
+export async function turnOnTotp(env: TwofaEnv, bound: Bound, codes: string[]): Promise<boolean> {
+  const results = await env.DB.batch([
+    confirmStatement(env.DB, bound.userId, bound),
+    ...(await recoveryCodeStatements(env.DB, bound.userId, codes, bound)),
   ]);
+  return (results[0]?.meta.changes ?? 0) > 0;
 }
 
 /** Decrypted secret of a PENDING (unconfirmed) enrollment — what /2fa/enable verifies against. */
@@ -210,6 +249,8 @@ interface TwofaChallenge {
   userId: number;
   /** Carried through so the session records how the first factor was proven. */
   provider: string;
+  /** users.token_version as the first factor's check read it; the session is bound to it. */
+  v: number;
   exp: number;
 }
 
@@ -218,15 +259,12 @@ async function hmacB64url(payload: string, secret: string): Promise<string> {
   return b64urlEncode(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
 }
 
-export async function issueTwofaChallengeCookie(
-  userId: number,
-  provider: string,
-  env: Env
-): Promise<string> {
+export async function issueTwofaChallengeCookie(env: Env, signIn: SignIn): Promise<string> {
   if (!env.JWT_SECRET) throw new Error('Auth not configured');
   const challenge: TwofaChallenge = {
-    userId,
-    provider,
+    userId: signIn.userId,
+    provider: signIn.provider,
+    v: signIn.tokenVersion,
     exp: Math.floor(Date.now() / 1000) + TWOFA_CHALLENGE_TTL_SECONDS,
   };
   const payload = b64urlEncode(new TextEncoder().encode(JSON.stringify(challenge)));
@@ -241,7 +279,7 @@ export function clearedTwofaCookie(env: Env): string {
 export async function verifyTwofaChallenge(
   raw: string,
   env: { JWT_SECRET?: string }
-): Promise<{ userId: number; provider: string } | null> {
+): Promise<SignIn | null> {
   if (!env.JWT_SECRET) return null;
   const [payload, mac] = raw.split('.');
   if (!payload || !mac) return null;
@@ -253,8 +291,9 @@ export async function verifyTwofaChallenge(
   try {
     const parsed = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as TwofaChallenge;
     if (typeof parsed.userId !== 'number' || typeof parsed.provider !== 'string') return null;
+    if (typeof parsed.v !== 'number') return null;
     if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) return null;
-    return { userId: parsed.userId, provider: parsed.provider };
+    return { userId: parsed.userId, provider: parsed.provider, tokenVersion: parsed.v };
   } catch {
     return null;
   }

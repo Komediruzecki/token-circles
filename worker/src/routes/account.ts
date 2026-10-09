@@ -137,6 +137,9 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
   P('DELETE FROM login_codes WHERE user_id = ?', userId);
   P('DELETE FROM webauthn_credentials WHERE user_id = ?', userId);
   P('DELETE FROM api_tokens WHERE user_id = ?', userId);
+  // Every device's session row, with the device and the address it signed in from, goes with
+  // the account.
+  P('DELETE FROM auth_sessions WHERE user_id = ?', userId);
   P('DELETE FROM custom_reports WHERE user_id = ?', userId);
   P('DELETE FROM error_logs WHERE user_id = ?', userId);
   P('DELETE FROM profiles WHERE user_id = ?', userId);

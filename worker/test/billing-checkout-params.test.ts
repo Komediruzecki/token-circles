@@ -13,7 +13,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const UID = 8300;
 const CUSTOMER = 'cus_TestExisting';
@@ -40,7 +40,7 @@ const checkout = async () =>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Cookie: (await issueSessionCookie(UID, 'password', env)).split(';')[0],
+      Cookie: (await sessionCookie(UID, 'password', env)).split(';')[0],
     },
     body: JSON.stringify({ plan: 'advanced', interval: 'monthly' }),
   });

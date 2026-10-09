@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6301;
 const PROFILE = 63010;
@@ -56,7 +56,7 @@ beforeEach(async () => {
     // April's own spending is not what April's budgets are set from.
     expense('2026-04-02', 75, CAR),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 function fromExpenses(body: unknown): Promise<Response> {

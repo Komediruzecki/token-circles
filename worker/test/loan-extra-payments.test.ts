@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { LOAN_MESSAGES as M } from '../../shared/loanSchema';
 
 // A loan's extra payments, added and changed through the Worker against a real D1. Both routes put
@@ -30,7 +30,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (930, 93, 'Me')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (931, 93, 'Partner')"),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown, profile = ME): Promise<Response> {

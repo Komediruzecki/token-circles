@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { calendarDateIn } from '../../shared/calendarDate';
 import { addCalendarMonths, calculateLoan, loanStatus } from '../../shared/loanSchedule';
 import type { LoanInput } from '../../shared/loanSchedule';
@@ -39,7 +39,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (910, 91, 'Me')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (911, 91, 'Partner')"),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown, profile = ME): Promise<Response> {

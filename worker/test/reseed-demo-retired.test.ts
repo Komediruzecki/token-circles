@@ -9,7 +9,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6420;
 const PROFILE = 64200;
@@ -33,7 +33,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (profile_id, name, type, currency, balance) VALUES (?, 'Everyday', 'giro', 'EUR', 100)"
     ).bind(PROFILE),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 describe('POST /api/profiles/reseed-demo', () => {

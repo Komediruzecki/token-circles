@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // The four receipt actions: POST /api/receipts/:id/categorize, /export, /share and /split. They are
 // stubs (worker/src/routes/receipts.ts): each answers success for a receipt of the active profile
@@ -75,8 +75,8 @@ beforeEach(async () => {
       "INSERT INTO transactions (id, profile_id, description, amount, type, date) VALUES (9501, 950, 'Lunch', 12.5, 'expense', '2026-07-01')"
     ),
   ]);
-  cookie = (await issueSessionCookie(95, 'password', env)).split(';')[0];
-  otherCookie = (await issueSessionCookie(96, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(95, 'password', env)).split(';')[0];
+  otherCookie = (await sessionCookie(96, 'password', env)).split(';')[0];
 });
 
 describe('the receipt actions', () => {

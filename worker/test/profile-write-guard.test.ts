@@ -5,7 +5,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 let cookie = '';
 
@@ -25,7 +25,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (id, name, type, balance, starting_balance, profile_id) VALUES (100, 'Checking', 'giro', 1000, 1000, 10)"
     ),
   ]);
-  cookie = (await issueSessionCookie(1, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(1, 'password', env)).split(';')[0];
 });
 
 function req(path: string, profileId: string, init: RequestInit = {}): Promise<Response> {

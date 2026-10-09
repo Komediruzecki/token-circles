@@ -14,7 +14,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER_ID = 6410;
 const CURRENT = 64100;
@@ -38,7 +38,7 @@ beforeEach(async () => {
       "INSERT INTO import_sources (profile_id, kind, label, config, schedule) VALUES (?, 'google_sheet', 'Old sheet', '{}', 'manual')"
     ).bind(CURRENT),
   ]);
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 });
 
 function source(over: Record<string, unknown> = {}): Record<string, unknown> {
