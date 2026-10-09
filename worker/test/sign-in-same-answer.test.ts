@@ -2,7 +2,9 @@
  * Signing in with a wrong password, asking for a reset link, asking for a sign-in code and
  * creating an account answer with the same status, content type and body for an address that has
  * an account and for one that has none, and so does each route's limit on one address once it is
- * reached. The cookie a sign-in code request sets is a new random handle on every request.
+ * reached. The cookie a sign-in code request sets is a new random handle on every request, and
+ * signing in checks a password for an address with no account against a hash of the same cost as
+ * a real one.
  *
  * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
  * sent or is held. The two that store a row for the address after their answer (a reset link, a
@@ -11,6 +13,7 @@
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
+import { DUMMY_PASSWORD_HASH } from '../src/routes/auth';
 import { fetchSettled, fetchUnsettled } from './helpers/after-answer';
 
 const BASE = 'https://api.example.com';
@@ -276,4 +279,19 @@ describe('while the row a route stores cannot be written', () => {
       expect(errors).toHaveBeenCalledWith(logged, expect.anything());
     });
   }
+});
+
+describe('signing in with an address that has no account', () => {
+  it('checks the password against a stand-in hash with the scheme, cost and lengths of a real one', async () => {
+    const fields = (stored: string) => {
+      const [scheme, cost, salt, hash] = stored.split('$');
+      return {
+        scheme,
+        cost,
+        saltBytes: b64urlDecode(salt!).length,
+        hashBytes: b64urlDecode(hash!).length,
+      };
+    };
+    expect(fields(DUMMY_PASSWORD_HASH)).toEqual(fields(await hashPassword('a real password')));
+  });
 });
