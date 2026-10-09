@@ -554,7 +554,9 @@ export async function importExecute(body: unknown): Promise<Response> {
     )
 
     // Auto-detect "IB" / "Interactive Brokers" categories as account type.
-    // Use case-insensitive check to avoid duplicates like "IB" + "ib".
+    // Use case-insensitive check to avoid duplicates like "IB" + "ib". Keyed by the name as the
+    // sheet first spells it, which is the account's name: keyed in lower case, "IB" became an
+    // account called "ib". The type lookups below lowercase their keys anyway.
     const ibPattern = /^(ib|interactive\s*brokers)$/i
     for (const row of validRows) {
       const rawCat = toStr(row.category).trim()
@@ -562,8 +564,8 @@ export async function importExecute(body: unknown): Promise<Response> {
         const key = rawCat.toLowerCase()
         const exists = Object.keys(categoryTypes).some((k) => k.toLowerCase() === key)
         if (!exists) {
-          categoryTypes[key] = 'account'
-          accountTypes[key] = accountTypes[key] || 'ib'
+          categoryTypes[rawCat] = 'account'
+          accountTypes[rawCat] = accountTypes[rawCat] || 'ib'
         }
       }
     }
