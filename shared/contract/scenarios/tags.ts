@@ -1,3 +1,4 @@
+import { defaultTagColor } from '../../tagSchema';
 import { expectMoney, listTransactions, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -64,8 +65,7 @@ export const tags = [
 
       const theirs = await spend(other, expect, {});
       const attached = await other.put(`/api/transactions/${theirs}/tags`, { tagIds: [id] });
-      // DIFFERENCE foreign-link-status
-      expect(attached.status).toBe(api.runtime === 'worker' ? 403 : 400);
+      expect(attached.status).toBe(400);
       expect(await tagsOn(other, expect, theirs)).toEqual([]);
       expect(
         (await other.post(`/api/tags/${id}/transactions`, { transactionIds: [theirs] })).status
@@ -294,16 +294,17 @@ export const tags = [
   }),
 
   scenario('a tag answers some writes differently in each runtime', async (api, expect) => {
+    const before = (await rowsOf(api, expect, '/api/tags')).length;
     const plain = await added(api, expect, '/api/tags', { name: 'Plain' });
     const listed = ((await api.get('/api/tags')).body as Json[]).find((t) => t.id === plain);
     // DIFFERENCE tag-default-colour
-    expect(listed.color).toBe(api.runtime === 'worker' ? '#3b82f6' : '#6e9bff');
+    expect(listed.color).toBe(api.runtime === 'worker' ? defaultTagColor(before) : '#6e9bff');
 
+    // An edit without a colour keeps it.
     const coloured = await tag(api, expect, 'Coloured', '#123456');
     expectOk(expect, await api.put(`/api/tags/${coloured}`, { name: 'Recoloured' }), 'rename');
     const renamed = ((await api.get('/api/tags')).body as Json[]).find((t) => t.id === coloured);
-    // DIFFERENCE tag-edit-without-colour
-    expect(renamed.color).toBe(api.runtime === 'worker' ? '#6b7280' : '#123456');
+    expect(renamed.color).toBe('#123456');
 
     const twin = await api.put(`/api/tags/${coloured}`, { name: 'Plain', color: '#123456' });
     // DIFFERENCE tag-rename-duplicate

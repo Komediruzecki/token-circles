@@ -16,7 +16,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
   'foreign-link-status':
-    "A recurring rule that links another profile's account or category, and a transaction's tags that name another profile's tag (PUT /api/transactions/:id/tags), are refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2, and a bill's, a budget's and a savings goal's since slice 3. Slice 5 (recurring, tags).",
+    "A recurring rule that links another profile's account or category is refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2, a bill's, a budget's and a savings goal's since slice 3, and a transaction's tags (PUT /api/transactions/:id/tags) since slice 5. Slice 5 (recurring).",
   'transactions-summary-shape':
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
@@ -24,9 +24,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'transactions-by-tag':
     'GET /api/transactions/by-tag/:tagId orders rows newest first and honours startDate, endDate, category_ids, type, limit and offset on the Worker, but answers every tagged row in key order, unfiltered, in local-first; nothing in the app calls it. Slice 5 (tags).',
   'tag-default-colour':
-    'A tag created without a colour gets the next colour of a twelve-colour palette (#3b82f6 first) on the Worker and #6e9bff in local-first; both forms always send one. Slice 5 (tags).',
-  'tag-edit-without-colour':
-    'A tag edit that leaves out the colour resets it to #6b7280 on the Worker and keeps it in local-first; the Tags page always sends it. Slice 5 (tags).',
+    "A tag created without a colour gets the next colour of the app's palette, by the profile's tag count, on the Worker, and always #6e9bff (the palette's first) in local-first; both forms always send one. Slice 5 (tags).",
   'tag-rename-duplicate':
     "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
   'day-of-month-default':
