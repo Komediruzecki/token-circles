@@ -745,11 +745,11 @@ added. The Tags, Housing, Portfolio and Recurring failures toasted a caught erro
 they go through `plainMessage`.
 
 Open for the owner, each a change no decision covers: a tag name capped at 50 characters and
-compared without case on the Worker; a tag's colour checked as #RRGGBB; another profile's tag,
-category or account a 400 where the Worker answered 403; a housing expense's six types, its
-name capped at 100 characters, its amount to the cent, and a create answered 201; the due month
-of an expense posted without one, this month where the Worker used January; a holding's ticker up
-to 20 characters where local-first stopped at 10, its date required to be real; a recurring rule's
+compared without case on the Worker; a tag's colour checked as #RRGGBB there too; another profile's
+tag, category or account a 400 where the Worker answered 403; a housing expense's six types, its
+name capped at 100 characters, its amount to the cent, and a create answered 201; the due month of
+an expense posted without one, this month where the Worker used January; a holding's ticker up to 20
+characters where local-first stopped at 10, its date required to be real; a recurring rule's
 description and next date required on the Worker, its day left blank in local-first, a paused rule
 left out of local-first's list; a deleted rule's second delete a 404; the words of a period already
 added (409); the upcoming list in local-first; the Recurring dialog's selects opening blank on a
