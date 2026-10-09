@@ -1049,8 +1049,23 @@ export default function Settings() {
   // The household view's rename (features/profileForm.ts). A save renames the profile where the
   // page, the sidebar and the Danger Zone show it; it used to reload the whole page.
   const appState = useAppState()
+  // The row's Edit button takes the focus back when its rename closes, saved or not: the editor
+  // that had it is gone, and a save builds the row again under the new name.
+  let returnFocusTo: number | null = null
+  const editButtonRef = (id: number) => (button: HTMLButtonElement) => {
+    if (returnFocusTo !== id) return
+    returnFocusTo = null
+    queueMicrotask(() => {
+      button.focus()
+    })
+  }
+  const closeRename = (id: number) => {
+    returnFocusTo = id
+    renameForm.close()
+  }
   const renameForm = createProfileRenameForm({
     onRenamed: (renamed) => {
+      returnFocusTo = renamed.id
       const rename = <T extends { id: number; name: string }>(list: readonly T[]): T[] =>
         list.map((p) => (p.id === renamed.id ? { ...p, name: renamed.name } : p))
       setAllProfiles((list) => rename(list))
@@ -1779,6 +1794,7 @@ export default function Settings() {
                             fallback={
                               <>
                                 <button
+                                  ref={editButtonRef(profile.id)}
                                   class={styles.iconBtn}
                                   onclick={() => {
                                     renameForm.open(profile)
@@ -1815,7 +1831,7 @@ export default function Settings() {
                               {...renameForm.attrs}
                               class={styles.householdRename}
                               onKeyDown={(e) => {
-                                if (e.key === 'Escape') renameForm.close()
+                                if (e.key === 'Escape') closeRename(profile.id)
                               }}
                             >
                               <FormNotice form={renameForm} />
@@ -1850,7 +1866,7 @@ export default function Settings() {
                                   type="button"
                                   class={styles.iconBtn}
                                   onclick={() => {
-                                    renameForm.close()
+                                    closeRename(profile.id)
                                   }}
                                   style="padding: 2px 6px; font-size: 11px; opacity: 0.6;"
                                 >

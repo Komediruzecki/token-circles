@@ -234,6 +234,9 @@ describe('renaming a profile in the household view', () => {
     expect(state.currentProfile?.name).toBe('Freelance')
     expect(successToasts()).toEqual(['Renamed "Side business" to "Freelance".'])
     expect(failureToasts()).toEqual([])
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(editButton(2))
+    })
   })
 
   it('closes on Cancel and on Escape, sending nothing', async () => {
@@ -244,12 +247,19 @@ describe('renaming a profile in the household view', () => {
     await vi.waitFor(() => {
       expect(input()).toBeNull()
     })
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(editButton(2))
+    })
 
     await startRename(2)
     expect(input()!.value).toBe('Side business')
+    input()!.focus()
     input()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     await vi.waitFor(() => {
       expect(input()).toBeNull()
+    })
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(editButton(2))
     })
     expect(net.sent).toEqual([])
   })
