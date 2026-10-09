@@ -9,6 +9,8 @@
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { refreshAchievements, unlocks } from '../achievementsStore'
+import { api } from '../api'
+import { ApiError } from '../apiError'
 import * as fetching from '../apiFetch'
 import { getDB } from '../storage/idb'
 
@@ -75,5 +77,45 @@ describe('achievements, with a loan deleted while they count', () => {
     await refreshAchievements()
 
     expect(unlocks().map((u) => u.id)).toContain('debt-free')
+  })
+})
+
+// The quiet is only for the status a read names, on the read that names it. A test that only
+// counts what is not logged passes as well when nothing at all is logged.
+describe('a read that expects a 404', () => {
+  /** Answers every request with `status` and `error`, in place of the router. */
+  const answering = (status: number, error: string) =>
+    vi.spyOn(fetching, 'apiFetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ error }), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        })
+    )
+
+  /** The typed client's error lines in the console. */
+  function apiErrorsLogged(): string[] {
+    const errors = vi.mocked(console.error).mock.calls
+    return errors.map((call) => call.map(String).join(' ')).filter((l) => l.includes('API Error'))
+  }
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('still logs a server error', async () => {
+    answering(500, 'Something went wrong on our side. Try again in a moment.')
+
+    await expect(api.getLoan(LOAN, { expectedStatuses: [404] })).rejects.toBeInstanceOf(ApiError)
+
+    expect(apiErrorsLogged()).toHaveLength(1)
+  })
+
+  it('is the only read whose 404 is not logged', async () => {
+    answering(404, 'Loan not found')
+
+    await expect(api.getLoan(LOAN)).rejects.toBeInstanceOf(ApiError)
+
+    expect(apiErrorsLogged()).toHaveLength(1)
   })
 })
