@@ -859,6 +859,37 @@ describe('Field', () => {
     second.remove()
   })
 
+  it('gives its control the id it is handed, and labels, marks and focuses it by that id', async () => {
+    const form = createForm<Values>({
+      initial: INITIAL,
+      check: (values): FieldErrors => (values.name ? {} : { name: 'Give it a name.' }),
+      send: () => undefined,
+      failure: 'x',
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form {...form.attrs}>
+          <Field form={form} name="name" label="Email address" id="login-email">
+            {(control) => <input {...control} />}
+          </Field>
+        </form>
+      ),
+      host
+    )
+
+    const input = host.querySelector('input')!
+    expect(input.id).toBe('login-email')
+    expect(host.querySelector('label')!.getAttribute('for')).toBe('login-email')
+
+    await submit()
+
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(input)).toEqual(['Give it a name.'])
+    expect(document.activeElement).toBe(input)
+  })
+
   it('marks a group and focuses the first control inside it', async () => {
     const form = createForm<Values>({
       initial: INITIAL,

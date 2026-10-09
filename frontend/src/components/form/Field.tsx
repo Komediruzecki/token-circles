@@ -43,6 +43,11 @@ export interface FieldProps<T extends FormValues> {
   tip?: JSX.Element
   /** The control is a set of controls (a row of buttons), labelled as a group. */
   group?: boolean
+  /**
+   * The control's id, when something outside the form names it: a password manager or a test that
+   * finds the sign-in fields by theirs. Unique otherwise, which is almost always what is wanted.
+   */
+  id?: string
   /** The page's own class for the field's wrapper. */
   class?: string
   labelClass?: string
@@ -51,7 +56,8 @@ export interface FieldProps<T extends FormValues> {
 }
 
 export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.Element {
-  const controlId = `field-${createUniqueId()}`
+  // Fixed for the field's life, like its form and name: the id is what it registers.
+  const controlId = props.id ?? `field-${createUniqueId()}`
   const labelId = `${controlId}-label`
   const errorId = `${controlId}-error`
   const hintId = `${controlId}-hint`
