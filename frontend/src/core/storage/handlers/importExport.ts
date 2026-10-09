@@ -1,8 +1,9 @@
 /**
  * ExportImport handlers — IndexedDB-backed implementations
  */
+import { EXPORT_MESSAGES, exportFile, isExportKind } from '../../../../../shared/exportColumns'
 import { localToday } from '../../../utils/period'
-import { seedDemoProfiles } from '../idb'
+import { getDB, seedDemoProfiles } from '../idb'
 import { dashboardUpcomingBills } from './bills'
 import {
   adapter,
@@ -15,6 +16,7 @@ import {
   prevMonth,
   targetProfileIdsFromHeaders,
 } from './helpers'
+import type { ExportKind } from '../../../../../shared/exportColumns'
 
 export async function exportAll(query?: URLSearchParams, headers?: HeadersInit): Promise<Response> {
   const pids = targetProfileIdsFromHeaders(headers)
@@ -23,166 +25,115 @@ export async function exportAll(query?: URLSearchParams, headers?: HeadersInit):
   return json(data, 200, pretty)
 }
 
+type Row = Record<string, unknown>
+
+/** The rows of a store that belong to one of these profiles, in id order. */
+async function profileRows(store: string, pids: readonly number[]): Promise<Row[]> {
+  const db = await getDB()
+  const rows = (
+    await (db as unknown as { getAll(name: string): Promise<Row[]> }).getAll(store)
+  ).filter((row) => pids.includes(row.profile_id as number))
+  return rows.sort((a, b) => (a.id as number) - (b.id as number))
+}
+
+/**
+ * A stored value, or, for a field the row was never given, what D1 stores for a column a row is
+ * added without (its DEFAULT). A null the row holds stays null, as it does in D1.
+ */
+const or = (value: unknown, fallback: unknown): unknown => (value === undefined ? fallback : value)
+
+/** One kind's rows with the columns the Worker reads them with (shared/exportColumns.ts). */
+async function exportRows(kind: ExportKind, pids: readonly number[]): Promise<Row[]> {
+  switch (kind) {
+    case 'transactions': {
+      const categories = await profileRows('categories', pids)
+      const nameOf = (tx: Row) =>
+        categories.find((c) => c.id === tx.category_id && c.profile_id === tx.profile_id)?.name ??
+        null
+      const rows = await profileRows('transactions', pids)
+      const day = (tx: Row) => (typeof tx.date === 'string' ? tx.date : '')
+      rows.sort((a, b) => day(b).localeCompare(day(a)) || (b.id as number) - (a.id as number))
+      return rows.map((tx) => ({
+        ...tx,
+        means_of_payment: or(tx.means_of_payment, ''),
+        beneficiary: or(tx.beneficiary, ''),
+        payor: or(tx.payor, ''),
+        notes: or(tx.notes, ''),
+        category: nameOf(tx),
+      }))
+    }
+    case 'categories':
+      return (await profileRows('categories', pids)).map((c) => ({
+        ...c,
+        color: or(c.color, '#6b7280'),
+        icon: or(c.icon, 'tag'),
+        type: or(c.type, 'expense'),
+      }))
+    case 'accounts':
+      return (await profileRows('accounts', pids)).map((a) => ({ ...a, notes: or(a.notes, '') }))
+    case 'budgets': {
+      const categories = await profileRows('categories', pids)
+      return (await profileRows('budgets', pids)).flatMap((b) => {
+        const category = categories.find(
+          (c) => c.id === b.category_id && c.profile_id === b.profile_id
+        )
+        if (!category) return []
+        return [
+          {
+            ...b,
+            period: or(b.period, 'monthly'),
+            rollover_enabled: or(b.rollover_enabled, 0),
+            rollover_amount: or(b.rollover_amount, 0),
+            rollover_used: or(b.rollover_used, 0),
+            category_name: category.name,
+          },
+        ]
+      })
+    }
+    case 'loans':
+      return (await profileRows('loans', pids)).map((loan) => {
+        const prepayments = Array.isArray(loan.prepayments)
+          ? (loan.prepayments as { amount?: unknown }[])
+          : []
+        return {
+          ...loan,
+          total_prepaid:
+            prepayments.length > 0
+              ? prepayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+              : null,
+        }
+      })
+    case 'recurring':
+      return (await profileRows('recurring', pids)).map((r) => ({
+        ...r,
+        notes: or(r.notes, ''),
+        // Local-first stores the flag as is_active; D1 as active.
+        active: r.active ?? r.is_active ?? 1,
+      }))
+  }
+}
+
+/**
+ * One kind of row as CSV or JSON, for the profiles the request names (the open one when it names
+ * none), as the Worker writes it: shared/exportColumns.ts.
+ */
 export async function exportByType(
   params: Record<string, string>,
   query: URLSearchParams,
   headers?: HeadersInit
 ): Promise<Response> {
-  const type = params.p1
-  const fmt = query.get('format') || 'json'
-  const pretty = query.get('pretty') === 'true'
-  const pids = targetProfileIdsFromHeaders(headers)
-  const data = await adapter.exportData(pids)
-
-  if (fmt === 'csv') {
-    const csvQuote = (s: string | null | undefined): string => `"${(s ?? '').replace(/"/g, '""')}"`
-
-    if (type === 'transactions') {
-      const csv = ['date,type,description,amount,currency,category_id,notes']
-      for (const t of data.transactions) {
-        csv.push(
-          [
-            t.date,
-            t.type,
-            csvQuote(t.description),
-            t.amount,
-            t.currency,
-            t.category_id ?? '',
-            csvQuote(t.notes),
-          ].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-
-    if (type === 'categories') {
-      const csv = ['id,profile_id,type,name,color,tax_deductible']
-      for (const c of data.categories) {
-        csv.push(
-          [
-            c.id,
-            c.profile_id,
-            c.type,
-            csvQuote(c.name),
-            c.color,
-            c.tax_deductible ? 'true' : 'false',
-          ].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-
-    if (type === 'budgets') {
-      const csv = [
-        'id,profile_id,category_id,amount,period,start_date,rollover_enabled,rollover_amount',
-      ]
-      for (const b of data.budgets) {
-        csv.push(
-          [
-            b.id,
-            b.profile_id,
-            b.category_id,
-            b.amount,
-            b.period,
-            b.start_date,
-            b.rollover_enabled ? 'true' : 'false',
-            b.rollover_amount,
-          ].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-
-    if (type === 'accounts') {
-      const csv = ['id,profile_id,name,type,currency,balance,notes,starting_balance,starting_date']
-      for (const a of data.accounts) {
-        csv.push(
-          [
-            a.id,
-            a.profile_id,
-            csvQuote(a.name),
-            a.type,
-            a.currency,
-            a.balance,
-            csvQuote(a.notes),
-            a.starting_balance ?? 0,
-            a.starting_date ?? '',
-          ].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-
-    if (type === 'loans') {
-      const csv = ['id,profile_id,name,principal,start_date,term_months']
-      for (const l of data.loans) {
-        csv.push(
-          [l.id, l.profile_id, csvQuote(l.name), l.principal, l.start_date, l.term_months].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-
-    if (type === 'recurring') {
-      const csv = [
-        'id,profile_id,description,amount,type,frequency,category_id,account_id,start_date,end_date',
-      ]
-      const recurringList = data.recurring || []
-      for (const r of recurringList) {
-        csv.push(
-          [
-            r.id,
-            r.profile_id,
-            csvQuote(r.description as string),
-            r.amount,
-            r.type,
-            r.frequency,
-            r.category_id ?? '',
-            r.account_id ?? '',
-            r.start_date ?? '',
-            r.end_date ?? '',
-          ].join(',')
-        )
-      }
-      return new Response(csv.join('\n'), {
-        headers: {
-          'Content-Type': 'text/csv;charset=utf-8',
-          'Content-Disposition': `attachment; filename=${type}.csv`,
-        },
-      })
-    }
-  }
-
-  if (type && type in data) {
-    return json({ [type]: data[type as keyof typeof data] }, 200, pretty)
-  }
-
-  return json(data, 200, pretty)
+  const kind = params.p1
+  if (!isExportKind(kind)) return json({ error: EXPORT_MESSAGES.kind }, 400)
+  const pids = targetProfileIdsFromHeaders(headers) ?? [await adapter.getCurrentProfileId()]
+  const file = exportFile(
+    kind,
+    query.get('format'),
+    await exportRows(kind, pids),
+    query.get('pretty') === 'true'
+  )
+  return new Response(file.body, {
+    headers: { 'Content-Type': file.contentType, 'Content-Disposition': file.disposition },
+  })
 }
 
 /** The kinds of rows a restore writes, as the Worker counts them in `rows_restored`. */

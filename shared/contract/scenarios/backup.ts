@@ -6,6 +6,7 @@ import {
   idsOf,
   listTransactions,
 } from '../helpers';
+import { EXPORT_MESSAGES } from '../../exportColumns';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
@@ -129,24 +130,21 @@ export const backup = [
     expectOk(expect, csv, 'GET /api/export/:type as CSV');
     const json = await api.get('/api/export/accounts?format=json');
     expectOk(expect, json, 'GET /api/export/:type as JSON');
-    // DIFFERENCE export-by-type
-    if (api.runtime === 'worker') {
-      expect(csv.body).toBe(
-        'date,description,amount,type,currency,means_of_payment,beneficiary,payor,notes,category\n' +
-          '2026-03-10,Groceries,45.5,expense,EUR,,,,,Food'
-      );
-      expect(json.body).toEqual([
-        { name: 'Everyday', type: 'giro', currency: 'EUR', balance: 954.5, notes: '' },
-      ]);
-    } else {
-      expect(csv.body).toBe(
-        'date,type,description,amount,currency,category_id,notes\n' +
-          `2026-03-10,expense,"Groceries",45.5,EUR,${food},""`
-      );
-      expect(json.body).toEqual({
-        accounts: [expect.objectContaining({ id: everyday, name: 'Everyday', balance: 954.5 })],
-      });
-    }
+    expect(csv.body).toBe(
+      'date,description,amount,type,currency,means_of_payment,beneficiary,payor,notes,category\n' +
+        '2026-03-10,Groceries,45.5,expense,EUR,,,,,Food'
+    );
+    expect(json.body).toEqual([
+      { name: 'Everyday', type: 'giro', currency: 'EUR', balance: 954.5, notes: '' },
+    ]);
+
+    // A kind with no rows is its header, and there is no export of a kind that is not listed.
+    expect((await api.get('/api/export/loans?format=csv')).body).toBe(
+      'name,principal,interest_rate,start_date,term_months,total_prepaid'
+    );
+    const unknown = await api.get('/api/export/settings?format=json');
+    expect(unknown.status).toBe(400);
+    expect(unknown.body).toEqual({ error: EXPORT_MESSAGES.kind });
   }),
 
   scenario('all data is cleared, and the profiles kept', async (api, expect) => {
