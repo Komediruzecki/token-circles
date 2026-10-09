@@ -19,6 +19,8 @@ import type { TurnstileStatus } from '../Turnstile'
 interface Captcha {
   /** What the widget reports. */
   status?: TurnstileStatus
+  /** A token the widget hands over as soon as it renders. */
+  issued?: string
   /** The token the wait on submit ends with; undefined: no token comes. */
   token?: string
 }
@@ -41,8 +43,12 @@ async function open(captcha?: Captcha) {
   vi.resetModules()
   vi.doMock('../Turnstile', async () => ({
     ...(await vi.importActual<typeof TurnstileModule>('../Turnstile')),
-    default: (props: { onStatus?: (status: TurnstileStatus) => void }) => {
+    default: (props: {
+      onStatus?: (status: TurnstileStatus) => void
+      onToken?: (token: string) => void
+    }) => {
       if (captcha?.status) props.onStatus?.(captcha.status)
+      if (captcha?.issued) props.onToken?.(captcha.issued)
       return null
     },
     turnstileEnabled: captcha !== undefined,
@@ -200,11 +206,23 @@ describe('what the Worker answers', () => {
 })
 
 describe('the captcha', () => {
-  it('sends the token it has', async () => {
-    await open({ status: 'solved', token: 'turnstile-token' })
+  it('sends the token the widget handed over', async () => {
+    await open({ status: 'solved', issued: 'turnstile-token' })
     await send('name@example.com', 'I cannot sign in.')
 
     expect(sent.map((s) => s.turnstileToken)).toEqual(['turnstile-token'])
+  })
+
+  it('uses a token for one request, and waits for a new one for the next', async () => {
+    answer = () => json({ error: 'Too many attempts. Please try again in 1 hour.' }, 429)
+    await open({ status: 'solved', issued: 'first-token', token: 'next-token' })
+    await send('name@example.com', 'I cannot sign in.')
+    answer = () => json({ ok: true, ticketId: 'TC-1A2B3C4D' })
+    host.querySelector('form')!.requestSubmit()
+    await settle()
+
+    expect(sent.map((s) => s.turnstileToken)).toEqual(['first-token', 'next-token'])
+    expect(host.textContent).toContain('Your reference number: TC-1A2B3C4D')
   })
 
   it('says to try again, and to complete the check, when the Worker refuses the token', async () => {
