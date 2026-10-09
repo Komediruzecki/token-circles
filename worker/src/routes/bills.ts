@@ -251,7 +251,7 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!existing) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Bill not found');
   const edit = accept(checkBillEdit(await c.req.json(), existing));
   if (
     edit.account_id != null &&
@@ -279,7 +279,7 @@ billsRoutes.put('/api/bills/:id', requireAuth, async (c) => {
 billsRoutes.delete('/api/bills/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
   const res = await db.del(c.env.DB, 'bills', 'id = ? AND profile_id = ?', c.req.param('id'), pid);
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Bill not found');
   return c.json({ ok: true });
 });
 
@@ -368,7 +368,7 @@ billsRoutes.post('/api/bills/:id/mark-paid', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!bill) throw new HttpError(404, 'Not found');
+  if (!bill) throw new HttpError(404, 'Bill not found');
 
   // Pre-flight, for the message: it asks the guard's question before anything is written. It is
   // NOT what makes this safe — see the guard in markPaidStatements.
