@@ -17,6 +17,7 @@
    supplied by anything outside this file. */
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
+import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 const SRC = resolve(__dirname, '..')
@@ -30,49 +31,46 @@ function tsxFiles(dir: string, found: string[] = []): string[] {
   return found
 }
 
-/*
- * `(?![-\w])` and not `[\s>]`: attributes usually start on the NEXT line, so `<button` is very
- * often the whole line, with no following character to match. A scanner that misses that misses
- * the exact shape the bug ships in.
- */
+/** The tag a JSX element names: `button`, `form`, `Field`. */
+const tagOf = (node: ts.JsxOpeningElement | ts.JsxSelfClosingElement): string =>
+  node.tagName.getText()
 
-/** Line spans covered by a `<form>`, counting nesting so a second form does not close the first. */
-function formSpans(lines: string[]): [number, number][] {
-  const spans: [number, number][] = []
-  let depth = 0
-  let start = 0
-  lines.forEach((line, i) => {
-    if (/<form(?![-\w])/.test(line)) {
-      if (depth === 0) start = i
-      depth += 1
-    }
-    if (line.includes('</form>')) {
-      depth -= 1
-      if (depth === 0) spans.push([start, i])
-    }
-  })
-  return spans
+/** Is `node` inside a `<form>` element, at any depth? */
+function insideAForm(node: ts.Node): boolean {
+  for (let up = node.parent as ts.Node | undefined; up; up = up.parent) {
+    if (ts.isJsxElement(up) && tagOf(up.openingElement) === 'form') return true
+  }
+  return false
 }
 
 /**
- * Every `<button>` opened inside a form whose attributes do not include `type`.
+ * Every `<button>` inside a form whose attributes do not include `type`, by the line it opens on.
  *
- * The attribute list runs from `<button` to the first `>`, which may be several lines down — so
- * the scan reads forward from the opening tag rather than looking at that line alone.
+ * Read with the TypeScript parser, so a tag's attributes are all of them, up to the `>` that
+ * closes it. The scan before this read from `<button` to the first `>`, which an arrow function's
+ * `=>` in an attribute supplies: the tag ended there, and a `type` after it went unseen.
  */
 function submitsByAccident(source: string): number[] {
-  const lines = source.split('\n')
-  const spans = formSpans(lines)
+  const file = ts.createSourceFile(
+    'scan.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX
+  )
   const bad: number[] = []
-
-  lines.forEach((line, i) => {
-    if (!/<button(?![-\w])/.test(line)) return
-    if (!spans.some(([a, b]) => i >= a && i <= b)) return
-
-    const rest = lines.slice(i).join('\n')
-    const attrs = rest.slice(rest.indexOf('<button')).split('>')[0] ?? ''
-    if (!/\stype=/.test(attrs)) bad.push(i + 1)
-  })
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
+      tagOf(node) === 'button' &&
+      insideAForm(node) &&
+      !node.attributes.properties.some((p) => ts.isJsxAttribute(p) && p.name.getText() === 'type')
+    ) {
+      bad.push(file.getLineAndCharacterOfPosition(node.getStart()).line + 1)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
   return bad
 }
 
@@ -110,6 +108,23 @@ describe('no button inside a form submits it by accident', () => {
         <button type="submit">Save</button>
       </form>`
     expect(submitsByAccident(regression)).toEqual([4])
+  })
+
+  it('reads the whole tag, past an arrow function before `type`', () => {
+    // `=>` has a `>` in it. Read only to the first `>`, this tag ended at the arrow, the `type`
+    // after it went unseen, and a button that states its type was flagged: slice 4b moved
+    // `type="button"` to the front in ProfileModal to get past it.
+    const typed = `
+      <form onSubmit={save}>
+        <button
+          onClick={() => setOpen(false)}
+          type="button"
+        >
+          Cancel
+        </button>
+        <button type="submit">Save</button>
+      </form>`
+    expect(submitsByAccident(typed)).toEqual([])
   })
 
   it('does not flag a button outside any form', () => {
