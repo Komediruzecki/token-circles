@@ -33,7 +33,6 @@ const SRC = resolve(__dirname, '..')
 /** Files that toasted a caught error's message before the rule, and how many times. */
 const KNOWN: Record<string, number> = {
   'components/ResendVerification.tsx': 1,
-  'components/onboarding/OnboardingWizard.tsx': 2,
   'features/CompoundInterestCalculator.tsx': 1,
   'features/EmergencyFundCalculator.tsx': 1,
 }

@@ -688,3 +688,10 @@
     transition: none;
   }
 }
+
+/* A step's form: its fields and its own action, laid out as the step lays out its children. */
+.stepForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
