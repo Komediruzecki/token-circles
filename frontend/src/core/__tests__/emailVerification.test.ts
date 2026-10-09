@@ -7,6 +7,7 @@
  * does not report the field at all — the legacy self-hosted server — rather than reading its
  * absence as "unverified" and nagging every user of it forever.
  */
+import { openDB } from 'idb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 async function load(fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>) {
@@ -34,6 +35,171 @@ beforeEach(() => {
 afterEach(() => {
   vi.doUnmock('../apiFetch')
   vi.resetModules()
+})
+
+/** A record in a database on the device, to show the landing leaves it where it was. */
+const PROBE_DB = 'finance-manager-probe'
+
+async function putLocalRecord(): Promise<void> {
+  const db = await openDB(PROBE_DB, 1, {
+    upgrade: (upgrading) => {
+      upgrading.createObjectStore('kept')
+    },
+  })
+  await db.put('kept', 'groceries', 'entry')
+  db.close()
+}
+
+async function readLocalRecord(): Promise<unknown> {
+  const db = await openDB(PROBE_DB, 1)
+  const value: unknown = await db.get('kept', 'entry')
+  db.close()
+  return value
+}
+
+describe('a link that needs a sign-in first', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('is noted as waiting, so the sign-in screen and the app after it know', async () => {
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const { consumeEmailVerifyRedirect, linkWaiting, takeEmailVerifyResult } = await load()
+    consumeEmailVerifyRedirect()
+
+    expect(linkWaiting()).toEqual({ change: false })
+    // Still there for the next reader: a sign-in ends in a reload.
+    expect(linkWaiting()).toEqual({ change: false })
+    expect(takeEmailVerifyResult()).toBeNull()
+    expect(window.location.hash).toBe('')
+  })
+
+  it('says when it is the link that changes the address', async () => {
+    history.replaceState(null, '', '/#everified_error=signin_required&change=1')
+    const { consumeEmailVerifyRedirect, linkWaiting } = await load()
+    consumeEmailVerifyRedirect()
+
+    expect(linkWaiting()).toEqual({ change: true })
+  })
+
+  it('outlasts a reload of the page', async () => {
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const first = await load()
+    first.consumeEmailVerifyRedirect()
+
+    const { linkWaiting } = await load()
+
+    expect(linkWaiting()).toEqual({ change: false })
+  })
+
+  it('waits as long as the marker lasts, 30 minutes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      history.replaceState(null, '', '/#everified_error=signin_required')
+      const { consumeEmailVerifyRedirect, linkWaiting } = await load()
+      consumeEmailVerifyRedirect()
+
+      vi.setSystemTime(Date.now() + 29 * 60_000)
+      expect(linkWaiting()).toEqual({ change: false })
+      vi.setSystemTime(Date.now() + 2 * 60_000)
+      expect(linkWaiting()).toBeNull()
+      expect(localStorage.getItem('tc:email-link-waiting')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('is gone once cleared', async () => {
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const { consumeEmailVerifyRedirect, linkWaiting, clearLinkWaiting } = await load()
+    consumeEmailVerifyRedirect()
+
+    clearLinkWaiting()
+
+    expect(linkWaiting()).toBeNull()
+  })
+
+  it('moves a local-first device to account mode, so it opens on the sign-in screen', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const { consumeEmailVerifyRedirect } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
+  })
+
+  it('does the same on a fresh device, which starts local-first', async () => {
+    // frontend/.env, which the tests read, sets VITE_DEFAULT_STORAGE=dexie, as production does.
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const { consumeEmailVerifyRedirect } = await load()
+    const { getStorageMode } = await import('../storage/storageFactory')
+    expect(getStorageMode()).toBe('serverless')
+
+    consumeEmailVerifyRedirect()
+
+    expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
+  })
+
+  it("leaves the device's local data where it is", async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    await putLocalRecord()
+    const deleteDatabase = vi.spyOn(window.indexedDB, 'deleteDatabase')
+    history.replaceState(null, '', '/#everified_error=signin_required')
+    const { consumeEmailVerifyRedirect } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(deleteDatabase).not.toHaveBeenCalled()
+    expect(await readLocalRecord()).toBe('groceries')
+    deleteDatabase.mockRestore()
+  })
+
+  it('leaves every other outcome for the banner, and the mode as it was', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified_error=expired')
+    const { consumeEmailVerifyRedirect, linkWaiting, takeEmailVerifyResult } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(linkWaiting()).toBeNull()
+    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired' })
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  })
+})
+
+describe('finishEmailLink', () => {
+  it('asks the worker to finish the link, with the session and the marker', async () => {
+    const { finishEmailLink, calls } = await load(() =>
+      json({ outcome: 'confirmed', change: false })
+    )
+
+    expect(await finishEmailLink()).toEqual({ outcome: 'confirmed', change: false })
+    expect(calls[0].url).toBe('/api/auth/email-link/finish')
+    expect(calls[0].init?.method).toBe('POST')
+    expect(calls[0].init?.credentials).toBe('include')
+  })
+
+  it.each(['changed', 'email_taken', 'server_error', 'other_account', 'none'])(
+    'passes on %s',
+    async (outcome) => {
+      const { finishEmailLink } = await load(() => json({ outcome, change: true }))
+
+      expect(await finishEmailLink()).toEqual({ outcome, change: true })
+    }
+  )
+
+  it.each([
+    ['without a session', () => json({ error: 'Unauthorized' }, 401)],
+    ['when the answer is a refusal, whatever its body says', () => json({ outcome: 'none' }, 409)],
+    ['when rate-limited', () => Promise.resolve(new Response('', { status: 429 }))],
+    ['offline', () => Promise.reject(new Error('offline'))],
+    ['for an answer it does not know', () => json({ outcome: 'a_later_outcome' })],
+  ])('has no answer %s', async (_, answer) => {
+    const { finishEmailLink } = await load(answer)
+
+    expect(await finishEmailLink()).toBeNull()
+  })
 })
 
 describe('consumeEmailVerifyRedirect', () => {

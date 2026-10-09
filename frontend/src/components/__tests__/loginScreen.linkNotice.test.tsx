@@ -1,11 +1,20 @@
 /**
  * The sign-in screen's one-line notices that arrive from elsewhere.
  *
- * A reset that confirmed the address and cleared the account ends here, so its words do.
+ * An email link opened before signing in is left unspent by the worker, which sends the browser
+ * back with #everified_error=signin_required, and the app notes the link as waiting. The sign-in
+ * screen is what the person sees then, so it says what signing in here does: it finishes the link.
+ *
+ * A reset that confirmed the address and cleared the account ends here too, so its words do.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+let waiting: { change: boolean } | null = null
+
+vi.mock('../../core/emailVerification', () => ({
+  linkWaiting: () => waiting,
+}))
 vi.mock('../../core/api', () => ({
   api: {
     loginWithPassword: vi.fn(),
@@ -38,6 +47,7 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
 beforeEach(() => {
+  waiting = null
   sessionStorage.clear()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -55,6 +65,41 @@ async function mount() {
 }
 
 const notice = () => host.querySelector('[data-test-id="auth-notice"]')?.textContent ?? null
+
+describe('the sign-in screen after an email link was opened signed out', () => {
+  it('says signing in confirms the address', async () => {
+    waiting = { change: false }
+    await mount()
+
+    expect(notice()).toBe('Sign in to confirm your address.')
+  })
+
+  it('says signing in finishes the change of address', async () => {
+    waiting = { change: true }
+    await mount()
+
+    expect(notice()).toBe('Sign in to finish changing your address.')
+  })
+
+  it('says it again after a reload, while the link still waits', async () => {
+    waiting = { change: false }
+    await mount()
+    dispose?.()
+    host.remove()
+    host = document.createElement('div')
+    document.body.appendChild(host)
+
+    await mount()
+
+    expect(notice()).toBe('Sign in to confirm your address.')
+  })
+
+  it('says nothing when no link was opened', async () => {
+    await mount()
+
+    expect(notice()).toBeNull()
+  })
+})
 
 describe('the sign-in screen after a reset that cleared the account', () => {
   it('says the new password is set and what else went', async () => {
