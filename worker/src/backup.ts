@@ -1,6 +1,13 @@
 import type { Env } from './index';
 import { HttpError } from './http';
 import * as db from './db';
+import { planHasFeature } from './plans';
+import {
+  AUTOMATED_IMPORT_SCHEDULES,
+  isImportSourceKind,
+  isImportSourceSchedule,
+  sourceJsonObject,
+} from '../../shared/importSourceSchema';
 
 export const BACKUP_VERSION = '3.0.0';
 
@@ -40,6 +47,11 @@ export interface BackupData {
   receiptFiles: ReceiptFileBackup[];
   balanceHistoryRows: Row[];
   importLogs: Row[];
+  /**
+   * Saved import sources, with config, mapping and category types as objects, as
+   * GET /api/import-sources answers them. Older backups have none.
+   */
+  importSources: Row[];
   customReports: Row[];
   settingsRows: Row[];
   settings: Record<string, unknown>;
@@ -80,6 +92,7 @@ const PROFILE_SCOPED_KEYS = [
   'categoryMappings',
   'receipts',
   'importLogs',
+  'importSources',
   'settingsRows',
 ] as const;
 
@@ -87,6 +100,7 @@ const PROFILE_TABLES = [
   'receipts',
   'category_mappings',
   'import_logs',
+  'import_sources',
   'recurring_transactions',
   'bills',
   'housings',
@@ -129,6 +143,11 @@ function uniqueIds(source: Row[], field: string): Set<number> {
     result.add(id);
   }
   return result;
+}
+
+/** An object for a TEXT column that holds JSON, or NULL. */
+function jsonColumn(value: Record<string, unknown> | null): string | null {
+  return value === null ? null : JSON.stringify(value);
 }
 
 function settingValue(value: unknown): string {
@@ -236,6 +255,7 @@ function normalizeBackup(input: unknown): NormalizedBackup {
       'balanceHistoryRows'
     ),
     importLogs: rows(data.importLogs, 'importLogs'),
+    importSources: rows(data.importSources, 'importSources'),
     customReports: rows(data.customReports, 'customReports'),
     settingsRows,
     settings,
@@ -331,6 +351,20 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   data.receipts.forEach((row, index) =>
     requireReference(row, 'transaction_id', transactionIds, `receipts[${index}]`)
   );
+  data.importSources.forEach((row, index) => {
+    if (row.kind !== undefined && !isImportSourceKind(row.kind)) {
+      throw new HttpError(
+        422,
+        `importSources[${index}].kind "${String(row.kind)}" is not a source`
+      );
+    }
+    if (row.schedule !== undefined && !isImportSourceSchedule(row.schedule)) {
+      throw new HttpError(
+        422,
+        `importSources[${index}].schedule "${String(row.schedule)}" is not a schedule`
+      );
+    }
+  });
 
   // The keys D1 holds unique, checked here so a file that repeats one is a 422 naming it rather
   // than a constraint failure halfway through the staged restore. Same comparison as the
@@ -442,6 +476,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     receipts,
     balanceHistoryRows,
     importLogs,
+    importSourceRows,
     customReports,
     settingsRows,
   ] = await Promise.all([
@@ -480,6 +515,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     scoped('receipts'),
     child('account_balance_history', 'accounts', 'account_id'),
     scoped('import_logs'),
+    scoped('import_sources', 'ORDER BY id'),
     db.all<Row>(env.DB, 'SELECT * FROM custom_reports WHERE user_id = ? ORDER BY id', userId),
     scoped('settings'),
   ]);
@@ -532,6 +568,14 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     }
   }
 
+  // As GET /api/import-sources answers them, which is how local-first stores them too.
+  const importSources = importSourceRows.map((row) => ({
+    ...row,
+    config: sourceJsonObject(row.config, {}),
+    mapping: sourceJsonObject(row.mapping, null),
+    category_types: sourceJsonObject(row.category_types, null),
+  }));
+
   const settings: Record<string, unknown> = {};
   for (const row of settingsRows) {
     if (Number(row.profile_id) === pids[0]) settings[String(row.key)] = row.value;
@@ -565,6 +609,7 @@ export async function exportBackup(env: Env, userId: number, pids: number[]): Pr
     receiptFiles,
     balanceHistoryRows,
     importLogs,
+    importSources,
     customReports,
     settingsRows,
     settings,
@@ -865,6 +910,28 @@ export async function restoreBackup(
     await insertRows('import_logs', data.importLogs, (row, index) =>
       withProfile(row, `importLogs[${index}]`)
     );
+    // A source on a schedule our machines run comes back on it only if the plan includes that;
+    // otherwise it comes back manual, as the import-sources routes would have it. A default
+    // account the file does not carry is no default.
+    const plan = await db.first<{ plan: string | null }>(
+      DB,
+      'SELECT plan FROM users WHERE id = ?',
+      userId
+    );
+    const automated = planHasFeature(plan?.plan ?? 'free', 'automatedImports');
+    await insertRows('import_sources', data.importSources, (row, index) => {
+      const schedule = isImportSourceSchedule(row.schedule) ? row.schedule : 'manual';
+      const defaultAccount = Number(row.default_account_id);
+      return {
+        ...withProfile(row, `importSources[${index}]`),
+        kind: isImportSourceKind(row.kind) ? row.kind : 'google_sheet',
+        config: JSON.stringify(sourceJsonObject(row.config, {})),
+        mapping: jsonColumn(sourceJsonObject(row.mapping, null)),
+        category_types: jsonColumn(sourceJsonObject(row.category_types, null)),
+        default_account_id: accountMap.get(defaultAccount) ?? null,
+        schedule: AUTOMATED_IMPORT_SCHEDULES.includes(schedule) && !automated ? 'manual' : schedule,
+      };
+    });
     await insertRows('settings', data.settingsRows, (row, index) => ({
       ...withProfile(row, `settingsRows[${index}]`),
       value: settingValue(row.value),

@@ -9,6 +9,7 @@ import {
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
+import { sourceForm } from './importSources';
 import { fillProfile, NONE, profileList } from './profiles';
 
 /** The ids that own rows of their own, as a profile's lists read now. */
@@ -52,6 +53,9 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
   expect(file.profiles.map((p: Json) => p.name)).toEqual(['Me', 'Partner']);
   expect(file.transactions).toHaveLength(1);
   expect(file.accounts.map((a: Json) => a.name).sort()).toEqual(['Everyday', 'Theirs']);
+  expect(file.importSources).toEqual([
+    expect.objectContaining({ profile_id: api.profile, label: 'Bank ledger' }),
+  ]);
 
   // Restoring replaces every profile with the file's.
   const restored = await api.unscoped.post('/api/import', file);
@@ -83,10 +87,18 @@ export const backup = [
       const back = api.as(me);
       // Everything the file carried is back, under the restored profile, and once: the rows that
       // hang off a loan, an account or a transaction are counted under the replaced ids as well as
-      // the restored ones, so one the restore left behind beside its copy counts twice. A backup
-      // carries no import sources, in either runtime, so a restore loses them.
+      // the restored ones, so one the restore left behind beside its copy counts twice. The
+      // profile's saved import sources come back with it.
       const after = await api.stored(me, both(mine, await ownedNow(back, expect)));
-      expect(after).toEqual({ ...before, 'import sources': 0 });
+      expect(after).toEqual(before);
+      const sources = (await back.get('/api/import-sources')).body as Json[];
+      expect(sources).toEqual([
+        expect.objectContaining({
+          profile_id: me,
+          ...sourceForm(),
+          last_synced_at: null,
+        }),
+      ]);
       const accounts = (await back.get('/api/accounts')).body as Json[];
       const everyday = accounts.find((a) => a.name === 'Everyday');
       expectMoney(expect, await balanceOf(back, expect, everyday.id), 954.5, 'Everyday');

@@ -3,6 +3,11 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import {
+  isImportSourceKind,
+  isImportSourceSchedule,
+  sourceJsonObject,
+} from '../../../../shared/importSourceSchema'
 import { toCents } from '../../../../shared/money'
 import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
@@ -1330,6 +1335,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       receipts,
       balanceHistoryRows,
       importLogs,
+      importSources,
       profiles,
       rawSettings,
       settings,
@@ -1351,6 +1357,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       db.getAll('receipts'),
       db.getAll('balanceHistory'),
       db.getAll('import_logs'),
+      db.objectStoreNames.contains('import_sources') ? db.getAll('import_sources') : [],
       db.getAll('profiles'),
       db.getAll('settings'),
       this.getSettings(),
@@ -1441,6 +1448,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       receiptFiles,
       balanceHistoryRows: exportedBalanceHistory,
       importLogs: filterByProfile(importLogs),
+      importSources: filterByProfile(importSources),
       budgetsZeroBased: filterExtensionByProfile(extensions.budgetsZeroBased),
       retirementGoals: filterByProfile(retirementGoals),
       emergencyFundConfig: filterExtensionByProfile(extensions.emergencyFundConfig),
@@ -1498,8 +1506,8 @@ export class IndexedDBAdapter implements StorageAdapter {
       'housings',
       'categoryMappings',
       'import_logs',
-      // A backup carries no import sources, but the profiles they belong to are replaced: the
-      // Worker deletes them with those profiles, and so does this.
+      // A backup carries the profiles' saved import sources; older ones have none, and the
+      // sources of the profiles being replaced go with those profiles either way.
       'import_sources',
       'settings',
     ]
@@ -1595,6 +1603,21 @@ export class IndexedDBAdapter implements StorageAdapter {
       await addAll('housings', data.housings)
       await addAll('categoryMappings', data.categoryMappings)
       await addAll('import_logs', data.importLogs)
+      if (data.importSources && stores.includes('import_sources')) {
+        // Stored as objects here; a Worker backup carries them the same way, but read text too.
+        for (const source of data.importSources) {
+          await tx.objectStore('import_sources').add(
+            remap<Record<string, unknown>>({
+              ...source,
+              kind: isImportSourceKind(source.kind) ? source.kind : 'google_sheet',
+              schedule: isImportSourceSchedule(source.schedule) ? source.schedule : 'manual',
+              config: sourceJsonObject(source.config, {}),
+              mapping: sourceJsonObject(source.mapping, null),
+              category_types: sourceJsonObject(source.category_types, null),
+            })
+          )
+        }
+      }
       if (data.receipts && stores.includes('receipts')) {
         for (const receipt of data.receipts) {
           const id = Number(receipt.id)
