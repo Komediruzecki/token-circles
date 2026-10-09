@@ -24,6 +24,7 @@ import { BankRulesEditor } from './BankRulesEditor'
 import { createPasteForm } from './pasteForm'
 import { downloadSampleTemplate } from './sampleTemplate'
 import { createSheetLinkForm } from './sheetLinkForm'
+import { createUploadForm } from './uploadForm'
 import type { BankId } from '../../core/bankImport'
 import type { ImportFlow, ImportTab } from './importFlow'
 
@@ -38,14 +39,16 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
   const flow = props.flow
   // Inputs are targeted by <label for>; ids must be unique because the Import
   // page (keep-alive) and the onboarding wizard can be in the DOM at once.
+  // The file upload's input takes its id from its form field.
   const uid = createUniqueId()
-  const fileInputId = `import-file-input-${uid}`
   const bankInputId = `bank-file-input-${uid}`
 
   // The Google Sheets link, on the form kit: a bad link is marked at the field (sheetLinkForm.ts).
   const sheetForm = createSheetLinkForm(flow)
   // Paste CSV, on the form kit: a paste with no row of data is marked at the box (pasteForm.ts).
   const pasteForm = createPasteForm(flow)
+  // File Upload, on the form kit: a file that is not read is marked under the drop area.
+  const uploadForm = createUploadForm(flow)
   const pasteDelimiterId = `paste-delimiter-${createUniqueId()}`
 
   const bankLabel = (bankId: BankId | null) =>
@@ -301,49 +304,69 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {/* File Upload Tab */}
       {flow.activeImportTab() === 'file-upload' && (
         <>
-          <div
-            class={`${styles.dropzone} ${uploadDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
-            {...uploadDrag.handlers}
-            onDrop={(e) => {
-              uploadDrag.reset()
-              flow.handleDrop(e)
-            }}
-          >
-            <input
-              type="file"
-              id={fileInputId}
-              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class={styles.fileInput}
-              data-test-id="import-file-input"
-              disabled={flow.loading()}
-              onChange={flow.handleFileSelect}
-            />
-            <label for={fileInputId} class={styles.uploadLabel}>
-              <Show
-                when={!flow.dropProcessing()}
-                fallback={<OrbitSpinner size={44} label="Reading your file…" />}
-              >
-                <svg
-                  class={styles.dropzoneIcon}
-                  width="48"
-                  height="48"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <form {...uploadForm.attrs} data-test-id="import-upload-form">
+            <FormNotice form={uploadForm} />
+            <Field
+              form={uploadForm}
+              name="file"
+              label="File to import"
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <div
+                  class={`${styles.dropzone} ${uploadDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
+                  {...uploadDrag.handlers}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    uploadDrag.reset()
+                    uploadForm.pick(e.dataTransfer?.files[0])
+                  }}
                 >
-                  <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p class={styles.dropzoneTitle}>
-                  {uploadDrag.active() ? 'Drop to upload' : 'Click or drag and drop your file here'}
-                </p>
-                <div class={styles.formatPills}>
-                  <Pill>CSV</Pill>
-                  <Pill>XLSX</Pill>
-                  <Pill>XLS</Pill>
+                  <input
+                    {...control}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    class={styles.fileInput}
+                    data-test-id="import-file-input"
+                    disabled={flow.loading()}
+                    onChange={(e) => {
+                      const input = e.currentTarget
+                      uploadForm.pick(input.files?.[0])
+                      // The same file can be chosen again once it is put right.
+                      input.value = ''
+                    }}
+                  />
+                  <label for={control.id} class={styles.uploadLabel}>
+                    <Show
+                      when={!flow.dropProcessing()}
+                      fallback={<OrbitSpinner size={44} label="Reading your file…" />}
+                    >
+                      <svg
+                        class={styles.dropzoneIcon}
+                        width="48"
+                        height="48"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p class={styles.dropzoneTitle}>
+                        {uploadDrag.active()
+                          ? 'Drop to upload'
+                          : 'Click or drag and drop your file here'}
+                      </p>
+                      <div class={styles.formatPills}>
+                        <Pill>CSV</Pill>
+                        <Pill>XLSX</Pill>
+                        <Pill>XLS</Pill>
+                      </div>
+                    </Show>
+                  </label>
                 </div>
-              </Show>
-            </label>
-          </div>
+              )}
+            </Field>
+          </form>
 
           {flow.uploadResult() && flow.uploadResult()!.sheetNames.length > 1 && (
             <div class={styles.sheetsUrlRow}>

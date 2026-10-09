@@ -12,6 +12,7 @@
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
 import { readSheetUrl } from '../../../../shared/importSourceSchema'
+import { IMPORT_UPLOAD_MESSAGES } from '../../../../shared/importUpload'
 import { getLocalCurrency, toast } from '../../core/api'
 import { ApiError, apiErrorFrom } from '../../core/apiError'
 import { apiFetch } from '../../core/apiFetch'
@@ -751,7 +752,12 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // File upload. Both runtimes answer the file's header row, the rows under it as text, and its
   // sheets (shared/importUpload.ts); local-first used to answer an upload session instead, and the
   // upload stopped here with "Cannot read properties of undefined (reading '0')".
-  const handleFileUpload = async (file: File, sheetName?: string) => {
+  const handleFileUpload = async (
+    file: File,
+    sheetName?: string,
+    options?: { rethrow?: boolean }
+  ) => {
+    const rethrow = options?.rethrow ?? false
     setLoading(true)
     setDropProcessing(true)
     setError(null)
@@ -770,16 +776,15 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         headers: profileHeaders(),
         body: formData,
       })
+      // A refusal names the file field (shared/importUpload.ts): thrown for a form to mark it.
+      if (!response.ok) throw await apiErrorFrom(response)
 
       const data = (await response.json()) as {
         headers: string[]
         rows: string[][]
         selectedSheet: string
         sheetNames: string[]
-        error?: string
       }
-
-      if (!response.ok) throw new Error(data.error || 'Upload failed')
 
       setUploadedFile(file)
       setUploadResult({
@@ -797,12 +802,19 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       // On to the mapping step with the columns detected, as a pasted CSV and a Google Sheet go.
       goToMapping()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Upload failed')
+      if (rethrow) throw err
+      setError(err instanceof ApiError ? err.message : IMPORT_UPLOAD_MESSAGES.unreadable)
     } finally {
       setLoading(false)
       setDropProcessing(false)
     }
   }
+
+  /**
+   * Uploads `file` for the mapping step, and throws when it is not read: an ApiError naming the
+   * `file` field for a refusal, for the Import page's form to mark (uploadForm.ts).
+   */
+  const uploadFile = (file: File) => handleFileUpload(file, undefined, { rethrow: true })
 
   /** Read another sheet of the uploaded workbook: the file goes up again, with the sheet named. */
   const chooseUploadedSheet = (sheetName: string) => {
@@ -1668,6 +1680,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     toggleApprovedCategory,
     resetForm,
     handleFileSelect,
+    uploadFile,
     chooseUploadedSheet,
     handleDragOver,
     handleDrop,
