@@ -140,10 +140,12 @@ analyticsRoutes.get('/api/analytics/category-trends', requireAuth, async (c) => 
   const type = c.req.query('type') || 'expense';
   // A week of the month as /api/analytics/weeks lists and labels it, Sunday to Saturday
   // (shared/calendarWeeks.ts). This used to read week N as days 7N-6 to 7N of the month, so week
-  // 2 answered the 8th to the 14th under the label of the 2nd to the 8th. A week the month does
-  // not have answers the whole month.
+  // 2 answered the 8th to the 14th under the label of the 2nd to the 8th.
   const picked =
     month && week ? weeksOfMonth(year, parseInt(month)).find((w) => w.week === week) : undefined;
+  // A week the month does not have (week 6 of February 2025) names no days, so it answers none:
+  // the whole month under a week's label would be wrong data.
+  if (month && week && !picked) return c.json({ labels: [], datasets: [], numDays: 0 });
 
   // Date range.
   let startStr: string;

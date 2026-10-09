@@ -183,8 +183,17 @@ export const analytics = [
       datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 9.5, 0, 0, 0, 0, 0] }],
       numDays: 7,
     });
-    // A week the month does not have answers the month.
-    expect((await week(7)).labels).toHaveLength(31);
+    // A week the month does not have names no days, so it answers none: the whole month under a
+    // week's label would be wrong data. February 2025 has five weeks.
+    const none = { labels: [], datasets: [], numDays: 0 };
+    expect(await week(7)).toEqual(none);
+    expect(
+      await read(
+        api,
+        expect,
+        '/api/analytics/category-trends?year=2025&type=expense&month=2&week=6'
+      )
+    ).toEqual(none);
 
     // The other profile sees only its own.
     expect(
