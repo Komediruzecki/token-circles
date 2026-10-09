@@ -271,8 +271,9 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     await mountApp(mode)
     const input = await openCreateModal('Travel')
 
-    // Enter submits without a click, so nothing closes the dropdown on the way.
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    // Enter submits without a click, so nothing closes the dropdown on the way. Enter in a form's
+    // field is the browser submitting the form, which jsdom leaves to requestSubmit.
+    input.form!.requestSubmit()
     const travel = await createFinished('Travel')
     // Choosing the new profile closes the dropdown, the same as choosing any other profile does.
     expect(state.showDropdown).toBe(false)
@@ -292,7 +293,7 @@ describe.each(['serverless', 'self-hosted'] as const)('creating a profile in %s 
     const versionBefore = state.profileVersion
 
     // Enter, so that no click outside the dropdown re-applies the selection on the way.
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    input.form!.requestSubmit()
     await vi.waitFor(() => {
       expect(byTestId('profile-modal')?.textContent).toContain(
         'You already have a profile called "Family". Choose another name.'
