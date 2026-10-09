@@ -22,7 +22,7 @@ import type {
 declare global {
   interface ImportMeta {
     glob<T>(
-      pattern: string,
+      pattern: string | string[],
       options: { eager: true; query?: string; import?: string }
     ): Record<string, T>;
   }
@@ -223,6 +223,40 @@ function workerRoutes(): { served: Set<string>; unreadable: string[] } {
   return { served, unreadable };
 }
 
+/**
+ * Each route as the source registers it, once per registration, in worker/src/index.ts and every
+ * module it mounts. Hono answers a request with the first registration that matches it, so a
+ * second registration of one method and path is never reached. `served` above is a set, and cannot
+ * see one.
+ */
+function registrations(): string[] {
+  const sources = import.meta.glob<string>(
+    ['../src/index.ts', '../src/routes/*.ts', '../src/mcp/*.ts'],
+    {
+      query: '?raw',
+      import: 'default',
+      eager: true,
+    }
+  );
+  const found: string[] = [];
+  for (const source of Object.values(sources)) {
+    for (const [, method, path] of source.matchAll(
+      /\b(?:\w+Routes|app)\.(get|post|put|patch|delete)\(\s*['"`](\/[^'"`]*)['"`]/g
+    )) {
+      found.push(`${method.toUpperCase()} ${path}`);
+    }
+  }
+  return found;
+}
+
+/**
+ * A route as Hono matches it: a parameter's name plays no part, so `/x/:id` and `/x/:key` are one
+ * route, and the second registration of it is never reached either.
+ */
+function asMatched(route: string): string {
+  return route.replace(/:\w+/g, ':');
+}
+
 // A scenario is a whole journey of up to a few hundred requests through SELF.fetch on D1, not one
 // call. The heaviest (a profile holding every kind of row, then removed or cleared) take 12-16s
 // on CI's shared vCPUs, against the 20s every other test gets, and one run crossed it. A minute
@@ -282,6 +316,16 @@ describe('contract: every route', () => {
     expect(
       [...served].filter((k) => !CONTRACT_ROUTES.includes(k as RouteKey) && !(k in WORKER_ONLY)),
       'routes on no list in shared/contract/routes.ts'
+    ).toEqual([]);
+  });
+
+  it('registers each route once', () => {
+    const found = registrations();
+    expect(found.length, 'the route sources were read').toBeGreaterThan(CONTRACT_ROUTES.length);
+    const seen = new Set<string>();
+    expect(
+      found.filter((k) => seen.has(asMatched(k)) || !seen.add(asMatched(k))),
+      'routes registered twice: the second is never reached'
     ).toEqual([]);
   });
 

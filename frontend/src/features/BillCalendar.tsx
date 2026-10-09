@@ -20,6 +20,7 @@
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
 import PeriodBar from '../components/PeriodBar'
 import { apiHouseholdGet, apiPost, formatCurrency, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
@@ -183,7 +184,7 @@ const BillCalendar: Component = () => {
       setSelectedBills((prev) => prev.map((b) => (b.id === billId ? { ...b, paid: true } : b)))
     } catch (err) {
       console.error('Failed to mark bill as paid:', err)
-      showToast('Failed to mark bill as paid', 'error')
+      showToast(plainMessage(err, "Couldn't mark the bill paid. Try again."), 'error')
     } finally {
       const next = new Set(markingPaid())
       next.delete(billId)

@@ -113,6 +113,19 @@ describe('twelve months of totals', () => {
   });
 });
 
+describe('the emergency fund', () => {
+  it('reaches back twelve months from 29 February to 28 February', async () => {
+    // A year before 29 February 2028 is 28 February 2027. Date.setMonth() made it 29 February
+    // 2027, which is 1 March, and left February 2027 out of the average.
+    await at('2028-02-29T12:00:00Z');
+    await expense('2027-02-28', 120);
+    await expense('2028-02-10', 300);
+
+    const fund = await get<{ avgMonthlyExpenses: number }>('/api/calculator/emergency-fund');
+    expect(fund.avgMonthlyExpenses).toBe(210);
+  });
+});
+
 describe('the budget forecast', () => {
   it('counts the budgets that start in the month it is asked for', async () => {
     await at('2026-10-15T12:00:00Z');

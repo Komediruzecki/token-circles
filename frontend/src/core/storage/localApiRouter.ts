@@ -1,3 +1,4 @@
+import { GENERIC_ERROR } from '../../../../shared/genericError'
 import { validateBody } from '../validation'
 import { AccountInUseError, ProfileOwnershipError } from './idb'
 import * as h from './localHandlers'
@@ -54,24 +55,11 @@ function dispatch(
 // ── Route table ──────────────────────────────────────────────────────────────
 
 const routes: RouteDef[] = [
-  // ── Health & app info ──
+  // ── Health ──
   {
     pattern: /^\/health$/,
     methods: ['GET'],
     handler: () => Promise.resolve(json({ status: 'ok', timestamp: new Date().toISOString() })),
-  },
-  {
-    pattern: /^\/app-info$/,
-    methods: ['GET'],
-    handler: () =>
-      Promise.resolve(
-        json({
-          name: 'Token Circles',
-          version: '4.0.0',
-          mode: 'serverless',
-          storage: 'indexeddb',
-        })
-      ),
   },
 
   // ── Auth ──
@@ -79,11 +67,6 @@ const routes: RouteDef[] = [
     pattern: /^\/auth\/login$/,
     methods: ['POST'],
     handler: dispatch({ POST: (ctx) => h.authLogin(ctx.body) }),
-  },
-  {
-    pattern: /^\/auth\/check$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: () => h.authCheck() }),
   },
   {
     pattern: /^\/auth\/logout$/,
@@ -173,11 +156,6 @@ const routes: RouteDef[] = [
 
   // ── Analytics (LS8) ──
   {
-    pattern: /^\/analytics$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
-  },
-  {
     pattern: /^\/analytics\/category-trends$/,
     methods: ['GET'],
     handler: dispatch({ GET: (ctx) => h.analyticsCategoryTrends(ctx.query) }),
@@ -246,11 +224,6 @@ const routes: RouteDef[] = [
     pattern: /^\/transactions\/reconcile-batch$/,
     methods: ['PUT'],
     handler: dispatch({ PUT: (ctx) => h.reconcileBatch(ctx.body, ctx.headers) }),
-  },
-  {
-    pattern: /^\/transactions\/export$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.transactionsExport(ctx.query) }),
   },
 
   // ── Categories ──
@@ -323,9 +296,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/budgets\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.budgetsGet(ctx.params),
       PUT: (ctx) => h.budgetsUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.budgetsDelete(ctx.params),
     }),
@@ -403,9 +375,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/savings-goals\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.goalsGet(ctx.params),
       PUT: (ctx) => h.goalsUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.goalsDelete(ctx.params),
     }),
@@ -435,17 +406,9 @@ const routes: RouteDef[] = [
     }),
   },
   {
-    pattern: /^\/loans\/(\d+)\/rate-periods$/,
-    methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.loanRates(ctx.params) }),
-  },
-  {
     pattern: /^\/loans\/(\d+)\/rates$/,
-    methods: ['GET', 'POST'],
-    handler: dispatch({
-      GET: (ctx) => h.loanRates(ctx.params),
-      POST: (ctx) => h.loanRatesAdd(ctx.params, ctx.body),
-    }),
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.loanRatesAdd(ctx.params, ctx.body) }),
   },
   {
     pattern: /^\/loans\/(\d+)\/rates\/(\d+)$/,
@@ -457,11 +420,8 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/loans\/(\d+)\/prepayments$/,
-    methods: ['GET', 'POST'],
-    handler: dispatch({
-      GET: (ctx) => h.loanPrepayments(ctx.params),
-      POST: (ctx) => h.loanPrepaymentAdd(ctx.params, ctx.body),
-    }),
+    methods: ['POST'],
+    handler: dispatch({ POST: (ctx) => h.loanPrepaymentAdd(ctx.params, ctx.body) }),
   },
   {
     pattern: /^\/loans\/(\d+)\/prepayments\/(\d+)$/,
@@ -799,11 +759,6 @@ const routes: RouteDef[] = [
 
   // Calculators (LS10)
   {
-    pattern: /^\/retirement$/,
-    methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.retirementCalculate(ctx.body) }),
-  },
-  {
     pattern: /^\/retirement\/projection$/,
     methods: ['GET'],
     handler: dispatch({ GET: () => h.retirementProjection() }),
@@ -842,18 +797,10 @@ const routes: RouteDef[] = [
   },
   {
     pattern: /^\/housing\/(\d+)$/,
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['PUT', 'DELETE'],
     handler: dispatch({
-      GET: (ctx) => h.housingGet(ctx.params),
       PUT: (ctx) => h.housingUpdate(ctx.params, ctx.body),
       DELETE: (ctx) => h.housingDelete(ctx.params),
-    }),
-  },
-  {
-    pattern: /^\/housing\/calculate$/,
-    methods: ['POST'],
-    handler: dispatch({
-      POST: (ctx) => h.housingCalculate(ctx.body),
     }),
   },
   {
@@ -961,6 +908,18 @@ function extractParams(pattern: RegExp, path: string): Record<string, string> | 
   return params
 }
 
+/**
+ * A failure nobody wrote words for, answered as the Worker answers one (worker/src/error-response.ts):
+ * the generic sentence, with the status kept, and what went wrong in the console with the method
+ * and path. The words a handler had for it were an exception's ("Failed to execute 'transaction'
+ * on 'IDBDatabase'..."), which name code a person cannot act on, and a toast showed them
+ * (plainMessage in core/apiError.ts). A refusal meant for a person is a 4xx, and passes as it is.
+ */
+function failed(method: string, path: string, status: number, what: unknown): Response {
+  console.error('[routeApiRequest] Failed', { method, path, status }, what)
+  return json({ error: GENERIC_ERROR }, status)
+}
+
 export async function routeApiRequest(url: string, init?: RequestInit): Promise<Response> {
   const urlObj = new URL(url, window.location.origin)
   const method = init?.method ?? 'GET'
@@ -1008,8 +967,9 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
     // handler (see targetProfileIdsFromHeaders) — there is deliberately NO shared mutable
     // profile state on the adapter, so concurrent requests can never clobber one another's
     // target and a Danger Zone delete always hits the profile it was issued for.
+    let answer: Response
     try {
-      return await route.handler({
+      answer = await route.handler({
         method,
         path: `/api${path}`,
         params,
@@ -1025,13 +985,13 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
       // surface as an unhandled 500 instead of a 400 (audit H-03).
       if (err instanceof ProfileOwnershipError) return json({ error: err.message }, 400)
       if (err instanceof AccountInUseError) return json({ error: err.message }, 409)
-      console.error(
-        '[routeApiRequest] Unhandled handler error',
-        { method, path: `/api${path}` },
-        err
-      )
-      return json({ error: (err as Error)?.message ?? 'Internal error' }, 500)
+      return failed(method, `/api${path}`, 500, err)
     }
+    // Many handlers answer their own catch with the exception's text: here, once, for them all.
+    if (answer.status >= 500) {
+      return failed(method, `/api${path}`, answer.status, await answer.text().catch(() => ''))
+    }
+    return answer
   }
 
   return notFound(`/api${path}`)

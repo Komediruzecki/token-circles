@@ -9,6 +9,7 @@
  * It extends Error, so code that reads `.message` keeps working, and `.message` is always a
  * sentence a person can act on: the answer's own `error`, or one written here for its status.
  */
+import { GENERIC_ERROR } from '../../../shared/genericError'
 import type { FieldErrors } from '../../../shared/refusal'
 
 export class ApiError extends Error {
@@ -39,7 +40,8 @@ export function statusMessage(status: number): string {
   if (status === 502 || status === 503 || status === 504) {
     return "Token Circles isn't answering right now. Try again in a moment."
   }
-  if (status >= 500) return 'Something went wrong on our side. Try again in a moment.'
+  // The Worker's words for a failure nobody wrote words for (shared/genericError.ts).
+  if (status >= 500) return GENERIC_ERROR
   return "That didn't work. Try again."
 }
 

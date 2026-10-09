@@ -144,17 +144,7 @@ async function handleUpload(c: Context<AppEnv>): Promise<Response> {
              SELECT ?, ?, ?, ?, ?, ?, ?
              WHERE (SELECT COUNT(*) FROM receipts WHERE profile_id = ?) < ?`
           )
-            .bind(
-              transactionId,
-              key,
-              file.name,
-              file.type,
-              file.size,
-              key,
-              pid,
-              pid,
-              limit
-            )
+            .bind(transactionId, key, file.name, file.type, file.size, key, pid, pid, limit)
             .run();
     if ((res.meta.changes ?? 0) === 0) {
       throw new HttpError(403, `Receipt limit reached (${limit ?? 0} per profile)`);

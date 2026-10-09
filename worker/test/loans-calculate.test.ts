@@ -1,5 +1,5 @@
 import { env, SELF } from 'cloudflare:test';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { sessionCookie } from './helpers/session';
 import { calendarDateIn } from '../../shared/calendarDate';
 import { addCalendarMonths, calculateLoan, loanStatus } from '../../shared/loanSchedule';
@@ -340,67 +340,5 @@ describe('GET /api/loans', () => {
     const theirs = await storeLoan(PARITY_LOAN, PARTNER);
     expect((await list(ME)).map((l) => l.id)).toEqual([mine]);
     expect((await list(PARTNER)).map((l) => l.id)).toEqual([theirs]);
-  });
-});
-
-describe('the calculators that share the annuity formula', () => {
-  // 100,000 at 5 % over 120 months: A = P r (1+r)^n / ((1+r)^n - 1) = 1,060.66, 127,278.62 in all.
-  const r = 0.05 / 12;
-  const A = (100000 * r * (1 + r) ** 120) / ((1 + r) ** 120 - 1);
-
-  it('GET /api/calculators/loans', async () => {
-    const res = await api('GET', '/api/calculators/loans?principal=100000&rate=5&term=120');
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, number>;
-    expect(body.monthlyPayment).toBe(Math.round(A * 100) / 100);
-    expect(body.totalPayment).toBe(Math.round(A * 120 * 100) / 100);
-    expect(body.totalInterest).toBe(Math.round((A * 120 - 100000) * 100) / 100);
-  });
-
-  it('GET /api/calculators/loans/amortization', async () => {
-    const res = await api(
-      'GET',
-      '/api/calculators/loans/amortization?principal=100000&rate=5&term=120'
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { monthlyPayment: number; schedule: { balance: number }[] };
-    expect(body.monthlyPayment).toBe(1060.66);
-    expect(body.schedule).toHaveLength(120);
-    expect(body.schedule[119].balance).toBe(0);
-  });
-
-  it('dates the amortization schedule by calendar month from today, the day clamped', async () => {
-    // Asked on 31 January, the first payment is due on 28 February, then 31 March, 30 April and
-    // 31 May. Date#setMonth overflowed instead: 31 February came out as 3 March, and 31 April as
-    // 1 May. Only Date is faked; the cookie from beforeEach is still valid on that day.
-    vi.useFakeTimers({ toFake: ['Date'] });
-    vi.setSystemTime(new Date('2026-01-31T12:00:00Z'));
-    try {
-      const res = await api(
-        'GET',
-        '/api/calculators/loans/amortization?principal=12000&rate=6&term=4'
-      );
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { schedule: { date: string }[] };
-      expect(body.schedule.map((row) => row.date)).toEqual([
-        '2026-02-28',
-        '2026-03-31',
-        '2026-04-30',
-        '2026-05-31',
-      ]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('GET /api/calculators/mortgages', async () => {
-    const res = await api(
-      'GET',
-      '/api/calculators/mortgages?principal=100000&rate=5&term=120&downPaymentPercent=20'
-    );
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, number>;
-    // 80,000 financed: 0.8 A.
-    expect(body.principalAndInterest).toBe(Math.round(0.8 * A * 100) / 100);
   });
 });

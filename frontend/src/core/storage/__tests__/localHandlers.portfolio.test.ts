@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
 import {
-  authCheck,
   authLogin,
   authLogout,
   authMe,
@@ -29,13 +28,6 @@ describe('localHandlers - auth stubs', () => {
   it('login rejects missing credentials', async () => {
     const res = await authLogin(null)
     expect(res.status).toBe(400)
-  })
-
-  it('authCheck returns authenticated', async () => {
-    const res = await authCheck()
-    expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.authenticated).toBe(true)
   })
 
   it('authLogout returns ok', async () => {

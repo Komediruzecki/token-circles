@@ -106,10 +106,8 @@ describe('retirement goals and savings goals are separate lists', () => {
     expect((await call('PUT', `/retirement-goals/${savingsId}`, PAGE_FORM)).status).toBe(404)
     expect((await call('DELETE', `/retirement-goals/${savingsId}`)).status).toBe(404)
 
-    const res = await call('GET', `/savings-goals/${savingsId}`)
-    expect(res.status).toBe(200)
-    const goal = (await res.json()) as Row
-    expect(goal.name).toBe('New Car')
+    const goal = (await savingsList()).find((g) => g.id === savingsId)
+    expect(goal?.name).toBe('New Car')
     expect(goal).not.toHaveProperty('current_age')
   })
 

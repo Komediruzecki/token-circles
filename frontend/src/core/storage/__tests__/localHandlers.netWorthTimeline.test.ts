@@ -6,6 +6,10 @@
  * its date out with .slice(0, 10), the UTC date: a balance noted at 08:30 on the 8th in Tokyo was
  * filed under the 7th. A snapshot an import made carries a bare date, which is already a calendar
  * date and stays as it is.
+ *
+ * A day's figure is each account's latest balance on or before it (shared/netWorthTimeline.ts).
+ * It used to add up only the balances recorded that day, so on the 8th in Tokyo, when only
+ * account 1 had a new one, the net worth was account 1's alone.
  */
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
@@ -41,6 +45,24 @@ it('files a snapshot under the local day it was taken, and a dated one under its
   const timeline = await (await accountsTimeline()).json()
   expect(timeline).toEqual([
     { date: '2026-10-07', net_worth: 50 },
-    { date: '2026-10-08', net_worth: 100 },
+    { date: '2026-10-08', net_worth: 150 },
   ])
+})
+
+// "YYYY-MM-DD HH:MM:SS" names no zone. It is what the cloud column's datetime('now') default
+// writes, so it is UTC, as the Worker reads it (shared/netWorthTimeline.ts snapshotDay). Read as
+// the device's own time, 23:30 on the 7th was filed under the 7th in Tokyo.
+it('reads a time with no zone as UTC', async () => {
+  const db = await getDB()
+  await db.clear('balanceHistory')
+  await db.add('balanceHistory', {
+    account_id: 1,
+    balance: 100,
+    recorded_at: '2026-10-07 23:30:00',
+  })
+  process.env.TZ = 'Asia/Tokyo'
+
+  const timeline = await (await accountsTimeline()).json()
+
+  expect(timeline).toEqual([{ date: '2026-10-08', net_worth: 100 }])
 })

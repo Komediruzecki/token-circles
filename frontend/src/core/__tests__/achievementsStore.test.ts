@@ -302,7 +302,7 @@ describe('badges are per profile', () => {
     await refreshAchievements()
 
     expect(apiMock.getLoan).toHaveBeenCalledTimes(1)
-    expect(apiMock.getLoan).toHaveBeenCalledWith(8)
+    expect(apiMock.getLoan).toHaveBeenCalledWith(8, { expectedStatuses: [404] })
     expect(unlocks().map((u) => u.id)).toContain('debt-free')
   })
 

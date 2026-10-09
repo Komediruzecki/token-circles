@@ -18,7 +18,7 @@ async function category(
  * a Food day in July, one uncategorised expense and the March pay. The other profile spends on
  * Fuel in March, and must count only when both profiles are selected.
  */
-async function year2025(api: ContractApi, expect: Expect) {
+async function year2025(api: ContractApi, expect: Expect): Promise<{ food: number }> {
   const food = await category(api, expect, 'Food', '#2e7d32');
   const rent = await category(api, expect, 'Rent', '#1565c0');
   const salary = await category(api, expect, 'Salary', '#f9a825', 'income');
@@ -51,6 +51,7 @@ async function year2025(api: ContractApi, expect: Expect) {
     date: '2023-05-02',
     category_id: fuel,
   });
+  return { food };
 }
 
 async function read(api: ContractApi, expect: Expect, path: string): Promise<Json> {
@@ -90,7 +91,7 @@ function sorted(flow: Json) {
 
 export const analytics = [
   scenario('a year of spending, by category, by month and by week', async (api, expect) => {
-    await year2025(api, expect);
+    const { food } = await year2025(api, expect);
 
     // The stacked chart's year view: one dataset per category with spending, largest first.
     // Uncategorised spending and the other profile's count nowhere.
@@ -139,10 +140,28 @@ export const analytics = [
       { category: 'Food', color: '#2e7d32', data: days(31, { 10: 45.5, 22: 35 }) },
     ]);
 
-    // Its weeks, and one week of it. KNOWN BUG, in both runtimes; a follow-up PR fixes it. No week
-    // holds March 30 and 31: a month's last days that start a new week are dropped. And week 2 of
-    // category trends is March 8 to 14, a Saturday to a Friday, where the weeks list labels week 2
-    // March 2 to 8. Fixed, both answers change: change these expectations then.
+    // Its weeks, Sunday to Saturday, and each week of it in the days its label names. Monday the
+    // 31st starts the sixth week: the list used to end at the week of the 29th, so 30 and 31 March
+    // were in no week, and week 2 of the trends answered 8 to 14 March under the label 2 to 8.
+    // The first and last weeks reach into February and April, and carry those days too.
+    await addTransaction(api, expect, {
+      description: 'Late groceries',
+      amount: 9.5,
+      date: '2025-03-31',
+      category_id: food,
+    });
+    await addTransaction(api, expect, {
+      description: 'February groceries',
+      amount: 6.25,
+      date: '2025-02-24',
+      category_id: food,
+    });
+    await addTransaction(api, expect, {
+      description: 'April groceries',
+      amount: 3.75,
+      date: '2025-04-02',
+      category_id: food,
+    });
     expect(await read(api, expect, '/api/analytics/weeks?year=2025&month=3')).toEqual({
       weeks: [
         { week: 1, label: 'Week 1 (2025-02-23 - 2025-03-01)' },
@@ -150,20 +169,63 @@ export const analytics = [
         { week: 3, label: 'Week 3 (2025-03-09 - 2025-03-15)' },
         { week: 4, label: 'Week 4 (2025-03-16 - 2025-03-22)' },
         { week: 5, label: 'Week 5 (2025-03-23 - 2025-03-29)' },
+        { week: 6, label: 'Week 6 (2025-03-30 - 2025-04-05)' },
       ],
     });
+    // No year, no weeks. A month asked for that is not 1 to 12 has none either, as a year that
+    // cannot be read has none: local-first read month=0 as no month and listed the year's 53.
     expect(await read(api, expect, '/api/analytics/weeks')).toEqual({ weeks: [] });
+    for (const month of ['0', '13', 'abc', '']) {
+      expect(
+        await read(api, expect, `/api/analytics/weeks?year=2025&month=${month}`),
+        `month=${month}`
+      ).toEqual({ weeks: [] });
+    }
+    // No month asked for: the year's weeks, from the one that holds 1 January.
+    const year = (await read(api, expect, '/api/analytics/weeks?year=2025')).weeks;
+    expect(year).toHaveLength(53);
+    expect([year[0], year[52]]).toEqual([
+      { week: 1, label: 'Week 1 (2024-12-29 - 2025-01-04)' },
+      { week: 53, label: 'Week 53 (2025-12-28 - 2026-01-03)' },
+    ]);
+    const week = (n: number) =>
+      read(api, expect, `/api/analytics/category-trends?year=2025&type=expense&month=3&week=${n}`);
+    const sundayToSaturday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Week 1, 23 February to 1 March: the groceries of Monday 24 February, and the rent on
+    // Saturday 1 March.
+    expect(await week(1)).toEqual({
+      labels: sundayToSaturday,
+      datasets: [
+        { category: 'Rent', color: '#1565c0', data: [0, 0, 0, 0, 0, 0, 800] },
+        { category: 'Food', color: '#2e7d32', data: [0, 6.25, 0, 0, 0, 0, 0] },
+      ],
+      numDays: 7,
+    });
+    // Week 2, 2 to 8 March, as its label says: nothing was spent.
+    expect(await week(2)).toEqual({ labels: sundayToSaturday, datasets: [], numDays: 7 });
+    // Week 3, 9 to 15 March: the groceries of Monday the 10th.
+    expect(await week(3)).toEqual({
+      labels: sundayToSaturday,
+      datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 45.5, 0, 0, 0, 0, 0] }],
+      numDays: 7,
+    });
+    // Week 6, 30 March to 5 April: the groceries of Monday the 31st and of Wednesday 2 April.
+    expect(await week(6)).toEqual({
+      labels: sundayToSaturday,
+      datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 9.5, 0, 3.75, 0, 0, 0] }],
+      numDays: 7,
+    });
+    // A week the month does not have names no days, so it answers none: the whole month under a
+    // week's label would be wrong data. February 2025 has five weeks.
+    const none = { labels: [], datasets: [], numDays: 0 };
+    expect(await week(7)).toEqual(none);
     expect(
       await read(
         api,
         expect,
-        '/api/analytics/category-trends?year=2025&type=expense&month=3&week=2'
+        '/api/analytics/category-trends?year=2025&type=expense&month=2&week=6'
       )
-    ).toEqual({
-      labels: ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-      datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 0, 45.5, 0, 0, 0, 0] }],
-      numDays: 7,
-    });
+    ).toEqual(none);
 
     // The other profile sees only its own.
     expect(
@@ -182,7 +244,7 @@ export const analytics = [
       ).datasets
     ).toEqual([
       { category: 'Rent', color: '#1565c0', data: days(31, { 1: 800 }) },
-      { category: 'Food', color: '#2e7d32', data: days(31, { 10: 45.5, 22: 35 }) },
+      { category: 'Food', color: '#2e7d32', data: days(31, { 10: 45.5, 22: 35, 31: 9.5 }) },
       { category: 'Fuel', color: '#6d4c41', data: days(31, { 10: 60 }) },
     ]);
   }),

@@ -92,12 +92,6 @@ export async function goalsCreate(body: unknown): Promise<Response> {
   return json(refreshed ?? { id, ...goal }, 201)
 }
 
-export async function goalsGet(params: Record<string, string>): Promise<Response> {
-  const goal = await currentProfileRecord('goals', idParam(params))
-  if (!goal) return notFound('Goal')
-  return json(normalizeSavingsGoal(goal))
-}
-
 export async function goalsUpdate(
   params: Record<string, string>,
   body: unknown

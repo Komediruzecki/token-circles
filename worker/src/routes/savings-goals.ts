@@ -65,7 +65,7 @@ savingsGoalsRoutes.put('/api/savings-goals/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!existing) throw new HttpError(404, 'Not found');
+  if (!existing) throw new HttpError(404, 'Goal not found');
   const fields = accept(checkGoalEdit(await c.req.json(), existing));
   if (
     fields.category_id != null &&
@@ -94,7 +94,7 @@ savingsGoalsRoutes.delete('/api/savings-goals/:id', requireAuth, async (c) => {
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Goal not found');
   return c.json({ ok: true });
 });
 

@@ -1,7 +1,12 @@
 /**
  * Analytics handlers — IndexedDB-backed implementations
  */
-import { isoDate } from '../../../utils/period'
+import {
+  daysOfWeek,
+  weekLabel,
+  weeksAsked,
+  weeksOfMonth,
+} from '../../../../../shared/calendarWeeks'
 import { seedDefaultCategories } from '../idb'
 import { adapter, getAmount, json } from './helpers'
 
@@ -26,28 +31,14 @@ export async function analyticsDistinctYears(): Promise<Response> {
 export async function analyticsWeeks(query: URLSearchParams): Promise<Response> {
   try {
     const year = parseInt(query.get('year')!)
-    const month = query.get('month') ? parseInt(query.get('month')!) : null
     if (!year) return json({ weeks: [] })
 
-    const weeks: Array<{ week: number; label: string }> = []
-    const firstDay = month ? new Date(year, month - 1, 1) : new Date(year, 0, 1)
-    const lastDay = month ? new Date(year, month, 0) : new Date(year, 11, 31)
-
-    let w = 1
-    const current = new Date(firstDay)
-    while (current <= lastDay) {
-      const ws = new Date(current)
-      ws.setDate(current.getDate() - current.getDay())
-      const we = new Date(ws)
-      we.setDate(ws.getDate() + 6)
-      weeks.push({
-        week: w,
-        label: `Week ${w} (${isoDate(ws)} - ${isoDate(we)})`,
-      })
-      current.setDate(current.getDate() + 7)
-      w++
-    }
-    return json({ weeks })
+    // Sunday to Saturday, every week that holds a day of the month, as the Worker lists them
+    // (shared/calendarWeeks.ts). Stepping a week at a time from the 1st stopped at the week of the
+    // 29th, so a month's last days that start a new week were in none. A month that is not one
+    // has no weeks: month=0 was read as no month, and listed the year's.
+    const weeks = weeksAsked(year, query.get('month'))
+    return json({ weeks: weeks.map((w) => ({ week: w.week, label: weekLabel(w) })) })
   } catch (_err) {
     return json({ weeks: [] })
   }
@@ -81,14 +72,20 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
     const week = query.get('week') ? parseInt(query.get('week')!) : null
     const type = query.get('type') || 'expense'
 
+    // A week of the month as /api/analytics/weeks lists and labels it, Sunday to Saturday
+    // (shared/calendarWeeks.ts). This used to read week N as days 7N-6 to 7N of the month, so week
+    // 2 answered the 8th to the 14th under the label of the 2nd to the 8th.
+    const picked =
+      month && week ? weeksOfMonth(year, month).find((w) => w.week === week) : undefined
+    // A week the month does not have (week 6 of February 2025) names no days, so it answers none,
+    // as the Worker does: the whole month under a week's label would be wrong data.
+    if (month && week && !picked) return json({ labels: [], datasets: [], numDays: 0 })
+
     // Date range
     let startStr: string, endStr: string
-    if (month && week) {
-      const lastDay = new Date(year, month, 0).getDate()
-      const ws = (week - 1) * 7 + 1
-      const we = Math.min(week * 7, lastDay)
-      startStr = `${year}-${String(month).padStart(2, '0')}-${String(ws).padStart(2, '0')}`
-      endStr = `${year}-${String(month).padStart(2, '0')}-${String(we).padStart(2, '0')}`
+    if (picked) {
+      startStr = picked.start
+      endStr = picked.end
     } else if (month) {
       const lastDay = new Date(year, month, 0).getDate()
       startStr = `${year}-${String(month).padStart(2, '0')}-01`
@@ -142,18 +139,13 @@ export async function analyticsCategoryTrends(query: URLSearchParams): Promise<R
       'December',
     ]
 
-    if (week && month) {
-      const lastDay = new Date(year, month, 0).getDate()
-      const ws = (week - 1) * 7 + 1
-      const we = Math.min(week * 7, lastDay)
-      for (let d = ws; d <= we; d++) {
-        const date = new Date(year, month - 1, d)
-        labels.push(dayNames[date.getDay()])
-        periodMap.set(
-          `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`,
-          labels.length - 1
-        )
-      }
+    if (picked) {
+      // Its seven days, Sunday to Saturday, the first or last of them in the month next door when
+      // the week crosses into one, as its label says.
+      daysOfWeek(picked).forEach((day, i) => {
+        labels.push(dayNames[i])
+        periodMap.set(day, i)
+      })
     } else if (month) {
       const lastDay = new Date(year, month, 0).getDate()
       for (let d = 1; d <= lastDay; d++) {

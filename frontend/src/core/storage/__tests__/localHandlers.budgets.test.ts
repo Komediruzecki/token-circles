@@ -4,7 +4,6 @@ import { getDB } from '../idb.js'
 import {
   budgetsCreate,
   budgetsDelete,
-  budgetsGet,
   budgetsList,
   budgetsSummary,
   budgetsUpdate,
@@ -52,12 +51,6 @@ describe('localHandlers - budgets', () => {
     expect(list).toHaveLength(1)
     expect(list[0].id).toBe(created.id)
     expect(list[0].amount).toBe(500)
-
-    // Get
-    const getRes = await budgetsGet({ p1: created.id.toString() })
-    expect(getRes.status).toBe(200)
-    const fetched = await getRes.json()
-    expect(fetched.id).toBe(created.id)
   })
 
   it('updates a budget', async () => {
@@ -79,8 +72,8 @@ describe('localHandlers - budgets', () => {
     )
     expect(updateRes.status).toBe(200)
 
-    const getRes = await budgetsGet({ p1: created.id.toString() })
-    const fetched = await getRes.json()
+    // Read back as the Budgets page does, from the list.
+    const [fetched] = await (await budgetsList()).json()
     expect(fetched.amount).toBe(300)
   })
 

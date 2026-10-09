@@ -6,6 +6,10 @@
  * date(recorded_at), the UTC date: a balance noted at 08:30 on the 8th in Tokyo was filed under
  * the 7th. A snapshot an import made holds a bare date, which is already the day. Without
  * X-Time-Zone the days are UTC ones, as before.
+ *
+ * A day's figure is each account's latest balance on or before it (shared/netWorthTimeline.ts).
+ * It used to add up only the balances recorded that day, so on the 8th in Tokyo, when only Giro
+ * had a new one, the net worth was Giro's alone.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -62,10 +66,23 @@ async function timeline(zone?: string): Promise<{ date: string; net_worth: numbe
 it('files a snapshot under the caller’s day, and a dated one under its date', async () => {
   expect(await timeline('Asia/Tokyo')).toEqual([
     { date: '2026-10-07', net_worth: 50 },
-    { date: '2026-10-08', net_worth: 100 },
+    { date: '2026-10-08', net_worth: 150 },
   ]);
 });
 
 it('without a zone, under the UTC day', async () => {
   expect(await timeline()).toEqual([{ date: '2026-10-07', net_worth: 150 }]);
+});
+
+// "YYYY-MM-DD HH:MM:SS" names no zone. It is what the column's datetime('now') default writes,
+// and it is UTC (shared/netWorthTimeline.ts snapshotDay, which local-first reads it with too).
+it('reads a time with no zone as UTC', async () => {
+  await env.DB.prepare('DELETE FROM account_balance_history').run();
+  await env.DB.prepare(
+    "INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, 100, '2026-10-07 23:30:00')"
+  )
+    .bind(GIRO)
+    .run();
+
+  expect(await timeline('Asia/Tokyo')).toEqual([{ date: '2026-10-08', net_worth: 100 }]);
 });
