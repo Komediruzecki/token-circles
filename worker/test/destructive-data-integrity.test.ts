@@ -507,3 +507,31 @@ describe('category reset referential integrity', () => {
     expect(budgets.map((b) => b.id)).not.toContain(7212);
   });
 });
+
+describe('account deletion and sessions', () => {
+  async function sessions(userId: number): Promise<number> {
+    const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id = ?')
+      .bind(userId)
+      .first<{ n: number }>();
+    return row?.n ?? -1;
+  }
+
+  it("deletes the account's sessions with it and leaves another account's", async () => {
+    // beforeEach signed account 70 in once; this is a second device, and another account.
+    await issueSessionCookie(70, 'password', env);
+    await issueSessionCookie(71, 'password', env);
+    expect(await sessions(70)).toBeGreaterThanOrEqual(2);
+    const others = await sessions(71);
+    expect(others).toBeGreaterThanOrEqual(1);
+
+    const response = await SELF.fetch('https://example.com/api/account', {
+      method: 'DELETE',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'delete' }),
+    });
+    expect(response.status).toBe(200);
+
+    expect(await sessions(70)).toBe(0);
+    expect(await sessions(71)).toBe(others);
+  });
+});
