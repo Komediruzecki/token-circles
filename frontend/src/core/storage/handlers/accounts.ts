@@ -2,7 +2,7 @@
  * Accounts handlers — IndexedDB-backed implementations
  */
 import { checkAccountCreate, checkAccountEdit } from '../../../../../shared/accountSchema'
-import { netWorthTimeline } from '../../../../../shared/netWorthTimeline'
+import { netWorthTimeline, snapshotDay } from '../../../../../shared/netWorthTimeline'
 import { isoDate } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
@@ -140,18 +140,10 @@ export async function accountsHistoryDelete(params: Record<string, string>): Pro
 }
 
 /**
- * The day a balance snapshot belongs to, on the person's calendar. One recorded through the app
- * holds an instant (toISOString(), so its first ten characters are the UTC date: at 08:30 in Tokyo
- * that is yesterday); one an import made holds a bare date, which is already the day.
+ * A day's figure is each account's latest balance on or before it, as the Worker answers. A
+ * snapshot is filed under its day on the device's calendar, read as the Worker reads it
+ * (shared/netWorthTimeline.ts snapshotDay).
  */
-function snapshotDay(recorded: unknown): string {
-  const text = typeof recorded === 'string' ? recorded : ''
-  if (text.length <= 10) return text
-  const instant = new Date(text)
-  return Number.isNaN(instant.getTime()) ? text.slice(0, 10) : isoDate(instant)
-}
-
-/** A day's figure is each account's latest balance on or before it, as the Worker answers. */
 export async function accountsTimeline(): Promise<Response> {
   try {
     const db = await getDB()
@@ -168,7 +160,7 @@ export async function accountsTimeline(): Promise<Response> {
       }
       snapshots.push({
         account: accountId,
-        day: snapshotDay(entry.recorded_at ?? entry.date),
+        day: snapshotDay(entry.recorded_at ?? entry.date, isoDate),
         id: entry.id as number,
         balance: entry.balance as number,
       })

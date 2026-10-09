@@ -48,3 +48,21 @@ it('files a snapshot under the local day it was taken, and a dated one under its
     { date: '2026-10-08', net_worth: 150 },
   ])
 })
+
+// "YYYY-MM-DD HH:MM:SS" names no zone. It is what the cloud column's datetime('now') default
+// writes, so it is UTC, as the Worker reads it (shared/netWorthTimeline.ts snapshotDay). Read as
+// the device's own time, 23:30 on the 7th was filed under the 7th in Tokyo.
+it('reads a time with no zone as UTC', async () => {
+  const db = await getDB()
+  await db.clear('balanceHistory')
+  await db.add('balanceHistory', {
+    account_id: 1,
+    balance: 100,
+    recorded_at: '2026-10-07 23:30:00',
+  })
+  process.env.TZ = 'Asia/Tokyo'
+
+  const timeline = await (await accountsTimeline()).json()
+
+  expect(timeline).toEqual([{ date: '2026-10-08', net_worth: 100 }])
+})

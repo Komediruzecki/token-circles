@@ -9,7 +9,7 @@ import { recomputeBalancesForAccounts } from '../recompute-balances';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { checkAccountCreate, checkAccountEdit } from '../../../shared/accountSchema';
 import { calendarDateIn } from '../../../shared/calendarDate';
-import { netWorthTimeline } from '../../../shared/netWorthTimeline';
+import { netWorthTimeline, snapshotDay } from '../../../shared/netWorthTimeline';
 import { requestTimeZone } from '../local-date';
 
 // Port of backend/routes/accounts.js + backend/repositories/accountsRepo.js.
@@ -88,23 +88,13 @@ accountsRoutes.get('/api/accounts/history/timeline', requireAuth, async (c) => {
     netWorthTimeline(
       rows.map((row) => ({
         account: row.account_id,
-        day: snapshotDay(row.recorded_at, zone),
+        day: snapshotDay(row.recorded_at, (instant) => calendarDateIn(zone, instant)),
         id: row.id,
         balance: row.balance,
       }))
     )
   );
 });
-
-/** The day a balance snapshot belongs to in `timeZone`; a bare YYYY-MM-DD is already one. */
-function snapshotDay(recorded: string, timeZone: string): string {
-  const text = String(recorded ?? '');
-  if (text.length <= 10) return text;
-  // SQLite's datetime('now') writes "YYYY-MM-DD HH:MM:SS" with no zone; it is UTC.
-  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text.replace(' ', 'T')}Z`;
-  const instant = new Date(iso);
-  return Number.isNaN(instant.getTime()) ? text.slice(0, 10) : calendarDateIn(timeZone, instant);
-}
 
 accountsRoutes.get('/api/accounts/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);

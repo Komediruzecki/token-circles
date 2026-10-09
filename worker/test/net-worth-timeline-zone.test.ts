@@ -73,3 +73,16 @@ it('files a snapshot under the caller’s day, and a dated one under its date', 
 it('without a zone, under the UTC day', async () => {
   expect(await timeline()).toEqual([{ date: '2026-10-07', net_worth: 150 }]);
 });
+
+// "YYYY-MM-DD HH:MM:SS" names no zone. It is what the column's datetime('now') default writes,
+// and it is UTC (shared/netWorthTimeline.ts snapshotDay, which local-first reads it with too).
+it('reads a time with no zone as UTC', async () => {
+  await env.DB.prepare('DELETE FROM account_balance_history').run();
+  await env.DB.prepare(
+    "INSERT INTO account_balance_history (account_id, balance, recorded_at) VALUES (?, 100, '2026-10-07 23:30:00')"
+  )
+    .bind(GIRO)
+    .run();
+
+  expect(await timeline('Asia/Tokyo')).toEqual([{ date: '2026-10-08', net_worth: 100 }]);
+});
