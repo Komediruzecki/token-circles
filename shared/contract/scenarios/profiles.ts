@@ -223,30 +223,4 @@ export const profiles = [
     expect((await profileList(api, expect)).map((p) => p.id)).toEqual([api.profile]);
     expect((await api.stored(api.profile)).accounts).toBe(1);
   }),
-
-  scenario('the demo data is reseeded', async (api, expect) => {
-    await account(api, expect, 'Everyday', 1000);
-    await account(api.other, expect, 'Theirs', 5);
-    // The Danger Zone offers this in local-first only; the Worker keeps it for older pages.
-    const reply = await api.post('/api/profiles/reseed-demo');
-    expectOk(expect, reply, 'POST /api/profiles/reseed-demo');
-    // DIFFERENCE profile-reseed-demo
-    if (api.runtime === 'worker') {
-      expect(reply.body).toEqual({ ok: true, message: 'Profile reset with default categories' });
-      expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
-      const stored = await api.stored(api.profile);
-      expect(stored.accounts).toBe(0);
-      expect(stored.categories).toBe(14);
-      expect((await api.stored(api.other.profile)).accounts).toBe(1);
-    } else {
-      expect(reply.body).toEqual({ ok: true, message: 'Demo data reseeded' });
-      expect((await profileList(api, expect)).map((p) => p.name)).toEqual([
-        'Example Low Income',
-        'Example Mid Income',
-        'Example High Income',
-      ]);
-      expect((await api.stored(api.profile)).accounts).toBe(0);
-      expect((await api.stored(api.other.profile)).accounts).toBe(0);
-    }
-  }),
 ];

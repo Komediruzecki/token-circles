@@ -117,7 +117,6 @@ export const CONTRACT_ROUTES: readonly RouteKey[] = [
   'DELETE /api/profiles/:id',
   'PATCH /api/profiles/:id',
   'PUT /api/profiles/:id',
-  'POST /api/profiles/reseed-demo',
   'POST /api/receipts',
   'DELETE /api/receipts/:id',
   'GET /api/receipts/:id',
@@ -223,6 +222,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'GET /api/auth/verify-email': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/import/file-sheet':
     'Retired: answers 410 Gone, telling an old cached page to upload the file again. The Import page reads a file in one upload now, and calls this in neither mode.',
+  'POST /api/profiles/reseed-demo':
+    "Retired: answers 410 Gone. The example profiles are local-first's browser demo, and the Danger Zone offers this in local-first only; the Worker's route cleared the active profile instead, under the same name.",
   'POST /api/billing/checkout': 'Billing belongs to a cloud account.',
   'POST /api/billing/portal': 'Billing belongs to a cloud account.',
   'GET /api/billing/status': 'Billing belongs to a cloud account.',
@@ -330,6 +331,8 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
     "A tag's transactions, for no caller: the Transactions page filters by tag in the page, on the rows it read.",
   'POST ^\\/import\\/preview$':
     'A bulk import of { items }, which nothing in the app sends: the Import page previews with POST /api/import/execute and dry_run, in both modes.',
+  'POST ^\\/profiles\\/reseed-demo$':
+    'Replaces every profile with the three example profiles of the browser demo, which only local-first has; the Danger Zone offers it there only, and the Worker answers it 410 Gone.',
   'POST ^\\/import\\/file-sheet$':
     'The old pick-a-sheet step after an upload, which the Import page calls in neither mode; the Worker answers it 410 Gone.',
   'GET ^\\/exchange-rates$': 'For api.getExchangeRates, which nothing in the app calls.',

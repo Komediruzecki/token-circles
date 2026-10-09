@@ -165,12 +165,16 @@ profilesRoutes.delete('/api/profile/data', requireAuth, async (c) => {
   return c.json({ ok: true, message: 'Profile data reset successfully' });
 });
 
-// The rich three-profile demo is client-only. Keep this endpoint as a safe
-// profile-default reset for older clients, while the current UI hides it in Worker mode.
-profilesRoutes.post('/api/profiles/reseed-demo', requireAuth, async (c) => {
-  const rl = await enforce(c, `destroy:${c.get('userId')}`, 10, 3600);
-  if (rl) return rl;
-  const pid = await getProfileId(c);
-  await clearProfileData(c.env, [pid], { seedDefaults: true });
-  return c.json({ ok: true, message: 'Profile reset with default categories' });
-});
+// Retired. The three example profiles are local-first's browser demo, and the Danger Zone has
+// offered "Reseed demo data" in local-first only since v5.10.0. This route did something else
+// under the same name (cleared the active profile and gave it the default categories), so it
+// answers 410 Gone for an old page instead, and changes nothing.
+profilesRoutes.post('/api/profiles/reseed-demo', requireAuth, (c) =>
+  c.json(
+    {
+      error:
+        'The example profiles are part of browser-only mode. To start this profile over, clear its data in Settings.',
+    },
+    410
+  )
+);
