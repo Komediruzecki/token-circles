@@ -5,22 +5,23 @@
 
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import {
   apiDelete,
   apiHouseholdGet,
   apiPost,
-  apiPut,
   formatCurrency,
   getLocalCurrency,
   showToast,
 } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
-import { showConfirm } from '../core/confirmStore'
 import { convertToBase } from '../core/currency'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { createHoldingForm } from './holdingForm'
 import styles from './PortfolioPage.module.css'
 import type { PortfolioHolding, PortfolioSummary } from '../types/models'
 
@@ -38,15 +39,6 @@ export default function Portfolio() {
   const [holdings, setHoldings] = createSignal<PortfolioHolding[]>([])
   const [summary, setSummary] = createSignal<PortfolioSummary | null>(null)
   const [initialLoad, setInitialLoad] = createSignal(true)
-  const [showAddModal, setShowAddModal] = createSignal(false)
-  const [editingHolding, setEditingHolding] = createSignal<PortfolioHolding | null>(null)
-  const [formData, setFormData] = createSignal({
-    ticker: '',
-    shares: '',
-    purchasePrice: '',
-    purchaseDate: '',
-    notes: '',
-  })
   const [priceLoading, setPriceLoading] = createSignal(false)
   // Live quotes keyed by UPPERCASE ticker, from the last "Refresh Prices" (session-only).
   const [prices, setPrices] = createSignal<Record<string, LiveQuote>>({})
@@ -118,88 +110,8 @@ export default function Portfolio() {
     }
   )
 
-  const openAddModal = () => {
-    setEditingHolding(null)
-    setFormData({ ticker: '', shares: '', purchasePrice: '', purchaseDate: '', notes: '' })
-    setShowAddModal(true)
-  }
-
-  const openEditModal = (h: PortfolioHolding) => {
-    setEditingHolding(h)
-    setFormData({
-      ticker: h.ticker,
-      shares: String(h.shares),
-      purchasePrice: String(h.purchase_price),
-      purchaseDate: h.purchase_date,
-      notes: h.notes || '',
-    })
-    setShowAddModal(true)
-  }
-
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = {
-      ticker: formData().ticker.toUpperCase(),
-      shares: parseFloat(formData().shares),
-      purchase_price: parseFloat(formData().purchasePrice),
-      purchase_date: formData().purchaseDate,
-      notes: formData().notes,
-    }
-
-    if (!data.ticker || !data.shares || !data.purchase_price || !data.purchase_date) {
-      showToast('Please fill all required fields', 'error')
-      return
-    }
-
-    try {
-      if (editingHolding()) {
-        await apiPut(`/api/portfolio/holdings/${editingHolding()!.id}`, data)
-        showToast('Holding updated', 'success')
-        setShowAddModal(false)
-        return
-      }
-
-      // Adding a buy for a ticker already held: offer to merge into one position at the
-      // blended average cost (correct total gain) instead of leaving two rows.
-      const existing = holdings().find((h) => h.ticker.toUpperCase() === data.ticker)
-      if (existing) {
-        const newShares = existing.shares + data.shares
-        const newCostBasis =
-          existing.purchase_price * existing.shares + data.purchase_price * data.shares
-        const newAvg = newCostBasis / newShares
-        const merge = await showConfirm(
-          `You already hold ${existing.shares} share${existing.shares === 1 ? '' : 's'} of ${data.ticker} at an average of ${formatAmount(existing.purchase_price)}. Merge this buy in? New position: ${newShares} shares at an average of ${formatAmount(newAvg)}. Choose Cancel to add it as a separate holding.`
-        )
-        if (merge) {
-          await apiPut(`/api/portfolio/holdings/${existing.id}`, {
-            ticker: data.ticker,
-            shares: newShares,
-            purchase_price: newAvg,
-            // Keep the earliest purchase date across the merged buys.
-            purchase_date:
-              existing.purchase_date && existing.purchase_date < data.purchase_date
-                ? existing.purchase_date
-                : data.purchase_date,
-            notes: existing.notes || '',
-          })
-          showToast(
-            `Added to ${data.ticker} — now ${newShares} shares at avg ${formatAmount(newAvg)}`,
-            'success'
-          )
-          setShowAddModal(false)
-          return
-        }
-        // merge declined → fall through and add as a separate holding
-      }
-
-      await apiPost('/api/portfolio/holdings', data)
-      showToast('Holding added', 'success')
-      setShowAddModal(false)
-    } catch (err) {
-      console.error('Failed to save holding', err)
-      showToast('Failed to save holding', 'error')
-    }
-  }
+  // The add and edit dialog. Its writes bump `portfolio` through apiFetch, which reloads the list.
+  const holdingForm = createHoldingForm({ holdings })
 
   const deleteHolding = async (id: number) => {
     try {
@@ -207,7 +119,7 @@ export default function Portfolio() {
       showToast('Holding deleted', 'success')
     } catch (err) {
       console.error('Failed to delete holding', err)
-      showToast('Failed to delete holding', 'error')
+      showToast(plainMessage(err, "Couldn't delete the holding. Try again."), 'error')
     }
   }
 
@@ -231,22 +143,10 @@ export default function Portfolio() {
       }
     } catch (err) {
       console.error('Failed to refresh prices', err)
-      showToast('Failed to refresh prices', 'error')
+      showToast(plainMessage(err, "Couldn't refresh the prices. Try again."), 'error')
     } finally {
       setPriceLoading(false)
     }
-  }
-
-  // Accept both '.' and ',' as the decimal separator and keep only one. A native
-  // <input type="number"> rejects '.' (and clears on ',') in comma-decimal locales,
-  // which made the price/shares fields impossible to fill; these are type="text".
-  const sanitizeDecimal = (s: string): string => {
-    let out = s.replace(/,/g, '.').replace(/[^0-9.]/g, '')
-    const first = out.indexOf('.')
-    if (first !== -1) {
-      out = out.slice(0, first + 1) + out.slice(first + 1).replace(/\./g, '')
-    }
-    return out
   }
 
   const formatAmount = (amount: number): string => {
@@ -287,7 +187,9 @@ export default function Portfolio() {
             <button
               data-test-id="add-holding-btn"
               class={`${styles.btn} ${styles.btnPrimary}`}
-              onClick={openAddModal}
+              onClick={() => {
+                holdingForm.openNew()
+              }}
             >
               <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -337,7 +239,12 @@ export default function Portfolio() {
           <div class={styles.emptyState}>
             <p>No holdings yet</p>
             <p>Add your first stock or ETF to start tracking your portfolio.</p>
-            <button class={`${styles.btn} ${styles.btnPrimary}`} onClick={openAddModal}>
+            <button
+              class={`${styles.btn} ${styles.btnPrimary}`}
+              onClick={() => {
+                holdingForm.openNew()
+              }}
+            >
               Add Holding
             </button>
           </div>
@@ -387,7 +294,7 @@ export default function Portfolio() {
                               <button
                                 class={`${styles.btn} ${styles.btnSm} ${styles.btnGhost}`}
                                 onClick={() => {
-                                  openEditModal(h)
+                                  holdingForm.openEdit(h)
                                 }}
                                 title="Edit"
                               >
@@ -455,12 +362,12 @@ export default function Portfolio() {
       </div>
 
       {/* Add/Edit Modal */}
-      <Show when={showAddModal()}>
+      <Show when={holdingForm.isOpen()}>
         <div
           data-test-id="portfolio-modal-overlay"
           class={styles.modalOverlay}
           onclick={(e) => {
-            if (e.target === e.currentTarget) setShowAddModal(false)
+            if (e.target === e.currentTarget) holdingForm.close()
           }}
         >
           <div
@@ -472,99 +379,139 @@ export default function Portfolio() {
           >
             <div class={styles.modalHeader}>
               <h3 data-test-id="portfolio-modal-title" class={styles.modalTitle}>
-                {editingHolding() ? 'Edit Holding' : 'Add Holding'}
+                {holdingForm.editing() ? 'Edit Holding' : 'Add Holding'}
               </h3>
-              <button class={styles.modalClose} onClick={() => setShowAddModal(false)}>
+              <button
+                class={styles.modalClose}
+                onClick={() => {
+                  holdingForm.close()
+                }}
+              >
                 <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Ticker Symbol</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="e.g., AAPL, SPY, NVDA"
-                  data-test-id="portfolio-form-ticker"
-                  value={formData().ticker}
-                  onInput={(e) =>
-                    setFormData({ ...formData(), ticker: e.target.value.toUpperCase() })
-                  }
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Shares</label>
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  class={styles.formControl}
-                  placeholder="Number of shares"
-                  data-test-id="portfolio-form-shares"
-                  value={formData().shares}
-                  onInput={(e) =>
-                    setFormData({ ...formData(), shares: sanitizeDecimal(e.currentTarget.value) })
-                  }
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Purchase Price (per share)</label>
-                <input
-                  type="text"
-                  inputmode="decimal"
-                  class={styles.formControl}
-                  placeholder="0.00"
-                  data-test-id="portfolio-form-price"
-                  value={formData().purchasePrice}
-                  onInput={(e) =>
-                    setFormData({
-                      ...formData(),
-                      purchasePrice: sanitizeDecimal(e.currentTarget.value),
-                    })
-                  }
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Purchase Date</label>
-                <input
-                  type="date"
-                  class={styles.formControl}
-                  data-test-id="portfolio-form-date"
-                  value={formData().purchaseDate}
-                  onInput={(e) => setFormData({ ...formData(), purchaseDate: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Notes</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  placeholder="Optional notes"
-                  data-test-id="portfolio-form-notes"
-                  value={formData().notes}
-                  onInput={(e) => setFormData({ ...formData(), notes: e.target.value })}
-                />
-              </div>
+            <form class={styles.modalBody} {...holdingForm.attrs} data-test-id="portfolio-form">
+              <FormNotice form={holdingForm} testId="portfolio-form-notice" />
+              <Field
+                form={holdingForm}
+                name="ticker"
+                label="Ticker Symbol"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="e.g., AAPL, SPY, NVDA"
+                    data-test-id="portfolio-form-ticker"
+                    value={holdingForm.values.ticker}
+                    onInput={(e) => holdingForm.set('ticker', e.currentTarget.value.toUpperCase())}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={holdingForm}
+                name="shares"
+                label="Shares"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    placeholder="Number of shares"
+                    data-test-id="portfolio-form-shares"
+                    value={holdingForm.values.shares}
+                    onInput={(e) => holdingForm.set('shares', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={holdingForm}
+                name="purchase_price"
+                label="Purchase Price (per share)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    placeholder="0.00"
+                    data-test-id="portfolio-form-price"
+                    value={holdingForm.values.purchase_price}
+                    onInput={(e) => holdingForm.set('purchase_price', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={holdingForm}
+                name="purchase_date"
+                label="Purchase Date"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="date"
+                    class={styles.formControl}
+                    data-test-id="portfolio-form-date"
+                    value={holdingForm.values.purchase_date}
+                    onInput={(e) => holdingForm.set('purchase_date', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <Field
+                form={holdingForm}
+                name="notes"
+                label="Notes"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    class={styles.formControl}
+                    placeholder="Optional notes"
+                    data-test-id="portfolio-form-notes"
+                    value={holdingForm.values.notes}
+                    onInput={(e) => holdingForm.set('notes', e.currentTarget.value)}
+                  />
+                )}
+              </Field>
               <div class={styles.modalFooter}>
                 <button
                   type="button"
                   class={`${styles.btn} ${styles.btnSecondary}`}
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => {
+                    holdingForm.close()
+                  }}
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
+                <SubmitButton
                   data-test-id="portfolio-modal-submit"
                   class={`${styles.btn} ${styles.btnPrimary}`}
+                  busy={holdingForm.submitting()}
+                  busyLabel={holdingForm.editing() ? 'Saving…' : 'Adding…'}
                 >
-                  {editingHolding() ? 'Update' : 'Add'} Holding
-                </button>
+                  {holdingForm.editing() ? 'Update' : 'Add'} Holding
+                </SubmitButton>
               </div>
             </form>
           </div>
