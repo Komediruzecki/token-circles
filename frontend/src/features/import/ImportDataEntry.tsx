@@ -316,7 +316,9 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                   {(name) => (
                     <button
                       class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => flow.setSelectedSheet(name)}
+                      onClick={() => {
+                        flow.chooseUploadedSheet(name)
+                      }}
                     >
                       {name}
                     </button>

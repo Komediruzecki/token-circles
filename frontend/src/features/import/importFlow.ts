@@ -258,9 +258,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // File upload state
   const [uploadResult, setUploadResult] = createSignal<UploadResult | null>(null)
   const [selectedSheet, setSelectedSheet] = createSignal<string>('')
-  // Getter unused since duplicate detection moved client-side (it was only read by
-  // the removed /api/import/file-sheet call); the setter still records the upload id.
-  const [_fileId, setFileId] = createSignal<string>('')
+  // The file last uploaded. Neither runtime keeps it, so choosing another of its sheets uploads it
+  // again with that sheet's name (shared/importUpload.ts).
+  const [uploadedFile, setUploadedFile] = createSignal<File | null>(null)
 
   // Google Sheets state
   const [sheetUrl, setSheetUrl] = createSignal<string>('')
@@ -714,9 +714,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const resetForm = () => {
     setActiveStep('upload')
     setUploadResult(null)
+    setUploadedFile(null)
     setSheetResult(null)
     setSelectedSheet('')
-    setFileId('')
     setSheetUrl('')
     setColumnMapping({})
     setCategoryTypes({})
@@ -739,8 +739,10 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setShowBankRules(false)
   }
 
-  // File upload
-  const handleFileUpload = async (file: File) => {
+  // File upload. Both runtimes answer the file's header row, the rows under it as text, and its
+  // sheets (shared/importUpload.ts); local-first used to answer an upload session instead, and the
+  // upload stopped here with "Cannot read properties of undefined (reading '0')".
+  const handleFileUpload = async (file: File, sheetName?: string) => {
     setLoading(true)
     setDropProcessing(true)
     setError(null)
@@ -752,6 +754,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       await nextPaint()
       const formData = new FormData()
       formData.append('file', file)
+      if (sheetName) formData.append('sheetName', sheetName)
 
       const response = await apiFetch('/api/import/upload', {
         method: 'POST',
@@ -759,24 +762,44 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         body: formData,
       })
 
-      const data = await response.json()
+      const data = (await response.json()) as {
+        headers: string[]
+        rows: string[][]
+        selectedSheet: string
+        sheetNames: string[]
+        error?: string
+      }
 
       if (!response.ok) throw new Error(data.error || 'Upload failed')
 
-      setUploadResult(data)
-      setSelectedSheet(data.sheetNames[0])
-      setFileId(data.fileId)
+      setUploadedFile(file)
+      setUploadResult({
+        fileId: '',
+        filename: file.name,
+        sheetName: data.selectedSheet,
+        sheetNames: data.sheetNames,
+        headers: data.headers,
+        rows: data.rows,
+        totalRows: data.rows.length,
+      })
+      setSelectedSheet(data.selectedSheet)
       setHeaders(data.headers)
-      setRows(
-        data.rows.slice(1).filter((r: string[]) => r.some((c) => c !== undefined && c !== ''))
-      )
-      setActiveStep('mapping')
+      setRows(data.rows)
+      // On to the mapping step with the columns detected, as a pasted CSV and a Google Sheet go.
+      goToMapping()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setLoading(false)
       setDropProcessing(false)
     }
+  }
+
+  /** Read another sheet of the uploaded workbook: the file goes up again, with the sheet named. */
+  const chooseUploadedSheet = (sheetName: string) => {
+    const file = uploadedFile()
+    if (!file || sheetName === selectedSheet()) return
+    void handleFileUpload(file, sheetName)
   }
 
   const handleFileSelect = (event: Event) => {
@@ -1614,6 +1637,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     toggleApprovedCategory,
     resetForm,
     handleFileSelect,
+    chooseUploadedSheet,
     handleDragOver,
     handleDrop,
     addBankAccount,
