@@ -75,6 +75,7 @@ export default function ProfileModal(props: ProfileModalProps) {
                 value={form.values.name}
                 onInput={(e) => form.set('name', e.currentTarget.value)}
                 autofocus
+                required
               />
             )}
           </Field>

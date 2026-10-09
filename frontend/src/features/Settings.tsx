@@ -1834,6 +1834,7 @@ export default function Settings() {
                                       value={renameForm.values.name}
                                       onInput={(e) => renameForm.set('name', e.currentTarget.value)}
                                       autofocus
+                                      required
                                     />
                                   )}
                                 </Field>

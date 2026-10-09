@@ -169,6 +169,7 @@ describe('renaming a profile in the household view', () => {
     const label = host.querySelector<HTMLLabelElement>(`label[for="${input()!.id}"]`)
     expect(label?.textContent).toBe('New name for Side business')
     expect(input()!.value).toBe('Side business')
+    expect(input()!.required).toBe(true)
   })
 
   it('marks a blank name in its own words, focuses it, and sends nothing', async () => {

@@ -120,6 +120,7 @@ describe('creating a profile', () => {
     await mount()
     const label = host.querySelector<HTMLLabelElement>(`label[for="${input().id}"]`)
     expect(label?.textContent).toBe('Profile Name')
+    expect(input().required).toBe(true)
   })
 
   it('marks a blank name in its own words, focuses it, and sends nothing', async () => {
