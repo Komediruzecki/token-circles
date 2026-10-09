@@ -402,6 +402,10 @@ const TEST_EMAIL_FAILED = "Couldn't send the test email. Try again."
 const HOUSEHOLD_LOCKED_HINT =
   'This is your active profile, so it is always included: new transactions, categories and accounts are saved to it. To change it, switch profiles in the sidebar.'
 
+/** Said when a backup was not restored and the runtime gave no words of its own. */
+const RESTORE_FAILED =
+  "Couldn't restore that backup. Check it's a backup file Token Circles saved. Your data is as it was."
+
 export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
   // not a hardcoded USD that mismatches how amounts actually render.
@@ -1051,10 +1055,9 @@ export default function Settings() {
       window.location.reload()
     } catch (error) {
       console.error('Backup restore failed:', error)
-      toast(
-        `Backup restore failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error'
-      )
+      // The runtime's own words when it refused the file (the Worker says what is wrong with it);
+      // anything else, a reason the person can act on.
+      toast(plainMessage(error, RESTORE_FAILED), 'error')
     } finally {
       setRestoringBackup(false)
     }

@@ -37,7 +37,6 @@ const KNOWN: Record<string, number> = {
   'components/onboarding/OnboardingWizard.tsx': 2,
   'features/CompoundInterestCalculator.tsx': 1,
   'features/EmergencyFundCalculator.tsx': 1,
-  'features/Settings.tsx': 1,
   'features/Tags.tsx': 6,
 }
 
