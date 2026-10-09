@@ -86,12 +86,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function openHousehold(): Promise<void> {
+async function openHousehold(lastId = 3): Promise<void> {
   setSettingsTab('exports')
   const { default: Settings } = await import('../Settings')
   dispose = render(() => <Settings />, host)
   await vi.waitFor(() => {
-    expect(row(3)).not.toBeNull()
+    expect(row(lastId)).not.toBeNull()
   })
 }
 
@@ -278,5 +278,35 @@ describe('the Danger Zone', () => {
       expect(await names()).toEqual(['Household', 'Freelance'])
     })
     expect(net.sent).toContain('DELETE /api/profiles/3')
+  })
+
+  it('deletes the first profile, as both runtimes allow any profile but the last', async () => {
+    await openHousehold()
+    chooseInDangerZone('Household')
+    const remove = buttonNamed('Delete Profile')!
+    expect(remove.disabled).toBe(false)
+    remove.click()
+    await vi.waitFor(() => {
+      expect(host.textContent).toContain('Delete profile "Household"?')
+    })
+    buttonNamed('Yes, Delete Profile')!.click()
+
+    await vi.waitFor(async () => {
+      expect(await names()).toEqual(['Side business', LONG])
+    })
+    expect(net.sent).toContain('DELETE /api/profiles/1')
+  })
+
+  it('keeps the last profile', async () => {
+    const db = await getDB()
+    await db.delete('profiles', 2)
+    await db.delete('profiles', 3)
+    setProfiles([{ id: 1, name: 'Household', created_at: '2026-01-01T00:00:00.000Z' }])
+    setCurrentProfile({ id: 1, name: 'Household', created_at: '2026-01-01T00:00:00.000Z' })
+    await openHousehold(1)
+
+    expect(dangerOptions()).toEqual([[1, 'Household']])
+    expect(buttonNamed('Delete Profile')!.disabled).toBe(true)
+    expect(host.textContent).toContain('(Cannot delete the last remaining profile)')
   })
 })

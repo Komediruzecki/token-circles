@@ -36,9 +36,8 @@ export default function DangerZone(props: DangerZoneProps) {
     return p ? p.name : 'Selected Profile'
   }
 
-  const isDeleteProfileDisabled = () => {
-    return selectedProfileId() === 1 || props.profiles.length <= 1
-  }
+  // Both runtimes delete any profile but the last one.
+  const isDeleteProfileDisabled = () => props.profiles.length <= 1
 
   const executeDelete = async (endpoint: string, successMsg: string) => {
     setLoading(true)
@@ -285,9 +284,7 @@ export default function DangerZone(props: DangerZoneProps) {
                 <Show when={isDeleteProfileDisabled()}>
                   <span class={styles['danger-zone-note']}>
                     {' '}
-                    {selectedProfileId() === 1
-                      ? '(The default profile cannot be deleted)'
-                      : '(Cannot delete the last remaining profile)'}
+                    (Cannot delete the last remaining profile)
                   </span>
                 </Show>
               </div>
