@@ -239,6 +239,13 @@ async function saidOnly(message: string): Promise<void> {
   })
 }
 
+/** The page said `message` as information, and said nothing else. */
+async function toldOnly(message: string): Promise<void> {
+  await vi.waitFor(() => {
+    expect(toasts().map((t) => [t.type, t.message])).toEqual([['info', message]])
+  })
+}
+
 describe('Goals, when an action fails', () => {
   const goalShown = () => host.querySelectorAll('[data-test-id="goal-card"]').length === 1
   const deleteGoal = async () => {
@@ -260,12 +267,17 @@ describe('Goals, when an action fails', () => {
     await saidOnly("Couldn't load your goals. Reload to try again.")
   })
 
-  it('says a goal deleted elsewhere first is not there', async () => {
+  // Gone is what was asked, so the page says so, as Bills does, and drops the card. It said the
+  // answer's words as an error, and the cloud's were "Not found".
+  it('drops a goal deleted elsewhere first, and says it was already deleted', async () => {
     await mount('goals', goalShown)
     await elsewhere('goals', SAVINGS, null)
     await deleteGoal()
 
-    await saidOnly('Goal not found')
+    await toldOnly('That goal was already deleted.')
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="goal-card"]')).toHaveLength(0)
+    })
   })
 
   it('says a plain sentence when deleting fails with no words of its own', async () => {

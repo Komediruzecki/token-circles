@@ -37,7 +37,7 @@ import { Field, FormNotice, SubmitButton } from '../components/form'
 import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiHouseholdGet, showToast } from '../core/api'
+import { apiDelete, apiHouseholdGet, errorStatus, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
@@ -150,12 +150,19 @@ export default function Goals() {
   const categoryNameOf = (goal: Goal): string | undefined =>
     goal.category_id ? categories().find((c) => c.id === goal.category_id)?.name : undefined
 
-  // Delete goal
+  // Delete goal. One deleted in another tab or on another device first answers 404: gone is what
+  // was asked, so the page says so and drops the card, as Bills does. A failed write bumps no
+  // counter, so this reload has to be asked for.
   const deleteGoal = async (id: number) => {
     try {
       await apiDelete(`/api/savings-goals/${id}`)
       showToast('Goal deleted successfully', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        showToast('That goal was already deleted.', 'info')
+        await loadGoals()
+        return
+      }
       console.error('Failed to delete goal:', err)
       showToast(plainMessage(err, "Couldn't delete the goal. Try again."), 'error')
     }
