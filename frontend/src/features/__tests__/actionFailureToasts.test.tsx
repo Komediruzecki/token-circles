@@ -12,6 +12,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { GENERIC_ERROR } from '../../../../shared/genericError'
 import { networkError, statusMessage, UNREACHABLE } from '../../core/apiError'
 import * as fetching from '../../core/apiFetch'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
@@ -19,6 +20,7 @@ import { confirmRequests, resolveConfirm } from '../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
 import { getDB } from '../../core/storage/idb'
+import * as localHandlers from '../../core/storage/localHandlers'
 import { removeToast, toasts } from '../../core/toastStore'
 import { defaultPeriod, localToday } from '../../utils/period'
 import type { Component } from 'solid-js'
@@ -272,6 +274,18 @@ describe('Goals, when an action fails', () => {
     await deleteGoal()
 
     await saidOnly("Couldn't delete the goal. Try again.")
+  })
+
+  it('never shows what a delete threw in local-first', async () => {
+    await mount('goals', goalShown)
+    // What IndexedDB throws when the connection closes under a write.
+    vi.spyOn(localHandlers, 'goalsDelete').mockRejectedValue(
+      new TypeError("Failed to execute 'transaction' on 'IDBDatabase': The database is closing.")
+    )
+    await deleteGoal()
+
+    await saidOnly(GENERIC_ERROR)
+    expect(toasts().map((t) => t.message)).not.toContainEqual(expect.stringContaining('IDB'))
   })
 })
 

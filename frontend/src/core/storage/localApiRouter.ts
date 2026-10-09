@@ -1,3 +1,4 @@
+import { GENERIC_ERROR } from '../../../../shared/genericError'
 import { validateBody } from '../validation'
 import { AccountInUseError, ProfileOwnershipError } from './idb'
 import * as h from './localHandlers'
@@ -917,6 +918,18 @@ function extractParams(pattern: RegExp, path: string): Record<string, string> | 
   return params
 }
 
+/**
+ * A failure nobody wrote words for, answered as the Worker answers one (worker/src/error-response.ts):
+ * the generic sentence, with the status kept, and what went wrong in the console with the method
+ * and path. The words a handler had for it were an exception's ("Failed to execute 'transaction'
+ * on 'IDBDatabase'..."), which name code a person cannot act on, and a toast showed them
+ * (plainMessage in core/apiError.ts). A refusal meant for a person is a 4xx, and passes as it is.
+ */
+function failed(method: string, path: string, status: number, what: unknown): Response {
+  console.error('[routeApiRequest] Failed', { method, path, status }, what)
+  return json({ error: GENERIC_ERROR }, status)
+}
+
 export async function routeApiRequest(url: string, init?: RequestInit): Promise<Response> {
   const urlObj = new URL(url, window.location.origin)
   const method = init?.method ?? 'GET'
@@ -964,8 +977,9 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
     // handler (see targetProfileIdsFromHeaders) — there is deliberately NO shared mutable
     // profile state on the adapter, so concurrent requests can never clobber one another's
     // target and a Danger Zone delete always hits the profile it was issued for.
+    let answer: Response
     try {
-      return await route.handler({
+      answer = await route.handler({
         method,
         path: `/api${path}`,
         params,
@@ -981,13 +995,13 @@ export async function routeApiRequest(url: string, init?: RequestInit): Promise<
       // surface as an unhandled 500 instead of a 400 (audit H-03).
       if (err instanceof ProfileOwnershipError) return json({ error: err.message }, 400)
       if (err instanceof AccountInUseError) return json({ error: err.message }, 409)
-      console.error(
-        '[routeApiRequest] Unhandled handler error',
-        { method, path: `/api${path}` },
-        err
-      )
-      return json({ error: (err as Error)?.message ?? 'Internal error' }, 500)
+      return failed(method, `/api${path}`, 500, err)
     }
+    // Many handlers answer their own catch with the exception's text: here, once, for them all.
+    if (answer.status >= 500) {
+      return failed(method, `/api${path}`, answer.status, await answer.text().catch(() => ''))
+    }
+    return answer
   }
 
   return notFound(`/api${path}`)
