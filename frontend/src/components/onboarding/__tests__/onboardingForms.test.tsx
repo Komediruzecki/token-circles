@@ -99,7 +99,7 @@ async function storedProfile(id: number): Promise<Row | undefined> {
 }
 
 describe('naming your space', () => {
-  it('marks a blank name in the rules’ words, focuses it, and stays on the step', async () => {
+  it("marks a blank name in the rules' words, focuses it, and stays on the step", async () => {
     await openAt('space')
     type(nameField(), '  ')
 
@@ -114,7 +114,7 @@ describe('naming your space', () => {
     expect(failureToasts()).toEqual([])
   })
 
-  it('marks a name another profile has, in the runtime’s words', async () => {
+  it("marks a name another profile has, in the runtime's words", async () => {
     await openAt('space')
     type(nameField(), 'household')
 
