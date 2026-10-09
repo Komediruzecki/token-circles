@@ -71,4 +71,39 @@ describe('resolveGoogleUser', () => {
       .first<{ email: string | null }>();
     expect(user?.email).toBeNull();
   });
+
+  it('joins the account whose address differs from the claim only in case', async () => {
+    await env.DB.prepare(
+      "INSERT INTO users (id, email, password_hash, email_verified, auth_provider, token_version) VALUES (901, 'gina@example.com', 'pbkdf2$100000$x$y', 1, 'password', 1)"
+    ).run();
+    const res = await resolveGoogleUser(env.DB, { ...CLAIMS, email: 'Gina@Example.COM' });
+    expect(res).toEqual({ userId: 901, created: false, email: null });
+    const user = await env.DB.prepare(
+      'SELECT email, provider_id FROM users WHERE id = 901'
+    ).first();
+    expect(user).toEqual({ email: 'gina@example.com', provider_id: 'google-sub-123' });
+  });
+
+  it('stores a new account address in lower case', async () => {
+    const res = await resolveGoogleUser(env.DB, { ...CLAIMS, email: 'New.Person@Example.COM' });
+    expect(res.created).toBe(true);
+    expect(res.email).toBe('new.person@example.com');
+    const user = await env.DB.prepare('SELECT email FROM users WHERE id = ?')
+      .bind(res.userId)
+      .first<{ email: string }>();
+    expect(user?.email).toBe('new.person@example.com');
+  });
+
+  it('finds an address stored earlier with capitals', async () => {
+    // A row kept with capitals: the look-up ignores case.
+    await env.DB.prepare(
+      "INSERT INTO users (id, email, email_verified, auth_provider, provider_id, token_version) VALUES (902, 'Gina@Example.com', 1, 'google', 'google-sub-older', 1)"
+    ).run();
+    const res = await resolveGoogleUser(env.DB, CLAIMS);
+    expect(res).toEqual({ userId: 902, created: false, email: null });
+    const { results } = await env.DB.prepare(
+      "SELECT id FROM users WHERE lower(email) = 'gina@example.com'"
+    ).all();
+    expect(results).toEqual([{ id: 902 }]);
+  });
 });

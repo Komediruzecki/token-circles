@@ -457,11 +457,15 @@ export async function resolveGoogleUser(
     .first<{ id: number }>();
   if (byProvider) return { userId: byProvider.id, created: false, email: null };
 
+  // Addresses are kept in lower case, as registration keeps them, and the match ignores case, so
+  // a row kept with capitals is found too.
+  const email = claims.email?.trim().toLowerCase() || null;
+
   // Link to an existing account with the same verified email.
-  if (claims.email && claims.email_verified === 'true') {
+  if (email && claims.email_verified === 'true') {
     const byEmail = await db
-      .prepare('SELECT id FROM users WHERE email = ?')
-      .bind(claims.email)
+      .prepare('SELECT id FROM users WHERE lower(email) = ? ORDER BY id LIMIT 1')
+      .bind(email)
       .first<{ id: number }>();
     if (byEmail) {
       await db
@@ -481,7 +485,7 @@ export async function resolveGoogleUser(
     .prepare(
       "INSERT INTO users (username, email, email_verified, auth_provider, provider_id) VALUES (NULL, ?, ?, 'google', ?)"
     )
-    .bind(verified ? (claims.email ?? null) : null, verified ? 1 : 0, claims.sub)
+    .bind(verified ? email : null, verified ? 1 : 0, claims.sub)
     .run();
   const userId = res.meta.last_row_id as number;
   // Every user needs a default profile (the Express backend seeded one at bootstrap);
@@ -490,5 +494,5 @@ export async function resolveGoogleUser(
     .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
     .bind('Personal Profile', userId)
     .run();
-  return { userId, created: true, email: verified ? (claims.email ?? null) : null };
+  return { userId, created: true, email: verified ? email : null };
 }
