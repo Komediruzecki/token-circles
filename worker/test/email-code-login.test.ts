@@ -1,7 +1,7 @@
 /**
  * Email-code sign-in: request a 6-digit code by mail, trade it for a session. Anti-enumeration
  * (the request endpoint answers identically for unknown addresses, cookie included), single-use,
- * 10-minute TTL — and the verify step is BOUND to the browser that requested it by a signed
+ * 10-minute TTL — and the verify step is BOUND to the browser that requested it by the
  * ceremony cookie, so a code can only be guessed at by the party that triggered it: five wrong
  * attempts burn it. On a confirmed account the 2FA challenge still applies after the code; on one
  * whose address was never confirmed, the code first removes every way in that was set up before.
@@ -12,7 +12,9 @@ import {
   createLoginCode,
   LOGIN_CODE_MAX_ATTEMPTS,
   LOGIN_CODE_TTL_MINUTES,
+  newCodeHandle,
 } from '../src/login-codes';
+import { b64urlEncode, hmacKey } from '../src/auth';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
@@ -42,6 +44,11 @@ const CODE_REFUSED = {
 const SEEDED = 6610;
 const SEEDED_ADDRESS = 'household-code@example.com';
 
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function cookieValue(res: Response, name: string): string | null {
   for (const c of res.headers.getSetCookie()) {
     if (c.startsWith(`${name}=`)) return c.split(';')[0]!;
@@ -62,8 +69,9 @@ async function mintWithCookie(
   email = EMAIL,
   user = userId
 ): Promise<{ code: string; cookie: string; id: number }> {
-  const { code, id } = await createLoginCode(env, user, email);
-  const cookie = (await issueLoginCodeCookie(env, id, email)).split(';')[0]!;
+  const handle = newCodeHandle();
+  const { code, id } = await createLoginCode(env, user, email, handle);
+  const cookie = issueLoginCodeCookie(env, handle).split(';')[0]!;
   return { code, cookie, id };
 }
 
@@ -114,8 +122,17 @@ describe('requesting a code', () => {
     expect(rows.results).toHaveLength(1); // only the real account got a code minted
   });
 
+  it('sets as its cookie the handle whose SHA-256 hash the code row keeps', async () => {
+    const res = await post('/api/auth/email-code/request', { email: EMAIL });
+    const handle = cookieValue(res, 'fm_logincode')!.slice('fm_logincode='.length);
+    const rows = await env.DB.prepare('SELECT handle_hash FROM login_codes WHERE email = ?')
+      .bind(EMAIL)
+      .all<{ handle_hash: string }>();
+    expect(rows.results).toEqual([{ handle_hash: await sha256Hex(handle) }]);
+  });
+
   it('stores only a hash, never the code', async () => {
-    const { code } = await createLoginCode(env, userId, EMAIL);
+    const { code } = await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const row = await env.DB.prepare('SELECT code_hash FROM login_codes WHERE user_id = ?')
       .bind(userId)
       .first<{ code_hash: string }>();
@@ -136,7 +153,7 @@ describe('requesting a code', () => {
     // The old delete-previous behavior let anyone invalidate the code a user was busy typing,
     // just by firing /request for their address.
     const first = await mintWithCookie();
-    await createLoginCode(env, userId, EMAIL);
+    await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const res = await post(
       '/api/auth/email-code/verify',
       { email: EMAIL, code: first.code },
@@ -146,7 +163,7 @@ describe('requesting a code', () => {
   });
 
   it('keeps at most three live codes per user', async () => {
-    for (let i = 0; i < 5; i++) await createLoginCode(env, userId, EMAIL);
+    for (let i = 0; i < 5; i++) await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const row = await env.DB.prepare(
       'SELECT COUNT(*) AS n FROM login_codes WHERE user_id = ? AND used_at IS NULL'
     )
@@ -213,6 +230,42 @@ describe('verifying a code', () => {
     expect(await res.json()).toEqual(CODE_REFUSED);
   });
 
+  it('refuses a cookie in the signed form it had before, as it refuses an expired code', async () => {
+    // A cookie as a code request set it before this change, for a code that is still live.
+    const signedForm = async (id: number) => {
+      const payload = b64urlEncode(
+        new TextEncoder().encode(
+          JSON.stringify({ codeId: id, email: EMAIL, exp: Math.floor(Date.now() / 1000) + 600 })
+        )
+      );
+      const mac = await crypto.subtle.sign(
+        'HMAC',
+        await hmacKey(env.JWT_SECRET),
+        new TextEncoder().encode(payload)
+      );
+      return `fm_logincode=${payload}.${b64urlEncode(mac)}`;
+    };
+    const minted = await mintWithCookie();
+    const earlier = await post(
+      '/api/auth/email-code/verify',
+      { email: EMAIL, code: minted.code },
+      await signedForm(minted.id)
+    );
+    await env.DB.prepare("UPDATE login_codes SET expires_at = datetime('now', '-1 minute')").run();
+    const expired = await post(
+      '/api/auth/email-code/verify',
+      { email: EMAIL, code: minted.code },
+      minted.cookie
+    );
+
+    expect(earlier.status).toBe(401);
+    expect(cookieValue(earlier, 'fm_session')).toBeNull();
+    expect({ status: earlier.status, body: await earlier.json() }).toEqual({
+      status: expired.status,
+      body: await expired.json(),
+    });
+  });
+
   it('rejects an expired code', async () => {
     const { code, cookie } = await mintWithCookie();
     await env.DB.prepare("UPDATE login_codes SET expires_at = datetime('now', '-1 minute')").run();
@@ -260,7 +313,7 @@ describe('verifying a code', () => {
 
 describe('account deletion', () => {
   it('removes the login_codes rows with the account', async () => {
-    await createLoginCode(env, userId, EMAIL);
+    await createLoginCode(env, userId, EMAIL, newCodeHandle());
     // The fixture user's password_hash is a dummy, so mint the session directly.
     const { sessionCookie } = await import('./helpers/session');
     const session = (

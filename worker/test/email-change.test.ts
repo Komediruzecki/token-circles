@@ -12,7 +12,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword } from '../src/auth';
 import { sessionCookie } from './helpers/session';
-import { createLoginCode } from '../src/login-codes';
+import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 
 const UID = 9500;
@@ -87,8 +87,9 @@ const resetPassword = (token: string) =>
 
 /** A sign-in code for `email`, minted as /email-code/request mints one, with its ceremony cookie. */
 async function codeFor(email: string): Promise<{ code: string; ceremony: string }> {
-  const { code, id } = await createLoginCode(env, UID, email);
-  return { code, ceremony: (await issueLoginCodeCookie(env, id, email)).split(';')[0] };
+  const handle = newCodeHandle();
+  const { code } = await createLoginCode(env, UID, email, handle);
+  return { code, ceremony: issueLoginCodeCookie(env, handle).split(';')[0] };
 }
 
 const signInWithCode = (email: string, { code, ceremony }: { code: string; ceremony: string }) =>
