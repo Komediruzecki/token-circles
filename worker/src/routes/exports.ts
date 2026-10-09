@@ -114,6 +114,11 @@ exportRoutes.get('/api/export', requireAuth, async (c) => {
   if (backup.skippedReceipts?.length) {
     c.header('X-Backup-Skipped-Receipts', String(backup.skippedReceipts.length));
   }
+  // Settings asks for an indented file unless its pretty-print switch is off, as the browser's own
+  // export does.
+  if (c.req.query('pretty') === 'true') {
+    return c.body(JSON.stringify(backup, null, 2), 200, { 'Content-Type': 'application/json' });
+  }
   return c.json(backup);
 });
 
