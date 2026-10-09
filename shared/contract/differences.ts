@@ -33,8 +33,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
   'emergency-fund-extras':
     'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
-  'housing-answer-shape':
-    "GET /api/housing answers each row's stored columns on the Worker, and the form's own fields (property_name, due_day, due_month) beside them in local-first; the Housing page reads both. Slice 5 (housing).",
   'portfolio-prices':
     'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
   'settings-scope':

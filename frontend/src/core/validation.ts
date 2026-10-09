@@ -24,6 +24,7 @@ import {
 } from '../../../shared/categoryMappingSchema'
 import { checkCategoryCreate } from '../../../shared/categorySchema'
 import { checkGoalCreate } from '../../../shared/goalSchema'
+import { checkHousingCreate } from '../../../shared/housingSchema'
 import { checkImportSourceCreate, checkSheetFetch } from '../../../shared/importSourceSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
 import { checkProfileCreate } from '../../../shared/profileSchema'
@@ -33,6 +34,7 @@ import { checkTagCreate, defaultTagColor } from '../../../shared/tagSchema'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
 import { getLocalCurrency } from './api'
+import type { HousingDefaults } from '../../../shared/housingSchema'
 import type { Checked, FieldErrors } from '../../../shared/refusal'
 import type { TransactionDefaults } from '../../../shared/transactionSchema'
 
@@ -100,19 +102,14 @@ export const portfolioHoldingCreateSchema = z.object({
 // Not a zod schema: shared/profileSchema.ts, which the Worker route runs too.
 
 // ── Housing ────────────────────────────────────────────────────────────────────
+// Not a zod schema: shared/housingSchema.ts, which the Worker route runs too. The zod schema
+// that was here was registered under /api/housings, a path nothing calls, and described a
+// purchase the Housing form does not send.
 
-export const housingCreateSchema = z.object({
-  name: z.string().min(1).max(100),
-  purchase_price: z.number().positive(),
-  monthly_rent: z.number().nonnegative().optional(),
-  down_payment: z.number().nonnegative().optional(),
-  interest_rate: z.number().nonnegative().optional(),
-  loan_term_years: z.number().int().positive().optional(),
-  property_tax_rate: z.number().nonnegative().optional(),
-  maintenance_rate: z.number().nonnegative().optional(),
-  appreciation_rate: z.number().nonnegative().optional(),
-  inflation_rate: z.number().nonnegative().optional(),
-})
+/** What a blank due month means in a local-first body: this month on this device's calendar. */
+export function localHousingDefaults(): HousingDefaults {
+  return { month: Number(localMonth().slice(5, 7)) }
+}
 
 // ── Counterparty ───────────────────────────────────────────────────────────────
 
@@ -159,8 +156,8 @@ const schemaMap: Record<string, BodyRule> = {
   // An edit of a source is checked by its handler against the stored kind (checkImportSourceEdit).
   'POST:/api/import-sources': checkImportSourceCreate,
   'POST:/api/import/googlesheet': checkSheetFetch,
-  'POST:/api/housings': housingCreateSchema,
-  'PUT:/api/housings': housingCreateSchema.partial(),
+  // An edit is checked by its handler against the stored row (checkHousingEdit).
+  'POST:/api/housing': (body) => checkHousingCreate(body, localHousingDefaults()),
   'POST:/api/counterparties': counterpartyCreateSchema,
   'PUT:/api/counterparties': counterpartyCreateSchema.partial(),
 }

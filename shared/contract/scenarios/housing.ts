@@ -1,3 +1,4 @@
+import { HOUSING_ANSWER_KEYS } from '../../housingSchema';
 import { expectMoney } from '../helpers';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -55,11 +56,9 @@ export const housing = [
       due: '03-05',
       notes: 'Paid to the landlord',
     });
+    // The stored columns, autopay as true or false, and nothing else.
     expect(row.autopay).toBe(true);
-    // DIFFERENCE housing-answer-shape: local-first also answers the form's own fields.
-    if (api.runtime === 'local') {
-      expect(row).toMatchObject({ property_name: 'Flat rent', due_day: 5, due_month: 3 });
-    } else expect(row.property_name).toBeUndefined();
+    expect(Object.keys(row).sort()).toEqual([...HOUSING_ANSWER_KEYS].sort());
 
     // Nothing in the app edits one; a client would send the form's body again.
     expectOk(

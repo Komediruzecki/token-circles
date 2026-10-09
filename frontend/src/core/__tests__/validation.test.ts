@@ -252,20 +252,29 @@ describe('validation - validateBody', () => {
   })
 })
 
-describe('validation - a zod refusal in plain words', () => {
-  async function fieldsOf(path: string, body: unknown): Promise<Record<string, string>> {
-    const result = validateBody('POST', path, body)
-    expect(result?.status).toBe(400)
-    return (await result!.json()).fields
-  }
+/** The field messages of a POST the body checks refuse. */
+async function fieldsOf(path: string, body: unknown): Promise<Record<string, string>> {
+  const result = validateBody('POST', path, body)
+  expect(result?.status).toBe(400)
+  return (await result!.json()).fields
+}
 
-  it('says what to do with a number out of range, a list value and a date', async () => {
-    expect(
-      await fieldsOf('/api/housings', { name: 'Flat', purchase_price: 0, interest_rate: -1 })
-    ).toEqual({
-      purchase_price: 'Make the purchase price more than zero.',
-      interest_rate: "The interest rate can't be negative.",
+describe('validation - the shared checks', () => {
+  it('checks a housing expense at /api/housing, the path the Housing page posts to', async () => {
+    expect(await fieldsOf('/api/housing', { property_name: '', monthly_amount: 0 })).toEqual({
+      property_name: 'Name the property or the payment.',
+      monthly_amount: 'Enter an amount more than zero.',
     })
+    expect(
+      validateBody('POST', '/api/housing', { property_name: 'Flat', monthly_amount: 850.5 })
+    ).toBeNull()
+    // The path the old zod schema was registered under is called by nothing.
+    expect(validateBody('POST', '/api/housings', {})).toBeNull()
+  })
+})
+
+describe('validation - a zod refusal in plain words', () => {
+  it('says what to do with a number out of range, a list value and a date', async () => {
     expect(
       await fieldsOf('/api/portfolio/holdings', {
         ticker: 'VWCE',
