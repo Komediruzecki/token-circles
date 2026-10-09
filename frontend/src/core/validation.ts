@@ -29,6 +29,7 @@ import { checkLoanCreate } from '../../../shared/loanSchema'
 import { checkProfileCreate } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema'
+import { checkTagCreate, defaultTagColor } from '../../../shared/tagSchema'
 import { checkTransactionCreate } from '../../../shared/transactionSchema'
 import { localMonth, localToday } from '../utils/period'
 import { getLocalCurrency } from './api'
@@ -80,16 +81,7 @@ export const recurringCreateSchema = z.object({
 export const recurringUpdateSchema = recurringCreateSchema.partial()
 
 // ── Tag ────────────────────────────────────────────────────────────────────────
-
-export const tagCreateSchema = z.object({
-  name: z.string().min(1).max(50),
-  color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
-})
-
-export const tagUpdateSchema = tagCreateSchema.partial()
+// Not a zod schema: shared/tagSchema.ts, which the Worker route runs too.
 
 // ── Portfolio Holding ──────────────────────────────────────────────────────────
 
@@ -154,8 +146,9 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/savings-goals': (body) => checkGoalCreate(body, { today: localToday() }),
   'POST:/api/recurring': recurringCreateSchema,
   'PUT:/api/recurring': recurringUpdateSchema,
-  'POST:/api/tags': tagCreateSchema,
-  'PUT:/api/tags': tagUpdateSchema,
+  // A new tag's colour, when it has none, depends on the profile's tags: its handler fills it in.
+  // An edit is checked by its handler against the stored tag (checkTagEdit).
+  'POST:/api/tags': (body) => checkTagCreate(body, defaultTagColor(0)),
   'POST:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/portfolio/holdings': portfolioHoldingCreateSchema,
   'PUT:/api/settings': checkSettingsUpdate,

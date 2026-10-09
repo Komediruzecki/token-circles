@@ -292,12 +292,12 @@ describe('validation - a zod refusal in plain words', () => {
   it('names a too-long name, and a wrong kind of value, by the field', async () => {
     expect(await fieldsOf('/api/tags', { name: 'x'.repeat(51), color: 5 })).toEqual({
       name: 'Keep the name to 50 characters or fewer.',
-      color: 'Enter a valid color.',
+      color: "That color can't be used. Pick another one.",
     })
   })
 
   it('answers a body that is not an object with a summary and no fields', async () => {
-    const result = validateBody('POST', '/api/tags', 'not json')
+    const result = validateBody('POST', '/api/counterparties', 'not json')
     expect(result?.status).toBe(400)
     expect(await result!.json()).toEqual({
       error: 'Some details need another look. Check them and try again.',

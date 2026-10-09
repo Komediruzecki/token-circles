@@ -96,14 +96,16 @@ describe('localHandlers - tags', () => {
     expect(await names()).toEqual(['Garden'])
   })
 
-  it('refuses a second tag of the same name in one profile, as the Worker does', async () => {
-    // The Worker's table is UNIQUE(name, profile_id): exact and case-sensitive.
+  it('refuses a second tag of the same name in one profile, in any case, as the Worker does', async () => {
+    // Both runtimes compare names without case or surrounding space (shared/tagSchema.ts).
     expect((await tagsCreate({ name: 'Groceries' })).status).toBe(201)
 
-    const again = await tagsCreate({ name: ' Groceries ' })
-    expect(again.status).toBe(400)
-    expect(await again.json()).toEqual({ error: 'Tag already exists' })
-    expect((await tagsCreate({ name: 'groceries' })).status).toBe(201)
+    const taken = 'You already have a tag called "Groceries". Choose another name.'
+    for (const name of [' Groceries ', 'groceries']) {
+      const again = await tagsCreate({ name })
+      expect(again.status).toBe(400)
+      expect(await again.json()).toEqual({ error: taken, fields: { name: taken } })
+    }
 
     const db = await getDB()
     await db.add('profiles', { id: 2, name: 'Partner', created_at: '2026-01-01' })

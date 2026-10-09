@@ -21,12 +21,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
     "On the Worker only, a new transaction is linked to the account named like its category as where the money went (transfer_account_id), and one with no account to the account named like its means of payment as where it came from. Through the Transactions form, which always sends an account, balances agree, but the row still names the other account, which the Transactions page's account filter then shows it under and which cannot be deleted while the row exists (409). An income written with no account (API, MCP or import) credits the account named like its category on the Worker only. Slice 2 (transactions).",
-  'transactions-by-tag':
-    'GET /api/transactions/by-tag/:tagId orders rows newest first and honours startDate, endDate, category_ids, type, limit and offset on the Worker, but answers every tagged row in key order, unfiltered, in local-first; nothing in the app calls it. Slice 5 (tags).',
-  'tag-default-colour':
-    "A tag created without a colour gets the next colour of the app's palette, by the profile's tag count, on the Worker, and always #6e9bff (the palette's first) in local-first; both forms always send one. Slice 5 (tags).",
-  'tag-rename-duplicate':
-    "Renaming a tag to another tag's name is refused (400) on the Worker and stored in local-first, which then lists two tags of one name. Slice 5 (tags).",
   'day-of-month-default':
     'A recurring rule saved without a day of the month (the form does not require one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. A bill stores none in both runtimes since slice 3. Slice 5 (recurring).',
   'delete-missing':
