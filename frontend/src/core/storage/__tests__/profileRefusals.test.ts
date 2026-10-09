@@ -8,6 +8,8 @@
  * - A blank name was "Profile name is required" or zod's words, with no field the dialog could
  *   place; a duplicate was compared exactly and refused with no field.
  * - A rename was stored as it came: blank, a duplicate, anything; it answered { ok: true }.
+ * - Delete Profile answered 403 for every profile but the ones in use, so the Danger Zone could
+ *   not delete another profile, and it deleted a person's last profile, leaving none.
  */
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { PROFILE_MESSAGES as M } from '../../../../../shared/profileSchema'
@@ -169,5 +171,60 @@ describe('renaming a profile', () => {
       body: { error: M.notFound },
     })
     expect(await names()).toEqual(STORED)
+  })
+})
+
+describe('deleting a profile', () => {
+  it('deletes one that is not in use, with its rows, and leaves the selection alone', async () => {
+    const db = await getDB()
+    await db.add('accounts', { id: 31, profile_id: SIDE, name: 'Invoices', balance: 10 } as never)
+    await db.add('accounts', {
+      id: 32,
+      profile_id: HOUSEHOLD,
+      name: 'Everyday',
+      balance: 5,
+    } as never)
+
+    expect(await answer(await call('DELETE', `/api/profiles/${SIDE}`))).toEqual({
+      status: 200,
+      body: { ok: true },
+    })
+    expect(await names()).toEqual(['Household', LONG, 'household '])
+    expect(((await db.getAll('accounts')) as { id: number }[]).map((a) => a.id)).toEqual([32])
+    expect(localStorage.getItem('currentProfileId')).toBe(String(HOUSEHOLD))
+    expect(localStorage.getItem('selectedProfileIds')).toBe(JSON.stringify([HOUSEHOLD]))
+  })
+
+  it('drops the one in use from the selection', async () => {
+    localStorage.setItem('selectedProfileIds', JSON.stringify([HOUSEHOLD, SIDE]))
+    expect((await call('DELETE', `/api/profiles/${HOUSEHOLD}`)).status).toBe(200)
+    expect(localStorage.getItem('currentProfileId')).toBeNull()
+    expect(localStorage.getItem('selectedProfileIds')).toBe(JSON.stringify([SIDE]))
+  })
+
+  it('refuses the last one, in words that say how to get past it, and keeps its rows', async () => {
+    for (const id of [SIDE, OLD, TWIN]) {
+      expect((await call('DELETE', `/api/profiles/${id}`)).status).toBe(200)
+    }
+    const db = await getDB()
+    await db.add('accounts', {
+      id: 33,
+      profile_id: HOUSEHOLD,
+      name: 'Everyday',
+      balance: 5,
+    } as never)
+    expect(await answer(await call('DELETE', `/api/profiles/${HOUSEHOLD}`))).toEqual({
+      status: 400,
+      body: { error: M.onlyProfile },
+    })
+    expect(await names()).toEqual(['Household'])
+    expect(await db.count('accounts')).toBe(1)
+  })
+
+  it('answers 404 for a profile that is not there', async () => {
+    expect(await answer(await call('DELETE', '/api/profiles/99'))).toEqual({
+      status: 404,
+      body: { error: M.notFound },
+    })
   })
 })

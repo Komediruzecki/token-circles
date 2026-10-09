@@ -201,17 +201,12 @@ export const profiles = [
     await account(api.as(id), expect, 'Old savings', 10);
 
     // The Danger Zone can target any profile while this one stays active.
-    const reply = await api.delete(`/api/profiles/${id}`);
-    // DIFFERENCE profile-delete-selection
-    if (api.runtime === 'worker') {
-      expectOk(expect, reply, 'DELETE another profile');
-      expect((await profileList(api, expect)).map((p) => p.id)).not.toContain(id);
-      expect((await api.stored(id)).accounts).toBe(0);
-    } else {
-      expect(reply.status).toBe(403);
-      expect((await profileList(api, expect)).map((p) => p.id)).toContain(id);
-      expect((await api.stored(id)).accounts).toBe(1);
-    }
+    expectOk(expect, await api.delete(`/api/profiles/${id}`), 'DELETE another profile');
+    expect((await profileList(api, expect)).map((p) => p.id)).toEqual([
+      api.profile,
+      api.other.profile,
+    ]);
+    expect((await api.stored(id)).accounts).toBe(0);
   }),
 
   scenario('the last profile left is deleted', async (api, expect) => {
@@ -221,16 +216,14 @@ export const profiles = [
       'DELETE the partner profile'
     );
     await account(api, expect, 'Everyday', 1000);
+    // The Danger Zone offers no delete with one profile left; a request that asks is refused.
     const reply = await api.delete(`/api/profiles/${api.profile}`);
-    // DIFFERENCE profile-delete-last: the Danger Zone offers no delete with one profile left.
-    if (api.runtime === 'worker') {
-      expect(reply.status).toBe(400);
-      expect((await profileList(api, expect)).map((p) => p.id)).toEqual([api.profile]);
-      expect((await api.stored(api.profile)).accounts).toBe(1);
-    } else {
-      expectOk(expect, reply, 'DELETE the last profile');
-      expect((await api.stored(api.profile)).accounts).toBe(0);
-    }
+    expect(reply.status).toBe(400);
+    expect(reply.body).toEqual({
+      error: 'This is your only profile. Create another one before you delete this one.',
+    });
+    expect((await profileList(api, expect)).map((p) => p.id)).toEqual([api.profile]);
+    expect((await api.stored(api.profile)).accounts).toBe(1);
   }),
 
   scenario('the demo data is reseeded', async (api, expect) => {

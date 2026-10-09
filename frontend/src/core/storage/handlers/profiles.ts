@@ -9,6 +9,7 @@ import {
   checkProfileCreate,
   checkProfileRename,
   clashingProfileName,
+  PROFILE_MESSAGES,
   profileNameTaken,
   renamesProfile,
 } from '../../../../../shared/profileSchema'
@@ -124,13 +125,12 @@ export async function profilesUpdate(
 
 export async function profilesDelete(params: Record<string, string>): Promise<Response> {
   const profileId = idParam(params)
-  // Verify the profile exists and is owned by the current user
   const db = await getDB()
   const profile = await db.get('profiles', profileId)
   if (!profile) return notFound('Profile')
-  const pids = adapter.getCurrentProfileIds()
-  if (!pids.includes(profileId))
-    return json({ error: 'Cannot delete a profile you do not own' }, 403)
+  // Every profile in this browser is the person's, so any of them can go, whichever is in use
+  // (the Danger Zone names the one it deletes), but never the last: the app needs one to stand in.
+  if ((await db.count('profiles')) <= 1) return json({ error: PROFILE_MESSAGES.onlyProfile }, 400)
 
   await adapter.clearProfileData([profileId], { deleteProfiles: true })
 
