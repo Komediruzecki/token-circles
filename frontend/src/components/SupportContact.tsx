@@ -1,5 +1,10 @@
 import { createSignal, Show } from 'solid-js'
-import Turnstile, { turnstileEnabled, waitForTurnstileToken } from './Turnstile'
+import { supportProblems } from '../../../shared/signInSchema'
+import { apiErrorFrom, networkError } from '../core/apiError'
+import { createCaptchaGate } from './captchaGate'
+import { createForm, Field, FormNotice, SubmitButton } from './form'
+import styles from './SignInSteps.module.css'
+import Turnstile from './Turnstile'
 
 // Hits the worker directly (not apiFetch) so it works in any storage mode and while signed out.
 const API = (import.meta.env.VITE_API_URL ?? '') as string
@@ -27,68 +32,62 @@ function LifebuoyIcon() {
   )
 }
 
+/** The notice for a send that failed in a way the Worker did not put into words. */
+const NOT_SENT = "Your message didn't send. Try again in a moment."
+
 /**
  * "Contact support" link + modal. Posts to the worker's /api/support/contact, which relays the
  * message to the private support inbox (the address is never exposed to the client). Drop it
  * anywhere — the sign-in screen, the reset screen, Settings.
+ *
+ * A kit form: an address that is missing or not an address, and a message shorter than 5
+ * characters or longer than 5,000, are marked under their fields before anything is sent; a field
+ * the Worker names is marked the same way. A limit reached and a request the captcha stopped are
+ * said in the form's notice, and mark no field.
  */
 export default function SupportContact(props: { label?: string; prefillEmail?: string }) {
   const [open, setOpen] = createSignal(false)
-  const [email, setEmail] = createSignal(props.prefillEmail ?? '')
-  const [message, setMessage] = createSignal('')
-  const [status, setStatus] = createSignal<'idle' | 'sending' | 'sent'>('idle')
-  const [error, setError] = createSignal('')
+  const [status, setStatus] = createSignal<'idle' | 'sent'>('idle')
   const [ticketId, setTicketId] = createSignal('')
-  const [turnstileToken, setTurnstileToken] = createSignal('')
+  // The widget is invisible unless Cloudflare wants a click, so the send button is never gated on
+  // a token: the send waits for one instead. Normally it is there before the message is typed.
+  const captcha = createCaptchaGate()
 
-  /**
-   * The widget is invisible unless Cloudflare wants a click, so the send button is never gated on
-   * a token — it waits here instead. Normally already resolved: the challenge runs while the
-   * message is being typed.
-   */
-  const captchaToken = async (): Promise<string> => {
-    if (!turnstileEnabled) return ''
-    if (turnstileToken()) return turnstileToken()
-    return waitForTurnstileToken(turnstileToken, 20000)
-  }
-
-  const send = async (e: Event) => {
-    e.preventDefault()
-    setError('')
-    const em = email().trim()
-    const msg = message().trim()
-    if (!em || msg.length < 5) {
-      setError('Enter your email and a short message')
-      return
-    }
-    setStatus('sending')
-    try {
-      const res = await fetch(`${API}/api/support/contact`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: em, message: msg, turnstileToken: await captchaToken() }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not send your message')
-      setTicketId(typeof data.ticketId === 'string' ? data.ticketId : '')
+  const form = createForm<{ email: string; message: string }, string>({
+    initial: { email: props.prefillEmail ?? '', message: '' },
+    check: (values) => supportProblems(values),
+    send: async (values) => {
+      try {
+        const turnstileToken = await captcha.next()
+        let response: Response
+        try {
+          response = await fetch(`${API}/api/support/contact`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: values.email.trim(),
+              message: values.message.trim(),
+              turnstileToken,
+            }),
+          })
+        } catch (cause) {
+          throw networkError(cause)
+        }
+        if (!response.ok) throw await apiErrorFrom(response)
+        const data = (await response.json().catch(() => ({}))) as { ticketId?: unknown }
+        return typeof data.ticketId === 'string' ? data.ticketId : ''
+      } catch (error) {
+        throw captcha.explain(error)
+      } finally {
+        captcha.spent()
+      }
+    },
+    saved: (ticket) => {
+      setTicketId(ticket)
       setStatus('sent')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send your message')
-      setStatus('idle')
-    }
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    'margin-bottom': '10px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    'box-sizing': 'border-box' as const,
-  }
+    },
+    failure: NOT_SENT,
+  })
 
   return (
     <>
@@ -96,7 +95,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
         onClick={() => {
           setOpen(true)
           setStatus('idle')
-          setError('')
+          form.reset({ ...form.values })
         }}
         style={{
           cursor: 'pointer',
@@ -189,36 +188,52 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                 Trouble signing in or didn't receive an email? Send us a message and we'll get back
                 to you.
               </p>
-              <form onSubmit={send}>
-                <input
-                  type="email"
-                  placeholder="Your email"
-                  value={email()}
-                  onInput={(e) => setEmail(e.currentTarget.value)}
-                  autocomplete="email"
-                  style={inputStyle}
-                />
-                <textarea
-                  placeholder="How can we help?"
-                  value={message()}
-                  onInput={(e) => setMessage(e.currentTarget.value)}
-                  rows={5}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-                <Show when={error()}>
-                  <div
-                    style={{
-                      color: 'var(--danger, #ef4444)',
-                      'font-size': '13px',
-                      margin: '2px 0 10px',
-                    }}
-                  >
-                    {error()}
-                  </div>
-                </Show>
+              <FormNotice form={form} testId="support-error" />
+              <form {...form.attrs}>
+                <Field
+                  form={form}
+                  name="email"
+                  label="Your email address"
+                  class={styles.field}
+                  labelClass={styles.label}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="email"
+                      value={form.values.email}
+                      onInput={(e) => form.set('email', e.currentTarget.value)}
+                      autocomplete="email"
+                      class={styles.input}
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={form}
+                  name="message"
+                  label="Message"
+                  class={styles.field}
+                  labelClass={styles.label}
+                >
+                  {(control) => (
+                    <textarea
+                      {...control}
+                      placeholder="How can we help?"
+                      value={form.values.message}
+                      onInput={(e) => form.set('message', e.currentTarget.value)}
+                      rows={5}
+                      class={styles.input}
+                      style={{ resize: 'vertical' }}
+                    />
+                  )}
+                </Field>
                 {/* Invisible unless Cloudflare wants a click. It has to be rendered for a token to
                     exist at all — the send button waits on one rather than being disabled by it. */}
-                <Turnstile appearance="interaction-only" onToken={setTurnstileToken} />
+                <Turnstile
+                  appearance="interaction-only"
+                  onToken={captcha.onToken}
+                  onStatus={captcha.onStatus}
+                />
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"
@@ -235,9 +250,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                   >
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={status() === 'sending'}
+                  <SubmitButton
+                    busy={form.submitting()}
+                    busyLabel="Sending…"
                     style={{
                       padding: '9px 16px',
                       'border-radius': '8px',
@@ -248,8 +263,8 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                       'font-size': '14px',
                     }}
                   >
-                    {status() === 'sending' ? 'Sending…' : 'Send message'}
-                  </button>
+                    Send message
+                  </SubmitButton>
                 </div>
               </form>
             </Show>
