@@ -4,7 +4,9 @@ Status: **slice 1 (categories) merged in #602; slice 2 (transactions and account
 `feat/forms-transactions`, see [Slice 2](#slice-2-transactions-and-accounts-2026-10-08); slice 4a
 (loans and retirement) built on `feat/forms-loans`, see
 [Slice 4a](#slice-4a-loans-and-retirement-2026-10-08); slice 4b (profiles, Settings and import) built
-on `feat/forms-profiles`, see [Slice 4b](#slice-4b-profiles-settings-and-import-2026-10-09)**
+on `feat/forms-profiles`, see [Slice 4b](#slice-4b-profiles-settings-and-import-2026-10-09); slice 6
+(sign-in and support) built on `feat/forms-slice-6`, see
+[Slice 6](#slice-6-sign-in-and-support-2026-10-09)**
 Date: 2026-10-07, decisions recorded 2026-10-08. Written on PR #599 (`fix/dev-check-polish`,
 664fd0c6); rebased onto main (d92626fe) once #599 and #601 merged.
 
@@ -675,6 +677,64 @@ a connected source's name refused over 200 characters where it was cut, its sett
 refused where they were stored; a base currency in lower case accepted; the wording of the new
 messages and toasts; and the mapping step, which still lets a person continue with the date or the
 amount column unmapped, where the page says they are required.
+
+## Slice 6: sign-in and support (2026-10-09)
+
+On `feat/forms-slice-6`, from main ceb43bb3, with main merged in at 29d85467 (#612, #613).
+
+The owner's rule for this slice: the sign-in system cannot break, so it changes how a refusal is
+shown, never what the Worker accepts.
+
+- **One set of rules, in `shared/signInSchema.ts`.** The address format, the 8 characters a new
+  password needs and the length of a message to support are the rules the routes already ran,
+  moved so the forms run them too. Registering, asking for a reset link or a sign-in code, trading
+  the code, setting a new password and writing to support answer a refused field with 400
+  `{ error, fields }`; a code that does not sign in (by email, an authenticator or a recovery code,
+  and turning two-factor on or off) with 401 `{ error, fields: { code } }`. Signing in with a
+  password tests only that both fields are there, as before.
+- **The forms are on the kit.** The sign-in screen (sign in, create an account, ask for a reset
+  link) and the sign-in dialog share one form (`components/signInForm.ts`). `EmailCodeLogin` (both
+  steps), `TwofaChallenge`, `ResetPassword`, `SupportContact` and the two code steps of
+  `TwofaSettings` are kit forms too. `EmailCodeLogin` and `TwofaChallenge` moved from bodies read
+  by hand onto the typed client (`api.requestEmailCode`, `api.verifyEmailCode`,
+  `api.verifySecondFactor`); `SupportContact` keeps its own `fetch`, so it works in any storage
+  mode, and reads a refusal with `apiErrorFrom`. Every field has a label; the sign-in fields keep
+  their ids (`login-email`, `login-password`), which a kit `Field` now takes.
+- **Nothing tells an address with an account from one without.** A wrong address or password is
+  one message for the whole form and marks neither field, whatever the answer carries
+  (`forTheWholeForm`). The Worker's answers to signing in with a wrong password, asking for a reset
+  link, asking for a sign-in code and creating an account are the same status, content type and
+  body for both, and so is each route's answer once its limit on one address is reached, the wait
+  it names aside (`worker/test/sign-in-same-answer.test.ts`); through the form, signing in and
+  asking for a reset link give the same status, body and words on the screen
+  (`frontend/tests/sign-in-form-errors.spec.ts`).
+- **A limit and the captcha have their own words, and mark no field.** A 429 shows the Worker's
+  sentence, which says when to try again. The captcha goes through one gate
+  (`components/captchaGate.ts`): the send waits for a token instead of the button waiting
+  disabled; a widget that cannot run says what to fix before anything is sent; no token in 20
+  seconds, or a token the Worker refused, says "Verification didn't go through. Try again, and
+  complete the check if one appears."; each token is used for one request.
+
+Not moved, and why: the passkey step that asks for the password again in Settings
+(`PasskeySettings`) reads its refusal from `registerPasskey`'s result, which also drives the
+browser's passkey ceremony, so moving it means reshaping `core/webauthn.ts`; the recovery codes
+view, `ResendVerification` and `SignedInDevices` have no field.
+
+The contract's two slice 6 entries stay, as differences on purpose: `auth-local-user` (local-first
+has no account to answer and no session to end) and `health-answer` (the Worker reports its own
+environment and captcha setup).
+
+Fixed on the way, each with a test that fails without the fix: the new-password and support fields
+had only placeholders, no labels; `EmailCodeLogin`'s "Back to sign in" and "Send another" were
+anchors with no `href`, out of the keyboard's reach; and the send after a refused one, on the support
+form, carried the captcha token the first had used (a token is good for one check).
+
+Open for the owner, each a change no decision covers: the sign-in dialog now checks the address
+format before it signs in, as the sign-in screen did, where the Worker's sign-in tests none; the
+dialog and the code request no longer disable their button until the visible captcha has a token;
+the new words for every refusal, the Worker's included; the hint the sign-in screen showed on
+leaving a malformed address, gone; the dialog saying "Signing you in…" after an account is
+created; and a reset link that stopped working showing its own screen.
 
 ## Rollout, one PR each
 
