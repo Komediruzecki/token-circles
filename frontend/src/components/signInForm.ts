@@ -4,9 +4,9 @@
  *
  * - Each mode checks what the route behind it checks (shared/signInSchema.ts), so a field is
  *   marked before anything is sent, and a refusal the route sends anyway marks the same field in
- *   the same words. Signing in also asks for an address in the format, as the form always has:
- *   every way an address reaches an account (registration, a change of address, Google) uses the
- *   same format.
+ *   the same words. Signing in also asks for an address in the format, which the route does
+ *   not: registration and a change of address test the same format, and a Google sign-in brings
+ *   the address Google holds, so no account's address fails it.
  * - A wrong address or password is one message for the whole form, never a mark on either field,
  *   whatever the answer carries. The Worker's status and words are the same for an address with
  *   an account and one without, and a mark on one field would say which of the two was wrong.
