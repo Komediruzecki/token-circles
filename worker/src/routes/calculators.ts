@@ -5,9 +5,10 @@ import { getProfileId } from '../profile';
 import { HttpError } from '../http';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { monthlyRate as monthlyRateFor } from '../../../shared/retirement';
-import { addCalendarMonths, annuityPayment } from '../../../shared/loanSchedule';
+import { annuityPayment } from '../../../shared/loanSchedule';
+import { addCalendarMonths } from '../../../shared/calendarMonths';
 import * as db from '../db';
-import { localNow, localToday } from '../local-date';
+import { localToday } from '../local-date';
 
 // Port of backend/routes/calculators.js. Every endpoint here is pure math except
 // the emergency-fund calc, which reads transactions + accounts for the active
@@ -429,10 +430,9 @@ calculatorsRoutes.get('/api/calculators/units', requireAuth, async (c) => {
 calculatorsRoutes.get('/api/calculator/emergency-fund', requireAuth, async (c) => {
   const pid = await getProfileId(c);
 
-  // Twelve months back from today on the person's calendar.
-  const twelveMonthsAgo = localNow(c);
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
-  const dateStr = twelveMonthsAgo.toISOString().split('T')[0];
+  // Twelve months back from today on the person's calendar, on the last day of a shorter month:
+  // from 29 February, 28 February. Date#setMonth overflowed into 1 March.
+  const dateStr = addCalendarMonths(localToday(c), -12);
 
   const amountSql = normalizedTransactionAmountSql();
   const expenseRows = await db.all<{ amount: number; date: string }>(

@@ -11,6 +11,7 @@ import {
   billsCalendar,
   budgetsForecast,
   dashboardCharts,
+  emergencyFund,
   recurringPopulate,
 } from '../localHandlers.js'
 
@@ -83,6 +84,19 @@ describe('the cash-flow chart on 31 October (Zagreb)', () => {
     const months = monthly as Array<{ month: string; expense: number }>
     expect(months[0]?.month).toBe('2025-11')
     expect(months.find((m) => m.month === '2025-11')?.expense).toBe(40)
+  })
+})
+
+describe('the emergency fund on 29 February (Zagreb)', () => {
+  it('reaches back twelve months to 28 February', async () => {
+    // A year before 29 February 2028 is 28 February 2027. Date.setMonth() made it 29 February
+    // 2027, which is 1 March, and left February 2027 out of the average.
+    at('Europe/Zagreb', -60, '2028-02-29T12:00:00Z')
+    await expense('2027-02-28', 120)
+    await expense('2028-02-10', 300)
+
+    const fund = await (await emergencyFund()).json()
+    expect(fund.avgMonthlyExpenses).toBe(210)
   })
 })
 
