@@ -6,6 +6,10 @@
  * its date out with .slice(0, 10), the UTC date: a balance noted at 08:30 on the 8th in Tokyo was
  * filed under the 7th. A snapshot an import made carries a bare date, which is already a calendar
  * date and stays as it is.
+ *
+ * A day's figure is each account's latest balance on or before it (shared/netWorthTimeline.ts).
+ * It used to add up only the balances recorded that day, so on the 8th in Tokyo, when only
+ * account 1 had a new one, the net worth was account 1's alone.
  */
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
@@ -41,6 +45,6 @@ it('files a snapshot under the local day it was taken, and a dated one under its
   const timeline = await (await accountsTimeline()).json()
   expect(timeline).toEqual([
     { date: '2026-10-07', net_worth: 50 },
-    { date: '2026-10-08', net_worth: 100 },
+    { date: '2026-10-08', net_worth: 150 },
   ])
 })

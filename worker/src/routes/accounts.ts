@@ -9,6 +9,7 @@ import { recomputeBalancesForAccounts } from '../recompute-balances';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { checkAccountCreate, checkAccountEdit } from '../../../shared/accountSchema';
 import { calendarDateIn } from '../../../shared/calendarDate';
+import { netWorthTimeline } from '../../../shared/netWorthTimeline';
 import { requestTimeZone } from '../local-date';
 
 // Port of backend/routes/accounts.js + backend/repositories/accountsRepo.js.
@@ -61,31 +62,38 @@ accountsRoutes.post('/api/accounts/recompute-balances', requireAuth, async (c) =
 // Net worth timeline from balance history (aggregating read -> getProfileIds).
 // Registered before /:id so the literal path is matched first.
 //
-// Snapshots are grouped by the day they were taken on the caller's calendar (X-Time-Zone, UTC
+// Snapshots are filed under the day they were taken on the caller's calendar (X-Time-Zone, UTC
 // without one). One recorded through the app holds an instant, and SQLite's date() of it is the
 // UTC day: at 08:30 in Tokyo that is yesterday. One an import made holds a bare date, which is
-// already the day. `date` is that day, YYYY-MM-DD, as local-first answers.
+// already the day. `date` is that day, YYYY-MM-DD, as local-first answers. A day's figure is each
+// account's latest balance on or before it (shared/netWorthTimeline.ts).
 accountsRoutes.get('/api/accounts/history/timeline', requireAuth, async (c) => {
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const rows = await db.all<{ recorded_at: string; balance: number }>(
+  const rows = await db.all<{
+    id: number;
+    account_id: number;
+    recorded_at: string;
+    balance: number;
+  }>(
     c.env.DB,
-    `SELECT abh.recorded_at, abh.balance
+    `SELECT abh.id, abh.account_id, abh.recorded_at, abh.balance
      FROM account_balance_history abh
      JOIN accounts a ON abh.account_id = a.id
      WHERE a.profile_id IN (${inClause})`,
     ...pids
   );
   const zone = requestTimeZone(c);
-  const byDay = new Map<string, number>();
-  for (const row of rows) {
-    const day = snapshotDay(row.recorded_at, zone);
-    byDay.set(day, (byDay.get(day) ?? 0) + row.balance);
-  }
-  const timeline = [...byDay]
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([date, net_worth]) => ({ date, net_worth }));
-  return c.json(timeline);
+  return c.json(
+    netWorthTimeline(
+      rows.map((row) => ({
+        account: row.account_id,
+        day: snapshotDay(row.recorded_at, zone),
+        id: row.id,
+        balance: row.balance,
+      }))
+    )
+  );
 });
 
 /** The day a balance snapshot belongs to in `timeZone`; a bare YYYY-MM-DD is already one. */

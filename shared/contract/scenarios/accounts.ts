@@ -172,26 +172,32 @@ export const accounts = [
     expect((await api.get(`/api/accounts/${id}/history`)).body).toHaveLength(1);
   }),
 
-  scenario('the net worth timeline adds up the recorded balances by day', async (api, expect) => {
-    const a = await account(api, expect, 'Everyday', 100);
-    const b = await account(api, expect, 'Savings', 900);
-    // Recorded balances that do not add up to the accounts' own (1000), so a timeline of the
-    // accounts' balances fails here.
-    expectOk(expect, await api.post(`/api/accounts/${a}/history`, { balance: 150.25 }), 'a');
-    expectOk(expect, await api.post(`/api/accounts/${b}/history`, { balance: 700 }), 'b');
-    const theirs = await account(api.other, expect, 'Theirs', 5);
-    expectOk(
-      expect,
-      await api.other.post(`/api/accounts/${theirs}/history`, { balance: 5000 }),
-      'theirs'
-    );
+  scenario(
+    "the net worth timeline adds up each account's latest recorded balance",
+    async (api, expect) => {
+      const a = await account(api, expect, 'Everyday', 100);
+      const b = await account(api, expect, 'Savings', 900);
+      // Recorded balances that do not add up to the accounts' own (1000), so a timeline of the
+      // accounts' balances fails here.
+      expectOk(expect, await api.post(`/api/accounts/${a}/history`, { balance: 150.25 }), 'a');
+      expectOk(expect, await api.post(`/api/accounts/${b}/history`, { balance: 700 }), 'b');
+      // A second balance for Everyday the same day replaces its first: the day's figure is each
+      // account's latest balance, not every balance recorded that day added up (1025.25).
+      expectOk(expect, await api.post(`/api/accounts/${a}/history`, { balance: 175 }), 'a again');
+      const theirs = await account(api.other, expect, 'Theirs', 5);
+      expectOk(
+        expect,
+        await api.other.post(`/api/accounts/${theirs}/history`, { balance: 5000 }),
+        'theirs'
+      );
 
-    const timeline = await api.get('/api/accounts/history/timeline');
-    expectOk(expect, timeline, 'GET the timeline');
-    expect(timeline.body).toHaveLength(1);
-    expect(timeline.body[0].date).toBe(isoDay(new Date()));
-    expectMoney(expect, timeline.body[0].net_worth, 850.25, 'net worth');
-  }),
+      const timeline = await api.get('/api/accounts/history/timeline');
+      expectOk(expect, timeline, 'GET the timeline');
+      expect(timeline.body).toHaveLength(1);
+      expect(timeline.body[0].date).toBe(isoDay(new Date()));
+      expectMoney(expect, timeline.body[0].net_worth, 875, 'net worth');
+    }
+  ),
 
   scenario(
     'recomputing the balances rebuilds each from its start and its transactions',

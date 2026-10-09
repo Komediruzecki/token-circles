@@ -2,6 +2,7 @@
  * Accounts handlers — IndexedDB-backed implementations
  */
 import { checkAccountCreate, checkAccountEdit } from '../../../../../shared/accountSchema'
+import { netWorthTimeline } from '../../../../../shared/netWorthTimeline'
 import { isoDate } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
@@ -17,6 +18,7 @@ import {
   refuse,
 } from './helpers'
 import { normalizeAccount } from './normalize'
+import type { BalanceSnapshot } from '../../../../../shared/netWorthTimeline'
 
 export async function accountsList(): Promise<Response> {
   const accts = await adapter.listAccounts()
@@ -149,12 +151,13 @@ function snapshotDay(recorded: unknown): string {
   return Number.isNaN(instant.getTime()) ? text.slice(0, 10) : isoDate(instant)
 }
 
+/** A day's figure is each account's latest balance on or before it, as the Worker answers. */
 export async function accountsTimeline(): Promise<Response> {
   try {
     const db = await getDB()
     const pids = adapter.getCurrentProfileIds()
     const allHistory = await db.getAll('balanceHistory')
-    const timeline = new Map<string, number>()
+    const snapshots: BalanceSnapshot[] = []
     for (const entry of allHistory as Record<string, unknown>[]) {
       const accountId = entry.account_id as number
       try {
@@ -163,14 +166,14 @@ export async function accountsTimeline(): Promise<Response> {
       } catch {
         continue
       }
-      const date = snapshotDay(entry.recorded_at ?? entry.date)
-      const balance = entry.balance as number
-      timeline.set(date, (timeline.get(date) || 0) + balance)
+      snapshots.push({
+        account: accountId,
+        day: snapshotDay(entry.recorded_at ?? entry.date),
+        id: entry.id as number,
+        balance: entry.balance as number,
+      })
     }
-    const result = Array.from(timeline.entries())
-      .map(([date, netWorth]) => ({ date, net_worth: netWorth }))
-      .sort((a, b) => a.date.localeCompare(b.date))
-    return json(result)
+    return json(netWorthTimeline(snapshots))
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }
