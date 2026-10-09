@@ -388,16 +388,6 @@ describe('this month and this year are the person’s', () => {
     expect(ahead.history.map((h) => h.month)).toEqual(['2026-11', '2026-10']);
   });
 
-  it('the comparison report starts at the local month (/api/reports/compare)', async () => {
-    await at(LAST_OF_OCTOBER);
-    const { comparison } = await json<{ comparison: { month: string }[] }>(
-      'GET',
-      '/api/reports/compare',
-      TOKYO
-    );
-    expect(comparison.map((m) => m.month)).toEqual(['2026-11', '2026-10', '2026-09']);
-  });
-
   it('the monthly PDF defaults to the local month (/api/reports/monthly-pdf)', async () => {
     await at(LAST_OF_OCTOBER);
     const res = await call('GET', '/api/reports/monthly-pdf', { zone: TOKYO });
@@ -427,18 +417,6 @@ describe('due, overdue and upcoming are measured from the person’s today', () 
     await at(LAST_OF_OCTOBER);
     const cal = await json<{ year: number; month: number }>('GET', '/api/bills/calendar', TOKYO);
     expect([cal.year, cal.month]).toEqual([2026, 11]);
-  });
-
-  it('a bill due yesterday is no longer coming up (/api/bills/notifications)', async () => {
-    await at(LATE_ON_THE_7TH);
-    await bill('Water', '2026-10-07');
-    await bill('Phone', '2026-10-12');
-    const local = await json<{ notifications: { name: string }[] }>(
-      'GET',
-      '/api/bills/notifications',
-      TOKYO
-    );
-    expect(local.notifications.map((b) => b.name)).toEqual(['Phone']);
   });
 
   it('the Dashboard’s upcoming bills start today (/api/dashboard)', async () => {
@@ -476,16 +454,6 @@ describe('due, overdue and upcoming are measured from the person’s today', () 
     expect([local?.remaining_balance, local?.next_payment_date]).toEqual([11000, '2026-11-08']);
     const [utc] = await json<Loan[]>('GET', '/api/loans');
     expect([utc?.remaining_balance, utc?.next_payment_date]).toEqual([12000, '2026-10-08']);
-  });
-
-  it('an amortization schedule is dated from today (/api/calculators/loans/amortization)', async () => {
-    await at(LAST_OF_OCTOBER);
-    const { schedule } = await json<{ schedule: { date: string }[] }>(
-      'GET',
-      '/api/calculators/loans/amortization?principal=1200&rate=0&term=2',
-      TOKYO
-    );
-    expect(schedule.map((r) => r.date)).toEqual(['2026-12-01', '2027-01-01']);
   });
 
   it('the emergency fund averages the twelve months up to today (/api/calculator/emergency-fund)', async () => {

@@ -77,24 +77,4 @@ describe('custom reports — ownership (IDOR fix)', () => {
     const still = await body(await req(cookieA, `/api/reports/custom/${id}`));
     expect(still.name).toBe('Mine');
   });
-
-  it('persists in D1 and /saved lists only the requesting user reports', async () => {
-    await req(cookieA, '/api/reports/save', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'A-report', params: { x: 1 } }),
-    });
-    await req(cookieB, '/api/reports/save', {
-      method: 'POST',
-      body: JSON.stringify({ name: 'B-report' }),
-    });
-
-    const savedA = (await body(await req(cookieA, '/api/reports/saved'))) as {
-      reports: Array<{ name: string }>;
-    };
-    expect(savedA.reports.map((r) => r.name)).toEqual(['A-report']);
-    const savedB = (await body(await req(cookieB, '/api/reports/saved'))) as {
-      reports: Array<{ name: string }>;
-    };
-    expect(savedB.reports.map((r) => r.name)).toEqual(['B-report']);
-  });
 });

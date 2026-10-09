@@ -218,20 +218,6 @@ accountsRoutes.post('/api/accounts/:id/history', requireAuth, async (c) => {
   return c.json({ id: res.meta.last_row_id, balance, recorded_at: recordedAt });
 });
 
-accountsRoutes.delete('/api/accounts/:id/history', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const id = c.req.param('id');
-  const account = await db.first(
-    c.env.DB,
-    'SELECT id FROM accounts WHERE id = ? AND profile_id = ?',
-    id,
-    pid
-  );
-  if (!account) throw new HttpError(404, 'Account not found');
-  await db.del(c.env.DB, 'account_balance_history', 'account_id = ?', id);
-  return c.json({ message: 'Balance history deleted' });
-});
-
 // Reconciliation summary for one account: the transactions drawn on it (account_id), as
 // local-first counts them. The Express port counted every transaction of the profile here,
 // from before transactions named their account, so each account reported the whole ledger.
