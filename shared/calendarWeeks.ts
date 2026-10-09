@@ -66,6 +66,18 @@ export function weeksOfYear(year: number): CalendarWeek[] {
   return weeksCovering(`${y}-01-01`, `${y}-12-31`);
 }
 
+/**
+ * The weeks GET /api/analytics/weeks lists for `year` and its `month` query parameter as it came
+ * (null or undefined when there is none), in both runtimes. A month asked for has its own weeks,
+ * and none when it is not 1 to 12, as a year that cannot be read has none. Only no month at all
+ * is the year's: local-first read month=0 as no month and listed the year's 53 weeks.
+ */
+export function weeksAsked(year: number, month: string | null | undefined): CalendarWeek[] {
+  return month === null || month === undefined
+    ? weeksOfYear(year)
+    : weeksOfMonth(year, parseInt(month, 10));
+}
+
 /** How the week list names a week: `Week 2 (2025-03-02 - 2025-03-08)`. */
 export function weekLabel(week: CalendarWeek): string {
   return `Week ${week.week} (${week.start} - ${week.end})`;

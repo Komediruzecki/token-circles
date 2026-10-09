@@ -4,8 +4,8 @@
 import {
   daysOfWeek,
   weekLabel,
+  weeksAsked,
   weeksOfMonth,
-  weeksOfYear,
 } from '../../../../../shared/calendarWeeks'
 import { seedDefaultCategories } from '../idb'
 import { adapter, getAmount, json } from './helpers'
@@ -31,13 +31,13 @@ export async function analyticsDistinctYears(): Promise<Response> {
 export async function analyticsWeeks(query: URLSearchParams): Promise<Response> {
   try {
     const year = parseInt(query.get('year')!)
-    const month = query.get('month') ? parseInt(query.get('month')!) : null
     if (!year) return json({ weeks: [] })
 
     // Sunday to Saturday, every week that holds a day of the month, as the Worker lists them
     // (shared/calendarWeeks.ts). Stepping a week at a time from the 1st stopped at the week of the
-    // 29th, so a month's last days that start a new week were in none.
-    const weeks = month ? weeksOfMonth(year, month) : weeksOfYear(year)
+    // 29th, so a month's last days that start a new week were in none. A month that is not one
+    // has no weeks: month=0 was read as no month, and listed the year's.
+    const weeks = weeksAsked(year, query.get('month'))
     return json({ weeks: weeks.map((w) => ({ week: w.week, label: weekLabel(w) })) })
   } catch (_err) {
     return json({ weeks: [] })

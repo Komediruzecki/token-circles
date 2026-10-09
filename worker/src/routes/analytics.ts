@@ -5,7 +5,7 @@ import { getProfileIds } from '../profile';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { localNow } from '../local-date';
-import { daysOfWeek, weekLabel, weeksOfMonth, weeksOfYear } from '../../../shared/calendarWeeks';
+import { daysOfWeek, weekLabel, weeksAsked, weeksOfMonth } from '../../../shared/calendarWeeks';
 
 // Port of backend/routes/analytics.js — read-only stats/analytics aggregations.
 // All response objects are built by hand with their exact key casing (labels,
@@ -118,14 +118,14 @@ analyticsRoutes.get('/api/analytics/weeks', requireAuth, async (c) => {
   // the week list itself is computed purely from the calendar.
   await getProfileIds(c);
   const year = parseInt(c.req.query('year') || '');
-  const monthQ = c.req.query('month');
   if (!year) {
     return c.json({ weeks: [] });
   }
   // Sunday to Saturday, every week that holds a day of the month (shared/calendarWeeks.ts, as
   // local-first lists them). Stepping a week at a time from the 1st stopped at the week of the
-  // 29th, so a month's last days that start a new week were in none.
-  const weeks = monthQ ? weeksOfMonth(year, parseInt(monthQ)) : weeksOfYear(year);
+  // 29th, so a month's last days that start a new week were in none. A month that is not one,
+  // an empty one included, has no weeks: only no month at all is the year's.
+  const weeks = weeksAsked(year, c.req.query('month'));
   return c.json({ weeks: weeks.map((w) => ({ week: w.week, label: weekLabel(w) })) });
 });
 

@@ -159,7 +159,22 @@ export const analytics = [
         { week: 6, label: 'Week 6 (2025-03-30 - 2025-04-05)' },
       ],
     });
+    // No year, no weeks. A month asked for that is not 1 to 12 has none either, as a year that
+    // cannot be read has none: local-first read month=0 as no month and listed the year's 53.
     expect(await read(api, expect, '/api/analytics/weeks')).toEqual({ weeks: [] });
+    for (const month of ['0', '13', 'abc', '']) {
+      expect(
+        await read(api, expect, `/api/analytics/weeks?year=2025&month=${month}`),
+        `month=${month}`
+      ).toEqual({ weeks: [] });
+    }
+    // No month asked for: the year's weeks, from the one that holds 1 January.
+    const year = (await read(api, expect, '/api/analytics/weeks?year=2025')).weeks;
+    expect(year).toHaveLength(53);
+    expect([year[0], year[52]]).toEqual([
+      { week: 1, label: 'Week 1 (2024-12-29 - 2025-01-04)' },
+      { week: 53, label: 'Week 53 (2025-12-28 - 2026-01-03)' },
+    ]);
     const week = (n: number) =>
       read(api, expect, `/api/analytics/category-trends?year=2025&type=expense&month=3&week=${n}`);
     const sundayToSaturday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
