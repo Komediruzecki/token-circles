@@ -811,6 +811,18 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   }
 
   /**
+   * Forgets the file read before, as soon as another is picked: whether or not the new one is
+   * read, the old one's sheet and the way on to the mapping step are not left on the page.
+   */
+  const clearUpload = () => {
+    setUploadResult(null)
+    setUploadedFile(null)
+    setSelectedSheet('')
+    setHeaders([])
+    setRows([])
+  }
+
+  /**
    * Uploads `file` for the mapping step, and throws when it is not read: an ApiError naming the
    * `file` field for a refusal, for the Import page's form to mark (uploadForm.ts).
    */
@@ -826,7 +838,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const handleFileSelect = (event: Event) => {
     const target = event.target as HTMLInputElement
     const file = target.files?.[0]
-    if (file) void handleFileUpload(file)
+    if (!file) return
+    clearUpload()
+    void handleFileUpload(file)
   }
 
   const handleDragOver = (event: DragEvent) => {
@@ -836,7 +850,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const handleDrop = (event: DragEvent) => {
     event.preventDefault()
     const file = event.dataTransfer?.files[0]
-    if (file) void handleFileUpload(file)
+    if (!file) return
+    clearUpload()
+    void handleFileUpload(file)
   }
 
   // ---- Bank Imports ----
@@ -1680,6 +1696,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     toggleApprovedCategory,
     resetForm,
     handleFileSelect,
+    clearUpload,
     uploadFile,
     chooseUploadedSheet,
     handleDragOver,

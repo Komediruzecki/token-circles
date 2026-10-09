@@ -113,6 +113,21 @@ describe('POST /api/import/upload', () => {
     });
   });
 
+  it('refuses a file with no header row at the file', async () => {
+    const empty = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(empty, XLSX.utils.aoa_to_sheet([]), 'Empty');
+    const bytes = new Uint8Array(XLSX.write(empty, { type: 'array', bookType: 'xlsx' }));
+    for (const file of [
+      new File(['\n \n'], 'empty.csv', { type: 'text/csv' }),
+      new File([bytes], 'empty.xlsx'),
+    ]) {
+      expect(await upload(file)).toEqual({
+        status: 400,
+        body: { error: M.empty, fields: { file: M.empty } },
+      });
+    }
+  });
+
   it('refuses a workbook cut short at the file', async () => {
     const whole = workbook();
     expect(await upload(new File([whole.slice(0, whole.length - 30)], 'statement.xlsx'))).toEqual({

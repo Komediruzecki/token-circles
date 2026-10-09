@@ -103,6 +103,13 @@ describe('POST /api/import/upload in local-first', () => {
     expect((await upload(file(), 'May')).body).toMatchObject({ selectedSheet: 'March' })
   })
 
+  it('refuses a file with no header row at the file, as the Worker does', async () => {
+    expect(await upload(new File(['\n \n'], 'empty.csv', { type: 'text/csv' }))).toEqual({
+      status: 400,
+      body: { error: M.empty, fields: { file: M.empty } },
+    })
+  })
+
   it('refuses no file, and a file over 10 MB, at the file', async () => {
     expect(await upload(null)).toEqual({
       status: 400,

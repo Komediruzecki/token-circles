@@ -3,6 +3,8 @@
  *
  * - A workbook saved as .xlsx is a zip, read from the index at its end: an upload is checked to
  *   be a complete file before it is read, and one that is not is refused at `file`.
+ * - A file with no header row is refused at `file`: the page did nothing with it, and said
+ *   nothing. An empty first sheet gives way to the first sheet with one.
  * - A number cell is written so the import reads it as the number it is: written plainly, 7.534
  *   reads like 7,534 with a thousands separator, which a number cell cannot have.
  */
@@ -57,6 +59,36 @@ describe('an upload is checked to be a complete file before it is read', () => {
       fields: { file: M.unreadable },
     })
     expect(read).not.toHaveBeenCalled()
+  })
+})
+
+describe('a file with no header row', () => {
+  it('is refused at the file, a CSV file or a workbook', () => {
+    const blank = new TextEncoder().encode('\n,,\n')
+    expect(readUploadedSheet(spied().xlsx, file(blank, 'empty.csv', 'text/csv'))).toEqual({
+      ok: false,
+      fields: { file: M.empty },
+    })
+    expect(readUploadedSheet(spied().xlsx, file(workbook({ Empty: [] })))).toEqual({
+      ok: false,
+      fields: { file: M.empty },
+    })
+  })
+
+  it('gives way to the first sheet that has one', () => {
+    const read = readUploadedSheet(spied().xlsx, file(workbook({ Notes: [], March: LEDGER })))
+    expect(read).toMatchObject({
+      ok: true,
+      value: { selectedSheet: 'March', sheetNames: ['Notes', 'March'] },
+    })
+  })
+
+  it('is refused at the file when it is the sheet asked for', () => {
+    const bytes = workbook({ Notes: [], March: LEDGER })
+    expect(readUploadedSheet(spied().xlsx, file(bytes), 'Notes')).toEqual({
+      ok: false,
+      fields: { file: M.emptySheet },
+    })
   })
 })
 

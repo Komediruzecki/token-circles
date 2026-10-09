@@ -6,7 +6,8 @@
  * it was about, and a file over the size cap went up before either runtime refused it. Now the
  * size is checked before anything is sent, with the rule both runtimes run
  * (shared/importUpload.ts), and a file either one refuses (one with no sheets, or one that cannot
- * be read) is marked under the drop area, in the runtime's words.
+ * be read) is marked under the drop area, in the runtime's words. Picking a file forgets the one
+ * read before, so a refused file leaves nothing of the last one behind.
  */
 import { uploadRefusal } from '../../../../shared/importUpload'
 import { createForm } from '../../components/form'
@@ -34,6 +35,8 @@ export function createUploadForm(flow: ImportFlow): UploadForm {
   })
   const pick = (file: File | undefined) => {
     if (!file) return
+    // Before any check: a file refused here must not leave the last one's sheet on the page.
+    flow.clearUpload()
     form.set('file', file)
     void form.submit()
   }

@@ -14,15 +14,22 @@
 import { createRoot } from 'solid-js'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
+import { IMPORT_UPLOAD_MESSAGES as M } from '../../../../../shared/importUpload'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
 import type { ImportFlow } from '../importFlow'
+import type { UploadForm } from '../uploadForm'
 
 let flow: ImportFlow
+let form: UploadForm
 let dispose: () => void
 
 beforeAll(async () => {
-  await Promise.all([import('../importFlow'), import('../../../core/storage/localApiRouter')])
+  await Promise.all([
+    import('../importFlow'),
+    import('../uploadForm'),
+    import('../../../core/storage/localApiRouter'),
+  ])
 }, 120_000)
 
 beforeEach(async () => {
@@ -36,9 +43,11 @@ beforeEach(async () => {
   await db.add('profiles', { id: 1, name: 'Household', created_at: '2026-01-01T00:00:00.000Z' })
   await db.put('settings', { key: 'currency', value: 'EUR' })
   const { createImportFlow } = await import('../importFlow')
+  const { createUploadForm } = await import('../uploadForm')
   createRoot((done) => {
     dispose = done
     flow = createImportFlow({ initialTab: 'file-upload', autoResetAfterImport: false })
+    form = createUploadForm(flow)
   })
 })
 
@@ -161,5 +170,30 @@ describe('a file uploaded on the Import page in local-first', () => {
     expect(flow.error()).toBe(
       'That file is over 10 MB. Split it into smaller files and upload each one.'
     )
+  })
+
+  it('forgets the file read before when another is picked, though that one is refused', async () => {
+    form.pick(new File([CSV], 'march.csv', { type: 'text/csv' }))
+    await settled()
+    expect(flow.uploadResult()?.filename).toBe('march.csv')
+    // Back on the upload step, with March's sheet and the way on to the mapping step.
+    flow.setActiveStep('upload')
+
+    form.pick(new File([new Uint8Array(11 * 1024 * 1024)], 'april.xlsx'))
+    await settled()
+
+    expect(form.error('file')).toBe(M.tooLarge)
+    expect(flow.uploadResult()).toBeNull()
+    expect(flow.currentHeaders()).toEqual([])
+    expect(flow.currentRows()).toEqual([])
+  })
+
+  it('refuses a file with no header row at the file, rather than doing nothing', async () => {
+    form.pick(new File(['\n \n'], 'empty.csv', { type: 'text/csv' }))
+    await settled()
+
+    expect(form.error('file')).toBe(M.empty)
+    expect(flow.activeStep()).toBe('upload')
+    expect(flow.uploadResult()).toBeNull()
   })
 })

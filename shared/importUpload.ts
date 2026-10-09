@@ -24,6 +24,8 @@ export const IMPORT_UPLOAD_MESSAGES = {
   tooLarge: 'That file is over 10 MB. Split it into smaller files and upload each one.',
   noSheets: 'That spreadsheet has no sheets. Choose another file.',
   unreadable: "That file couldn't be read. Upload a CSV or Excel file.",
+  empty: 'That file has no rows to import. Choose a file with its column names in the first row.',
+  emptySheet: 'That sheet has no rows to import. Choose another sheet.',
   tooSlow:
     'That file took too long to read. Upload it as a CSV file, or split it into smaller files.',
 } as const;
@@ -126,10 +128,16 @@ export function isCsvUpload(file: { name: string; type: string }): boolean {
   return /\.csv$/i.test(file.name) || file.type === 'text/csv';
 }
 
+const refused = (file: string): Checked<UploadedSheet> => ({ ok: false, fields: { file } });
+
+/** Whether a header row has a column name in it. */
+const hasHeader = (headers: string[]): boolean => headers.some((cell) => cell.trim() !== '');
+
 /**
- * The sheet `requested` names, or the first, as its header row and the rows under it. A blank row
- * is left out. Refused at `file` when the file is not a complete one, a workbook has no sheets, or
- * it is not a workbook at all.
+ * The sheet `requested` names, as its header row and the rows under it; with none named, the
+ * first sheet that has a header row. A blank row is left out. Refused at `file` when the file is
+ * not a complete one, a workbook has no sheets or is not a workbook at all, or the file or the
+ * sheet asked for has no header row.
  */
 export function readUploadedSheet(
   xlsx: SheetReader,
@@ -138,29 +146,41 @@ export function readUploadedSheet(
 ): Checked<UploadedSheet> {
   if (isCsvUpload(file)) {
     const { headers, rows } = parseImportCsv(new TextDecoder().decode(file.bytes));
+    if (!hasHeader(headers)) return refused(IMPORT_UPLOAD_MESSAGES.empty);
     return { ok: true, value: { headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] } };
   }
-  if (!isCompleteUpload(file.bytes)) {
-    return { ok: false, fields: { file: IMPORT_UPLOAD_MESSAGES.unreadable } };
-  }
+  if (!isCompleteUpload(file.bytes)) return refused(IMPORT_UPLOAD_MESSAGES.unreadable);
   let workbook: ReturnType<SheetReader['read']>;
   try {
     workbook = xlsx.read(file.bytes, { type: 'array', cellDates: true });
   } catch {
-    return { ok: false, fields: { file: IMPORT_UPLOAD_MESSAGES.unreadable } };
+    return refused(IMPORT_UPLOAD_MESSAGES.unreadable);
   }
   const sheetNames = workbook.SheetNames;
-  const selected = requested && sheetNames.includes(requested) ? requested : sheetNames[0];
-  if (!selected) return { ok: false, fields: { file: IMPORT_UPLOAD_MESSAGES.noSheets } };
-  const matrix = xlsx.utils.sheet_to_json<unknown[]>(workbook.Sheets[selected] as never, {
-    header: 1,
-    blankrows: false,
-    defval: '',
-  });
-  const headers = (matrix[0] ?? []).map(cellText);
-  const rows = matrix
-    .slice(1)
-    .filter((row) => Array.isArray(row) && row.some((cell) => cell !== '' && cell != null))
-    .map((row) => row.map(cellText));
-  return { ok: true, value: { headers, rows, selectedSheet: selected, sheetNames } };
+  if (sheetNames.length === 0) return refused(IMPORT_UPLOAD_MESSAGES.noSheets);
+  const sheet = (name: string): { headers: string[]; rows: string[][] } => {
+    const matrix = xlsx.utils.sheet_to_json<unknown[]>(workbook.Sheets[name] as never, {
+      header: 1,
+      blankrows: false,
+      defval: '',
+    });
+    const headers = (matrix[0] ?? []).map(cellText);
+    const rows = matrix
+      .slice(1)
+      .filter((row) => Array.isArray(row) && row.some((cell) => cell !== '' && cell != null))
+      .map((row) => row.map(cellText));
+    return { headers, rows };
+  };
+  if (requested && sheetNames.includes(requested)) {
+    const { headers, rows } = sheet(requested);
+    if (!hasHeader(headers)) return refused(IMPORT_UPLOAD_MESSAGES.emptySheet);
+    return { ok: true, value: { headers, rows, selectedSheet: requested, sheetNames } };
+  }
+  for (const name of sheetNames) {
+    const { headers, rows } = sheet(name);
+    if (hasHeader(headers)) {
+      return { ok: true, value: { headers, rows, selectedSheet: name, sheetNames } };
+    }
+  }
+  return refused(IMPORT_UPLOAD_MESSAGES.empty);
 }
