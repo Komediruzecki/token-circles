@@ -6,12 +6,16 @@
  * at boot (see core/emailVerification.ts), and of the link that moves the account to a new
  * address, which comes back the same way.
  *
+ * After a sign-in that confirmed the address and cleared what the account had set up before it,
+ * it also shows that, once, in the same strip (core/accessCleared.ts).
+ *
  * Self-checking. It asks /api/auth/me itself and re-asks whenever the session changes, so it can
  * be dropped into the shell without threading account state through it — and it shows nothing at
  * all on a backend that does not report the field, which is how the legacy self-hosted server
  * answers.
  */
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js'
+import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { fetchVerificationStatus, takeEmailVerifyResult } from '../core/emailVerification'
@@ -35,6 +39,7 @@ export const VerifyEmailBanner: Component = () => {
   const state = useAppState()
   const [email, setEmail] = createSignal<string | null>(null)
   const [dismissed, setDismissed] = createSignal(loadDismissed())
+  const [cleared, setCleared] = createSignal(false)
 
   const refresh = async (): Promise<void> => {
     if (!state.isAuthenticated) {
@@ -61,6 +66,7 @@ export const VerifyEmailBanner: Component = () => {
   )
 
   onMount(() => {
+    setCleared(takeAccessCleared('sign-in'))
     const result = takeEmailVerifyResult()
     if (result === null) return
     if (result.change) {
@@ -98,48 +104,90 @@ export const VerifyEmailBanner: Component = () => {
   }
 
   return (
-    <Show when={email() !== null && !dismissed()}>
-      <div class={styles.banner} role="status" data-testid="verify-email-banner">
-        <svg
-          class={styles.icon}
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="M22 7l-10 6L2 7" />
-        </svg>
-        <p class={styles.text}>
-          Confirm your email — we sent a link to <span class={styles.address}>{email()}</span>
-        </p>
-        <ResendVerification data-testid="verify-email-resend" />
-        <button
-          class={styles.close}
-          onClick={dismiss}
-          aria-label="Dismiss"
-          title="Dismiss for this session"
-          data-testid="verify-email-dismiss"
-        >
+    <>
+      <Show when={cleared()}>
+        <div class={styles.banner} role="status" data-testid="access-cleared-notice">
           <svg
+            class={styles.icon}
             viewBox="0 0 24 24"
-            width="14"
-            height="14"
+            width="18"
+            height="18"
             aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="2"
             stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <path d="M6 6l12 12M18 6L6 18" />
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
           </svg>
-        </button>
-      </div>
-    </Show>
+          <p class={styles.text}>{ACCESS_CLEARED_NOTICE['sign-in']}</p>
+          <button
+            class={styles.close}
+            onClick={() => setCleared(false)}
+            aria-label="Dismiss"
+            title="Dismiss"
+            data-testid="access-cleared-dismiss"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+      <Show when={email() !== null && !dismissed()}>
+        <div class={styles.banner} role="status" data-testid="verify-email-banner">
+          <svg
+            class={styles.icon}
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M22 7l-10 6L2 7" />
+          </svg>
+          <p class={styles.text}>
+            Confirm your email — we sent a link to <span class={styles.address}>{email()}</span>
+          </p>
+          <ResendVerification data-testid="verify-email-resend" />
+          <button
+            class={styles.close}
+            onClick={dismiss}
+            aria-label="Dismiss"
+            title="Dismiss for this session"
+            data-testid="verify-email-dismiss"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+    </>
   )
 }

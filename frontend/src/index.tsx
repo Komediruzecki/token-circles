@@ -2,6 +2,7 @@
 import './styles/index.css'
 import { installPwaInstallListeners, registerServiceWorker } from '@pwa-kit'
 import { render } from 'solid-js/web'
+import { consumeAccessClearedRedirect } from './core/accessCleared'
 import { noteWaitingBuild } from './core/appVersion'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
@@ -44,6 +45,9 @@ void Promise.resolve(window.__SW_CLEANUP__).then(() => {
 // it is not a page, so the hash router would resolve it to a 404, and a fragment left in the
 // address bar re-announces the outcome on every reload.
 consumeEmailVerifyRedirect()
+// Google sign-in adds ?cleared=1 when joining an account cleared what it had set up before its
+// address was confirmed. Same treatment: read once, stripped, shown by the app.
+consumeAccessClearedRedirect()
 
 const root = document.getElementById('root')
 

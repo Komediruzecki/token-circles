@@ -208,6 +208,44 @@ describe('the confirm link’s outcome', () => {
   })
 })
 
+describe('after a sign-in that confirmed the address and cleared the account', () => {
+  const notice = () => host.querySelector('[data-testid="access-cleared-notice"]')
+
+  it('says what went and what to do, once', async () => {
+    status = { email: 'someone@example.com', verified: true, provider: 'google' }
+    sessionStorage.setItem('tc:access-cleared', 'sign-in')
+    await mount()
+
+    expect(notice()?.textContent).toContain(
+      'Confirming your email removed what was set up before it'
+    )
+    expect(sessionStorage.getItem('tc:access-cleared')).toBeNull()
+  })
+
+  it('goes away when dismissed', async () => {
+    sessionStorage.setItem('tc:access-cleared', 'sign-in')
+    await mount()
+
+    host.querySelector<HTMLButtonElement>('[data-testid="access-cleared-dismiss"]')!.click()
+
+    expect(notice()).toBeNull()
+  })
+
+  it('is not shown for a reset, whose words are on the sign-in screen', async () => {
+    sessionStorage.setItem('tc:access-cleared', 'reset')
+    await mount()
+
+    expect(notice()).toBeNull()
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('reset')
+  })
+
+  it('is not shown after an ordinary sign-in', async () => {
+    await mount()
+
+    expect(notice()).toBeNull()
+  })
+})
+
 describe('the email change link’s outcome', () => {
   it('says the account moved to the new address', async () => {
     bootResult = { ok: true, change: true }

@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { setStorageMode } from '../core/storage/storageFactory'
@@ -51,6 +52,11 @@ export default function LoginScreen() {
   // cookie and sends the browser back with ?twofa=1 — land straight on the code step.
   onMount(() => {
     if (new URLSearchParams(window.location.search).get('twofa') === '1') setStage('twofa')
+  })
+
+  // A reset that also confirmed the address reloads onto this screen with what else it cleared.
+  onMount(() => {
+    if (takeAccessCleared('reset')) setNotice(ACCESS_CLEARED_NOTICE.reset)
   })
 
   // Conditional UI: on capable browsers a background WebAuthn request lets the email field's

@@ -1,4 +1,5 @@
 import { createSignal, onMount, Show } from 'solid-js'
+import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { setStorageMode } from '../core/storage/storageFactory'
 import layoutStyles from './Layout.module.css'
@@ -49,7 +50,9 @@ export default function ResetPassword() {
     }
     setLoading(true)
     try {
-      await api.resetPassword(token, password())
+      const { cleared } = await api.resetPassword(token, password())
+      // The sign-in screen this reloads onto says what else the reset cleared.
+      if (cleared) markAccessCleared('reset')
       setStatus('done')
       // A reset only makes sense for a server account — land in server mode at the sign-in
       // screen. The worker no longer auto-logs-in, so the user signs in with the new password.
