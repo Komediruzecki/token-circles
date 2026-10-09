@@ -338,3 +338,17 @@
     transition: none;
   }
 }
+
+/* A price the bill rules refuse: the field's border, and the words on a line of their own. */
+.price-wrap-error {
+  border-color: var(--danger);
+}
+
+.price-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--danger-text);
+  overflow-wrap: anywhere;
+}
