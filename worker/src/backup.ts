@@ -8,6 +8,7 @@ import {
   isImportSourceSchedule,
   sourceJsonObject,
 } from '../../shared/importSourceSchema';
+import { distinctProfileNames } from '../../shared/profileSchema';
 
 export const BACKUP_VERSION = '3.0.0';
 
@@ -154,10 +155,22 @@ function settingValue(value: unknown): string {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+/**
+ * The profiles with names no two of which differ only in case: this Worker took such names before
+ * the rule, and a backup must restore. The later of two comes back as "Name (2)".
+ */
+function withDistinctNames(profiles: Row[]): Row[] {
+  const names = profiles.map((profile) => String(profile.name ?? ''));
+  const distinct = distinctProfileNames(names);
+  return profiles.map((profile, index) =>
+    distinct[index] === names[index] ? profile : { ...profile, name: distinct[index] }
+  );
+}
+
 function normalizeBackup(input: unknown): NormalizedBackup {
   if (!input || typeof input !== 'object') throw new HttpError(400, 'Invalid backup payload');
   const data = input as Record<string, unknown>;
-  const profiles = rows(data.profiles, 'profiles');
+  const profiles = withDistinctNames(rows(data.profiles, 'profiles'));
   if (profiles.length === 0) throw new HttpError(422, 'A backup must contain at least one profile');
 
   const loans = rows(data.loans, 'loans');
@@ -279,13 +292,10 @@ function requireReference(
 
 function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   const profileIds = uniqueIds(data.profiles, 'profiles');
-  const profileNames = new Set<string>();
+  // Names that differ only in case are numbered by now (withDistinctNames).
   for (let index = 0; index < data.profiles.length; index++) {
     const name = String(data.profiles[index]!.name ?? '').trim();
     if (!name) throw new HttpError(422, `profiles[${index}].name is required`);
-    const key = name.toLowerCase();
-    if (profileNames.has(key)) throw new HttpError(422, `Duplicate profile name "${name}"`);
-    profileNames.add(key);
   }
 
   for (const key of PROFILE_SCOPED_KEYS) {

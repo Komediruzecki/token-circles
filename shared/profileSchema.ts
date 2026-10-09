@@ -119,3 +119,28 @@ export function clashingProfileName(
   }
   return null;
 }
+
+/**
+ * The names a restore gives the profiles in a backup, in the file's order. A file can hold two
+ * names that differ only in case (the Worker took them before names were unique without regard to
+ * case), and a backup must restore: the later one comes back as "Name (2)", or the first number
+ * no name in the file has. A blank name stays blank, for the restore to refuse.
+ */
+export function distinctProfileNames(names: readonly string[]): string[] {
+  const key = (name: string) => name.trim().toLowerCase();
+  const inFile = new Set(names.map(key));
+  const given = new Set<string>();
+  return names.map((name) => {
+    if (name.trim() === '') return name;
+    if (!given.has(key(name))) {
+      given.add(key(name));
+      return name;
+    }
+    for (let n = 2; ; n++) {
+      const numbered = `${name.trim()} (${n})`;
+      if (inFile.has(key(numbered)) || given.has(key(numbered))) continue;
+      given.add(key(numbered));
+      return numbered;
+    }
+  });
+}

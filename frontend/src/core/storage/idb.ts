@@ -9,6 +9,7 @@ import {
   sourceJsonObject,
 } from '../../../../shared/importSourceSchema'
 import { toCents } from '../../../../shared/money'
+import { distinctProfileNames } from '../../../../shared/profileSchema'
 import { editedLocalAmount } from '../../../../shared/transactionSchema'
 import { householdProfileIds } from '../apiProfileScope'
 import {
@@ -1542,10 +1543,13 @@ export class IndexedDBAdapter implements StorageAdapter {
 
       const profileIdMap = new Map<number, number>()
       if (data.profiles && data.profiles.length > 0) {
-        for (const p of data.profiles) {
+        // Names that differ only in case come back numbered, "Name (2)", as on the Worker: the
+        // Worker took such names before the rule, and a backup must restore.
+        const names = distinctProfileNames(data.profiles.map((p) => p.name))
+        for (const [index, p] of data.profiles.entries()) {
           const oldId = p.id
           const newId = (await tx.objectStore('profiles').add({
-            name: p.name,
+            name: names[index],
             created_at: p.created_at || new Date().toISOString(),
           })) as number
           profileIdMap.set(oldId, newId)

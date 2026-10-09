@@ -7,6 +7,7 @@ import {
   checkProfileCreate,
   checkProfileRename,
   clashingProfileName,
+  distinctProfileNames,
   PROFILE_MESSAGES,
   PROFILE_NAME_MAX,
   profileNameTaken,
@@ -138,5 +139,28 @@ describe('the other words', () => {
       'This is your only profile. Create another one before you delete this one.'
     )
     expect(PROFILE_MESSAGES.notFound).toBe('Profile not found')
+  })
+})
+
+describe('the names a restore gives the profiles in a backup', () => {
+  it('keeps names that differ by more than case', () => {
+    expect(distinctProfileNames(['Me', 'Partner', 'Side business'])).toEqual([
+      'Me',
+      'Partner',
+      'Side business',
+    ])
+  })
+
+  it('numbers a later name that differs only in case, past any number the file holds', () => {
+    expect(distinctProfileNames(['Me', 'ME', 'Me (2)', ' me '])).toEqual([
+      'Me',
+      'ME (3)',
+      'Me (2)',
+      'me (4)',
+    ])
+  })
+
+  it('leaves a blank name blank, for the restore to refuse', () => {
+    expect(distinctProfileNames(['', 'Me', '  '])).toEqual(['', 'Me', '  '])
   })
 })
