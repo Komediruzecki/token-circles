@@ -394,8 +394,9 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   })
 
   // Race all strategies against each other and a hard deadline
+  let deadlineTimer: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
-    setTimeout(() => {
+    deadlineTimer = setTimeout(() => {
       reject(new Error('TIMEOUT'))
     }, GOOGLE_SHEETS_TIMEOUT + 500)
   })
@@ -403,6 +404,9 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
   // Direct-to-Google strategies (no third party) are tried first; the CORS proxy is only
   // used if they all fail (audit S5).
   const strategies: Promise<ReturnType<typeof json>>[] = [strategy1, strategy2, strategy3]
+  // All three are under way at once and awaited in turn below. One that fails after an earlier one
+  // answered has no one waiting for it any more: its failure is handled here, as nothing.
+  for (const strategy of strategies) strategy.catch(() => undefined)
 
   // Try strategies sequentially with fast failure — first success wins,
   // but each gets at most GOOGLE_SHEETS_TIMEOUT total across all attempts
@@ -434,6 +438,8 @@ export async function importGoogleSheet(body: unknown): Promise<Response> {
       },
       422
     )
+  } finally {
+    clearTimeout(deadlineTimer)
   }
 }
 
