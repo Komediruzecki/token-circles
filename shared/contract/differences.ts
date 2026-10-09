@@ -50,7 +50,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'import-upload-answer':
     "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
   'profile-answers':
-    "POST /api/profiles answers 200 with the profile and its zero counts on the Worker, but 201 with { id, name, created_at } in local-first; PUT and PATCH answer the renamed profile on the Worker and { ok: true } in local-first. The app reads only the new profile's id, name and created_at, and only whether a rename worked. Slice 4 (profiles).",
+    "POST /api/profiles answers 201 with the profile and its zero counts on the Worker, but with { id, name, created_at } in local-first; PUT and PATCH answer the renamed profile ({ id, name, created_at }) on the Worker and { ok: true } in local-first. The app reads only the new profile's id, name and created_at, and only whether a rename worked. Slice 4 (profiles).",
   'profile-delete-selection':
     "DELETE /api/profiles/:id deletes any of the person's profiles but the last on the Worker; local-first refuses with 403 unless the profile is in the active selection, so the Danger Zone's Delete Profile fails in local-first for every profile but the one in use. Slice 4 (profiles).",
   'profile-delete-last':

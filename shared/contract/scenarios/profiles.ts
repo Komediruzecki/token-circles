@@ -20,12 +20,15 @@ export async function profileList(api: ContractApi, expect: Expect): Promise<Jso
 async function addProfile(api: ContractApi, expect: Expect, name: string): Promise<number> {
   const reply = await api.post('/api/profiles', { name });
   expectOk(expect, reply, 'POST /api/profiles');
+  expect(reply.status).toBe(201);
   // DIFFERENCE profile-answers
-  expect(reply.status).toBe(api.runtime === 'worker' ? 200 : 201);
-  expect(reply.body).toMatchObject({
+  expect(reply.body).toEqual({
     id: expect.any(Number),
     name,
     created_at: expect.any(String),
+    ...(api.runtime === 'worker'
+      ? { transaction_count: 0, account_count: 0, budget_count: 0 }
+      : {}),
   });
   return reply.body.id as number;
 }
@@ -154,7 +157,7 @@ export const profiles = [
       // DIFFERENCE profile-answers
       expect(renamed.body).toEqual(
         api.runtime === 'worker'
-          ? { id, name: 'Beach house', user_id: expect.any(Number), created_at: expect.any(String) }
+          ? { id, name: 'Beach house', created_at: expect.any(String) }
           : { ok: true }
       );
       expect((await profileList(api, expect)).find((p) => p.id === id)?.name).toBe('Beach house');
