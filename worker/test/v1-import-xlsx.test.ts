@@ -95,6 +95,30 @@ describe('POST /api/v1/import - spreadsheets', () => {
     expect(body.dateParseRate).toBe(1);
   });
 
+  it('reads a date cell as its day through the generic path', async () => {
+    const res = await post(
+      sheetToBytes(
+        [
+          ['Date', 'Description', 'Amount'],
+          [new Date(2026, 6, 2), 'Coffee', -3.5],
+          [new Date(2026, 6, 3), 'Book', -12.25],
+        ],
+        'xlsx'
+      ),
+      'ledger.xlsx'
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, any>;
+    expect(body.parsedBy).toBe('generic-csv');
+    expect(body.imported).toBe(2);
+    const { results } = await env.DB.prepare(
+      'SELECT date FROM transactions WHERE profile_id = ? ORDER BY date'
+    )
+      .bind(PROFILE_ID)
+      .all<{ date: string }>();
+    expect(results.map((row) => row.date)).toEqual(['2026-07-02', '2026-07-03']);
+  });
+
   it('loads xlsx inside the Worker to parse a PBZ .xls through its adapter', async () => {
     // The assertion that matters: the injected `() => import('xlsx')` actually resolves in
     // workerd. If it did not, the adapter would throw and the request would fall back to the

@@ -3,7 +3,8 @@ import * as XLSX from 'xlsx';
 import { autoDetectMapping } from '../../shared/importMapping';
 import type { Env } from './index';
 import * as db from './db';
-import { executeImport, parseCsv } from './routes/imports';
+import { readUploadedSheet } from '../../shared/importUpload';
+import { executeImport } from './routes/imports';
 
 // Cloudflare Email Routing → Worker email-in (Ask 3). A bank statement forwarded to
 // `ingest+<EMAIL_INGEST_SECRET>@<your-domain>` lands here: CSV/XLSX attachments are auto-mapped
@@ -33,7 +34,10 @@ interface ParsedTable {
   rows: string[][];
 }
 
-// Parse a CSV or XLSX attachment into { headers, rows }; null for anything else.
+// A CSV or XLSX attachment as { headers, rows }, read as an uploaded file is
+// (shared/importUpload.ts): a workbook is checked to be a complete file first, its first sheet with
+// a header row is the one read, and a date cell is its day. Null for any other attachment, and for
+// one that cannot be read or has no header row.
 export function parseAttachment(
   filename: string,
   mimeType: string,
@@ -44,25 +48,14 @@ export function parseAttachment(
   const isCsv = name.endsWith('.csv') || mime === 'text/csv';
   const isXlsx =
     /\.(xlsx|xls)$/.test(name) || mime.includes('spreadsheet') || mime.includes('excel');
-  if (isCsv) return parseCsv(new TextDecoder().decode(bytes));
-  if (isXlsx) {
-    const wb = XLSX.read(bytes, { type: 'array' });
-    const first = wb.SheetNames[0];
-    const sheet = first ? wb.Sheets[first] : undefined;
-    if (!sheet) return null;
-    const matrix = XLSX.utils.sheet_to_json<any[]>(sheet, {
-      header: 1,
-      blankrows: false,
-      defval: '',
-    });
-    const headers = (matrix[0] as any[] | undefined)?.map((h) => String(h ?? '')) ?? [];
-    const rows = matrix
-      .slice(1)
-      .filter((r) => Array.isArray(r) && r.some((cell) => cell !== '' && cell != null))
-      .map((r) => (r as any[]).map((cell) => String(cell ?? '')));
-    return { headers, rows };
-  }
-  return null;
+  if (!isCsv && !isXlsx) return null;
+  const read = readUploadedSheet(XLSX, {
+    name,
+    type: isCsv ? 'text/csv' : mime,
+    size: bytes.length,
+    bytes,
+  });
+  return read.ok ? { headers: read.value.headers, rows: read.value.rows } : null;
 }
 
 function toBytes(content: unknown): Uint8Array {
