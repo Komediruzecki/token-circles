@@ -424,6 +424,16 @@ export function computeBalanceDeltas(tx: {
   return adj
 }
 
+/**
+ * The profile a settings key belongs to, for the settings local-first keeps per profile by naming
+ * the profile in the key (`retirement_settings:<id>`, `achievements:<id>`), or null for a setting
+ * of the whole browser.
+ */
+function profileOfSettingKey(key: string): number | null {
+  const match = /^(?:retirement_settings|achievements):(\d+)$/.exec(key)
+  return match ? Number(match[1]) : null
+}
+
 export class IndexedDBAdapter implements StorageAdapter {
   private getProfileId(): number {
     const stored = localStorage.getItem('currentProfileId')
@@ -1387,16 +1397,29 @@ export class IndexedDBAdapter implements StorageAdapter {
     const filterExtensionByProfile = (source: Record<string, unknown>[]) =>
       pids ? source.filter((row) => pids.has(Number(row.profile_id))) : source
     const extensionSettingsRows = filterExtensionByProfile(extensions.settingsRows)
-    const publicSettings = Object.entries(settings)
+    // A setting of one profile carries it in its key (`retirement_settings:<id>`,
+    // `achievements:<id>`): it goes in the file only with its profile, and only under it. Every
+    // other setting is the whole browser's, so every exported profile's.
+    const exportedSettings = Object.fromEntries(
+      Object.entries(settings).filter(([key]) => {
+        const owner = profileOfSettingKey(key)
+        return owner === null || !pids || pids.has(owner)
+      })
+    ) as typeof settings
     const settingsRows =
       extensionSettingsRows.length > 0
         ? extensionSettingsRows
         : exportedProfiles.flatMap((profile) =>
-            publicSettings.map(([key, value]) => ({
-              key,
-              value: typeof value === 'string' ? value : JSON.stringify(value),
-              profile_id: profile.id,
-            }))
+            Object.entries(exportedSettings)
+              .filter(([key]) => {
+                const owner = profileOfSettingKey(key)
+                return owner === null || owner === profile.id
+              })
+              .map(([key, value]) => ({
+                key,
+                value: typeof value === 'string' ? value : JSON.stringify(value),
+                profile_id: profile.id,
+              }))
           )
     const loanRatePeriods = exportedLoans.flatMap((loan) =>
       Array.isArray(loan.rate_periods)
@@ -1454,7 +1477,7 @@ export class IndexedDBAdapter implements StorageAdapter {
       emergencyFundConfig: filterExtensionByProfile(extensions.emergencyFundConfig),
       customReports: extensions.customReports,
       settingsRows,
-      settings,
+      settings: exportedSettings,
     }
   }
 
