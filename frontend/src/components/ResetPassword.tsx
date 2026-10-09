@@ -30,6 +30,10 @@ export default function ResetPassword() {
       setStatus('invalid')
       return
     }
+    // A reset is for an account on the server, and the link often opens in a browser that starts
+    // local-first. Account mode from here, as Sign In switches it, so the check and the new
+    // password reach the server. The device's local data is not touched.
+    setStorageMode('self-hosted')
     try {
       setStatus((await api.validateResetToken(token)) ? 'ready' : 'invalid')
     } catch {
