@@ -11,7 +11,9 @@
 
 import { createMemo, createSignal } from 'solid-js'
 import { createStore, reconcile } from 'solid-js/store'
+import { readSheetUrl } from '../../../../shared/importSourceSchema'
 import { getLocalCurrency, toast } from '../../core/api'
+import { ApiError, apiErrorFrom } from '../../core/apiError'
 import { apiFetch } from '../../core/apiFetch'
 import {
   detectBank,
@@ -36,6 +38,13 @@ import {
 } from './previewFilter'
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../../core/bankImport'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
+
+/** Said when a sheet's link was read but the sheet has no header row to map. */
+export const SHEET_EMPTY =
+  'That sheet has no header row to read. Check the link points at the tab with your transactions.'
+/** Said when the sheet could not be read for a reason the answer did not name. */
+export const SHEET_UNREAD =
+  "Couldn't read that sheet. Check it is shared so anyone with the link can view it, and try again."
 
 /** A within-batch potential duplicate: `index` is identical to the earlier row `matchIndex`. */
 export interface RowDuplicate {
@@ -1180,13 +1189,26 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // mapping/upload. A background "auto sync" / "fetch & preview" passes { navigate: false } to
   // fetch WITHOUT touching the active step, then drives mapping/preview/import itself. Returns
   // whether usable headers came back, so a headless caller can bail on a failed fetch.
-  const fetchGoogleSheet = async (options?: { navigate?: boolean }): Promise<boolean> => {
+  /**
+   * Reads the sheet at `sheetUrl()` (the tab in `selectedSheet()`) for the mapping step. Without
+   * `rethrow`, a failure is said in the page's error banner and the answer is false. With it, the
+   * failure is thrown as an ApiError instead, for a form to mark its link field, and nothing goes
+   * in the banner: a link that is not a sheet's (shared/importSourceSchema.ts), a sheet that could
+   * not be read, and a sheet with no header row are all at `url`.
+   */
+  const fetchGoogleSheet = async (options?: {
+    navigate?: boolean
+    rethrow?: boolean
+  }): Promise<boolean> => {
     const navigate = options?.navigate ?? true
-    const url = sheetUrl()
-    if (!url) {
-      setError('Please enter a Google Sheets URL')
+    const rethrow = options?.rethrow ?? false
+    const fail = (error: ApiError): false => {
+      if (rethrow) throw error
+      setError(error.message)
       return false
     }
+    const link = readSheetUrl(sheetUrl())
+    if ('error' in link) return fail(new ApiError(400, link.error, { url: link.error }))
 
     setLoading(true)
     setError(null)
@@ -1195,13 +1217,22 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       const response = await apiFetch('/api/import/googlesheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...profileHeaders() },
-        body: JSON.stringify({ url, sheetName: selectedSheet() }),
+        body: JSON.stringify({ url: link.value.url, sheetName: selectedSheet() }),
       })
+      if (!response.ok) {
+        const refused = await apiErrorFrom(response)
+        // A sheet either runtime could not read is about its link: the words say how to share it.
+        const unread =
+          Object.keys(refused.fields).length === 0 &&
+          (response.status === 422 || response.status === 501)
+        return fail(
+          unread ? new ApiError(refused.status, refused.message, { url: refused.message }) : refused
+        )
+      }
 
       const data = await response.json()
-
-      if (!response.ok) throw new Error(data.error || 'Failed to fetch Google Sheet')
-
+      const hasHeaders = Array.isArray(data.headers) && data.headers.length > 0
+      if (!hasHeaders && rethrow) throw new ApiError(422, SHEET_EMPTY, { url: SHEET_EMPTY })
       setSheetNames(data.sheetNames || [])
       setSheetResult({
         ...data,
@@ -1214,7 +1245,6 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setHeaders(data.headers || [])
       setRows(data.rows || [])
 
-      const hasHeaders = Array.isArray(data.headers) && data.headers.length > 0
       if (navigate) {
         // If returning with specific sheet and we have headers, go to mapping
         if (selectedSheet() && hasHeaders) {
@@ -1225,7 +1255,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       }
       return hasHeaders
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch Google Sheet')
+      if (rethrow) throw err instanceof ApiError ? err : new ApiError(0, SHEET_UNREAD)
+      setError(err instanceof ApiError ? err.message : SHEET_UNREAD)
       return false
     } finally {
       setLoading(false)

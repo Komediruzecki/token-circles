@@ -6,12 +6,14 @@
  */
 import { createEffect, createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
 import { AccountSelect } from '../../components/AccountSelect'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { OrbitSpinner } from '../../components/OrbitSpinner'
 import { Pill } from '../../components/Pill'
 import { listAdapters } from '../../core/bankImport'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
 import { downloadSampleTemplate } from './sampleTemplate'
+import { createSheetLinkForm } from './sheetLinkForm'
 import type { BankId } from '../../core/bankImport'
 import type { ImportFlow, ImportTab } from './importFlow'
 
@@ -29,6 +31,9 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
   const uid = createUniqueId()
   const fileInputId = `import-file-input-${uid}`
   const bankInputId = `bank-file-input-${uid}`
+
+  // The Google Sheets link, on the form kit: a bad link is marked at the field (sheetLinkForm.ts).
+  const sheetForm = createSheetLinkForm(flow)
 
   const bankLabel = (bankId: BankId | null) =>
     listAdapters().find((a) => a.id === bankId)?.label ?? ''
@@ -205,24 +210,43 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             </div>
           </Show>
 
-          <div class={styles.sheetsUrlRow}>
-            <input
-              type="text"
-              class={styles.sheetsUrlInput}
-              placeholder="Paste Google Sheets URL"
-              data-test-id="import-sheet-url"
-              value={flow.sheetUrl()}
-              onInput={(e) => flow.setSheetUrl(e.target.value)}
-            />
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-sheet-fetch"
-              onClick={() => void flow.fetchGoogleSheet()}
-              disabled={flow.loading()}
-            >
-              Fetch
-            </button>
-          </div>
+          <form {...sheetForm.attrs} data-test-id="import-sheet-form">
+            <FormNotice form={sheetForm} />
+            <div class={styles.sheetsUrlRow}>
+              <Field
+                form={sheetForm}
+                name="url"
+                label="Google Sheets link"
+                class={styles.sheetsUrlField}
+                labelClass={styles.visuallyHidden}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="url"
+                    class={styles.sheetsUrlInput}
+                    placeholder="Paste Google Sheets URL"
+                    required
+                    data-test-id="import-sheet-url"
+                    value={sheetForm.values.url}
+                    onInput={(e) => {
+                      sheetForm.set('url', e.currentTarget.value)
+                      flow.setSheetUrl(e.currentTarget.value)
+                    }}
+                  />
+                )}
+              </Field>
+              <SubmitButton
+                class={`${styles.btn} ${styles.btnPrimary}`}
+                busy={sheetForm.submitting()}
+                busyLabel="Fetching…"
+                data-test-id="import-sheet-fetch"
+              >
+                Fetch
+              </SubmitButton>
+            </div>
+          </form>
           <p class={styles.sheetsInfo}>
             Google Sheets URL format: https://docs.google.com/spreadsheets/d/... (the sheet must be
             shared or published so it can be read)
