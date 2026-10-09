@@ -207,7 +207,8 @@ authRoutes.post('/api/auth/register', async (c) => {
   // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
   // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
   // existing owner by email — returning the SAME neutral response with NO session either way. The
-  // user signs in afterward, so a new vs existing email is indistinguishable to the caller.
+  // user signs in afterward, so a new vs existing email is indistinguishable to the caller. Either
+  // mail is sent after the answer.
   const passwordHash = await hashPassword(password);
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
@@ -215,10 +216,12 @@ authRoutes.post('/api/auth/register', async (c) => {
     .first<{ id: number }>();
   if (existing) {
     const notice = renderAccountExists({ appUrl: base });
-    await sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
-      (e: unknown) => {
-        console.error('account-exists notice email failed to send:', e);
-      }
+    c.executionCtx.waitUntil(
+      sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
+        (e: unknown) => {
+          console.error('account-exists notice email failed to send:', e);
+        }
+      )
     );
   } else {
     const res = await c.env.DB.prepare(
@@ -231,7 +234,8 @@ authRoutes.post('/api/auth/register', async (c) => {
       .bind('Personal Profile', userId)
       .run();
     // Best-effort, exactly like the mail it replaces: a signup is never held up, or failed, by
-    // the mail server. An account with no confirm link can always ask for one from the app.
+    // the mail server, which is why the mail goes after the answer. An account with no confirm
+    // link can always ask for one from the app.
     let verifyUrl: string | undefined;
     try {
       const token = await createEmailVerification(c.env.DB, userId, email);
@@ -240,10 +244,12 @@ authRoutes.post('/api/auth/register', async (c) => {
       console.error('Verification token could not be minted:', e);
     }
     const welcome = renderWelcome({ appUrl: base, verifyUrl });
-    await sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
-      (e) => {
-        console.error('Welcome email failed:', e);
-      }
+    c.executionCtx.waitUntil(
+      sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+        (e: unknown) => {
+          console.error('Welcome email failed:', e);
+        }
+      )
     );
   }
   // Identical response regardless of existence; no session cookie is set (the user signs in next).

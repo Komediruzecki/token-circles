@@ -88,6 +88,12 @@ const MAILING: { path: string; logged: string[]; mailedTo: string[] }[] = [
     logged: ['Sign-in code could not be sent:'],
     mailedTo: [HAS_ACCOUNT],
   },
+  {
+    path: '/api/auth/register',
+    logged: ['account-exists notice email failed to send:', 'Welcome email failed:'],
+    // The owner of the address hears someone tried it; the new account gets its welcome.
+    mailedTo: [HAS_ACCOUNT, NO_ACCOUNT],
+  },
 ];
 
 /** The routes that store something for an address after their answer, and what they log. */
