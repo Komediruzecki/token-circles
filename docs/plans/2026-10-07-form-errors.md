@@ -568,11 +568,16 @@ What the runtimes now agree on:
 
 The contract's `loan-total-prepaid-none` and `fire-inflation` are settled and their pins removed.
 
-Fixed on the way, each with a test that failed before: a new loan opened after an edit had the
-edited loan's rate periods, and saved them with it (local-first, where the list carries them); a
-goal saved at 0 % showed, and opened, at 7 %, and one without a date said "Invalid Date";
-local-first restored a backup's 0 % goal at 7 %; and local-first served a `POST
-/loans/:id/prepayment` that nothing called.
+Fixed on the way, each with a test that failed before: a goal saved at 0 % showed, and opened, at
+7 %, and one without a date said "Invalid Date"; local-first restored a backup's 0 % goal at 7 %;
+and local-first served a `POST /loans/:id/prepayment` that nothing called.
+
+Not a fix to anything shipped: main's dialog never gave a new loan the rate periods of a loan
+edited before it. It replaced the draft's list on every change rather than changing it
+(`LoanForm.tsx` on main, lines 55, 64-66, 326-328 and 353-356). Moving the dialog onto the kit
+exposed the kit's shallow copy: a reset changed in place the lists of the values the form was
+given, so the first edit of a loan wrote its rate periods into the blank loan's list. The kit's own
+copy of its values (c3849fe2) fixed that before merge, with a test that fails without it.
 
 Open for the owner, each a change no decision covers: a new loan must give a rate and an edit
 cannot empty one, where the Worker saved 5 % and kept the stored rate; a third decimal on an extra
