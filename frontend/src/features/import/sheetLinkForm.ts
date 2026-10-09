@@ -29,13 +29,9 @@ export function createSheetLinkForm(flow: ImportFlow): Form<SheetLinkValues> {
   })
   // The flow's link can change without the field: a reset after an import empties it.
   createEffect(
-    on(
-      flow.sheetUrl,
-      (url) => {
-        if (url !== form.values.url) form.reset({ url })
-      },
-      { defer: true }
-    )
+    on(flow.sheetUrl, (url) => {
+      if (url !== form.values.url) form.reset({ url })
+    })
   )
   return form
 }

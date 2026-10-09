@@ -382,6 +382,28 @@ describe("the Import page's Google Sheets link", () => {
     expect(failureToasts()).toEqual([])
   })
 
+  it('shows a link the flow was given while the page was being drawn', async () => {
+    setPage('import')
+    const { ImportDataEntry } = await import('../ImportDataEntry')
+    const { createImportFlow } = await import('../importFlow')
+    dispose = createRoot((disposeRoot) => {
+      const flow = createImportFlow({ initialTab: 'google-sheets' })
+      const unmount = render(() => {
+        const page = <ImportDataEntry flow={flow} />
+        // After the field is made, before its effects first run.
+        flow.setSheetUrl(LEDGER)
+        return page
+      }, host)
+      return () => {
+        unmount()
+        disposeRoot()
+      }
+    })
+    await vi.waitFor(() => {
+      expect(urlInput().value).toBe(LEDGER)
+    })
+  })
+
   it('empties the link, and its mark, when the flow starts over', async () => {
     const flow = await openSheets()
     type(urlInput(), 'not a link')
