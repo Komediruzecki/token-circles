@@ -31,6 +31,7 @@ import AccountDeletion from '../components/AccountDeletion'
 import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import LegalLinks from '../components/LegalLinks'
 import { LogViewer } from '../components/LogViewer'
@@ -46,7 +47,14 @@ import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
 import { apiErrorFrom, plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
-import { bumpProfileVersion, getProfileVersion, setPage } from '../core/appStore'
+import {
+  bumpProfileVersion,
+  getProfileVersion,
+  setCurrentProfile,
+  setPage,
+  setProfiles,
+  useAppState,
+} from '../core/appStore'
 import { displayVersion, serverVersion, updateAvailable } from '../core/appVersion'
 import { confirmBillingActivation, hasManageableSubscription } from '../core/billingActivation'
 import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
@@ -69,6 +77,7 @@ import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
+import { createProfileRenameForm } from './profileForm'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
 import type { SettingsTab } from '../core/settingsStore'
@@ -1065,54 +1074,20 @@ export default function Settings() {
     window.location.reload()
   }
 
-  const [renamingProfileId, setRenamingProfileId] = createSignal<number | null>(null)
-  const [renameValue, setRenameValue] = createSignal('')
-  const [renaming, setRenaming] = createSignal(false)
-
-  const startRename = (id: number, currentName: string) => {
-    setRenamingProfileId(id)
-    setRenameValue(currentName)
-  }
-
-  const cancelRename = () => {
-    setRenamingProfileId(null)
-    setRenameValue('')
-  }
-
-  const submitRename = async () => {
-    const pid = renamingProfileId()
-    const name = renameValue().trim()
-    if (!pid || !name) return
-    setRenaming(true)
-    try {
-      const res = await apiFetch(`/api/profiles/${pid}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        if (data.error === 'Unauthorized') {
-          toast(
-            'You cannot rename default demo profiles. Log in to manage your own profiles.',
-            'warning'
-          )
-        } else {
-          toast(data.error || 'Failed to rename profile', 'error')
-        }
-      } else {
-        setRenamingProfileId(null)
-        setRenameValue('')
-        loadHouseholdProfiles()
-        window.location.reload()
-      }
-    } catch {
-      toast('Failed to rename profile', 'error')
-    } finally {
-      setRenaming(false)
-    }
-  }
+  // The household view's rename (features/profileForm.ts). A save renames the profile where the
+  // page and the sidebar show it; it used to reload the whole page.
+  const appState = useAppState()
+  const renameForm = createProfileRenameForm({
+    onRenamed: (renamed) => {
+      const rename = <T extends { id: number; name: string }>(list: readonly T[]): T[] =>
+        list.map((p) => (p.id === renamed.id ? { ...p, name: renamed.name } : p))
+      setAllProfiles((list) => rename(list))
+      setProfiles(rename(appState.profiles))
+      const current = appState.currentProfile
+      if (current?.id === renamed.id) setCurrentProfile({ ...current, name: renamed.name })
+    },
+  })
+  const renamingRow = (id: number) => renameForm.renaming()?.id === id
 
   const handleDeleteProfile = async (profileId?: string | number) => {
     const pid = profileId ? profileId.toString() : localStorage.getItem('currentProfileId') || '1'
@@ -1732,47 +1707,60 @@ export default function Settings() {
                     </span>
                     <For each={allProfiles()}>
                       {(profile) => (
-                        <label
+                        <div
                           data-test-id={`household-profile-${profile.id}`}
                           title={
                             profile.id === lockedProfileId() ? HOUSEHOLD_LOCKED_HINT : undefined
                           }
                           style={{
                             display: 'flex',
+                            'flex-wrap': 'wrap',
                             'align-items': 'center',
                             gap: '10px',
                             padding: '8px 0',
-                            cursor: profile.id === lockedProfileId() ? 'default' : 'pointer',
                             'border-bottom': '1px solid var(--border)',
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            class={styles.checkbox}
-                            checked={
-                              householdIds().includes(profile.id) ||
-                              profile.id === lockedProfileId()
-                            }
-                            disabled={profile.id === lockedProfileId()}
-                            aria-describedby={
-                              profile.id === lockedProfileId() ? 'household-locked-hint' : undefined
-                            }
-                            onchange={() => {
-                              toggleHouseholdProfile(profile.id)
+                          <label
+                            style={{
+                              display: 'flex',
+                              'align-items': 'center',
+                              gap: '10px',
+                              cursor: profile.id === lockedProfileId() ? 'default' : 'pointer',
                             }}
-                          />
+                          >
+                            <input
+                              type="checkbox"
+                              class={styles.checkbox}
+                              checked={
+                                householdIds().includes(profile.id) ||
+                                profile.id === lockedProfileId()
+                              }
+                              disabled={profile.id === lockedProfileId()}
+                              aria-describedby={
+                                profile.id === lockedProfileId()
+                                  ? 'household-locked-hint'
+                                  : undefined
+                              }
+                              onchange={() => {
+                                toggleHouseholdProfile(profile.id)
+                              }}
+                            />
+                            <span
+                              class={renamingRow(profile.id) ? styles.visuallyHidden : undefined}
+                              style="font-size: 14px; color: var(--text);"
+                            >
+                              {profile.name}
+                            </span>
+                          </label>
                           <Show
-                            when={renamingProfileId() === profile.id}
+                            when={renamingRow(profile.id)}
                             fallback={
                               <>
-                                <span style="font-size: 14px; color: var(--text);">
-                                  {profile.name}
-                                </span>
                                 <button
                                   class={styles.iconBtn}
-                                  onclick={(e) => {
-                                    e.preventDefault()
-                                    startRename(profile.id, profile.name)
+                                  onclick={() => {
+                                    renameForm.open(profile)
                                   }}
                                   title="Rename profile"
                                   style="margin-left: auto; padding: 2px 6px; font-size: 11px; opacity: 0.6;"
@@ -1802,40 +1790,54 @@ export default function Settings() {
                               </>
                             }
                           >
-                            <input
-                              value={renameValue()}
-                              oninput={(e) => setRenameValue(e.currentTarget.value)}
-                              onkeypress={(e) => {
-                                if (e.key === 'Enter') submitRename()
-                                if (e.key === 'Escape') cancelRename()
+                            <form
+                              {...renameForm.attrs}
+                              class={styles.householdRename}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Escape') renameForm.close()
                               }}
-                              style={{
-                                'font-size': '14px',
-                                padding: '2px 6px',
-                                border: '1px solid var(--primary)',
-                                'border-radius': '4px',
-                                background: 'var(--bg)',
-                                color: 'var(--text)',
-                                'min-width': '120px',
-                              }}
-                            />
-                            <button
-                              class={styles.iconBtn}
-                              onclick={submitRename}
-                              disabled={renaming()}
-                              style="padding: 2px 6px; font-size: 11px; color: var(--primary);"
                             >
-                              Save
-                            </button>
-                            <button
-                              class={styles.iconBtn}
-                              onclick={cancelRename}
-                              style="padding: 2px 6px; font-size: 11px; opacity: 0.6;"
-                            >
-                              Cancel
-                            </button>
+                              <FormNotice form={renameForm} />
+                              <div class={styles.householdRenameRow}>
+                                <Field
+                                  form={renameForm}
+                                  name="name"
+                                  label={`New name for ${profile.name}`}
+                                  labelClass={styles.visuallyHidden}
+                                  class={styles.householdRenameField}
+                                >
+                                  {(control) => (
+                                    <input
+                                      {...control}
+                                      data-test-id="household-rename-input"
+                                      value={renameForm.values.name}
+                                      onInput={(e) => renameForm.set('name', e.currentTarget.value)}
+                                      autofocus
+                                    />
+                                  )}
+                                </Field>
+                                <SubmitButton
+                                  class={styles.iconBtn}
+                                  busy={renameForm.submitting()}
+                                  unchanged={renameForm.unchanged()}
+                                  style="padding: 2px 6px; font-size: 11px; color: var(--primary);"
+                                >
+                                  Save
+                                </SubmitButton>
+                                <button
+                                  type="button"
+                                  class={styles.iconBtn}
+                                  onclick={() => {
+                                    renameForm.close()
+                                  }}
+                                  style="padding: 2px 6px; font-size: 11px; opacity: 0.6;"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
                           </Show>
-                        </label>
+                        </div>
                       )}
                     </For>
                   </div>
