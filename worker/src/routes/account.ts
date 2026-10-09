@@ -99,6 +99,19 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
   // Every device's session row, with the device and the address it signed in from, goes with
   // the account.
   P('DELETE FROM auth_sessions WHERE user_id = ?', userId);
+  // Its sign-in history goes too: the rows with its id, and the attempts at its address (a wrong
+  // password, a bad code), which carry the address and no id. authlog.ts stores that address
+  // trimmed and lower case.
+  const address = user.email?.trim().toLowerCase();
+  if (address) {
+    P(
+      'DELETE FROM auth_logs WHERE user_id = ? OR (user_id IS NULL AND email = ?)',
+      userId,
+      address
+    );
+  } else {
+    P('DELETE FROM auth_logs WHERE user_id = ?', userId);
+  }
   P('DELETE FROM custom_reports WHERE user_id = ?', userId);
   P('DELETE FROM error_logs WHERE user_id = ?', userId);
   P('DELETE FROM profiles WHERE user_id = ?', userId);
