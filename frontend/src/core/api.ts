@@ -1187,7 +1187,10 @@ export class ApiClient {
     return this.request(`/recurring/${id}`, undefined, { method: 'DELETE' })
   }
 
-  populateRecurring(id: number): Promise<{ ok: boolean }> {
+  /** Adds the rule's due period to transactions: the row it added, and the rule's next date. */
+  populateRecurring(
+    id: number
+  ): Promise<{ ok: boolean; transactionId: number; next_date: string }> {
     return this.request(`/recurring/${id}/populate`, undefined, { method: 'POST' })
   }
 }
