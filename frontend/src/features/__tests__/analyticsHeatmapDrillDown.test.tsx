@@ -64,6 +64,16 @@ beforeEach(async () => {
     date: `${YEAR}-03-11`,
   })
   await row(4, { description: 'Refund', amount: 9, amount_local: 9, date: DAY, type: 'income' })
+  // The other profile's spending that day.
+  await db.add('profiles', { id: 2, name: 'Partner', created_at: '2026-01-01T00:00:00.000Z' })
+  await row(5, {
+    profile_id: 2,
+    category_id: null,
+    description: 'Their market',
+    amount: 100,
+    amount_local: 100,
+    date: DAY,
+  })
 
   Element.prototype.scrollIntoView = () => {}
   vi.stubGlobal('matchMedia', (query: string) => ({
@@ -96,33 +106,63 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/** Opens Analytics and clicks 10 March on the heatmap. */
+async function clickTheTenthOfMarch() {
+  setPage('analytics')
+  const { default: Analytics } = await import('../Analytics')
+  dispose = render(() => <Analytics />, host)
+
+  // d3 loads on the heatmap's first render; the cells appear once it has.
+  const cell = await vi.waitFor(
+    () => {
+      const found = [...host.querySelectorAll('rect.cell')].find((el) => {
+        const day = (el as unknown as { __data__?: Date }).__data__
+        return day?.getMonth() === 2 && day.getDate() === 10
+      })
+      expect(found, 'no cell for 10 March').toBeDefined()
+      return found!
+    },
+    { timeout: 10_000 }
+  )
+  cell.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+}
+
 describe('the spending heatmap in local-first', () => {
   it('lists the expenses of the day that was clicked', async () => {
-    setPage('analytics')
-    const { default: Analytics } = await import('../Analytics')
-    dispose = render(() => <Analytics />, host)
-
-    // d3 loads on the heatmap's first render; the cells appear once it has.
-    const cell = await vi.waitFor(
-      () => {
-        const found = [...host.querySelectorAll('rect.cell')].find((el) => {
-          const day = (el as unknown as { __data__?: Date }).__data__
-          return day?.getMonth() === 2 && day.getDate() === 10
-        })
-        expect(found, 'no cell for 10 March').toBeDefined()
-        return found!
-      },
-      { timeout: 10_000 }
-    )
-    cell.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await clickTheTenthOfMarch()
 
     await vi.waitFor(() => {
       expect(document.body.textContent).toContain('Market stall')
     })
     expect(document.body.textContent).toContain('Bakery')
     expect(document.body.textContent).not.toContain('No expense transactions for this day')
-    // Only that day, and only its expenses.
+    // Only that day, only its expenses, and only this profile's.
     expect(document.body.textContent).not.toContain('Hardware shop')
     expect(document.body.textContent).not.toContain('Refund')
+    expect(document.body.textContent).not.toContain('Their market')
+  })
+
+  // The heatmap sums the profiles selected in the household; the day's list reads the same ones.
+  it('lists both profiles of the household when both are selected', async () => {
+    localStorage.setItem('selectedProfileIds', JSON.stringify([1, 2]))
+    await clickTheTenthOfMarch()
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('Their market')
+    })
+    expect(document.body.textContent).toContain('Market stall')
+    expect(document.body.textContent).toContain('Bakery')
+  })
+
+  it("lists the other profile's alone when it is the one in use", async () => {
+    localStorage.setItem('currentProfileId', '2')
+    localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
+    await clickTheTenthOfMarch()
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain('Their market')
+    })
+    expect(document.body.textContent).not.toContain('Market stall')
+    expect(document.body.textContent).not.toContain('Bakery')
   })
 })
