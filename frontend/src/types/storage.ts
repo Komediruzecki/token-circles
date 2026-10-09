@@ -213,6 +213,8 @@ export interface ExportData {
   receiptFiles?: ExportReceiptFile[]
   balanceHistoryRows?: Record<string, unknown>[]
   importLogs?: Record<string, unknown>[]
+  /** Saved import sources, config, mapping and category types as objects. Older files have none. */
+  importSources?: Record<string, unknown>[]
 
   // Canonical v3 backup domains. Some are Worker-native and are preserved as
   // opaque extension data while a backup is held in browser-only mode.

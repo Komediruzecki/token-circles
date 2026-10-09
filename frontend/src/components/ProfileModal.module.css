@@ -12,6 +12,12 @@
 }
 
 .modal {
+  /* The dialog sits on the sidebar's dark surface in both themes, so the form kit's marks use the
+     dark theme's danger colours here: the light theme's are under 4.5:1 on it. */
+  --danger: #ef4444;
+  --danger-text: #ff9d9d;
+  --danger-outline: #ff9d9d;
+  --danger-bg: rgba(255, 157, 157, 0.06);
   background: var(--sidebar-bg);
   color: var(--sidebar-text);
   padding: 24px;
@@ -57,15 +63,6 @@
 .input:focus {
   outline: none;
   border-color: var(--primary);
-}
-
-.error {
-  background: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  margin-bottom: 12px;
 }
 
 .upgradeBtn {

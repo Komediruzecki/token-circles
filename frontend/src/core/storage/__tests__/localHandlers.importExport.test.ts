@@ -58,11 +58,10 @@ describe('localHandlers - export/import', () => {
 
     const res = await exportByType({ p1: 'transactions' }, new URLSearchParams({ format: 'json' }))
     expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.transactions).toBeInstanceOf(Array)
-    expect(data.categories).toBeUndefined()
-    expect(data.accounts).toBeUndefined()
-    expect(data.version).toBeUndefined()
+    // The list of rows, with the Worker's columns (shared/exportColumns.ts), not the backup's.
+    expect(await res.json()).toEqual([
+      expect.objectContaining({ date: '2026-05-01', description: 'Salary', amount: 100 }),
+    ])
   })
 
   it('exports transactions as CSV', async () => {
@@ -76,7 +75,7 @@ describe('localHandlers - export/import', () => {
     const res = await exportByType({ p1: 'transactions' }, new URLSearchParams({ format: 'csv' }))
     expect(res.status).toBe(200)
     const text = await res.text()
-    expect(text).toContain('date,type,description,amount')
+    expect(text).toContain('date,description,amount,type,currency')
   })
 
   it('exports categories, budgets, accounts, loans, and recurring as CSV', async () => {
@@ -85,29 +84,29 @@ describe('localHandlers - export/import', () => {
       new URLSearchParams({ format: 'csv' })
     )
     expect(categoriesRes.status).toBe(200)
-    expect(await categoriesRes.text()).toContain('id,profile_id,type,name')
+    expect(await categoriesRes.text()).toContain('name,color,icon,type,parent_id')
 
     const budgetsRes = await exportByType({ p1: 'budgets' }, new URLSearchParams({ format: 'csv' }))
     expect(budgetsRes.status).toBe(200)
-    expect(await budgetsRes.text()).toContain('id,profile_id,category_id,amount')
+    expect(await budgetsRes.text()).toContain('id,category_id,amount,period')
 
     const accountsRes = await exportByType(
       { p1: 'accounts' },
       new URLSearchParams({ format: 'csv' })
     )
     expect(accountsRes.status).toBe(200)
-    expect(await accountsRes.text()).toContain('id,profile_id,name,type')
+    expect(await accountsRes.text()).toContain('name,type,currency,balance,notes')
 
     const loansRes = await exportByType({ p1: 'loans' }, new URLSearchParams({ format: 'csv' }))
     expect(loansRes.status).toBe(200)
-    expect(await loansRes.text()).toContain('id,profile_id,name,principal')
+    expect(await loansRes.text()).toContain('name,principal,interest_rate')
 
     const recurringRes = await exportByType(
       { p1: 'recurring' },
       new URLSearchParams({ format: 'csv' })
     )
     expect(recurringRes.status).toBe(200)
-    expect(await recurringRes.text()).toContain('id,profile_id,description,amount')
+    expect(await recurringRes.text()).toContain('description,amount,type,frequency')
   })
 
   it('imports data', async () => {
@@ -126,8 +125,12 @@ describe('localHandlers - export/import', () => {
     }
     const res = await importData(importPayload)
     expect(res.status).toBe(200)
-    const result = await res.json()
-    expect(result.message).toContain('imported')
+    // The Worker's answer: one profile, one category and the currency, and the profile restored.
+    expect(await res.json()).toEqual({
+      profiles_restored: 1,
+      rows_restored: 2,
+      first_profile_id: Number(localStorage.getItem('currentProfileId')),
+    })
   })
 
   it('rejects invalid import body', async () => {

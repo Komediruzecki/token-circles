@@ -6,9 +6,11 @@ import {
   idsOf,
   listTransactions,
 } from '../helpers';
+import { EXPORT_MESSAGES } from '../../exportColumns';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
+import { sourceForm } from './importSources';
 import { fillProfile, NONE, profileList } from './profiles';
 
 /** The ids that own rows of their own, as a profile's lists read now. */
@@ -52,26 +54,25 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
   expect(file.profiles.map((p: Json) => p.name)).toEqual(['Me', 'Partner']);
   expect(file.transactions).toHaveLength(1);
   expect(file.accounts.map((a: Json) => a.name).sort()).toEqual(['Everyday', 'Theirs']);
+  expect(file.importSources).toEqual([
+    expect.objectContaining({ profile_id: api.profile, label: 'Bank ledger' }),
+  ]);
 
-  // Restoring replaces every profile with the file's.
+  // Restoring replaces every profile with the file's, and says how much it put back.
   const restored = await api.unscoped.post('/api/import', file);
   expectOk(expect, restored, 'POST /api/import');
-  // DIFFERENCE backup-restore-answer
-  if (api.runtime === 'worker') {
-    expect(restored.body).toMatchObject({
-      profiles_restored: 2,
-      rows_restored: expect.any(Number),
-      first_profile_id: expect.any(Number),
-    });
-  } else {
-    expect(restored.body).toEqual({ ok: true, message: 'Data imported successfully' });
-  }
 
   const listed = await profileList(api.unscoped, expect);
   expect(listed.map((p) => p.name)).toEqual(['Me', 'Partner']);
   const me = listed.find((p) => p.name === 'Me')!.id as number;
   const partner = listed.find((p) => p.name === 'Partner')!.id as number;
   expect([me, partner]).not.toContain(api.profile);
+  expect(restored.body).toEqual({
+    profiles_restored: 2,
+    rows_restored: expect.any(Number),
+    first_profile_id: me,
+  });
+  expect(restored.body.rows_restored).toBeGreaterThanOrEqual(20);
   return { before, mine, theirs, me, partner };
 }
 
@@ -83,10 +84,18 @@ export const backup = [
       const back = api.as(me);
       // Everything the file carried is back, under the restored profile, and once: the rows that
       // hang off a loan, an account or a transaction are counted under the replaced ids as well as
-      // the restored ones, so one the restore left behind beside its copy counts twice. A backup
-      // carries no import sources, in either runtime, so a restore loses them.
+      // the restored ones, so one the restore left behind beside its copy counts twice. The
+      // profile's saved import sources come back with it.
       const after = await api.stored(me, both(mine, await ownedNow(back, expect)));
-      expect(after).toEqual({ ...before, 'import sources': 0 });
+      expect(after).toEqual(before);
+      const sources = (await back.get('/api/import-sources')).body as Json[];
+      expect(sources).toEqual([
+        expect.objectContaining({
+          profile_id: me,
+          ...sourceForm(),
+          last_synced_at: null,
+        }),
+      ]);
       const accounts = (await back.get('/api/accounts')).body as Json[];
       const everyday = accounts.find((a) => a.name === 'Everyday');
       expectMoney(expect, await balanceOf(back, expect, everyday.id), 954.5, 'Everyday');
@@ -121,24 +130,21 @@ export const backup = [
     expectOk(expect, csv, 'GET /api/export/:type as CSV');
     const json = await api.get('/api/export/accounts?format=json');
     expectOk(expect, json, 'GET /api/export/:type as JSON');
-    // DIFFERENCE export-by-type
-    if (api.runtime === 'worker') {
-      expect(csv.body).toBe(
-        'date,description,amount,type,currency,means_of_payment,beneficiary,payor,notes,category\n' +
-          '2026-03-10,Groceries,45.5,expense,EUR,,,,,Food'
-      );
-      expect(json.body).toEqual([
-        { name: 'Everyday', type: 'giro', currency: 'EUR', balance: 954.5, notes: '' },
-      ]);
-    } else {
-      expect(csv.body).toBe(
-        'date,type,description,amount,currency,category_id,notes\n' +
-          `2026-03-10,expense,"Groceries",45.5,EUR,${food},""`
-      );
-      expect(json.body).toEqual({
-        accounts: [expect.objectContaining({ id: everyday, name: 'Everyday', balance: 954.5 })],
-      });
-    }
+    expect(csv.body).toBe(
+      'date,description,amount,type,currency,means_of_payment,beneficiary,payor,notes,category\n' +
+        '2026-03-10,Groceries,45.5,expense,EUR,,,,,Food'
+    );
+    expect(json.body).toEqual([
+      { name: 'Everyday', type: 'giro', currency: 'EUR', balance: 954.5, notes: '' },
+    ]);
+
+    // A kind with no rows is its header, and there is no export of a kind that is not listed.
+    expect((await api.get('/api/export/loans?format=csv')).body).toBe(
+      'name,principal,interest_rate,start_date,term_months,total_prepaid'
+    );
+    const unknown = await api.get('/api/export/settings?format=json');
+    expect(unknown.status).toBe(400);
+    expect(unknown.body).toEqual({ error: EXPORT_MESSAGES.kind });
   }),
 
   scenario('all data is cleared, and the profiles kept', async (api, expect) => {
@@ -149,9 +155,8 @@ export const backup = [
     expectOk(expect, cleared, 'DELETE /api/clear-all');
     expect(cleared.body).toEqual({ ok: true, message: 'All data cleared' });
     expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
-    // DIFFERENCE profile-clear-import-sources
-    const kept = api.runtime === 'worker' ? { 'import sources': 1 } : {};
-    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, ...kept });
-    expect(await api.stored(api.other.profile, theirs)).toEqual({ ...NONE, ...kept });
+    // Import sources go too: a source on the daily schedule would fill the profile again.
+    expect(await api.stored(api.profile, mine)).toEqual(NONE);
+    expect(await api.stored(api.other.profile, theirs)).toEqual(NONE);
   }),
 ];

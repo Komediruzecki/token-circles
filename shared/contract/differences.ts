@@ -47,26 +47,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
   'portfolio-prices':
     'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
-  'import-upload-answer':
-    "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
-  'profile-answers':
-    "POST /api/profiles answers 200 with the profile and its zero counts on the Worker, but 201 with { id, name, created_at } in local-first; PUT and PATCH answer the renamed profile on the Worker and { ok: true } in local-first. The app reads only the new profile's id, name and created_at, and only whether a rename worked. Slice 4 (profiles).",
-  'profile-delete-selection':
-    "DELETE /api/profiles/:id deletes any of the person's profiles but the last on the Worker; local-first refuses with 403 unless the profile is in the active selection, so the Danger Zone's Delete Profile fails in local-first for every profile but the one in use. Slice 4 (profiles).",
-  'profile-delete-last':
-    "The Worker refuses to delete a person's only profile with 400; local-first deletes it and is left with none. The Danger Zone disables Delete Profile when one profile is left. Slice 4 (profiles).",
-  'profile-reseed-demo':
-    'POST /api/profiles/reseed-demo clears the active profile and gives it the default categories on the Worker; local-first deletes every profile and puts back its three example profiles. The Danger Zone offers it in local-first only. Slice 4 (profiles).',
-  'profile-clear-import-sources':
-    'DELETE /api/profile/data and DELETE /api/clear-all keep the saved import sources on the Worker and delete them in local-first; on the Worker, a source on the daily schedule fills the cleared profile again at its next sync. Slice 4 (profiles).',
-  'backup-restore-answer':
-    'POST /api/import answers { profiles_restored, rows_restored, first_profile_id } on the Worker and { ok: true, message } in local-first, where Settings restores through the storage adapter rather than this route. Both replace every profile. Slice 4 (import).',
-  'export-by-type':
-    'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'settings-scope':
-    "Settings are kept per profile on the Worker and once per browser in local-first, so a base currency or an onboarding state saved on one profile is every profile's in local-first (the achievement record names its profile in its key there). Slice 4 (settings).",
-  'storage-mode-answers':
-    "GET /api/storage-mode answers { mode: 'self-hosted', type: 'sqlite' } on the Worker and the browser's own mode in local-first; POST /api/storage-mode and POST /api/settings/set-storage only acknowledge on the Worker, but switch the browser's mode in local-first and answer it. Settings sends only POST /api/storage-mode, and sets the mode itself after. Slice 4 (settings).",
+    "Settings are kept per profile on the Worker and once per browser in local-first, so a base currency or an onboarding state saved on one profile is every profile's in local-first (the achievement record names its profile in its key there). Left open by slice 4b for the owner to decide which way both go.",
   'receipt-answers':
     'A receipt upload answers 201 with the stored row on the Worker and 200 with the row and a url in local-first; GET /api/receipts/transaction/:id answers the receipt on the Worker and a list of it in local-first; DELETE /api/receipts/:id answers { message } on the Worker and { ok: true } in local-first. The app finds a receipt through its transaction row, and reads none of these. Slice 2 (transactions).',
   'auth-local-user':
@@ -89,10 +71,4 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/reports/monthly-pdf takes the month as YYYY-MM on the Worker, which refuses year=2025&month=3 with 400, and as a month number beside the year in local-first, which reads month=2025-03 as month 2025 of this year and still answers a PDF; nothing in the app calls it, as Settings makes its PDFs in the browser in both modes. Slice 4 (settings).',
   'custom-report':
     "POST /api/reports/custom saves the report's settings and answers them with a new id on the Worker, where GET /api/reports/custom/:id reads them back, but saves nothing and answers the report itself (totals and sums per category over the dates and category given) in local-first; nothing in the app calls it. Slice 4 (settings).",
-  'category-apply-mappings':
-    'POST /api/categories/apply-mappings files the transactions listed in { mappings: [{ transaction_id, category_id, pattern }] } and learns each pattern, answering { ok, updated }, on the Worker, but runs the stored mappings named in { mapping_ids, apply_to } over uncategorised rows, answering { ok, applied }, in local-first; nothing in the app calls it. Slice 4 (import).',
-  'category-mapping-upsert':
-    'A mapping saved again for a pattern the profile already has updates that row and counts it (use_count 2) on the Worker, which also trims the pattern and lists mappings with their category name, most used first; local-first adds a second row and lists raw rows. Only the auto-categorise dialog reads mappings, and nothing in the app saves one through this route. Slice 4 (import).',
-  'category-auto-map':
-    'POST /api/categories/auto-map only suggests a category per transaction ({ total, mapped, mappings }) on the Worker, but files the rows itself ({ ok, mapped }), without moving a linked goal, in local-first; nothing in the app calls it. Slice 4 (import).',
 };

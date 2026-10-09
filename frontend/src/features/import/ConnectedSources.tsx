@@ -9,12 +9,11 @@
  * preview, dedup and the execute path are the same code the Import page uses.
  */
 import { createSignal, For, Show } from 'solid-js'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { useAppState } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
 import { entityVersion } from '../../core/dataVersions'
-import { autoDetectMapping, mappingToHeaderNames } from '../../core/importMapping'
 import {
-  createImportSource,
   deleteImportSource,
   listImportSources,
   parseSheetUrl,
@@ -27,14 +26,12 @@ import importStyles from '../Import.module.css'
 import styles from './ConnectedSources.module.css'
 import { createImportFlow } from './importFlow'
 import { ImportPreviewModal } from './ImportPreviewModal'
+import { createSheetSourceForm } from './sheetSourceForm'
 import type { ImportSource } from '../../core/importSources'
 
 export function ConnectedSources() {
   const [sources, setSources] = createSignal<ImportSource[]>([])
   const [showAdd, setShowAdd] = createSignal(false)
-  const [newUrl, setNewUrl] = createSignal('')
-  const [newLabel, setNewLabel] = createSignal('')
-  const [adding, setAdding] = createSignal(false)
   const [busy, setBusy] = createSignal<{ id: number; action: 'sync' | 'preview' } | null>(null)
   const [previewOpen, setPreviewOpen] = createSignal(false)
   const [activeSource, setActiveSource] = createSignal<ImportSource | null>(null)
@@ -124,44 +121,19 @@ export function ConnectedSources() {
     setPreviewOpen(true)
   }
 
-  async function addSource() {
-    const url = newUrl().trim()
-    if (!url || adding()) return
-    setAdding(true)
-    flow.resetForm()
-    flow.setActiveImportTab('google-sheets')
-    flow.setSheetUrl(url)
-    flow.setSelectedSheet('')
-    const ok = await flow.fetchGoogleSheet({ navigate: false })
-    if (!ok) {
-      addToast(
-        flow.error() ?? 'Could not fetch that sheet — make sure it is shared or published',
-        'error'
-      )
-      setAdding(false)
-      return
-    }
-    const headers = flow.currentHeaders()
-    // Remember the mapping BY HEADER NAME so it survives the sheet owner reordering columns.
-    const mapping = mappingToHeaderNames(autoDetectMapping(headers), headers)
-    const label = newLabel().trim() || flow.selectedSheet() || 'Google Sheet'
-    const created = await createImportSource({
-      kind: 'google_sheet',
-      label,
-      config: { url, sheetName: flow.selectedSheet() || '' },
-      mapping,
-      schedule: 'manual',
-    })
-    setAdding(false)
-    if (!created) {
-      addToast('Could not save the source', 'error')
-      return
-    }
-    setSources((s) => [created, ...s])
-    setNewUrl('')
-    setNewLabel('')
+  // "Add a sheet": the link and a name, checked before anything is sent, and a sheet that cannot
+  // be read or saved marked at its field (sheetSourceForm.ts).
+  const addForm = createSheetSourceForm({
+    flow,
+    onSaved: (created) => {
+      setSources((list) => [created, ...list])
+      closeAdd()
+    },
+  })
+
+  function closeAdd() {
+    addForm.reset()
     setShowAdd(false)
-    addToast('Sheet saved', 'success')
   }
 
   async function removeSource(src: ImportSource) {
@@ -239,21 +211,48 @@ export function ConnectedSources() {
       </div>
 
       <Show when={showAdd()}>
-        <div class={styles.addForm}>
+        <form class={styles.addForm} {...addForm.attrs} data-test-id="source-add-form">
+          <FormNotice form={addForm} />
           <div class={styles.addRow}>
-            <input
-              class={styles.input}
-              placeholder="Google Sheets link (shared or published)"
-              value={newUrl()}
-              onInput={(e) => setNewUrl(e.currentTarget.value)}
-            />
-            <input
-              class={styles.input}
-              style={{ 'max-width': '220px', flex: '0 1 220px' }}
-              placeholder="Label (optional)"
-              value={newLabel()}
-              onInput={(e) => setNewLabel(e.currentTarget.value)}
-            />
+            <Field
+              form={addForm}
+              name="url"
+              label="Google Sheets link"
+              class={styles.addField}
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  class={styles.input}
+                  type="url"
+                  inputmode="url"
+                  placeholder="Google Sheets link (shared or published)"
+                  required
+                  data-test-id="source-url-input"
+                  value={addForm.values.url}
+                  onInput={(e) => addForm.set('url', e.currentTarget.value)}
+                />
+              )}
+            </Field>
+            <Field
+              form={addForm}
+              name="label"
+              label="Name"
+              class={`${styles.addField} ${styles.addLabelField}`}
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  class={styles.input}
+                  placeholder="Name (optional)"
+                  data-test-id="source-label-input"
+                  value={addForm.values.label}
+                  onInput={(e) => addForm.set('label', e.currentTarget.value)}
+                />
+              )}
+            </Field>
           </div>
           <p class={styles.hint}>
             The sheet must be shared as "anyone with the link can view" (or File &rarr; Share &rarr;
@@ -263,25 +262,20 @@ export function ConnectedSources() {
             <button
               class={`${importStyles.btn} ${importStyles.btnGhost} ${importStyles.btnSm}`}
               type="button"
-              disabled={adding()}
-              onClick={() => {
-                setShowAdd(false)
-                setNewUrl('')
-                setNewLabel('')
-              }}
+              disabled={addForm.submitting()}
+              onClick={closeAdd}
             >
               Cancel
             </button>
-            <button
+            <SubmitButton
               class={`${importStyles.btn} ${importStyles.btnPrimary} ${importStyles.btnSm}`}
-              type="button"
-              disabled={adding() || !newUrl().trim()}
-              onClick={() => void addSource()}
+              busy={addForm.submitting()}
+              data-test-id="source-save"
             >
-              {adding() ? 'Saving…' : 'Save sheet'}
-            </button>
+              Save sheet
+            </SubmitButton>
           </div>
-        </div>
+        </form>
       </Show>
 
       <Show

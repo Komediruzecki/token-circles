@@ -9,106 +9,78 @@ import { getUserPlan } from '../plan';
 import { planLimit } from '../plans';
 import * as db from '../db';
 import { clearProfileData } from '../profileData';
+import { EXPORT_MESSAGES, exportFile, isExportKind } from '../../../shared/exportColumns';
 
 // Data export, versioned restore, and wipe.
 export const exportRoutes = new Hono<AppEnv>();
 
-// CSV serialization with a formula-injection guard, mirroring the Express backend.
-function toCsv(rows: Record<string, unknown>[]): string {
-  if (rows.length === 0) return '';
-  const headers = Object.keys(rows[0]);
-  const escape = (v: unknown): string => {
-    let val = v == null ? '' : String(v);
-    // Formula-injection guard for spreadsheet apps. Plain numbers (incl. negatives) are
-    // data, not formulas — quoting them turned every negative balance into text like
-    // "'-2392.21" and corrupted numeric columns.
-    const isPlainNumber = typeof v === 'number' || /^-?\d+(\.\d+)?$/.test(val);
-    if (!isPlainNumber && /^[=+\-@\t\r]/.test(val)) val = "'" + val;
-    return /[",\n]/.test(val) ? `"${val.replace(/"/g, '""')}"` : val;
-  };
-  return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h])).join(','))].join(
-    '\n'
-  );
-}
-
-// GET /api/export/:type — one resource as CSV (or JSON), across the selected profiles.
+// GET /api/export/:type — one kind of row as CSV (or JSON), across the selected profiles. The
+// kinds, their columns and the file are shared with local-first (shared/exportColumns.ts); each
+// query reads its rows in a fixed order, so the same export is the same file.
 exportRoutes.get('/api/export/:type', requireAuth, async (c) => {
+  const type = c.req.param('type');
+  if (!isExportKind(type)) return c.json({ error: EXPORT_MESSAGES.kind }, 400);
   const pids = await getProfileIds(c);
   const inClause = pids.map(() => '?').join(',');
-  const type = c.req.param('type');
-  const format = c.req.query('format') || 'csv';
 
   let rows: Record<string, unknown>[];
-  let filename: string;
   switch (type) {
     case 'transactions':
       rows = await db.all(
         c.env.DB,
         `SELECT t.date, t.description, t.amount, t.type, t.currency, t.means_of_payment, t.beneficiary, t.payor, t.notes, c.name as category
          FROM transactions t LEFT JOIN categories c ON t.category_id = c.id AND c.profile_id = t.profile_id
-         WHERE t.profile_id IN (${inClause}) ORDER BY t.date DESC`,
+         WHERE t.profile_id IN (${inClause}) ORDER BY t.date DESC, t.id DESC`,
         ...pids
       );
-      filename = 'transactions';
       break;
     case 'categories':
       rows = await db.all(
         c.env.DB,
-        `SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id IN (${inClause})`,
+        `SELECT name, color, icon, type, parent_id FROM categories WHERE profile_id IN (${inClause}) ORDER BY id`,
         ...pids
       );
-      filename = 'categories';
       break;
     case 'accounts':
       rows = await db.all(
         c.env.DB,
-        `SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id IN (${inClause})`,
+        `SELECT name, type, currency, balance, notes FROM accounts WHERE profile_id IN (${inClause}) ORDER BY id`,
         ...pids
       );
-      filename = 'accounts';
       break;
     case 'budgets':
       rows = await db.all(
         c.env.DB,
-        `SELECT b.*, c.name as category_name FROM budgets b
+        `SELECT b.id, b.category_id, b.amount, b.period, b.start_date, b.end_date, b.rollover_enabled,
+           b.rollover_amount, b.rollover_used, b.created_at, b.profile_id, c.name as category_name
+         FROM budgets b
          JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-         WHERE b.profile_id IN (${inClause})`,
+         WHERE b.profile_id IN (${inClause}) ORDER BY b.id`,
         ...pids
       );
-      filename = 'budgets';
       break;
     case 'loans':
       rows = await db.all(
         c.env.DB,
         `SELECT l.name, l.principal, l.interest_rate, l.start_date, l.term_months,
            (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid
-         FROM loans l WHERE l.profile_id IN (${inClause})`,
+         FROM loans l WHERE l.profile_id IN (${inClause}) ORDER BY l.id`,
         ...pids
       );
-      filename = 'loans';
       break;
     case 'recurring':
       rows = await db.all(
         c.env.DB,
         `SELECT description, amount, type, frequency, day_of_month, next_date, notes, active
-         FROM recurring_transactions WHERE profile_id IN (${inClause})`,
+         FROM recurring_transactions WHERE profile_id IN (${inClause}) ORDER BY id`,
         ...pids
       );
-      filename = 'recurring_transactions';
       break;
-    default:
-      return c.json({ error: 'Invalid export type' }, 400);
   }
 
-  if (format === 'json') {
-    c.header('Content-Disposition', `attachment; filename="${filename}.json"`);
-    return c.json(rows);
-  }
-  return new Response(toCsv(rows), {
-    headers: {
-      'Content-Type': 'text/csv',
-      'Content-Disposition': `attachment; filename="${filename}.csv"`,
-    },
+  const file = exportFile(type, c.req.query('format'), rows, c.req.query('pretty') === 'true');
+  return new Response(file.body, {
+    headers: { 'Content-Type': file.contentType, 'Content-Disposition': file.disposition },
   });
 });
 
@@ -141,6 +113,11 @@ exportRoutes.get('/api/export', requireAuth, async (c) => {
   // that does not involve opening a hundred megabytes of JSON.
   if (backup.skippedReceipts?.length) {
     c.header('X-Backup-Skipped-Receipts', String(backup.skippedReceipts.length));
+  }
+  // Settings asks for an indented file unless its pretty-print switch is off, as the browser's own
+  // export does.
+  if (c.req.query('pretty') === 'true') {
+    return c.body(JSON.stringify(backup, null, 2), 200, { 'Content-Type': 'application/json' });
   }
   return c.json(backup);
 });

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { sessionCookie } from './helpers/session';
 import { BILL_MESSAGES } from '../../shared/billSchema';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
+import { CATEGORY_MAPPING_MESSAGES } from '../../shared/categoryMappingSchema';
 import { GOAL_MESSAGES } from '../../shared/goalSchema';
 
 const USER = 91;
@@ -202,13 +203,13 @@ describe('Worker profile-link integrity', () => {
     expect(((await bill.json()) as { fields: object }).fields).toEqual({
       category_id: BILL_MESSAGES.category,
     });
-    expect(
-      (
-        await post('/api/categories/mappings', {
-          pattern: 'merchant',
-          category_id: 9222,
-        })
-      ).status
-    ).toBe(403);
+    const mapping = await post('/api/categories/mappings', {
+      pattern: 'merchant',
+      category_id: 9222,
+    });
+    expect(mapping.status).toBe(400);
+    expect(((await mapping.json()) as { fields: object }).fields).toEqual({
+      category_id: CATEGORY_MAPPING_MESSAGES.category,
+    });
   });
 });

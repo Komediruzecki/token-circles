@@ -1,6 +1,11 @@
+import {
+  baseCurrencyLocked,
+  readCurrencyCode,
+  SETTINGS_MESSAGES,
+} from '../../shared/settingsSchema';
 import { normalizeCurrencyCode } from './currency';
 import * as db from './db';
-import { HttpError } from './http';
+import { HttpError, refuse } from './http';
 
 export async function configuredBaseCurrency(
   DB: D1Database,
@@ -68,10 +73,8 @@ export async function setProfileBaseCurrency(
   profileId: number,
   requested: unknown
 ): Promise<string> {
-  const raw = typeof requested === 'string' ? requested.trim().toUpperCase() : '';
-  if (!/^[A-Z]{3}$/.test(raw)) {
-    throw new HttpError(422, 'Invalid currency code. Must be a three-letter ISO code.');
-  }
+  const raw = readCurrencyCode(requested);
+  if (!raw) throw refuse({ currency: SETTINGS_MESSAGES.currency });
 
   const configured = await configuredBaseCurrency(DB, profileId);
   if (configured === raw) return raw;
@@ -85,10 +88,9 @@ export async function setProfileBaseCurrency(
       profileId
     );
     if ((counts?.account_count || 0) > 0 || (counts?.transaction_count || 0) > 0) {
-      throw new HttpError(
-        409,
-        `Base currency is locked to ${configured} after financial data is added.`
-      );
+      // At the currency, in the words local-first uses (shared/settingsSchema.ts).
+      const fields = baseCurrencyLocked(configured);
+      throw new HttpError(409, fields.currency, fields);
     }
   }
 

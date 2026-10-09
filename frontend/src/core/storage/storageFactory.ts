@@ -2,6 +2,7 @@
  * Storage Factory - Creates the appropriate storage adapter based on mode
  */
 
+import { apiErrorFrom } from '../apiError'
 import { IndexedDBAdapter } from './idb.js'
 import type {
   Account,
@@ -655,10 +656,8 @@ class SelfHostedAdapter implements StorageAdapter {
       body: JSON.stringify(data),
     })
 
-    if (!response.ok) {
-      const result = (await response.json().catch(() => ({}))) as { error?: string }
-      throw new Error(result.error || 'Failed to import data')
-    }
+    // The Worker's refusal, in its own words (worker/src/backup.ts says what is wrong with a file).
+    if (!response.ok) throw await apiErrorFrom(response)
     const result = (await response.json()) as { first_profile_id?: number }
     if (result.first_profile_id) {
       localStorage.setItem('currentProfileId', String(result.first_profile_id))

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { getDB } from '../idb.js'
-import { importBulk, importExecute } from '../localHandlers.js'
+import { importExecute } from '../localHandlers.js'
 
 beforeEach(async () => {
   localStorage.clear()
@@ -85,30 +85,5 @@ describe('serverless import numeric validation', () => {
     })
     expect(response.status).toBe(422)
     expect(await (await getDB()).count('accounts')).toBe(0)
-  })
-
-  it('parses localized amounts on the bulk import endpoint', async () => {
-    const response = await importBulk({
-      items: [{ description: 'Localized', amount: '2.468,13', date: '2026-01-01' }],
-    })
-    expect(response.status).toBe(200)
-
-    const transactions = await (await getDB()).getAll('transactions')
-    expect(transactions).toHaveLength(1)
-    expect(transactions[0].amount).toBeCloseTo(2468.13, 2)
-  })
-
-  it('rejects the entire bulk import before writing when any amount is malformed', async () => {
-    const response = await importBulk({
-      items: [
-        { description: 'Valid', amount: '10.00', date: '2026-01-01' },
-        { description: 'Malformed', amount: '1,2,3', date: '2026-01-02' },
-      ],
-    })
-    expect(response.status).toBe(422)
-    expect(await response.json()).toMatchObject({
-      validation_errors: [{ field: 'items.1.amount' }],
-    })
-    expect(await (await getDB()).count('transactions')).toBe(0)
   })
 })

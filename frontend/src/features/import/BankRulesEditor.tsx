@@ -2,9 +2,27 @@
  * The Bank Imports categorization + transfer rules editor. Rendered on the upload
  * tab, and on the preview step with a Recalculate button that re-runs the transform.
  * Shared by the Import page and the onboarding wizard via the ImportFlow controller.
+ *
+ * The rules are a form on the kit (components/form), written through to the flow's drafts as they
+ * are typed, so an edit made on the upload tab is still there on the preview step. A rule half
+ * filled in, a category with no keyword or a signature with no account, is marked at the part
+ * that is missing and nothing is saved (core/bankImport/rulesCheck.ts). It used to be dropped on
+ * save, beside a "Rules saved." that said otherwise.
  */
-import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
-import { produce } from 'solid-js/store'
+import {
+  batch,
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  Index,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js'
+import { reconcile } from 'solid-js/store'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
+import { createForm } from '../../components/form'
 import {
   loadCategoryRules,
   RULE_GROUPS,
@@ -12,8 +30,16 @@ import {
   saveCategoryRules,
   saveRuleGroup,
 } from '../../core/bankImport'
+import { checkBankRuleDrafts } from '../../core/bankImport/rulesCheck'
 import styles from '../Import.module.css'
+import type { CategoryRuleDraft, CounterpartDraft } from '../../core/bankImport/rulesCheck'
 import type { ImportFlow } from './importFlow'
+
+interface BankRuleValues {
+  categoryRules: CategoryRuleDraft[]
+  transferKeywords: string
+  counterparts: CounterpartDraft[]
+}
 
 export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () => void }) {
   const flow = props.flow
@@ -36,6 +62,88 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
   onCleanup(() => {
     clearTimeout(confirmationTimer)
   })
+
+  /** The flow's drafts, as the form holds them. */
+  const drafts = (): BankRuleValues => ({
+    categoryRules: flow.categoryRuleDraft.map((rule) => ({
+      category: rule.category,
+      keywords: rule.keywords,
+    })),
+    transferKeywords: flow.transferKeywordDraft(),
+    counterparts: flow.counterpartDraft.map((counterpart) => ({
+      signature: counterpart.signature,
+      account: counterpart.account,
+    })),
+  })
+  // What a save that passes does next: confirm beside the buttons, or, from Recalculate, run the
+  // preview again with the rules it saved.
+  const confirmSaved = () => {
+    confirm('Rules saved.')
+  }
+  const runRecalculate = () => {
+    props.onRecalculate?.()
+  }
+  let afterSave = confirmSaved
+  const form = createForm<BankRuleValues, () => void>({
+    initial: drafts(),
+    check: (values) => checkBankRuleDrafts(values),
+    // The drafts are the form's values already: they are written through as they are typed.
+    send: () => {
+      flow.saveBankRules()
+      return afterSave
+    },
+    // Saving loads the rules back as the flow keeps them, without a rule left wholly empty and
+    // with each list of keywords written out the same way: the form starts over from them.
+    saved: (next) => {
+      form.reset(drafts())
+      next()
+    },
+    failure: "Couldn't save the rules. Try again.",
+  })
+  // The flow loads its drafts again without the form: when it first reaches them (the onboarding
+  // wizard mounts this before it does), on a reset to defaults, another mapping group, another
+  // profile. The form starts over from them; an edit typed here is already in them. Not while the
+  // form saves: the save loads them too, and a reset then would drop its answer.
+  createEffect(
+    on(
+      () => JSON.stringify(drafts()),
+      (now) => {
+        if (!form.submitting() && now !== JSON.stringify(form.values)) form.reset(drafts())
+      }
+    )
+  )
+
+  const setRules = (rules: CategoryRuleDraft[]) => {
+    batch(() => {
+      form.set('categoryRules', rules)
+      flow.setCategoryRuleDraft(reconcile(rules.map((rule) => ({ ...rule }))))
+    })
+  }
+  const setRule = (index: number, field: keyof CategoryRuleDraft, text: string) => {
+    setRules(
+      form.values.categoryRules.map((rule, i) => (i === index ? { ...rule, [field]: text } : rule))
+    )
+  }
+  const setCounterparts = (counterparts: CounterpartDraft[]) => {
+    batch(() => {
+      form.set('counterparts', counterparts)
+      flow.setCounterpartDraft(reconcile(counterparts.map((counterpart) => ({ ...counterpart }))))
+    })
+  }
+  const setCounterpart = (index: number, field: keyof CounterpartDraft, text: string) => {
+    setCounterparts(
+      form.values.counterparts.map((counterpart, i) =>
+        i === index ? { ...counterpart, [field]: text } : counterpart
+      )
+    )
+  }
+  const recalculate = () => {
+    // The kit calls `send` before its first await, so the save it starts here is the one that
+    // reads this.
+    afterSave = runRecalculate
+    void form.submit()
+    afterSave = confirmSaved
+  }
   return (
     <div style={{ 'margin-top': '16px' }}>
       <button
@@ -47,7 +155,9 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
       </button>
 
       <Show when={flow.showBankRules()}>
-        <div
+        <form
+          {...form.attrs}
+          data-test-id="bank-rules-form"
           style={{
             'margin-top': '10px',
             border: '1px solid var(--border)',
@@ -58,6 +168,7 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
             gap: '14px',
           }}
         >
+          <FormNotice form={form} />
           <div>
             <label class={styles.mappingLabel} style={{ 'margin-bottom': '6px', display: 'block' }}>
               Mapping
@@ -105,63 +216,70 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
               comma-separate keywords.
             </p>
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-              <For each={flow.categoryRuleDraft}>
+              <Index each={form.values.categoryRules}>
                 {(rule, i) => (
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '6px',
-                      'align-items': 'center',
-                      'flex-wrap': 'wrap',
-                    }}
-                  >
-                    <input
-                      class={styles.ruleField}
-                      style={{ flex: '0 0 160px' }}
-                      list={categoryListId}
-                      placeholder="Category (pick or type)"
-                      value={rule.category}
-                      onInput={(e) => {
-                        flow.setCategoryRuleDraft(i(), 'category', e.currentTarget.value)
-                      }}
-                    />
-                    <input
-                      class={styles.ruleField}
-                      style={{ flex: '1 1 220px' }}
-                      placeholder="keyword1, keyword2, ..."
-                      value={rule.keywords}
-                      onInput={(e) => {
-                        flow.setCategoryRuleDraft(i(), 'keywords', e.currentTarget.value)
-                      }}
-                    />
+                  <div class={styles.ruleRow} data-test-id="bank-rule-row">
+                    <Field
+                      form={form}
+                      name={`categoryRules.${i}.category`}
+                      label="Category"
+                      class={styles.ruleCategoryField}
+                      labelClass={styles.visuallyHidden}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          class={styles.ruleField}
+                          list={categoryListId}
+                          placeholder="Category (pick or type)"
+                          value={rule().category}
+                          onInput={(e) => {
+                            setRule(i, 'category', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      form={form}
+                      name={`categoryRules.${i}.keywords`}
+                      label="Keywords"
+                      class={styles.ruleKeywordsField}
+                      labelClass={styles.visuallyHidden}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          class={styles.ruleField}
+                          placeholder="keyword1, keyword2, ..."
+                          value={rule().keywords}
+                          onInput={(e) => {
+                            setRule(i, 'keywords', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
                     <button
+                      type="button"
                       class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
                       onClick={() => {
-                        flow.setCategoryRuleDraft(
-                          produce((d) => {
-                            d.splice(i(), 1)
-                          })
-                        )
+                        setRules(form.values.categoryRules.filter((_, j) => j !== i))
                       }}
                     >
                       Remove
                     </button>
                   </div>
                 )}
-              </For>
+              </Index>
               <datalist id={categoryListId}>
                 <For each={flow.bankCategories()}>{(c) => <option value={c} />}</For>
               </datalist>
             </div>
             <button
+              type="button"
               class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
               style={{ 'margin-top': '8px' }}
               onClick={() => {
-                flow.setCategoryRuleDraft(
-                  produce((d) => {
-                    d.push({ category: '', keywords: '' })
-                  })
-                )
+                setRules([...form.values.categoryRules, { category: '', keywords: '' }])
               }}
             >
               Add category rule
@@ -177,78 +295,102 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
               one of your account names. Map a counterpart signature (a keyword or a card's last 4
               digits) to the account it represents so both sides are linked.
             </p>
-            <input
-              class={styles.ruleField}
-              style={{ width: '100%', 'margin-bottom': '8px' }}
-              placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
-              value={flow.transferKeywordDraft()}
-              onInput={(e) => {
-                flow.setTransferKeywordDraft(e.currentTarget.value)
-              }}
-            />
+            <Field
+              form={form}
+              name="transferKeywords"
+              label="Transfer keywords"
+              class={styles.ruleTransferField}
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  class={styles.ruleField}
+                  style={{ width: '100%' }}
+                  placeholder="Transfer keywords: top-up, transfer, ibkr, ..."
+                  value={form.values.transferKeywords}
+                  onInput={(e) => {
+                    const text = e.currentTarget.value
+                    batch(() => {
+                      form.set('transferKeywords', text)
+                      flow.setTransferKeywordDraft(text)
+                    })
+                  }}
+                />
+              )}
+            </Field>
             <div style={{ display: 'flex', 'flex-direction': 'column', gap: '6px' }}>
-              <For each={flow.counterpartDraft}>
-                {(cp, i) => (
-                  <div
-                    style={{
-                      display: 'flex',
-                      gap: '6px',
-                      'align-items': 'center',
-                      'flex-wrap': 'wrap',
-                    }}
-                  >
-                    <input
-                      class={styles.ruleField}
-                      style={{ flex: '0 0 150px' }}
-                      placeholder="Signature (e.g. 1111)"
-                      value={cp.signature}
-                      onInput={(e) => {
-                        flow.setCounterpartDraft(i(), 'signature', e.currentTarget.value)
-                      }}
-                    />
-                    <span style="color: var(--text-secondary);">→</span>
-                    <select
-                      class={styles.mappingSelect}
-                      style={{ flex: '0 0 170px' }}
-                      value={cp.account}
-                      onChange={(e) => {
-                        flow.setCounterpartDraft(i(), 'account', e.currentTarget.value)
-                      }}
+              <Index each={form.values.counterparts}>
+                {(counterpart, i) => (
+                  <div class={styles.ruleRow} data-test-id="bank-counterpart-row">
+                    <Field
+                      form={form}
+                      name={`counterparts.${i}.signature`}
+                      label="Signature"
+                      class={styles.ruleSignatureField}
+                      labelClass={styles.visuallyHidden}
                     >
-                      <option value="">Account…</option>
-                      <For each={flow.bankAccounts()}>
-                        {(a) => (
-                          <option value={a.name} selected={a.name === cp.account}>
-                            {a.name}
-                          </option>
-                        )}
-                      </For>
-                    </select>
+                      {(control) => (
+                        <input
+                          {...control}
+                          class={styles.ruleField}
+                          placeholder="Signature (e.g. 1111)"
+                          value={counterpart().signature}
+                          onInput={(e) => {
+                            setCounterpart(i, 'signature', e.currentTarget.value)
+                          }}
+                        />
+                      )}
+                    </Field>
+                    <span class={styles.ruleArrow} aria-hidden="true">
+                      →
+                    </span>
+                    <Field
+                      form={form}
+                      name={`counterparts.${i}.account`}
+                      label="Account"
+                      class={styles.ruleAccountField}
+                      labelClass={styles.visuallyHidden}
+                    >
+                      {(control) => (
+                        <select
+                          {...control}
+                          class={styles.mappingSelect}
+                          value={counterpart().account}
+                          onChange={(e) => {
+                            setCounterpart(i, 'account', e.currentTarget.value)
+                          }}
+                        >
+                          <option value="">Account…</option>
+                          <For each={flow.bankAccounts()}>
+                            {(a) => (
+                              <option value={a.name} selected={a.name === counterpart().account}>
+                                {a.name}
+                              </option>
+                            )}
+                          </For>
+                        </select>
+                      )}
+                    </Field>
                     <button
+                      type="button"
                       class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
                       onClick={() => {
-                        flow.setCounterpartDraft(
-                          produce((d) => {
-                            d.splice(i(), 1)
-                          })
-                        )
+                        setCounterparts(form.values.counterparts.filter((_, j) => j !== i))
                       }}
                     >
                       Remove
                     </button>
                   </div>
                 )}
-              </For>
+              </Index>
             </div>
             <button
+              type="button"
               class={`${styles.btn} ${styles.btnOutline} ${styles.btnSm}`}
               style={{ 'margin-top': '8px' }}
               onClick={() => {
-                flow.setCounterpartDraft(
-                  produce((d) => {
-                    d.push({ signature: '', account: '' })
-                  })
-                )
+                setCounterparts([...form.values.counterparts, { signature: '', account: '' }])
               }}
             >
               Add counterpart
@@ -260,26 +402,23 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
           >
             <Show when={props.onRecalculate}>
               <button
+                type="button"
                 class={`${styles.btn} ${styles.btnPrimary} ${styles.btnSm}`}
                 disabled={flow.loading()}
-                onClick={() => {
-                  props.onRecalculate?.()
-                }}
+                onClick={recalculate}
               >
                 Recalculate preview
               </button>
             </Show>
-            <button
+            <SubmitButton
               class={`${styles.btn} ${props.onRecalculate ? styles.btnOutline : styles.btnPrimary} ${styles.btnSm}`}
+              busy={form.submitting()}
               data-test-id="bank-rules-save"
-              onClick={() => {
-                flow.saveBankRules()
-                confirm('Rules saved.')
-              }}
             >
               Save rules
-            </button>
+            </SubmitButton>
             <button
+              type="button"
               class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
               onClick={() => {
                 flow.resetBankRules()
@@ -309,7 +448,7 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
               </span>
             </Show>
           </div>
-        </div>
+        </form>
       </Show>
     </div>
   )

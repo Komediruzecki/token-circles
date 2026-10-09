@@ -1,6 +1,7 @@
-import { createSignal, Show } from 'solid-js'
-import { api } from '../core/api'
+import { Show } from 'solid-js'
 import { setSettingsTab } from '../core/settingsStore'
+import { createProfileCreateForm } from '../features/profileForm'
+import { Field, FormNotice, SubmitButton } from './form'
 import styles from './ProfileModal.module.css'
 import type { Profile } from '../types/models'
 
@@ -10,39 +11,24 @@ export interface ProfileModalProps {
   onSuccess: (profile: Profile) => void
 }
 
+/**
+ * The sidebar's Create Profile dialog. The name is checked with the rules both runtimes run, and a
+ * refused one is marked under the field (features/profileForm.ts).
+ */
 export default function ProfileModal(props: ProfileModalProps) {
-  const [name, setName] = createSignal('')
-  const [error, setError] = createSignal('')
-  const [loading, setLoading] = createSignal(false)
+  const form = createProfileCreateForm({
+    onCreated: (created) => {
+      props.onSuccess(created)
+    },
+  })
 
-  // The worker rejects a create past the plan's profile cap with "…Upgrade for more." — when
-  // that happens, offer a direct jump to Settings → Billing instead of a dead-end error.
-  const isPlanCapError = (): boolean => /Upgrade for more/i.test(error())
+  // The Worker refuses a create past the plan's profile cap with "...Upgrade for more.", which is
+  // no field's fault: it stays in the notice, with a way to Settings > Billing beside it.
+  const isPlanCapError = (): boolean => /Upgrade for more/i.test(form.notice() ?? '')
   const goToBilling = () => {
     setSettingsTab('billing')
     props.onClose()
     window.location.hash = '#settings'
-  }
-
-  const handleSubmit = async () => {
-    const n = name().trim()
-    if (!n) return
-
-    setLoading(true)
-    setError('')
-    try {
-      const created = await api.createProfile(n)
-      props.onSuccess(created)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create profile')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') handleSubmit()
-    if (e.key === 'Escape') props.onClose()
   }
 
   return (
@@ -52,40 +38,67 @@ export default function ProfileModal(props: ProfileModalProps) {
         if (e.target === e.currentTarget) props.onClose()
       }}
     >
-      <div class={styles.modal} data-test-id="profile-modal" onKeyDown={handleKeyDown}>
-        <h3 class={styles.title}>Create Profile</h3>
-        <div class={styles.field}>
-          <label class={styles.label}>Profile Name</label>
-          <input
-            type="text"
-            class={styles.input}
-            data-test-id="profile-name-input"
-            placeholder="Enter profile name"
-            value={name()}
-            onInput={(e) => setName((e.target as HTMLInputElement).value)}
-            autofocus
-          />
-        </div>
-        {error() && <div class={styles.error}>{error()}</div>}
-        <Show when={isPlanCapError()}>
-          <button class={styles.upgradeBtn} onClick={goToBilling} type="button">
-            Upgrade
-          </button>
-        </Show>
-        <div class={styles.actions}>
-          <button class={styles.btnCancel} onClick={props.onClose} type="button">
-            Cancel
-          </button>
-          <button
-            class={styles.btnSubmit}
-            data-test-id="profile-create-submit"
-            onClick={handleSubmit}
-            disabled={loading() || !name().trim()}
-            type="button"
+      <div
+        class={styles.modal}
+        data-test-id="profile-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-modal-title"
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') props.onClose()
+        }}
+      >
+        <h3 class={styles.title} id="profile-modal-title">
+          Create Profile
+        </h3>
+        <form {...form.attrs}>
+          <FormNotice form={form} />
+          <Show when={isPlanCapError()}>
+            <button class={styles.upgradeBtn} onClick={goToBilling} type="button">
+              Upgrade
+            </button>
+          </Show>
+          <Field
+            form={form}
+            name="name"
+            label="Profile Name"
+            class={styles.field}
+            labelClass={styles.label}
           >
-            {loading() ? 'Creating...' : 'Create'}
-          </button>
-        </div>
+            {(control) => (
+              <input
+                {...control}
+                type="text"
+                class={styles.input}
+                data-test-id="profile-name-input"
+                placeholder="Holiday house, Side business..."
+                value={form.values.name}
+                onInput={(e) => form.set('name', e.currentTarget.value)}
+                autofocus
+                required
+              />
+            )}
+          </Field>
+          <div class={styles.actions}>
+            <button
+              type="button"
+              class={styles.btnCancel}
+              onClick={() => {
+                props.onClose()
+              }}
+            >
+              Cancel
+            </button>
+            <SubmitButton
+              class={styles.btnSubmit}
+              data-test-id="profile-create-submit"
+              busy={form.submitting()}
+              busyLabel="Creating…"
+            >
+              Create
+            </SubmitButton>
+          </div>
+        </form>
       </div>
     </div>
   )

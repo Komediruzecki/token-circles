@@ -1,3 +1,4 @@
+import { baseCurrencyLocked } from '../../../../shared/settingsSchema'
 import { getLocalCurrency } from '../api'
 import { normalizeCurrencyCode } from '../currencies'
 import { getDB } from './idb'
@@ -71,9 +72,8 @@ export async function setBaseCurrency(requested: unknown): Promise<string> {
       db.count('transactions'),
     ])
     if (accounts > 0 || transactions > 0) {
-      throw new BaseCurrencyConflictError(
-        `Base currency is locked to ${configured} after financial data is added.`
-      )
+      // The Worker's words, at the currency (shared/settingsSchema.ts).
+      throw new BaseCurrencyConflictError(baseCurrencyLocked(configured).currency)
     }
   }
 

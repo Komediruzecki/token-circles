@@ -4,14 +4,27 @@
  * Import page and the onboarding wizard — pass `compact` to drop the page-sized
  * explainer table.
  */
-import { createEffect, createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
+import {
+  batch,
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js'
 import { AccountSelect } from '../../components/AccountSelect'
+import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { OrbitSpinner } from '../../components/OrbitSpinner'
 import { Pill } from '../../components/Pill'
 import { listAdapters } from '../../core/bankImport'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
+import { createPasteForm } from './pasteForm'
 import { downloadSampleTemplate } from './sampleTemplate'
+import { createSheetLinkForm } from './sheetLinkForm'
+import { createUploadForm } from './uploadForm'
 import type { BankId } from '../../core/bankImport'
 import type { ImportFlow, ImportTab } from './importFlow'
 
@@ -26,9 +39,17 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
   const flow = props.flow
   // Inputs are targeted by <label for>; ids must be unique because the Import
   // page (keep-alive) and the onboarding wizard can be in the DOM at once.
+  // The file upload's input takes its id from its form field.
   const uid = createUniqueId()
-  const fileInputId = `import-file-input-${uid}`
   const bankInputId = `bank-file-input-${uid}`
+
+  // The Google Sheets link, on the form kit: a bad link is marked at the field (sheetLinkForm.ts).
+  const sheetForm = createSheetLinkForm(flow)
+  // Paste CSV, on the form kit: a paste with no row of data is marked at the box (pasteForm.ts).
+  const pasteForm = createPasteForm(flow)
+  // File Upload, on the form kit: a file that is not read is marked under the drop area.
+  const uploadForm = createUploadForm(flow)
+  const pasteDelimiterId = `paste-delimiter-${createUniqueId()}`
 
   const bankLabel = (bankId: BankId | null) =>
     listAdapters().find((a) => a.id === bankId)?.label ?? ''
@@ -205,24 +226,43 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             </div>
           </Show>
 
-          <div class={styles.sheetsUrlRow}>
-            <input
-              type="text"
-              class={styles.sheetsUrlInput}
-              placeholder="Paste Google Sheets URL"
-              data-test-id="import-sheet-url"
-              value={flow.sheetUrl()}
-              onInput={(e) => flow.setSheetUrl(e.target.value)}
-            />
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-sheet-fetch"
-              onClick={() => void flow.fetchGoogleSheet()}
-              disabled={flow.loading()}
-            >
-              Fetch
-            </button>
-          </div>
+          <form {...sheetForm.attrs} data-test-id="import-sheet-form">
+            <FormNotice form={sheetForm} />
+            <div class={styles.sheetsUrlRow}>
+              <Field
+                form={sheetForm}
+                name="url"
+                label="Google Sheets link"
+                class={styles.sheetsUrlField}
+                labelClass={styles.visuallyHidden}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="url"
+                    class={styles.sheetsUrlInput}
+                    placeholder="Paste Google Sheets URL"
+                    required
+                    data-test-id="import-sheet-url"
+                    value={sheetForm.values.url}
+                    onInput={(e) => {
+                      sheetForm.set('url', e.currentTarget.value)
+                      flow.setSheetUrl(e.currentTarget.value)
+                    }}
+                  />
+                )}
+              </Field>
+              <SubmitButton
+                class={`${styles.btn} ${styles.btnPrimary}`}
+                busy={sheetForm.submitting()}
+                busyLabel="Fetching…"
+                data-test-id="import-sheet-fetch"
+              >
+                Fetch
+              </SubmitButton>
+            </div>
+          </form>
           <p class={styles.sheetsInfo}>
             Google Sheets URL format: https://docs.google.com/spreadsheets/d/... (the sheet must be
             shared or published so it can be read)
@@ -264,49 +304,69 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
       {/* File Upload Tab */}
       {flow.activeImportTab() === 'file-upload' && (
         <>
-          <div
-            class={`${styles.dropzone} ${uploadDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
-            {...uploadDrag.handlers}
-            onDrop={(e) => {
-              uploadDrag.reset()
-              flow.handleDrop(e)
-            }}
-          >
-            <input
-              type="file"
-              id={fileInputId}
-              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class={styles.fileInput}
-              data-test-id="import-file-input"
-              disabled={flow.loading()}
-              onChange={flow.handleFileSelect}
-            />
-            <label for={fileInputId} class={styles.uploadLabel}>
-              <Show
-                when={!flow.dropProcessing()}
-                fallback={<OrbitSpinner size={44} label="Reading your file…" />}
-              >
-                <svg
-                  class={styles.dropzoneIcon}
-                  width="48"
-                  height="48"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+          <form {...uploadForm.attrs} data-test-id="import-upload-form">
+            <FormNotice form={uploadForm} />
+            <Field
+              form={uploadForm}
+              name="file"
+              label="File to import"
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <div
+                  class={`${styles.dropzone} ${uploadDrag.active() ? styles.dragOver : ''} ${flow.loading() ? styles.disabled : ''}`}
+                  {...uploadDrag.handlers}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    uploadDrag.reset()
+                    uploadForm.pick(e.dataTransfer?.files[0])
+                  }}
                 >
-                  <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                <p class={styles.dropzoneTitle}>
-                  {uploadDrag.active() ? 'Drop to upload' : 'Click or drag and drop your file here'}
-                </p>
-                <div class={styles.formatPills}>
-                  <Pill>CSV</Pill>
-                  <Pill>XLSX</Pill>
-                  <Pill>XLS</Pill>
+                  <input
+                    {...control}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    class={styles.fileInput}
+                    data-test-id="import-file-input"
+                    disabled={flow.loading()}
+                    onChange={(e) => {
+                      const input = e.currentTarget
+                      uploadForm.pick(input.files?.[0])
+                      // The same file can be chosen again once it is put right.
+                      input.value = ''
+                    }}
+                  />
+                  <label for={control.id} class={styles.uploadLabel}>
+                    <Show
+                      when={!flow.dropProcessing()}
+                      fallback={<OrbitSpinner size={44} label="Reading your file…" />}
+                    >
+                      <svg
+                        class={styles.dropzoneIcon}
+                        width="48"
+                        height="48"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      <p class={styles.dropzoneTitle}>
+                        {uploadDrag.active()
+                          ? 'Drop to upload'
+                          : 'Click or drag and drop your file here'}
+                      </p>
+                      <div class={styles.formatPills}>
+                        <Pill>CSV</Pill>
+                        <Pill>XLSX</Pill>
+                        <Pill>XLS</Pill>
+                      </div>
+                    </Show>
+                  </label>
                 </div>
-              </Show>
-            </label>
-          </div>
+              )}
+            </Field>
+          </form>
 
           {flow.uploadResult() && flow.uploadResult()!.sheetNames.length > 1 && (
             <div class={styles.sheetsUrlRow}>
@@ -316,7 +376,9 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                   {(name) => (
                     <button
                       class={`${styles.sheetTab} ${flow.selectedSheet() === name ? styles.active : ''}`}
-                      onClick={() => flow.setSelectedSheet(name)}
+                      onClick={() => {
+                        flow.chooseUploadedSheet(name)
+                      }}
                     >
                       {name}
                     </button>
@@ -352,41 +414,68 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
             parsed right in your browser.
           </p>
-          <div
-            style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}
-          >
-            <select
-              class={styles.formControl}
-              value={flow.pasteDelimiter()}
-              onchange={(e) =>
-                flow.setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')
-              }
-              style={{ 'max-width': '140px' }}
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="comma">Comma (,)</option>
-              <option value="tab">Tab</option>
-            </select>
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-paste-parse"
-              onClick={() => {
-                flow.parsePastedData(flow.pastedText())
+          <form {...pasteForm.attrs} data-test-id="import-paste-form">
+            <FormNotice form={pasteForm} />
+            <div
+              style={{
+                'margin-bottom': '8px',
+                display: 'flex',
+                gap: '8px',
+                'align-items': 'center',
               }}
-              disabled={flow.loading() || !flow.pastedText().trim()}
             >
-              Parse pasted data
-            </button>
-          </div>
-          <textarea
-            class={styles.formControl}
-            placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
-            data-test-id="import-paste-textarea"
-            value={flow.pastedText()}
-            oninput={(e) => flow.setPastedText(e.currentTarget.value)}
-            rows={8}
-            style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
-          />
+              <label class={styles.visuallyHidden} for={pasteDelimiterId}>
+                Columns separated by
+              </label>
+              <select
+                id={pasteDelimiterId}
+                class={styles.formControl}
+                value={flow.pasteDelimiter()}
+                onchange={(e) =>
+                  flow.setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')
+                }
+                style={{ 'max-width': '140px' }}
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="comma">Comma (,)</option>
+                <option value="tab">Tab</option>
+              </select>
+              <SubmitButton
+                class={`${styles.btn} ${styles.btnPrimary}`}
+                busy={pasteForm.submitting()}
+                busyLabel="Reading…"
+                data-test-id="import-paste-parse"
+              >
+                Parse pasted data
+              </SubmitButton>
+            </div>
+            <Field
+              form={pasteForm}
+              name="text"
+              label="Pasted rows"
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <textarea
+                  {...control}
+                  required
+                  class={styles.formControl}
+                  placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
+                  data-test-id="import-paste-textarea"
+                  value={pasteForm.values.text}
+                  oninput={(e) => {
+                    const text = e.currentTarget.value
+                    batch(() => {
+                      pasteForm.set('text', text)
+                      flow.setPastedText(text)
+                    })
+                  }}
+                  rows={8}
+                  style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
+                />
+              )}
+            </Field>
+          </form>
           {flow.uploadResult() && flow.activeImportTab() === 'paste-csv' && (
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}

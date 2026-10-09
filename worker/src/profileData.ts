@@ -66,7 +66,9 @@ export const DEFAULT_CATEGORIES = [
   },
 ] as const;
 
-const PROFILE_TABLES = [
+// Every table a profile's rows live in, besides settings and the child tables below. Clearing a
+// profile and deleting an account both delete from each one, through profileRowDeletes.
+export const PROFILE_TABLES = [
   'receipts',
   'category_mappings',
   'budgets',
@@ -87,6 +89,9 @@ const PROFILE_TABLES = [
   'retirement_goals',
   'emergency_fund_config',
   'import_logs',
+  // A saved source goes with the data it filled: one on the daily schedule would otherwise fill a
+  // cleared profile again at its next sync.
+  'import_sources',
 ] as const;
 
 interface ClearProfileDataOptions {
@@ -117,6 +122,50 @@ async function deleteReceiptObjects(bucket: R2Bucket | undefined, keys: string[]
   }
 }
 
+// The deletes that remove every row the given profiles own: child rows first, then each table in
+// PROFILE_TABLES, then the profiles' settings when asked. They do not depend on a foreign key's
+// cascade to reach any of them.
+export function profileRowDeletes(
+  DB: D1Database,
+  profileIds: readonly number[],
+  options: { includeSettings?: boolean } = {}
+): D1PreparedStatement[] {
+  if (profileIds.length === 0) return [];
+  const ph = placeholders(profileIds.length);
+  const statements: D1PreparedStatement[] = [];
+  const add = (sql: string, ...values: unknown[]) => {
+    statements.push(DB.prepare(sql).bind(...values));
+  };
+
+  add(
+    `DELETE FROM account_balance_history
+     WHERE account_id IN (SELECT id FROM accounts WHERE profile_id IN (${ph}))`,
+    ...profileIds
+  );
+  add(
+    `DELETE FROM transaction_tags
+     WHERE transaction_id IN (SELECT id FROM transactions WHERE profile_id IN (${ph}))`,
+    ...profileIds
+  );
+  add(
+    `DELETE FROM loan_rate_periods
+     WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
+    ...profileIds
+  );
+  add(
+    `DELETE FROM loan_prepayments
+     WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
+    ...profileIds
+  );
+  for (const table of PROFILE_TABLES) {
+    add(`DELETE FROM ${table} WHERE profile_id IN (${ph})`, ...profileIds);
+  }
+  if (options.includeSettings) {
+    add(`DELETE FROM settings WHERE profile_id IN (${ph})`, ...profileIds);
+  }
+  return statements;
+}
+
 export async function clearProfileData(
   env: AppEnv['Bindings'],
   profileIds: number[],
@@ -129,37 +178,11 @@ export async function clearProfileData(
   await deleteReceiptObjects(env.RECEIPTS, keys);
 
   const ph = placeholders(pids.length);
-  const statements: D1PreparedStatement[] = [];
+  const statements = profileRowDeletes(env.DB, pids, options);
   const add = (sql: string, ...values: unknown[]) => {
     statements.push(env.DB.prepare(sql).bind(...values));
   };
 
-  add(
-    `DELETE FROM account_balance_history
-     WHERE account_id IN (SELECT id FROM accounts WHERE profile_id IN (${ph}))`,
-    ...pids
-  );
-  add(
-    `DELETE FROM transaction_tags
-     WHERE transaction_id IN (SELECT id FROM transactions WHERE profile_id IN (${ph}))`,
-    ...pids
-  );
-  add(
-    `DELETE FROM loan_rate_periods
-     WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
-    ...pids
-  );
-  add(
-    `DELETE FROM loan_prepayments
-     WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
-    ...pids
-  );
-  for (const table of PROFILE_TABLES) {
-    add(`DELETE FROM ${table} WHERE profile_id IN (${ph})`, ...pids);
-  }
-  if (options.includeSettings) {
-    add(`DELETE FROM settings WHERE profile_id IN (${ph})`, ...pids);
-  }
   if (options.seedDefaults) {
     for (const pid of pids) {
       for (const category of DEFAULT_CATEGORIES) {

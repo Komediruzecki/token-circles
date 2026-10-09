@@ -3,32 +3,11 @@ import type { AppEnv } from '../index';
 import { requireAuth, clearedSessionCookie } from '../auth';
 import { HttpError } from '../http';
 import * as db from '../db';
+import { profileRowDeletes } from '../profileData';
 import { STRIPE_API_VERSION } from '../stripe';
 
 // Account-level operations (distinct from profile CRUD). Today: permanent account deletion.
 export const accountRoutes = new Hono<AppEnv>();
-
-// Tables scoped by profile_id — every row for the user's profiles is removed.
-const PROFILE_TABLES = [
-  'receipts',
-  'category_mappings',
-  'budgets',
-  'budgets_zero_based',
-  'savings_goals',
-  'retirement_goals',
-  'emergency_fund_config',
-  'recurring_transactions',
-  'bills',
-  'transactions',
-  'categories',
-  'accounts',
-  'loans',
-  'settings',
-  'housings',
-  'tags',
-  'portfolio_holdings',
-  'import_logs',
-];
 
 // Best-effort: delete the Stripe customer (which also cancels their subscriptions). No-op unless
 // billing is configured and the user has a customer id. Failures are swallowed — account deletion
@@ -104,30 +83,10 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     }
   }
 
-  // Delete everything in one atomic D1 batch: child tables first (FK cascade isn't relied on — D1
-  // has it off by default), then profile-scoped tables, then user-scoped tables, then the user row.
-  const stmts: D1PreparedStatement[] = [];
+  // Delete everything in one atomic D1 batch: the profiles' rows (the same deletes that clear a
+  // profile), then user-scoped tables, then the profiles and the user row.
+  const stmts = profileRowDeletes(c.env.DB, pids, { includeSettings: true });
   const P = (sql: string, ...args: unknown[]) => stmts.push(c.env.DB.prepare(sql).bind(...args));
-  if (pids.length) {
-    const ph = pids.map(() => '?').join(',');
-    P(
-      `DELETE FROM account_balance_history WHERE account_id IN (SELECT id FROM accounts WHERE profile_id IN (${ph}))`,
-      ...pids
-    );
-    P(
-      `DELETE FROM transaction_tags WHERE transaction_id IN (SELECT id FROM transactions WHERE profile_id IN (${ph}))`,
-      ...pids
-    );
-    P(
-      `DELETE FROM loan_rate_periods WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
-      ...pids
-    );
-    P(
-      `DELETE FROM loan_prepayments WHERE loan_id IN (SELECT id FROM loans WHERE profile_id IN (${ph}))`,
-      ...pids
-    );
-    for (const t of PROFILE_TABLES) P(`DELETE FROM ${t} WHERE profile_id IN (${ph})`, ...pids);
-  }
   P('DELETE FROM reminder_sends WHERE user_id = ?', userId);
   P('DELETE FROM reminder_dedup WHERE user_id = ?', userId);
   P('DELETE FROM password_resets WHERE user_id = ?', userId);

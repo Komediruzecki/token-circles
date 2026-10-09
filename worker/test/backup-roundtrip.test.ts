@@ -256,6 +256,26 @@ describe('Worker full backup and staged restore', () => {
     expect(backup.profiles.map((profile) => profile.id)).toEqual([2000, 2001, 2002]);
   });
 
+  it('indents the backup when asked to, and keeps it compact otherwise', async () => {
+    const indented = await request('/api/export?pretty=true');
+    expect(indented.status).toBe(200);
+    expect(indented.headers.get('Content-Type')).toContain('application/json');
+    const indentedText = await indented.text();
+    expect(indentedText).toBe(JSON.stringify(JSON.parse(indentedText), null, 2));
+
+    const compactText = await (await request('/api/export')).text();
+    expect(compactText).toBe(JSON.stringify(JSON.parse(compactText)));
+  });
+
+  it('still says how many receipts it skipped when the backup is indented', async () => {
+    await env.RECEIPTS!.delete('2000/receipt.png');
+
+    const response = await request('/api/export?pretty=true');
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('X-Backup-Skipped-Receipts')).toBe('1');
+  });
+
   it('refuses to hand back an empty file to an account with no profiles', async () => {
     // A backup of nothing is not a backup, and restoring one would delete everything it does not
     // contain. Say so instead of handing over a file that looks like a safety net.

@@ -126,6 +126,7 @@ const OPTIONAL_ARRAYS = [
   'receiptFiles',
   'balanceHistoryRows',
   'importLogs',
+  'importSources',
   'budgetsZeroBased',
   'emergencyFundConfig',
   'loanRatePeriods',
@@ -152,6 +153,7 @@ const PROFILE_SCOPED_ARRAYS = [
   'categoryMappings',
   'receipts',
   'importLogs',
+  'importSources',
   'budgetsZeroBased',
   'emergencyFundConfig',
   'settingsRows',
@@ -194,7 +196,7 @@ export function validateBackupForLocalRestore(value: unknown): asserts value is 
   const profiles = data.profiles as unknown[]
   if (profiles.length === 0) throw new Error('Backup must contain at least one profile')
   const profileIds = new Set<number>()
-  const profileNames = new Set<string>()
+  // Names that differ only in case are restored numbered, "Name (2)" (IndexedDBAdapter.importData).
   profiles.forEach((value, index) => {
     const row = objectRow(value, `profiles[${index}]`)
     const id = positiveId(row.id, `profiles[${index}].id`)
@@ -202,11 +204,6 @@ export function validateBackupForLocalRestore(value: unknown): asserts value is 
     profileIds.add(id)
     const name = typeof row.name === 'string' ? row.name.trim() : ''
     if (!name) throw new Error(`Backup profiles[${index}].name is required`)
-    const normalizedName = name.toLocaleLowerCase()
-    if (profileNames.has(normalizedName)) {
-      throw new Error(`Backup contains duplicate profile name "${name}"`)
-    }
-    profileNames.add(normalizedName)
   })
 
   for (const key of PROFILE_SCOPED_ARRAYS) {
