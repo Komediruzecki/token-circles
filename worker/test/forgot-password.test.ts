@@ -250,8 +250,8 @@ describe('a reset link for an account whose address was never confirmed', () => 
 describe('a reset link for an unconfirmed account with only a password and a session', () => {
   it('says nothing was cleared: a reset replaces the password and ends sessions anyway', async () => {
     await env.DB.prepare('UPDATE users SET email_verified = 0 WHERE id = ?').bind(UID).run();
-    const { issueSessionCookie } = await import('../src/auth');
-    await issueSessionCookie(UID, 'password', env);
+    const { sessionCookie } = await import('./helpers/session');
+    await sessionCookie(UID, 'password', env);
     const token = await resetLinkFor(EMAIL);
 
     const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });

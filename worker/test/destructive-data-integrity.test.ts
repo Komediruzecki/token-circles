@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { DEFAULT_CATEGORIES } from '../src/profileData';
 
 const TABLES = [
@@ -74,7 +74,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (701, 70, 'Target')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (702, 71, 'Other user')"),
   ]);
-  cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(70, 'password', env)).split(';')[0];
 });
 
 function api(path: string, method: 'DELETE' | 'POST', profileId?: number): Promise<Response> {
@@ -518,8 +518,8 @@ describe('account deletion and sessions', () => {
 
   it("deletes the account's sessions with it and leaves another account's", async () => {
     // beforeEach signed account 70 in once; this is a second device, and another account.
-    await issueSessionCookie(70, 'password', env);
-    await issueSessionCookie(71, 'password', env);
+    await sessionCookie(70, 'password', env);
+    await sessionCookie(71, 'password', env);
     expect(await sessions(70)).toBeGreaterThanOrEqual(2);
     const others = await sessions(71);
     expect(others).toBeGreaterThanOrEqual(1);

@@ -1,5 +1,6 @@
 import * as db from './db';
 import { planHasFeature } from './plans';
+import { SAME_TOKEN_VERSION, type Bound } from './auth';
 
 // Personal access tokens. Bearer credentials for /mcp and /api/v1/*, and for nothing else --
 // see requireToken (added alongside the middleware) for why that boundary is an allow-list
@@ -45,20 +46,43 @@ export function parseScopes(raw: string): Scope[] {
   return [];
 }
 
+interface MintOptions {
+  name: string;
+  scopes: Scope[];
+  defaultProfileId?: number | null;
+  expiresAt?: string | null;
+}
+
+interface Minted {
+  id: string;
+  secret: string;
+  hint: string;
+}
+
+/**
+ * Store a new token for `userId` and return its secret, the only time it exists in the clear.
+ * With `opts.bound`, only while the account's token_version is still the one the request checked
+ * (SAME_TOKEN_VERSION); null when nothing was written.
+ */
 export async function mintApiToken(
   DB: D1Database,
   userId: number,
-  opts: {
-    name: string;
-    scopes: Scope[];
-    defaultProfileId?: number | null;
-    expiresAt?: string | null;
-  }
-): Promise<{ id: string; secret: string; hint: string }> {
+  opts: MintOptions & { bound: Bound }
+): Promise<Minted | null>;
+export async function mintApiToken(
+  DB: D1Database,
+  userId: number,
+  opts: MintOptions
+): Promise<Minted>;
+export async function mintApiToken(
+  DB: D1Database,
+  userId: number,
+  opts: MintOptions & { bound?: Bound }
+): Promise<Minted | null> {
   const random = b64url(crypto.getRandomValues(new Uint8Array(32)));
   const secret = `${TOKEN_PREFIX}${random}`;
   const id = crypto.randomUUID();
-  await db.insert(DB, 'api_tokens', {
+  const row = {
     id,
     user_id: userId,
     name: opts.name,
@@ -67,7 +91,21 @@ export async function mintApiToken(
     scopes: JSON.stringify(opts.scopes),
     default_profile_id: opts.defaultProfileId ?? null,
     expires_at: opts.expiresAt ?? null,
-  });
+  };
+  if (opts.bound) {
+    const columns = Object.keys(row);
+    const written = await db.run(
+      DB,
+      `INSERT INTO api_tokens (${columns.join(', ')})
+       SELECT ${columns.map(() => '?').join(', ')} WHERE ${SAME_TOKEN_VERSION}`,
+      ...Object.values(row),
+      opts.bound.userId,
+      opts.bound.tokenVersion
+    );
+    if ((written.meta.changes ?? 0) === 0) return null;
+  } else {
+    await db.insert(DB, 'api_tokens', row);
+  }
   return { id, secret, hint: random.slice(0, 8) };
 }
 

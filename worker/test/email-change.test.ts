@@ -10,7 +10,8 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hashPassword, issueSessionCookie } from '../src/auth';
+import { hashPassword } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { createLoginCode } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 
@@ -143,7 +144,7 @@ async function seed(verified = 1): Promise<void> {
       "INSERT INTO users (id, email, auth_provider, email_verified, token_version) VALUES (?, ?, 'password', 1, 1)"
     ).bind(OTHER, TAKEN),
   ]);
-  cookie = (await issueSessionCookie(UID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(UID, 'password', env)).split(';')[0];
 }
 
 beforeEach(async () => {
@@ -384,7 +385,7 @@ describe('saving a new address', () => {
       SELF.fetch('https://example.com/api/notifications/settings', {
         method: 'PUT',
         headers: {
-          Cookie: (await issueSessionCookie(id, 'password', env)).split(';')[0],
+          Cookie: (await sessionCookie(id, 'password', env)).split(';')[0],
           'Content-Type': 'application/json',
           'CF-Connecting-IP': from,
         },
@@ -699,7 +700,7 @@ describe('the current address', () => {
     )
       .bind(UID)
       .run();
-    cookie = (await issueSessionCookie(UID, 'google', env)).split(';')[0];
+    cookie = (await sessionCookie(UID, 'google', env)).split(';')[0];
 
     expect((await save(NEW)).status).toBe(200);
 

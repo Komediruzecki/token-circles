@@ -15,7 +15,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { GOAL_MESSAGES as M } from '../../shared/goalSchema';
 
 const USER = 6304;
@@ -85,7 +85,7 @@ beforeEach(async () => {
     goal(PLAIN, {}),
     goal(OLD, { name: LONG_NAME, target_amount: 0, deadline: null }),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 afterEach(() => {
@@ -149,7 +149,7 @@ describe('POST /api/savings-goals', () => {
   it('stores what the Goals form sends, with the defaults for what it leaves out', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-08T12:00:00Z'));
-    cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+    cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
     const res = await call('POST', '/api/savings-goals', {
       name: 'Holiday',
       target_amount: 1200.5,

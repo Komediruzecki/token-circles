@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { BILL_MESSAGES } from '../../shared/billSchema';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 import { GOAL_MESSAGES } from '../../shared/goalSchema';
@@ -56,7 +56,7 @@ beforeEach(async () => {
               (92002, ?, 'Household row', 20, 'expense', 922, 9222, '2026-01-01')`
     ).bind(CURRENT, HOUSEHOLD),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(path: string, init: RequestInit = {}): Promise<Response> {

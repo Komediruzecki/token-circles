@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { mintApiToken } from '../src/apitoken';
 
 /*
@@ -35,7 +35,7 @@ beforeEach(async () => {
       .bind(id, `${plan} household`, id)
       .run();
     PROFILE[plan] = id;
-    COOKIES[plan] = (await issueSessionCookie(id, 'password', env)).split(';')[0];
+    COOKIES[plan] = (await sessionCookie(id, 'password', env)).split(';')[0];
   }
 });
 

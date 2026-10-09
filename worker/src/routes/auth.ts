@@ -17,7 +17,9 @@ import {
   clearedSessionCookie,
   hashPassword,
   verifyPassword,
+  boundTo,
   TOKEN_TTL_SECONDS,
+  TRY_AGAIN,
 } from '../auth';
 import { sendMail } from '../email';
 import {
@@ -118,7 +120,14 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
   if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const { userId, created, email: newEmail, cleared } = await resolveGoogleUser(c.env.DB, claims);
+  const {
+    userId,
+    created,
+    email: newEmail,
+    cleared,
+    tokenVersion,
+  } = await resolveGoogleUser(c.env.DB, claims);
+  const signIn = { userId, provider: 'google', tokenVersion };
   // Brand-new Google signups get the same welcome as email/password registrations
   // (best-effort — a mail failure must never break the OAuth redirect).
   if (created && newEmail) {
@@ -140,11 +149,12 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
       status: 302,
       headers: {
         Location: dest.toString(),
-        'Set-Cookie': await issueTwofaChallengeCookie(userId, 'google', c.env),
+        'Set-Cookie': await issueTwofaChallengeCookie(c.env, signIn),
       },
     });
   }
-  const sessionCookie = await issueSessionCookie(userId, 'google', c.env, sessionOrigin(c));
+  const sessionCookie = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
+  if (!sessionCookie) return c.json({ error: TRY_AGAIN }, 409);
   // Joining cleared what the account had set up before its address was confirmed: ?cleared=1
   // lets the app say what. Joining clears the TOTP too, so this never meets ?twofa=1.
   let location = state.returnTo;
@@ -279,9 +289,12 @@ authRoutes.post('/api/auth/login', async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_email', email });
     return emailRl;
   }
-  const user = await c.env.DB.prepare('SELECT id, password_hash FROM users WHERE email = ?')
+  // token_version is read with the password: the session below is bound to it.
+  const user = await c.env.DB.prepare(
+    'SELECT id, password_hash, token_version FROM users WHERE email = ?'
+  )
     .bind(email)
-    .first<{ id: number; password_hash: string | null }>();
+    .first<{ id: number; password_hash: string | null; token_version: number }>();
   // Always run a verification — against a dummy hash when the account/hash is missing — so login
   // takes the same time regardless of whether the email exists (anti-enumeration). Then branch on
   // the real outcome.
@@ -295,6 +308,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
   // password. Failures still accumulate exactly as before.
   await Promise.all([clearRateLimit(c.env, ipBucket), clearRateLimit(c.env, emailBucket)]);
+  const signIn = { userId: user.id, provider: 'password', tokenVersion: user.token_version };
   // Second factor: the password alone must not buy a session for a 2FA account. The browser
   // gets a short-lived challenge cookie instead; /api/auth/2fa/verify trades it for the session.
   if (await getTotpForLogin(c.env, user.id)) {
@@ -305,11 +319,13 @@ authRoutes.post('/api/auth/login', async (c) => {
       userId: user.id,
       email,
     });
-    c.header('Set-Cookie', await issueTwofaChallengeCookie(user.id, 'password', c.env));
+    c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
     return c.json({ twofaRequired: true });
   }
+  const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
+  if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
-  c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env, sessionOrigin(c)));
+  c.header('Set-Cookie', session);
   return c.json({ id: user.id, email });
 });
 
@@ -520,7 +536,8 @@ authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
   if (emailRl) return emailRl;
 
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-  const token = await createEmailVerification(c.env.DB, userId, user.email);
+  const token = await createEmailVerification(c.env.DB, userId, user.email, 'confirm', boundTo(c));
+  if (token === null) return c.json({ error: TRY_AGAIN }, 409);
   const link = verifyLink(new URL(c.req.url).origin, token, base);
   const mail = renderEmailVerification({
     link,

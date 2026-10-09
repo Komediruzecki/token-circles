@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6309;
 const PROFILE = 63090;
@@ -59,7 +59,7 @@ beforeEach(async () => {
     expense(FOOD, '2026-10-12', 150),
     expense(RENT, '2026-10-01', 900),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 afterEach(() => {
@@ -98,7 +98,7 @@ describe('GET /api/budgets/alerts', () => {
   it('reads this month when none is given', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-20T12:00:00Z'));
-    cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+    cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
     expect(await alerts('threshold=80')).toEqual([
       { categoryName: 'Food', budgetAmount: 300, spent: 270, percentage: 90 },
     ]);

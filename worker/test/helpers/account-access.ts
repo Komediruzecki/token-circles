@@ -4,7 +4,8 @@
  * passes ids of its own, so files sharing the test database never touch each other's rows.
  */
 import { env, SELF } from 'cloudflare:test';
-import { hashPassword, issueSessionCookie } from '../../src/auth';
+import { hashPassword } from '../../src/auth';
+import { sessionCookie } from './session';
 import { mintApiToken } from '../../src/apitoken';
 import { generateTotpSecret } from '../../src/totp';
 import {
@@ -84,7 +85,7 @@ export async function seedAccount(
   await confirmTotp(env, id);
   await storeRecoveryCodes(env, id, generateRecoveryCodes());
   const token = await mintApiToken(env.DB, id, { name: 'Nightly import', scopes: ['read'] });
-  const session = (await issueSessionCookie(id, 'password', env)).split(';')[0]!;
+  const session = (await sessionCookie(id, 'password', env)).split(';')[0]!;
   return { session, apiToken: token.secret, totpSecret };
 }
 

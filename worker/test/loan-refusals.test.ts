@@ -17,7 +17,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { LOAN_MESSAGES as M, periodEndMessage, periodStartMessage } from '../../shared/loanSchema';
 
 const USER = 6320;
@@ -95,7 +95,7 @@ beforeEach(async () => {
       "INSERT INTO loan_prepayments (id, loan_id, month, amount, note) VALUES (?, ?, 50, 500, 'Bonus')"
     ).bind(LATE_EXTRA, SHORTENED),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 async function call(method: string, path: string, body?: unknown): Promise<Response> {

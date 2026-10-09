@@ -20,7 +20,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { STRIPE_API_VERSION } from '../src/stripe';
 
 const UID = 8500;
@@ -72,7 +72,7 @@ const choose = async (plan: string, interval: 'monthly' | 'annual' = 'monthly') 
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Cookie: (await issueSessionCookie(UID, 'password', env)).split(';')[0],
+      Cookie: (await sessionCookie(UID, 'password', env)).split(';')[0],
     },
     body: JSON.stringify({ plan, interval }),
   });

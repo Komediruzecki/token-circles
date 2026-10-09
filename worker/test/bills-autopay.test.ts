@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 let cookie = '';
 
@@ -14,7 +14,7 @@ beforeEach(async () => {
     ),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (600, 60, 'Main')"),
   ]);
-  cookie = (await issueSessionCookie(60, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(60, 'password', env)).split(';')[0];
 });
 
 function request(path: string, method: 'GET' | 'POST' | 'PUT', body?: unknown) {

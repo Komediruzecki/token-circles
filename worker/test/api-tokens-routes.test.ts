@@ -4,7 +4,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { mintApiToken } from '../src/apitoken';
 
 const USER_ID = 9100;
@@ -15,8 +15,8 @@ async function seed(): Promise<string> {
   )
     .bind(USER_ID)
     .run();
-  // issueSessionCookie returns the whole Set-Cookie header; the request wants just the pair.
-  return (await issueSessionCookie(USER_ID, 'password', env as never)).split(';')[0]!;
+  // sessionCookie returns the whole Set-Cookie header; the request wants just the pair.
+  return (await sessionCookie(USER_ID, 'password', env as never)).split(';')[0]!;
 }
 
 describe('token management endpoints', () => {

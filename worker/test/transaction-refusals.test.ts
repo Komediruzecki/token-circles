@@ -23,7 +23,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { TRANSACTION_MESSAGES as M } from '../../shared/transactionSchema';
 
 const USER = 9831;
@@ -146,7 +146,7 @@ beforeEach(async () => {
       transfer_account_id: SAVINGS,
     }),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function call(method: string, path: string, body?: unknown): Promise<Response> {

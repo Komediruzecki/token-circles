@@ -16,7 +16,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { RETIREMENT_GOAL_MESSAGES as M } from '../../shared/retirementGoalSchema';
 
 const USER = 6340;
@@ -90,7 +90,7 @@ beforeEach(async () => {
     insert(OLD, PROFILE),
     insert(THEIRS, OTHER),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown): Promise<Response> {

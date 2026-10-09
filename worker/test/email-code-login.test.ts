@@ -253,9 +253,9 @@ describe('account deletion', () => {
   it('removes the login_codes rows with the account', async () => {
     await createLoginCode(env, userId, EMAIL);
     // The fixture user's password_hash is a dummy, so mint the session directly.
-    const { issueSessionCookie } = await import('../src/auth');
+    const { sessionCookie } = await import('./helpers/session');
     const session = (
-      await issueSessionCookie(userId, 'password', env, { userAgent: null, ip: null })
+      await sessionCookie(userId, 'password', env, { userAgent: null, ip: null })
     ).split(';')[0]!;
     const del = await SELF.fetch(`${BASE}/api/account`, {
       method: 'DELETE',

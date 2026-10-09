@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { RETIREMENT_PLAN_MESSAGES as M } from '../../shared/retirementPlanSchema';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../../shared/retirementSettings';
 
@@ -59,7 +59,7 @@ beforeEach(async () => {
       "INSERT INTO settings (key, value, profile_id) VALUES ('retirement_settings', ?, ?)"
     ).bind(JSON.stringify(OLD_BLOB), PROFILE),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown): Promise<Response> {

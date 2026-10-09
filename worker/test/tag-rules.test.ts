@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 810;
 const PROFILE = 8100;
@@ -57,7 +57,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, profile_id, name, type, color) VALUES (11, ?, 'Food', 'expense', '#222')"
     ).bind(PROFILE),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function call(

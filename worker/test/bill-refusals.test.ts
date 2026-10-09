@@ -16,7 +16,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { BILL_MESSAGES as M } from '../../shared/billSchema';
 
 const USER = 6306;
@@ -91,7 +91,7 @@ beforeEach(async () => {
     bill(OLD, { name: 'Old water', amount: 0, frequency: 'daily', day_of_month: 1 }),
     bill(ELSEWHERE_BILL, { profile_id: OTHER_PROFILE, category_id: ELSEWHERE_CATEGORY }),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 async function call(method: string, path: string, body?: unknown): Promise<Response> {

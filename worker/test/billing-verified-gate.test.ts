@@ -12,7 +12,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const UID = 8200;
 
@@ -32,7 +32,7 @@ async function seed(opts: { provider: string; verified: number; customer?: strin
 }
 
 const session = async (): Promise<string> =>
-  (await issueSessionCookie(UID, 'password', env)).split(';')[0];
+  (await sessionCookie(UID, 'password', env)).split(';')[0];
 
 const checkout = async () =>
   SELF.fetch('https://api.example.com/api/billing/checkout', {

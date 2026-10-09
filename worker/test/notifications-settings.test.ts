@@ -6,7 +6,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const UID = 9400;
 const MAIN = 9401;
@@ -49,7 +49,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (9401, 9400, 'Main')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (9402, 9400, 'Side')"),
   ]);
-  cookie = (await issueSessionCookie(UID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(UID, 'password', env)).split(';')[0];
 });
 
 describe('PUT /api/notifications/settings', () => {

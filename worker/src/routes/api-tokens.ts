@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
-import { requireAuth } from '../auth';
+import { boundTo, requireAuth, TRY_AGAIN } from '../auth';
 import { HttpError } from '../http';
 import { mintApiToken, parseScopes, tokenExpired, type Scope } from '../apitoken';
 import { apiTokenLimit, requireFeature } from '../plan';
@@ -88,7 +88,9 @@ apiTokensRoutes.post('/api/account/api-tokens', requireAuth, async (c) => {
     scopes,
     defaultProfileId,
     expiresAt,
+    bound: boundTo(c),
   });
+  if (!minted) return c.json({ error: TRY_AGAIN }, 409);
   // The only time the secret is ever returned. It is not recoverable afterwards.
   return c.json(minted, 201);
 });

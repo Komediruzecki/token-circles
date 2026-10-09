@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 700;
 const PROFILE = 7000;
@@ -37,7 +37,7 @@ beforeEach(async () => {
       'Main'
     ),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function execute(body: Record<string, unknown>): Promise<Response> {

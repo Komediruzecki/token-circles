@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // POST /api/budgets/allocate is an upsert: re-allocating a category for the same month must
 // UPDATE the existing amount, not 400. Previously it errored ("Budget already exists…"), so a
@@ -21,7 +21,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, profile_id, name, type, color) VALUES (81, 800, 'Food', 'expense', '#F97316')"
     ),
   ]);
-  cookie = (await issueSessionCookie(80, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(80, 'password', env)).split(';')[0];
 });
 
 function allocate(amount: number, month = '2026-05'): Promise<Response> {

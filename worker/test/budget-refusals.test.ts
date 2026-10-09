@@ -17,7 +17,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { BUDGET_MESSAGES as M } from '../../shared/budgetSchema';
 
 const USER = 6302;
@@ -88,7 +88,7 @@ beforeEach(async () => {
       period: 'quarterly',
     }),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 afterEach(() => {
@@ -160,7 +160,7 @@ describe('POST /api/budgets', () => {
   it("starts a budget sent without a start date on the first of the person's month", async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-15T12:00:00Z'));
-    cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+    cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
     const res = await call('POST', '/api/budgets', { category_id: RENT, amount: '900' });
     expect(res.status).toBe(200);
     const { id } = (await res.json()) as { id: number };

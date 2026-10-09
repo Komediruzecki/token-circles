@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { renderEmailVerification, renderWelcome } from '../src/emailTemplates';
 
 const USER_ID = 8100;
@@ -173,7 +173,7 @@ describe('POST /api/auth/resend-verification', () => {
     });
 
   const sessionFor = async (id = USER_ID): Promise<string> =>
-    (await issueSessionCookie(id, 'password', env)).split(';')[0];
+    (await sessionCookie(id, 'password', env)).split(';')[0];
 
   it('needs a session', async () => {
     const res = await resend();
@@ -245,7 +245,7 @@ describe('POST /api/auth/register', () => {
 describe('GET /api/auth/me', () => {
   it('reports email_verified, which is the only thing that reads it', async () => {
     await seedUser(USER_ID, EMAIL, 1);
-    const cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+    const cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 
     const res = await SELF.fetch('https://api.example.com/api/auth/me', {
       headers: { Cookie: cookie },

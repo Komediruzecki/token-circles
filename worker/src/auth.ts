@@ -13,7 +13,7 @@
 // signed-state CSRF guard). Logout / "sign out everywhere" via a token_version
 // counter on the user row.
 
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './index';
 import { logAuthEvent } from './authlog';
 
@@ -180,36 +180,75 @@ export interface SessionOrigin {
   ip?: string | null;
 }
 
+// ── Writes bound to what a request checked ───────────────────────────────────────
+//
+// A new session or credential is written only while the account's token_version is still the
+// one the request checked: confirming an address (which clears what was set up before it) and
+// signing out everywhere both move it on. The condition rides in the same statement as the
+// write, so nothing can land between the two, and a write it stops answers TRY_AGAIN.
+
+/** The account a request checked, and its token_version as the check read it. */
+export interface Bound {
+  userId: number;
+  tokenVersion: number;
+}
+
+/** Holds while users.token_version is still the one checked. Binds the user id, then the version. */
+export const SAME_TOKEN_VERSION = 'EXISTS (SELECT 1 FROM users WHERE id = ? AND token_version = ?)';
+
+/** What a route answers, with 409, when a write it allowed found the account had moved on. */
+export const TRY_AGAIN = 'Please try again.';
+
+/** The signed-in account of a request that passed requireAuth, for a bound write. */
+export function boundTo(c: Context<AppEnv>): Bound {
+  const tokenVersion = c.get('tokenVersion');
+  if (tokenVersion === undefined)
+    throw new Error('boundTo needs a request that passed requireAuth');
+  return { userId: c.get('userId'), tokenVersion };
+}
+
+/** A sign-in that checked out: who, how, and the token_version the check read. */
+export interface SignIn extends Bound {
+  provider: string;
+}
+
 /**
- * Sign a JWT for the user and return a Set-Cookie value.
+ * Record a session for a sign-in that checked out, and return its Set-Cookie value. Null when the
+ * account's token_version is no longer the one the sign-in read: then nothing was written.
  *
- * Also records a `sessions` row and puts its id in the token, which is what makes one device
- * revocable without touching the others.
+ * The `auth_sessions` row's id goes in the token, which is what makes one device revocable
+ * without touching the others.
  */
 export async function issueSessionCookie(
-  userId: number,
-  provider: string,
   env: Env,
+  signIn: SignIn,
   origin: SessionOrigin = {}
-): Promise<string> {
+): Promise<string | null> {
   if (!env.JWT_SECRET) throw new Error('JWT_SECRET not configured');
-  const row = await env.DB.prepare('SELECT token_version FROM users WHERE id = ?')
-    .bind(userId)
-    .first<{ token_version: number }>();
   const sid = crypto.randomUUID();
-  await env.DB.prepare(
-    'INSERT INTO auth_sessions (id, user_id, provider, user_agent, ip) VALUES (?, ?, ?, ?, ?)'
+  const written = await env.DB.prepare(
+    `INSERT INTO auth_sessions (id, user_id, provider, user_agent, ip)
+     SELECT ?, ?, ?, ?, ? WHERE ${SAME_TOKEN_VERSION}`
   )
-    .bind(sid, userId, provider, origin.userAgent ?? null, origin.ip ?? null)
+    .bind(
+      sid,
+      signIn.userId,
+      signIn.provider,
+      origin.userAgent ?? null,
+      origin.ip ?? null,
+      signIn.userId,
+      signIn.tokenVersion
+    )
     .run();
+  if ((written.meta.changes ?? 0) === 0) return null;
   const now = Math.floor(Date.now() / 1000);
   const token = await signJwt(
     {
-      sub: String(userId),
-      provider,
+      sub: String(signIn.userId),
+      provider: signIn.provider,
       iat: now,
       exp: now + TOKEN_TTL_SECONDS,
-      v: row?.token_version ?? 1,
+      v: signIn.tokenVersion,
       sid,
     },
     env.JWT_SECRET
@@ -222,6 +261,8 @@ export interface AuthUser {
   provider: string;
   /** Which device this is. Absent for a token issued before the sessions table existed. */
   sessionId?: string;
+  /** users.token_version as this request's check read it, for writes bound to it. */
+  tokenVersion: number;
 }
 
 /**
@@ -310,6 +351,7 @@ export async function authenticateRequest(request: Request, env: Env): Promise<A
         userId: Number(payload.sub),
         provider: payload.provider,
         ...(payload.sid !== undefined ? { sessionId: payload.sid } : {}),
+        tokenVersion: user.token_version,
       },
       cookieCount: tokens.length,
     };
@@ -355,6 +397,7 @@ export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
     return c.json({ error: 'Unauthorized' }, 401);
   }
   c.set('userId', auth.user.userId);
+  c.set('tokenVersion', auth.user.tokenVersion);
   if (auth.user.sessionId !== undefined) c.set('sessionId', auth.user.sessionId);
   await next();
 };
@@ -512,12 +555,29 @@ export function clearedWorthSaying(cleared: ClearedAccess, by: 'sign-in' | 'rese
 export async function resolveGoogleUser(
   db: D1Database,
   claims: GoogleClaims
-): Promise<{ userId: number; created: boolean; email: string | null; cleared: boolean }> {
+): Promise<{
+  userId: number;
+  created: boolean;
+  email: string | null;
+  cleared: boolean;
+  /** users.token_version as of the look-up, or as the join's own batch left it. */
+  tokenVersion: number;
+}> {
   const byProvider = await db
-    .prepare("SELECT id FROM users WHERE auth_provider = 'google' AND provider_id = ?")
+    .prepare(
+      "SELECT id, token_version FROM users WHERE auth_provider = 'google' AND provider_id = ?"
+    )
     .bind(claims.sub)
-    .first<{ id: number }>();
-  if (byProvider) return { userId: byProvider.id, created: false, email: null, cleared: false };
+    .first<{ id: number; token_version: number }>();
+  if (byProvider) {
+    return {
+      userId: byProvider.id,
+      created: false,
+      email: null,
+      cleared: false,
+      tokenVersion: byProvider.token_version,
+    };
+  }
 
   // Addresses are kept in lower case, as registration keeps them, and the match ignores case, so
   // a row kept with capitals is found too.
@@ -540,27 +600,37 @@ export async function resolveGoogleUser(
             "UPDATE users SET auth_provider = 'google', provider_id = ?, email_verified = 1 WHERE id = ?"
           )
           .bind(claims.sub, byEmail.id),
+        // The version this batch leaves, which the session it leads to is bound to.
+        db.prepare('SELECT token_version FROM users WHERE id = ?').bind(byEmail.id),
       ]);
       const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
-      return { userId: byEmail.id, created: false, email: null, cleared };
+      const tokenVersion = (results.at(-1)?.results[0] as { token_version: number }).token_version;
+      return { userId: byEmail.id, created: false, email: null, cleared, tokenVersion };
     }
   }
 
   // New Google user. Store the email only if verified (avoids a UNIQUE(email) collision
   // with an existing account); username stays NULL for OAuth accounts.
   const verified = claims.email_verified === 'true';
-  const res = await db
+  const created = await db
     .prepare(
-      "INSERT INTO users (username, email, email_verified, auth_provider, provider_id) VALUES (NULL, ?, ?, 'google', ?)"
+      `INSERT INTO users (username, email, email_verified, auth_provider, provider_id)
+       VALUES (NULL, ?, ?, 'google', ?) RETURNING id, token_version`
     )
     .bind(verified ? email : null, verified ? 1 : 0, claims.sub)
-    .run();
-  const userId = res.meta.last_row_id as number;
+    .first<{ id: number; token_version: number }>();
+  const userId = created!.id;
   // Every user needs a default profile (the Express backend seeded one at bootstrap);
   // without it every profile-scoped route would 403 immediately after sign-up.
   await db
     .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
     .bind('Personal Profile', userId)
     .run();
-  return { userId, created: true, email: verified ? email : null, cleared: false };
+  return {
+    userId,
+    created: true,
+    email: verified ? email : null,
+    cleared: false,
+    tokenVersion: created!.token_version,
+  };
 }

@@ -19,7 +19,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { ACCOUNT_MESSAGES as M } from '../../shared/accountSchema';
 
 const USER = 9851;
@@ -81,7 +81,7 @@ beforeEach(async () => {
     account(CHECKING, { name: 'Old checking', type: 'checking' }),
     account(ODD_DATE, { name: 'Old date', starting_date: '01/01/2026' }),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function call(method: string, path: string, body?: unknown): Promise<Response> {

@@ -79,7 +79,13 @@ describe('resolveGoogleUser', () => {
       "INSERT INTO users (id, email, password_hash, email_verified, auth_provider, token_version) VALUES (901, 'gina@example.com', 'pbkdf2$100000$x$y', 1, 'password', 1)"
     ).run();
     const res = await resolveGoogleUser(env.DB, { ...CLAIMS, email: 'Gina@Example.COM' });
-    expect(res).toEqual({ userId: 901, created: false, email: null, cleared: false });
+    expect(res).toEqual({
+      userId: 901,
+      created: false,
+      email: null,
+      cleared: false,
+      tokenVersion: 1,
+    });
     const user = await env.DB.prepare(
       'SELECT email, provider_id FROM users WHERE id = 901'
     ).first();
@@ -102,7 +108,13 @@ describe('resolveGoogleUser', () => {
       "INSERT INTO users (id, email, email_verified, auth_provider, provider_id, token_version) VALUES (902, 'Gina@Example.com', 1, 'google', 'google-sub-older', 1)"
     ).run();
     const res = await resolveGoogleUser(env.DB, CLAIMS);
-    expect(res).toEqual({ userId: 902, created: false, email: null, cleared: false });
+    expect(res).toEqual({
+      userId: 902,
+      created: false,
+      email: null,
+      cleared: false,
+      tokenVersion: 1,
+    });
     const { results } = await env.DB.prepare(
       "SELECT id FROM users WHERE lower(email) = 'gina@example.com'"
     ).all();

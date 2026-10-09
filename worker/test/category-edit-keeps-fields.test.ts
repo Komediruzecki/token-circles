@@ -9,7 +9,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 9303;
 const PROFILE = 93030;
@@ -50,7 +50,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, 'Elsewhere', 'expense', '#6e9bff', 'tag')"
     ).bind(ELSEWHERE, OTHER),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function put(id: number, body: unknown): Promise<Response> {

@@ -8,6 +8,7 @@
  */
 import type { Context } from 'hono';
 import type { AppEnv } from './index';
+import { boundTo, TRY_AGAIN } from './auth';
 import * as db from './db';
 import { sendMail } from './email';
 import { insertEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './email-verification';
@@ -110,7 +111,9 @@ export async function sendEmailChangeLink(
     throw new HttpError(409, 'That email is already in use');
   }
   const base = appBase(c);
-  const { token, id } = await insertEmailVerification(c.env.DB, userId, email, 'change');
+  const inserted = await insertEmailVerification(c.env.DB, userId, email, 'change', boundTo(c));
+  if (!inserted) throw new HttpError(409, TRY_AGAIN);
+  const { token, id } = inserted;
   const mail = renderEmailChange({
     link: verifyLink(new URL(c.req.url).origin, token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,

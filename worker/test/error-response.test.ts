@@ -4,7 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import { bearerAuth } from 'hono/bearer-auth';
 import { basicAuth } from 'hono/basic-auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { errorResponse, GENERIC_ERROR } from '../src/error-response';
 import { HttpError, refuse } from '../src/http';
 import type { AppEnv } from '../src/index';
@@ -32,7 +32,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, name, color, icon, type, profile_id) VALUES (9001, 'Groceries', '#22c55e', 'cart', 'expense', 900)"
     ),
   ]);
-  cookie = (await issueSessionCookie(90, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(90, 'password', env)).split(';')[0];
   consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 

@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Editing a goal 500'd: the PUT bound current_amount (which the edit form doesn't send)
 // as undefined, which D1 rejects. The update is now a partial update that only touches
@@ -22,7 +22,7 @@ beforeEach(async () => {
       "INSERT INTO savings_goals (id, profile_id, name, target_amount, current_amount, deadline, monthly_contribution) VALUES (1, 600, 'Car', 10000, 2500, '2027-01-01', 200)"
     ),
   ]);
-  cookie = (await issueSessionCookie(60, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(60, 'password', env)).split(';')[0];
 });
 
 function put(body: unknown): Promise<Response> {
@@ -79,7 +79,7 @@ describe('PUT /api/savings-goals/:id', () => {
       ),
       env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (601, 61, 'Main')"),
     ]);
-    const other = (await issueSessionCookie(61, 'password', env)).split(';')[0];
+    const other = (await sessionCookie(61, 'password', env)).split(';')[0];
     const res = await SELF.fetch('https://example.com/api/savings-goals/1', {
       method: 'PUT',
       headers: { Cookie: other, 'Content-Type': 'application/json', 'X-Profile-Id': '601' },

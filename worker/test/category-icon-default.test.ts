@@ -8,7 +8,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 9301;
 const PROFILE = 93010;
@@ -34,7 +34,7 @@ beforeEach(async () => {
       "INSERT INTO categories (id, profile_id, name, type, color, icon) VALUES (?, ?, 'Food', 'expense', '#6e9bff', 'food')"
     ).bind(FOOD, PROFILE),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function call(method: string, path: string, body?: unknown): Promise<Response> {

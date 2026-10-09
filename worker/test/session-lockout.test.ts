@@ -14,7 +14,8 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { hashPassword, issueSessionCookie, sweepExpiredSessions } from '../src/auth';
+import { hashPassword, sweepExpiredSessions } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { humanWait } from '../src/ratelimit';
 
 const EMAIL = 'locked@example.com';
@@ -69,7 +70,7 @@ describe('a request carrying more than one session cookie', () => {
     // A browser signed into both prod and dev sends both, oldest first — and the oldest is the
     // one that does not work here.
     const stale = 'fm_session=not.a.valid.jwt';
-    const good = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const good = cookiePair(await sessionCookie(UID, 'password', env));
 
     const res = await me(`${stale}; cf_clearance=x; ${good}`);
 
@@ -78,7 +79,7 @@ describe('a request carrying more than one session cookie', () => {
   });
 
   it('is authenticated whichever order they arrive in', async () => {
-    const good = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const good = cookiePair(await sessionCookie(UID, 'password', env));
 
     expect((await me(`${good}; fm_session=not.a.valid.jwt`)).status).toBe(200);
   });
@@ -86,9 +87,9 @@ describe('a request carrying more than one session cookie', () => {
   it('is not fooled by a cookie for an account whose sessions were revoked', async () => {
     // The exact production shape: a well-formed JWT, signed by us, for a real user, at a
     // token_version the account has since moved past — what "sign out everywhere" leaves behind.
-    const revoked = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const revoked = cookiePair(await sessionCookie(UID, 'password', env));
     await env.DB.prepare('UPDATE users SET token_version = 22 WHERE id = ?').bind(UID).run();
-    const good = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const good = cookiePair(await sessionCookie(UID, 'password', env));
 
     // Revoked first, current second — the losing order under the old reader.
     const res = await me(`${revoked}; ${good}`);
@@ -103,8 +104,8 @@ describe('a request carrying more than one session cookie', () => {
   });
 
   it('never signs in as somebody else because their cookie came along', async () => {
-    const mine = cookiePair(await issueSessionCookie(UID, 'password', env));
-    const theirs = cookiePair(await issueSessionCookie(OTHER_UID, 'password', env));
+    const mine = cookiePair(await sessionCookie(UID, 'password', env));
+    const theirs = cookiePair(await sessionCookie(OTHER_UID, 'password', env));
 
     // Whoever is first wins, but it must be one of the two real sessions and nothing invented.
     expect((await me(`${theirs}; ${mine}`)).status).toBe(200);
@@ -177,8 +178,8 @@ describe('humanWait', () => {
 
 describe('signing out', () => {
   it('ends this session and leaves the other devices alone', async () => {
-    const phone = cookiePair(await issueSessionCookie(UID, 'password', env));
-    const laptop = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const phone = cookiePair(await sessionCookie(UID, 'password', env));
+    const laptop = cookiePair(await sessionCookie(UID, 'password', env));
 
     const res = await SELF.fetch('https://api.example.com/api/auth/logout', {
       method: 'POST',
@@ -193,8 +194,8 @@ describe('signing out', () => {
   });
 
   it('ends every session when that is what was asked for', async () => {
-    const phone = cookiePair(await issueSessionCookie(UID, 'password', env));
-    const laptop = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const phone = cookiePair(await sessionCookie(UID, 'password', env));
+    const laptop = cookiePair(await sessionCookie(UID, 'password', env));
 
     await SELF.fetch('https://api.example.com/api/auth/logout-all', {
       method: 'POST',
@@ -230,12 +231,12 @@ const listedDevices = async (cookie: string) => {
 
 describe('a session whose token has expired', () => {
   it('is not offered as a device you could sign out of', async () => {
-    const laptop = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const laptop = cookiePair(await sessionCookie(UID, 'password', env));
     const [oldId] = await sessionIds();
     // A row nothing has touched since before the token lifetime. Its cookie expired with it; the
     // row is all that is left, and it used to be listed as if the device were still signed in.
     await ageSession(oldId!, 8);
-    const phone = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const phone = cookiePair(await sessionCookie(UID, 'password', env));
 
     const devices = await listedDevices(phone);
 
@@ -247,8 +248,8 @@ describe('a session whose token has expired', () => {
   });
 
   it('is deleted by the sweep, so the table does not grow by a row per sign-in', async () => {
-    await issueSessionCookie(UID, 'password', env);
-    await issueSessionCookie(UID, 'password', env);
+    await sessionCookie(UID, 'password', env);
+    await sessionCookie(UID, 'password', env);
     const [first, second] = await sessionIds();
     await ageSession(first!, 30);
 
@@ -258,7 +259,7 @@ describe('a session whose token has expired', () => {
   });
 
   it('survives the sweep while its token is still good', async () => {
-    const live = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const live = cookiePair(await sessionCookie(UID, 'password', env));
     const [id] = await sessionIds();
     // Six days old: expired tomorrow, not today. Sweeping it now would sign someone out early.
     await ageSession(id!, 6);
@@ -270,7 +271,7 @@ describe('a session whose token has expired', () => {
   });
 
   it('is left alone by the sweep for a day past expiry, so no live token loses its row', async () => {
-    await issueSessionCookie(UID, 'password', env);
+    await sessionCookie(UID, 'password', env);
     const [id] = await sessionIds();
     // Past the 7-day token lifetime but inside the grace, which exists so a clock that disagrees
     // with D1 by a few minutes cannot end a session the JWT would still have accepted.
@@ -323,7 +324,7 @@ describe('the auth audit trail', () => {
   });
 
   it('says which kind of bad the token was', async () => {
-    const revoked = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const revoked = cookiePair(await sessionCookie(UID, 'password', env));
     await env.DB.prepare('UPDATE users SET token_version = 9 WHERE id = ?').bind(UID).run();
 
     await me(revoked);
@@ -512,7 +513,7 @@ describe('signing out everywhere', () => {
 
   it('reaches a token issued before sessions existed, which nothing else can', async () => {
     // The row is what ends a modern session; token_version is the only handle on an older token.
-    const legacy = cookiePair(await issueSessionCookie(UID, 'password', env));
+    const legacy = cookiePair(await sessionCookie(UID, 'password', env));
     await env.DB.prepare('DELETE FROM auth_sessions').run();
     // With no row and no sid check to fail, it would otherwise still be a valid token.
     const current = await signIn(CHROME_LINUX);

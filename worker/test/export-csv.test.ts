@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // CSV export: the formula-injection guard must quote attacker-shaped STRINGS but leave
 // plain numbers alone — it used to turn every negative balance into text ("'-2392.21").
@@ -23,7 +23,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (profile_id, name, type, currency, balance) VALUES (600, '=HYPERLINK(\"http://evil\")', 'giro', 'USD', 10)"
     ),
   ]);
-  cookie = (await issueSessionCookie(60, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(60, 'password', env)).split(';')[0];
 });
 
 describe('GET /api/export/accounts (CSV)', () => {
