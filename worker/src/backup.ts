@@ -393,21 +393,6 @@ function validateBackup(data: NormalizedBackup): Map<number, Uint8Array> {
   data.receipts.forEach((row, index) =>
     requireReference(row, 'transaction_id', transactionIds, `receipts[${index}]`)
   );
-  data.importSources.forEach((row, index) => {
-    if (row.kind !== undefined && !isImportSourceKind(row.kind)) {
-      throw new HttpError(
-        422,
-        `importSources[${index}].kind "${String(row.kind)}" is not a source`
-      );
-    }
-    if (row.schedule !== undefined && !isImportSourceSchedule(row.schedule)) {
-      throw new HttpError(
-        422,
-        `importSources[${index}].schedule "${String(row.schedule)}" is not a schedule`
-      );
-    }
-  });
-
   // The keys D1 holds unique, checked here so a file that repeats one is a 422 naming it rather
   // than a constraint failure halfway through the staged restore. Same comparison as the
   // constraint: exact, case-sensitive names.
@@ -953,8 +938,10 @@ export async function restoreBackup(
       withProfile(row, `importLogs[${index}]`)
     );
     // A source on a schedule our machines run comes back on it only if the plan includes that;
-    // otherwise it comes back manual, as the import-sources routes would have it. A default
-    // account the file does not carry is no default.
+    // otherwise it comes back manual, as the import-sources routes would have it. A kind or a
+    // schedule there is no such thing as comes back as a sheet on manual, for the person to open
+    // and fix, as local-first restores it. A default account the file does not carry is no
+    // default.
     const plan = await db.first<{ plan: string | null }>(
       DB,
       'SELECT plan FROM users WHERE id = ?',

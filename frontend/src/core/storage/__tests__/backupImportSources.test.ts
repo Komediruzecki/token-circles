@@ -93,6 +93,21 @@ describe('a local-first backup and its import sources', () => {
     ])
   })
 
+  it('restores a kind or a schedule there is no such thing as as a sheet on manual', async () => {
+    const file: ExportData = {
+      ...(await adapter.exportData()),
+      importSources: [
+        { id: 9, profile_id: 1, kind: 'ftp', label: 'Odd kind', schedule: 'daily' },
+        { id: 10, profile_id: 1, kind: 'google_sheet', label: 'Odd schedule', schedule: 'hourly' },
+      ],
+    }
+    await adapter.importData(file)
+    expect((await sources()).map((s) => [s.label, s.kind, s.schedule])).toEqual([
+      ['Odd kind', 'google_sheet', 'daily'],
+      ['Odd schedule', 'google_sheet', 'manual'],
+    ])
+  })
+
   it('refuses a source of a profile the file does not carry, and keeps what was there', async () => {
     const file: ExportData = {
       ...(await adapter.exportData()),

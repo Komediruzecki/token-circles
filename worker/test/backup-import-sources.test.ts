@@ -10,7 +10,8 @@
  * - takes the JSON columns as objects or as text, as a file from either runtime has them;
  * - puts a source on a schedule our machines run (on open, daily) back on it only when the plan
  *   includes automated imports, and on manual otherwise, as the import-sources routes would;
- * - refuses a kind or a schedule there is no such thing as, before anything is staged.
+ * - restores a kind or a schedule there is no such thing as as a sheet on manual, which the
+ *   person can open and fix, as local-first does.
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -189,15 +190,22 @@ describe('a backup and its import sources', () => {
     expect((await stored()).map((s) => s.schedule)).toEqual(['daily']);
   });
 
-  it('refuses a kind or a schedule there is no such thing as, and keeps what was there', async () => {
-    for (const [over, words] of [
-      [{ kind: 'ftp' }, 'importSources[0].kind "ftp" is not a source'],
-      [{ schedule: 'hourly' }, 'importSources[0].schedule "hourly" is not a schedule'],
-    ] as const) {
-      const res = await send('POST', '/api/import', backup([source(over)]));
-      expect(res.status).toBe(422);
-      expect(await res.json()).toEqual({ error: words });
-    }
-    expect((await stored()).map((s) => s.label)).toEqual(['Old sheet']);
+  it('restores a kind or a schedule there is no such thing as as a sheet on manual', async () => {
+    const res = await send(
+      'POST',
+      '/api/import',
+      backup([source({ kind: 'ftp', label: 'Odd kind' }), source({ id: 8, schedule: 'hourly' })])
+    );
+    expect(res.status).toBe(200);
+    const { results } = await env.DB.prepare(
+      `SELECT s.label, s.kind, s.schedule FROM import_sources s JOIN profiles p ON p.id = s.profile_id
+       WHERE p.user_id = ? ORDER BY s.id`
+    )
+      .bind(USER_ID)
+      .all();
+    expect(results).toEqual([
+      { label: 'Odd kind', kind: 'google_sheet', schedule: 'manual' },
+      { label: 'Bank ledger', kind: 'google_sheet', schedule: 'manual' },
+    ]);
   });
 });
