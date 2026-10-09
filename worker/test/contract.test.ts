@@ -249,6 +249,14 @@ function registrations(): string[] {
   return found;
 }
 
+/**
+ * A route as Hono matches it: a parameter's name plays no part, so `/x/:id` and `/x/:key` are one
+ * route, and the second registration of it is never reached either.
+ */
+function asMatched(route: string): string {
+  return route.replace(/:\w+/g, ':');
+}
+
 // A scenario is a whole journey of up to a few hundred requests through SELF.fetch on D1, not one
 // call. The heaviest (a profile holding every kind of row, then removed or cleared) take 12-16s
 // on CI's shared vCPUs, against the 20s every other test gets, and one run crossed it. A minute
@@ -316,7 +324,7 @@ describe('contract: every route', () => {
     expect(found.length, 'the route sources were read').toBeGreaterThan(CONTRACT_ROUTES.length);
     const seen = new Set<string>();
     expect(
-      found.filter((k) => seen.has(k) || !seen.add(k)),
+      found.filter((k) => seen.has(asMatched(k)) || !seen.add(asMatched(k))),
       'routes registered twice: the second is never reached'
     ).toEqual([]);
   });
