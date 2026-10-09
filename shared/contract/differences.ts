@@ -47,8 +47,6 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
   'portfolio-prices':
     'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
-  'import-upload-answer':
-    "POST /api/import/upload answers { headers, rows, selectedSheet, sheetNames } with each row a list of cells on the Worker, but { session_id, filename, rows, row_count } with each row an object keyed by its column in local-first. The Import page reads the Worker's shape: in cloud mode an upload goes on to the mapping step with every row of the file, and in local-first it stops at the upload step with \"Cannot read properties of undefined (reading '0')\", as the page reads sheetNames[0], which local-first does not send. Slice 4 (import).",
   'export-by-type':
     'GET /api/export/:type answers chosen columns on the Worker (the category by name; JSON as a list of rows) and other columns in local-first (the category by id; JSON as every field of each row inside { <kind>: [...] }). Settings saves either answer as the file, so the same export gives a different file in each mode. Slice 4 (settings).',
   'settings-scope':

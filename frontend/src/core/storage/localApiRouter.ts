@@ -746,7 +746,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/import\/file-sheet$/,
     methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.importFileSheet(ctx.body) }),
+    handler: dispatch({ POST: () => h.importFileSheet() }),
   },
   {
     pattern: /^\/import\/execute$/,

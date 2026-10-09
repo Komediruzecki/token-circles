@@ -8,6 +8,12 @@ import {
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
+import {
+  IMPORT_UPLOAD_MESSAGES,
+  readUploadedSheet,
+  uploadRefusal,
+} from '../../../../../shared/importUpload'
+import { refusalOf } from '../../../../../shared/refusal'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
@@ -15,8 +21,7 @@ import { normalizeCurrencyCode } from '../../currencies'
 import { parseImportNumber } from '../../importNumber'
 import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
-import { adapter, json } from './helpers'
-import type { WorkBook } from 'xlsx'
+import { adapter, json, refuse } from './helpers'
 import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
@@ -104,80 +109,6 @@ export function normalizeDate(v: unknown): string {
     if (y >= 1971 && y <= 2100) return `${y}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`
   }
   return ''
-}
-
-interface ImportSession {
-  workbook: WorkBook
-  uploadedAt: number
-}
-
-const importSessions = new Map<string, ImportSession>()
-const SESSION_TTL_MS = 30 * 60 * 1000 // 30 minutes
-const MAX_SESSIONS = 20
-// Largest import file we parse in-memory (audit S8). Guards against a huge/crafted
-// workbook exhausting memory; the receipts path caps uploads similarly.
-const MAX_IMPORT_BYTES = 10 * 1024 * 1024 // 10 MB
-
-/** Store an upload session under a random id, evicting expired ones and bounding the map
- *  size so it can't grow without limit (audit I6). */
-function putSession(workbook: WorkBook): string {
-  const now = Date.now()
-  for (const [id, s] of importSessions) {
-    if (now - s.uploadedAt > SESSION_TTL_MS) importSessions.delete(id)
-  }
-  while (importSessions.size >= MAX_SESSIONS) {
-    let oldestId: string | null = null
-    let oldestAt = Infinity
-    for (const [id, s] of importSessions) {
-      if (s.uploadedAt < oldestAt) {
-        oldestAt = s.uploadedAt
-        oldestId = id
-      }
-    }
-    if (oldestId === null) break
-    importSessions.delete(oldestId)
-  }
-  const id = globalThis.crypto.randomUUID()
-  importSessions.set(id, { workbook, uploadedAt: now })
-  return id
-}
-
-async function parseSheetData(workbook: WorkBook) {
-  const sheetName = workbook.SheetNames[0] || 'Sheet1'
-  const sheet = workbook.Sheets[sheetName]
-  const XLSX = await import('xlsx')
-  const raw: Record<string, unknown>[] = XLSX.utils.sheet_to_json(sheet, { defval: '' })
-
-  const results: Record<string, unknown>[] = []
-  for (const row of raw) {
-    const cleaned: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(row)) {
-      const lk = key.toLowerCase().trim()
-      if (lk === 'date' || lk === 'datum') {
-        cleaned.date = normalizeDate(value) || value
-      } else if (lk === 'description' || lk === 'desc') {
-        cleaned.description = value
-      } else if (lk === 'amount' || lk === 'bedrag') {
-        cleaned.amount = value
-      } else if (lk === 'type') {
-        cleaned.type = value
-      } else if (lk === 'category' || lk === 'categorie') {
-        cleaned.category = value
-      } else if (lk === 'notes' || lk === 'note' || lk === 'notities') {
-        cleaned.notes = value
-      } else if (lk === 'beneficiary' || lk === 'begunstigde') {
-        cleaned.beneficiary = value
-      } else if (lk === 'payor' || lk === 'betaler') {
-        cleaned.payor = value
-      } else {
-        cleaned[key] = value
-      }
-    }
-    if (cleaned.date || cleaned.description || cleaned.amount) {
-      results.push(cleaned)
-    }
-  }
-  return results
 }
 
 /** Dedup key from the RESOLVED fields (audit A2): date, normalized-lowercased
@@ -270,122 +201,45 @@ async function detectNewAccounts(
   return out
 }
 
-async function detectDuplicates(
-  rows: Record<string, unknown>[]
-): Promise<{ duplicates: number[]; clean: Record<string, unknown>[] }> {
-  const db = await getDB()
-  const profileId = await adapter.getCurrentProfileId()
-  const existing = await db.getAllFromIndex('transactions', 'by_profile', profileId)
-
-  // Bucket existing transactions by (date, normalized-description) ONCE so the
-  // per-row check is a small local scan instead of a full O(M) find per row.
-  // The matching key mirrors the original find() exactly: date and normalized
-  // description must be equal, and amounts must be within 0.01 (a penny). The
-  // amount tolerance is not an equivalence relation, so it stays a real
-  // comparison — but it only ever needs to run against existing rows that
-  // already share the same (date, description), which is what this map groups.
-  // The two key parts are joined with a NUL byte so the (date, description) pair
-  // round-trips unambiguously and can never collide across different pairs (a
-  // NUL never appears in a date or a description), keeping this exactly as
-  // strict as the original tuple comparison.
-  // Key is date + normalized description; amount is matched within a penny inside the bucket.
-  // (Account/type/currency aren't reliably known at dedup time — type is inferred from the amount
-  // sign later, and the account is resolved in importExecute — so account/type-aware dedup would
-  // need dedup moved after resolution; tracked as a follow-up.) NUL-joined so the parts
-  // round-trip unambiguously. toStr guards a null description (previously threw, aborting import).
-  const keyOf = (date: string, desc: string) => `${date}\x00${desc}`
-  const existingByKey = new Map<string, number[]>()
-  for (const t of existing) {
-    const k = keyOf(toStr(t.date), toStr(t.description).toLowerCase().trim())
-    const amt = Number(t.amount)
-    const bucket = existingByKey.get(k)
-    if (bucket) bucket.push(amt)
-    else existingByKey.set(k, [amt])
-  }
-
-  const duplicates: number[] = []
-  const clean: Record<string, unknown>[] = []
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    // Same today-default the import applies to a dateless row, so this preview keys the row on
-    // the date it will actually be stored under rather than on the empty cell. (The insert path
-    // dedups separately, via resolvedDedupKey on the resolved date — this is the upload preview.)
-    const date = normalizeDate(row.date) || toStr(row.date) || isoToday()
-    const desc = toStr(row.description).toLowerCase().trim()
-    // Locale-aware amount parse so a European-formatted import ("1.234,56") matches the stored
-    // value instead of being read as 1.234 and missing the duplicate (audit I1/I4).
-    const amount = parseAmount(row.amount)
-
-    // Multiplicity-aware: consume one matching existing amount per row, so N identical
-    // import rows are flagged only up to the number that already exist in the data — the
-    // rest are genuine repeats and count as new.
-    const bucket = existingByKey.get(keyOf(date, desc))
-    const matchAt =
-      bucket && Number.isFinite(amount)
-        ? bucket.findIndex((amt) => Math.abs(amt - amount) < 0.01)
-        : -1
-    if (matchAt !== -1) {
-      bucket!.splice(matchAt, 1)
-      duplicates.push(i)
-    } else clean.push(row)
-  }
-
-  return { duplicates, clean }
-}
-
+/**
+ * A file uploaded on the Import page, read as the Worker reads it (shared/importUpload.ts): its
+ * header row, the rows under it as lists of cells, and the workbook's sheets. Stateless: the page
+ * chooses another sheet by uploading the file again with that sheet's `sheetName`.
+ */
 export async function importUpload(body: unknown): Promise<Response> {
-  try {
-    const formData = body as FormData
-    const file = formData.get('file') as File | null
-    if (!file) return json({ error: 'No file uploaded' }, 400)
-    if (file.size > MAX_IMPORT_BYTES) {
-      return json({ error: 'File too large (max 10 MB)' }, 413)
-    }
-
-    const ext = file.name.split('.').pop()?.toLowerCase()
-    const buffer = await file.arrayBuffer()
-    let workbook: WorkBook
-
-    const XLSX = await import('xlsx')
-    if (ext === 'csv') {
-      const text = new TextDecoder().decode(buffer)
-      workbook = XLSX.read(text, { type: 'string', raw: true })
-    } else {
-      workbook = XLSX.read(buffer, { type: 'array' })
-    }
-
-    const sessionId = putSession(workbook)
-
-    const rows = await parseSheetData(workbook)
-    return json({ session_id: sessionId, filename: file.name, rows, row_count: rows.length })
-  } catch (err) {
-    return json({ error: (err as Error).message }, 500)
+  const form = body instanceof FormData ? body : null
+  const entry = form?.get('file') ?? form?.get('import') ?? null
+  const file = entry instanceof File ? entry : null
+  const refused = uploadRefusal(file)
+  if (refused || !file) {
+    const answer = refused ?? { status: 400, fields: { file: IMPORT_UPLOAD_MESSAGES.file } }
+    return json(refusalOf(answer.fields), answer.status)
   }
+  const requested = form?.get('sheetName')
+  const XLSX = await import('xlsx')
+  const sheet = readUploadedSheet(
+    XLSX,
+    {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+    },
+    typeof requested === 'string' ? requested : undefined
+  )
+  if (!sheet.ok) return refuse(sheet.fields)
+  return json(sheet.value)
 }
 
-export async function importFileSheet(body: unknown): Promise<Response> {
-  try {
-    const data = body as Record<string, unknown>
-    const sessionId = toStr(data.session_id)
-    const session = importSessions.get(sessionId)
-    if (!session) return json({ error: 'Session expired or not found' }, 404)
-
-    const rows = await parseSheetData(session.workbook)
-    const { duplicates, clean } = await detectDuplicates(rows)
-    // Category-column values with no matching existing category — the categories an
-    // import would create, surfaced so the UI can confirm before creating (audit B5).
-    const newCategories = await detectNewCategories(rows)
-    return json({
-      rows,
-      total: rows.length,
-      new_items: clean.length,
-      duplicate_indices: duplicates,
-      new_categories: newCategories,
-    })
-  } catch (err) {
-    return json({ error: (err as Error).message }, 500)
-  }
+/**
+ * The old pick-a-sheet step after an upload, which kept the workbook in memory under a session.
+ * Retired as the Worker's is: the page uploads the file again with the sheet's name.
+ */
+export async function importFileSheet(): Promise<Response> {
+  return json(
+    { error: 'Re-upload via /api/import/upload with a sheetName field (stateless Worker flow).' },
+    410
+  )
 }
 
 export async function importGoogleSheet(body: unknown): Promise<Response> {
@@ -613,7 +467,8 @@ export async function importExecute(body: unknown): Promise<Response> {
       throw error
     }
 
-    // Accept rows directly (from paste/Google Sheets) or via session_id (from file upload)
+    // The rows come with the request, as on the Worker, from every tab of the Import page: a
+    // file, a pasted CSV or a Google Sheet.
     let rows: Record<string, unknown>[]
     if (Array.isArray(data.rows)) {
       // Convert string[][] from frontend into named-object rows using the mapping
@@ -632,10 +487,7 @@ export async function importExecute(body: unknown): Promise<Response> {
         return obj
       })
     } else {
-      const sessionId = toStr(data.session_id)
-      const session = importSessions.get(sessionId)
-      if (!session) return json({ error: 'Session expired or not found' }, 404)
-      rows = await parseSheetData(session.workbook)
+      return json({ error: 'Missing data' }, 400)
     }
     // Duplicate detection now runs AFTER account/type/currency resolution, inside the
     // row loop below (audit A2) — so `clean` here is just all rows, not the

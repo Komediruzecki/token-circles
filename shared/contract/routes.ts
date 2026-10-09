@@ -334,7 +334,7 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
   'POST ^\\/profiles\\/reseed-demo$':
     'Replaces every profile with the three example profiles of the browser demo, which only local-first has; the Danger Zone offers it there only, and the Worker answers it 410 Gone.',
   'POST ^\\/import\\/file-sheet$':
-    'The old pick-a-sheet step after an upload, which the Import page calls in neither mode; the Worker answers it 410 Gone.',
+    'Retired: answers 410 Gone, as the Worker does. The old pick-a-sheet step after an upload; the Import page reads a file in one upload now, and calls this in neither mode.',
   'GET ^\\/exchange-rates$': 'For api.getExchangeRates, which nothing in the app calls.',
   'GET ^\\/exchange-rates\\/([A-Z]{3})\\/([A-Z]{3})$':
     'For api.getExchangeRate, which nothing in the app calls.',
