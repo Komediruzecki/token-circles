@@ -230,10 +230,15 @@ for (const mode of MODES) {
       await expect(nameField).toHaveAttribute('aria-invalid', 'true')
       await expect(nameField).toHaveAccessibleDescription('Give the profile a name.')
       await expect(nameField).toBeFocused()
+      // Signed in, nothing went over the network. Local-first's router is in the page, and its
+      // profiles are this browser's alone: none was added. (The Worker's list is the account's,
+      // which other specs add to while this one runs.)
       expect(writes).toEqual([])
-      expect(await viaApp<StoredProfile[]>(page, 'GET', '/api/profiles')).toHaveLength(
-        before.length
-      )
+      if (mode.name === 'local-first') {
+        expect(await viaApp<StoredProfile[]>(page, 'GET', '/api/profiles')).toHaveLength(
+          before.length
+        )
+      }
 
       await nameField.fill(name)
       await expect(nameField).not.toHaveAttribute('aria-invalid', 'true')
