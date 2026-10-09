@@ -555,3 +555,28 @@ reportsRoutes.delete('/api/reports/custom/:id', requireAuth, async (c) => {
   if (!result.meta.changes) return c.json({ error: 'Report not found' }, 404);
   return c.json({ ok: true });
 });
+
+// ── Saved Reports ────────────────────────────────────────────────────
+reportsRoutes.get('/api/reports/saved', requireAuth, async (c) => {
+  const rows = await db.all<CustomReportRow>(
+    c.env.DB,
+    'SELECT id, name, type, config, created_at, updated_at FROM custom_reports WHERE user_id = ? ORDER BY created_at DESC',
+    c.get('userId')
+  );
+  return c.json({ reports: rows.map(customReportView) });
+});
+
+reportsRoutes.post('/api/reports/save', requireAuth, async (c) => {
+  const b = (await c.req.json()) as Record<string, any>;
+  if (!b.name) return c.json({ error: 'Report name is required' }, 400);
+  const type = b.type || 'custom';
+  const result = await db.run(
+    c.env.DB,
+    'INSERT INTO custom_reports (user_id, name, type, config) VALUES (?, ?, ?, ?)',
+    c.get('userId'),
+    b.name,
+    type,
+    JSON.stringify({ params: b.params || {} })
+  );
+  return c.json({ id: result.meta.last_row_id as number, name: b.name, ok: true });
+});

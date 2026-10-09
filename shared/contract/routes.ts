@@ -262,6 +262,10 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
     'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'PUT /api/reports/custom/:id':
     'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'POST /api/reports/save':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
+  'GET /api/reports/saved':
+    'Nothing in the app calls it: Settings makes its reports in the browser from /api/transactions and /api/categories, in both modes.',
   'POST /api/support/contact': 'Support messages are sent by the Worker.',
   'POST /api/auth/2fa/disable': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/2fa/enable': 'Signing in. Local-first has no account to sign in to.',
