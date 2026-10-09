@@ -93,6 +93,29 @@ export function cellText(cell: unknown): string {
   return String(cell);
 }
 
+/**
+ * Whether `bytes` are a complete zip, which a workbook saved as .xlsx is: a zip is read from the
+ * end-of-central-directory record at its end (22 bytes, then a comment of up to 65535), and one
+ * without it is not a whole file. Anything that does not start as a zip passes.
+ */
+export function isCompleteUpload(bytes: Uint8Array): boolean {
+  const startsAsZip =
+    bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2]! < 9 && bytes[3]! < 9;
+  if (!startsAsZip) return true;
+  const last = bytes.length - 22;
+  for (let at = last; at >= 0 && at >= last - 0xffff; at--) {
+    if (
+      bytes[at] === 0x50 &&
+      bytes[at + 1] === 0x4b &&
+      bytes[at + 2] === 5 &&
+      bytes[at + 3] === 6
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Whether the file is read as CSV text rather than as a workbook. */
 export function isCsvUpload(file: { name: string; type: string }): boolean {
   return /\.csv$/i.test(file.name) || file.type === 'text/csv';
@@ -100,7 +123,8 @@ export function isCsvUpload(file: { name: string; type: string }): boolean {
 
 /**
  * The sheet `requested` names, or the first, as its header row and the rows under it. A blank row
- * is left out. Refused at `file` when a workbook has no sheets, or is not a workbook at all.
+ * is left out. Refused at `file` when the file is not a complete one, a workbook has no sheets, or
+ * it is not a workbook at all.
  */
 export function readUploadedSheet(
   xlsx: SheetReader,
@@ -110,6 +134,9 @@ export function readUploadedSheet(
   if (isCsvUpload(file)) {
     const { headers, rows } = parseImportCsv(new TextDecoder().decode(file.bytes));
     return { ok: true, value: { headers, rows, selectedSheet: 'CSV', sheetNames: ['CSV'] } };
+  }
+  if (!isCompleteUpload(file.bytes)) {
+    return { ok: false, fields: { file: IMPORT_UPLOAD_MESSAGES.unreadable } };
   }
   let workbook: ReturnType<SheetReader['read']>;
   try {

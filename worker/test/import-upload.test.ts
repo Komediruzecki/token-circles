@@ -112,4 +112,12 @@ describe('POST /api/import/upload', () => {
       },
     });
   });
+
+  it('refuses a workbook cut short at the file', async () => {
+    const whole = workbook();
+    expect(await upload(new File([whole.slice(0, whole.length - 30)], 'statement.xlsx'))).toEqual({
+      status: 400,
+      body: { error: M.unreadable, fields: { file: M.unreadable } },
+    });
+  });
 });
