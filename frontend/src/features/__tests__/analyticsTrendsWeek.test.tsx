@@ -12,6 +12,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as fetching from '../../core/apiFetch'
 import { setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { setPeriod } from '../../core/periodStore'
@@ -121,6 +122,7 @@ afterEach(() => {
   dispose = undefined
   host.remove()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 const selects = () => [...host.querySelectorAll('select')]
@@ -196,6 +198,17 @@ describe('the stacked trends week', () => {
 
   it('compared with a month that lacks it, draws the main month alone', async () => {
     await openWeek6OfMarch2025()
+    // The answers the page receives for February, read before the page reads them.
+    const february: Array<Promise<Response>> = []
+    const real = fetching.apiFetch
+    vi.spyOn(fetching, 'apiFetch').mockImplementation((url, init) => {
+      const answer = real(url, init)
+      const [path, query] = url.split('?')
+      if (path?.endsWith('/category-trends') && new URLSearchParams(query).get('month') === '2') {
+        february.push(answer.then((reply) => reply.clone()))
+      }
+      return answer
+    })
     const compare = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Compare')
     expect(compare, 'no Compare button').toBeDefined()
     compare!.click()
@@ -207,14 +220,14 @@ describe('the stacked trends week', () => {
     )
 
     await vi.waitFor(() => {
-      expect(trends()?.datasets.map((d) => d.label)).toEqual(['Food (Mar 2025)'])
+      expect(february).toHaveLength(1)
     })
+    expect(await (await february[0]!).json()).toEqual({ labels: [], datasets: [], numDays: 0 })
+    await settle()
     expect(trends()).toEqual({
       labels: SUNDAY_TO_SATURDAY,
       datasets: [{ label: 'Food (Mar 2025)', data: [0, 9.5, 0, 0, 0, 0, 0] }],
     })
     expect(host.textContent).not.toContain('No category trend data available')
-    // The compare answer arrived, with nothing in it: the note under the chart shows only then.
-    expect(host.textContent).toContain('Dashed outlines show February 2025')
   })
 })
