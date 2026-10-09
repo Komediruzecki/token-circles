@@ -71,7 +71,9 @@ function linkIn(mail: Mail | undefined): string {
 /** The newest link mailed to `address`. */
 const latestLinkTo = (address: string) => linkIn(mailsTo(address).at(-1));
 
-const open = (link: string) => SELF.fetch(link, { redirect: 'manual' });
+/** Open a link, by default in the browser where the account is signed in. */
+const open = (link: string, session: string | null = cookie) =>
+  SELF.fetch(link, { redirect: 'manual', headers: session === null ? {} : { Cookie: session } });
 
 /** The token in a password reset mail, read the way forgot-password.test.ts reads it. */
 function resetTokenIn(mail: Mail | undefined): string {
@@ -542,6 +544,38 @@ describe('the link, when the work behind it fails', () => {
 
     expect(res.status).toBe(302);
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=server_error`);
+  });
+});
+
+describe('the link, opened where the account is not signed in', () => {
+  it('asks to sign in and moves nothing, and the link still works once signed in', async () => {
+    await seed(1);
+    await save(NEW);
+    const link = latestLinkTo(NEW);
+
+    // A browser with no session.
+    const res = await open(link, null);
+
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required&change=1`);
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+    expect(await unusedLinks()).toEqual([
+      expect.objectContaining({ email: NEW, purpose: 'change' }),
+    ]);
+    expect((await open(link)).headers.get('Location')).toBe(`${APP}/#everified=1&change=1`);
+    expect(await account()).toEqual({ email: NEW, email_verified: 1 });
+  });
+
+  it("asks to sign in when the session is another account's", async () => {
+    await seed(1);
+    await save(NEW);
+    const other = (await sessionCookie(OTHER, 'password', env)).split(';')[0];
+
+    const res = await open(latestLinkTo(NEW), other);
+
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required&change=1`);
+    expect(await account()).toEqual({ email: OLD, email_verified: 1 });
+    expect(await account(OTHER)).toEqual({ email: TAKEN, email_verified: 1 });
+    expect(await unusedLinks()).toHaveLength(1);
   });
 });
 

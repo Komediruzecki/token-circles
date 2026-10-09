@@ -4,6 +4,7 @@ import type { AppEnv } from '../index';
 import * as db from '../db';
 import { deviceLabel } from '../deviceLabel';
 import {
+  authenticateRequest,
   clearedAccess,
   clearedWorthSaying,
   clearUnconfirmedAccess,
@@ -22,12 +23,17 @@ import {
   TRY_AGAIN,
 } from '../auth';
 import { sendMail } from '../email';
+import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
 import {
-  applyEmailChange,
-  cancelEmailChange,
-  pendingEmailChange,
-  sendEmailChangeLink,
-} from '../email-change';
+  clearedMarker,
+  EMAIL_LINK_COLUMNS,
+  EMAIL_LINK_FINISH_PATH,
+  linkExpired,
+  markedLink,
+  markerFor,
+  spendLink,
+  type EmailLink,
+} from '../email-link';
 import {
   createEmailVerification,
   randomToken,
@@ -454,6 +460,12 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // Two kinds of link land here (migration 0031): one confirms the address the account has, the
 // other moves the account to the address it was mailed to. The second adds `change=1` to every
 // answer that names its outcome, so the app can say which happened.
+//
+// Either kind is spent only with its own account's session. The session cookie is SameSite=Lax
+// on the parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation
+// from a mail client. Opened without that session, the link stays unspent, the answer is
+// `signin_required`, and the browser keeps a marker that finishes the link once its account
+// signs in there (email-link.ts, POST /api/auth/email-link/finish).
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -467,56 +479,63 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
 
   const token = c.req.query('token') ?? '';
   if (!token) return fail('missing_token');
-  // Same shape as the reset link: the read finds the token, the conditional UPDATE below decides
-  // whether it is still spendable. Checking `used_at` here as well would let the read say yes
-  // while the write says no.
-  const row = await c.env.DB.prepare(
-    'SELECT id, user_id, email, expires_at, purpose FROM email_verifications WHERE token_hash = ?'
+  // The read finds the token; spendLink's conditional UPDATE decides whether it is still
+  // spendable, so a read that says yes can never disagree with the write.
+  const link = await c.env.DB.prepare(
+    `SELECT ${EMAIL_LINK_COLUMNS} FROM email_verifications WHERE token_hash = ?`
   )
     .bind(await sha256Hex(token))
-    .first<{ id: number; user_id: number; email: string; expires_at: string; purpose: string }>();
+    .first<EmailLink>();
   // One message for an unknown token and one for an already-used one would let a caller probe
   // token state, so both land here.
-  if (!row) return fail('invalid_or_used');
-  // Single-use: spend the token whatever the outcome below, so a link that failed for any reason
-  // cannot be retried until it happens to succeed. `AND used_at IS NULL` makes spending it the
-  // claim rather than a follow-up to one — the SELECT above is a read, and two requests carrying
-  // the same link (a mail client prefetching while the person clicks) both pass a read.
-  const claimed = await c.env.DB.prepare(
-    "UPDATE email_verifications SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL"
-  )
-    .bind(row.id)
-    .run();
-  if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
-  const change = row.purpose === 'change';
-  if (Date.parse(row.expires_at) < Date.now()) return fail('expired', change);
-  // The link is spent. Whatever goes wrong from here goes back to the app as a reason: the person
-  // arrived by opening a link in a mail, so an error page would leave them nowhere.
-  try {
-    if (change) {
-      // The account moves to the address this link was mailed to, unless another account has it
-      // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
-      const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
-      if (outcome === 'taken') return fail('email_taken', true);
-      if (outcome === 'gone') return fail('invalid_or_used');
-      return back('everified=1&change=1');
-    }
-    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
-      .bind(row.user_id)
-      .first<{ email: string | null }>();
-    // The address has to still be the one this link was sent to. Otherwise changing the address
-    // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
-    if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
-      return fail('invalid_or_used');
-    }
-    await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
-      .bind(row.user_id)
-      .run();
-    return back('everified=1');
-  } catch (e) {
-    console.error('An email link failed after it was spent:', e);
-    return fail('server_error', change);
+  if (!link) return fail('invalid_or_used');
+  const change = link.purpose === 'change';
+  const auth = await authenticateRequest(c.req.raw, c.env);
+  if (auth.user?.userId !== link.user_id) {
+    // No session, or another account's: the link waits for its own account to sign in here.
+    // Unless no sign-in can complete it: the account is gone, or the link is spent or expired.
+    const owner = await c.env.DB.prepare('SELECT 1 AS found FROM users WHERE id = ?')
+      .bind(link.user_id)
+      .first();
+    if (!owner || link.used_at !== null) return fail('invalid_or_used');
+    if (linkExpired(link)) return fail('expired', change);
+    const asked = fail('signin_required', change);
+    asked.headers.append('Set-Cookie', await markerFor(c.env, link));
+    return asked;
   }
+  const spent = await spendLink(c.env.DB, link);
+  if (spent === 'confirmed') return back('everified=1');
+  if (spent === 'changed') return back('everified=1&change=1');
+  if (spent === 'email_taken') return fail('email_taken', true);
+  if (spent === 'invalid') return fail('invalid_or_used');
+  return fail(spent, change);
+});
+
+/** What POST /api/auth/email-link/finish answers. */
+type EmailLinkOutcome = 'confirmed' | 'changed' | 'email_taken' | 'server_error' | 'none';
+
+// Finish the link this browser opened without its account's session (verify-email above). The
+// app calls this once someone signs in. The link finishes only for its own account's session,
+// and only while it is unspent and unexpired; the answer says what happened, for the app to show.
+//
+// The marker stays for another account's session, so signing out and in to the right account
+// still finishes the link. Every other answer clears it: the link finished, or it never can.
+authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
+  const rl = await enforce(c, `email-link-finish:${clientIp(c)}`, 30, 60);
+  if (rl) return rl;
+  const { link, carried } = await markedLink(c.req.raw, c.env, c.env.DB);
+  const done = (outcome: EmailLinkOutcome, change = false) => {
+    if (carried) c.header('Set-Cookie', clearedMarker(c.env));
+    return c.json({ outcome, change });
+  };
+  if (!link) return done('none');
+  const change = link.purpose === 'change';
+  if (link.user_id !== c.get('userId')) return c.json({ outcome: 'other_account', change });
+  // A spent or expired link is left exactly as it is.
+  if (link.used_at !== null || linkExpired(link)) return done('none');
+  const spent = await spendLink(c.env.DB, link);
+  if (spent === 'expired' || spent === 'invalid') return done('none');
+  return done(spent, change);
 });
 
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to

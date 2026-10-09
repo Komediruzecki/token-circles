@@ -79,6 +79,17 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
+  it('email change says a sign-in finishes it, with the address the account signs in with now', () => {
+    const link = 'https://api.example.com/verify';
+    const mail = renderEmailChange({ link, ttlHours: 24 });
+    expect(mail.html).toContain(
+      "The link works once and expires in 24 hours. If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes."
+    );
+    expect(mail.text).toContain(
+      `(it expires in 24 hours). If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do:\n${link}`
+    );
+  });
+
   it('email change link says only what is true for every account, Google ones included', () => {
     const mail = renderEmailChange({ link: 'https://api.example.com/verify', ttlHours: 24 });
     expect(mail.html).not.toMatch(/sign in with it/i);
