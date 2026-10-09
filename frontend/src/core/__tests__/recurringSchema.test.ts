@@ -256,6 +256,20 @@ describe('an edit', () => {
     })
   })
 
+  it('sends a rule that stays anything but a transfer to no second account', () => {
+    // Both runtimes cleared it on every edit before; an edit that sets one now leaves it out.
+    expect(checkRecurringEdit({ transfer_account_id: 4 }, stored)).toEqual({ ok: true, value: {} })
+    expect(
+      checkRecurringEdit({ type: 'income', transfer_account_id: 4 }, { ...stored, type: 'expense' })
+    ).toEqual({ ok: true, value: { type: 'income' } })
+    // An older rule that holds one has it cleared when the edit sends another.
+    const holding = { ...stored, transfer_account_id: 5 }
+    expect(checkRecurringEdit({ transfer_account_id: 4 }, holding)).toEqual({
+      ok: true,
+      value: { transfer_account_id: null },
+    })
+  })
+
   it('leaves the accounts of an older transfer alone when the edit does not touch them', () => {
     const halfTransfer = { ...stored, type: 'transfer', account_id: null }
     // The form sends the rule's own values back, with the notes changed.

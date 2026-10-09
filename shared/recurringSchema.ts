@@ -242,6 +242,13 @@ export function checkRecurringEdit(body: unknown, stored: object): Checked<Recur
   if (edit.type !== undefined && edit.type !== 'transfer' && !isBlank(row.transfer_account_id)) {
     edit.transfer_account_id = null;
   }
+  // Only a transfer goes to a second account: one sent for any other rule is left out, and one an
+  // older rule holds is cleared.
+  const typeAfter = edit.type ?? row.type;
+  if (typeAfter !== 'transfer' && !isBlank(edit.transfer_account_id)) {
+    if (isBlank(row.transfer_account_id)) delete edit.transfer_account_id;
+    else edit.transfer_account_id = null;
+  }
   if (ACCOUNT_FIELDS.some((field) => changed.has(field))) {
     // The rule after the edit. A field the edit gets wrong has its own message already.
     const after = (field: Field): unknown =>
