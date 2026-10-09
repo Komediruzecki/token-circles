@@ -24,7 +24,6 @@ import {
   budgetsZeroBasedSummary,
   dashboardCharts,
   emergencyFund,
-  importBulk,
   importExecute,
   loansCreate,
   loansList,
@@ -119,8 +118,9 @@ describe('east of UTC after local midnight (Tokyo, 08:30 on the 8th, UTC still o
   })
 
   it('an imported row without a date is dated today', async () => {
-    const res = await importBulk({
-      items: [{ description: 'undated', amount: '12.50', type: 'expense' }],
+    const res = await importExecute({
+      rows: [['undated', '-12.50']],
+      mapping: { description: 0, amount: 1 },
     })
     expect(res.status).toBeLessThan(300)
     expect(await storedTransactionDates()).toEqual(['2026-10-08'])
@@ -252,7 +252,7 @@ describe('west of UTC in the evening (Los Angeles, 20:30 on the 7th, UTC already
   })
 
   it('an imported row without a date is dated today, not tomorrow', async () => {
-    await importBulk({ items: [{ description: 'undated', amount: '12.50', type: 'expense' }] })
+    await importExecute({ rows: [['undated', '-12.50']], mapping: { description: 0, amount: 1 } })
     expect(await storedTransactionDates()).toEqual(['2026-10-07'])
   })
 })

@@ -784,16 +784,6 @@ const routes: RouteDef[] = [
       DELETE: (ctx) => h.importSourcesDelete(ctx.params, ctx.headers),
     }),
   },
-  {
-    pattern: /^\/import\/preview$/,
-    methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.importBulk(ctx.body) }),
-  },
-  {
-    pattern: /^\/import$/,
-    methods: ['POST'],
-    handler: dispatch({ POST: (ctx) => h.importUpload(ctx.body) }),
-  },
 
   // Exchange rates (cached from open.er-api.com)
   {

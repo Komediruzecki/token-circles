@@ -329,8 +329,6 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
     'Puts the default categories in the active profile; nothing in the app calls it.',
   'GET ^\\/tags\\/(\\d+)\\/transactions$':
     "A tag's transactions, for no caller: the Transactions page filters by tag in the page, on the rows it read.",
-  'POST ^\\/import\\/preview$':
-    'A bulk import of { items }, which nothing in the app sends: the Import page previews with POST /api/import/execute and dry_run, in both modes.',
   'POST ^\\/profiles\\/reseed-demo$':
     'Replaces every profile with the three example profiles of the browser demo, which only local-first has; the Danger Zone offers it there only, and the Worker answers it 410 Gone.',
   'POST ^\\/import\\/file-sheet$':
