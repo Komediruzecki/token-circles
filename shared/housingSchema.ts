@@ -23,7 +23,9 @@
  * - The type is one of the six the form offers; blank is other.
  * - The monthly amount is more than zero, at most two decimal places, below one trillion.
  * - The due month is 1 to 12; blank is the person's current month, what the form starts on. The
- *   due day is 1 to 31; blank is 1. They are stored together as `due_date`, "MM-DD".
+ *   due day is 1 to 31; blank is 1. The day is one the month has, 29 February included (an
+ *   expense falls due every year, leap years too). They are stored together as `due_date`,
+ *   "MM-DD".
  * - Autopay is on or off; blank is off. Notes are text.
  * - A field an edit leaves out is left alone, and so is one it sends back unchanged (decision 2).
  */
@@ -38,6 +40,7 @@ import {
   type MoneyWords,
   type Read,
 } from './fieldReaders';
+import { daysInMonth } from './calendarMonths';
 import type { Checked, FieldErrors } from './refusal';
 
 export const HOUSING_TYPES = [
@@ -69,6 +72,43 @@ export const HOUSING_MESSAGES = {
 } as const;
 
 const M = HOUSING_MESSAGES;
+
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/** The last day `month` can fall due on: 29 for February, which has one every leap year. */
+function lastDueDay(month: number): number {
+  return daysInMonth(2000, month);
+}
+
+function ordinal(day: number): string {
+  const tens = day % 100;
+  if (tens >= 11 && tens <= 13) return `${day}th`;
+  const suffix = ['th', 'st', 'nd', 'rd'][day % 10] ?? 'th';
+  return `${day}${suffix}`;
+}
+
+/**
+ * The words for a due day the month does not have, like 31 April: "April has no 31st. Enter a day
+ * from 1 to 30." Null when the month has the day.
+ */
+export function housingDayMissing(month: number, day: number): string | null {
+  const last = lastDueDay(month);
+  if (day <= last) return null;
+  return `${MONTH_NAMES[month - 1]} has no ${ordinal(day)}. Enter a day from 1 to ${last}.`;
+}
 
 /** The fields a housing body may carry, as the form names them. */
 export interface HousingInput {
@@ -182,6 +222,10 @@ export function checkHousingCreate(
   defaults: HousingDefaults
 ): Checked<HousingInput> {
   const { value, fields } = readFields(bodyOf(body), defaults);
+  if (fields.due_month === undefined && fields.due_day === undefined) {
+    const missing = housingDayMissing(value.due_month as number, value.due_day as number);
+    if (missing) fields.due_day = missing;
+  }
   return Object.keys(fields).length > 0
     ? { ok: false, fields }
     : { ok: true, value: value as HousingInput };
@@ -238,6 +282,17 @@ export function checkHousingEdit(
     if (!same) changed.add(field);
   }
   const { value, fields } = readFields(record, defaults, changed);
+  // The due date is written whole, so a changed month or day is checked with the other as it
+  // stays: moving the 31st to April is refused at the day.
+  let due: string | undefined;
+  const dueRead = fields.due_month === undefined && fields.due_day === undefined;
+  if (dueRead && (value.due_month !== undefined || value.due_day !== undefined)) {
+    const month = value.due_month ?? (kept.due_month as number | undefined) ?? defaults.month;
+    const day = value.due_day ?? (kept.due_day as number | undefined) ?? 1;
+    const missing = housingDayMissing(month, day);
+    if (missing) fields.due_day = missing;
+    else due = housingDueDate(month, day);
+  }
   if (Object.keys(fields).length > 0) return { ok: false, fields };
   const edit: Partial<HousingRow> = {};
   if (value.property_name !== undefined) edit.name = value.property_name;
@@ -245,11 +300,7 @@ export function checkHousingEdit(
   if (value.monthly_amount !== undefined) edit.monthly_amount = value.monthly_amount;
   if (value.autopay !== undefined) edit.autopay = value.autopay;
   if (value.notes !== undefined) edit.notes = value.notes;
-  if (value.due_month !== undefined || value.due_day !== undefined) {
-    const month = value.due_month ?? (kept.due_month as number | undefined) ?? defaults.month;
-    const day = value.due_day ?? (kept.due_day as number | undefined) ?? 1;
-    edit.due_date = housingDueDate(month, day);
-  }
+  if (due !== undefined) edit.due_date = due;
   return { ok: true, value: edit };
 }
 

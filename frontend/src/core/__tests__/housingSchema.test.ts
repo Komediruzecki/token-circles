@@ -117,6 +117,28 @@ describe('a new housing expense', () => {
     }
   })
 
+  it('refuses a due day the month does not have, and takes 29 February', () => {
+    expect(checkHousingCreate({ ...FORM, due_month: 4, due_day: 31 }, MARCH)).toEqual({
+      ok: false,
+      fields: { due_day: 'April has no 31st. Enter a day from 1 to 30.' },
+    })
+    expect(checkHousingCreate({ ...FORM, due_month: '2', due_day: '30' }, MARCH)).toEqual({
+      ok: false,
+      fields: { due_day: 'February has no 30th. Enter a day from 1 to 29.' },
+    })
+    expect(checkHousingCreate({ ...FORM, due_month: 2, due_day: 29 }, MARCH)).toMatchObject({
+      ok: true,
+      value: { due_month: 2, due_day: 29 },
+    })
+    // A body without a month falls due in the person's month, and is checked against that one.
+    expect(
+      checkHousingCreate({ ...FORM, due_month: undefined, due_day: 31 }, { month: 6 })
+    ).toEqual({
+      ok: false,
+      fields: { due_day: 'June has no 31st. Enter a day from 1 to 30.' },
+    })
+  })
+
   it('refuses autopay that is not yes or no, and notes that are not text', () => {
     expect(checkHousingCreate({ ...FORM, autopay: 'maybe', notes: 5 }, MARCH)).toEqual({
       ok: false,
@@ -215,6 +237,37 @@ describe('an edit', () => {
       ok: true,
       value: {},
     })
+  })
+
+  it('refuses a due date the month does not have, whichever of the two changes', () => {
+    const lastOfJanuary = { ...stored, due_date: '01-31' }
+    expect(checkHousingEdit({ due_month: 4 }, lastOfJanuary, MARCH)).toEqual({
+      ok: false,
+      fields: { due_day: 'April has no 31st. Enter a day from 1 to 30.' },
+    })
+    expect(checkHousingEdit({ due_day: 31 }, stored, MARCH)).toEqual({
+      ok: false,
+      fields: { due_day: 'April has no 31st. Enter a day from 1 to 30.' },
+    })
+    expect(checkHousingEdit({ due_day: 31, monthly_amount: 0 }, stored, MARCH)).toEqual({
+      ok: false,
+      fields: {
+        monthly_amount: M.amountPositive,
+        due_day: 'April has no 31st. Enter a day from 1 to 30.',
+      },
+    })
+    expect(checkHousingEdit({ due_month: 2, due_day: 29 }, stored, MARCH)).toEqual({
+      ok: true,
+      value: { due_date: '02-29' },
+    })
+    // A date an older version stored is sent back as it was, so it is not checked.
+    expect(
+      checkHousingEdit(
+        { ...FORM, due_month: 2, due_day: 30, notes: 'New' },
+        { ...stored, due_date: '02-30' },
+        MARCH
+      )
+    ).toEqual({ ok: true, value: { notes: 'New' } })
   })
 
   it('checks a changed field like a new expense', () => {

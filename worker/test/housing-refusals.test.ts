@@ -160,6 +160,19 @@ describe('POST /api/housing', () => {
     expect(await count()).toBe(2);
   });
 
+  it('refuses a due day its month does not have, and stores 29 February', async () => {
+    const april31 = 'April has no 31st. Enter a day from 1 to 30.';
+    expect(
+      await refusal(await call('POST', '/api/housing', { ...FORM, due_month: 4, due_day: 31 }))
+    ).toEqual({ status: 400, body: { error: april31, fields: { due_day: april31 } } });
+    expect(await count()).toBe(2);
+
+    const res = await call('POST', '/api/housing', { ...FORM, due_month: 2, due_day: 29 });
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()) as { id: number };
+    expect((await stored(id))?.due_date).toBe('02-29');
+  });
+
   it('stores what the Housing form sends and answers 201 with its id', async () => {
     const res = await call('POST', '/api/housing', FORM);
     expect(res.status).toBe(201);
