@@ -112,7 +112,12 @@ describe('scheduled imports are an Advanced feature', () => {
     SELF.fetch(`https://example.com/api/import-sources?profileId=${PROFILE[plan]}`, {
       method: 'POST',
       headers: { Cookie: COOKIES[plan], 'Content-Type': 'application/json' },
-      body: JSON.stringify({ kind: 'google_sheet', label: 'Bank', config: {}, schedule }),
+      body: JSON.stringify({
+        kind: 'google_sheet',
+        label: 'Bank',
+        config: { url: 'https://docs.google.com/spreadsheets/d/plan-gate/edit' },
+        schedule,
+      }),
     });
 
   it('Basic may keep a manual source', async () => {

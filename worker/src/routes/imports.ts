@@ -9,7 +9,8 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
 import { accept, HttpError } from '../http';
-import { summarizeFields } from '../../../shared/refusal';
+import { refusalOf, summarizeFields } from '../../../shared/refusal';
+import { readSheetUrl } from '../../../shared/importSourceSchema';
 import {
   IMPORT_UPLOAD_MAX_BYTES,
   IMPORT_UPLOAD_MESSAGES,
@@ -285,12 +286,10 @@ export async function fetchGoogleSheetRows(
   url: unknown,
   sheetName?: string
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  if (!url) return { status: 400, body: { error: 'URL is required' } };
-  const idMatch = String(url).match(/\/d\/([a-zA-Z0-9-_]+)/);
-  if (!idMatch) return { status: 400, body: { error: 'Invalid Google Sheets URL or ID' } };
-  const sheetId = idMatch[1];
-  const gidMatch = String(url).match(/[?&#]gid=([0-9]+)/);
-  const gid = gidMatch ? gidMatch[1] : null;
+  // The link's words are shared with local-first and the Import page (shared/importSourceSchema.ts).
+  const link = readSheetUrl(url);
+  if ('error' in link) return { status: 400, body: { ...refusalOf({ url: link.error }) } };
+  const { id: sheetId, gid } = link.value;
   try {
     const csvUrl = gid
       ? `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`
