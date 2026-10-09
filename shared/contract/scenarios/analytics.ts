@@ -143,10 +143,23 @@ export const analytics = [
     // Its weeks, Sunday to Saturday, and each week of it in the days its label names. Monday the
     // 31st starts the sixth week: the list used to end at the week of the 29th, so 30 and 31 March
     // were in no week, and week 2 of the trends answered 8 to 14 March under the label 2 to 8.
+    // The first and last weeks reach into February and April, and carry those days too.
     await addTransaction(api, expect, {
       description: 'Late groceries',
       amount: 9.5,
       date: '2025-03-31',
+      category_id: food,
+    });
+    await addTransaction(api, expect, {
+      description: 'February groceries',
+      amount: 6.25,
+      date: '2025-02-24',
+      category_id: food,
+    });
+    await addTransaction(api, expect, {
+      description: 'April groceries',
+      amount: 3.75,
+      date: '2025-04-02',
       category_id: food,
     });
     expect(await read(api, expect, '/api/analytics/weeks?year=2025&month=3')).toEqual({
@@ -178,10 +191,14 @@ export const analytics = [
     const week = (n: number) =>
       read(api, expect, `/api/analytics/category-trends?year=2025&type=expense&month=3&week=${n}`);
     const sundayToSaturday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    // Week 1 ends on Saturday 1 March, the rent.
+    // Week 1, 23 February to 1 March: the groceries of Monday 24 February, and the rent on
+    // Saturday 1 March.
     expect(await week(1)).toEqual({
       labels: sundayToSaturday,
-      datasets: [{ category: 'Rent', color: '#1565c0', data: [0, 0, 0, 0, 0, 0, 800] }],
+      datasets: [
+        { category: 'Rent', color: '#1565c0', data: [0, 0, 0, 0, 0, 0, 800] },
+        { category: 'Food', color: '#2e7d32', data: [0, 6.25, 0, 0, 0, 0, 0] },
+      ],
       numDays: 7,
     });
     // Week 2, 2 to 8 March, as its label says: nothing was spent.
@@ -192,10 +209,10 @@ export const analytics = [
       datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 45.5, 0, 0, 0, 0, 0] }],
       numDays: 7,
     });
-    // Week 6, 30 March to 5 April: the groceries of Monday the 31st.
+    // Week 6, 30 March to 5 April: the groceries of Monday the 31st and of Wednesday 2 April.
     expect(await week(6)).toEqual({
       labels: sundayToSaturday,
-      datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 9.5, 0, 0, 0, 0, 0] }],
+      datasets: [{ category: 'Food', color: '#2e7d32', data: [0, 9.5, 0, 3.75, 0, 0, 0] }],
       numDays: 7,
     });
     // A week the month does not have names no days, so it answers none: the whole month under a
