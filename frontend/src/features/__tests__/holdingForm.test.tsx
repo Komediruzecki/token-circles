@@ -323,6 +323,44 @@ describe('editing a holding', () => {
     expect(failureToasts()).toEqual([])
   })
 
+  it('sends back shares and a price stored past eight decimals as they were, when only the notes change', async () => {
+    await seed({ shares: 1.123456789123, purchase_price: 0.000012345678 })
+    await openEdit()
+    expect(field('Shares').value).toBe('1.123456789123')
+    expect(field('Purchase Price').value).toBe('0.000012345678')
+
+    type(field('Notes'), 'Paused')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect(await holdings()).toEqual([
+        expect.objectContaining({
+          shares: 1.123456789123,
+          purchase_price: 0.000012345678,
+          notes: 'Paused',
+        }),
+      ])
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('opens shares below a millionth written out, not as an exponent, and keeps them', async () => {
+    await seed({ shares: 0.0000001, purchase_price: 0.00000025 })
+    await openEdit()
+    expect(field('Shares').value).toBe('0.0000001')
+    expect(field('Purchase Price').value).toBe('0.00000025')
+
+    type(field('Notes'), 'Dust')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect(await holdings()).toEqual([
+        expect.objectContaining({ shares: 0.0000001, purchase_price: 0.00000025, notes: 'Dust' }),
+      ])
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
   it('saves a holding an older version stored, sending its values back as they were', async () => {
     await seed({ ticker: 'EXAMPLE-FUND-CLASS-A.XX', purchase_price: -5 })
     await openEdit()

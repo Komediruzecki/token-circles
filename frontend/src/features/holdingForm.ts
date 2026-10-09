@@ -12,8 +12,9 @@
  * as an edit of that holding: a refusal of the merge is marked at the field it names.
  *
  * Shares and the price are read with a comma or a dot for the decimals, as the Housing and Bills
- * dialogs read an amount. An edit opens with them rounded to eight decimal places, so a holding
- * stored with a sum's float error (0.30000000000000004 shares) opens as 0.3.
+ * dialogs read an amount. An edit opens with them to fifteen significant digits, written out: a
+ * holding stored with a sum's float error (0.30000000000000004 shares) opens as 0.3, and one stored
+ * with more decimals than a merge keeps (1.123456789123 shares) opens, and is sent back, as stored.
  */
 import { createSignal } from 'solid-js'
 import {
@@ -91,8 +92,13 @@ export function holdingBody(values: HoldingFormValues): Record<string, unknown> 
   }
 }
 
-/** Shares or a price as a field shows it: without the error floating point leaves on a sum. */
-const shown = (value: number): string => String(toHoldingPrecision(value))
+/**
+ * Shares or a price as a field shows it: to fifteen significant digits, which drops the error
+ * floating point leaves on a sum and keeps every digit that was stored, so an edit that leaves the
+ * field alone sends the stored value back. Written out, because the field cannot read "1e-7".
+ */
+const SHOWN = new Intl.NumberFormat('en-US', { useGrouping: false, maximumSignificantDigits: 15 })
+const shown = (value: number): string => SHOWN.format(value)
 
 /** What merging `buy` into `held` makes of it: the shares added up, at the average price paid. */
 export function mergedHolding(
