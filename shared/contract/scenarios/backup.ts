@@ -149,9 +149,8 @@ export const backup = [
     expectOk(expect, cleared, 'DELETE /api/clear-all');
     expect(cleared.body).toEqual({ ok: true, message: 'All data cleared' });
     expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
-    // DIFFERENCE profile-clear-import-sources
-    const kept = api.runtime === 'worker' ? { 'import sources': 1 } : {};
-    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, ...kept });
-    expect(await api.stored(api.other.profile, theirs)).toEqual({ ...NONE, ...kept });
+    // Import sources go too: a source on the daily schedule would fill the profile again.
+    expect(await api.stored(api.profile, mine)).toEqual(NONE);
+    expect(await api.stored(api.other.profile, theirs)).toEqual(NONE);
   }),
 ];

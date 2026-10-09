@@ -87,6 +87,9 @@ const PROFILE_TABLES = [
   'retirement_goals',
   'emergency_fund_config',
   'import_logs',
+  // A saved source goes with the data it filled: one on the daily schedule would otherwise fill a
+  // cleared profile again at its next sync.
+  'import_sources',
 ] as const;
 
 interface ClearProfileDataOptions {

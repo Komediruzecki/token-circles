@@ -187,11 +187,9 @@ export const profiles = [
     expectOk(expect, cleared, 'DELETE /api/profile/data');
     expect(cleared.body).toMatchObject({ ok: true, message: 'Profile data reset successfully' });
 
-    // Both keep the profile's retirement plan.
-    const kept: Partial<Record<StoredKind, number>> = { 'retirement settings': 1 };
-    // DIFFERENCE profile-clear-import-sources
-    if (api.runtime === 'worker') kept['import sources'] = 1;
-    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, ...kept });
+    // Both keep the profile's retirement plan, and delete its import sources with the rest: a
+    // source on the daily schedule would fill the cleared profile again.
+    expect(await api.stored(api.profile, mine)).toEqual({ ...NONE, 'retirement settings': 1 });
     expect((await profileList(api, expect)).map((p) => p.name)).toEqual(['Me', 'Partner']);
     expect(await api.stored(api.other.profile, theirs)).toEqual(theirsBefore);
   }),
