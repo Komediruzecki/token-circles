@@ -22,8 +22,9 @@ jobs:
       # see everything that is broken in one run, not the first thing.
       fail-fast: false
       matrix:
-        # A pull request runs the 44-test smoke subset, which fits in one job in under four
-        # minutes. A push to main runs all 515 tests, split four ways.
+        # A pull request runs the smoke subset, 99 tests in October 2026, which fits in one job in
+        # about five minutes of tests. A push to main runs the whole suite, 628 tests then, split
+        # four ways.
         #
         # Four JOBS, not four workers. playwright.config.ts pins `workers: 1` on CI because four
         # headless Chromiums against one wrangler got workerd killed twenty seconds in. Sharding
