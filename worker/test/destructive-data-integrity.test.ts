@@ -2,7 +2,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { sessionCookie } from './helpers/session';
-import { DEFAULT_CATEGORIES } from '../src/profileData';
+import { DEFAULT_CATEGORIES, PROFILE_TABLES as CLEARED_TABLES } from '../src/profileData';
 
 const TABLES = [
   'custom_reports',
@@ -533,5 +533,70 @@ describe('account deletion and sessions', () => {
 
     expect(await sessions(70)).toBe(0);
     expect(await sessions(71)).toBe(others);
+  });
+});
+
+describe('account deletion and the rows its routes save', () => {
+  const rowsOf = async (table: string, profileId: number): Promise<number> => {
+    const row = await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE profile_id = ?`)
+      .bind(profileId)
+      .first<{ n: number }>();
+    return row?.n ?? -1;
+  };
+  const post = (path: string, body: unknown): Promise<Response> =>
+    SELF.fetch(`https://example.com${path}`, {
+      method: 'POST',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json', 'X-Profile-Id': '700' },
+      body: JSON.stringify(body),
+    });
+
+  it('deletes from every table that has a profile_id column', async () => {
+    const { results: tables } = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+    ).all<{ name: string }>();
+    const withProfileId: string[] = [];
+    for (const { name } of tables) {
+      const { results: columns } = await env.DB.prepare(`PRAGMA table_info("${name}")`).all<{
+        name: string;
+      }>();
+      if (columns.some((column) => column.name === 'profile_id')) withProfileId.push(name);
+    }
+    // Settings go when account deletion asks for them; API tokens go with the user's row.
+    const cleared = new Set<string>([...CLEARED_TABLES, 'settings', 'api_tokens']);
+    expect(withProfileId.length).toBeGreaterThan(CLEARED_TABLES.length);
+    expect(withProfileId.filter((name) => !cleared.has(name))).toEqual([]);
+  });
+
+  it("deletes the account's saved import sources and tag rules", async () => {
+    await env.DB.prepare('DELETE FROM import_sources').run();
+    await env.DB.prepare('DELETE FROM tag_rules').run();
+    const source = await post('/api/import-sources', {
+      kind: 'google_sheet',
+      label: 'Bank ledger',
+      config: {
+        url: 'https://docs.google.com/spreadsheets/d/e/2PACX-account-delete/pub?output=csv',
+      },
+      schedule: 'manual',
+    });
+    expect(source.status).toBe(201);
+    const tag = await post('/api/tags', { name: 'Holiday' });
+    expect(tag.status).toBe(200);
+    const { id: tagId } = (await tag.json()) as { id: number };
+    const rule = await post('/api/tags/rules', {
+      tag_id: tagId,
+      name: 'Flights',
+      criteria: { types: ['expense'] },
+      auto_apply: false,
+    });
+    expect(rule.status).toBe(201);
+    expect([await rowsOf('import_sources', 700), await rowsOf('tag_rules', 700)]).toEqual([1, 1]);
+
+    const response = await SELF.fetch('https://example.com/api/account', {
+      method: 'DELETE',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'delete' }),
+    });
+    expect(response.status).toBe(200);
+    expect([await rowsOf('import_sources', 700), await rowsOf('tag_rules', 700)]).toEqual([0, 0]);
   });
 });
