@@ -44,7 +44,7 @@ import Toggle from '../components/Toggle'
 import TokenOrbitLink from '../components/TokenOrbitLink'
 import TwofaSettings from '../components/TwofaSettings'
 import { apiGet, apiPut, getLocalCurrency, toast } from '../core/api.js'
-import { apiErrorFrom, plainMessage } from '../core/apiError'
+import { ApiError, apiErrorFrom, plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { activeProfileId, profileRequestHeaders } from '../core/apiProfileScope'
 import {
@@ -394,6 +394,10 @@ function CardHead(props: { icon: JSX.Element; title: string; desc?: string; tag?
   )
 }
 
+/** What a failed checkout or test email says when the answer brought no words of its own. */
+const CHECKOUT_FAILED = "Couldn't start checkout. Try again."
+const TEST_EMAIL_FAILED = "Couldn't send the test email. Try again."
+
 /** Why the active profile's household checkbox cannot be cleared. Shown on hover and read by screen readers. */
 const HOUSEHOLD_LOCKED_HINT =
   'This is your active profile, so it is always included: new transactions, categories and accounts are saved to it. To change it, switch profiles in the sidebar.'
@@ -619,7 +623,7 @@ export default function Settings() {
         resumed?: boolean
         error?: string
       }
-      if (!res.ok) throw new Error(data.error || 'Could not start checkout')
+      if (!res.ok) throw new ApiError(res.status, data.error || CHECKOUT_FAILED)
       if (data.url) {
         // Leave the button reading "Redirecting…" — the page is on its way out, and flipping it
         // back to "Upgrade" mid-navigation looks like the click did nothing.
@@ -644,7 +648,7 @@ export default function Settings() {
         slow: 'Plan changed. It will show here once Stripe confirms it — reload if it does not.',
       })
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not start checkout', 'error')
+      toast(plainMessage(e, CHECKOUT_FAILED), 'error')
     } finally {
       if (!leaving) setBillingBusyKey(null)
     }
@@ -656,9 +660,9 @@ export default function Settings() {
       const res = await apiFetch(path, { method: 'POST', credentials: 'include' })
       const data = await res.json()
       if (res.ok && data.url) window.location.href = data.url
-      else throw new Error(data.error || failMsg)
+      else throw new ApiError(res.status, data.error || failMsg)
     } catch (e) {
-      toast(e instanceof Error ? e.message : failMsg, 'error')
+      toast(plainMessage(e, failMsg), 'error')
       setBillingBusyKey(null)
     }
   }
@@ -784,7 +788,7 @@ export default function Settings() {
         body: JSON.stringify({ type }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not send')
+      if (!res.ok) throw new ApiError(res.status, data.error || TEST_EMAIL_FAILED)
       toast(
         data.skipped
           ? 'Email is not configured on the server yet (no-op in dev).'
@@ -798,7 +802,7 @@ export default function Settings() {
         data.skipped ? 'info' : 'success'
       )
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not send', 'error')
+      toast(plainMessage(e, TEST_EMAIL_FAILED), 'error')
     } finally {
       setNotifBusy(false)
     }
@@ -1320,7 +1324,9 @@ export default function Settings() {
                         {...control}
                         class={styles.formControl}
                         data-test-id="settings-currency-select"
-                        onChange={(event) => { currencyForm.choose(event.currentTarget.value); }}
+                        onChange={(event) => {
+                          currencyForm.choose(event.currentTarget.value)
+                        }}
                         disabled={currencyForm.submitting()}
                       >
                         {/* Each option says whether it is the one chosen: the select's own value is
@@ -2020,7 +2026,7 @@ export default function Settings() {
                       onClick={() =>
                         redirectToStripe(
                           '/api/billing/portal',
-                          'Could not open billing portal',
+                          "Couldn't open the billing portal. Try again.",
                           'manage'
                         )
                       }
@@ -2066,7 +2072,7 @@ export default function Settings() {
                   onManage={() =>
                     redirectToStripe(
                       '/api/billing/portal',
-                      'Could not open billing portal',
+                      "Couldn't open the billing portal. Try again.",
                       'manage'
                     )
                   }
