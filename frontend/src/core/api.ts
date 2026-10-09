@@ -257,6 +257,14 @@ export class ApiClient {
   }
 
   /**
+   * The second sign-in step (worker: POST /api/auth/2fa/verify): an authenticator or recovery
+   * code, traded with the challenge cookie the first step set for the session.
+   */
+  async verifySecondFactor(code: string): Promise<void> {
+    await this.request('/auth/2fa/verify', undefined, { method: 'POST', body: { code } })
+  }
+
+  /**
    * Logout
    */
   async logout(): Promise<void> {

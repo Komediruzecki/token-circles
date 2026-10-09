@@ -46,6 +46,12 @@
   text-align: center;
 }
 
+/* A recovery code has letters and a dash: bigger and centred, not spaced. */
+.recovery {
+  font-size: 16px;
+  text-align: center;
+}
+
 .hint {
   margin: 2px 0 10px;
   color: var(--text-secondary);

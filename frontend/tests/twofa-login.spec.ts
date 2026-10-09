@@ -17,6 +17,7 @@ import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
 import { E2E_BASE } from './e2e-constants'
 import { sql } from './db'
 import { getByTestId } from './test-helpers'
+import { SIGN_IN_MESSAGES } from '../../shared/signInSchema'
 
 /** One account per boot, so the two runs never share a second factor. */
 const emailFor = (boot: string) =>
@@ -128,7 +129,10 @@ for (const boot of BOOTS) {
 
     await getByTestId(page, 'twofa-code').fill('000000')
     await getByTestId(page, 'twofa-submit').click()
-    await expect(getByTestId(page, 'twofa-error')).toBeVisible()
+    await expect(getByTestId(page, 'twofa-code')).toHaveAttribute('aria-invalid', 'true')
+    await expect(getByTestId(page, 'twofa-code')).toHaveAccessibleDescription(
+      SIGN_IN_MESSAGES.secondFactorRefused
+    )
 
     await getByTestId(page, 'twofa-code').fill(nextStepCode(secret))
     await getByTestId(page, 'twofa-submit').click()
