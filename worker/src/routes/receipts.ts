@@ -35,6 +35,18 @@ interface ReceiptRow {
   profile_id: number;
 }
 
+// ── GET /api/receipts — list all receipts for the active profile ──────────────
+// receiptsRepo.list: SELECT * ... WHERE profile_id = ? ORDER BY id DESC
+receiptsRoutes.get('/api/receipts', requireAuth, async (c) => {
+  const pid = await getProfileId(c);
+  const rows = await db.all<ReceiptRow>(
+    c.env.DB,
+    'SELECT * FROM receipts WHERE profile_id = ? ORDER BY id DESC',
+    pid
+  );
+  return c.json(rows);
+});
+
 // ── Upload (PREMIUM) — store the file in R2, save metadata in D1 ───────────────
 // Receipt file storage is gated to paid plans (plan.ts) so free accounts don't
 // accumulate binary data. Enforces type, per-file size and per-profile count limits,

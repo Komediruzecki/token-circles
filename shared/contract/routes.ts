@@ -246,6 +246,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'POST /api/auth/passkeys/register/verify':
     'Signing in. Local-first has no account to sign in to.',
   'GET /api/plans': 'Billing belongs to a cloud account.',
+  'GET /api/receipts':
+    "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/categorize':
     "Nothing in the app calls it: the Transactions page finds a receipt through its transaction's receipt_id, and uploads, reads and deletes it by id (on the contract).",
   'POST /api/receipts/:id/export':
