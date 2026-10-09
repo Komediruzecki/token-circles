@@ -80,11 +80,11 @@ export default function ProfileModal(props: ProfileModalProps) {
           </Field>
           <div class={styles.actions}>
             <button
+              type="button"
               class={styles.btnCancel}
               onClick={() => {
                 props.onClose()
               }}
-              type="button"
             >
               Cancel
             </button>
