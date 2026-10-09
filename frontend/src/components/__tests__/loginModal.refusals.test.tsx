@@ -15,6 +15,8 @@ let sent: { url: string; body: Record<string, unknown> }[]
 let answers: Record<string, () => Response>
 let reloads: number
 let releaseToken: (token: string) => void
+/** What signing in with a passkey answers; undefined: the browser has no passkeys. */
+let passkeyAnswer: { ok: boolean; error?: string; aborted?: boolean } | undefined
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -45,8 +47,9 @@ async function mount(captcha = false) {
   }))
   vi.doMock('../../core/webauthn', () => ({
     markPasskeyNudgeAfterLogin: () => undefined,
-    passkeysSupported: () => false,
-    signInWithPasskey: () => Promise.resolve({ ok: false, error: 'x', aborted: true }),
+    passkeysSupported: () => passkeyAnswer !== undefined,
+    signInWithPasskey: () =>
+      Promise.resolve(passkeyAnswer ?? { ok: false, error: 'x', aborted: true }),
   }))
   vi.doMock('../EmailCodeLogin', () => ({ default: () => null }))
   vi.doMock('../TwofaChallenge', () => ({ default: () => null }))
@@ -92,6 +95,7 @@ beforeEach(() => {
   sent = []
   answers = {}
   reloads = 0
+  passkeyAnswer = undefined
   vi.stubGlobal('location', {
     reload: () => {
       reloads += 1
@@ -119,6 +123,18 @@ describe('the sign-in dialog', () => {
 
     expect(describedBy(email())).toEqual([SAY.email])
     expect(describedBy(password())).toEqual([SAY.password])
+    expect(document.activeElement).toBe(email())
+    expect(sent).toEqual([])
+  })
+
+  it('marks an address that is not one before signing in, and sends nothing', async () => {
+    await mount()
+    type(email(), 'name-at-example.com')
+    type(password(), 'the-password')
+    await submit()
+
+    expect(describedBy(email())).toEqual([SAY.emailFormat])
+    expect(marked(password())).toBe(false)
     expect(document.activeElement).toBe(email())
     expect(sent).toEqual([])
   })
@@ -181,5 +197,31 @@ describe('the sign-in dialog with the captcha on', () => {
     releaseToken('a-token')
     await settle()
     expect(sent.map((s) => s.body.turnstileToken)).toEqual(['a-token'])
+  })
+})
+
+describe('the sign-in dialog with passkeys', () => {
+  it('says a passkey that did not sign in under the passkey link, and marks no field', async () => {
+    passkeyAnswer = { ok: false, error: 'This device could not sign in with a passkey.' }
+    await mount()
+    host.querySelector<HTMLElement>('[data-test-id="passkey-signin"]')!.click()
+    await settle()
+
+    expect(host.querySelector('[data-test-id="passkey-error"]')?.textContent).toBe(
+      'This device could not sign in with a passkey.'
+    )
+    expect(notice()).toBe('')
+    expect(marked(email())).toBe(false)
+    expect(marked(password())).toBe(false)
+  })
+
+  it('reloads into the app when the passkey signs in', async () => {
+    passkeyAnswer = { ok: true }
+    await mount()
+    host.querySelector<HTMLElement>('[data-test-id="passkey-signin"]')!.click()
+    await settle()
+
+    expect(reloads).toBe(1)
+    expect(sent).toEqual([])
   })
 })
