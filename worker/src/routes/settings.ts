@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { HttpError } from '../http';
+import { checkSettingsUpdate } from '../../../shared/settingsSchema';
+import { accept } from '../http';
 import * as db from '../db';
 import { setProfileBaseCurrency } from '../base-currency';
 
@@ -29,28 +30,16 @@ settingsRoutes.get('/api/settings', requireAuth, async (c) => {
   return c.json(settings);
 });
 
+// The settings this route stores, checked by the rules local-first runs too
+// (shared/settingsSchema.ts): a key another route owns is refused there, a value is checked before
+// anything is written, and a refused write stores none of the body.
 settingsRoutes.put('/api/settings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (b.currency && !/^[A-Z]{3}$/.test(b.currency)) {
-    throw new HttpError(
-      422,
-      'Invalid currency code. Must be 3-letter ISO 4217 code (e.g., USD, EUR).'
-    );
+  const settings = accept(checkSettingsUpdate(await c.req.json().catch(() => null)));
+  if (settings.currency !== undefined) {
+    settings.currency = await setProfileBaseCurrency(c.env.DB, pid, settings.currency);
   }
-  if (b.locale) {
-    const localeRegex = /^[a-z]{2,3}(?:-[A-Z]{2,3}(?:-[A-Z0-9]+)*)?$/i;
-    if (!localeRegex.test(b.locale)) {
-      throw new HttpError(
-        422,
-        'Invalid locale code. Use valid BCP 47 language tags (e.g., en-US, fr-FR).'
-      );
-    }
-  }
-  if (b.currency) {
-    b.currency = await setProfileBaseCurrency(c.env.DB, pid, b.currency);
-  }
-  for (const [k, v] of Object.entries(b)) {
+  for (const [k, v] of Object.entries(settings)) {
     await db.run(
       c.env.DB,
       'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)',
