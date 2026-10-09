@@ -506,3 +506,8 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* The base currency select, on the form kit: its message sits under it, as wide as it is. */
+.currency-form {
+  max-width: 340px;
+}

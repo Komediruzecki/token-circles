@@ -77,6 +77,7 @@ import { setStickyPeriodBar, stickyPeriodBar } from '../core/uiPrefs'
 import { loadChartExportSettings, saveChartExportSettings } from '../utils/chartExportSettings'
 import { localToday, toYYYYMM } from '../utils/period'
 import ApiAccess from './ApiAccess'
+import { createBaseCurrencyForm } from './baseCurrencyForm'
 import { createProfileRenameForm } from './profileForm'
 import styles from './SettingsPage.module.css'
 import type { JSX } from 'solid-js'
@@ -401,7 +402,10 @@ export default function Settings() {
   // Initialize from the saved setting (default EUR) so the dropdown reflects reality,
   // not a hardcoded USD that mismatches how amounts actually render.
   const [localCurrency, setLocalCurrency] = createSignal(getLocalCurrency())
-  const [currencyBusy, setCurrencyBusy] = createSignal(false)
+  const currencyForm = createBaseCurrencyForm({
+    stored: localCurrency,
+    onChanged: setLocalCurrency,
+  })
   const [darkMode, setDarkMode] = createSignal(false)
   const [chartExportSettings, setChartExportSettings] =
     createSignal<ChartExportSettings>(loadChartExportSettings())
@@ -804,13 +808,17 @@ export default function Settings() {
   onMount(() => {
     const savedCurrency = getLocalCurrency()
     setLocalCurrency(savedCurrency)
+    currencyForm.reset({ currency: savedCurrency })
     // localStorage was the historical source of truth. Establish that value in the
     // active storage engine once; if the profile already has a locked base currency,
     // use the persisted value instead of silently relabelling historical amounts.
     void apiPut('/api/settings', { currency: savedCurrency }).catch(async () => {
       try {
         const settings = await apiGet<{ currency?: string }>('/api/settings')
-        if (settings.currency) setLocalCurrency(settings.currency)
+        if (settings.currency) {
+          setLocalCurrency(settings.currency)
+          currencyForm.reset({ currency: settings.currency })
+        }
       } catch {
         // Keep the local value when settings are temporarily unavailable.
       }
@@ -876,24 +884,6 @@ export default function Settings() {
   createEffect(() => {
     localStorage.setItem('localCurrency', localCurrency())
   })
-
-  // Handle local currency change
-  const handleLocalCurrencyChange = async (event: Event) => {
-    const target = event.target as HTMLSelectElement
-    const next = target.value
-    if (next === localCurrency() || currencyBusy()) return
-    setCurrencyBusy(true)
-    try {
-      await apiPut('/api/settings', { currency: next })
-      setLocalCurrency(next)
-      toast(`Base currency set to ${next}`, 'success')
-    } catch {
-      target.value = localCurrency()
-      toast(`Base currency is locked to ${localCurrency()} after financial data is added.`, 'error')
-    } finally {
-      setCurrencyBusy(false)
-    }
-  }
 
   // Handle storage type change
   const handleStorageModeChange = (event: Event) => {
@@ -1317,17 +1307,38 @@ export default function Settings() {
                   title="Base Currency"
                   desc="The unit used by balances, budgets, and reports."
                 />
-                <select
-                  class={styles.formControl}
-                  value={localCurrency()}
-                  onchange={(event) => void handleLocalCurrencyChange(event)}
-                  disabled={currencyBusy()}
-                  style="max-width: 340px;"
-                >
-                  <For each={CURRENCY_OPTIONS}>
-                    {(currency) => <option value={currency.code}>{currency.name}</option>}
-                  </For>
-                </select>
+                <form class={styles.currencyForm} {...currencyForm.attrs}>
+                  <FormNotice form={currencyForm} />
+                  <Field
+                    form={currencyForm}
+                    name="currency"
+                    label="Base currency"
+                    labelClass={styles.visuallyHidden}
+                  >
+                    {(control) => (
+                      <select
+                        {...control}
+                        class={styles.formControl}
+                        data-test-id="settings-currency-select"
+                        onChange={(event) => { currencyForm.choose(event.currentTarget.value); }}
+                        disabled={currencyForm.submitting()}
+                      >
+                        {/* Each option says whether it is the one chosen: the select's own value is
+                            set before its options are there to take it. */}
+                        <For each={CURRENCY_OPTIONS}>
+                          {(currency) => (
+                            <option
+                              value={currency.code}
+                              selected={currency.code === currencyForm.values.currency}
+                            >
+                              {currency.name}
+                            </option>
+                          )}
+                        </For>
+                      </select>
+                    )}
+                  </Field>
+                </form>
               </div>
 
               <div class={styles.card} data-tour="settings-storage">
