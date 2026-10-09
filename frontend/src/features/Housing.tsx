@@ -29,16 +29,19 @@
 import { createMemo, createSignal, For } from 'solid-js'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalAccent from '../components/OrbitalAccent'
 import OrbitalDivider from '../components/OrbitalDivider'
 import RenewalCycle from '../components/RenewalCycle'
 import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, apiPost, showToast } from '../core/api'
+import { apiDelete, apiGet, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { refetchOnActive } from '../core/pageVisibility'
+import { createHousingForm } from './housingForm'
 import styles from './HousingPage.module.css'
 
 interface Housing {
@@ -47,8 +50,7 @@ interface Housing {
   property_name?: string
   name?: string
   monthly_amount: number | string
-  due_day: number
-  due_month: number
+  /** "MM-DD"; empty on a row that was never given one. */
   due_date?: string
   start_date?: string
   autopay: boolean | number
@@ -69,15 +71,11 @@ export default function HousingForm() {
   const [housings, setHousings] = createSignal<Housing[]>([])
   const [initialLoad, setInitialLoad] = createSignal(true)
   const [showAddModal, setShowAddModal] = createSignal(false)
-  const [formData, setFormData] = createSignal({
-    type: 'rent',
-    property_name: '',
-    monthly_amount: '',
-    due_day: 1,
-    due_month: new Date().getMonth() + 1,
-    autopay: false,
-    notes: '',
-  })
+  const housingForm = createHousingForm({ onSaved: () => setShowAddModal(false) })
+  const openAdd = () => {
+    housingForm.open()
+    setShowAddModal(true)
+  }
 
   // Subscriptions tracker
   interface SubBill {
@@ -111,41 +109,9 @@ export default function HousingForm() {
       setHousings(result.housings || [])
     } catch (err) {
       console.error('Failed to load housing expenses:', err)
-      showToast('Failed to load housing expenses', 'error')
+      showToast(plainMessage(err, "Couldn't load your housing costs. Try again."), 'error')
     } finally {
       setInitialLoad(false)
-    }
-  }
-
-  // Handle form submit
-  const handleSubmit = async (e: Event) => {
-    e.preventDefault()
-    const data = {
-      type: formData().type,
-      property_name: formData().property_name,
-      monthly_amount: parseFloat(formData().monthly_amount),
-      due_day: formData().due_day,
-      due_month: formData().due_month,
-      autopay: formData().autopay,
-      notes: formData().notes,
-    }
-
-    try {
-      await apiPost('/api/housing', data)
-      showToast('Housing expense saved', 'success')
-      setShowAddModal(false)
-      setFormData({
-        type: 'rent',
-        property_name: '',
-        monthly_amount: '',
-        due_day: 1,
-        due_month: new Date().getMonth() + 1,
-        autopay: false,
-        notes: '',
-      })
-    } catch (err) {
-      console.error('Failed to save housing expense:', err)
-      showToast('Failed to save housing expense', 'error')
     }
   }
 
@@ -156,7 +122,7 @@ export default function HousingForm() {
       showToast('Housing expense deleted', 'success')
     } catch (err) {
       console.error('Failed to delete housing expense:', err)
-      showToast('Failed to delete housing expense', 'error')
+      showToast(plainMessage(err, "Couldn't delete the housing expense. Try again."), 'error')
     }
   }
 
@@ -240,11 +206,7 @@ export default function HousingForm() {
           <h1 data-test-id="housing-header" data-tour="calc-housing">
             Housing
           </h1>
-          <button
-            data-test-id="add-housing-btn"
-            class={styles.btnPrimary}
-            onClick={() => setShowAddModal(true)}
-          >
+          <button data-test-id="add-housing-btn" class={styles.btnPrimary} onClick={openAdd}>
             <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
@@ -336,7 +298,7 @@ export default function HousingForm() {
         <div class={styles.emptyState} data-test-id="housing-empty">
           <p>No housing expenses yet</p>
           <p>Add your first housing expense to start tracking your housing costs.</p>
-          <button class={styles.btnPrimary} onClick={() => setShowAddModal(true)}>
+          <button class={styles.btnPrimary} onClick={openAdd}>
             Add Expense
           </button>
         </div>
@@ -394,9 +356,7 @@ export default function HousingForm() {
                   <div class={styles.detailItem}>
                     <span class={styles.detailLabel}>Due</span>
                     <span class={styles.detailValue} data-test-id="housing-card-due">
-                      {housing.due_date
-                        ? housing.due_date
-                        : `${housing.due_month} / ${housing.due_day}`}
+                      {housing.due_date || 'Not set'}
                     </span>
                   </div>
                   {housing.notes && (
@@ -440,104 +400,152 @@ export default function HousingForm() {
                 </svg>
               </button>
             </div>
-            <form class={styles.modalBody} onSubmit={handleSubmit}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Expense Type</label>
-                <select
-                  class={styles.formControl}
-                  data-test-id="housing-type-select"
-                  value={formData().type}
-                  oninput={(e) =>
-                    setFormData({ ...formData(), type: e.target.value as Housing['type'] })
-                  }
-                >
-                  <option value="rent">Rent</option>
-                  <option value="mortgage">Mortgage</option>
-                  <option value="hoa">HOA Fees</option>
-                  <option value="property_tax">Property Tax</option>
-                  <option value="insurance">Insurance</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Property / Description</label>
-                <input
-                  type="text"
-                  class={styles.formControl}
-                  data-test-id="housing-property-input"
-                  placeholder="e.g., Main Apartment, Monthly Payment"
-                  value={formData().property_name}
-                  oninput={(e) => setFormData({ ...formData(), property_name: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Monthly Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  class={styles.formControl}
-                  data-test-id="housing-amount-input"
-                  placeholder="1200.00"
-                  value={formData().monthly_amount}
-                  oninput={(e) => setFormData({ ...formData(), monthly_amount: e.target.value })}
-                  required
-                />
-              </div>
-              <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Due Month</label>
+            <form class={styles.modalBody} {...housingForm.attrs} data-test-id="housing-form">
+              <FormNotice form={housingForm} testId="housing-form-notice" />
+              <Field
+                form={housingForm}
+                name="type"
+                label="Expense Type"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <select
+                    {...control}
                     class={styles.formControl}
-                    data-test-id="housing-due-month-select"
-                    value={formData().due_month}
-                    oninput={(e) =>
-                      setFormData({ ...formData(), due_month: parseInt(e.target.value) })
-                    }
+                    data-test-id="housing-type-select"
+                    value={housingForm.values.type}
+                    onChange={(e) => housingForm.set('type', e.currentTarget.value)}
                   >
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option value={i + 1}>
-                        {new Date(0, i).toLocaleString('default', { month: 'long' })}
-                      </option>
-                    ))}
+                    <option value="rent">Rent</option>
+                    <option value="mortgage">Mortgage</option>
+                    <option value="hoa">HOA Fees</option>
+                    <option value="property_tax">Property Tax</option>
+                    <option value="insurance">Insurance</option>
+                    <option value="other">Other</option>
                   </select>
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel}>Due Day</label>
+                )}
+              </Field>
+              <Field
+                form={housingForm}
+                name="property_name"
+                label="Property / Description"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
                   <input
-                    type="number"
-                    min="1"
-                    max="31"
+                    {...control}
+                    type="text"
                     class={styles.formControl}
-                    data-test-id="housing-due-day-input"
-                    placeholder="1"
-                    value={formData().due_day}
-                    oninput={(e) =>
-                      setFormData({ ...formData(), due_day: parseInt(e.target.value) || 1 })
-                    }
+                    data-test-id="housing-property-input"
+                    placeholder="e.g., Main Apartment, Monthly Payment"
+                    value={housingForm.values.property_name}
+                    onInput={(e) => housingForm.set('property_name', e.currentTarget.value)}
+                    required
                   />
-                </div>
+                )}
+              </Field>
+              <Field
+                form={housingForm}
+                name="monthly_amount"
+                label="Monthly Amount"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="text"
+                    inputmode="decimal"
+                    class={styles.formControl}
+                    data-test-id="housing-amount-input"
+                    placeholder="1200.00"
+                    value={housingForm.values.monthly_amount}
+                    onInput={(e) => housingForm.set('monthly_amount', e.currentTarget.value)}
+                    required
+                  />
+                )}
+              </Field>
+              <div class={styles.formRow}>
+                <Field
+                  form={housingForm}
+                  name="due_month"
+                  label="Due Month"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <select
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="housing-due-month-select"
+                      value={housingForm.values.due_month}
+                      onChange={(e) => housingForm.set('due_month', e.currentTarget.value)}
+                    >
+                      {/* The options are inserted after the select's value is set, so each says
+                          whether it is the one chosen: the select showed January otherwise, while
+                          the form held this month. */}
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option
+                          value={String(i + 1)}
+                          selected={housingForm.values.due_month === String(i + 1)}
+                        >
+                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </Field>
+                <Field
+                  form={housingForm}
+                  name="due_day"
+                  label="Due Day"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="numeric"
+                      class={styles.formControl}
+                      data-test-id="housing-due-day-input"
+                      placeholder="1"
+                      value={housingForm.values.due_day}
+                      onInput={(e) => housingForm.set('due_day', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
               </div>
               <div class={styles.formGroup}>
                 <ToggleField
                   title="Autopay"
                   description="Indicate that this housing expense is handled automatically."
                   data-test-id="housing-autopay-toggle"
-                  checked={() => formData().autopay}
-                  onChange={(v) => setFormData({ ...formData(), autopay: v })}
+                  checked={() => housingForm.values.autopay}
+                  onChange={(v) => housingForm.set('autopay', v)}
                 />
               </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel}>Notes (optional)</label>
-                <textarea
-                  class={styles.formControl}
-                  data-test-id="housing-notes-input"
-                  placeholder="Additional details..."
-                  value={formData().notes}
-                  oninput={(e) => setFormData({ ...formData(), notes: e.target.value })}
-                  rows={2}
-                />
-              </div>
+              <Field
+                form={housingForm}
+                name="notes"
+                label="Notes (optional)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <textarea
+                    {...control}
+                    class={styles.formControl}
+                    data-test-id="housing-notes-input"
+                    placeholder="Additional details..."
+                    value={housingForm.values.notes}
+                    onInput={(e) => housingForm.set('notes', e.currentTarget.value)}
+                    rows={2}
+                  />
+                )}
+              </Field>
               <div class={styles.modalFooter}>
                 <button
                   type="button"
@@ -546,9 +554,14 @@ export default function HousingForm() {
                 >
                   Cancel
                 </button>
-                <button type="submit" class={styles.btnPrimary} data-test-id="housing-submit-btn">
+                <SubmitButton
+                  class={styles.btnPrimary}
+                  data-test-id="housing-submit-btn"
+                  busy={housingForm.submitting()}
+                  busyLabel="Adding…"
+                >
                   Add Expense
-                </button>
+                </SubmitButton>
               </div>
             </form>
           </div>
