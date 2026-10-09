@@ -38,6 +38,7 @@ import GoalRing from '../components/GoalRing'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { formatCurrency } from '../core/api'
 import { apiDelete, apiHouseholdGet, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
@@ -124,7 +125,7 @@ export default function Goals() {
       )
     } catch (err) {
       console.error('Failed to load goals:', err)
-      showToast('Failed to load goals', 'error')
+      showToast(plainMessage(err, "Couldn't load your goals. Reload to try again."), 'error')
     } finally {
       setInitialLoad(false)
     }
@@ -156,7 +157,7 @@ export default function Goals() {
       showToast('Goal deleted successfully', 'success')
     } catch (err) {
       console.error('Failed to delete goal:', err)
-      showToast('Failed to delete goal', 'error')
+      showToast(plainMessage(err, "Couldn't delete the goal. Try again."), 'error')
     }
   }
 

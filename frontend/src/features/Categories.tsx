@@ -135,7 +135,7 @@ export default function Categories() {
       showToast('Category deleted successfully', 'success')
     } catch (err) {
       console.error('Failed to delete category:', err)
-      showToast('Failed to delete category', 'error')
+      showToast(plainMessage(err, "Couldn't delete the category. Try again."), 'error')
     }
   }
 

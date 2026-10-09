@@ -286,8 +286,8 @@ export default function Budgets() {
       } else {
         showToast(result.message || 'Nothing to duplicate', 'info')
       }
-    } catch (_err) {
-      showToast('Failed to duplicate budgets', 'error')
+    } catch (err) {
+      showToast(plainMessage(err, "Couldn't copy last month's budgets. Try again."), 'error')
     }
   }
 
@@ -333,8 +333,11 @@ export default function Budgets() {
       } else {
         showToast(result.message || 'Nothing to backfill', 'info')
       }
-    } catch {
-      showToast('Failed to backfill budgets', 'error')
+    } catch (err) {
+      showToast(
+        plainMessage(err, "Couldn't backfill budgets from your spending. Try again."),
+        'error'
+      )
     }
   }
 
@@ -425,7 +428,7 @@ export default function Budgets() {
       // No reload here: the DELETE bumped the categories counter.
     } catch (err) {
       console.error('Failed to delete category:', err)
-      showToast('Failed to delete category', 'error')
+      showToast(plainMessage(err, "Couldn't delete the category. Try again."), 'error')
     }
   }
 
