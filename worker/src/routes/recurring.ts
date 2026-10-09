@@ -1,20 +1,62 @@
 import { Hono } from 'hono';
-import { addDays, nextOccurrence } from '../../../shared/calendarMonths';
+import type { Context } from 'hono';
+import { nextOccurrence } from '../../../shared/calendarMonths';
+import {
+  checkRecurringCreate,
+  checkRecurringEdit,
+  RECURRING_MESSAGES as M,
+} from '../../../shared/recurringSchema';
+import { upcomingRecurring } from '../../../shared/recurringUpcoming';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
+import type { FieldErrors } from '../../../shared/refusal';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { localToday } from '../local-date';
 
 // Port of backend/routes/recurring.js + backend/repositories/recurringRepo.js.
 // Table: recurring_transactions, LEFT JOINed to categories. Response shapes are
-// kept identical (snake_case) to the Express backend.
+// kept identical (snake_case) to the Express backend. A body is checked by
+// shared/recurringSchema.ts, as local-first checks it.
 export const recurringRoutes = new Hono<AppEnv>();
 
-const UNREADABLE_NEXT_DATE =
-  "This rule's next date can't be read. Edit the rule and set its date again.";
+/** The links a rule's body sets, each checked against the profile. */
+interface RecurringLinks {
+  category_id?: number | null;
+  account_id?: number | null;
+  transfer_account_id?: number | null;
+}
+
+/**
+ * The links in `links` that are not the profile's, as refusals at their fields: a 400 at the
+ * field, as a transaction's and a bill's are, where this route answered 403 at no field.
+ */
+async function foreignLinks(
+  c: Context<AppEnv>,
+  pid: number,
+  links: RecurringLinks
+): Promise<FieldErrors> {
+  const fields: FieldErrors = {};
+  const { DB } = c.env;
+  if (links.account_id != null && !(await db.accountBelongsToProfile(DB, links.account_id, pid))) {
+    fields.account_id = M.account;
+  }
+  if (
+    links.transfer_account_id != null &&
+    !(await db.accountBelongsToProfile(DB, links.transfer_account_id, pid))
+  ) {
+    fields.transfer_account_id = M.transferAccount;
+  }
+  if (
+    links.category_id != null &&
+    !(await db.categoryBelongsToProfile(DB, links.category_id, pid))
+  ) {
+    fields.category_id = M.category;
+  }
+  return fields;
+}
 
 export interface RecurringRow {
   id: number;
@@ -51,12 +93,10 @@ recurringRoutes.get('/api/recurring', requireAuth, async (c) => {
 });
 
 // IMPORTANT: /upcoming must come before /:id to avoid :id capturing "upcoming".
+// The next 30 days from today on the person's calendar (shared/recurringUpcoming.ts, which
+// local-first answers with too): next_date is one of their dates.
 recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  // The next 30 days from today on the person's calendar: next_date is one of their dates.
-  const todayStr = localToday(c);
-  const endStr = addDays(todayStr, 30);
-
   const recurring = await db.all<RecurringRow>(
     c.env.DB,
     `
@@ -68,88 +108,15 @@ recurringRoutes.get('/api/recurring/upcoming', requireAuth, async (c) => {
     `,
     pid
   );
-
-  interface UpcomingItem {
-    id: number;
-    description: string;
-    amount: number;
-    type: string;
-    frequency: string;
-    day_of_month: number | null;
-    next_date: string;
-    category_name?: string | null;
-    category_color?: string | null;
-  }
-
-  const upcoming: UpcomingItem[] = [];
-  for (const r of recurring) {
-    // From the rule's next date. A rule whose next date has passed is listed once on today, for
-    // what populate has not written yet, and after today on its own dates, stepped from its next
-    // date and not from today's day. Each step is the one populate takes, so the list shows the
-    // dates populate will write. The monthly step here used to be setMonth() and then the day,
-    // and setMonth() overflows first: a rule on the 31st went from January to March, and February
-    // was never listed.
-    const dates: string[] = [];
-    let cursor = r.next_date || todayStr;
-    if (cursor <= todayStr) {
-      dates.push(todayStr);
-      while (cursor && cursor <= todayStr) {
-        cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
-      }
-    }
-    while (cursor && cursor <= endStr) {
-      dates.push(cursor);
-      cursor = nextOccurrence(cursor, r.frequency, r.day_of_month);
-    }
-    for (const date of dates) {
-      upcoming.push({
-        id: r.id,
-        description: r.description,
-        amount: r.amount,
-        type: r.type,
-        frequency: r.frequency,
-        day_of_month: r.day_of_month,
-        next_date: date,
-        category_name: r.category_name,
-        category_color: r.category_color,
-      });
-    }
-  }
-
-  upcoming.sort((a, b) => a.next_date.localeCompare(b.next_date));
-
-  interface CategoryBucket {
-    name: string;
-    color?: string | null;
-    total: number;
-    items: UpcomingItem[];
-  }
-  const byCategory: Record<string, CategoryBucket> = {};
-  let totalMonthly = 0;
-  for (const item of upcoming) {
-    const catKey = item.category_name || 'Uncategorized';
-    if (!byCategory[catKey]) {
-      byCategory[catKey] = { name: catKey, color: item.category_color, total: 0, items: [] };
-    }
-    byCategory[catKey]!.total += item.amount;
-    byCategory[catKey]!.items.push(item);
-    totalMonthly += item.amount;
-  }
-
   const currencyRow = await db.first<{ value: string }>(
     c.env.DB,
     'SELECT value FROM settings WHERE key = ? AND profile_id = ?',
     'currency',
     pid
   );
-  const currency = currencyRow ? currencyRow.value : 'EUR';
-
-  return c.json({
-    transactions: upcoming.slice(0, 20),
-    byCategory: Object.values(byCategory).sort((a, b) => b.total - a.total),
-    totalMonthly,
-    currency,
-  });
+  return c.json(
+    upcomingRecurring(recurring, localToday(c), currencyRow ? currencyRow.value : 'EUR')
+  );
 });
 
 recurringRoutes.get('/api/recurring/:id', requireAuth, async (c) => {
@@ -160,59 +127,16 @@ recurringRoutes.get('/api/recurring/:id', requireAuth, async (c) => {
     c.req.param('id'),
     pid
   );
-  if (!r) throw new HttpError(404, 'Not found');
+  if (!r) throw new HttpError(404, M.notFound);
   return c.json(r);
 });
 
 recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const {
-    description,
-    amount,
-    type,
-    category_id,
-    account_id,
-    transfer_account_id,
-    frequency,
-    day_of_month,
-    next_date,
-    notes,
-  } = b;
-  // Validate ownership of any client-supplied account id (source or transfer dest).
-  for (const acc of [account_id, transfer_account_id]) {
-    if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
-      throw new HttpError(403, 'Account does not belong to this profile');
-    }
-  }
-  if (
-    category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  const normalizedType = type || 'expense';
-  const normalizedTransferAccountId = normalizedType === 'transfer' ? transfer_account_id : null;
-  const invariantError = transactionInvariantError({
-    type: normalizedType,
-    amount,
-    account_id,
-    transfer_account_id: normalizedTransferAccountId,
-  });
-  if (invariantError) throw new HttpError(400, invariantError);
-  const res = await db.insert(c.env.DB, 'recurring_transactions', {
-    profile_id: pid,
-    description: description || '',
-    amount,
-    type: normalizedType,
-    category_id: category_id || null,
-    account_id: account_id || null,
-    transfer_account_id: normalizedTransferAccountId || null,
-    frequency: frequency || 'monthly',
-    day_of_month: day_of_month || null,
-    next_date: next_date || null,
-    notes: notes || '',
-  });
+  const rule = accept(checkRecurringCreate(await c.req.json()));
+  const foreign = await foreignLinks(c, pid, rule);
+  if (Object.keys(foreign).length > 0) throw refuse(foreign);
+  const res = await db.insert(c.env.DB, 'recurring_transactions', { profile_id: pid, ...rule });
   return c.json({ id: res.meta.last_row_id });
 });
 
@@ -225,69 +149,38 @@ recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!existing) throw new HttpError(404, 'Not found');
-  const b = (await c.req.json()) as Record<string, any>;
-  const effective = {
-    description: b.description ?? existing.description,
-    amount: b.amount ?? existing.amount,
-    type: b.type ?? existing.type,
-    category_id: b.category_id === undefined ? existing.category_id : b.category_id,
-    account_id: b.account_id === undefined ? existing.account_id : b.account_id,
-    transfer_account_id:
-      b.transfer_account_id === undefined ? existing.transfer_account_id : b.transfer_account_id,
-    frequency: b.frequency ?? existing.frequency,
-    day_of_month: b.day_of_month === undefined ? existing.day_of_month : b.day_of_month,
-    next_date: b.next_date === undefined ? existing.next_date : b.next_date,
-    notes: b.notes === undefined ? existing.notes : b.notes,
-    active: b.active ?? existing.active,
-  };
-  if (effective.type !== 'transfer') effective.transfer_account_id = null;
-  // Validate ownership of any client-supplied account id (source or transfer dest).
-  for (const acc of [effective.account_id, effective.transfer_account_id]) {
-    if (acc != null && !(await db.accountBelongsToProfile(c.env.DB, Number(acc), pid))) {
-      throw new HttpError(403, 'Account does not belong to this profile');
-    }
+  if (!existing) throw new HttpError(404, M.notFound);
+  // Only what the edit changes is checked and written (decision 2): a link the rule already
+  // holds is not checked again.
+  const edit = accept(checkRecurringEdit(await c.req.json(), existing));
+  const foreign = await foreignLinks(c, pid, edit);
+  if (Object.keys(foreign).length > 0) throw refuse(foreign);
+  const values: Record<string, unknown> = { ...edit };
+  if (edit.active !== undefined) values.active = edit.active ? 1 : 0;
+  if (Object.keys(values).length > 0) {
+    await db.update(
+      c.env.DB,
+      'recurring_transactions',
+      values,
+      'id = ? AND profile_id = ?',
+      id,
+      pid
+    );
   }
-  if (
-    effective.category_id != null &&
-    !(await db.categoryBelongsToProfile(c.env.DB, Number(effective.category_id), pid))
-  ) {
-    throw new HttpError(403, 'Category does not belong to this profile');
-  }
-  const invariantError = transactionInvariantError(effective);
-  if (invariantError) throw new HttpError(400, invariantError);
-  await db.update(
-    c.env.DB,
-    'recurring_transactions',
-    {
-      description: effective.description,
-      amount: effective.amount,
-      type: effective.type,
-      category_id: effective.category_id,
-      account_id: effective.account_id,
-      transfer_account_id: effective.transfer_account_id,
-      frequency: effective.frequency,
-      day_of_month: effective.day_of_month,
-      next_date: effective.next_date,
-      notes: effective.notes ?? '',
-      active: effective.active,
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
-  );
   return c.json({ ok: true });
 });
 
 recurringRoutes.delete('/api/recurring/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  await db.del(
+  const id = c.req.param('id');
+  const existing = await db.first(
     c.env.DB,
-    'recurring_transactions',
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
+    'SELECT id FROM recurring_transactions WHERE id = ? AND profile_id = ?',
+    id,
     pid
   );
+  if (!existing) throw new HttpError(404, M.notFound);
+  await db.del(c.env.DB, 'recurring_transactions', 'id = ? AND profile_id = ?', id, pid);
   return c.json({ ok: true });
 });
 
@@ -377,7 +270,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
     id,
     pid
   );
-  if (!r) throw new HttpError(404, 'Not found');
+  if (!r) throw new HttpError(404, M.notFound);
   const invariantError = transactionInvariantError(r);
   if (invariantError) throw new HttpError(400, invariantError);
 
@@ -390,7 +283,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   // same period — two identical transactions, the account debited twice. The guard carried by
   // every statement below is what closes it.
   if (r.next_date && r.next_date > todayStr) {
-    throw new HttpError(409, 'Recurring transaction already populated for current period');
+    throw new HttpError(409, M.populated);
   }
 
   const date = r.next_date || todayStr;
@@ -402,7 +295,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
   // nextOccurrence counts months on the calendar: setMonth() overflowed past a shorter month, so
   // a rule on the 31st went from January to 3 March, and stayed on the 3rd.
   const nextStr = nextOccurrence(date, r.frequency, r.day_of_month);
-  if (!nextStr) throw new HttpError(400, UNREADABLE_NEXT_DATE);
+  if (!nextStr) throw new HttpError(400, M.unreadableNextDate);
 
   // The generated transaction inherits the profile's base currency and carries
   // amount_local = amount, matching the create handler (amount_local ?? amount) and the
@@ -422,7 +315,7 @@ recurringRoutes.post('/api/recurring/:id/populate', requireAuth, async (c) => {
 
   const results = await c.env.DB.batch(stmts);
   if ((results[results.length - 1]?.meta?.changes ?? 0) === 0) {
-    throw new HttpError(409, 'Recurring transaction already populated for current period');
+    throw new HttpError(409, M.populated);
   }
   const txLastRowId = results[0]?.meta?.last_row_id;
 

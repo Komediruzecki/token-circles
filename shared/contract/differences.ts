@@ -15,16 +15,12 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'A recorded balance is stored with recorded_at and answered 200 { id, balance, recorded_at } on the Worker, but stored with date and answered 201 { id, account_id, balance, date } in local-first; no screen reads the history yet. Slice 2 (accounts).',
   'account-recompute-answer':
     'POST /api/accounts/recompute-balances answers { ok, recomputed: <count> } on the Worker and { ok, accounts: [...] } in local-first; nothing in the app calls it. Slice 2 (accounts).',
-  'foreign-link-status':
-    "A recurring rule that links another profile's account or category is refused with 403 on the Worker and 400 in local-first; both store nothing. A transaction's own account and category links answer 400 at the field in both runtimes since slice 2, a bill's, a budget's and a savings goal's since slice 3, and a transaction's tags (PUT /api/transactions/:id/tags) since slice 5. Slice 5 (recurring).",
   'transactions-summary-shape':
     'GET /api/transactions/summary answers { total_income, total_expense, total_expenses, total_amount, net_balance, count } and honours the list filters on the Worker, but { totalIncome, totalExpenses, count } over every row in local-first; Analytics fetches it and discards the answer. Slice 2 (transactions).',
   'transaction-account-from-names':
     "On the Worker only, a new transaction is linked to the account named like its category as where the money went (transfer_account_id), and one with no account to the account named like its means of payment as where it came from. Through the Transactions form, which always sends an account, balances agree, but the row still names the other account, which the Transactions page's account filter then shows it under and which cannot be deleted while the row exists (409). An income written with no account (API, MCP or import) credits the account named like its category on the Worker only. Slice 2 (transactions).",
   'day-of-month-default':
     'A recurring rule saved without a day of the month (the form does not require one) stores day_of_month NULL on the Worker and 1 in local-first, and the Recurring form then opens with day 1 in local-first. A bill stores none in both runtimes since slice 3. Slice 5 (recurring).',
-  'delete-missing':
-    "DELETE /api/recurring/:id answers 200 { ok: true } on the Worker when the profile has no such row, another profile's included, and 404 in local-first; neither deletes anything. DELETE /api/bills/:id answers 404 in both runtimes since slice 3. Slice 5 (recurring).",
   'recurring-populate-answer':
     'POST /api/recurring/:id/populate answers { ok, transactionId, next_date } on the Worker and { ok } in local-first; the Recurring section reads neither. Slice 5 (recurring).',
   'recurring-upcoming':

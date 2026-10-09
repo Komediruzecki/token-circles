@@ -109,10 +109,7 @@ export const recurring = [
       expect(await rules(other, expect)).toEqual([]);
       expect((await other.put(`/api/recurring/${id}`, ruleForm({ amount: 1 }))).status).toBe(404);
       expect((await other.post(`/api/recurring/${id}/populate`)).status).toBe(404);
-      // DIFFERENCE delete-missing
-      expect((await other.delete(`/api/recurring/${id}`)).status).toBe(
-        api.runtime === 'worker' ? 200 : 404
-      );
+      expect((await other.delete(`/api/recurring/${id}`)).status).toBe(404);
 
       const mine = (await api.get(`/api/recurring/${id}`)).body;
       expect(mine).toMatchObject({ id, next_date: '2026-03-01' });
@@ -120,19 +117,18 @@ export const recurring = [
       expect(await listTransactions(api, expect)).toEqual([]);
       expect(await listTransactions(other, expect)).toEqual([]);
 
-      // DIFFERENCE foreign-link-status: a rule on another profile's category or account.
-      const refused = api.runtime === 'worker' ? 403 : 400;
+      // A rule on another profile's category or account is refused.
       const theirCategory = await addCategory(other, expect, 'Their rent');
       const theirAccount = await account(other, expect, 'Their account', 10);
       expect(
         (await api.post('/api/recurring', ruleForm({ category_id: theirCategory }))).status
-      ).toBe(refused);
+      ).toBe(400);
       expect(
         (await api.post('/api/recurring', ruleForm({ account_id: theirAccount }))).status
-      ).toBe(refused);
+      ).toBe(400);
       expect(
         (await api.put(`/api/recurring/${id}`, ruleForm({ account_id: theirAccount }))).status
-      ).toBe(refused);
+      ).toBe(400);
       expect(await rules(api, expect)).toHaveLength(1);
     }
   ),

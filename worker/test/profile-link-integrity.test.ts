@@ -6,6 +6,7 @@ import { BILL_MESSAGES } from '../../shared/billSchema';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 import { CATEGORY_MAPPING_MESSAGES } from '../../shared/categoryMappingSchema';
 import { GOAL_MESSAGES } from '../../shared/goalSchema';
+import { RECURRING_MESSAGES } from '../../shared/recurringSchema';
 
 const USER = 91;
 const CURRENT = 910;
@@ -162,18 +163,20 @@ describe('Worker profile-link integrity', () => {
   });
 
   it('rejects foreign category/account links in dependent resources', async () => {
-    expect(
-      (
-        await post('/api/recurring', {
-          description: 'Recurring',
-          amount: 10,
-          type: 'expense',
-          account_id: 922,
-        })
-      ).status
-    ).toBe(403);
-    // A budget, a bill and a goal answer a 400 at the field (shared/budgetSchema.ts and its
-    // siblings), as a transaction does; the others are still a 403 until their slice.
+    // A recurring rule, a budget, a bill and a goal answer a 400 at the field
+    // (shared/recurringSchema.ts and its siblings), as a transaction does; the others are still a
+    // 403 until their slice.
+    const recurring = await post('/api/recurring', {
+      description: 'Recurring',
+      amount: 10,
+      type: 'expense',
+      next_date: '2026-01-01',
+      account_id: 922,
+    });
+    expect(recurring.status).toBe(400);
+    expect(((await recurring.json()) as { fields: object }).fields).toEqual({
+      account_id: RECURRING_MESSAGES.account,
+    });
     const budget = await post('/api/budgets', {
       amount: 100,
       category_id: 9222,
