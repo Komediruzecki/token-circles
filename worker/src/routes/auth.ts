@@ -347,8 +347,10 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
 authRoutes.get('/api/auth/reset-password', async (c) => {
   const token = c.req.query('token') ?? '';
   if (!token) return c.json({ valid: false });
+  // expires_at is written as ISO 8601. datetime(expires_at) and datetime('now') compare the two in
+  // one format, and the POST below compares the same way.
   const row = await c.env.DB.prepare(
-    "SELECT id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
+    "SELECT id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')"
   )
     .bind(await sha256Hex(token))
     .first();
@@ -370,7 +372,7 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // decided by the conditional UPDATE below and nowhere else — two gates for one fact means the
   // read can say yes while the write says no, and the read is the one that is not a claim.
   const row = await c.env.DB.prepare(
-    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND expires_at > datetime('now')"
+    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND datetime(expires_at) > datetime('now')"
   )
     .bind(await sha256Hex(token))
     .first<{ id: number; user_id: number }>();

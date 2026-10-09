@@ -97,6 +97,25 @@ describe('POST /api/auth/forgot-password', () => {
     expect(old.status).toBe(401);
   });
 
+  it('refuses a link once it has expired', async () => {
+    await post('/api/auth/forgot-password', { email: EMAIL });
+    const token = tokenIn(sent[0]);
+    // An expiry that has passed, in the ISO 8601 shape the route writes. D1 keeps its own clock,
+    // which vi.setSystemTime does not reach, so the expiry moves instead of the clock.
+    await env.DB.prepare(
+      "UPDATE password_resets SET expires_at = strftime('%Y-%m-%dT00:00:00.000Z', 'now') WHERE user_id = ?"
+    )
+      .bind(UID)
+      .run();
+
+    const checked = await SELF.fetch(`https://example.com/api/auth/reset-password?token=${token}`);
+    expect(await checked.json()).toEqual({ valid: false });
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+    expect(reset.status).toBe(400);
+    const old = await post('/api/auth/login', { email: EMAIL, password: 'the-old-password' });
+    expect(old.status).toBe(200);
+  });
+
   it('a second request replaces the first link', async () => {
     await post('/api/auth/forgot-password', { email: EMAIL });
     await post('/api/auth/forgot-password', { email: EMAIL });
