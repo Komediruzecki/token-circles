@@ -84,12 +84,14 @@ export class ApiClient {
 
         // Auth/authz failures (401/403) and auth-endpoint 4xx are expected — don't spam the console.
         // A 503 is a transient "retry shortly" (e.g. D1 briefly locked by a backup export) — also
-        // not worth an error line; the request will succeed on a later load.
+        // not worth an error line; the request will succeed on a later load. So is a status the
+        // caller said it expects and handles itself.
         const expected =
           response.status === 401 ||
           response.status === 403 ||
           response.status === 503 ||
-          endpoint.startsWith('/auth/')
+          endpoint.startsWith('/auth/') ||
+          (options.expectedStatuses ?? []).includes(response.status)
         if (!expected) {
           logger.error(
             'API Error',
@@ -652,10 +654,13 @@ export class ApiClient {
   }
 
   /**
-   * Get a single loan
+   * Get a single loan. `expected` names statuses the caller handles itself, which are not logged.
    */
-  async getLoan(id: number): Promise<Models.Loan> {
-    return this.request<Models.Loan>(`/loans/${id}`, Schemas.LoanSchema)
+  async getLoan(
+    id: number,
+    expected?: Pick<ApiTypes.ApiClientOptions, 'expectedStatuses'>
+  ): Promise<Models.Loan> {
+    return this.request<Models.Loan>(`/loans/${id}`, Schemas.LoanSchema, expected)
   }
 
   /**

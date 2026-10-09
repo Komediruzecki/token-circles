@@ -168,12 +168,17 @@ export function refreshAchievements(): Promise<UnlockRecord[]> {
  * The loans, with the rate periods and prepayments the amortisation needs. The list route does
  * not carry either in server mode, so each loan is fetched once; a profile with no loans makes
  * no extra request at all, and one with a mortgage makes one.
+ *
+ * A loan deleted between the list and its own read (in another tab, say) answers 404. It is
+ * simply not counted, and the 404 is not logged as an error: nothing went wrong.
  */
 async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
   const list = ownRows(await api.getLoans().catch(() => []), profileId)
   if (list.length === 0) return []
   const details = await Promise.all(
-    list.map((l) => api.getLoan(l.id).catch(() => null as unknown as null))
+    list.map((l) =>
+      api.getLoan(l.id, { expectedStatuses: [404] }).catch(() => null as unknown as null)
+    )
   )
   return details
     .filter((d): d is NonNullable<typeof d> => d !== null)
