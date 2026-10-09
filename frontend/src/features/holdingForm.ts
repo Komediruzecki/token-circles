@@ -25,6 +25,7 @@ import {
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { createForm } from '../components/form'
 import { apiPost, apiPut, formatCurrency, showToast } from '../core/api'
+import { activeProfileId } from '../core/apiProfileScope'
 import { showConfirm } from '../core/confirmStore'
 import { parseDecimalInput } from '../core/decimalInput'
 import type { HoldingInput } from '../../../shared/holdingSchema'
@@ -42,7 +43,7 @@ export interface HoldingFormValues {
 /** A holding as the page lists it, to open it for editing or merge a buy into it. */
 export type HeldHolding = Pick<
   PortfolioHolding,
-  'id' | 'ticker' | 'shares' | 'purchase_price' | 'purchase_date' | 'notes'
+  'id' | 'ticker' | 'shares' | 'purchase_price' | 'purchase_date' | 'notes' | 'profile_id'
 >
 
 export type HoldingForm = Form<HoldingFormValues> & {
@@ -59,7 +60,11 @@ export type HoldingForm = Form<HoldingFormValues> & {
 }
 
 export interface HoldingFormOptions {
-  /** The holdings on the page: a buy of a ticker among them is offered as a merge. */
+  /**
+   * The holdings on the page. A buy of a ticker the active profile holds among them is offered as
+   * a merge. The household view lists other profiles' holdings too, but a buy is written to the
+   * active profile, so a merge into one of theirs would answer that the holding does not exist.
+   */
   holdings: () => readonly HeldHolding[]
 }
 
@@ -154,8 +159,11 @@ export function createHoldingForm(options: HoldingFormOptions): HoldingForm {
         return
       }
       const buy = checkHoldingCreate(body)
+      const profile = activeProfileId()
       const held = buy.ok
-        ? options.holdings().find((h) => h.ticker.toUpperCase() === buy.value.ticker)
+        ? options
+            .holdings()
+            .find((h) => h.profile_id === profile && h.ticker.toUpperCase() === buy.value.ticker)
         : undefined
       if (buy.ok && held && (await merge(held, buy.value))) return
       await apiPost('/api/portfolio/holdings', body)

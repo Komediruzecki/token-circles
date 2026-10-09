@@ -282,6 +282,35 @@ describe('a buy of a ticker already held', () => {
     expect(successToasts()).toEqual(['Added "EXMPL" to your portfolio.'])
   })
 
+  it("is not offered as a merge into another profile's holding the household view lists", async () => {
+    await (
+      await getDB()
+    ).add('profiles', { id: 2, name: 'Partner', created_at: '2026-01-01T00:00:00.000Z' })
+    localStorage.setItem('selectedProfileIds', '[1,2]')
+    await seed({ profile_id: 2 })
+    await showPage()
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-test-id="portfolio-holding-row"]')).not.toBeNull()
+    })
+    host.querySelector<HTMLButtonElement>('[data-test-id="add-holding-btn"]')!.click()
+    await vi.waitFor(() => {
+      expect(dialog()).not.toBeNull()
+    })
+    fillBuy('exmpl', '2', '110', '2026-03-02')
+
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await holdings()).map((h) => [h.profile_id, h.shares])).toEqual([
+        [2, 10],
+        [1, 2],
+      ])
+    })
+    expect(confirmRequests()).toEqual([])
+    expect(successToasts()).toEqual(['Added "EXMPL" to your portfolio.'])
+    expect(failureToasts()).toEqual([])
+  })
+
   it("marks the shares when the runtime refuses the merged total, in the runtime's words", async () => {
     await seed({ shares: 600_000_000_000 })
     await openAdd()
