@@ -19,8 +19,7 @@ async function addHousing(api: ContractApi, expect: Expect, fields: Record<strin
   const reply = await api.post('/api/housing', housingForm(fields));
   expectOk(expect, reply, 'POST /api/housing');
   expect(reply.body.id).toEqual(expect.any(Number));
-  // DIFFERENCE housing-answer-shape
-  expect(reply.status).toBe(api.runtime === 'worker' ? 200 : 201);
+  expect(reply.status).toBe(201);
   return reply.body.id as number;
 }
 
@@ -56,9 +55,11 @@ export const housing = [
       due: '03-05',
       notes: 'Paid to the landlord',
     });
-    // DIFFERENCE housing-answer-shape
-    if (api.runtime === 'worker') expect(row.autopay).toBe(1);
-    else expect(row.autopay).toBe(true);
+    expect(row.autopay).toBe(true);
+    // DIFFERENCE housing-answer-shape: local-first also answers the form's own fields.
+    if (api.runtime === 'local') {
+      expect(row).toMatchObject({ property_name: 'Flat rent', due_day: 5, due_month: 3 });
+    } else expect(row.property_name).toBeUndefined();
 
     // Nothing in the app edits one; a client would send the form's body again.
     expectOk(
@@ -131,11 +132,13 @@ export const housing = [
     }
   ),
 
-  scenario('a housing expense sent without a due month', async (api, expect) => {
-    const id = await addHousing(api, expect, { due_month: undefined, due_day: 15 });
-    const row = (await housingList(api, expect)).housings.find((h: Json) => h.id === id);
-    // DIFFERENCE housing-due-month-default: the Housing form always sends one.
-    const thisMonth = String(new Date().getUTCMonth() + 1).padStart(2, '0');
-    expect(row.due_date).toBe(api.runtime === 'worker' ? '01-15' : `${thisMonth}-15`);
-  }),
+  scenario(
+    'a housing expense sent without a due month falls due this month',
+    async (api, expect) => {
+      const id = await addHousing(api, expect, { due_month: undefined, due_day: 15 });
+      const row = (await housingList(api, expect)).housings.find((h: Json) => h.id === id);
+      const thisMonth = String(new Date().getUTCMonth() + 1).padStart(2, '0');
+      expect(row.due_date).toBe(`${thisMonth}-15`);
+    }
+  ),
 ];

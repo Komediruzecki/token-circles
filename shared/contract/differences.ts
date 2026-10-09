@@ -34,9 +34,7 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
   'emergency-fund-extras':
     'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
   'housing-answer-shape':
-    "POST /api/housing answers 200 on the Worker and 201 in local-first, and GET /api/housing answers autopay as 0 or 1 with the stored columns on the Worker, but as true or false with the form's own fields (property_name, due_day, due_month) too in local-first; the Housing page reads both. Slice 5 (housing).",
-  'housing-due-month-default':
-    'A housing expense posted without a due month falls due in January on the Worker and in the current month in local-first; the Housing form always sends one. Slice 5 (housing).',
+    "GET /api/housing answers each row's stored columns on the Worker, and the form's own fields (property_name, due_day, due_month) beside them in local-first; the Housing page reads both. Slice 5 (housing).",
   'portfolio-prices':
     'POST /api/portfolio/prices answers live quotes from Yahoo Finance on the Worker and none, ever, in local-first, which cannot reach a quote service from the browser; the Portfolio page then values holdings at their purchase price and says no live prices are available. Slice 5 (portfolio).',
   'settings-scope':
