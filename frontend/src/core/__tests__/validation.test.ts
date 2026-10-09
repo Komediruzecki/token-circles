@@ -177,6 +177,23 @@ describe('validation - validateBody', () => {
     expect(result).toBeNull()
   })
 
+  it('checks a new recurring rule by the shared rules, and leaves an edit to its handler', async () => {
+    expect(
+      await fieldsOf('/api/recurring', {
+        description: 'Rent',
+        amount: 900,
+        frequency: 'fortnightly',
+        next_date: '2026-06-01',
+        category_id: 0,
+      })
+    ).toEqual({
+      frequency: 'Choose Daily, Weekly, Monthly or Yearly.',
+      category_id: 'Choose a category from the list, or leave it blank.',
+    })
+    // An edit that sends one field is checked against the stored rule (checkRecurringEdit).
+    expect(validateBody('PUT', '/api/recurring/4', { notes: 'Flat 5' })).toBeNull()
+  })
+
   it('validates tag create body', () => {
     const result = validateBody('POST', '/api/tags', {
       name: 'groceries',
@@ -287,19 +304,14 @@ describe('validation - the shared checks', () => {
 })
 
 describe('validation - a zod refusal in plain words', () => {
-  it('says what to do with a list value and an id', async () => {
-    expect(
-      await fieldsOf('/api/recurring', {
-        description: 'Rent',
-        amount: 900,
-        type: 'expense',
-        frequency: 'fortnightly',
-        next_date: '2026-06-01',
-        category_id: 0,
-      })
-    ).toEqual({
-      frequency: 'Choose the frequency from the list.',
-      category_id: 'Choose the category from the list.',
+  it('says what to do with a missing value and a value not on the list', async () => {
+    // Counterparties are the last entity with a zod schema (docs/plans/2026-10-07-form-errors.md).
+    expect(await fieldsOf('/api/counterparties', { name: '', type: 'company' })).toEqual({
+      name: 'Fill in the name.',
+      type: 'Choose the type from the list.',
+    })
+    expect(await fieldsOf('/api/counterparties', { name: 'x'.repeat(101) })).toEqual({
+      name: 'Keep the name to 100 characters or fewer.',
     })
   })
 

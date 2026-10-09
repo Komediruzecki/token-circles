@@ -29,6 +29,7 @@ import { checkHousingCreate } from '../../../shared/housingSchema'
 import { checkImportSourceCreate, checkSheetFetch } from '../../../shared/importSourceSchema'
 import { checkLoanCreate } from '../../../shared/loanSchema'
 import { checkProfileCreate } from '../../../shared/profileSchema'
+import { checkRecurringCreate } from '../../../shared/recurringSchema'
 import { refusalOf } from '../../../shared/refusal'
 import { checkSettingsUpdate, checkStorageMode } from '../../../shared/settingsSchema'
 import { checkTagCreate, defaultTagColor } from '../../../shared/tagSchema'
@@ -69,19 +70,7 @@ export function localTransactionDefaults(): TransactionDefaults {
 // Not a zod schema: shared/goalSchema.ts, which the Worker route runs too.
 
 // ── Recurring Transaction ──────────────────────────────────────────────────────
-
-export const recurringCreateSchema = z.object({
-  description: z.string().min(1),
-  amount: z.number(),
-  type: z.enum(['income', 'expense', 'transfer']),
-  frequency: z.enum(['daily', 'weekly', 'monthly', 'yearly']),
-  day_of_month: z.number().int().min(1).max(31).nullable().optional(),
-  next_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  category_id: z.number().int().positive().nullable().optional(),
-  notes: z.string().nullable().optional(),
-})
-
-export const recurringUpdateSchema = recurringCreateSchema.partial()
+// Not a zod schema: shared/recurringSchema.ts, which the Worker route runs too.
 
 // ── Tag ────────────────────────────────────────────────────────────────────────
 // Not a zod schema: shared/tagSchema.ts, which the Worker route runs too.
@@ -135,8 +124,8 @@ const schemaMap: Record<string, BodyRule> = {
   'POST:/api/bills': checkBillCreate,
   'POST:/api/loans': checkLoanCreate,
   'POST:/api/savings-goals': (body) => checkGoalCreate(body, { today: localToday() }),
-  'POST:/api/recurring': recurringCreateSchema,
-  'PUT:/api/recurring': recurringUpdateSchema,
+  // An edit is checked by its handler against the stored rule (checkRecurringEdit).
+  'POST:/api/recurring': checkRecurringCreate,
   // A new tag's colour, when it has none, depends on the profile's tags: its handler fills it in.
   // An edit is checked by its handler against the stored tag (checkTagEdit).
   'POST:/api/tags': (body) => checkTagCreate(body, defaultTagColor(0)),
