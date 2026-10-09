@@ -75,6 +75,18 @@ describe('API access is a paid feature', () => {
     expect((await mint('basic', 'three')).status).toBe(201);
   });
 
+  it('an expired token frees its slot too', async () => {
+    expect((await mint('basic', 'one')).status).toBe(201);
+    expect((await mint('basic', 'two')).status).toBe(201);
+    // An expiry that has passed, in the ISO 8601 shape a client sends. D1 keeps its own clock,
+    // which vi.setSystemTime does not reach, so the expiry moves instead of the clock.
+    await env.DB.prepare(
+      "UPDATE api_tokens SET expires_at = strftime('%Y-%m-%dT00:00:00.000Z', 'now') WHERE user_id = 92 AND name = 'two'"
+    ).run();
+    const third = await mint('basic', 'three');
+    expect(third.status, await third.clone().text()).toBe(201);
+  });
+
   it('Ultimate is uncapped', async () => {
     for (let i = 0; i < 12; i++) expect((await mint('ultimate', `t${i}`)).status).toBe(201);
   });

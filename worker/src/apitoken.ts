@@ -72,6 +72,15 @@ export async function mintApiToken(
 }
 
 /**
+ * Whether a token's expiry has passed. One rule for signing in with a token and for counting
+ * live tokens against a plan's limit. `expires_at` holds the string the client sent, which mint
+ * checks with Date.parse, so it is read with Date here as well.
+ */
+export function tokenExpired(expiresAt: string | null): boolean {
+  return !!expiresAt && new Date(expiresAt).getTime() <= Date.now();
+}
+
+/**
  * Resolve a raw secret to its identity, or null.
  *
  * Note what is NOT checked: users.token_version. That counter is the blunt instrument behind
@@ -96,7 +105,7 @@ export async function verifyApiToken(DB: D1Database, raw: string): Promise<Token
     await hashToken(raw)
   );
   if (!row || row.revoked_at) return null;
-  if (row.expires_at && new Date(row.expires_at).getTime() <= Date.now()) return null;
+  if (tokenExpired(row.expires_at)) return null;
   // The plan is checked here, not only where tokens are minted, so a downgrade or a lapsed
   // subscription actually closes the API rather than leaving whatever was minted while paid
   // working forever. It is a joined column, so it costs no extra round trip.
