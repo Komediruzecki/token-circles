@@ -1,3 +1,5 @@
+import { CONSTELLATION } from '../../../shared/palette'
+
 /**
  * Token Circles categorical palette — the "constellation".
  * Azure-anchored with warm dawn and mint counterpoints, tuned to read on
@@ -5,19 +7,11 @@
  * of categories needs distinct colors and no per-item color is defined
  * (charts, swatches, orbit rings). Prefer a category's own stored color
  * when it has one; fall back to this palette by index.
+ *
+ * The colors themselves are in shared/palette.ts: a tag created without a color takes the next of
+ * them, on the Worker as in local-first.
  */
-export const CATEGORY_PALETTE = [
-  '#6e9bff', // azure
-  '#f0a860', // dawn
-  '#59d2a2', // mint
-  '#e0708a', // rose
-  '#93b4ff', // azure bright
-  '#e8c268', // amber
-  '#4fb3d9', // cyan
-  '#c9a0ff', // violet
-  '#7182a8', // mist (also the "Other" bucket)
-  '#3b6fe0', // azure deep
-]
+export const CATEGORY_PALETTE = CONSTELLATION
 
 /** Neutral color for an aggregated "Other" bucket. */
 export const OTHER_COLOR = '#7182a8'
