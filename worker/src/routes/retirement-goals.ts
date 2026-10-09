@@ -3,16 +3,20 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError } from '../http';
 import * as db from '../db';
 import { localNow } from '../local-date';
 import { normalizedTransactionAmountSql } from '../transaction-amount';
 import { projectRetirement } from '../../../shared/retirement';
 import {
+  checkRetirementGoalCreate,
+  checkRetirementGoalEdit,
+} from '../../../shared/retirementGoalSchema';
+import { checkRetirementPlan } from '../../../shared/retirementPlanSchema';
+import {
   buildFacts,
   deriveSettings,
   monthOf,
-  normalizeSettings,
   settingsToInput,
 } from '../../../shared/retirementSettings';
 import type { CashflowRow, RetirementSettings } from '../../../shared/retirementSettings';
@@ -119,58 +123,53 @@ retirementGoalsRoutes.get('/api/retirement-goals', requireAuth, async (c) => {
   });
 });
 
+// A goal is checked by the rules local-first and the goal dialog run too
+// (shared/retirementGoalSchema.ts): a refused body answers 400 at its fields, and nothing a
+// person did not type is stored as if they had.
 retirementGoalsRoutes.post('/api/retirement-goals', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const dl = b.deadline || b.target_date || null;
-  if (!b.name || b.target_amount == null)
-    throw new HttpError(400, 'Name and target amount are required');
-  const res = await db.insert(c.env.DB, 'retirement_goals', {
-    profile_id: pid,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: dl,
-    notes: b.notes || '',
-    current_age: b.current_age || 30,
-    retirement_age: b.retirement_age || 65,
-    monthly_contribution: b.monthly_contribution || 0,
-    expected_return_rate: b.expected_return_rate || 7,
-  });
+  const goal = accept(checkRetirementGoalCreate(await c.req.json()));
+  const res = await db.insert(c.env.DB, 'retirement_goals', { ...goal, profile_id: pid });
   return c.json({
     id: res.meta.last_row_id,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: b.current_amount || 0,
-    deadline: dl,
-    notes: b.notes,
+    name: goal.name,
+    target_amount: goal.target_amount,
+    current_amount: goal.current_amount,
+    deadline: goal.deadline,
+    notes: goal.notes,
     profile_id: pid,
   });
 });
 
-retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const dl = b.deadline || b.target_date || null;
-  const res = await db.update(
+/** The profile's goal `id`, or the 404 that says it is not there. */
+async function ownGoal(c: Context<AppEnv>, pid: number): Promise<Record<string, unknown>> {
+  const goal = await db.first<Record<string, unknown>>(
     c.env.DB,
-    'retirement_goals',
-    {
-      name: b.name,
-      target_amount: b.target_amount,
-      current_amount: b.current_amount,
-      deadline: dl,
-      notes: b.notes || '',
-      current_age: b.current_age || 30,
-      retirement_age: b.retirement_age || 65,
-      monthly_contribution: b.monthly_contribution || 0,
-      expected_return_rate: b.expected_return_rate || 7,
-    },
-    'id = ? AND profile_id = ?',
+    'SELECT * FROM retirement_goals WHERE id = ? AND profile_id = ?',
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!goal) throw new HttpError(404, 'Retirement goal not found');
+  return goal;
+}
+
+// An edit checks and writes only the fields whose value it changes (decision 2), so a goal an
+// older version stored under other rules can still be renamed, and a field it leaves out is left
+// as it is.
+retirementGoalsRoutes.put('/api/retirement-goals/:id', requireAuth, async (c) => {
+  const pid = await getProfileId(c);
+  const existing = await ownGoal(c, pid);
+  const fields = accept(checkRetirementGoalEdit(await c.req.json(), existing));
+  if (Object.keys(fields).length > 0) {
+    await db.update(
+      c.env.DB,
+      'retirement_goals',
+      fields,
+      'id = ? AND profile_id = ?',
+      existing.id,
+      pid
+    );
+  }
   return c.json({ ok: true });
 });
 
@@ -183,7 +182,7 @@ retirementGoalsRoutes.delete('/api/retirement-goals/:id', requireAuth, async (c)
     c.req.param('id'),
     pid
   );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  if (!res.meta.changes) throw new HttpError(404, 'Retirement goal not found');
   return c.json({ ok: true });
 });
 
@@ -200,6 +199,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
     annualReturn = 7,
     annualExpenses = 30000,
     withdrawalRate = 4,
+    inflationRate = 0,
     expensesAtRetirement = null,
     country = '',
   } = b;
@@ -228,8 +228,9 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
       monthlyIncome: monthlyContribution,
       monthlyExpenses: 0,
       annualReturnPct: returnPct,
-      // This endpoint has no inflation input, so it projects in nominal money throughout.
-      annualInflationPct: 0,
+      // The caller's inflation rate, as local-first takes it: 0, nominal money throughout, when
+      // none is sent. It used to be dropped here, so the answer ignored what was asked for.
+      annualInflationPct: inflationRate,
       horizonMonths,
       safeWithdrawalRatePct: withdrawalRate,
       lifestyles: [{ id: 'fire', label: 'FIRE', monthlySpendToday: adjustedExpenses / 12 }],
@@ -303,6 +304,7 @@ retirementGoalsRoutes.post('/api/calculator/retire', requireAuth, async (c) => {
       annualReturn,
       adjustedExpenses,
       withdrawalRate,
+      inflationRate,
       country,
       expensesAtRetirement,
     },
@@ -322,9 +324,10 @@ retirementGoalsRoutes.get('/api/retirement/settings', requireAuth, async (c) => 
 
 retirementGoalsRoutes.put('/api/retirement/settings', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  // Normalised before storage, so the row can only ever hold something the model accepts —
-  // whatever the client sent, and whatever an older client sends later.
-  const settings = normalizeSettings(await c.req.json());
+  // Checked by the rules local-first and the planner run too (shared/retirementPlanSchema.ts): a
+  // value outside its range is refused at its field rather than moved into it, and a plan that
+  // fits is stored as normalizeSettings stores it, so the row only ever holds what the model takes.
+  const settings = accept(checkRetirementPlan(await c.req.json()));
   await db.run(
     c.env.DB,
     'INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)',

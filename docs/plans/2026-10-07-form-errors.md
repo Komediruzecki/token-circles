@@ -1,7 +1,9 @@
 # Form errors: one answer, one schema, one kit
 
 Status: **slice 1 (categories) merged in #602; slice 2 (transactions and accounts) built on
-`feat/forms-transactions`, see [Slice 2](#slice-2-transactions-and-accounts-2026-10-08)**
+`feat/forms-transactions`, see [Slice 2](#slice-2-transactions-and-accounts-2026-10-08); slice 4a
+(loans and retirement) built on `feat/forms-loans`, see
+[Slice 4a](#slice-4a-loans-and-retirement-2026-10-08)**
 Date: 2026-10-07, decisions recorded 2026-10-08. Written on PR #599 (`fix/dev-check-polish`,
 664fd0c6); rebased onto main (d92626fe) once #599 and #601 merged.
 
@@ -172,8 +174,8 @@ From `validation.ts` against each Worker route; each PR re-checks its own entiti
   five values, the Worker stores any. _Settled in slice 3._
 - **Savings goals.** Local requires a positive target; the Worker accepts 0. _Settled in slice 3._
 - **Loans.** Local requires every field; the Worker checks none. A loan without a name answers 500
-  with D1's text, and `interest_rate || 5.0` turns a 0 % loan into a 5 % one (outside this
-  workstream; noted under Later).
+  with D1's text, and `interest_rate || 5.0` turns a 0 % loan into a 5 % one. _Settled in slice
+  4a._
 - **Housing.** The local schemas are registered as `/api/housings`, but the route is
   `/api/housing`, so they never run. (They would refuse the form: they require a purchase price
   the Housing form does not send.)
@@ -525,6 +527,85 @@ budget by $" names dollars whatever the currency; the Bills dialog has no accoun
 payment moves no balance unless an API client set one; there is no way to remove a budget on the
 page. Follow-up: the bill calendar draws every bill once a month, whatever its frequency.
 
+## Slice 4a: loans and retirement (2026-10-08)
+
+On `feat/forms-loans`, from 149a41e8 and moved onto main at 39808e0b (#607 in).
+
+- **One set of rules each, in `shared/`.** `shared/loanSchema.ts` (a loan, a rate period and an
+  extra payment), `shared/retirementGoalSchema.ts` and `shared/retirementPlanSchema.ts` hold the
+  rules and their words. The Worker routes (`loans.ts`, `retirement-goals.ts`), the local-first
+  handlers and the forms run them. Both runtimes answer a refusal with 400 `{ error, fields }`, a
+  row's field named `<list>.<index>.<field>` (`rate_periods.0.rate`,
+  `lifestyles.1.monthlySpendToday`), and an edit of a loan, a rate period, an extra payment or a
+  goal checks and writes only what it changes. The plan is saved whole: its ranges are the ones
+  `normalizeSettings` reads a stored plan into, so a plan read back and sent unchanged always saves.
+- **The forms are on the kit.** The Loans dialog, its rate periods as rows
+  (`features/loans/loanForm.ts`); adding and changing an extra payment
+  (`features/loans/extraPaymentForm.ts`); the Retirement page's goal dialog
+  (`features/retirementGoalForm.ts`); and the planner's assumptions (`RetirementPlanner.tsx`).
+- **The kit takes a list of rows**, whose marks follow a row when one before it is removed. It keeps
+  its own copy of the values it starts from and is reset to, and `SubmitButton` takes `unchanged`
+  for a form whose values are already saved: the planner's "Saved", aria-disabled so it keeps
+  focus. `NumberField` and `MonthPicker` carry a field's marks.
+
+What the runtimes now agree on:
+
+| Question                                   | Before                                           | Now, in both                                         |
+| ------------------------------------------ | ------------------------------------------------ | ---------------------------------------------------- |
+| A loan without a name                      | A 500 from D1 on the Worker                      | Refused at `name`                                    |
+| A loan without a rate                      | Saved at 5 % on the Worker                       | Refused at `interest_rate`; 0 % stays 0 %            |
+| A rate period's rate and payments          | Stored as sent on the Worker                     | 0 to 100 %, inside the loan's term, refused at a row |
+| An extra payment with three decimals       | Rounded                                          | Refused at `amount`                                  |
+| Removing a rate period or extra payment    | 200 on the Worker for one the loan does not have | 404                                                  |
+| A loan the profile does not have           | "Not found" on the Worker                        | "Loan not found"                                     |
+| The loan list's extra payment total        | null for none on the Worker; float sums in both  | 0 for none, to the cent                              |
+| A retirement goal without ages or a return | Saved as 30, 65 and 7 %                          | Refused at each field                                |
+| A retirement goal at 0 %                   | Saved as 7 %                                     | 0 %                                                  |
+| A goal edit that sends only a name         | A 500 on the Worker                              | The name changes                                     |
+| A goal the profile does not have           | "Not found" on the Worker                        | "Retirement goal not found"                          |
+| A plan value outside its range             | Moved into range, or dropped, without a word     | Refused at the field                                 |
+| The FIRE calculator with an inflation rate | Ignored on the Worker                            | Deflates the projection                              |
+
+The contract's `loan-total-prepaid-none` and `fire-inflation` are settled and their pins removed.
+
+Fixed on the way, each with a test that failed before: a goal saved at 0 % showed, and opened, at
+7 %, and one without a date said "Invalid Date"; local-first restored a backup's 0 % goal at 7 %;
+local-first served a `POST /loans/:id/prepayment` that nothing called; removing an extra payment
+another tab had removed was an error toast and left the row listed (local-first, and cloud once
+the Worker answers 404), and now says "That extra payment was already removed." and reads the loan
+again; deleting a loan another tab had deleted said "The loan was not deleted. Check your
+connection and try again." and left it listed, and now says "That loan was already deleted.",
+with any other failure in the runtime's words; and a change open on an extra payment lost the
+caret when the list was read again, as on coming back to the page after a minute away. The parity
+guard (`shared/fixtures/loanFormParity.ts`) gained a loan with two extra payments in one month and
+one after payoff, so each runtime's schedule and its list's `total_prepaid` are held to figures
+worked out by hand.
+
+Not a fix to anything shipped: main's dialog never gave a new loan the rate periods of a loan
+edited before it. It replaced the draft's list on every change rather than changing it
+(`LoanForm.tsx` on main, lines 55, 64-66, 326-328 and 353-356). Moving the dialog onto the kit
+exposed the kit's shallow copy: a reset changed in place the lists of the values the form was
+given, so the first edit of a loan wrote its rate periods into the blank loan's list. The kit's own
+copy of its values (c3849fe2) fixed that before merge, with a test that fails without it.
+
+Open for the owner, each a change no decision covers: a new loan must give a rate and an edit
+cannot empty one, where the Worker saved 5 % and kept the stored rate; a third decimal on an extra
+payment is refused where it was rounded; a new goal must give both ages and a return, where the API
+filled in 30, 65 and 7 %; the goal dialog's date is optional, as both runtimes always took it,
+where the dialog had made it required; the ranges (ages 18 to 100, a goal's return 0 to 20 %, a
+loan's rate 0 to 100 % and its term 1 to 1200 months); a plan saved through the API is refused
+where it was clamped; a loan's extra payment total of 0 for none, and the FIRE calculator taking
+`inflationRate` in both runtimes, as local-first did; an extra payment's month and amount read from
+text; the wording of the new messages and toasts; the planner's "Saved" button, the kit's
+`unchanged` state; a name over 100 characters, refused for a loan on the Worker and for a goal in
+both, where only local-first capped a loan's; two decimals on a loan's amount and a goal's three
+amounts; a goal's target above zero and its saved amount and contribution zero or more, where both
+runtimes stored text or a negative target; real dates for a loan's first payment and a goal's target
+date, where the Worker stored any text for both and local-first checked only a loan's shape, so
+2026-02-30 saved; a rate period's rate from 0 to 100 and payments inside the term; the goal dialog's
+Current Amount, no longer required, a blank one saved as 0; the goal card's "Not set" and "No target
+date"; and a second Remove of an extra payment, a 404 the page now says was already done.
+
 ## Rollout, one PR each
 
 1. **Contract, `ApiError`, kit, categories.** Forms 1-4, the swatch toasts, the shared category
@@ -627,7 +708,6 @@ Added to the plan, and confirmed on 2026-10-08:
 - A 401 on a write fires `auth:required` from `request()` only; the raw helpers do not.
 - The local router answers an unexpected handler error with the raw `err.message` and status 500,
   as the Worker did before #601.
-- A loan's `interest_rate || 5.0` on the Worker stores a 0 % loan as 5 %.
 - The housing schema keys (`/api/housings`) in `validation.ts` never match the route.
 - The bulk update route on the Worker still answers 403 for another profile's category, where
   local-first and the single-row routes answer 400.
@@ -638,3 +718,10 @@ Added to the plan, and confirmed on 2026-10-08:
 - `CommandBar` and `GuidedOrbit` add transactions outside the form, with their own toasts.
 - The account delete confirmation says it "also removes all of its transactions", but a delete is
   refused while transactions use the account.
+- A retirement goal's card reads its date with `new Date('YYYY-MM-DD')`, midnight in UTC, so west
+  of UTC it shows the day before.
+- The Loans dialog's first payment date is a `type="date"` input (solid-forms rule 4), for a date
+  that can be years back.
+- The Worker's loan CSV export totals extra payments in SQL (`exports.ts`), so a loan without any
+  exports an empty total and a sum can carry a float error, where the loan list now says 0, to the
+  cent.

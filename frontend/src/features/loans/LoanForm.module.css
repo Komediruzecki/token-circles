@@ -105,3 +105,48 @@
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
+
+/* ── Rate periods ────────────────────────────────────────────────────────── */
+
+.periods-hint {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+.periods {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+/* One rate period: its rate, its first and last payment, and the button that removes it. A
+   refusal under one field makes that field taller, so the row aligns its fields at the top. */
+.period {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+.period-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.period-field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.period-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Level with the inputs, below the labels. */
+.period-remove {
+  margin-top: 20px;
+}

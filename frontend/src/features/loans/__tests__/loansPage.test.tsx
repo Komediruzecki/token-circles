@@ -9,9 +9,10 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiGet, apiPost, apiPut, showToast } from '../../../core/api'
+import { apiDelete, apiGet, apiPost, apiPut, showToast } from '../../../core/api'
 import { ApiError } from '../../../core/apiError'
 import { setPage } from '../../../core/appStore'
+import { confirmRequests, resolveConfirm } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest, invalidateForRequest } from '../../../core/dataVersions'
 
 let listed: Record<string, unknown>[] = []
@@ -35,7 +36,20 @@ vi.mock('../../../core/api', async (importOriginal) => {
       invalidateForRequest(path, 'POST', true)
       return { ok: true }
     }),
+    // A removal takes the row out of the store. One the store no longer has, because another tab
+    // removed it first, is a 404 in the words both runtimes use, and bumps nothing.
     apiDelete: vi.fn(async (path: string) => {
+      const ref = /\/prepayments\/(\d+)$/.exec(path)?.[1]
+      if (ref !== undefined) {
+        const extras = (loanOf(path)?.prepayments ?? []) as Record<string, unknown>[]
+        const at = extras.findIndex((p) => String(p.id) === ref)
+        if (at < 0) throw new ApiError(404, 'Extra payment not found')
+        extras.splice(at, 1)
+      } else {
+        const loan = loanOf(path)
+        if (!loan) throw new ApiError(404, 'Loan not found')
+        listed = listed.filter((l) => l !== loan)
+      }
       invalidateForRequest(path, 'DELETE', true)
       return { ok: true }
     }),
@@ -433,6 +447,52 @@ describe('the tour', () => {
   })
 })
 
+describe('deleting a loan', () => {
+  /** Press the card's Delete and confirm it. */
+  async function deleteFromCard(root: HTMLElement, name: string) {
+    root.querySelector<HTMLButtonElement>(`[aria-label="Delete ${name}"]`)!.click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+    await settle()
+  }
+
+  it('drops a loan another tab deleted, and says it was already deleted', async () => {
+    const root = await mount('#loans')
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(1)
+    // Another tab deleted it: this page still lists it.
+    listed = []
+    vi.mocked(showToast).mockClear()
+
+    await deleteFromCard(root, 'Mortgage')
+
+    expect(vi.mocked(showToast).mock.calls).toEqual([['That loan was already deleted.', 'info']])
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(0)
+  })
+
+  it('says why a delete failed in the words it came with, or plainly when it has none', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const root = await mount('#loans')
+    vi.mocked(showToast).mockClear()
+    vi.mocked(apiDelete)
+      .mockRejectedValueOnce(
+        new ApiError(500, 'Something went wrong on our side. Try again in a moment.')
+      )
+      .mockRejectedValueOnce(new TypeError("Cannot read properties of undefined (reading 'id')"))
+
+    await deleteFromCard(root, 'Mortgage')
+    await deleteFromCard(root, 'Mortgage')
+
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ['Something went wrong on our side. Try again in a moment.', 'error'],
+      ["Couldn't delete the loan. Try again.", 'error'],
+    ])
+    expect(root.querySelectorAll('[data-test-id="loans-item"]')).toHaveLength(1)
+    quiet.mockRestore()
+  })
+})
+
 describe('the loan page', () => {
   it('says plainly when a loan is not there, with a way back', async () => {
     const root = await mount('#loans/99/schedule')
@@ -472,7 +532,32 @@ describe('the loan page', () => {
     expect(root.textContent).toContain('With your saved extra payment')
   })
 
-  it('says a failed add in plain words, and keeps what was typed', async () => {
+  it('drops an extra payment another tab removed, and says it was already removed', async () => {
+    ;(listed[0].prepayments as unknown[]).push({ id: 7, month: 12, amount: 1000, note: '' })
+    const root = await mount('#loans/1/extras')
+    expect(root.querySelectorAll('[data-test-id="loans-extra-item"]')).toHaveLength(1)
+    // Another tab removed it: this page still lists it.
+    listed[0].prepayments = []
+    vi.mocked(showToast).mockClear()
+
+    root
+      .querySelector<HTMLButtonElement>('[aria-label="Remove the extra payment with payment 12"]')!
+      .click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    resolveConfirm(confirmRequests()[0]!.id, true)
+    await settle()
+
+    // Gone is what was asked: no error, and the page reads the loan again, without it.
+    expect(vi.mocked(showToast).mock.calls).toEqual([
+      ['That extra payment was already removed.', 'info'],
+    ])
+    expect(root.querySelectorAll('[data-test-id="loans-extra-item"]')).toHaveLength(0)
+    expect(el(root, 'loans-extras-empty')).not.toBeNull()
+  })
+
+  it('says a failed add in plain words in the form, and keeps what was typed', async () => {
     vi.mocked(showToast).mockClear()
     vi.mocked(apiPost).mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
     const root = await mount('#loans/1/extras')
@@ -485,10 +570,43 @@ describe('the loan page', () => {
     )
     await settle()
 
-    expect(vi.mocked(showToast).mock.calls).toEqual([
-      ["Couldn't save the extra payment. Try again.", 'error'],
-    ])
+    expect(text(root, 'loans-extra-notice')).toBe("Couldn't save the extra payment. Try again.")
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
     expect((el(root, 'loans-extra-amount') as HTMLInputElement).value).toBe('10000')
+  })
+
+  it('marks the field the runtime refuses, under it, and sends nothing it can tell is wrong', async () => {
+    vi.mocked(showToast).mockClear()
+    vi.mocked(apiPost).mockClear()
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(400, 'Enter an amount above zero.', { amount: 'Enter an amount above zero.' })
+    )
+    const root = await mount('#loans/1/extras')
+    const amount = el(root, 'loans-extra-amount') as HTMLInputElement
+    const submit = () =>
+      el(root, 'loans-extra-form')!.dispatchEvent(
+        new Event('submit', { bubbles: true, cancelable: true })
+      )
+
+    // Checked before sending: nothing goes out.
+    submit()
+    await settle()
+    expect(amount.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(amount)
+    expect(vi.mocked(apiPost)).not.toHaveBeenCalled()
+
+    // Refused by the runtime: marked the same way.
+    amount.value = '10'
+    amount.dispatchEvent(new Event('input', { bubbles: true }))
+    submit()
+    await settle()
+    expect(vi.mocked(apiPost)).toHaveBeenCalledTimes(1)
+    expect(amount.getAttribute('aria-invalid')).toBe('true')
+    expect(document.getElementById(amount.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Enter an amount above zero.'
+    )
+    expect(text(root, 'loans-extra-notice')).toBe('')
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
   })
 
   it('changes a saved extra payment in place', async () => {
@@ -527,7 +645,7 @@ describe('the loan page', () => {
     expect(text(root, 'loans-extra-item')).toBe('Payment 24, Dec 1, 2027Bonus€5,000.00')
   })
 
-  it('says a refused change in plain words, and keeps the form open', async () => {
+  it('says a refused change in plain words in the form, and keeps it open', async () => {
     listed = [
       {
         ...structuredClone(LOAN),
@@ -541,16 +659,19 @@ describe('the loan page', () => {
       .mockRejectedValueOnce(new Error('D1_ERROR: no such column: note'))
     const root = await mount('#loans/1/extras')
     await click(root, 'loans-extra-edit')
+    const notices: string[] = []
     for (let i = 0; i < 2; i++) {
       el(root, 'loans-extra-edit-form')!.dispatchEvent(
         new Event('submit', { bubbles: true, cancelable: true })
       )
       await settle()
+      notices.push(text(root, 'loans-extra-edit-notice'))
     }
-    expect(vi.mocked(showToast).mock.calls).toEqual([
-      ['Enter an amount above zero.', 'error'],
-      ["Couldn't update the extra payment. Try again.", 'error'],
+    expect(notices).toEqual([
+      'Enter an amount above zero.',
+      "Couldn't update the extra payment. Try again.",
     ])
+    expect(vi.mocked(showToast).mock.calls).toEqual([])
     expect(el(root, 'loans-extra-edit-form')).not.toBeNull()
   })
 

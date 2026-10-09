@@ -21,7 +21,7 @@ import { createUniqueId, onCleanup, Show } from 'solid-js'
 import ErrorGlyph from './ErrorGlyph'
 import styles from './Form.module.css'
 import type { JSX } from 'solid-js'
-import type { Form, FormValues } from './createForm'
+import type { FieldName, Form, FormValues } from './createForm'
 
 /** What to spread onto the control. The getters keep it current as the field is marked. */
 export interface FieldControl {
@@ -34,7 +34,8 @@ export interface FieldControl {
 
 export interface FieldProps<T extends FormValues> {
   form: Form<T>
-  name: keyof T & string
+  /** One of the form's values, or `<list>.<index>.<field>` for a field of a row in a list. */
+  name: FieldName<T>
   label: JSX.Element
   /** Help that stays under the field, after the message. */
   hint?: JSX.Element

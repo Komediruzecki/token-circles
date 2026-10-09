@@ -7,15 +7,27 @@
  */
 import { projectRetirement } from '../../../../../shared/retirement'
 import {
+  checkRetirementGoalCreate,
+  checkRetirementGoalEdit,
+} from '../../../../../shared/retirementGoalSchema'
+import { checkRetirementPlan } from '../../../../../shared/retirementPlanSchema'
+import {
   buildFacts,
   deriveSettings,
-  normalizeSettings,
   settingsToInput,
 } from '../../../../../shared/retirementSettings'
 import { localMonth, localToday } from '../../../utils/period'
 import { getDB } from '../idb'
-import { editedRetirementGoal, retirementGoalFields } from '../retirementGoalRows'
-import { adapter, currentProfileRecord, getAmount, idParam, json, notFound, ok } from './helpers'
+import {
+  adapter,
+  currentProfileRecord,
+  getAmount,
+  idParam,
+  json,
+  notFound,
+  ok,
+  refuse,
+} from './helpers'
 import type { CashflowRow } from '../../../../../shared/retirementSettings'
 
 /**
@@ -424,8 +436,12 @@ export async function retirementSettingsGet(): Promise<Response> {
 
 export async function retirementSettingsUpdate(body: unknown): Promise<Response> {
   try {
-    // Normalised before storage, so the row can only ever hold something the model accepts.
-    const settings = normalizeSettings(body)
+    // Checked by the rules the Worker and the planner run too (shared/retirementPlanSchema.ts): a
+    // value outside its range is refused at its field rather than moved into it, and a plan that
+    // fits is stored as normalizeSettings stores it.
+    const checked = checkRetirementPlan(body)
+    if (!checked.ok) return refuse(checked.fields)
+    const settings = checked.value
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
     await db.put('settings', { key: settingsKeyFor(pid), value: settings })
@@ -462,42 +478,51 @@ export async function retirementGoals(): Promise<Response> {
   }
 }
 
+/**
+ * A new goal, checked by the rules the Worker and the goal dialog run too
+ * (shared/retirementGoalSchema.ts): a refused body answers 400 at its fields.
+ */
 export async function retirementGoalCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid goal data' }, 400)
-  const b = body as Record<string, unknown>
-  if (!b.name || b.target_amount === undefined || b.target_amount === null) {
-    return json({ error: 'Name and target amount are required' }, 400)
-  }
+  const checked = checkRetirementGoalCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const goal = checked.value
   const pid = await adapter.getCurrentProfileId()
-  const fields = retirementGoalFields(b)
   const db = await getDB()
   const id = (await db.add('retirement_goals', {
     profile_id: pid,
-    ...fields,
+    ...goal,
     // D1's `created_at DEFAULT CURRENT_TIMESTAMP`, which orders the list.
     created_at: new Date().toISOString(),
   })) as number
-  // The worker echoes these fields, not the stored row, and answers 200.
+  // The Worker answers these fields of what it stored, not the whole row, and answers 200.
   return json({
     id,
-    name: b.name,
-    target_amount: b.target_amount,
-    current_amount: fields.current_amount,
-    deadline: fields.deadline,
-    notes: b.notes,
+    name: goal.name,
+    target_amount: goal.target_amount,
+    current_amount: goal.current_amount,
+    deadline: goal.deadline,
+    notes: goal.notes,
     profile_id: pid,
   })
 }
 
+/**
+ * An edit checks and writes only the fields whose value it changes (decision 2), as the Worker's
+ * does: a goal an older version stored under other rules can still be renamed, and a field the
+ * body leaves out keeps its stored value. Its id, profile and creation date are never the body's.
+ */
 export async function retirementGoalUpdate(
   params: Record<string, string>,
   body: unknown
 ): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
   const existing = await currentProfileRecord('retirement_goals', idParam(params))
   if (!existing) return notFound('Retirement goal')
-  const db = await getDB()
-  await db.put('retirement_goals', editedRetirementGoal(existing, body as Record<string, unknown>))
+  const checked = checkRetirementGoalEdit(body, existing)
+  if (!checked.ok) return refuse(checked.fields)
+  if (Object.keys(checked.value).length > 0) {
+    const db = await getDB()
+    await db.put('retirement_goals', { ...existing, ...checked.value })
+  }
   return ok()
 }
 

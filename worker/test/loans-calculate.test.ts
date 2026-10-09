@@ -5,6 +5,7 @@ import { calendarDateIn } from '../../shared/calendarDate';
 import { addCalendarMonths, calculateLoan, loanStatus } from '../../shared/loanSchedule';
 import type { LoanInput } from '../../shared/loanSchedule';
 import { PARITY_LOAN } from '../../shared/fixtures/loanParity';
+import { LOAN_MESSAGES } from '../../shared/loanSchema';
 
 // The loan routes end to end in workerd against a real D1.
 //
@@ -71,8 +72,9 @@ async function calculate(id: number, profile = ME): Promise<Response> {
 
 describe('the base rate POST and PUT /api/loans store', () => {
   // `b.interest_rate || 5.0` read a 0 % rate as a missing one, so an interest-free loan was saved,
-  // and charged, at 5 %. Only a create that is sent no rate falls back to 5 %; an edit sent none
-  // keeps the rate stored, as it keeps the stored rate periods when it is sent none.
+  // and charged, at 5 %. A create sent no rate is refused at the rate (shared/loanSchema.ts), where
+  // it used to be saved at 5 %; an edit that leaves the rate out keeps the one stored, as it keeps
+  // the stored rate periods when it leaves them out.
   const LOAN = { name: 'Family loan', principal: 12000, start_date: '2026-01-01', term_months: 24 };
 
   async function create(body: Record<string, unknown>): Promise<number> {
@@ -109,27 +111,33 @@ describe('the base rate POST and PUT /api/loans store', () => {
     expect(await totalInterest(id)).toBe(0);
   });
 
-  it('answers a create with the rate it saved, 5 % when it was sent none', async () => {
-    const cases: [Record<string, unknown>, number][] = [
-      [LOAN, 5],
-      [{ ...LOAN, interest_rate: null }, 5],
-      [{ ...LOAN, interest_rate: 0 }, 0],
-    ];
-    for (const [body, rate] of cases) {
+  it('answers a create with the rate it saved, and refuses one sent none', async () => {
+    for (const body of [LOAN, { ...LOAN, interest_rate: null }]) {
       const res = await api('POST', '/api/loans', body);
-      expect(res.status).toBe(200);
-      const answer = (await res.json()) as { id: number; interest_rate?: unknown };
-      expect(answer.interest_rate).toBe(rate);
-      expect((await stored(answer.id)).interest_rate).toBe(rate);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        error: LOAN_MESSAGES.rate,
+        fields: { interest_rate: LOAN_MESSAGES.rate },
+      });
     }
+    const res = await api('POST', '/api/loans', { ...LOAN, interest_rate: 0 });
+    expect(res.status).toBe(200);
+    const answer = (await res.json()) as { id: number; interest_rate?: unknown };
+    expect(answer.interest_rate).toBe(0);
+    expect((await stored(answer.id)).interest_rate).toBe(0);
   });
 
-  it('keeps the rate stored when an edit sends none', async () => {
+  it('keeps the rate stored when an edit leaves it out, and refuses one that empties it', async () => {
     const id = await create({ ...LOAN, interest_rate: 3.5 });
-    for (const edit of [LOAN, { ...LOAN, interest_rate: null }]) {
-      expect((await api('PUT', `/api/loans/${id}`, edit)).status).toBe(200);
-      expect((await stored(id)).interest_rate).toBe(3.5);
-    }
+    expect((await api('PUT', `/api/loans/${id}`, LOAN)).status).toBe(200);
+    expect((await stored(id)).interest_rate).toBe(3.5);
+    const emptied = await api('PUT', `/api/loans/${id}`, { ...LOAN, interest_rate: null });
+    expect(emptied.status).toBe(400);
+    expect(await emptied.json()).toEqual({
+      error: LOAN_MESSAGES.rate,
+      fields: { interest_rate: LOAN_MESSAGES.rate },
+    });
+    expect((await stored(id)).interest_rate).toBe(3.5);
   });
 });
 

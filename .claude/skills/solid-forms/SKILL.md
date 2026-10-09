@@ -193,6 +193,10 @@ const form = createForm({
 - An InfoTip beside a label goes in `Field`'s `tip`, never inside the label: inside a `<label>`
   its whole explanation becomes the control's accessible name.
 - A submit button outside the `<form>` (a dialog footer) is `<SubmitButton form="<the form's id>">`.
+- A list of editable rows (a loan's rate periods) is one value, a list, set whole with `form.set`.
+  Each row's field is a `Field` named `<list>.<index>.<field>` (`rate_periods.0.rate`), the name
+  both runtimes give it in a refusal, inside an `<Index>`. Its marks follow the row when a row
+  before it is removed.
 
 Worked examples: `frontend/src/features/categoryForm.ts`, used by the four category dialogs, with
 its test `frontend/src/features/__tests__/categoryForms.test.tsx`; `accountForm.ts` (a form object

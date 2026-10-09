@@ -185,21 +185,34 @@ describe('PUT /api/retirement/settings', () => {
     ]);
   });
 
-  it('stores a normalised blob, so a bad value cannot reach the model later', async () => {
-    await put('/api/retirement/settings', {
+  it('refuses a value the model cannot take, so it never reaches the model', async () => {
+    // These used to be moved into range (50 %, 0.1 %) or dropped, without a word: now the save is
+    // refused at each field (shared/retirementPlanSchema.ts) and nothing is stored.
+    const res = await put('/api/retirement/settings', {
       annualReturnPct: 9000,
       safeWithdrawalRatePct: 0,
-      lifestyles: [],
       incomeSteps: [{ fromMonth: 'whenever', monthlyAmount: 1 }],
+    });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { fields: object }).fields).toEqual({
+      annualReturnPct: expect.any(String),
+      safeWithdrawalRatePct: expect.any(String),
+      'incomeSteps.0.fromMonth': expect.any(String),
     });
     const row = await env.DB.prepare(
       "SELECT value FROM settings WHERE key = 'retirement_settings' AND profile_id = 800"
     ).first<{ value: string }>();
-    const stored = JSON.parse(row!.value);
-    expect(stored.annualReturnPct).toBe(50);
-    expect(stored.safeWithdrawalRatePct).toBe(0.1);
-    expect(stored.lifestyles.length).toBeGreaterThan(0);
-    expect(stored.incomeSteps).toEqual([]);
+    expect(row).toBeNull();
+  });
+
+  it('stores a normalised blob: what was left out filled in, an empty list given its default', async () => {
+    expect((await put('/api/retirement/settings', { netWorth: 1000, lifestyles: [] })).status).toBe(
+      200
+    );
+    const row = await env.DB.prepare(
+      "SELECT value FROM settings WHERE key = 'retirement_settings' AND profile_id = 800"
+    ).first<{ value: string }>();
+    expect(JSON.parse(row!.value)).toEqual(normalizeSettings({ netWorth: 1000 }));
   });
 
   it('overwrites rather than accumulating rows', async () => {

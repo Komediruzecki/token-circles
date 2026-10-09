@@ -322,8 +322,6 @@ export const LOCAL_ONLY: Readonly<Record<string, string>> = {
     "For api.getLoanRatePeriods, which nothing in the app calls: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'GET ^\\/loans\\/(\\d+)\\/rates$':
     "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
-  'POST ^\\/loans\\/(\\d+)\\/prepayment$':
-    'For api.addLoanPrepayment, which nothing in the app calls: the Loans page adds an extra payment with POST /api/loans/:id/prepayments (on the contract).',
   'GET ^\\/loans\\/(\\d+)\\/prepayments$':
     "For no caller: the Loans page reads a loan's rate periods and extra payments on the loan itself (GET /api/loans/:id), in both modes.",
   'POST ^\\/categories\\/seed$':

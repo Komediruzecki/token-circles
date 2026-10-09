@@ -1,10 +1,17 @@
 import { Hono } from 'hono'
-import type { Context } from 'hono'
 import type { AppEnv } from '../index'
-import { readExtraPayment } from '../../../shared/loanExtraPayment'
+import {
+  checkExtraPaymentCreate,
+  checkExtraPaymentEdit,
+  checkLoanCreate,
+  checkLoanEdit,
+  checkRatePeriodCreate,
+  checkRatePeriodEdit,
+  extraPaymentTotals,
+} from '../../../shared/loanSchema'
 import { requireAuth } from '../auth'
 import { getProfileId } from '../profile'
-import { HttpError } from '../http'
+import { accept, HttpError } from '../http'
 import * as db from '../db'
 import { localToday } from '../local-date'
 import { calculateLoan, loanStatus } from '../../../shared/loanSchedule'
@@ -46,30 +53,21 @@ function byLoan<T extends { loan_id: number }>(rows: T[]): Map<number, T[]> {
   return groups
 }
 
-/**
- * Whether a create or an edit was sent a base rate. 0 % is a rate, an interest-free loan; a rate
- * left out, null or empty is not. A create sent none is saved at the 5 % these routes have always
- * defaulted to, and an edit sent none keeps the stored rate.
- */
-function rateSent(rate: unknown): boolean {
-  return rate !== undefined && rate !== null && rate !== ''
-}
-
-// List loans with prepayment rollups (correlated subqueries, profile-scoped), plus where each loan
-// stands today: remaining_balance (after every payment due by today, extra payments and rate
-// periods included), monthly_payment (the next one due; 0 once paid off) and payoff_date. They come
-// from the shared engine, as in the local-first list, so the Loans page and API clients read the
-// same figures. Rate periods and extra payments are fetched in one query each for all the loans,
-// ordered as the calculate route orders them. Additions only: every column the list had is kept.
-// "Today" is the person's date (local-date.ts), as it is in the local-first list.
+// List loans with prepayment rollups, plus where each loan stands today: remaining_balance (after
+// every payment due by today, extra payments and rate periods included), monthly_payment (the next
+// one due; 0 once paid off) and payoff_date. They come from the shared engine, as in the
+// local-first list, so the Loans page and API clients read the same figures. Rate periods and extra
+// payments are fetched in one query each for all the loans, ordered as the calculate route orders
+// them. Additions only: every column the list had is kept. total_prepaid is the extra payments'
+// total to the cent, 0 for a loan without any (shared/loanSchema.ts), as local-first answers it;
+// a SUM in SQL answered null there. "Today" is the person's date (local-date.ts), as it is in the
+// local-first list.
 loansRoutes.get('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const [rows, ratePeriods, prepayments] = await Promise.all([
     db.all<Record<string, any>>(
       c.env.DB,
-      `SELECT l.*,
-          (SELECT SUM(amount) FROM loan_prepayments WHERE loan_id = l.id) as total_prepaid,
-          (SELECT COUNT(*) FROM loan_prepayments WHERE loan_id = l.id) as prepayment_count
+      `SELECT l.*
         FROM loans l
         WHERE l.profile_id = ?
         ORDER BY l.created_at DESC, l.id DESC`,
@@ -96,6 +94,7 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
   return c.json(
     rows.map((loan) => ({
       ...loan,
+      ...extraPaymentTotals(extrasOf.get(loan.id)),
       ...loanStatus(
         engineInput(loan, periodsOf.get(loan.id) ?? [], extrasOf.get(loan.id) ?? []),
         today
@@ -104,42 +103,24 @@ loansRoutes.get('/api/loans', requireAuth, async (c) => {
   )
 })
 
+// A loan, its rate periods and its extra payments are checked by shared/loanSchema.ts, as the
+// local-first handlers and the Loans forms check them. A refused body answers 400 with what is
+// wrong at each field, and nothing is written.
 loansRoutes.post('/api/loans', requireAuth, async (c) => {
   const pid = await getProfileId(c)
-  const b = (await c.req.json()) as Record<string, any>
-  const interestRate = rateSent(b.interest_rate) ? b.interest_rate : 5.0
-  const res = await db.insert(c.env.DB, 'loans', {
-    name: b.name,
-    principal: b.principal,
-    interest_rate: interestRate,
-    start_date: b.start_date,
-    term_months: b.term_months,
-    profile_id: pid,
-  })
+  const { rate_periods: ratePeriods, ...loan } = accept(checkLoanCreate(await c.req.json()))
+  const res = await db.insert(c.env.DB, 'loans', { ...loan, profile_id: pid })
   const loanId = res.meta.last_row_id
 
   // Only the periods sent. The loan's own interest_rate is the engine's base rate for every month
   // no period covers (shared/loanSchedule.ts); a period copying it from month 1 used to be added
   // here, and since the Loans form sends a loan's periods back on every edit, that copy then
   // outranked any new interest rate the form saved.
-  for (const rp of b.rate_periods ?? []) {
-    await db.insert(c.env.DB, 'loan_rate_periods', {
-      loan_id: loanId,
-      rate: rp.rate,
-      start_month: rp.start_month,
-      end_month: rp.end_month || null,
-    })
+  for (const rp of ratePeriods) {
+    await db.insert(c.env.DB, 'loan_rate_periods', { loan_id: loanId, ...rp })
   }
 
-  return c.json({
-    id: loanId,
-    name: b.name,
-    principal: b.principal,
-    interest_rate: interestRate,
-    start_date: b.start_date,
-    term_months: b.term_months,
-    profile_id: pid,
-  })
+  return c.json({ id: loanId, ...loan, profile_id: pid })
 })
 
 loansRoutes.get('/api/loans/:id', requireAuth, async (c) => {
@@ -151,7 +132,7 @@ loansRoutes.get('/api/loans/:id', requireAuth, async (c) => {
     id,
     pid
   )
-  if (!loan) throw new HttpError(404, 'Not found')
+  if (!loan) throw new HttpError(404, 'Loan not found')
   loan.rate_periods = await db.all(
     c.env.DB,
     'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month',
@@ -165,35 +146,35 @@ loansRoutes.get('/api/loans/:id', requireAuth, async (c) => {
   return c.json(loan)
 })
 
+// An edit checks and writes only what it changes (decision 2), so a loan an older version stored
+// under other rules can still be renamed: the Loans form sends every field on every save. Rate
+// periods sent replace the stored ones when they differ from them; sent back unchanged, they are
+// left as they are, ids and all.
 loansRoutes.put('/api/loans/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const b = (await c.req.json()) as Record<string, any>
-  const res = await db.update(
+  const existing = await db.first<Record<string, any>>(
     c.env.DB,
-    'loans',
-    {
-      name: b.name,
-      principal: b.principal,
-      ...(rateSent(b.interest_rate) ? { interest_rate: b.interest_rate } : {}),
-      start_date: b.start_date,
-      term_months: b.term_months,
-    },
-    'id = ? AND profile_id = ?',
+    'SELECT * FROM loans WHERE id = ? AND profile_id = ?',
     id,
     pid
   )
-  if (!res.meta.changes) throw new HttpError(404, 'Not found')
+  if (!existing) throw new HttpError(404, 'Loan not found')
+  existing.rate_periods = await db.all(
+    c.env.DB,
+    'SELECT * FROM loan_rate_periods WHERE loan_id = ? ORDER BY start_month, id',
+    id
+  )
+  const body = await c.req.json()
+  const { rate_periods: ratePeriods, ...edit } = accept(checkLoanEdit(body, existing))
+  if (Object.keys(edit).length > 0) {
+    await db.update(c.env.DB, 'loans', edit, 'id = ? AND profile_id = ?', id, pid)
+  }
 
-  if (b.rate_periods !== undefined) {
+  if (ratePeriods !== undefined) {
     await db.del(c.env.DB, 'loan_rate_periods', 'loan_id = ?', id)
-    for (const rp of b.rate_periods) {
-      await db.insert(c.env.DB, 'loan_rate_periods', {
-        loan_id: id,
-        rate: rp.rate,
-        start_month: rp.start_month,
-        end_month: rp.end_month || null,
-      })
+    for (const rp of ratePeriods) {
+      await db.insert(c.env.DB, 'loan_rate_periods', { loan_id: id, ...rp })
     }
   }
 
@@ -212,44 +193,54 @@ loansRoutes.delete('/api/loans/:id', requireAuth, async (c) => {
     c.env.DB.prepare(`DELETE FROM loan_prepayments WHERE ${owned}`).bind(id, pid),
     c.env.DB.prepare('DELETE FROM loans WHERE id = ? AND profile_id = ?').bind(id, pid),
   ])
-  if (!results[2]?.meta.changes) throw new HttpError(404, 'Not found')
+  if (!results[2]?.meta.changes) throw new HttpError(404, 'Loan not found')
   return c.json({ ok: true })
 })
 
 // ── Rate periods CRUD ─────────────────────────────────────────────────────────
+/** The loan's term, for checking a rate period or an extra payment against it, or a 404. */
+async function termOf(c: { env: AppEnv['Bindings'] }, id: string, pid: number) {
+  const loan = await db.first<{ term_months: number | null }>(
+    c.env.DB,
+    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
+    id,
+    pid
+  )
+  if (!loan) throw new HttpError(404, 'Loan not found')
+  return loan.term_months
+}
+
 loansRoutes.post('/api/loans/:id/rates', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
-  if (!loan) throw new HttpError(404, 'Loan not found')
-  const b = (await c.req.json()) as Record<string, any>
-  const res = await db.insert(c.env.DB, 'loan_rate_periods', {
-    loan_id: id,
-    rate: b.rate,
-    start_month: b.start_month,
-    end_month: b.end_month || null,
-  })
+  const term = await termOf(c, id, pid)
+  const period = accept(checkRatePeriodCreate(await c.req.json(), term))
+  const res = await db.insert(c.env.DB, 'loan_rate_periods', { loan_id: id, ...period })
   return c.json({ id: res.meta.last_row_id })
 })
 
 loansRoutes.put('/api/loans/:id/rates/:rateId', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
-  if (!loan) throw new HttpError(404, 'Loan not found')
-  const b = (await c.req.json()) as Record<string, any>
-  await db.update(
+  const term = await termOf(c, id, pid)
+  const stored = await db.first(
     c.env.DB,
-    'loan_rate_periods',
-    {
-      rate: b.rate,
-      start_month: b.start_month,
-      end_month: b.end_month || null,
-    },
-    'id = ? AND loan_id = ?',
+    'SELECT * FROM loan_rate_periods WHERE id = ? AND loan_id = ?',
     c.req.param('rateId'),
     id
   )
+  if (!stored) throw new HttpError(404, 'Rate period not found')
+  const edit = accept(checkRatePeriodEdit(await c.req.json(), stored, term))
+  if (Object.keys(edit).length > 0) {
+    await db.update(
+      c.env.DB,
+      'loan_rate_periods',
+      edit,
+      'id = ? AND loan_id = ?',
+      c.req.param('rateId'),
+      id
+    )
+  }
   return c.json({ ok: true })
 })
 
@@ -258,30 +249,20 @@ loansRoutes.delete('/api/loans/:id/rates/:rateId', requireAuth, async (c) => {
   const id = c.req.param('id')
   const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
   if (!loan) throw new HttpError(404, 'Loan not found')
-  await db.del(c.env.DB, 'loan_rate_periods', 'id = ? AND loan_id = ?', c.req.param('rateId'), id)
+  const res = await db.del(c.env.DB, 'loan_rate_periods', 'id = ? AND loan_id = ?', c.req.param('rateId'), id)
+  if (!res.meta.changes) throw new HttpError(404, 'Rate period not found')
   return c.json({ ok: true })
 })
 
 // ── Prepayments CRUD ──────────────────────────────────────────────────────────
-// An extra payment is checked by shared/loanExtraPayment.ts, as the local-first handlers check it:
-// a whole payment number within the loan's term, an amount above zero, a note that is text.
-async function extraPaymentOf(c: Context<AppEnv>, loan: { term_months: number | null }) {
-  const read = readExtraPayment(await c.req.json(), loan.term_months)
-  if (!read.ok) throw new HttpError(400, read.error)
-  return read.value
-}
-
+// An extra payment goes with one of the loan's payments, within its term, and is an amount above
+// zero with an optional note. A change is checked for what it changes, so one that goes with a
+// payment a since-shortened term has passed keeps its month while its amount changes.
 loansRoutes.post('/api/loans/:id/prepayments', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first<{ term_months: number | null }>(
-    c.env.DB,
-    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
-    id,
-    pid
-  )
-  if (!loan) throw new HttpError(404, 'Loan not found')
-  const extra = await extraPaymentOf(c, loan)
+  const term = await termOf(c, id, pid)
+  const extra = accept(checkExtraPaymentCreate(await c.req.json(), term))
   const res = await db.insert(c.env.DB, 'loan_prepayments', { loan_id: id, ...extra })
   return c.json({ id: res.meta.last_row_id })
 })
@@ -289,23 +270,25 @@ loansRoutes.post('/api/loans/:id/prepayments', requireAuth, async (c) => {
 loansRoutes.put('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const loan = await db.first<{ term_months: number | null }>(
+  const term = await termOf(c, id, pid)
+  const stored = await db.first(
     c.env.DB,
-    'SELECT term_months FROM loans WHERE id = ? AND profile_id = ?',
-    id,
-    pid
-  )
-  if (!loan) throw new HttpError(404, 'Loan not found')
-  const extra = await extraPaymentOf(c, loan)
-  const res = await db.update(
-    c.env.DB,
-    'loan_prepayments',
-    { ...extra },
-    'id = ? AND loan_id = ?',
+    'SELECT * FROM loan_prepayments WHERE id = ? AND loan_id = ?',
     c.req.param('prepayId'),
     id
   )
-  if (!res.meta.changes) throw new HttpError(404, 'Extra payment not found')
+  if (!stored) throw new HttpError(404, 'Extra payment not found')
+  const edit = accept(checkExtraPaymentEdit(await c.req.json(), stored, term))
+  if (Object.keys(edit).length > 0) {
+    await db.update(
+      c.env.DB,
+      'loan_prepayments',
+      edit,
+      'id = ? AND loan_id = ?',
+      c.req.param('prepayId'),
+      id
+    )
+  }
   return c.json({ ok: true })
 })
 
@@ -314,7 +297,8 @@ loansRoutes.delete('/api/loans/:id/prepayments/:prepayId', requireAuth, async (c
   const id = c.req.param('id')
   const loan = await db.first(c.env.DB, 'SELECT id FROM loans WHERE id = ? AND profile_id = ?', id, pid)
   if (!loan) throw new HttpError(404, 'Loan not found')
-  await db.del(c.env.DB, 'loan_prepayments', 'id = ? AND loan_id = ?', c.req.param('prepayId'), id)
+  const res = await db.del(c.env.DB, 'loan_prepayments', 'id = ? AND loan_id = ?', c.req.param('prepayId'), id)
+  if (!res.meta.changes) throw new HttpError(404, 'Extra payment not found')
   return c.json({ ok: true })
 })
 
@@ -333,7 +317,7 @@ loansRoutes.post('/api/loans/:id/calculate', requireAuth, async (c) => {
     id,
     pid
   )
-  if (!loan) throw new HttpError(404, 'Not found')
+  if (!loan) throw new HttpError(404, 'Loan not found')
 
   const [ratePeriods, prepayments] = await Promise.all([
     db.all<LoanRatePeriod>(

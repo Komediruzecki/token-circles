@@ -431,13 +431,22 @@ describe('the return band', () => {
 })
 
 describe('saving', () => {
+  // The button is aria-disabled rather than disabled while there is nothing to save, so the
+  // person who just saved keeps focus on it (components/form/SubmitButton.tsx).
+  const inactive = (button: HTMLButtonElement) => button.getAttribute('aria-disabled') === 'true'
+
   it('will not offer to save until something has changed', async () => {
     const root = await mountPlanner()
     const button = buttonByTestId(root, 'retirement-save-settings')!
-    expect(button.disabled).toBe(true)
+    expect(button.textContent).toBe('Saved')
+    expect(inactive(button)).toBe(true)
+    button.click()
+    await flush()
+    expect(apiPut).not.toHaveBeenCalled()
 
     await type(inputByTestId(root, 'retirement-input-networth')!, '1234')
-    expect(button.disabled).toBe(false)
+    expect(button.textContent).toBe('Save assumptions')
+    expect(inactive(button)).toBe(false)
   })
 
   it('sends what is on screen and confirms', async () => {
@@ -452,12 +461,14 @@ describe('saving', () => {
     const [path, body] = apiPut.mock.calls[0]
     expect(path).toBe('/api/retirement/settings')
     expect(body.netWorth).toBe(54321)
-    expect(showToast).toHaveBeenCalledWith('Retirement assumptions saved', 'success')
-    expect(buttonByTestId(root, 'retirement-save-settings')!.disabled).toBe(true)
+    expect(showToast).toHaveBeenCalledWith('Saved your retirement assumptions.', 'success')
+    expect(inactive(buttonByTestId(root, 'retirement-save-settings')!)).toBe(true)
   })
 
-  it('says so and stays editable when the save fails', async () => {
+  it('says so beside the button, with no toast, and stays editable when the save fails', async () => {
     apiPut.mockRejectedValueOnce(new Error('offline'))
+    // The kit logs a failure that has no words for a person; this one is expected.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const root = await mountPlanner()
 
     await type(inputByTestId(root, 'retirement-input-networth')!, '54321')
@@ -465,8 +476,12 @@ describe('saving', () => {
     await flush()
     await flush()
 
-    expect(showToast).toHaveBeenCalledWith('Failed to save your retirement assumptions', 'error')
-    expect(buttonByTestId(root, 'retirement-save-settings')!.disabled).toBe(false)
+    expect(byTestId(root, 'retirement-assumptions-notice')!.textContent).toBe(
+      "Couldn't save your retirement assumptions. Try again."
+    )
+    expect(showToast).not.toHaveBeenCalled()
+    expect(inactive(buttonByTestId(root, 'retirement-save-settings')!)).toBe(false)
+    logged.mockRestore()
   })
 
   it('keeps working when the settings cannot be loaded at all', async () => {

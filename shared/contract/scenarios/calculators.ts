@@ -171,14 +171,19 @@ export const calculators = [
       (await api.post('/api/calculator/retire', { ...fireBody, retirementAge: 30 })).status
     ).toBe(400);
 
-    // DIFFERENCE fire-inflation
+    // Without an inflation rate the projection is in nominal money, as above. With one, it is
+    // deflated by it, so the same savings reach the FIRE number later. The Worker used to drop
+    // the rate and answer as if none had been sent.
+    expect(reply.body.inputs.inflationRate).toBe(0);
     const inflated = await api.post('/api/calculator/retire', { ...fireBody, inflationRate: 2.5 });
     expectOk(expect, inflated, 'POST /api/calculator/retire with inflation');
-    if (api.runtime === 'worker') {
-      expect(inflated.body).toEqual(reply.body);
-    } else {
-      expect(inflated.body).toMatchObject({ fireMonth: 130, fireAge: 40.8 });
-      expect(inflated.body.inputs.inflationRate).toBe(2.5);
-    }
+    expect(inflated.body).toMatchObject({
+      fireNumber: 450000,
+      fireMonth: 130,
+      monthsToFire: 130,
+      fireAge: 40.8,
+      fireYear: 40,
+    });
+    expect(inflated.body.inputs.inflationRate).toBe(2.5);
   }),
 ];

@@ -10,9 +10,17 @@
  * same module the Worker runs, so nothing is lost by not asking it: the chart redraws on
  * every keystroke instead of after a round trip, and the two still agree by construction.
  * Only saving talks to the server.
+ *
+ * The panel is a form on the kit (components/form). A save is checked by the rules both runtimes
+ * run (shared/retirementPlanSchema.ts), so a value outside its range is marked under its field
+ * before anything is sent, in the same words, and a field the runtime refuses is marked the same
+ * way. A save used to send anything and have it moved into range without a word, and a failure
+ * was a toast that said only that it failed.
  */
 import { createMemo, createSignal, For, Index, Show } from 'solid-js'
+import { fieldErrorsOf } from '../../../shared/refusal'
 import { projectRetirement, yearsOfWithdrawals } from '../../../shared/retirement'
+import { checkRetirementPlan } from '../../../shared/retirementPlanSchema'
 import {
   DEFAULT_SETTINGS,
   effectiveReturnPct,
@@ -23,6 +31,7 @@ import {
   settingsToInput,
 } from '../../../shared/retirementSettings'
 import Chart from '../components/Chart'
+import { createForm, Field, FormNotice, SubmitButton } from '../components/form'
 import InfoTip from '../components/InfoTip'
 import MonthPicker from '../components/MonthPicker'
 import NumberField from '../components/NumberField'
@@ -48,6 +57,9 @@ interface SettingsResponse {
   missing: string[]
   startMonth: string
 }
+
+/** What a save answers: the plan as stored, and what is still filled in from your data. */
+type SavedSettings = Pick<SettingsResponse, 'settings' | 'filled'>
 
 /** A field's label, so `filled` can name what it took in words rather than in field names. */
 const FIELD_LABELS: Record<string, string> = {
@@ -78,11 +90,9 @@ const PLAN_TO_YEAR = NOW_YEAR + 80
 
 export default function RetirementPlanner() {
   const state = useAppState()
-  const [settings, setSettings] = createSignal<RetirementSettings>(DEFAULT_SETTINGS)
   const [filled, setFilled] = createSignal<DerivedField[]>([])
   const [startMonth, setStartMonth] = createSignal(monthOf(new Date()))
   const [loading, setLoading] = createSignal(true)
-  const [saving, setSaving] = createSignal(false)
   const [dirty, setDirty] = createSignal(false)
   const [showNominal, setShowNominal] = createSignal(false)
   const [showBand, setShowBand] = createSignal(false)
@@ -92,10 +102,50 @@ export default function RetirementPlanner() {
 
   const chartColors = () => theme.getChartColors()
 
+  /**
+   * The assumptions: what is on screen is what the chart draws, on every keystroke, and what a
+   * save sends, once it passes the rules both runtimes run.
+   */
+  const form = createForm<RetirementSettings, SavedSettings>({
+    initial: DEFAULT_SETTINGS,
+    check: (values) => fieldErrorsOf(checkRetirementPlan(values)),
+    send: async (values) => {
+      const res = await apiPut<SavedSettings>('/api/retirement/settings', values)
+      showToast('Saved your retirement assumptions.', 'success')
+      return res
+    },
+    saved: (res) => {
+      // Take back what was stored rather than what was sent: the pay steps and spending
+      // periods come back in order, and the panel should show what will be used next time.
+      form.reset(normalizeSettings(res.settings))
+      // Saving is exactly what stops a field being derived, so the provenance note has to
+      // come back from the save too. Without this it kept crediting "your data" for figures
+      // the user had just entered by hand.
+      setFilled(res.filled || [])
+      setDirty(false)
+    },
+    failure: "Couldn't save your retirement assumptions. Try again.",
+  })
+
+  /** The assumptions on screen, read through the form so every control stays current. */
+  const settings = (): RetirementSettings => form.values
+
+  /**
+   * The same assumptions as plain data, for the model. The projection walks the pay steps and
+   * spending periods once a month for decades, which is no work to do through a store's proxies.
+   */
+  const plan = createMemo((): RetirementSettings => ({
+    ...form.values,
+    incomeSteps: form.values.incomeSteps.map((step) => ({ ...step })),
+    expensePeriods: form.values.expensePeriods.map((period) => ({ ...period })),
+    allocation: form.values.allocation.map((slice) => ({ ...slice })),
+    lifestyles: form.values.lifestyles.map((lifestyle) => ({ ...lifestyle })),
+  }))
+
   const load = async () => {
     try {
       const res = await apiGet<SettingsResponse>('/api/retirement/settings')
-      setSettings(normalizeSettings(res.settings))
+      form.reset(normalizeSettings(res.settings))
       setFilled(res.filled || [])
       if (res.startMonth) setStartMonth(res.startMonth)
       setDirty(false)
@@ -107,36 +157,12 @@ export default function RetirementPlanner() {
     }
   }
 
-  const save = async () => {
-    setSaving(true)
-    try {
-      const res = await apiPut<Pick<SettingsResponse, 'settings' | 'filled'>>(
-        '/api/retirement/settings',
-        settings()
-      )
-      // Take back what was stored rather than what was sent: the server normalises, and the
-      // panel should show what will actually be used next time.
-      setSettings(normalizeSettings(res.settings))
-      // Saving is exactly what stops a field being derived, so the provenance note has to
-      // come back from the save too. Without this it kept crediting "your data" for figures
-      // the user had just entered by hand.
-      setFilled(res.filled || [])
-      setDirty(false)
-      showToast('Retirement assumptions saved', 'success')
-    } catch (err) {
-      console.error('Failed to save retirement settings', err)
-      showToast('Failed to save your retirement assumptions', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const update = <K extends keyof RetirementSettings>(key: K, value: RetirementSettings[K]) => {
-    setSettings({ ...settings(), [key]: value })
+    form.set(key, value)
     setDirty(true)
   }
 
-  const projection = createMemo(() => projectRetirement(settingsToInput(settings(), startMonth())))
+  const projection = createMemo(() => projectRetirement(settingsToInput(plan(), startMonth())))
 
   /**
    * A withdrawal rate is a claim about how much of the pot you take each year, so raising it
@@ -208,11 +234,11 @@ export default function RetirementPlanner() {
 
   const scenarios = createMemo(() => {
     if (!showBand()) return []
-    const base = effectiveReturnPct(settings())
+    const base = effectiveReturnPct(plan())
     return RETURN_SCENARIOS.filter((s) => s.offsetPct !== 0).map((s) => ({
       ...s,
       projection: projectRetirement({
-        ...settingsToInput(settings(), startMonth()),
+        ...settingsToInput(plan(), startMonth()),
         annualReturnPct: base + s.offsetPct,
       }),
     }))
@@ -452,9 +478,14 @@ export default function RetirementPlanner() {
           <form
             class={styles.assumptions}
             data-test-id="retirement-assumptions"
+            {...form.attrs}
             onSubmit={(e) => {
-              e.preventDefault()
-              save()
+              // Nothing to save until something has changed: the button says "Saved".
+              if (!dirty()) {
+                e.preventDefault()
+                return
+              }
+              void form.submit(e)
             }}
           >
             <div class={styles.modeToggle} role="group" aria-label="Calculator detail">
@@ -488,115 +519,161 @@ export default function RetirementPlanner() {
             </p>
 
             <div class={styles.formRow}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-networth">
-                  Current net worth
-                </label>
-                <NumberField
-                  id="ret-networth"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-networth"
-                  value={settings().netWorth}
-                  onChange={(v) => {
-                    update('netWorth', v)
-                  }}
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-birth">
-                  Date of birth
+              <Field
+                form={form}
+                name="netWorth"
+                label="Current net worth"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="0.01"
+                    class={styles.formControl}
+                    testId="retirement-input-networth"
+                    value={settings().netWorth}
+                    onChange={(v) => {
+                      update('netWorth', v)
+                    }}
+                  />
+                )}
+              </Field>
+              <Field
+                form={form}
+                name="birthMonth"
+                label="Date of birth"
+                tip={
                   <InfoTip
                     testId="retirement-info-birth"
                     text="Used to label the chart with your age instead of the year, and to work out how long a plan that stops at an age has to run."
                   />
-                </label>
-                <MonthPicker
-                  id="ret-birth"
-                  class={styles.monthPicker}
-                  testId="retirement-input-birth"
-                  ariaLabel="Date of birth"
-                  fromYear={NOW_YEAR - 120}
-                  toYear={NOW_YEAR}
-                  allowEmpty
-                  value={settings().birthMonth}
-                  onChange={(v) => {
-                    update('birthMonth', v)
-                  }}
-                />
-              </div>
+                }
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <MonthPicker
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    class={styles.monthPicker}
+                    testId="retirement-input-birth"
+                    ariaLabel="Date of birth"
+                    fromYear={NOW_YEAR - 120}
+                    toYear={NOW_YEAR}
+                    allowEmpty
+                    value={settings().birthMonth}
+                    onChange={(v) => {
+                      update('birthMonth', v)
+                    }}
+                  />
+                )}
+              </Field>
             </div>
 
             <Show when={settings().mode === 'simple'}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-contribution">
-                  Monthly contribution
-                </label>
-                <NumberField
-                  id="ret-contribution"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-contribution"
-                  value={settings().monthlyContribution}
-                  onChange={(v) => {
-                    update('monthlyContribution', v)
-                  }}
-                />
-              </div>
+              <Field
+                form={form}
+                name="monthlyContribution"
+                label="Monthly contribution"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="0.01"
+                    class={styles.formControl}
+                    testId="retirement-input-contribution"
+                    value={settings().monthlyContribution}
+                    onChange={(v) => {
+                      update('monthlyContribution', v)
+                    }}
+                  />
+                )}
+              </Field>
             </Show>
 
             <Show when={settings().mode === 'advanced'}>
               <div class={styles.formRow}>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel} for="ret-income">
-                    Monthly income
-                  </label>
-                  <NumberField
-                    id="ret-income"
-                    step="0.01"
-                    class={styles.formControl}
-                    testId="retirement-input-income"
-                    value={settings().monthlyIncome}
-                    onChange={(v) => {
-                      update('monthlyIncome', v)
-                    }}
-                  />
-                </div>
-                <div class={styles.formGroup}>
-                  <label class={styles.formLabel} for="ret-expenses">
-                    Monthly spending
-                  </label>
-                  <NumberField
-                    id="ret-expenses"
-                    step="0.01"
-                    class={styles.formControl}
-                    testId="retirement-input-expenses"
-                    value={settings().monthlyExpenses}
-                    onChange={(v) => {
-                      update('monthlyExpenses', v)
-                    }}
-                  />
-                </div>
+                <Field
+                  form={form}
+                  name="monthlyIncome"
+                  label="Monthly income"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <NumberField
+                      id={control.id}
+                      ariaInvalid={control['aria-invalid']}
+                      ariaDescribedBy={control['aria-describedby']}
+                      step="0.01"
+                      class={styles.formControl}
+                      testId="retirement-input-income"
+                      value={settings().monthlyIncome}
+                      onChange={(v) => {
+                        update('monthlyIncome', v)
+                      }}
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={form}
+                  name="monthlyExpenses"
+                  label="Monthly spending"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                >
+                  {(control) => (
+                    <NumberField
+                      id={control.id}
+                      ariaInvalid={control['aria-invalid']}
+                      ariaDescribedBy={control['aria-describedby']}
+                      step="0.01"
+                      class={styles.formControl}
+                      testId="retirement-input-expenses"
+                      value={settings().monthlyExpenses}
+                      onChange={(v) => {
+                        update('monthlyExpenses', v)
+                      }}
+                    />
+                  )}
+                </Field>
               </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-raise">
-                  Annual pay rise (%)
+              <Field
+                form={form}
+                name="annualRaisePct"
+                label="Annual pay rise (%)"
+                tip={
                   <InfoTip
                     testId="retirement-info-raise"
                     text="Applied every January, unless a pay step beats it."
                   />
-                </label>
-                <NumberField
-                  id="ret-raise"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-raise"
-                  value={settings().annualRaisePct}
-                  onChange={(v) => {
-                    update('annualRaisePct', v)
-                  }}
-                />
-              </div>
+                }
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="0.01"
+                    class={styles.formControl}
+                    testId="retirement-input-raise"
+                    value={settings().annualRaisePct}
+                    onChange={(v) => {
+                      update('annualRaisePct', v)
+                    }}
+                  />
+                )}
+              </Field>
 
               <fieldset class={styles.subSection} data-test-id="retirement-income-steps">
                 <legend class={styles.subLegend}>
@@ -606,38 +683,67 @@ export default function RetirementPlanner() {
                     text="What you will earn from that month on. Lower than today is a pay cut or a sabbatical, and is projected as one; raises carry on from there."
                   />
                 </legend>
+                {/* A row's fields are named `incomeSteps.<index>.<field>`, as both runtimes name
+                    them in a refusal. Their labels are for assistive tech: the row reads as one
+                    line, and the legend says what it is. */}
                 <Index each={settings().incomeSteps}>
                   {(step, i) => (
                     <div class={styles.listRow}>
-                      <MonthPicker
-                        class={styles.monthPicker}
-                        ariaLabel="Pay step start month"
-                        fromYear={PLAN_FROM_YEAR}
-                        toYear={PLAN_TO_YEAR}
-                        value={step().fromMonth}
-                        onChange={(v) => {
-                          update(
-                            'incomeSteps',
-                            settings().incomeSteps.map((s, j) =>
-                              j === i ? { ...s, fromMonth: v ?? '' } : s
-                            )
-                          )
-                        }}
-                      />
-                      <NumberField
-                        step="0.01"
-                        class={styles.formControl}
-                        ariaLabel="Monthly income from then"
-                        value={step().monthlyAmount}
-                        onChange={(v) => {
-                          update(
-                            'incomeSteps',
-                            settings().incomeSteps.map((s, j) =>
-                              j === i ? { ...s, monthlyAmount: v } : s
-                            )
-                          )
-                        }}
-                      />
+                      <Field
+                        form={form}
+                        name={`incomeSteps.${i}.fromMonth`}
+                        label="Pay step start month"
+                        class={`${styles.rowField} ${styles.rowFieldMonth}`}
+                        labelClass={styles.visuallyHidden}
+                      >
+                        {(control) => (
+                          <MonthPicker
+                            id={control.id}
+                            ariaInvalid={control['aria-invalid']}
+                            ariaDescribedBy={control['aria-describedby']}
+                            class={styles.monthPicker}
+                            ariaLabel="Pay step start month"
+                            fromYear={PLAN_FROM_YEAR}
+                            toYear={PLAN_TO_YEAR}
+                            value={step().fromMonth}
+                            onChange={(v) => {
+                              update(
+                                'incomeSteps',
+                                settings().incomeSteps.map((s, j) =>
+                                  j === i ? { ...s, fromMonth: v ?? '' } : s
+                                )
+                              )
+                            }}
+                          />
+                        )}
+                      </Field>
+                      <Field
+                        form={form}
+                        name={`incomeSteps.${i}.monthlyAmount`}
+                        label="Monthly income from then"
+                        class={styles.rowField}
+                        labelClass={styles.visuallyHidden}
+                      >
+                        {(control) => (
+                          <NumberField
+                            id={control.id}
+                            ariaInvalid={control['aria-invalid']}
+                            ariaDescribedBy={control['aria-describedby']}
+                            step="0.01"
+                            class={styles.formControl}
+                            ariaLabel="Monthly income from then"
+                            value={step().monthlyAmount}
+                            onChange={(v) => {
+                              update(
+                                'incomeSteps',
+                                settings().incomeSteps.map((s, j) =>
+                                  j === i ? { ...s, monthlyAmount: v } : s
+                                )
+                              )
+                            }}
+                          />
+                        )}
+                      </Field>
                       <button
                         type="button"
                         class={`${styles.btnSm} ${styles.btnGhost}`}
@@ -683,52 +789,91 @@ export default function RetirementPlanner() {
                 <Index each={settings().expensePeriods}>
                   {(period, i) => (
                     <div class={styles.listRow}>
-                      <MonthPicker
-                        class={styles.monthPicker}
-                        ariaLabel="Spending period start"
-                        fromYear={PLAN_FROM_YEAR}
-                        toYear={PLAN_TO_YEAR}
-                        value={period().fromMonth}
-                        onChange={(v) => {
-                          update(
-                            'expensePeriods',
-                            settings().expensePeriods.map((p, j) =>
-                              j === i ? { ...p, fromMonth: v ?? '' } : p
-                            )
-                          )
-                        }}
-                      />
-                      <MonthPicker
-                        class={styles.monthPicker}
-                        ariaLabel="Spending period end"
-                        fromYear={PLAN_FROM_YEAR}
-                        toYear={PLAN_TO_YEAR}
-                        allowEmpty
-                        emptyLabel="Ongoing"
-                        value={period().toMonth}
-                        onChange={(v) => {
-                          update(
-                            'expensePeriods',
-                            settings().expensePeriods.map((p, j) =>
-                              j === i ? { ...p, toMonth: v ?? undefined } : p
-                            )
-                          )
-                        }}
-                      />
-                      <NumberField
-                        step="0.01"
-                        class={styles.formControl}
-                        ariaLabel="Extra monthly spending"
-                        value={period().monthlyAmount}
-                        onChange={(v) => {
-                          update(
-                            'expensePeriods',
-                            settings().expensePeriods.map((p, j) =>
-                              j === i ? { ...p, monthlyAmount: v } : p
-                            )
-                          )
-                        }}
-                      />
+                      <Field
+                        form={form}
+                        name={`expensePeriods.${i}.fromMonth`}
+                        label="Spending period start"
+                        class={`${styles.rowField} ${styles.rowFieldMonth}`}
+                        labelClass={styles.visuallyHidden}
+                      >
+                        {(control) => (
+                          <MonthPicker
+                            id={control.id}
+                            ariaInvalid={control['aria-invalid']}
+                            ariaDescribedBy={control['aria-describedby']}
+                            class={styles.monthPicker}
+                            ariaLabel="Spending period start"
+                            fromYear={PLAN_FROM_YEAR}
+                            toYear={PLAN_TO_YEAR}
+                            value={period().fromMonth}
+                            onChange={(v) => {
+                              update(
+                                'expensePeriods',
+                                settings().expensePeriods.map((p, j) =>
+                                  j === i ? { ...p, fromMonth: v ?? '' } : p
+                                )
+                              )
+                            }}
+                          />
+                        )}
+                      </Field>
+                      <Field
+                        form={form}
+                        name={`expensePeriods.${i}.toMonth`}
+                        label="Spending period end"
+                        class={`${styles.rowField} ${styles.rowFieldMonth}`}
+                        labelClass={styles.visuallyHidden}
+                      >
+                        {(control) => (
+                          <MonthPicker
+                            id={control.id}
+                            ariaInvalid={control['aria-invalid']}
+                            ariaDescribedBy={control['aria-describedby']}
+                            class={styles.monthPicker}
+                            ariaLabel="Spending period end"
+                            fromYear={PLAN_FROM_YEAR}
+                            toYear={PLAN_TO_YEAR}
+                            allowEmpty
+                            emptyLabel="Ongoing"
+                            value={period().toMonth}
+                            onChange={(v) => {
+                              update(
+                                'expensePeriods',
+                                settings().expensePeriods.map((p, j) =>
+                                  j === i ? { ...p, toMonth: v ?? undefined } : p
+                                )
+                              )
+                            }}
+                          />
+                        )}
+                      </Field>
+                      <Field
+                        form={form}
+                        name={`expensePeriods.${i}.monthlyAmount`}
+                        label="Extra monthly spending"
+                        class={styles.rowField}
+                        labelClass={styles.visuallyHidden}
+                      >
+                        {(control) => (
+                          <NumberField
+                            id={control.id}
+                            ariaInvalid={control['aria-invalid']}
+                            ariaDescribedBy={control['aria-describedby']}
+                            step="0.01"
+                            class={styles.formControl}
+                            ariaLabel="Extra monthly spending"
+                            value={period().monthlyAmount}
+                            onChange={(v) => {
+                              update(
+                                'expensePeriods',
+                                settings().expensePeriods.map((p, j) =>
+                                  j === i ? { ...p, monthlyAmount: v } : p
+                                )
+                              )
+                            }}
+                          />
+                        )}
+                      </Field>
                       <button
                         type="button"
                         class={`${styles.btnSm} ${styles.btnGhost}`}
@@ -765,42 +910,56 @@ export default function RetirementPlanner() {
             </Show>
 
             <div class={styles.formRow}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-return">
-                  Expected annual return (%)
-                </label>
-                <NumberField
-                  id="ret-return"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-return"
-                  disabled={settings().useAllocation}
-                  value={
-                    settings().useAllocation
-                      ? round(effectiveReturnPct(settings()))
-                      : settings().annualReturnPct
-                  }
-                  onChange={(v) => {
-                    update('annualReturnPct', v)
-                  }}
-                />
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-inflation">
-                  Inflation (%)
-                </label>
-                <NumberField
-                  id="ret-inflation"
-                  step="0.01"
-                  class={styles.formControl}
-                  testId="retirement-input-inflation"
-                  disabled={!settings().adjustForInflation}
-                  value={settings().annualInflationPct}
-                  onChange={(v) => {
-                    update('annualInflationPct', v)
-                  }}
-                />
-              </div>
+              <Field
+                form={form}
+                name="annualReturnPct"
+                label="Expected annual return (%)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="0.01"
+                    class={styles.formControl}
+                    testId="retirement-input-return"
+                    disabled={settings().useAllocation}
+                    value={
+                      settings().useAllocation
+                        ? round(effectiveReturnPct(settings()))
+                        : settings().annualReturnPct
+                    }
+                    onChange={(v) => {
+                      update('annualReturnPct', v)
+                    }}
+                  />
+                )}
+              </Field>
+              <Field
+                form={form}
+                name="annualInflationPct"
+                label="Inflation (%)"
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="0.01"
+                    class={styles.formControl}
+                    testId="retirement-input-inflation"
+                    disabled={!settings().adjustForInflation}
+                    value={settings().annualInflationPct}
+                    onChange={(v) => {
+                      update('annualInflationPct', v)
+                    }}
+                  />
+                )}
+              </Field>
             </div>
 
             {/* A setting with a line of its own explaining what it currently means reads as
@@ -844,49 +1003,86 @@ export default function RetirementPlanner() {
                   <Index each={settings().allocation}>
                     {(slice, i) => (
                       <div class={styles.listRow}>
-                        <input
-                          type="text"
-                          class={styles.formControl}
-                          aria-label="Asset name"
-                          value={slice().label}
-                          oninput={(e) => {
-                            update(
-                              'allocation',
-                              settings().allocation.map((a, j) =>
-                                j === i ? { ...a, label: e.currentTarget.value } : a
-                              )
-                            )
-                          }}
-                        />
-                        <NumberField
-                          step="1"
-                          class={styles.formControl}
-                          ariaLabel="Share of portfolio, percent"
-                          value={slice().weightPct}
-                          onChange={(v) => {
-                            update(
-                              'allocation',
-                              settings().allocation.map((a, j) =>
-                                j === i ? { ...a, weightPct: v } : a
-                              )
-                            )
-                          }}
-                        />
-                        <NumberField
-                          step="0.01"
-                          class={styles.formControl}
-                          ariaLabel="Expected annual return, percent"
-                          disabled={slice().erodesWithInflation}
-                          value={slice().annualReturnPct}
-                          onChange={(v) => {
-                            update(
-                              'allocation',
-                              settings().allocation.map((a, j) =>
-                                j === i ? { ...a, annualReturnPct: v } : a
-                              )
-                            )
-                          }}
-                        />
+                        <Field
+                          form={form}
+                          name={`allocation.${i}.label`}
+                          label="Asset name"
+                          class={styles.rowField}
+                          labelClass={styles.visuallyHidden}
+                        >
+                          {(control) => (
+                            <input
+                              {...control}
+                              type="text"
+                              class={styles.formControl}
+                              aria-label="Asset name"
+                              value={slice().label}
+                              oninput={(e) => {
+                                update(
+                                  'allocation',
+                                  settings().allocation.map((a, j) =>
+                                    j === i ? { ...a, label: e.currentTarget.value } : a
+                                  )
+                                )
+                              }}
+                            />
+                          )}
+                        </Field>
+                        <Field
+                          form={form}
+                          name={`allocation.${i}.weightPct`}
+                          label="Share of portfolio, percent"
+                          class={styles.rowField}
+                          labelClass={styles.visuallyHidden}
+                        >
+                          {(control) => (
+                            <NumberField
+                              id={control.id}
+                              ariaInvalid={control['aria-invalid']}
+                              ariaDescribedBy={control['aria-describedby']}
+                              step="1"
+                              class={styles.formControl}
+                              ariaLabel="Share of portfolio, percent"
+                              value={slice().weightPct}
+                              onChange={(v) => {
+                                update(
+                                  'allocation',
+                                  settings().allocation.map((a, j) =>
+                                    j === i ? { ...a, weightPct: v } : a
+                                  )
+                                )
+                              }}
+                            />
+                          )}
+                        </Field>
+                        <Field
+                          form={form}
+                          name={`allocation.${i}.annualReturnPct`}
+                          label="Expected annual return, percent"
+                          class={styles.rowField}
+                          labelClass={styles.visuallyHidden}
+                        >
+                          {(control) => (
+                            <NumberField
+                              id={control.id}
+                              ariaInvalid={control['aria-invalid']}
+                              ariaDescribedBy={control['aria-describedby']}
+                              step="0.01"
+                              class={styles.formControl}
+                              ariaLabel="Expected annual return, percent"
+                              disabled={slice().erodesWithInflation}
+                              value={slice().annualReturnPct}
+                              onChange={(v) => {
+                                update(
+                                  'allocation',
+                                  settings().allocation.map((a, j) =>
+                                    j === i ? { ...a, annualReturnPct: v } : a
+                                  )
+                                )
+                              }}
+                            />
+                          )}
+                        </Field>
                       </div>
                     )}
                   </Index>
@@ -903,28 +1099,52 @@ export default function RetirementPlanner() {
                 />
               </legend>
               <Index each={settings().lifestyles}>
-                {(lifestyle) => (
+                {(lifestyle, i) => (
                   <div class={styles.listRow}>
-                    <input
-                      type="text"
-                      class={styles.formControl}
-                      aria-label="Lifestyle name"
-                      value={lifestyle().label}
-                      oninput={(e) => {
-                        updateLifestyle(lifestyle().id, { label: e.currentTarget.value })
-                      }}
-                    />
-                    <NumberField
-                      step="0.01"
-                      class={styles.formControl}
-                      ariaLabel="Monthly spending in today's money"
-                      value={lifestyle().monthlySpendToday}
-                      onChange={(v) => {
-                        updateLifestyle(lifestyle().id, {
-                          monthlySpendToday: v,
-                        })
-                      }}
-                    />
+                    <Field
+                      form={form}
+                      name={`lifestyles.${i}.label`}
+                      label="Lifestyle name"
+                      class={styles.rowField}
+                      labelClass={styles.visuallyHidden}
+                    >
+                      {(control) => (
+                        <input
+                          {...control}
+                          type="text"
+                          class={styles.formControl}
+                          aria-label="Lifestyle name"
+                          value={lifestyle().label}
+                          oninput={(e) => {
+                            updateLifestyle(lifestyle().id, { label: e.currentTarget.value })
+                          }}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      form={form}
+                      name={`lifestyles.${i}.monthlySpendToday`}
+                      label="Monthly spending in today's money"
+                      class={styles.rowField}
+                      labelClass={styles.visuallyHidden}
+                    >
+                      {(control) => (
+                        <NumberField
+                          id={control.id}
+                          ariaInvalid={control['aria-invalid']}
+                          ariaDescribedBy={control['aria-describedby']}
+                          step="0.01"
+                          class={styles.formControl}
+                          ariaLabel="Monthly spending in today's money"
+                          value={lifestyle().monthlySpendToday}
+                          onChange={(v) => {
+                            updateLifestyle(lifestyle().id, {
+                              monthlySpendToday: v,
+                            })
+                          }}
+                        />
+                      )}
+                    </Field>
                     <button
                       type="button"
                       class={`${styles.btnSm} ${styles.btnGhost}`}
@@ -958,75 +1178,100 @@ export default function RetirementPlanner() {
             </fieldset>
 
             <div class={styles.formRow}>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-swr">
-                  Withdrawal rate (%)
-                  <InfoTip testId="retirement-info-swr" text={swrExplainer()} />
-                </label>
-                {/* The slider is the point: what this number costs you is a trade-off, and
-                    dragging it shows the chart and the runway move together. The number box
-                    beside it keeps exact entry, and doubles as the slider's readout. */}
-                <div class={styles.sliderRow}>
-                  <RangeField
-                    min={1}
-                    max={12}
-                    step={0.1}
-                    showReadout={false}
-                    value={settings().safeWithdrawalRatePct}
-                    testId="retirement-slider-swr"
-                    ariaLabel="Withdrawal rate, percent"
-                    onChange={(v) => {
-                      update('safeWithdrawalRatePct', round(v))
-                    }}
-                  />
-                  <NumberField
-                    id="ret-swr"
-                    step="0.01"
-                    class={`${styles.formControl} ${styles.sliderNumber}`}
-                    testId="retirement-input-swr"
-                    value={settings().safeWithdrawalRatePct}
-                    onChange={(v) => {
-                      update('safeWithdrawalRatePct', v)
-                    }}
-                  />
-                </div>
-              </div>
-              <div class={styles.formGroup}>
-                <label class={styles.formLabel} for="ret-life">
-                  Plan until age
-                  {/* Stopping at an age means nothing without a date to count it from, and the
-                      projection quietly ignores the field in that case. Say so rather than
-                      leaving a control that does nothing. */}
+              <Field
+                form={form}
+                name="safeWithdrawalRatePct"
+                label="Withdrawal rate (%)"
+                tip={<InfoTip testId="retirement-info-swr" text={swrExplainer()} />}
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  // The slider is the point: what this number costs you is a trade-off, and
+                  // dragging it shows the chart and the runway move together. The number box
+                  // beside it keeps exact entry, doubles as the slider's readout, and is the
+                  // control the label and a refusal point at.
+                  <div class={styles.sliderRow}>
+                    <RangeField
+                      min={1}
+                      max={12}
+                      step={0.1}
+                      showReadout={false}
+                      value={settings().safeWithdrawalRatePct}
+                      testId="retirement-slider-swr"
+                      ariaLabel="Withdrawal rate, percent"
+                      onChange={(v) => {
+                        update('safeWithdrawalRatePct', round(v))
+                      }}
+                    />
+                    <NumberField
+                      id={control.id}
+                      ariaInvalid={control['aria-invalid']}
+                      ariaDescribedBy={control['aria-describedby']}
+                      step="0.01"
+                      class={`${styles.formControl} ${styles.sliderNumber}`}
+                      testId="retirement-input-swr"
+                      value={settings().safeWithdrawalRatePct}
+                      onChange={(v) => {
+                        update('safeWithdrawalRatePct', v)
+                      }}
+                    />
+                  </div>
+                )}
+              </Field>
+              <Field
+                form={form}
+                name="lifeExpectancyAge"
+                label="Plan until age"
+                tip={
+                  // Stopping at an age means nothing without a date to count it from, and the
+                  // projection quietly ignores the field in that case. Say so rather than
+                  // leaving a control that does nothing.
                   <Show when={settings().birthMonth === null}>
                     <InfoTip
                       testId="retirement-life-needs-birth"
                       text="Set your date of birth to plan to an age. Until then the chart runs 60 years."
                     />
                   </Show>
-                </label>
-                <NumberField
-                  id="ret-life"
-                  step="1"
-                  class={styles.formControl}
-                  testId="retirement-input-life"
-                  disabled={settings().birthMonth === null}
-                  value={settings().lifeExpectancyAge}
-                  onChange={(v) => {
-                    update('lifeExpectancyAge', v)
-                  }}
-                />
-              </div>
+                }
+                class={styles.formGroup}
+                labelClass={styles.formLabel}
+              >
+                {(control) => (
+                  <NumberField
+                    id={control.id}
+                    ariaInvalid={control['aria-invalid']}
+                    ariaDescribedBy={control['aria-describedby']}
+                    step="1"
+                    class={styles.formControl}
+                    testId="retirement-input-life"
+                    disabled={settings().birthMonth === null}
+                    value={settings().lifeExpectancyAge}
+                    onChange={(v) => {
+                      update('lifeExpectancyAge', v)
+                    }}
+                  />
+                )}
+              </Field>
             </div>
 
             <div class={styles.saveRow}>
-              <button
-                type="submit"
+              {/* What belongs to no field on screen: offline, or a value the panel does not
+                  show right now, like an advanced one while it is in simple mode. Next to the
+                  button, because that is where the person who pressed it is looking. */}
+              <FormNotice
+                form={form}
+                class={styles.saveNotice}
+                testId="retirement-assumptions-notice"
+              />
+              <SubmitButton
                 class={styles.btnPrimary}
                 data-test-id="retirement-save-settings"
-                disabled={saving() || !dirty()}
+                busy={form.submitting()}
+                unchanged={!dirty()}
               >
-                {saving() ? 'Saving...' : dirty() ? 'Save assumptions' : 'Saved'}
-              </button>
+                {dirty() ? 'Save assumptions' : 'Saved'}
+              </SubmitButton>
               <Show when={dirty()}>
                 <span class={styles.fieldHint}>
                   The chart already reflects these; saving keeps them for next time.

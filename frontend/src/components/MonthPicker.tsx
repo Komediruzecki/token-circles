@@ -42,7 +42,12 @@ export interface MonthPickerProps {
   emptyLabel?: string
   class?: string
   ariaLabel?: string
+  /** 'true' while a form marks the month: both selects say so. */
+  ariaInvalid?: 'true'
+  /** The ids of the message and hint that describe the month, on both selects. */
+  ariaDescribedBy?: string
   testId?: string
+  /** On the month select, the first of the two: what a `<label for>` points at. */
   id?: string
   disabled?: boolean
 }
@@ -84,6 +89,8 @@ export default function MonthPicker(props: MonthPickerProps) {
       <select
         id={props.id}
         aria-label={props.ariaLabel ? `${props.ariaLabel} — month` : 'Month'}
+        aria-invalid={props.ariaInvalid}
+        aria-describedby={props.ariaDescribedBy}
         disabled={props.disabled}
         value={current().month === null ? '' : String(current().month)}
         onChange={(e) => {
@@ -104,6 +111,8 @@ export default function MonthPicker(props: MonthPickerProps) {
       </select>
       <select
         aria-label={props.ariaLabel ? `${props.ariaLabel} — year` : 'Year'}
+        aria-invalid={props.ariaInvalid}
+        aria-describedby={props.ariaDescribedBy}
         disabled={props.disabled}
         value={current().year === null ? '' : String(current().year)}
         onChange={(e) => {

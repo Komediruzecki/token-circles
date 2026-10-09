@@ -497,14 +497,7 @@ describe('editing a local-first row saved under older rules', () => {
 
 describe('a refusal for an entity still on its zod schema', () => {
   it('names the field in plain words, not zod text', async () => {
-    const body = await refusal(
-      await call('POST', '/api/loans', {
-        principal: 12000,
-        interest_rate: 4.5,
-        start_date: '2026-11-01',
-        term_months: 60,
-      })
-    )
+    const body = await refusal(await call('POST', '/api/tags', { color: '#22C55E' }))
 
     expect(body).toEqual({
       error: 'Fill in the name.',

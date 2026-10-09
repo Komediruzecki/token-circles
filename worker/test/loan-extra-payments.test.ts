@@ -1,11 +1,13 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { issueSessionCookie } from '../src/auth';
+import { LOAN_MESSAGES as M } from '../../shared/loanSchema';
 
 // A loan's extra payments, added and changed through the Worker against a real D1. Both routes put
-// the body through shared/loanExtraPayment.ts, as the local-first handlers do
+// the body through shared/loanSchema.ts, as the local-first handlers do
 // (frontend/src/core/storage/__tests__/localHandlers.loans.test.ts), so the two runtimes accept
-// and refuse the same bodies. The rules themselves: frontend/src/core/__tests__/loanExtraPayment.test.ts.
+// and refuse the same bodies. The rules themselves: frontend/src/core/__tests__/loanSchema.test.ts;
+// what a refusal says at each field: loan-refusals.test.ts.
 
 const USER = 93;
 const ME = 930;
@@ -80,30 +82,31 @@ describe('PUT /api/loans/:id/prepayments/:prepayId', () => {
     const { loan, extra } = await loanWithExtra();
     const res = await api('PUT', `/api/loans/${loan}/prepayments/${extra}`, {
       month: 12,
-      amount: 2500.456,
+      amount: 2500.45,
       note: '  Bonus ',
     });
     expect(res.status).toBe(200);
-    expect(await stored(extra)).toEqual({ month: 12, amount: 2500.46, note: 'Bonus' });
+    expect(await stored(extra)).toEqual({ month: 12, amount: 2500.45, note: 'Bonus' });
   });
 
-  it('refuses a body it would refuse as a new extra payment, and changes nothing', async () => {
+  it('refuses a change it would refuse in a new extra payment, and changes nothing', async () => {
     const { loan, extra } = await loanWithExtra();
     const zero = await api('PUT', `/api/loans/${loan}/prepayments/${extra}`, {
       month: 3,
       amount: 0,
     });
     expect(zero.status).toBe(400);
-    expect(await zero.json()).toEqual({ error: 'Enter an amount above zero.' });
+    expect(await zero.json()).toEqual({
+      error: M.amountPositive,
+      fields: { amount: M.amountPositive },
+    });
     // The loan has 60 payments.
     const late = await api('PUT', `/api/loans/${loan}/prepayments/${extra}`, {
       month: 61,
       amount: 10,
     });
     expect(late.status).toBe(400);
-    expect(await late.json()).toEqual({
-      error: 'Choose which payment the extra payment goes with.',
-    });
+    expect(await late.json()).toEqual({ error: M.extraMonth, fields: { month: M.extraMonth } });
     expect(await stored(extra)).toEqual({ month: 3, amount: 500, note: 'Gift' });
   });
 
@@ -132,16 +135,21 @@ describe('PUT /api/loans/:id/prepayments/:prepayId', () => {
 });
 
 describe('POST /api/loans/:id/prepayments', () => {
-  it('stores the extra payment as checked: to the cent, the note trimmed, no other fields', async () => {
+  it('stores the extra payment as checked: numbers read, the note trimmed, no other fields', async () => {
     const { loan } = await loanWithExtra();
     const res = await api('POST', `/api/loans/${loan}/prepayments`, {
-      month: 2,
-      amount: 99.999,
+      month: '2',
+      amount: '99.99',
       note: ' x ',
+      loan_id: 1,
     });
     expect(res.status).toBe(200);
     const { id } = (await res.json()) as { id: number };
-    expect(await stored(id)).toEqual({ month: 2, amount: 100, note: 'x' });
+    expect(await stored(id)).toEqual({ month: 2, amount: 99.99, note: 'x' });
+    const row = await env.DB.prepare('SELECT loan_id FROM loan_prepayments WHERE id = ?')
+      .bind(id)
+      .first<{ loan_id: number }>();
+    expect(row?.loan_id).toBe(loan);
   });
 
   it('refuses an amount at or below zero, and a month outside the term', async () => {
@@ -161,5 +169,33 @@ describe('POST /api/loans/:id/prepayments', () => {
       .bind(loan)
       .first<{ n: number }>();
     expect(count?.n).toBe(1);
+  });
+});
+
+describe('GET /api/loans', () => {
+  // The list summed a loan's extra payments in SQL: null for a loan without any, where local-first
+  // answered 0 (the contract's loan-total-prepaid-none). Both runtimes now total them to the cent
+  // (shared/loanSchema.ts, extraPaymentTotals).
+  it("totals a loan's extra payments to the cent, and 0 for a loan without any", async () => {
+    const bike = { name: 'Bike', principal: 1000, interest_rate: 0, term_months: 10 };
+    const ids: number[] = [];
+    for (const name of ['Bike', 'Boat']) {
+      const res = await api('POST', '/api/loans', { ...bike, name, start_date: '2026-01-01' });
+      ids.push(((await res.json()) as { id: number }).id);
+    }
+    const [some, none] = ids;
+    for (const amount of [0.1, 0.2]) {
+      const res = await api('POST', `/api/loans/${some}/prepayments`, { month: 4, amount });
+      expect(res.status).toBe(200);
+    }
+    const listed = (await (await api('GET', '/api/loans')).json()) as Record<string, unknown>[];
+    expect(listed.find((l) => l.id === some)).toMatchObject({
+      total_prepaid: 0.3,
+      prepayment_count: 2,
+    });
+    expect(listed.find((l) => l.id === none)).toMatchObject({
+      total_prepaid: 0,
+      prepayment_count: 0,
+    });
   });
 });

@@ -39,12 +39,8 @@ export const DIFFERENCES: Readonly<Record<string, string>> = {
     'GET /api/recurring/upcoming answers { transactions, byCategory, totalMonthly, currency }, every occurrence of the next 30 days, on the Worker, and the active rules themselves in local-first; nothing in the app calls it. Slice 5 (recurring).',
   'recurring-pause':
     "A recurring rule is paused with `active` on the Worker, whose list then leaves it out, and with `is_active` in local-first, whose list keeps it; each ignores the other's field, and no screen pauses a rule. Slice 5 (recurring).",
-  'loan-total-prepaid-none':
-    'GET /api/loans answers total_prepaid null for a loan with no extra payments on the Worker (SUM over no rows) and 0 in local-first; the Loans page does not read it. Slice 4 (loans).',
   'emergency-fund-extras':
     'GET /api/calculator/emergency-fund also answers monthsOfCoverage on the Worker, and totalBalance with the savings accounts themselves in local-first; the Emergency Fund page reads none of the three. Slice 2 (accounts), whose data it reads.',
-  'fire-inflation':
-    'POST /api/calculator/retire ignores an inflationRate in the body on the Worker, projecting in nominal money, but deflates the projection by it (and echoes it in inputs) in local-first, so the same body reaches its FIRE number later there; nothing in the app calls it. Slice 4 (the Retirement forms).',
   'housing-answer-shape':
     "POST /api/housing answers 200 on the Worker and 201 in local-first, and GET /api/housing answers autopay as 0 or 1 with the stored columns on the Worker, but as true or false with the form's own fields (property_name, due_day, due_month) too in local-first; the Housing page reads both. Slice 5 (housing).",
   'housing-due-month-default':
