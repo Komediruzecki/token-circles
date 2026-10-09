@@ -278,6 +278,35 @@ describe('apply-mappings', () => {
       ['sidejob', GROCERIES, 1],
     ])
   })
+  it('updates the goals linked to the categories it moves transactions out of and into', async () => {
+    const db = await getDB()
+    await db.clear('goals')
+    for (const [id, name, categoryId] of [
+      [50, 'Groceries fund', GROCERIES],
+      [51, 'Other fund', OTHER],
+    ] as const) {
+      await db.add('goals', {
+        id,
+        profile_id: PROFILE,
+        name,
+        target_amount: 100,
+        current_amount: 10,
+        category_id: categoryId,
+        tracking_start_date: '2026-01-01',
+      })
+    }
+
+    await send('POST', '/api/categories/apply-mappings', {
+      mappings: [{ transaction_id: CORNER_TX, category_id: GROCERIES, pattern: 'Corner shop' }],
+    })
+
+    // The stored amounts: the goals list recalculates them itself, other readers do not.
+    const goals = (await db.getAll('goals')) as { id: number; current_amount: number }[]
+    expect(goals.map((goal) => [goal.id, goal.current_amount])).toEqual([
+      [50, 20],
+      [51, 0],
+    ])
+  })
 })
 
 describe('auto-map', () => {

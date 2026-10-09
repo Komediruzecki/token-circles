@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/categorySchema'
 import { getDB } from '../idb'
 import { profileMappings, upsertMapping } from './categoryMappings'
+import { recalcGoalsByCategory } from './goals'
 import {
   adapter,
   currentProfileOwns,
@@ -191,10 +192,15 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
   }
 
   let updated = 0
+  // The categories filed transactions leave and join.
+  const moved = new Set<number>()
   for (const entry of checked.value) {
-    if (await currentProfileRecord('transactions', entry.transaction_id, pid)) {
+    const transaction = await currentProfileRecord('transactions', entry.transaction_id, pid)
+    if (transaction) {
       await adapter.updateTransaction(entry.transaction_id, { category_id: entry.category_id })
       updated++
+      if (transaction.category_id) moved.add(transaction.category_id as number)
+      moved.add(entry.category_id)
     }
     // Learn the text for next time (shared/categoryMappingSchema.ts, learnedPattern).
     const pattern = learnedPattern(entry.pattern)
@@ -206,5 +212,7 @@ export async function categoriesApplyMappings(body: unknown): Promise<Response> 
       })
     }
   }
+  // A goal linked to a category follows its transactions, as on every other path that moves them.
+  for (const categoryId of moved) await recalcGoalsByCategory(categoryId)
   return ok({ updated })
 }

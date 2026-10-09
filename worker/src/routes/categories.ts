@@ -5,6 +5,7 @@ import { getProfileId, getProfileIds } from '../profile';
 import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import { deleteProfileCategory, resetProfileCategories } from '../profileData';
+import { recalcGoalsByCategory } from '../recalc-goals';
 import {
   CATEGORY_MESSAGES,
   categoryNameTaken,
@@ -269,7 +270,15 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
   }
 
   let updated = 0;
+  // The categories filed transactions leave and join.
+  const moved = new Set<number>();
   for (const entry of entries) {
+    const before = await db.first<{ category_id: number | null }>(
+      c.env.DB,
+      'SELECT category_id FROM transactions WHERE id = ? AND profile_id = ?',
+      entry.transaction_id,
+      pid
+    );
     const result = await db.run(
       c.env.DB,
       "UPDATE transactions SET category_id = ?, updated_at = datetime('now') WHERE id = ? AND profile_id = ?",
@@ -277,7 +286,11 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
       entry.transaction_id,
       pid
     );
-    if (result.meta.changes > 0) updated++;
+    if (result.meta.changes > 0) {
+      updated++;
+      if (before?.category_id) moved.add(before.category_id);
+      moved.add(entry.category_id);
+    }
 
     // Learn the text for next time (shared/categoryMappingSchema.ts, learnedPattern).
     const pattern = learnedPattern(entry.pattern);
@@ -289,6 +302,8 @@ categoriesRoutes.post('/api/categories/apply-mappings', requireAuth, async (c) =
       });
     }
   }
+  // A goal linked to a category follows its transactions, as on every other path that moves them.
+  for (const categoryId of moved) await recalcGoalsByCategory(c.env.DB, categoryId, [pid]);
 
   return c.json({ ok: true, updated });
 });

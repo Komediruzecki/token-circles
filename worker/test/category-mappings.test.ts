@@ -230,6 +230,31 @@ describe('apply-mappings', () => {
       ['sidejob', GROCERIES, 1],
     ]);
   });
+  it('updates the goals linked to the categories it moves transactions out of and into', async () => {
+    await env.DB.prepare('DELETE FROM savings_goals WHERE profile_id = ?').bind(PROFILE).run();
+    await env.DB.prepare(
+      `INSERT INTO savings_goals (id, profile_id, name, target_amount, current_amount, category_id, tracking_start_date) VALUES
+         (64350, ?, 'Groceries fund', 100, 40, ?, '2026-01-01'),
+         (64351, ?, 'Other fund', 100, 4.5, ?, '2026-01-01')`
+    )
+      .bind(PROFILE, GROCERIES, PROFILE, OTHER)
+      .run();
+
+    await send('POST', '/api/categories/apply-mappings', {
+      mappings: [{ transaction_id: CORNER_TX, category_id: GROCERIES, pattern: 'Corner shop' }],
+    });
+
+    // The stored amounts: the goals list recalculates them itself, other readers do not.
+    const { results } = await env.DB.prepare(
+      'SELECT id, current_amount FROM savings_goals WHERE profile_id = ? ORDER BY id'
+    )
+      .bind(PROFILE)
+      .all();
+    expect(results).toEqual([
+      { id: 64350, current_amount: 44.5 },
+      { id: 64351, current_amount: 0 },
+    ]);
+  });
 });
 
 describe('auto-map', () => {
