@@ -43,6 +43,7 @@ import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
 import { sweepExpiredSessions } from './auth';
+import { sweepAuthLogs } from './authlog';
 import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
 import { readTimeZone } from './local-date';
@@ -219,6 +220,7 @@ export default {
         runScheduledReminders(event.cron, env),
         sweepRateLimits(env),
         sweepExpiredSessions(env),
+        sweepAuthLogs(env),
         runScheduledSheetSyncs(event.cron, env),
       ])
     );
