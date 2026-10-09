@@ -4,7 +4,16 @@
  * Import page and the onboarding wizard — pass `compact` to drop the page-sized
  * explainer table.
  */
-import { createEffect, createSignal, createUniqueId, For, onCleanup, onMount, Show } from 'solid-js'
+import {
+  batch,
+  createEffect,
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js'
 import { AccountSelect } from '../../components/AccountSelect'
 import { Field, FormNotice, SubmitButton } from '../../components/form'
 import { OrbitSpinner } from '../../components/OrbitSpinner'
@@ -12,6 +21,7 @@ import { Pill } from '../../components/Pill'
 import { listAdapters } from '../../core/bankImport'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
+import { createPasteForm } from './pasteForm'
 import { downloadSampleTemplate } from './sampleTemplate'
 import { createSheetLinkForm } from './sheetLinkForm'
 import type { BankId } from '../../core/bankImport'
@@ -34,6 +44,9 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
 
   // The Google Sheets link, on the form kit: a bad link is marked at the field (sheetLinkForm.ts).
   const sheetForm = createSheetLinkForm(flow)
+  // Paste CSV, on the form kit: a paste with no row of data is marked at the box (pasteForm.ts).
+  const pasteForm = createPasteForm(flow)
+  const pasteDelimiterId = `paste-delimiter-${createUniqueId()}`
 
   const bankLabel = (bankId: BankId | null) =>
     listAdapters().find((a) => a.id === bankId)?.label ?? ''
@@ -378,41 +391,68 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             Paste tabular data straight from Excel, Google Sheets, or any spreadsheet app — it's
             parsed right in your browser.
           </p>
-          <div
-            style={{ 'margin-bottom': '8px', display: 'flex', gap: '8px', 'align-items': 'center' }}
-          >
-            <select
-              class={styles.formControl}
-              value={flow.pasteDelimiter()}
-              onchange={(e) =>
-                flow.setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')
-              }
-              style={{ 'max-width': '140px' }}
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="comma">Comma (,)</option>
-              <option value="tab">Tab</option>
-            </select>
-            <button
-              class={`${styles.btn} ${styles.btnPrimary}`}
-              data-test-id="import-paste-parse"
-              onClick={() => {
-                flow.parsePastedData(flow.pastedText())
+          <form {...pasteForm.attrs} data-test-id="import-paste-form">
+            <FormNotice form={pasteForm} />
+            <div
+              style={{
+                'margin-bottom': '8px',
+                display: 'flex',
+                gap: '8px',
+                'align-items': 'center',
               }}
-              disabled={flow.loading() || !flow.pastedText().trim()}
             >
-              Parse pasted data
-            </button>
-          </div>
-          <textarea
-            class={styles.formControl}
-            placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
-            data-test-id="import-paste-textarea"
-            value={flow.pastedText()}
-            oninput={(e) => flow.setPastedText(e.currentTarget.value)}
-            rows={8}
-            style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
-          />
+              <label class={styles.visuallyHidden} for={pasteDelimiterId}>
+                Columns separated by
+              </label>
+              <select
+                id={pasteDelimiterId}
+                class={styles.formControl}
+                value={flow.pasteDelimiter()}
+                onchange={(e) =>
+                  flow.setPasteDelimiter(e.currentTarget.value as 'auto' | 'comma' | 'tab')
+                }
+                style={{ 'max-width': '140px' }}
+              >
+                <option value="auto">Auto-detect</option>
+                <option value="comma">Comma (,)</option>
+                <option value="tab">Tab</option>
+              </select>
+              <SubmitButton
+                class={`${styles.btn} ${styles.btnPrimary}`}
+                busy={pasteForm.submitting()}
+                busyLabel="Reading…"
+                data-test-id="import-paste-parse"
+              >
+                Parse pasted data
+              </SubmitButton>
+            </div>
+            <Field
+              form={pasteForm}
+              name="text"
+              label="Pasted rows"
+              labelClass={styles.visuallyHidden}
+            >
+              {(control) => (
+                <textarea
+                  {...control}
+                  required
+                  class={styles.formControl}
+                  placeholder="Paste CSV or TSV data here (include header row)&#10;Example:&#10;date,description,amount&#10;2024-01-15,Grocery Store,-45.99&#10;2024-01-16,Salary,3200.00"
+                  data-test-id="import-paste-textarea"
+                  value={pasteForm.values.text}
+                  oninput={(e) => {
+                    const text = e.currentTarget.value
+                    batch(() => {
+                      pasteForm.set('text', text)
+                      flow.setPastedText(text)
+                    })
+                  }}
+                  rows={8}
+                  style={{ resize: 'vertical', 'font-family': 'monospace', 'font-size': '12px' }}
+                />
+              )}
+            </Field>
+          </form>
           {flow.uploadResult() && flow.activeImportTab() === 'paste-csv' && (
             <button
               class={`${styles.btn} ${styles.btnPrimary}`}
