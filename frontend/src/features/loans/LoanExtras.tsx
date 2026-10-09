@@ -84,6 +84,15 @@ export default function LoanExtras(props: Props) {
   })
   let list: HTMLUListElement | undefined
 
+  // The open change is built once, for its payment, between the rows before it and the rows after
+  // it. A list read again (as on coming back to the page after a minute away) is all new objects,
+  // and `<For>` builds every row again: built inside its row, the form went with it, and so did
+  // the caret. Kept by position instead, it would last only while no payment lands before it.
+  const openAt = createMemo(() => props.extras.findIndex((extra) => extra.ref === editing()))
+  const before = createMemo(() => (openAt() < 0 ? props.extras : props.extras.slice(0, openAt())))
+  const after = createMemo(() => (openAt() < 0 ? [] : props.extras.slice(openAt() + 1)))
+  const open = () => props.extras[openAt()]
+
   const dateOf = (m: number) => addCalendarMonths(props.startDate, m - 1)
   const whenLabel = (m: number) => {
     const date = dateOf(m)
@@ -194,6 +203,50 @@ export default function LoanExtras(props: Props) {
     </span>
   )
 
+  /** A saved extra payment, as the list shows it: when, its note, the amount, Change and Remove. */
+  const row = (extra: SavedExtra) => (
+    <li class={styles.listItem} data-test-id="loans-extra-item">
+      <span class={styles.listWhen}>
+        {whenLabel(extra.month)}
+        <Show when={extra.note}>
+          <small>{extra.note}</small>
+        </Show>
+      </span>
+      <span class={styles.listAmount}>{props.formats.money(extra.amount)}</span>
+      <Show when={props.canWrite} fallback={<span />}>
+        <span class={styles.listActions}>
+          <button
+            type="button"
+            class={styles.buttonQuiet}
+            data-test-id="loans-extra-edit"
+            data-ref={extra.ref}
+            aria-label={`Change the extra payment with payment ${extra.month}`}
+            title="Change"
+            onClick={() => {
+              startEdit(extra)
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+            </svg>
+          </button>
+          {deleteButton(extra)}
+        </span>
+      </Show>
+    </li>
+  )
+
   return (
     <div class={styles.panel} data-test-id="loans-extras">
       <section class={styles.section} aria-labelledby="loan-extras-title">
@@ -218,104 +271,60 @@ export default function LoanExtras(props: Props) {
           }
         >
           <ul class={styles.list} data-test-id="loans-extras-list" ref={list}>
-            <For each={props.extras}>
+            <For each={before()}>{row}</For>
+            <Show when={open()}>
               {(extra) => (
-                <Show
-                  when={editing() === extra.ref}
-                  fallback={
-                    <li class={styles.listItem} data-test-id="loans-extra-item">
-                      <span class={styles.listWhen}>
-                        {whenLabel(extra.month)}
-                        <Show when={extra.note}>
-                          <small>{extra.note}</small>
-                        </Show>
-                      </span>
-                      <span class={styles.listAmount}>{props.formats.money(extra.amount)}</span>
-                      <Show when={props.canWrite} fallback={<span />}>
-                        <span class={styles.listActions}>
-                          <button
-                            type="button"
-                            class={styles.buttonQuiet}
-                            data-test-id="loans-extra-edit"
-                            data-ref={extra.ref}
-                            aria-label={`Change the extra payment with payment ${extra.month}`}
-                            title="Change"
-                            onClick={() => {
-                              startEdit(extra)
-                            }}
-                          >
-                            <svg
-                              width="16"
-                              height="16"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              viewBox="0 0 24 24"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 20h9" />
-                              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                            </svg>
-                          </button>
-                          {deleteButton(extra)}
-                        </span>
-                      </Show>
-                    </li>
-                  }
+                <li
+                  class={`${styles.listItem} ${styles.listItemEditing}`}
+                  data-test-id="loans-extra-item"
                 >
-                  <li
-                    class={`${styles.listItem} ${styles.listItemEditing}`}
-                    data-test-id="loans-extra-item"
+                  <form
+                    class={styles.form}
+                    data-test-id="loans-extra-edit-form"
+                    aria-label={`Change the extra payment with payment ${extra().month}`}
+                    {...editForm.attrs}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Escape') return
+                      e.preventDefault()
+                      stopEdit(extra().ref)
+                    }}
                   >
-                    <form
-                      class={styles.form}
-                      data-test-id="loans-extra-edit-form"
-                      aria-label={`Change the extra payment with payment ${extra.month}`}
-                      {...editForm.attrs}
-                      onKeyDown={(e) => {
-                        if (e.key !== 'Escape') return
-                        e.preventDefault()
-                        stopEdit(extra.ref)
-                      }}
-                    >
-                      <FormNotice form={editForm} testId="loans-extra-edit-notice" />
-                      <div class={styles.formFields}>
-                        {fields(
-                          editForm,
-                          () => monthsUpTo(Math.max(props.lastMonth, extra.month)),
-                          {
-                            month: 'loans-extra-edit-month',
-                            amount: 'loans-extra-edit-amount',
-                            note: 'loans-extra-edit-note',
-                          }
-                        )}
-                        <div class={styles.formActions}>
-                          <SubmitButton
-                            class={styles.buttonPrimary}
-                            data-test-id="loans-extra-save"
-                            busy={editForm.submitting()}
-                          >
-                            Save
-                          </SubmitButton>
-                          <button
-                            type="button"
-                            class={styles.button}
-                            data-test-id="loans-extra-cancel"
-                            onClick={() => {
-                              stopEdit(extra.ref)
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
+                    <FormNotice form={editForm} testId="loans-extra-edit-notice" />
+                    <div class={styles.formFields}>
+                      {fields(
+                        editForm,
+                        () => monthsUpTo(Math.max(props.lastMonth, extra().month)),
+                        {
+                          month: 'loans-extra-edit-month',
+                          amount: 'loans-extra-edit-amount',
+                          note: 'loans-extra-edit-note',
+                        }
+                      )}
+                      <div class={styles.formActions}>
+                        <SubmitButton
+                          class={styles.buttonPrimary}
+                          data-test-id="loans-extra-save"
+                          busy={editForm.submitting()}
+                        >
+                          Save
+                        </SubmitButton>
+                        <button
+                          type="button"
+                          class={styles.button}
+                          data-test-id="loans-extra-cancel"
+                          onClick={() => {
+                            stopEdit(extra().ref)
+                          }}
+                        >
+                          Cancel
+                        </button>
                       </div>
-                    </form>
-                  </li>
-                </Show>
+                    </div>
+                  </form>
+                </li>
               )}
-            </For>
+            </Show>
+            <For each={after()}>{row}</For>
           </ul>
         </Show>
 

@@ -12,7 +12,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LOAN_MESSAGES as M } from '../../../../../shared/loanSchema'
 import { setCurrentProfile, setPage, setProfiles } from '../../../core/appStore'
-import { __resetDataVersionsForTest } from '../../../core/dataVersions'
+import { __resetDataVersionsForTest, invalidateAllEntities } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
 import { removeToast, toasts } from '../../../core/toastStore'
 
@@ -298,5 +298,51 @@ describe('changing an extra payment', () => {
     })
     expect(editForm()).not.toBeNull()
     expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('a change open while the list is read again', () => {
+  /**
+   * Another tab adds an extra payment, and the page reads the list again, as it does when it comes
+   * back to the front after a minute away: every row comes back a new object.
+   */
+  async function addedElsewhere(extra: Row): Promise<void> {
+    const db = await getDB()
+    const car = (await db.get('loans', CAR)) as Row
+    await db.put('loans', { ...car, prepayments: [...(car.prepayments as Row[]), extra] } as never)
+    invalidateAllEntities()
+    await vi.waitFor(() => {
+      expect(host.querySelectorAll('[data-test-id="loans-extra-item"]')).toHaveLength(2)
+    })
+  }
+
+  it('keeps the field being typed in, and what it holds', async () => {
+    await openLoan(CAR)
+    await openChange(6)
+    const amount = field('Amount', editForm()!)
+    type(amount, '65')
+
+    await addedElsewhere({ id: 2, month: 12, amount: 300, note: '' })
+
+    expect(field('Amount', editForm()!)).toBe(amount)
+    expect(document.activeElement).toBe(amount)
+    expect(amount.value).toBe('65')
+  })
+
+  it('keeps it when the new payment comes before the one being changed', async () => {
+    await openLoan(CAR)
+    await openChange(6)
+    const amount = field('Amount', editForm()!)
+    type(amount, '65')
+
+    await addedElsewhere({ id: 2, month: 3, amount: 300, note: '' })
+
+    expect(field('Amount', editForm()!)).toBe(amount)
+    expect(document.activeElement).toBe(amount)
+    expect(amount.value).toBe('65')
+    // Still in its place: after payment 3, which is listed first.
+    const items = host.querySelectorAll('[data-test-id="loans-extra-item"]')
+    expect(items[0].textContent).toContain('Payment 3')
+    expect(items[1].contains(amount)).toBe(true)
   })
 })
