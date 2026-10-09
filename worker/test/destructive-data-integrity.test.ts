@@ -1,7 +1,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { DEFAULT_CATEGORIES } from '../src/profileData';
 
 const TABLES = [
@@ -74,7 +74,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (701, 70, 'Target')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (702, 71, 'Other user')"),
   ]);
-  cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(70, 'password', env)).split(';')[0];
 });
 
 function api(path: string, method: 'DELETE' | 'POST', profileId?: number): Promise<Response> {
@@ -505,5 +505,33 @@ describe('category reset referential integrity', () => {
     const budgets = (await budgetsRes.json()) as Array<{ id: number }>;
     expect(budgets.map((b) => b.id)).toContain(7213);
     expect(budgets.map((b) => b.id)).not.toContain(7212);
+  });
+});
+
+describe('account deletion and sessions', () => {
+  async function sessions(userId: number): Promise<number> {
+    const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM auth_sessions WHERE user_id = ?')
+      .bind(userId)
+      .first<{ n: number }>();
+    return row?.n ?? -1;
+  }
+
+  it("deletes the account's sessions with it and leaves another account's", async () => {
+    // beforeEach signed account 70 in once; this is a second device, and another account.
+    await sessionCookie(70, 'password', env);
+    await sessionCookie(71, 'password', env);
+    expect(await sessions(70)).toBeGreaterThanOrEqual(2);
+    const others = await sessions(71);
+    expect(others).toBeGreaterThanOrEqual(1);
+
+    const response = await SELF.fetch('https://example.com/api/account', {
+      method: 'DELETE',
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'delete' }),
+    });
+    expect(response.status).toBe(200);
+
+    expect(await sessions(70)).toBe(0);
+    expect(await sessions(71)).toBe(others);
   });
 });

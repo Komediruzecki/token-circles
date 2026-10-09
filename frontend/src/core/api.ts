@@ -216,11 +216,13 @@ export class ApiClient {
    * Set a new password from a reset token (worker: POST /api/auth/reset-password). The worker
    * deliberately does NOT set a session cookie — the caller sends the user to sign in.
    */
-  async resetPassword(token: string, password: string): Promise<void> {
-    await this.request('/auth/reset-password', undefined, {
+  async resetPassword(token: string, password: string): Promise<{ cleared: boolean }> {
+    const answer = await this.request<{ cleared?: boolean }>('/auth/reset-password', undefined, {
       method: 'POST',
       body: { token, password },
     })
+    // True when the reset also confirmed the address and cleared what the account had set up.
+    return { cleared: answer?.cleared === true }
   }
 
   /**

@@ -1,13 +1,18 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Receipt visibility: the transactions list must expose receipt_id/receipt_name (the
 // table's chip renders from them — they used to be missing entirely), and the file must
 // be fetchable by receipt id at /api/receipts/:id/file (the path the frontend client
 // uses; only the /file/:filename variant existed before).
 
-const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (ch) => ch.charCodeAt(0));
+const PNG = Uint8Array.from(
+  atob(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  ),
+  (ch) => ch.charCodeAt(0)
+);
 
 let cookie = '';
 
@@ -38,7 +43,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (id, profile_id, description, amount, type, date) VALUES (7001, 700, 'Lunch', 12.5, 'expense', '2026-07-01')"
     ),
   ]);
-  cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(70, 'password', env)).split(';')[0];
 });
 
 describe('receipt visibility', () => {
@@ -50,10 +55,7 @@ describe('receipt visibility', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { rows?: unknown[] } | unknown[];
-    const rows = (Array.isArray(body) ? body : (body.rows ?? [])) as Record<
-      string,
-      unknown
-    >[];
+    const rows = (Array.isArray(body) ? body : (body.rows ?? [])) as Record<string, unknown>[];
     const lunch = rows.find((t) => t.id === 7001);
     expect(lunch).toBeDefined();
     expect(lunch!.receipt_id).toBe(receiptId);
@@ -80,7 +82,7 @@ describe('receipt visibility', () => {
       ),
       env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (701, 71, 'Main')"),
     ]);
-    const otherCookie = (await issueSessionCookie(71, 'password', env)).split(';')[0];
+    const otherCookie = (await sessionCookie(71, 'password', env)).split(';')[0];
 
     const res = await SELF.fetch(`https://example.com/api/receipts/${receiptId}/file`, {
       headers: { Cookie: otherCookie },
@@ -96,10 +98,7 @@ describe('receipt visibility', () => {
       headers: { Cookie: cookie },
     });
     const body = (await res.json()) as { rows?: unknown[] } | unknown[];
-    const rows = (Array.isArray(body) ? body : (body.rows ?? [])) as Record<
-      string,
-      unknown
-    >[];
+    const rows = (Array.isArray(body) ? body : (body.rows ?? [])) as Record<string, unknown>[];
     const lunchRows = rows.filter((t) => t.id === 7001);
     expect(lunchRows).toHaveLength(1);
     expect(lunchRows[0].receipt_id).toBe(secondId);

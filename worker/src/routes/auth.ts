@@ -4,6 +4,10 @@ import type { AppEnv } from '../index';
 import * as db from '../db';
 import { deviceLabel } from '../deviceLabel';
 import {
+  authenticateRequest,
+  clearedAccess,
+  clearedWorthSaying,
+  clearUnconfirmedAccess,
   requireAuth,
   verifyGoogleIdToken,
   signState,
@@ -14,15 +18,22 @@ import {
   clearedSessionCookie,
   hashPassword,
   verifyPassword,
+  boundTo,
   TOKEN_TTL_SECONDS,
+  TRY_AGAIN,
 } from '../auth';
 import { sendMail } from '../email';
+import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
 import {
-  applyEmailChange,
-  cancelEmailChange,
-  pendingEmailChange,
-  sendEmailChangeLink,
-} from '../email-change';
+  clearedMarker,
+  EMAIL_LINK_COLUMNS,
+  EMAIL_LINK_FINISH_PATH,
+  linkExpired,
+  markedLink,
+  markerFor,
+  spendLink,
+  type EmailLink,
+} from '../email-link';
 import {
   createEmailVerification,
   randomToken,
@@ -115,7 +126,14 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   const claims = await verifyGoogleIdToken(tok.id_token, GOOGLE_CLIENT_ID);
   if (!claims) return c.json({ error: 'Invalid id_token' }, 401);
 
-  const { userId, created, email: newEmail } = await resolveGoogleUser(c.env.DB, claims);
+  const {
+    userId,
+    created,
+    email: newEmail,
+    cleared,
+    tokenVersion,
+  } = await resolveGoogleUser(c.env.DB, claims);
+  const signIn = { userId, provider: 'google', tokenVersion };
   // Brand-new Google signups get the same welcome as email/password registrations
   // (best-effort — a mail failure must never break the OAuth redirect).
   if (created && newEmail) {
@@ -137,15 +155,24 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
       status: 302,
       headers: {
         Location: dest.toString(),
-        'Set-Cookie': await issueTwofaChallengeCookie(userId, 'google', c.env),
+        'Set-Cookie': await issueTwofaChallengeCookie(c.env, signIn),
       },
     });
   }
-  const sessionCookie = await issueSessionCookie(userId, 'google', c.env, sessionOrigin(c));
+  const sessionCookie = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
+  if (!sessionCookie) return c.json({ error: TRY_AGAIN }, 409);
+  // Joining cleared what the account had set up before its address was confirmed: ?cleared=1
+  // lets the app say what. Joining clears the TOTP too, so this never meets ?twofa=1.
+  let location = state.returnTo;
+  if (cleared) {
+    const dest = new URL(state.returnTo);
+    dest.searchParams.set('cleared', '1');
+    location = dest.toString();
+  }
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
   return new Response(null, {
     status: 302,
-    headers: { Location: state.returnTo, 'Set-Cookie': sessionCookie },
+    headers: { Location: location, 'Set-Cookie': sessionCookie },
   });
 });
 
@@ -268,9 +295,12 @@ authRoutes.post('/api/auth/login', async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_email', email });
     return emailRl;
   }
-  const user = await c.env.DB.prepare('SELECT id, password_hash FROM users WHERE email = ?')
+  // token_version is read with the password: the session below is bound to it.
+  const user = await c.env.DB.prepare(
+    'SELECT id, password_hash, token_version FROM users WHERE email = ?'
+  )
     .bind(email)
-    .first<{ id: number; password_hash: string | null }>();
+    .first<{ id: number; password_hash: string | null; token_version: number }>();
   // Always run a verification — against a dummy hash when the account/hash is missing — so login
   // takes the same time regardless of whether the email exists (anti-enumeration). Then branch on
   // the real outcome.
@@ -284,6 +314,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
   // password. Failures still accumulate exactly as before.
   await Promise.all([clearRateLimit(c.env, ipBucket), clearRateLimit(c.env, emailBucket)]);
+  const signIn = { userId: user.id, provider: 'password', tokenVersion: user.token_version };
   // Second factor: the password alone must not buy a session for a 2FA account. The browser
   // gets a short-lived challenge cookie instead; /api/auth/2fa/verify trades it for the session.
   if (await getTotpForLogin(c.env, user.id)) {
@@ -294,11 +325,13 @@ authRoutes.post('/api/auth/login', async (c) => {
       userId: user.id,
       email,
     });
-    c.header('Set-Cookie', await issueTwofaChallengeCookie(user.id, 'password', c.env));
+    c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
     return c.json({ twofaRequired: true });
   }
+  const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
+  if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
-  c.header('Set-Cookie', await issueSessionCookie(user.id, 'password', c.env, sessionOrigin(c)));
+  c.header('Set-Cookie', session);
   return c.json({ id: user.id, email });
 });
 
@@ -347,8 +380,10 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
 authRoutes.get('/api/auth/reset-password', async (c) => {
   const token = c.req.query('token') ?? '';
   if (!token) return c.json({ valid: false });
+  // expires_at is written as ISO 8601. datetime(expires_at) and datetime('now') compare the two in
+  // one format, and the POST below compares the same way.
   const row = await c.env.DB.prepare(
-    "SELECT id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > datetime('now')"
+    "SELECT id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND datetime(expires_at) > datetime('now')"
   )
     .bind(await sha256Hex(token))
     .first();
@@ -370,7 +405,7 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // decided by the conditional UPDATE below and nowhere else — two gates for one fact means the
   // read can say yes while the write says no, and the read is the one that is not a claim.
   const row = await c.env.DB.prepare(
-    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND expires_at > datetime('now')"
+    "SELECT id, user_id FROM password_resets WHERE token_hash = ? AND datetime(expires_at) > datetime('now')"
   )
     .bind(await sha256Hex(token))
     .first<{ id: number; user_id: number }>();
@@ -393,7 +428,12 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   // One batch, so the password change and the retiring of the account's other pending links
   // either both happen or neither does. They used to be separate awaited writes: a failure
   // between them left live reset links pointing at an account whose password had just changed.
-  await c.env.DB.batch([
+  const results = await c.env.DB.batch([
+    // On an account whose address was not confirmed yet, every way in that was set up before goes
+    // first (clearUnconfirmedAccess), the old password with it. It has to come before the write
+    // below: that write confirms the address, after which these do nothing, and it sets the new
+    // password, which has to be the one that stays. A confirmed account keeps everything it has.
+    ...clearUnconfirmedAccess(c.env.DB, row.user_id),
     // Set the password, mark the email verified (they proved control), and bump token_version
     // to revoke every previously issued session.
     c.env.DB.prepare(
@@ -405,8 +445,10 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   ]);
   // Do NOT auto-login: send the user back to the sign-in screen to log in with the new
   // password (avoids a half-authenticated state). The token_version bump above already
-  // revoked any existing sessions.
-  return c.json({ ok: true });
+  // revoked any existing sessions. `cleared` lets the app say what else went, if anything.
+  return c.json(
+    clearedWorthSaying(clearedAccess(results), 'reset') ? { ok: true, cleared: true } : { ok: true }
+  );
 });
 
 // ── Email verification ─────────────────────────────────────────────────────────────────────────
@@ -418,6 +460,12 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // Two kinds of link land here (migration 0031): one confirms the address the account has, the
 // other moves the account to the address it was mailed to. The second adds `change=1` to every
 // answer that names its outcome, so the app can say which happened.
+//
+// Either kind is spent only with its own account's session. The session cookie is SameSite=Lax
+// on the parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation
+// from a mail client. Opened without that session, the link stays unspent, the answer is
+// `signin_required`, and the browser keeps a marker that finishes the link once its account
+// signs in there (email-link.ts, POST /api/auth/email-link/finish).
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -431,56 +479,63 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
 
   const token = c.req.query('token') ?? '';
   if (!token) return fail('missing_token');
-  // Same shape as the reset link: the read finds the token, the conditional UPDATE below decides
-  // whether it is still spendable. Checking `used_at` here as well would let the read say yes
-  // while the write says no.
-  const row = await c.env.DB.prepare(
-    'SELECT id, user_id, email, expires_at, purpose FROM email_verifications WHERE token_hash = ?'
+  // The read finds the token; spendLink's conditional UPDATE decides whether it is still
+  // spendable, so a read that says yes can never disagree with the write.
+  const link = await c.env.DB.prepare(
+    `SELECT ${EMAIL_LINK_COLUMNS} FROM email_verifications WHERE token_hash = ?`
   )
     .bind(await sha256Hex(token))
-    .first<{ id: number; user_id: number; email: string; expires_at: string; purpose: string }>();
+    .first<EmailLink>();
   // One message for an unknown token and one for an already-used one would let a caller probe
   // token state, so both land here.
-  if (!row) return fail('invalid_or_used');
-  // Single-use: spend the token whatever the outcome below, so a link that failed for any reason
-  // cannot be retried until it happens to succeed. `AND used_at IS NULL` makes spending it the
-  // claim rather than a follow-up to one — the SELECT above is a read, and two requests carrying
-  // the same link (a mail client prefetching while the person clicks) both pass a read.
-  const claimed = await c.env.DB.prepare(
-    "UPDATE email_verifications SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL"
-  )
-    .bind(row.id)
-    .run();
-  if ((claimed.meta.changes ?? 0) === 0) return fail('invalid_or_used');
-  const change = row.purpose === 'change';
-  if (Date.parse(row.expires_at) < Date.now()) return fail('expired', change);
-  // The link is spent. Whatever goes wrong from here goes back to the app as a reason: the person
-  // arrived by opening a link in a mail, so an error page would leave them nowhere.
-  try {
-    if (change) {
-      // The account moves to the address this link was mailed to, unless another account has it
-      // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
-      const outcome = await applyEmailChange(c.env.DB, row.user_id, row.email);
-      if (outcome === 'taken') return fail('email_taken', true);
-      if (outcome === 'gone') return fail('invalid_or_used');
-      return back('everified=1&change=1');
-    }
-    const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')
-      .bind(row.user_id)
-      .first<{ email: string | null }>();
-    // The address has to still be the one this link was sent to. Otherwise changing the address
-    // after asking for a link would confirm the NEW one on the strength of mail sent to the old.
-    if (!user || (user.email ?? '').toLowerCase() !== row.email.toLowerCase()) {
-      return fail('invalid_or_used');
-    }
-    await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?')
-      .bind(row.user_id)
-      .run();
-    return back('everified=1');
-  } catch (e) {
-    console.error('An email link failed after it was spent:', e);
-    return fail('server_error', change);
+  if (!link) return fail('invalid_or_used');
+  const change = link.purpose === 'change';
+  const auth = await authenticateRequest(c.req.raw, c.env);
+  if (auth.user?.userId !== link.user_id) {
+    // No session, or another account's: the link waits for its own account to sign in here.
+    // Unless no sign-in can complete it: the account is gone, or the link is spent or expired.
+    const owner = await c.env.DB.prepare('SELECT 1 AS found FROM users WHERE id = ?')
+      .bind(link.user_id)
+      .first();
+    if (!owner || link.used_at !== null) return fail('invalid_or_used');
+    if (linkExpired(link)) return fail('expired', change);
+    const asked = fail('signin_required', change);
+    asked.headers.append('Set-Cookie', await markerFor(c.env, link));
+    return asked;
   }
+  const spent = await spendLink(c.env.DB, link);
+  if (spent === 'confirmed') return back('everified=1');
+  if (spent === 'changed') return back('everified=1&change=1');
+  if (spent === 'email_taken') return fail('email_taken', true);
+  if (spent === 'invalid') return fail('invalid_or_used');
+  return fail(spent, change);
+});
+
+/** What POST /api/auth/email-link/finish answers. */
+type EmailLinkOutcome = 'confirmed' | 'changed' | 'email_taken' | 'server_error' | 'none';
+
+// Finish the link this browser opened without its account's session (verify-email above). The
+// app calls this once someone signs in. The link finishes only for its own account's session,
+// and only while it is unspent and unexpired; the answer says what happened, for the app to show.
+//
+// The marker stays for another account's session, so signing out and in to the right account
+// still finishes the link. Every other answer clears it: the link finished, or it never can.
+authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
+  const rl = await enforce(c, `email-link-finish:${clientIp(c)}`, 30, 60);
+  if (rl) return rl;
+  const { link, carried } = await markedLink(c.req.raw, c.env, c.env.DB);
+  const done = (outcome: EmailLinkOutcome, change = false) => {
+    if (carried) c.header('Set-Cookie', clearedMarker(c.env));
+    return c.json({ outcome, change });
+  };
+  if (!link) return done('none');
+  const change = link.purpose === 'change';
+  if (link.user_id !== c.get('userId')) return c.json({ outcome: 'other_account', change });
+  // A spent or expired link is left exactly as it is.
+  if (link.used_at !== null || linkExpired(link)) return done('none');
+  const spent = await spendLink(c.env.DB, link);
+  if (spent === 'expired' || spent === 'invalid') return done('none');
+  return done(spent, change);
 });
 
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
@@ -500,7 +555,8 @@ authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
   if (emailRl) return emailRl;
 
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-  const token = await createEmailVerification(c.env.DB, userId, user.email);
+  const token = await createEmailVerification(c.env.DB, userId, user.email, 'confirm', boundTo(c));
+  if (token === null) return c.json({ error: TRY_AGAIN }, 409);
   const link = verifyLink(new URL(c.req.url).origin, token, base);
   const mail = renderEmailVerification({
     link,

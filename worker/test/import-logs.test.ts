@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Import session log (migration 0014): the Import page records one row per successful
 // import and lists past sessions. Rows are profile-scoped.
@@ -17,7 +17,7 @@ beforeEach(async () => {
     ),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (800, 80, 'Main')"),
   ]);
-  cookie = (await issueSessionCookie(80, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(80, 'password', env)).split(';')[0];
 });
 
 describe('import logs', () => {
@@ -61,7 +61,7 @@ describe('import logs', () => {
       ),
       env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (801, 81, 'Main')"),
     ]);
-    const otherCookie = (await issueSessionCookie(81, 'password', env)).split(';')[0];
+    const otherCookie = (await sessionCookie(81, 'password', env)).split(';')[0];
     const list = await SELF.fetch('https://example.com/api/import-logs', {
       headers: { Cookie: otherCookie, 'X-Profile-Id': '801' },
     });

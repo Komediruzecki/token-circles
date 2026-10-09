@@ -9,7 +9,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6051;
 const PROFILE = 60510;
@@ -40,7 +40,7 @@ beforeEach(async () => {
   ]);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-10-08T00:00:00Z'));
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 });
 
 afterEach(() => {

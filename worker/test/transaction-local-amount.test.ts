@@ -12,7 +12,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 9841;
 const PROFILE = 98410;
@@ -50,7 +50,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (id, profile_id, description, type, amount, amount_local, currency, exchange_rate, date, account_id) VALUES (?, ?, 'Old', 'expense', 30, NULL, 'EUR', 1, '2026-01-02', ?)"
     ).bind(OLD, PROFILE, ACCOUNT),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function edit(id: number, body: unknown): Promise<Response> {

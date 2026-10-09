@@ -6,7 +6,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const SECRET = 'SECRET-CATEGORY-DivorceLawyer';
 
@@ -62,7 +62,7 @@ let cookie = '';
 beforeEach(async () => {
   await reset();
   await seed();
-  const setCookie = await issueSessionCookie(1, 'password', env); // attacker's session
+  const setCookie = await sessionCookie(1, 'password', env); // attacker's session
   cookie = setCookie.split(';')[0];
 });
 

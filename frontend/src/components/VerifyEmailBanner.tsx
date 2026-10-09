@@ -6,18 +6,33 @@
  * at boot (see core/emailVerification.ts), and of the link that moves the account to a new
  * address, which comes back the same way.
  *
+ * After a sign-in that confirmed the address and cleared what the account had set up before it,
+ * it also shows that, once, in the same strip (core/accessCleared.ts).
+ *
+ * And it finishes a link this browser opened before signing in (core/emailVerification.ts): once
+ * someone is signed in, it asks the worker, which spends the link for its own account and says
+ * so for any other, and it shows the answer.
+ *
  * Self-checking. It asks /api/auth/me itself and re-asks whenever the session changes, so it can
  * be dropped into the shell without threading account state through it — and it shows nothing at
  * all on a backend that does not report the field, which is how the legacy self-hosted server
  * answers.
  */
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js'
+import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
-import { fetchVerificationStatus, takeEmailVerifyResult } from '../core/emailVerification'
+import {
+  clearLinkWaiting,
+  fetchVerificationStatus,
+  finishEmailLink,
+  linkWaiting,
+  takeEmailVerifyResult,
+} from '../core/emailVerification'
 import { ResendVerification } from './ResendVerification'
 import styles from './VerifyEmailBanner.module.css'
 import type { Component } from 'solid-js'
+import type { EmailVerifyResult, LinkFinish } from '../core/emailVerification'
 
 // Dismissal lasts the tab, not forever: an address that is still unconfirmed next time is worth
 // mentioning again, and a permanent dismissal is a setting nobody knows they set.
@@ -31,10 +46,64 @@ function loadDismissed(): boolean {
   }
 }
 
+/** A link this browser opened is for another account than the one signed in. */
+export const OTHER_ACCOUNT_NOTICE = {
+  confirm:
+    'That link is for another account. Sign out, then sign in to that account, and its address is confirmed as soon as you do.',
+  change:
+    'That link is for another account. Sign out, then sign in to that account, and the change is made as soon as you do.',
+} as const
+
+/** Say what an emailed link did: the same words whether it finished on opening or after a sign-in. */
+function announce(result: EmailVerifyResult): void {
+  if (result.change) {
+    if (result.ok) {
+      toast('Email changed. Your account uses the new address from now on.', 'success')
+    } else if (result.error === 'expired') {
+      // A change that expired no longer waits in Settings, so there is nothing to resend.
+      toast(
+        'That email change link has expired. Save the new address in Settings to get a fresh one.',
+        'error'
+      )
+    } else if (result.error === 'email_taken') {
+      toast('Another account uses that address now, so your email stays as it was.', 'error')
+    } else {
+      toast('That confirmation link is no longer valid', 'error')
+    }
+    return
+  }
+  if (result.ok) {
+    toast('Email confirmed — your account is all set', 'success')
+  } else if (result.error === 'expired') {
+    toast('That confirmation link has expired — use Resend to get a fresh one', 'error')
+  } else {
+    toast('That confirmation link is no longer valid', 'error')
+  }
+}
+
+/** The finish route's answer as the outcome announce() takes, or null when there is none to say. */
+function finishedAs(finished: LinkFinish): EmailVerifyResult | null {
+  const change = finished.change ? ({ change: true } as const) : {}
+  switch (finished.outcome) {
+    case 'confirmed':
+      return { ok: true }
+    case 'changed':
+      return { ok: true, change: true }
+    case 'email_taken':
+      return { ok: false, error: 'email_taken', change: true }
+    case 'server_error':
+      return { ok: false, error: 'server_error', ...change }
+    default:
+      return null
+  }
+}
+
 export const VerifyEmailBanner: Component = () => {
   const state = useAppState()
   const [email, setEmail] = createSignal<string | null>(null)
   const [dismissed, setDismissed] = createSignal(loadDismissed())
+  const [cleared, setCleared] = createSignal(false)
+  const [otherAccount, setOtherAccount] = createSignal<'confirm' | 'change' | null>(null)
 
   const refresh = async (): Promise<void> => {
     if (!state.isAuthenticated) {
@@ -49,43 +118,41 @@ export const VerifyEmailBanner: Component = () => {
     )
   }
 
+  // A link opened in this browser before signing in. The worker decides: the link's own account
+  // finishes it, any other is told whose it is. With no answer the note stays for the next try.
+  const finishWaitingLink = async (): Promise<void> => {
+    const finished = await finishEmailLink()
+    if (finished === null) return
+    if (finished.outcome === 'other_account') {
+      setOtherAccount(finished.change ? 'change' : 'confirm')
+      return
+    }
+    clearLinkWaiting()
+    setOtherAccount(null)
+    const result = finishedAs(finished)
+    if (result !== null) announce(result)
+  }
+
   // Re-ask on every session change, so the nudge appears straight after an in-session sign-up
-  // rather than on the next reload.
+  // rather than on the next reload. A waiting link is finished first, so the nudge reflects it.
   createEffect(
     on(
       () => state.isAuthenticated,
       () => {
-        void refresh()
+        if (!state.isAuthenticated) setOtherAccount(null)
+        if (state.isAuthenticated && linkWaiting() !== null) {
+          void finishWaitingLink().then(refresh)
+        } else {
+          void refresh()
+        }
       }
     )
   )
 
   onMount(() => {
+    setCleared(takeAccessCleared('sign-in'))
     const result = takeEmailVerifyResult()
-    if (result === null) return
-    if (result.change) {
-      if (result.ok) {
-        toast('Email changed. Your account uses the new address from now on.', 'success')
-      } else if (result.error === 'expired') {
-        // A change that expired no longer waits in Settings, so there is nothing to resend.
-        toast(
-          'That email change link has expired. Save the new address in Settings to get a fresh one.',
-          'error'
-        )
-      } else if (result.error === 'email_taken') {
-        toast('Another account uses that address now, so your email stays as it was.', 'error')
-      } else {
-        toast('That confirmation link is no longer valid', 'error')
-      }
-      return
-    }
-    if (result.ok) {
-      toast('Email confirmed — your account is all set', 'success')
-    } else if (result.error === 'expired') {
-      toast('That confirmation link has expired — use Resend to get a fresh one', 'error')
-    } else {
-      toast('That confirmation link is no longer valid', 'error')
-    }
+    if (result !== null) announce(result)
   })
 
   const dismiss = (): void => {
@@ -98,48 +165,130 @@ export const VerifyEmailBanner: Component = () => {
   }
 
   return (
-    <Show when={email() !== null && !dismissed()}>
-      <div class={styles.banner} role="status" data-testid="verify-email-banner">
-        <svg
-          class={styles.icon}
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          aria-hidden="true"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="2" y="4" width="20" height="16" rx="2" />
-          <path d="M22 7l-10 6L2 7" />
-        </svg>
-        <p class={styles.text}>
-          Confirm your email — we sent a link to <span class={styles.address}>{email()}</span>
-        </p>
-        <ResendVerification data-testid="verify-email-resend" />
-        <button
-          class={styles.close}
-          onClick={dismiss}
-          aria-label="Dismiss"
-          title="Dismiss for this session"
-          data-testid="verify-email-dismiss"
-        >
+    <>
+      <Show when={cleared()}>
+        <div class={styles.banner} role="status" data-testid="access-cleared-notice">
           <svg
+            class={styles.icon}
             viewBox="0 0 24 24"
-            width="14"
-            height="14"
+            width="18"
+            height="18"
             aria-hidden="true"
             fill="none"
             stroke="currentColor"
             stroke-width="2"
             stroke-linecap="round"
+            stroke-linejoin="round"
           >
-            <path d="M6 6l12 12M18 6L6 18" />
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
           </svg>
-        </button>
-      </div>
-    </Show>
+          <p class={styles.text}>{ACCESS_CLEARED_NOTICE['sign-in']}</p>
+          <button
+            class={styles.close}
+            onClick={() => setCleared(false)}
+            aria-label="Dismiss"
+            title="Dismiss"
+            data-testid="access-cleared-dismiss"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+      <Show when={otherAccount() !== null}>
+        <div class={styles.banner} role="status" data-testid="email-link-other-account">
+          <svg
+            class={styles.icon}
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4M12 8h.01" />
+          </svg>
+          <p class={styles.text}>{OTHER_ACCOUNT_NOTICE[otherAccount() ?? 'confirm']}</p>
+          <button
+            class={styles.close}
+            onClick={() => setOtherAccount(null)}
+            aria-label="Dismiss"
+            title="Dismiss"
+            data-testid="email-link-other-account-dismiss"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+      <Show when={email() !== null && !dismissed()}>
+        <div class={styles.banner} role="status" data-testid="verify-email-banner">
+          <svg
+            class={styles.icon}
+            viewBox="0 0 24 24"
+            width="18"
+            height="18"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M22 7l-10 6L2 7" />
+          </svg>
+          <p class={styles.text}>
+            Confirm your email — we sent a link to <span class={styles.address}>{email()}</span>
+          </p>
+          <ResendVerification data-testid="verify-email-resend" />
+          <button
+            class={styles.close}
+            onClick={dismiss}
+            aria-label="Dismiss"
+            title="Dismiss for this session"
+            data-testid="verify-email-dismiss"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        </div>
+      </Show>
+    </>
   )
 }

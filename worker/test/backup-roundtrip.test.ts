@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import type { BackupData } from '../src/backup';
 
 const USER_ID = 200;
@@ -170,7 +170,7 @@ beforeEach(async () => {
   await env.RECEIPTS!.put('2000/receipt.png', new Uint8Array([1, 2, 3, 4]), {
     httpMetadata: { contentType: 'image/png' },
   });
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 });
 
 function request(path: string, init: RequestInit = {}): Promise<Response> {
@@ -262,7 +262,7 @@ describe('Worker full backup and staged restore', () => {
     await env.DB.prepare(
       "INSERT INTO users (id, email, auth_provider, token_version) VALUES (299, 'empty@example.com', 'password', 1)"
     ).run();
-    const emptyCookie = (await issueSessionCookie(299, 'password', env)).split(';')[0];
+    const emptyCookie = (await sessionCookie(299, 'password', env)).split(';')[0];
 
     const response = await SELF.fetch('https://example.com/api/export', {
       headers: { Cookie: emptyCookie },

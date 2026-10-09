@@ -162,6 +162,36 @@ describe('verifying', () => {
     })
   })
 
+  it('keeps the news that confirming cleared the account, for after the reload', async () => {
+    verifyResponse = () =>
+      Promise.resolve(json({ id: 1, email: 'user@example.com', cleared: true }))
+    sessionStorage.clear()
+    await mount()
+    await requestCode()
+    type('[data-test-id="emailcode-code"]', '123456')
+    host.querySelector<HTMLButtonElement>('[data-test-id="emailcode-verify"]')!.click()
+    await flush()
+
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('sign-in')
+  })
+
+  it('keeps nothing when nothing was cleared', async () => {
+    sessionStorage.clear()
+    await mount()
+    await requestCode()
+    type('[data-test-id="emailcode-code"]', '123456')
+    host.querySelector<HTMLButtonElement>('[data-test-id="emailcode-verify"]')!.click()
+    await flush()
+
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
+    expect(sessionStorage.getItem('tc:access-cleared')).toBeNull()
+  })
+
   it('hands off to the 2FA step instead of reloading when the account has 2FA', async () => {
     verifyResponse = () => Promise.resolve(json({ twofaRequired: true }))
     await mount()

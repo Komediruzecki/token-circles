@@ -16,7 +16,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { markPaidStatements, type BillRow } from '../src/routes/bills';
 import { populateStatements, type RecurringRow } from '../src/routes/recurring';
 import { unchangedSince } from '../src/routes/transactions';
@@ -76,7 +76,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (id, name, currency, balance, starting_balance, profile_id) VALUES (?, 'Checking', 'EUR', 1000, 1000, ?)"
     ).bind(ACCOUNT, PID),
   ]);
-  cookie = (await issueSessionCookie(UID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(UID, 'password', env)).split(';')[0];
 });
 
 describe('paying a bill from two devices at once', () => {

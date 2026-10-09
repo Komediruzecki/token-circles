@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Fix A7 (audit D12/D13): the budget summary must respect the same multi-profile
 // (household) selection as GET /api/budgets, and must not stack a category's
@@ -43,7 +43,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (701, 'rent', 800, 'expense', '2026-05-02', 72)"
     ),
   ]);
-  cookie = (await issueSessionCookie(70, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(70, 'password', env)).split(';')[0];
 });
 
 interface SummaryRow {

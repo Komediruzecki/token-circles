@@ -19,7 +19,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER = 6308;
 const PROFILE = 63080;
@@ -62,7 +62,7 @@ afterEach(() => {
 async function on(date: string): Promise<void> {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(`${date}T12:00:00Z`));
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0]!;
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0]!;
 }
 
 async function send(method: string, path: string, body?: unknown): Promise<Response> {

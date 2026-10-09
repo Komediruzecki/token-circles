@@ -2,7 +2,8 @@
  * "Email me a code" sign-in: POST /request mints a 6-digit code and mails it (identical neutral
  * answer whether or not the address has an account — the forgot-password anti-enumeration rule),
  * POST /verify trades a live code for a session. The 2FA challenge still applies after: an email
- * code proves the inbox, which is one factor, not two.
+ * code proves the inbox, which is one factor, not two. On an account whose address was never
+ * confirmed, the code first removes every way in that was set up before (clearUnconfirmedAccess).
  *
  * The verify step is bound to the browser that requested the code by a signed ceremony cookie
  * (fm_logincode, same construction as fm_2fa). That binding is what keeps a 10^6 code space
@@ -15,10 +16,14 @@ import type { AppEnv, Env } from '../index';
 import {
   b64urlDecode,
   b64urlEncode,
+  clearedAccess,
+  clearedWorthSaying,
+  clearUnconfirmedAccess,
   cookie,
   hmacKey,
   issueSessionCookie,
   readCookies,
+  TRY_AGAIN,
 } from '../auth';
 import { logAuthEvent } from '../authlog';
 import { sendMail } from '../email';
@@ -163,26 +168,36 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   // address can keep signing its users in (the auth.ts clear-on-success rule).
   await clearRateLimit(c.env, ipBucket);
   // Typing a mailed code IS proof of inbox control — the same proof the verification link asks
-  // for, so the pending "confirm your address" state resolves here for free.
-  await c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId).run();
+  // for, so the pending "confirm your address" state resolves here for free. On an account whose
+  // address was not confirmed yet, every way in that was set up before goes first, in the same
+  // batch (clearUnconfirmedAccess), so there is no second factor left to ask for. A confirmed
+  // account keeps everything it has.
+  const results = await c.env.DB.batch([
+    ...clearUnconfirmedAccess(c.env.DB, userId),
+    c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId),
+    // The version this batch leaves, which the session below is bound to.
+    c.env.DB.prepare('SELECT token_version FROM users WHERE id = ?').bind(userId),
+  ]);
+  const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
+  const after = results.at(-1)?.results[0] as { token_version: number } | undefined;
   c.header('Set-Cookie', cookie(LOGINCODE_COOKIE, '', 0, c.env), { append: true });
+  if (!after) return c.json({ error: 'Invalid or expired code' }, 401);
+  const signIn = { userId, provider: 'email', tokenVersion: after.token_version };
 
   // Second factor: identical rule to password login — the inbox is one factor, not two.
   if (await getTotpForLogin(c.env, userId)) {
     logAuthEvent(c, { event: 'twofa', outcome: 'ok', reason: 'challenge_issued', userId, email });
-    c.header('Set-Cookie', await issueTwofaChallengeCookie(userId, 'email', c.env), {
-      append: true,
-    });
+    c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn), { append: true });
     return c.json({ twofaRequired: true });
   }
+  const session = await issueSessionCookie(c.env, signIn, {
+    userAgent: c.req.header('user-agent') ?? null,
+    ip: clientIp(c),
+  });
+  if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId, email });
-  c.header(
-    'Set-Cookie',
-    await issueSessionCookie(userId, 'email', c.env, {
-      userAgent: c.req.header('user-agent') ?? null,
-      ip: clientIp(c),
-    }),
-    { append: true }
-  );
-  return c.json({ id: userId, email });
+  c.header('Set-Cookie', session, { append: true });
+  // `cleared` lets the app say what went. Clearing removes the TOTP too, so it never needs the
+  // challenge branch above.
+  return c.json(cleared ? { id: userId, email, cleared: true } : { id: userId, email });
 });

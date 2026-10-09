@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Email alerts (manual test/preview + trigger) are a paid feature (plans.ts emailReminders).
 // The scheduled sender gates on canReceive(); these manual endpoints must gate too — otherwise
@@ -17,8 +17,8 @@ beforeEach(async () => {
   await env.DB.prepare(
     "INSERT INTO users (id, email, auth_provider, token_version, plan) VALUES (82, 'paid@example.com', 'password', 1, 'advanced')"
   ).run();
-  freeCookie = (await issueSessionCookie(81, 'password', env)).split(';')[0];
-  paidCookie = (await issueSessionCookie(82, 'password', env)).split(';')[0];
+  freeCookie = (await sessionCookie(81, 'password', env)).split(';')[0];
+  paidCookie = (await sessionCookie(82, 'password', env)).split(';')[0];
 });
 
 function post(path: string, cookie: string, body: unknown) {

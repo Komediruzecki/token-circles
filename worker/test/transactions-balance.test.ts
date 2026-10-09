@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // ── seeding / helpers ─────────────────────────────────────────────────────────
 async function reset(): Promise<void> {
@@ -55,7 +55,7 @@ beforeEach(async () => {
   await seed();
   // Mint a genuine session cookie (reads token_version from D1, signs with env.JWT_SECRET) —
   // the same path the OAuth/login flow uses, so requireAuth accepts it end-to-end.
-  const setCookie = await issueSessionCookie(1, 'password', env);
+  const setCookie = await sessionCookie(1, 'password', env);
   cookie = setCookie.split(';')[0]; // "fm_session=<jwt>"
 });
 

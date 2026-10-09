@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Deleting a loan deletes its rate periods and extra payments.
 //
@@ -26,7 +26,7 @@ beforeEach(async () => {
     ),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (47110, 4711, 'Me')"),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 function api(method: string, path: string, body?: unknown): Promise<Response> {

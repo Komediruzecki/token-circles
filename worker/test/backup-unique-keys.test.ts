@@ -10,7 +10,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 const USER_ID = 94;
 let cookie = '';
@@ -39,7 +39,7 @@ beforeEach(async () => {
       USER_ID
     ),
   ]);
-  cookie = (await issueSessionCookie(USER_ID, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
 });
 
 function backup(over: Record<string, unknown>): Record<string, unknown> {

@@ -25,9 +25,12 @@ import {
   b64urlEncode,
   cookie,
   hmacKey,
+  boundTo,
   issueSessionCookie,
   readCookies,
   requireAuth,
+  SAME_TOKEN_VERSION,
+  TRY_AGAIN,
   verifyPassword,
 } from '../auth';
 import { verifySecondFactor } from './twofa';
@@ -110,6 +113,8 @@ interface CredentialRow {
   public_key: string;
   counter: number;
   transports: string | null;
+  /** The owner's users.token_version, read with the credential: the session is bound to it. */
+  token_version: number;
 }
 
 export const passkeyRoutes = new Hono<AppEnv>();
@@ -231,10 +236,11 @@ passkeyRoutes.post('/api/auth/passkeys/register/verify', requireAuth, async (c) 
   }
   const { credential, credentialBackedUp } = verification.registrationInfo;
   const name = (body.name ?? '').trim().slice(0, 60) || null;
+  const bound = boundTo(c);
   try {
-    await c.env.DB.prepare(
+    const written = await c.env.DB.prepare(
       `INSERT INTO webauthn_credentials (id, user_id, public_key, counter, transports, device_name, backed_up)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+       SELECT ?, ?, ?, ?, ?, ?, ? WHERE ${SAME_TOKEN_VERSION}`
     )
       .bind(
         credential.id,
@@ -243,9 +249,12 @@ passkeyRoutes.post('/api/auth/passkeys/register/verify', requireAuth, async (c) 
         credential.counter,
         credential.transports ? JSON.stringify(credential.transports) : null,
         name,
-        credentialBackedUp ? 1 : 0
+        credentialBackedUp ? 1 : 0,
+        bound.userId,
+        bound.tokenVersion
       )
       .run();
+    if ((written.meta.changes ?? 0) === 0) return c.json({ error: TRY_AGAIN }, 409);
   } catch (err) {
     // The ceremony cookie lives 300s and a browser can double-submit; the credential id is the
     // primary key, so the second write must answer cleanly rather than leak a D1 error string.
@@ -312,7 +321,10 @@ passkeyRoutes.post('/api/auth/passkeys/login/verify', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { response?: AuthenticationResponseJSON };
   if (!body.response?.rawId) return c.json({ error: 'Missing response' }, 400);
 
-  const row = await c.env.DB.prepare('SELECT * FROM webauthn_credentials WHERE id = ?')
+  const row = await c.env.DB.prepare(
+    `SELECT c.id, c.user_id, c.public_key, c.counter, c.transports, u.token_version
+     FROM webauthn_credentials c JOIN users u ON u.id = c.user_id WHERE c.id = ?`
+  )
     .bind(body.response.rawId)
     .first<CredentialRow>();
   if (!row) {
@@ -362,6 +374,13 @@ passkeyRoutes.post('/api/auth/passkeys/login/verify', async (c) => {
     .first<{ id: number; email: string | null }>();
   if (!user) return c.json({ error: 'That passkey is not registered here' }, 401);
   // No TOTP challenge on purpose — a user-verified passkey is already two factors (see module doc).
+  const session = await issueSessionCookie(
+    c.env,
+    { userId: user.id, provider: 'passkey', tokenVersion: row.token_version },
+    { userAgent: c.req.header('user-agent') ?? null, ip: clientIp(c) }
+  );
+  c.header('Set-Cookie', cookie(WEBAUTHN_COOKIE, '', 0, c.env), { append: true });
+  if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, {
     event: 'login',
     outcome: 'ok',
@@ -369,14 +388,6 @@ passkeyRoutes.post('/api/auth/passkeys/login/verify', async (c) => {
     userId: user.id,
     email: user.email,
   });
-  c.header('Set-Cookie', cookie(WEBAUTHN_COOKIE, '', 0, c.env), { append: true });
-  c.header(
-    'Set-Cookie',
-    await issueSessionCookie(user.id, 'passkey', c.env, {
-      userAgent: c.req.header('user-agent') ?? null,
-      ip: clientIp(c),
-    }),
-    { append: true }
-  );
+  c.header('Set-Cookie', session, { append: true });
   return c.json({ id: user.id, email: user.email });
 });

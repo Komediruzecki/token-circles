@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
-import { requireAuth } from '../auth';
+import { boundTo, requireAuth, TRY_AGAIN } from '../auth';
 import { HttpError } from '../http';
-import { mintApiToken, parseScopes, type Scope } from '../apitoken';
+import { mintApiToken, parseScopes, tokenExpired, type Scope } from '../apitoken';
 import { apiTokenLimit, requireFeature } from '../plan';
 import * as db from '../db';
 import { enforce } from '../ratelimit';
@@ -27,17 +27,17 @@ apiTokensRoutes.post('/api/account/api-tokens', requireAuth, async (c) => {
   if (limited) return limited;
 
   // Counted over live tokens only: a revoked or expired one is not occupying a slot, so
-  // rotating a token never needs an upgrade first.
+  // rotating a token never needs an upgrade first. Expired is decided by the rule that refuses
+  // the token at sign-in (tokenExpired).
   const cap = await apiTokenLimit(c);
   if (cap !== null) {
-    const live = await db.first<{ n: number }>(
+    const unrevoked = await db.all<{ expires_at: string | null }>(
       c.env.DB,
-      `SELECT COUNT(*) AS n FROM api_tokens
-        WHERE user_id = ? AND revoked_at IS NULL
-          AND (expires_at IS NULL OR expires_at > datetime('now'))`,
+      'SELECT expires_at FROM api_tokens WHERE user_id = ? AND revoked_at IS NULL',
       c.get('userId')
     );
-    if ((live?.n ?? 0) >= cap) {
+    const live = unrevoked.filter((t) => !tokenExpired(t.expires_at)).length;
+    if (live >= cap) {
       throw new HttpError(
         402,
         `Your plan allows ${cap} API token${cap === 1 ? '' : 's'}. Revoke one, or upgrade for more.`
@@ -88,7 +88,9 @@ apiTokensRoutes.post('/api/account/api-tokens', requireAuth, async (c) => {
     scopes,
     defaultProfileId,
     expiresAt,
+    bound: boundTo(c),
   });
+  if (!minted) return c.json({ error: TRY_AGAIN }, 409);
   // The only time the secret is ever returned. It is not recoverable afterwards.
   return c.json(minted, 201);
 });

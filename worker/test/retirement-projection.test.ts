@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 import { projectRetirement } from '../../shared/retirement';
 import { normalizeSettings, settingsToInput } from '../../shared/retirementSettings';
 
@@ -48,7 +48,7 @@ beforeEach(async () => {
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (800, 80, 'Me')"),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (801, 80, 'Partner')"),
   ]);
-  cookie = (await issueSessionCookie(USER, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(USER, 'password', env)).split(';')[0];
 });
 
 async function seedAccounts(): Promise<void> {

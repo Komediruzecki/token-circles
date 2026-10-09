@@ -5,7 +5,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 let cookieA = '';
 let cookieB = '';
@@ -22,8 +22,8 @@ beforeEach(async () => {
       "INSERT INTO users (id, email, auth_provider, token_version) VALUES (2, 'b@example.com', 'password', 1)"
     ),
   ]);
-  cookieA = (await issueSessionCookie(1, 'password', env)).split(';')[0];
-  cookieB = (await issueSessionCookie(2, 'password', env)).split(';')[0];
+  cookieA = (await sessionCookie(1, 'password', env)).split(';')[0];
+  cookieB = (await sessionCookie(2, 'password', env)).split(';')[0];
 });
 
 function req(cookie: string, path: string, init: RequestInit = {}): Promise<Response> {

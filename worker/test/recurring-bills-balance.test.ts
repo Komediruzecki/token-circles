@@ -11,7 +11,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 let cookie = '';
 const today = new Date().toISOString().split('T')[0];
@@ -40,7 +40,7 @@ beforeEach(async () => {
       "INSERT INTO accounts (id, profile_id, name, type, currency, balance, starting_balance) VALUES (5001, 500, 'Savings', 'savings', 'EUR', 500, 500)"
     ),
   ]);
-  cookie = (await issueSessionCookie(50, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(50, 'password', env)).split(';')[0];
 });
 
 async function balanceOf(id: number): Promise<number> {

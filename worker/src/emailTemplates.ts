@@ -206,6 +206,7 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
     ${p(`Your ${BRAND} account is ready. Everything orbits your accounts: add one, bring your history, and the dashboards light up.`)}
     ${confirm ? p(`First, confirm this is your address so we can reach you about your account — password resets, and anything that needs your attention.`) : ''}
     ${confirm ? `<div style="padding:8px 0 12px">${btn(confirm, 'Confirm your email')}</div>` : ''}
+    ${confirm ? p(`If you're asked to sign in first, your address is confirmed as soon as you do.`, `font-size:12.5px;color:${C.faint}`) : ''}
     ${card('Create your first account', 'The home for your balance and transactions — checking, savings, cash or brokerage. The setup wizard walks you through it.')}
     ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
     ${card('Subscriptions, spotted', 'We recognize recurring charges — Netflix, Spotify, Claude and 40+ more — from your imported transactions and offer to track them.')}
@@ -224,7 +225,7 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
       assetOrigin: opts.appUrl,
     }),
     text: confirm
-      ? `Welcome to ${BRAND}\n\nConfirm this is your address so we can reach you about your account:\n${confirm}\n\nThen sign in to set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`
+      ? `Welcome to ${BRAND}\n\nConfirm this is your address so we can reach you about your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${confirm}\n\nThen set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`
       : `Welcome to ${BRAND}\n\nYour account is ready. Sign in to set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`,
   };
 }
@@ -244,6 +245,7 @@ export function renderEmailVerification(opts: {
     ${h1('Confirm your email')}
     ${p(`Click below to confirm this is your address. It lets us reach you about your account — password resets, and anything that needs your attention.`)}
     <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm your email')}</div>
+    ${p(`If you're asked to sign in first, your address is confirmed as soon as you do.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`This link expires in ${ttl}. Your account keeps working either way — confirming just means we can reach you.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
   `;
@@ -257,7 +259,7 @@ export function renderEmailVerification(opts: {
       orbit: false,
       assetOrigin: opts.assetOrigin,
     }),
-    text: `Confirm your ${BRAND} email address\n\nOpen this link to confirm your address (expires in ${ttl}):\n${opts.link}\n\nYour account keeps working either way — confirming just means we can reach you.${textFooter('Sent because a confirmation link was requested for this address.')}`,
+    text: `Confirm your ${BRAND} email address\n\nOpen this link to confirm your address (expires in ${ttl}). If you're asked to sign in first, it's confirmed as soon as you do:\n${opts.link}\n\nYour account keeps working either way — confirming just means we can reach you.${textFooter('Sent because a confirmation link was requested for this address.')}`,
   };
 }
 
@@ -277,7 +279,7 @@ export function renderEmailChange(opts: {
     ${h1('Confirm your new email')}
     ${p(`Open the link below to make this the email address of your ${BRAND} account. From then on, mail about your account comes here.`)}
     <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm new email')}</div>
-    ${p(`The link works once and expires in ${ttl}. Until you open it, nothing changes.`, `font-size:12.5px;color:${C.faint}`)}
+    ${p(`The link works once and expires in ${ttl}. If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`If you didn't ask for this, ignore this email.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
   `;
@@ -291,7 +293,7 @@ export function renderEmailChange(opts: {
       orbit: false,
       assetOrigin: opts.assetOrigin,
     }),
-    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}):\n${opts.link}\n\nFrom then on, mail about your account comes here. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
+    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}). If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do:\n${opts.link}\n\nFrom then on, mail about your account comes here. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
   };
 }
 

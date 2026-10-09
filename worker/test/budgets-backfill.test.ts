@@ -1,6 +1,6 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 // Backfill-from-spending sets each historical month's budget to that month's actual
 // spending (base-currency value), so budget-vs-spent charts aren't empty after an import.
@@ -40,7 +40,7 @@ beforeEach(async () => {
       "INSERT INTO transactions (profile_id, description, amount, type, date, category_id) VALUES (500, 'pay', 3000, 'income', '2026-03-01', NULL)"
     ),
   ]);
-  cookie = (await issueSessionCookie(50, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(50, 'password', env)).split(';')[0];
 });
 
 async function budgetsByMonthCat(): Promise<Record<string, number>> {

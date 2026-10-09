@@ -17,7 +17,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { issueSessionCookie } from '../src/auth';
+import { sessionCookie } from './helpers/session';
 
 async function reset(): Promise<void> {
   for (const t of ['transactions', 'accounts', 'categories', 'profiles', 'users']) {
@@ -52,7 +52,7 @@ let cookie = '';
 beforeEach(async () => {
   await reset();
   await seed();
-  cookie = (await issueSessionCookie(1, 'password', env)).split(';')[0];
+  cookie = (await sessionCookie(1, 'password', env)).split(';')[0];
 });
 
 type ListBody = { rows: { id: number }[]; total: number; limit: number; offset: number };
