@@ -14,6 +14,10 @@
  * runtime refuses is marked there too, while the rest are added. A refusal no price can fix is said
  * in the notice, naming the subscription. Both used to be a toast, with nothing marked, and the
  * price field dropped any letter typed into it.
+ *
+ * While it adds, the form is busy (`aria-busy`) and nothing on it is disabled: a disabled control
+ * drops the focus to the page, and Enter in a price used to leave a keyboard user there. A tick or
+ * a Rescan is `aria-disabled` and does nothing until the add is done, as the Add button does.
  */
 import {
   createEffect,
@@ -311,7 +315,12 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             class={styles.check}
             data-test-id="sub-scan-row-checkbox"
             checked={!isTracked() && row(d.key).included}
-            disabled={isTracked() || form.submitting()}
+            disabled={isTracked()}
+            aria-disabled={form.submitting() ? 'true' : undefined}
+            onClick={(e) => {
+              // The add took the rows it was pressed on.
+              if (form.submitting()) e.preventDefault()
+            }}
             onChange={(e) => {
               patchRow(d.key, { included: e.currentTarget.checked })
             }}
@@ -354,7 +363,6 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
                   inputmode="decimal"
                   data-test-id="sub-scan-price"
                   value={form.values[d.key] ?? ''}
-                  disabled={form.submitting()}
                   onInput={(e) => {
                     form.set(d.key, e.currentTarget.value)
                   }}
@@ -369,7 +377,6 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               class={styles.freq}
               data-test-id="sub-scan-frequency"
               value={row(d.key).frequency}
-              disabled={form.submitting()}
               onChange={(e) => {
                 patchRow(d.key, { frequency: e.currentTarget.value as DetectedFrequency })
               }}
@@ -434,8 +441,12 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               <button
                 class={styles.rescan}
                 type="button"
-                disabled={scanning() || form.submitting()}
-                onClick={() => void scan()}
+                disabled={scanning()}
+                aria-disabled={form.submitting() ? 'true' : undefined}
+                onClick={() => {
+                  // A rescan resets the rows under an add still on its way.
+                  if (!form.submitting()) void scan()
+                }}
               >
                 Rescan
               </button>

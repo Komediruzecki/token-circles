@@ -117,7 +117,7 @@ for (const mode of MODES) {
       expect(errors).toEqual([])
     })
 
-    test('the scan marks a blank price under its row and sends nothing, and says in its notice why a subscription was refused', async ({
+    test('the scan marks a blank price under its row and sends nothing, and says in its notice why a subscription was refused, keeping the focus on the price Enter sent it from', async ({
       page,
     }) => {
       const errors = watchErrors(page, REFUSAL_LOG)
@@ -160,15 +160,18 @@ for (const mode of MODES) {
       expect(writes).toEqual([])
       await expect(errorToasts(page)).toHaveCount(0)
 
-      // Its category, deleted in another tab: no price would fix that.
+      // Its category, deleted in another tab: no price would fix that. Sent with Enter from the
+      // price, which keeps the focus while it adds: the field was disabled, which dropped the focus
+      // to the page.
       await price.fill('11.99')
       await elsewhere(page, mode, 'DELETE', `/api/categories/${String(category)}`, profileId)
-      await add.click()
+      await price.press('Enter')
 
       await expect(scan.getByTestId('sub-scan-notice')).toHaveText(
         `Couldn't add "NordVPN". Choose a category from the list, or leave it blank.`
       )
       await expect(price).not.toHaveAttribute('aria-invalid', 'true')
+      await expect(price).toBeFocused()
       await expect(scan).toBeVisible()
       await expect(errorToasts(page)).toHaveCount(0)
       expect(await billsNamed(page, 'NordVPN')).toHaveLength(before)

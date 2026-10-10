@@ -162,6 +162,62 @@ describe('adding what the scan found', () => {
     expect(scan.chosenCount()).toBe(0)
   })
 
+  it('keeps its controls enabled while it adds, with focus where Enter left it', async () => {
+    let release = (): void => undefined
+    apiMocks.apiPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve({ id: 1 })
+          }
+        })
+    )
+    apiMocks.apiPost.mockResolvedValue({ id: 2 })
+    const scan = await mountScan()
+    const form = host.querySelector('form')!
+    const box = host.querySelector<HTMLInputElement>(
+      '[data-name="Netflix"] [data-test-id="sub-scan-row-checkbox"]'
+    )!
+    const period = host.querySelector<HTMLSelectElement>(
+      '[data-name="Netflix"] [data-test-id="sub-scan-frequency"]'
+    )!
+    const rescan = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Rescan')!
+
+    // Enter in a price submits the form; jsdom has no implicit submission, so this stands for it.
+    price('Netflix').focus()
+    form.requestSubmit()
+    await vi.waitFor(() => {
+      expect(apiMocks.apiPost).toHaveBeenCalledTimes(1)
+    })
+
+    // A disabled control drops the focus to the page: nothing is disabled while it adds.
+    expect(form.getAttribute('aria-busy')).toBe('true')
+    expect(price('Netflix').disabled).toBe(false)
+    expect(document.activeElement).toBe(price('Netflix'))
+    expect(period.disabled).toBe(false)
+    expect(box.disabled).toBe(false)
+    expect(rescan.disabled).toBe(false)
+    // The add took the rows it was pressed on: a tick, or a rescan that would reset the rows under
+    // it, does nothing until it is done.
+    expect(box.getAttribute('aria-disabled')).toBe('true')
+    expect(rescan.getAttribute('aria-disabled')).toBe('true')
+    const scans = apiMocks.apiGet.mock.calls.length
+    box.click()
+    rescan.click()
+    expect(box.checked).toBe(true)
+    expect(scan.chosenCount()).toBe(2)
+    expect(apiMocks.apiGet).toHaveBeenCalledTimes(scans)
+
+    release()
+    await vi.waitFor(() => {
+      expect(scan.chosenCount()).toBe(0)
+    })
+    expect(apiMocks.apiPost).toHaveBeenCalledTimes(2)
+    expect(apiMocks.showToast).toHaveBeenCalledWith('2 subscriptions added', 'success')
+    expect(form.getAttribute('aria-busy')).toBeNull()
+    expect(rescan.getAttribute('aria-disabled')).toBeNull()
+  })
+
   it('takes the mark away when its row is left out', async () => {
     const scan = await mountScan()
     type(price('Netflix'), '0')
