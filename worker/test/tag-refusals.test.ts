@@ -170,12 +170,12 @@ describe('POST /api/tags', () => {
   });
 
   it("takes a name only another profile's tag has", async () => {
-    expect((await call('POST', '/api/tags', { name: 'Elsewhere' })).status).toBe(200);
+    expect((await call('POST', '/api/tags', { name: 'Elsewhere' })).status).toBe(201);
   });
 
   it('stores what the Tags page sends, trimmed', async () => {
     const res = await call('POST', '/api/tags', { name: ' Groceries ', color: '#225588' });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = (await res.json()) as { id: number };
     expect(body).toEqual({ id: expect.any(Number), name: 'Groceries', color: '#225588' });
     expect(await stored(body.id)).toEqual({ name: 'Groceries', color: '#225588' });

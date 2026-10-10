@@ -248,7 +248,7 @@ describe('POST /api/recurring', () => {
 
   it('stores what the Recurring form sends, with no day of the month when it has none', async () => {
     const res = await call('POST', '/api/recurring', FORM);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const { id } = (await res.json()) as { id: number };
     expect(await stored(id)).toEqual({
       description: 'Gym',

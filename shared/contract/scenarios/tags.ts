@@ -3,8 +3,14 @@ import { expectMoney, listTransactions, rowsOf, transactionForm } from '../helpe
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
+/** Adds a tag. Both runtimes answer 201 with the tag as stored: its id, name and colour. */
 async function tag(api: ContractApi, expect: Expect, name: string, color = '#22aa66') {
-  return added(api, expect, '/api/tags', { name, color });
+  const reply = await api.post('/api/tags', { name, color });
+  expectOk(expect, reply, 'POST /api/tags');
+  expect(reply.status, 'POST /api/tags').toBe(201);
+  expect(Object.keys(reply.body).sort(), 'POST /api/tags').toEqual(['color', 'id', 'name']);
+  expect(reply.body.id).toEqual(expect.any(Number));
+  return reply.body.id as number;
 }
 
 async function category(api: ContractApi, expect: Expect, name: string) {

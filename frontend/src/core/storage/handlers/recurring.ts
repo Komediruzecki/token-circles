@@ -113,7 +113,7 @@ export async function recurringCreate(body: unknown): Promise<Response> {
     created_at: new Date().toISOString(),
   }
   const id = await db.add('recurring', item)
-  return json({ id, profile_id: pid }, 201)
+  return json({ id }, 201)
 }
 
 export async function recurringUpdate(

@@ -137,7 +137,7 @@ recurringRoutes.post('/api/recurring', requireAuth, async (c) => {
   const foreign = await foreignLinks(c, pid, rule);
   if (Object.keys(foreign).length > 0) throw refuse(foreign);
   const res = await db.insert(c.env.DB, 'recurring_transactions', { profile_id: pid, ...rule });
-  return c.json({ id: res.meta.last_row_id });
+  return c.json({ id: res.meta.last_row_id }, 201);
 });
 
 recurringRoutes.put('/api/recurring/:id', requireAuth, async (c) => {

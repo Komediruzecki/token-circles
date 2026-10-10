@@ -57,7 +57,7 @@ tagsRoutes.post('/api/tags', requireAuth, async (c) => {
   const taken = clashingTagName(own, name);
   if (taken !== null) throw refuse(tagNameTaken(taken));
   const res = await db.insert(c.env.DB, 'tags', { name, color, profile_id: pid });
-  return c.json({ id: res.meta.last_row_id, name, color });
+  return c.json({ id: res.meta.last_row_id, name, color }, 201);
 });
 
 // ── Tag rules & analytics ────────────────────────────────────────────────────

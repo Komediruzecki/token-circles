@@ -1,7 +1,7 @@
 import { addCalendarMonths } from '../../calendarMonths';
 import { RECURRING_MESSAGES as M } from '../../recurringSchema';
 import { addCategory, balanceOf, expectMoney, isoDay, listTransactions } from '../helpers';
-import { added, expectOk, scenario } from '../types';
+import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
@@ -22,8 +22,14 @@ export function ruleForm(fields: Record<string, unknown> = {}) {
   };
 }
 
+/** Adds a rule. Both runtimes answer 201 with its id, and nothing else. */
 async function rule(api: ContractApi, expect: Expect, fields: Record<string, unknown> = {}) {
-  return added(api, expect, '/api/recurring', ruleForm(fields));
+  const reply = await api.post('/api/recurring', ruleForm(fields));
+  expectOk(expect, reply, 'POST /api/recurring');
+  expect(reply.status, 'POST /api/recurring').toBe(201);
+  expect(Object.keys(reply.body), 'POST /api/recurring').toEqual(['id']);
+  expect(reply.body.id).toEqual(expect.any(Number));
+  return reply.body.id as number;
 }
 
 async function rules(api: ContractApi, expect: Expect): Promise<Json[]> {

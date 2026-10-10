@@ -92,8 +92,11 @@ describe('localHandlers - recurring', () => {
     })
     expect(res.status).toBe(201)
     const data = await res.json()
-    expect(data.id).toBeDefined()
-    expect(data.profile_id).toBe(1)
+    // Its id alone, as the Worker answers. The rule is the active profile's.
+    expect(data).toEqual({ id: expect.any(Number) })
+    expect(
+      ((await (await getDB()).get('recurring', data.id)) as { profile_id: number }).profile_id
+    ).toBe(1)
   })
 
   it('lists created recurring transactions', async () => {
