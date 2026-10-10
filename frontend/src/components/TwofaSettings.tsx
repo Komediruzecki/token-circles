@@ -145,15 +145,6 @@ export default function TwofaSettings() {
     URL.revokeObjectURL(url)
   }
 
-  const codeInputStyle = {
-    padding: '8px 10px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    width: '140px',
-  }
   const codeRow = { display: 'flex', gap: '8px', 'flex-wrap': 'wrap' } as const
 
   return (
@@ -305,7 +296,7 @@ export default function TwofaSettings() {
                     autocomplete="one-time-code"
                     inputmode="numeric"
                     maxlength={6}
-                    style={codeInputStyle}
+                    class={styles.codeInput}
                   />
                   <SubmitButton
                     data-test-id="twofa-enroll-confirm"
@@ -400,7 +391,7 @@ export default function TwofaSettings() {
                     value={disableForm.values.code}
                     onInput={(e) => disableForm.set('code', e.currentTarget.value)}
                     autocomplete="one-time-code"
-                    style={codeInputStyle}
+                    class={styles.codeInput}
                   />
                   <SubmitButton
                     data-test-id="twofa-disable-confirm"

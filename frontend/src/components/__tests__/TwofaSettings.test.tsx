@@ -76,6 +76,14 @@ const marked = (el: HTMLElement) => el.getAttribute('aria-invalid') === 'true'
 const notice = () => host.querySelector('[data-test-id="twofa-error"]')?.textContent ?? ''
 /** The label the browser gives the control: the one its id points a `<label>` at. */
 const labelOf = (el: HTMLElement) => host.querySelector(`label[for="${el.id}"]`)?.textContent
+/**
+ * The border properties set on the element itself, its corners aside. The form kit draws a marked
+ * field's border with a rule (Form.module.css), and a border set on the element would win over it.
+ * jsdom applies no style sheets, so this reads the element's own style, not the border a browser
+ * computes.
+ */
+const ownBorder = (el: HTMLElement) =>
+  Array.from(el.style).filter((p) => p.startsWith('border') && !p.endsWith('radius'))
 
 async function confirm(testId: 'twofa-enroll' | 'twofa-disable', code: string) {
   type(`[data-test-id="${testId}-code"]`, code)
@@ -201,6 +209,14 @@ describe('enrollment', () => {
     expect(requests.map((r) => r.url)).not.toContain('/api/auth/2fa/enable')
   })
 
+  it('sets no border on the code field, so a marked code takes the form kit border', async () => {
+    await startEnroll()
+    await confirm('twofa-enroll', '')
+
+    expect(marked(field('twofa-enroll-code'))).toBe(true)
+    expect(ownBorder(field('twofa-enroll-code'))).toEqual([])
+  })
+
   it('says a setup that is no longer there in the notice, and marks no field', async () => {
     enableResponse = () => Promise.resolve(json({ error: 'No 2FA setup in progress' }, 400))
     await startEnroll()
@@ -250,6 +266,16 @@ describe('enabled state and disable', () => {
     expect(marked(field('twofa-disable-code'))).toBe(true)
     expect(describedBy(field('twofa-disable-code'))).toContain(SAY.secondFactor)
     expect(requests.map((r) => r.url)).not.toContain('/api/auth/2fa/disable')
+  })
+
+  it('sets no border on the code field, so a marked code takes the form kit border', async () => {
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-disable-btn"]')!.click()
+    await flush()
+    await confirm('twofa-disable', '')
+
+    expect(marked(field('twofa-disable-code'))).toBe(true)
+    expect(ownBorder(field('twofa-disable-code'))).toEqual([])
   })
 
   it('marks a code the Worker does not take, in its words, and stays on the step', async () => {
