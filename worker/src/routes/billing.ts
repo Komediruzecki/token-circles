@@ -388,13 +388,16 @@ billingRoutes.post('/api/billing/portal', requireAuthEvenUnconfirmed, async (c) 
 /**
  * A password account has to confirm its address before it can start paying.
  *
- * Everything else about verification is a soft nudge — the account works, the banner asks. This
- * one place is hard, because the address is where the receipts, the renewal notices and the
- * recovery link all go: a typo at signup sends a stranger the paper trail for someone else's
- * subscription, and the person who typed it has no way back into the account that is billing them.
+ * The confirm-email gate (requireAuth) already answers such an account EMAIL_UNCONFIRMED on
+ * checkout and status, so this check is billing's own copy of the rule, for a route here that
+ * would ever take the session without the gate. It matters here because the address is where the
+ * receipts, the renewal notices and the recovery link all go: a typo at signup sends a stranger
+ * the paper trail for someone else's subscription, and the person who typed it has no way back
+ * into the account that is billing them.
  *
- * Google accounts arrive with Google's own `email_verified` claim, so they are never gated.
- * Managing an EXISTING subscription is never gated either — see the portal route.
+ * Google accounts arrive with Google's own `email_verified` claim, so they are never gated. An
+ * unconfirmed account that already has a billing account still reaches the portal, to manage or
+ * cancel its subscription (see the portal route).
  */
 function mustVerifyEmail(
   u: {

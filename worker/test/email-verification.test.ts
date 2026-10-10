@@ -3,14 +3,15 @@
  *
  * The interesting cases are all the ones where a link should NOT work: spent, expired, minted for
  * an address the account no longer has, or pointed at somebody else's origin. Each is asserted to
- * leave email_verified alone, because a soft gate that can be talked into flipping is no gate.
+ * leave email_verified alone, because that flag is what lets a password account into the app: a
+ * link that can be talked into flipping it opens the account to an address nobody read.
  *
  * The link confirms only for its own account, signed in where it is opened. Anywhere else it is
  * left unspent and the browser is asked to sign in, so the cases above open it signed in.
  *
- * Runs the real worker in workerd via Miniflare. RESEND_API_KEY is unset in tests, so sendMail
- * logs and skips — the token rows are what these assert on; the mail bodies have their own test
- * in email-templates.test.ts.
+ * Runs the real worker in workerd via Miniflare. RESEND_API_KEY is unset unless a test sets it to
+ * read the mail it sends; otherwise sendMail logs and skips, and the token rows are what these
+ * assert on. The mail bodies have more tests in email-templates.test.ts.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

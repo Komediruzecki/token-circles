@@ -746,8 +746,9 @@ authRoutes.post('/api/auth/resend-verification', requireAuthEvenUnconfirmed, asy
   if (!user.email) return c.json({ error: 'This account has no email address' }, 400);
   // Not an error: the address is confirmed, which is what the caller wanted.
   if (user.email_verified) return c.json({ ok: true, alreadyVerified: true });
-  // Per-address cap on top of the per-IP one — the IP bucket does nothing against a caller who
-  // rotates addresses, and this route sends real mail to a real inbox.
+  // No limit per network address, unlike the signed-out ways of asking: the session decides the
+  // address, so this route mails nobody but the account's own address, whoever calls it. That
+  // address has two limits: its requests here, and the links it was mailed in the hour (below).
   const emailRl = await enforce(c, `resend-verification:${user.email}`, 3, 3600);
   if (emailRl) return emailRl;
   // The links this address has had in the hour, by every way of asking (mailFreshConfirmLink).

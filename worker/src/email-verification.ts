@@ -16,9 +16,11 @@ export async function sha256Hex(input: string): Promise<string> {
 
 // ── Email verification (password signups) ──────────────────────────────────────────────────────
 //
-// A password account starts unverified and works anyway: the confirm link is a soft gate, so
-// nothing is blocked on it — the app shows a banner until it is clicked. Google accounts arrive
-// with Google's own email_verified claim and never see any of this.
+// A password account starts unconfirmed and uses the app once its address is confirmed. Until
+// then the Worker answers it 403 EMAIL_UNCONFIRMED everywhere but a few account routes
+// (requireAuth and requireAuthEvenUnconfirmed in auth.ts), and the app shows the Confirm your
+// email screen. Google accounts arrive with Google's own email_verified claim and never see any
+// of this.
 //
 // The link stays valid long enough to survive a night in a spam folder. It is longer than the
 // password-reset TTL on purpose: a reset link is a live credential, a confirm link is not.
