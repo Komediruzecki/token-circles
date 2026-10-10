@@ -63,6 +63,7 @@ afterEach(async () => {
   globalThis.fetch = realFetch;
   delete (env as unknown as Record<string, string>).RESEND_API_KEY;
   await env.DB.prepare('DROP TRIGGER IF EXISTS refuse_profiles').run();
+  await env.DB.prepare('DROP TRIGGER IF EXISTS refuse_links').run();
 });
 
 /** The account at `email`, with how many profiles it has; null when there is none. */
@@ -127,5 +128,43 @@ describe('a sign-up whose profile cannot be written', () => {
     expect(res.status).toBe(200);
     expect(await accountAt(NEW)).toBeNull();
     expect(mailed).toEqual([]);
+  });
+});
+
+describe('a sign-up whose confirm link cannot be stored', () => {
+  it('leaves no account behind, and mails nothing', async () => {
+    await env.DB.prepare(
+      `CREATE TRIGGER refuse_links BEFORE INSERT ON email_verifications
+       BEGIN SELECT RAISE(ABORT, 'refused for the test'); END`
+    ).run();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const res = await signUp(NEW);
+
+    expect(res.status).toBe(200);
+    expect(await accountAt(NEW)).toBeNull();
+    expect(mailed).toEqual([]);
+  });
+});
+
+describe('the welcome of a new account', () => {
+  it('carries the confirm link stored with the account, and goes to its address alone', async () => {
+    await signUp(NEW);
+
+    expect(mailed.map((mail) => mail.to)).toEqual([NEW]);
+    const token = /verify-email\?token=([0-9a-f]+)/.exec(mailed[0]!.text)?.[1];
+    expect(token, mailed[0]!.text).toBeDefined();
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+    const hash = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join(
+      ''
+    );
+    const stored = await realDb
+      .prepare(
+        `SELECT v.email, v.purpose, v.used_at FROM email_verifications v
+           JOIN users u ON u.id = v.user_id WHERE u.email = ? AND v.token_hash = ?`
+      )
+      .bind(NEW, hash)
+      .first();
+    expect(stored).toEqual({ email: NEW, purpose: 'confirm', used_at: null });
   });
 });

@@ -75,6 +75,24 @@ export async function createEmailVerification(
 }
 
 /**
+ * The statement that stores the first confirm link of the account at `email`, for the batch that
+ * makes that account: it reads the account's id inside the batch, once the account is written.
+ */
+export async function firstConfirmLink(
+  db: D1Database,
+  email: string,
+  token: string
+): Promise<D1PreparedStatement> {
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  return db
+    .prepare(
+      `INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose)
+       SELECT id, ?, ?, ?, 'confirm' FROM users WHERE email = ?`
+    )
+    .bind(email, await sha256Hex(token), expiresAt, email);
+}
+
+/**
  * Store a new single-use link for `userId` without retiring any other, and return its raw token
  * and row id. For a caller that retires the others only once the new link has been sent. With
  * `bound`, only while the account's token_version is still the one the request checked; null

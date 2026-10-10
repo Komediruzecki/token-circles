@@ -39,6 +39,7 @@ import {
 } from '../email-link';
 import {
   createEmailVerification,
+  firstConfirmLink,
   randomToken,
   sha256Hex,
   verifyLink,
@@ -186,28 +187,30 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
 });
 
 /**
- * The account at `email` (`found`), or the one sign-up makes there (`made`, its id). The account
- * and its profile are written in one batch, so a failure leaves neither behind and the work can
- * run again from the start.
+ * The account at `email` (`found`), or the one sign-up makes there (`made`, with the token of its
+ * first confirm link). The account, its profile and that link are written in one batch, so a
+ * failure leaves none of them behind and the work can run again from the start.
  */
 async function accountAt(
   env: Env,
   email: string,
   passwordHash: string
-): Promise<{ found: { id: number } } | { made: number }> {
+): Promise<{ found: { id: number } } | { made: { token: string } }> {
   const found = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
     .bind(email)
     .first<{ id: number }>();
   if (found) return { found };
-  const [user] = await env.DB.batch([
+  const token = randomToken();
+  await env.DB.batch([
     env.DB.prepare(
       "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
     ).bind(email, passwordHash),
     env.DB.prepare(
       "INSERT INTO profiles (name, user_id) SELECT 'Personal Profile', id FROM users WHERE email = ?"
     ).bind(email),
+    await firstConfirmLink(env.DB, email, token),
   ]);
-  return { made: user!.meta.last_row_id as number };
+  return { made: { token } };
 }
 
 /**
@@ -238,17 +241,11 @@ async function signUpAfterAnswer(
     );
     return;
   }
-  const userId = account.made;
-  // A welcome without a confirm link still goes: the account can ask for one from the sign-in
-  // form or the Confirm your email screen.
-  let verifyUrl: string | undefined;
-  try {
-    const token = await createEmailVerification(env.DB, userId, email);
-    verifyUrl = verifyLink(apiOrigin, token, base);
-  } catch (e) {
-    console.error('Verification token could not be minted:', e);
-  }
-  const welcome = renderWelcome({ appUrl: base, verifyUrl });
+  // A password account's welcome always carries its confirm link: the account opens with it.
+  const welcome = renderWelcome({
+    appUrl: base,
+    verifyUrl: verifyLink(apiOrigin, account.made.token, base),
+  });
   await sendMail(env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
     (e: unknown) => {
       console.error('Welcome email failed:', e);

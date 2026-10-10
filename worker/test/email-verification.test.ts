@@ -439,21 +439,43 @@ describe('the mail itself', () => {
     expect(mail.text).toContain('https://x/y');
   });
 
-  it('says in both mails that a sign-in the link asks for confirms the address', () => {
+  it('says in both mails, html and text, that a password sign-in where the link asks for one confirms the address', () => {
     const link = 'https://api.example.com/api/auth/verify-email?token=abc';
     const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
     const resent = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
+    const sentence =
+      'If the link asks you to sign in, sign in right there with your password, and your address is confirmed.';
     for (const mail of [welcome, resent]) {
-      expect(mail.html).toContain(
-        "If you're asked to sign in first, your address is confirmed as soon as you do."
-      );
+      expect(mail.html).toContain(sentence);
     }
     expect(welcome.text).toContain(
-      `Confirm this is your address to start using your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${link}\n\nThen set up your first account,`
+      `Confirm this is your address to start using your account:\n${link}\n\n${sentence}\n\nThen set up your first account,`
     );
     expect(resent.text).toContain(
-      `Open this link to confirm your address (expires in 24 hours). If you're asked to sign in first, it's confirmed as soon as you do:\n${link}`
+      `Open this link to confirm your address and start using your account (it expires in 24 hours):\n${link}\n\n${sentence} Links we sent before this one no longer work.`
     );
+  });
+
+  it('says in the welcome of a password sign-up, html and text, that the link opens the account, and never that it is ready or to open the app first', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
+    expect(welcome.subject).toBe('Welcome to Token Circles: confirm your email');
+    for (const part of [welcome.html, welcome.text]) {
+      expect(part).toContain('Confirm this is your address to start using your account');
+      expect(part).not.toMatch(/is ready/);
+      expect(part).not.toContain('Open Token Circles');
+      expect(part).not.toContain('Open the app:');
+    }
+    expect(welcome.html).toContain('Confirm your email address to start using your account.');
+  });
+
+  it('says in the confirm mail, html and text, that the links sent before it no longer work', () => {
+    const mail = renderEmailVerification({ link: 'https://x/y', ttlHours: 24, assetOrigin: APP });
+    expect(mail.html).toContain(
+      'This link expires in 24 hours. Links we sent before this one no longer work.'
+    );
+    expect(mail.html).toContain('Confirm your address. The link expires in 24 hours.');
+    expect(mail.text).toContain('Links we sent before this one no longer work.');
   });
 
   it('says in both mails, html and text, that the account is for using once the address is confirmed, and never that it works without', () => {
@@ -470,7 +492,7 @@ describe('the mail itself', () => {
 
   it('leaves the sign-in sentence out of the welcome that has nothing to confirm', () => {
     const plain = renderWelcome({ appUrl: APP });
-    expect(plain.html).not.toContain("If you're asked to sign in first");
-    expect(plain.text).not.toContain("If you're asked to sign in first");
+    expect(plain.html).not.toContain('If the link asks you to sign in');
+    expect(plain.text).not.toContain('If the link asks you to sign in');
   });
 });
