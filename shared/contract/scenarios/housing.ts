@@ -1,5 +1,5 @@
 import { HOUSING_ANSWER_KEYS } from '../../housingSchema';
-import { expectMoney } from '../helpers';
+import { expectMoney, personMonth } from '../helpers';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
@@ -136,8 +136,7 @@ export const housing = [
     async (api, expect) => {
       const id = await addHousing(api, expect, { due_month: undefined, due_day: 15 });
       const row = (await housingList(api, expect)).housings.find((h: Json) => h.id === id);
-      const thisMonth = String(new Date().getUTCMonth() + 1).padStart(2, '0');
-      expect(row.due_date).toBe(`${thisMonth}-15`);
+      expect(row.due_date).toBe(`${personMonth()}-15`);
     }
   ),
 ];

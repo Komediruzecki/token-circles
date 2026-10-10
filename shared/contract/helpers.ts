@@ -27,6 +27,14 @@ export function dayOf(offset: number, day: number, from = new Date()): string {
   return `${monthStart(offset, from).slice(0, 8)}${String(day).padStart(2, '0')}`;
 }
 
+/**
+ * This month as `MM`, on the person's calendar: the device's, which local-first reads and the app
+ * sends the Worker as X-Time-Zone. A runner that sends no zone runs where the Worker does, on UTC.
+ */
+export function personMonth(now = new Date()): string {
+  return String(now.getMonth() + 1).padStart(2, '0');
+}
+
 /** Money compared to the cent, whether the runtime answered a number or a numeric string. */
 export function expectMoney(expect: Expect, actual: unknown, cents: number, what = 'amount'): void {
   expect(Number(actual), `${what} was ${JSON.stringify(actual)}`).toBeCloseTo(cents, 2);
