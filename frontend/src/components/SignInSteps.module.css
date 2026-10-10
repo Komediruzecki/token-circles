@@ -1,7 +1,8 @@
 /*
  * The short forms around signing in: a code by email and the second factor (inside the sign-in
- * screen and the sign-in dialog), a new password, and a message to support. Each field is labelled
- * above it as the sign-in form's fields are. The form kit adds the marked state (Form.module.css).
+ * screen and the sign-in dialog), the sign-in dialog's own fields, a new password, and a message to
+ * support. Each field is labelled above it as the sign-in form's fields are. The form kit adds the
+ * marked state (Form.module.css), which is why no field here sets its border on the element.
  */
 
 .lead {

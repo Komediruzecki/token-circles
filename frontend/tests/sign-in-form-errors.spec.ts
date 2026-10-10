@@ -7,15 +7,17 @@
  * status and body from the Worker and the same words on the screen, and neither field is marked.
  * Asking for a reset link gets the same status, body and words for both. A field left empty, or
  * filled in a way the Worker would refuse, is marked with its message as its accessible
- * description, and nothing is sent: on the sign-in, account, email-code and support forms, and on
- * the new-password screen a reset link opens.
+ * description, and nothing is sent: on the sign-in, account, email-code and support forms, on the
+ * sign-in dialog Manage Account opens for an account already signed in, and on the new-password
+ * screen a reset link opens. A marked field in the dialog takes the kit's border, in the danger
+ * colour.
  *
  * Each case signs up an account made for the run (an example.com address) and deletes it at the
  * end, also when a step fails.
  */
-import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
+import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
-import { BOOTS, bootApp, openSignIn } from './boot'
+import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
 import { sql } from './db'
 import { E2E_BASE } from './e2e-constants'
 import { isNetworkNoise } from './test-helpers'
@@ -95,6 +97,21 @@ async function sendAndRead(page: Page, path: string, send: () => Promise<void>):
 const email = (page: Page) => page.locator('#login-email')
 const password = (page: Page) => page.locator('#login-password')
 const submit = (page: Page) => page.locator('form button[type="submit"]').first().click()
+
+/**
+ * 'danger' when a field's border is the danger colour, both as the browser computes them where the
+ * field is, and the two colours when it is not.
+ */
+const borderColour = (field: Locator) =>
+  field.evaluate((el) => {
+    const swatch = document.createElement('span')
+    swatch.style.color = 'var(--danger)'
+    el.after(swatch)
+    const danger = getComputedStyle(swatch).color
+    swatch.remove()
+    const border = getComputedStyle(el).borderTopColor
+    return border === danger ? 'danger' : `${border}, where danger is ${danger}`
+  })
 
 async function expectUnmarked(page: Page) {
   await expect(email(page)).not.toHaveAttribute('aria-invalid', 'true')
@@ -177,6 +194,7 @@ for (const boot of BOOTS) {
     test(`what is missing is marked at its field, and nothing is sent (${boot})`, async ({
       page,
       context,
+      request,
     }) => {
       test.setTimeout(150_000)
       const errors = watchErrors(page)
@@ -234,6 +252,30 @@ for (const boot of BOOTS) {
       expect(registrations).toEqual([])
       expect(codeRequests).toEqual([])
       expect(supportMessages).toEqual([])
+
+      // ── The sign-in dialog, empty, from Manage Account once signed in ─────────────────────────
+      const account = await signUp(request)
+      try {
+        await page.goto(`${E2E_BASE}/`)
+        await signInWithPassword(page, account, PASSWORD)
+        const sent = signIns.length
+        await page.getByTestId('profile-dropdown-btn').click()
+        await page.getByText('Manage Account', { exact: true }).click()
+        const dialogEmail = page.locator('#login-modal-email')
+        const dialogPassword = page.locator('#login-modal-password')
+        await expect(dialogEmail).toBeVisible()
+        expect(await borderColour(dialogEmail)).not.toBe('danger')
+        await page.locator('form', { has: dialogEmail }).locator('button[type="submit"]').click()
+        await expect(dialogEmail).toHaveAttribute('aria-invalid', 'true')
+        await expect(dialogEmail).toHaveAccessibleDescription(SAY.email)
+        await expect(dialogPassword).toHaveAttribute('aria-invalid', 'true')
+        await expect(dialogPassword).toHaveAccessibleDescription(SAY.password)
+        await expect.poll(() => borderColour(dialogEmail)).toBe('danger')
+        await expect.poll(() => borderColour(dialogPassword)).toBe('danger')
+        expect(signIns).toHaveLength(sent)
+      } finally {
+        await deleteRunAccount(request, account)
+      }
       expect(errors).toEqual([])
     })
 

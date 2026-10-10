@@ -7,6 +7,7 @@ import { Field, FormNotice, SubmitButton } from './form'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
 import { createSignInForm, reloadIntoTheApp } from './signInForm'
+import stepStyles from './SignInSteps.module.css'
 import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
 import type { SignInMode, SignInOutcome } from './signInForm'
@@ -98,17 +99,6 @@ export default function LoginModal(props: LoginModalProps) {
     setNotice('')
     setElsewhere('')
     form.reset({ ...form.values })
-  }
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    'box-sizing': 'border-box' as const,
   }
 
   return (
@@ -228,7 +218,7 @@ export default function LoginModal(props: LoginModalProps) {
                   value={form.values.email}
                   onInput={(e) => form.set('email', e.currentTarget.value)}
                   autocomplete="username"
-                  style={inputStyle}
+                  class={stepStyles.input}
                 />
               )}
             </Field>
@@ -248,7 +238,7 @@ export default function LoginModal(props: LoginModalProps) {
                   value={form.values.password}
                   onInput={(e) => form.set('password', e.currentTarget.value)}
                   autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
-                  style={inputStyle}
+                  class={stepStyles.input}
                 />
               )}
             </Field>
