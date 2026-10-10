@@ -9,6 +9,333 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Deploy notes
+
+- Two migrations, both a column on an existing table: `0031_email_change.sql` adds `purpose`
+  (`'confirm'` or `'change'`, default `'confirm'`) to `email_verifications` (#608), and
+  `0032_login_code_handle.sql` adds `handle_hash` with a unique index to `login_codes` (#615). A
+  sign-in code requested before the deploy has no handle and stops working; the person asks for a
+  new one, and every code expires within ten minutes anyway.
+- From #616 on, a password account whose address is not confirmed gets Confirm your email instead of
+  the app, and its sessions and API tokens get 403 `EMAIL_UNCONFIRMED`. That includes accounts
+  created before this release that never opened their link.
+- The app sends `X-Time-Zone` on every cloud request from #603 on, so GETs that sent no custom
+  header now get a CORS preflight; `cors()` sets `maxAge: 7200` so the browser asks once per two
+  hours.
+
+### Loans
+
+- **One amortisation engine for both runtimes** (#594). `shared/loanSchedule.ts` replaces the two
+  copies in `frontend/src/core/loanCalculator.ts` (deleted with its test) and
+  `worker/src/routes/loans.ts`. The decisions it encodes, with 100,000 at 5 % over 120 months
+  (installment 1,060.66) as the example: extra payments shorten the loan at the same installment; a
+  rate change recomputes the installment so the loan still ends on its current end date (5 % to 8 %
+  from month 13 pays 1,198.93 and owes nothing after month 120); dates are year/month arithmetic
+  with the day clamped to the month's last day and no `Date` object (`addCalendarMonths`), so a 31
+  January start is due 28 February, then 31 March, in every timezone; same-month extra payments add
+  up; an extra payment larger than the balance records only what was needed and principal is never
+  negative; the last month pays what is owed, so `totalPaid` is principal plus interest;
+  `monthsSaved` is a count of months removed; the base `interest_rate` is part of the engine's input
+  and covers every month no rate period covers. A balance within half a cent of zero
+  (`HALF_CENT = 0.005`) counts as repaid, so paying the balance shown to the cent ends the loan. The
+  annuity goes through `expm1`/`log1p`. Tests check closed forms, one case per old defect, and
+  invariants over 400 seeded random loans.
+- `POST /api/loans/:id/calculate` calls `calculateLoan()` in both runtimes, with the same response
+  shape; `shared/fixtures/loanParity.ts` is stored through each runtime's API and must answer
+  exactly `calculateLoan()` of it (`worker/test/loans-calculate.test.ts`,
+  `localHandlers.loans.test.ts`). The Worker's rate period and extra payment queries order by id. A
+  local-first loan without a start date calculates with empty dates and a null payoff date instead
+  of a 500. `/api/calculators/loans`, `/mortgages` and `/loans/amortization` use `annuityPayment()`;
+  the amortization calculator dates payment i with `addCalendarMonths`, so asked on 31 January it
+  lists 28 February, 31 March, 30 April.
+- `GET /api/loans` adds `remaining_balance`, `monthly_payment`, `next_payment_date` and
+  `payoff_date` to each loan from `loanStatus()`, in both runtimes (#594). Additions only, after the
+  existing keys. The Worker reads all listed loans' rate periods and extra payments in one query
+  each. The Loans page reads them (its own `calculateRemaining` subtracted one installment per 30
+  days with no interest), runs the engine itself for a server without the fields, derives paid or
+  active from `remaining_balance`, and formats dates in UTC. The debt-free badge
+  (`core/achievements/evaluate.ts`) runs `amortize()` with the loan's `interest_rate`, so months no
+  rate period covers are charged the loan's rate. `LoanAmortizationTable` took its dates from the
+  schedule rather than `setMonth`.
+- **Loans page rebuilt around what-ifs** (#600). `frontend/src/features/loans/`: `LoansOverview`
+  (summary strip and one card per loan, What if on each unpaid one), `LoanDetail` with three tabs
+  routed as `#loans/<id>/compare|schedule|extras` (`loanRoute.ts`), `LoanCompare`, `LoanSchedule`
+  (the amortisation table out of its modal, with CSV export) and `LoanExtras` (saved extra payments
+  changed in their row or removed). `shared/loanScenarios.ts` adds the "lower" mode (end date kept,
+  installment drops), repeating extra-payment rules, a keep-the-installment option for rate changes
+  with "never repaid", `compareScenarios`, a done-by-a-date solver and the template presets.
+  Scenarios live in the URL and are computed in the browser. A loan without the new fields gets the
+  #594 figures unchanged. `LoanAmortizationTable.tsx` and `LoansPage.module.css` are deleted; the
+  loan form's Status select is gone (it was never stored). The loans tour gains a What if step.
+- `PUT /api/loans/:id/prepayments/:prepayId` in both runtimes; an extra payment keeps one stored id
+  in local-first as on the Worker, a cloud backup's ids survive a restore, and a missing one answers
+  "Extra payment not found" in both (#600). The Worker stores a 0 % rate as 0 %: a create without a
+  rate gets 5 %, an edit without one keeps the stored rate. Round the installment up takes no mode.
+  The route is on the CRUD contract. Each Worker contract scenario gets a one-minute timeout.
+- Form-error slice 4a (#609) moved loans, rate periods and extra payments onto
+  `shared/loanSchema.ts` (replacing `shared/loanExtraPayment.ts`). Removing an extra payment or rate
+  period the loan does not have answers 404 in both runtimes, and the page treats a 404 on a remove
+  or a loan delete as done. `total_prepaid` is 0 to the cent for a loan without extra payments.
+  Local-first's unused `POST /loans/:id/prepayment` is gone. `shared/fixtures/loanFormParity.ts`
+  schedules loans typed into the dialog to the same cent in both runtimes
+  (`worker/test/loan-form-parity.test.ts`).
+
+### Forms say what is wrong at the field
+
+- **Slice 1, the kit and categories** (#602). A refused save answers 400 `{ error, fields }` from
+  both runtimes (`shared/refusal.ts`, `worker/src/http.ts`), and both client surfaces throw
+  `ApiError` (`frontend/src/core/apiError.ts`) so a form can put each message under its field.
+  `frontend/src/components/form/` is the form kit, with a busy state. `shared/categorySchema.ts`
+  holds the category rules and words for the four category dialogs (Categories, Budgets, Bills,
+  Goals; `features/categoryForm.ts`). An edit checks only the fields it changes, so rows stored
+  under older rules still save. An ended session asks to sign in again, and a save that lands after
+  Cancel leaves the reopened dialog alone.
+- **Slice 2, transactions and accounts** (#605). `shared/transactionSchema.ts` and
+  `shared/accountSchema.ts` hold the rules both runtimes and forms use; `worker/src/validation.ts`
+  is gone. The runtimes agree on the 10 rules they differed on. Editing a transaction updates the
+  goals of both categories it moves between; a foreign-currency edit moves the account by the
+  converted amount, and a local amount that copies the amount follows it (shared
+  `editedLocalAmount`). The edit form shows the row's own exchange rate, and notes, beneficiary or
+  payor cleared in an edit stay cleared. Seven warning toasts and "Failed to create account" are
+  gone. The kit gains `form.mark` and a Field tip.
+- **Slice 3, budgets, goals and bills** (#607). `shared/budgetSchema.ts`, `goalSchema.ts` and
+  `billSchema.ts`, read through `shared/fieldReaders.ts`; money is kept to the cent with
+  `shared/money.ts`. `shared/billSchedule.ts` is the one rule for when a bill falls due next, used
+  by the Bills list and calendar, the Dashboard, `/api/bills/upcoming`, mark-paid, the reminder
+  email and the MCP tools: weekly and biweekly bills fall due on their own schedule, a bill on the
+  31st falls on a shorter month's last day, and local-first's Dashboard lists upcoming bills. The
+  Bills dialog saves its category; Set Budget changes the month's budget instead of adding one;
+  Allocate sets the month on screen; budget alerts measure a month against that month's budgets; the
+  sankey counts uncategorised spending; setting a month from last month's spending fills only
+  categories without a budget. A budget stored with a float error opens and saves unchanged,
+  Backfill from Spending stores sums to the cent, and MCP `upsert_budget` checks a budget as the app
+  does. Seven contract pins settled.
+- **Slice 4a, loans and retirement** (#609). See Loans for the loan half.
+  `shared/retirementGoalSchema.ts` and `shared/retirementPlanSchema.ts` cover retirement goals and
+  the retirement plan (`features/retirementGoalForm.ts`, `RetirementPlanner.tsx`). The FIRE
+  calculator takes `inflationRate` in both runtimes. The kit gains fields in list rows, a form's own
+  copy of its values, and `SubmitButton` `unchanged`.
+- **Slice 4b, profiles, Settings and import** (#611). `shared/profileSchema.ts`,
+  `settingsSchema.ts`, `importSourceSchema.ts`, `categoryMappingSchema.ts`, `importUpload.ts` and
+  `exportColumns.ts`. A profile name that is blank, over 100 characters, or another profile's in
+  other capitals is refused at name; any profile but the last can be deleted, and the Danger Zone
+  lists the page's profiles under their current names. `PUT /api/settings` refuses a key another
+  route owns; the base currency select is labelled and refuses at the select. Both runtimes read an
+  upload with `shared/importUpload.ts` (complete file checked first, every cell text, no header row
+  refused at file); local-first reads it off the main thread in `workers/uploadReader.ts` with a
+  time limit, and imports an uploaded file again. The email importer, `/api/v1/import` and MCP's
+  upload use the same reader. A backup carries each profile's connected sources and only its own
+  settings; a restore files each retirement plan and badge record under its profile from either
+  runtime's file, and restores profile names that differ only in case with the later one numbered.
+  Clearing a profile deletes its connected sources on the Worker, and account deletion runs the same
+  deletes. Applying category mappings updates linked goals. The Worker's full backup is indented
+  when Settings asks, and its `reseed-demo` answers 410. 12 contract pins settled (43 to 31).
+- **Slice 5, housing, portfolio, tags, recurring and onboarding** (#614). `shared/tagSchema.ts`,
+  `housingSchema.ts`, `holdingSchema.ts`, `recurringSchema.ts`, `recurringUpcoming.ts` and
+  `palette.ts`; forms in `features/{tag,housing,holding,recurring}Form.ts` and
+  `components/onboarding/onboardingForms.ts`, plus the subscription catalog and scan. An edit checks
+  and writes only what it changes. Tags: name up to 50 characters and unique in any case, colour
+  `#RRGGBB`, a create without one takes the palette's next colour. Housing: six types, an amount to
+  the cent, a real due month and a day that month has; no due month falls due this month. Holdings:
+  ticker up to 20 characters stored in capitals, shares and price above zero and below one trillion;
+  a buy merges only into the open profile's holding. Recurring: a period is added once and a second
+  add is 409 in both runtimes; deleting a rule the profile does not have is 404; local-first's
+  upcoming list is the Worker's. Another profile's tag, category or account is a 400 at the field it
+  names. New tags and recurring rules answer 201 in both runtimes. A delete of a row another tab
+  already deleted says so and reloads. MCP `upsert_tag_rule` finds and creates tags by the tag
+  rules. 12 contract pins settled (31 to 19).
+- **Slice 6, sign-in and support** (#615). The sign-in screen and dialog, the sign-in code steps,
+  the two-factor challenge and its enroll and disable steps, the new-password screen and the support
+  form use the kit, with `shared/signInSchema.ts` for the address format, a new password's 8
+  characters and a support message's length. A refused field answers 400 `{ error, fields }`, and a
+  code that does not sign in answers 401 at `code`. A wrong address or password stays one message
+  for the whole form. Every field has a label, and the sign-in fields keep the ids password managers
+  use. `components/captchaGate.ts` is the one captcha gate: a send waits for its token and each
+  token is used for one request. The reset page says a link is invalid only when the Worker says so,
+  and a failed check offers Try again. A mail call gives up after 10 seconds
+  (`worker/src/email.ts`).
+
+### Dates and calendars
+
+- **"Today" is the person's day** (#603). In cloud mode `apiFetch` sends `X-Time-Zone` with the
+  browser's IANA zone, to the app's own API only and never over a caller's own header. The
+  `readTimeZone` middleware in `worker/src/index.ts` accepts a name that matches the IANA pattern,
+  is at most 64 characters and that `Intl` knows; offsets and anything else fall back to UTC, so API
+  tokens, MCP and older builds answer as before. `shared/calendarDate.ts` keeps one formatter per
+  zone, keyed in lower case and capped at 256. Routes call `localToday(c)`, `localMonth(c)` and
+  `localNow(c)` from `worker/src/local-date.ts`; 46 call sites were swapped, and
+  `worker/test/local-today.test.ts` (48 tests) runs each at an instant where the zone's date and
+  UTC's differ. Mark-paid treats a payment dated on or after the start of the caller's period as
+  settling it, in the list's `paid` flag, the pre-flight and the batch guard, so two clients on
+  different calendars pay once (`bills-paid-across-zones.test.ts`). The net-worth timeline groups by
+  the caller's day. Local-first and the app's forms use `localToday()`/`localMonth()` in
+  `utils/period.ts`; `endOfNextMonth` keeps its day across an offset change, and the week labels and
+  forecast months no longer depend on the zone. A guard test fails on a `toISOString()` cut to a
+  date outside its list. Scheduled jobs, MCP, API tokens and timestamps stay on UTC. `todayUtc` is
+  gone from `shared/loanSchedule.ts`.
+- **Month steps past February** (#604), in both runtimes through `shared/calendarMonths.ts`. Twelve
+  months of totals start on the 1st, so the first month counts whole and none is skipped from the
+  29th to the 31st. The budget forecast counts this month's budgets. A monthly recurring rule on the
+  31st falls on 28 February and returns to the 31st; the upcoming list takes populate's own steps
+  and lists an overdue rule today, then on its dates. `/api/bills/upcoming` keeps a bill due today
+  and its month step no longer overflows. MCP `create_transactions` refuses an account that is not
+  there before writing anything. The bill and recurring payment guards each have a test that fails
+  without them.
+
+### Account email and sign-in
+
+- **A changed email takes effect once the new address confirms it** (#608). A change is a `'change'`
+  row in `email_verifications` (migration 0031); `users.email` and `email_verified` stay as they are
+  until its link is opened, once, within 24 hours (`worker/src/email-change.ts`). Opening it moves
+  the account, marks the address confirmed, and spends the account's other confirm and change links,
+  unused reset links and sign-in codes, and the unsubscribe link in reminders sent to the old
+  address. A waiting address is not held: anyone may sign up with it, and the link then says the
+  address is taken and changes nothing. The current address gets a notice (`emailTemplates.ts`).
+  Settings shows the waiting address with Send again and Cancel change. New routes
+  `POST /api/auth/email-change/resend` and `DELETE /api/auth/email-change`. Limits: three links an
+  hour per inbox, five an hour and ten a day per account, twenty an hour per network address.
+  Account deletion deletes its email links.
+- **Confirming an address clears what was set up before it, and email links finish after sign-in**
+  (#610). Google sign-in, an emailed sign-in code and a reset link confirm the address; on an
+  account whose address was never confirmed, each first runs `clearUnconfirmedAccess`
+  (`worker/src/auth.ts`) in the same D1 batch: sessions, password, passkeys, two-factor, API tokens
+  and unused links. The route reports what went (`cleared`), and
+  `frontend/src/core/accessCleared.ts` shows it once after the reload. Session and credential writes
+  carry `SAME_TOKEN_VERSION` (`boundTo`), so they land only while the account's `token_version` is
+  the one its check read. Confirm and change links are spent only with their own account's session
+  (`worker/src/email-link.ts`): opened elsewhere, the browser gets a signed, HttpOnly
+  `fm_email_link` marker on `/api/auth` for 30 minutes, and the link finishes on a password sign-in
+  to that account or through `POST /api/auth/email-link/finish` after any other sign-in. A browser
+  that starts local-first opens the sign-in for these links, and the reset page works there. Google
+  sign-in stores and matches addresses in lower case. Account deletion deletes its sessions.
+- **Sign-in history is kept 90 days, and goes with the account** (#613). Account deletion deletes
+  its `auth_logs` rows in the same D1 batch: rows with its user id, and attempts at its address that
+  carry none. The scheduled run deletes rows older than `AUTH_LOG_RETENTION_DAYS` (90,
+  `worker/src/authlog.ts`), at most 1,000 rows per statement and 50 statements per run. Nothing in
+  the app reads `auth_logs`.
+- **A password account confirms its email before it uses the app** (#616). Create account ends on
+  Check your inbox (`components/CheckInbox.tsx`), which names the address, sends the link again and
+  says where to open it; the screen is the same for any address. A password sign-in works once the
+  address is confirmed, or in the browser that opened the account's own confirm link; until then it
+  answers as a wrong password does and the form offers Send the link again. A signed-in, unconfirmed
+  account sees Confirm your email (`components/ConfirmEmailScreen.tsx`). `authenticateRequest` and
+  the API token check answer 403 `EMAIL_UNCONFIRMED` everywhere but me, logout, the signed-in
+  resend, the link's finish route, and the billing portal for a paying account
+  (`requireAuthEvenUnconfirmed`). `POST /api/auth/verify-email/resend` sends the link while signed
+  out, with limits and the captcha before any look-up; one budget of three confirm links an hour
+  (`CONFIRM_LINKS_PER_HOUR`) covers every way of asking. Sign-up answers first, then writes the
+  account, its profile and its first link in one batch, tried twice; signing up again for an address
+  waiting for its link mails a fresh link. A sign-in code, a reset link and Google sign-in confirm
+  the address; a passkey or two-factor does not. `/api/v1` capabilities, reminders and sheet syncs
+  leave out an account waiting for its link. The welcome and confirm mails say the link starts the
+  account and where to sign in after opening it. No migration.
+
+### Errors
+
+- **The Worker answers an unexpected error with a fixed sentence** (#601).
+  `worker/src/error-response.ts` (`publicError`, `reportError`, `errorResponse`,
+  `rejectMalformedJson`) is the one rule: `HttpError` and Hono's `HTTPException` keep their status
+  and message (an `HTTPException` with its own response answers with it), and anything else answers
+  500 with "Something went wrong on our side. Try again in a moment." The full error goes to the
+  logs with method, path, `cf-ray` and user id, never the request body, and 5xx are still stored in
+  `error_logs`. A body that is not JSON answers 400 "The request body isn't valid JSON."; the check
+  wraps only `c.req.json`, so raw-body routes such as the Stripe webhook and receipt uploads are
+  untouched. MCP `tools/call` and the Google Sheets import's 501 follow the same rule
+  (`worker/src/mcp/rpc.ts`, `routes/imports.ts`). Renaming a tag or profile onto a name already
+  taken answers 400 with the create route's words, and `validateBackup` (`worker/src/backup.ts`)
+  refuses a backup that repeats a unique key with a 422 naming it, before anything is staged.
+- Local-first answers an unexpected failure with the same sentence (`shared/genericError.ts`), never
+  an exception's text (#612).
+
+### Profiles and quick entry
+
+- **Fixes from the 5.16 dev check** (#599). Local-first stores a new category as the Worker does
+  (default colour, icon and type, `tax_deductible` false; `handlers/categories.ts`), and
+  `normalize.ts` repairs rows already stored, so a category made on Budgets, Goals or Bills no
+  longer fails every typed category read of its profile; `core/validation.ts` accepts a blank icon.
+  `core/quickEntryLists.ts` is one list per entity for both quick entries (`GuidedOrbit.tsx`,
+  `CommandBar.tsx`): the active profile's rows only (`rowsOfProfile`), a loading, ready or error
+  state, read when a quick entry opens and when the seam's counters move, newest answer wins, and a
+  save guard so another profile's category id never reaches `POST /api/transactions`. The
+  Transactions form offers the rows of the profile it writes to (the active one for a new entry, the
+  row's own for an edit), and so do bulk actions, Auto Categorize (failed picks stay staged with a
+  "Couldn't categorize N of M" toast), the recurring section and the tag lists. A form left open
+  across a profile switch closes and names the profile to switch back to. The account field says
+  "Loading accounts…" and offers Try again on failure. Local-first lists recurring rules for the
+  active profile only. The Worker's `GET /api/tags` lists each tag's `profile_id`. In cloud, a blank
+  icon stores the default `tag` on create and edit, and an edit keeps every stored category field it
+  does not send (parent, `tax_deductible`).
+
+### CRUD contract suite
+
+- **One CRUD suite for cloud and local-first** (#606). `shared/contract/scenarios/` holds 120
+  scenarios in 24 entity files, run by `worker/test/contract.test.ts` through `SELF.fetch` on D1 and
+  by `frontend/src/core/storage/__tests__/contract.test.ts` through `routeApiRequest` on fake
+  IndexedDB: create from the body the form sends, read back to the cent, edit, delete, and check
+  another profile can neither read nor change it. `shared/contract/routes.ts` lists 171 routes
+  served by both runtimes, 69 by the Worker only and 25 by local-first only, each one-runtime route
+  with its reason. Guards fail on a served route on no list, a listed route not served, a shared
+  route without a passing scenario, and (from #612) a route registered twice. Where the runtimes
+  differ, the check says `// DIFFERENCE <id>` and `shared/contract/differences.ts` describes it (52
+  when the suite merged); a shared wrong answer is marked `KNOWN BUG`.
+- 35 bugs fixed, each in its own commit with a failing test. Copy last month
+  (`features/copyLastMonth.ts`, both runtimes) fills only categories with no budget yet, copies
+  amount, period and the rollover switch but not a hand-set rollover amount, and answers
+  `{ ok, count, already_budgeted }` for a toast that says both. Worker: an account's reconciliation
+  summary counts only that account; reconciling a date range works; a partial budget edit keeps
+  rollover; adherence and the forecast history count each budget once; a month summary counts that
+  month only; counterparties with and without a trailing space stay apart; a deleted loan's rate
+  periods and extra payments are deleted with it; a loan saved without rate periods no longer gets a
+  copy of its rate as one; the emergency fund answer carries `monthsWithData`; the monthly PDF
+  answers 400 for an unreadable month; the import preview lists the accounts it would create.
+  Local-first: the transaction list honours the app's filter names and orders a day's rows last
+  entered first; a bill keeps its account, so paying it moves the balance; bills and recurring rules
+  carry their category's name and colour; extra payments and rate periods have ids; holdings are
+  profile-scoped; an imported account keeps its case; a deleted profile's retirement plan goes with
+  it and a restore keeps it; a restore removes the replaced profiles' import sources; PDF reports
+  answer the PDF's bytes. Both: the sankey uses the month's own budget; loans list newest first.
+  Local-first's `PUT /loans/:id/rate` and `api.updateLoanRate` are gone.
+
+### Found along the way
+
+- **Analytics weeks, heatmap days, whole PDF reports, net worth by day** (#612).
+  `shared/calendarWeeks.ts` puts every day of a month in one of its weeks, a week's trends cover the
+  seven days its label names, and a week or month the calendar does not have answers no days, in
+  both runtimes. Local-first's heatmap drill-down lists the day's transactions. A cloud PDF report
+  reads every transaction of its range, not the newest 1,000. `shared/netWorthTimeline.ts` takes
+  each account's latest balance on or before the day, in both runtimes. Quick entry, Goals, Bills,
+  Budgets and Categories say why an action failed; deleting a goal or category another tab already
+  deleted says so, and the Worker names a missing goal or bill. Twelve months back from 29 February
+  reach 28 February. 13 Worker routes and 12 local-first routes that nothing called are removed,
+  with a second registration of `POST /api/calculator/compound-interest`. Achievements leave out a
+  loan deleted while they count. The `formButtonType` guard reads the whole tag.
+
+### Tests and tooling
+
+- **The release suite** (#593). `frontend/tests/release/` runs the 5.16 dev test scope in both
+  storage modes as its own Playwright project, present only with `E2E_RELEASE=1`
+  (`pnpm run test:e2e:release`): cloud cases in profiles of their own, local-first cases through
+  Continue with no account. Sections 1 to 6, 8 and 10 to 15, including the two-tab upgrade rehearsal
+  (`s15-two-tab-upgrade.spec.ts`), which routes each tab to its own build. Known app bugs are pinned
+  at their check with `test.fail`, listed in the suite's README. #600 adds `s16-loans.spec.ts`.
+- **Stopping the Worker webServer stops wrangler too** (#588). `frontend/playwright.config.ts` sets
+  `gracefulShutdown: { signal: 'SIGTERM', timeout: 5000 }` on the Worker entry, so
+  `serve-worker.mjs`'s supervisor kills wrangler's detached group before it exits, instead of
+  leaving wrangler, workerd and esbuild on :8787 for the next local run's `reuseExistingServer` to
+  adopt. `e2eWorkerTeardown.test.ts` runs the real supervisor against a stand-in wrangler and fails
+  without the line.
+
+### Dependencies
+
+- The worker-deps group (#591): `@simplewebauthn/server` 14.0.3, hono 4.13.12 and
+  `@cloudflare/workers-types` 5.20261002.1, with the worker lockfile regenerated under pnpm 10, and
+  undici overridden to exactly 7.29.1 in `worker/` for six advisories (both miniflare releases pin
+  7.29.0).
+- The dev-tooling group at #597's versions (#598), including ESLint 10.12.0, Prettier 3.9.9, Vitest
+  5.0.3 and Vite 8.3.2; dompurify 3.4.16 and postcss-selector-parser 7.1.6; a fast-uri 3.1.8
+  override in the root workspace; solid-js 1.9.16 (seroval 1.6.8); brace-expansion and source-map-js
+  lockfile refreshes; the worker's sharp override raised to 0.35.5.
+
 ## [5.16.1] — 2026-09-27
 
 - **Money is formatted in the base currency** everywhere it was hard-coded. `D3HeatmapChart`'s
