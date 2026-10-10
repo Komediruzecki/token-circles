@@ -99,7 +99,7 @@ async function mount(captcha?: Captcha, opened?: string) {
 
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
 
 const settle = async () => {
   for (let i = 0; i < 8; i += 1) await Promise.resolve()
@@ -391,7 +391,7 @@ describe('creating an account', () => {
     await submit()
 
     expect(host.querySelector('[data-test-id="check-inbox-lead"]')?.textContent).toBe(
-      'We sent a link to name@example.com. Open it in this browser, then sign in with your password. Opening it on another device? Sign in there first.'
+      'We sent a link to name@example.com. Open it in this browser, then sign in with your password. Opening it in another browser or on another device? Sign in there first.'
     )
   })
 

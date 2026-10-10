@@ -52,8 +52,8 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
     <div data-test-id="check-inbox">
       <p class={styles.lead} data-test-id="check-inbox-lead">
         We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>. Open it
-        in this browser, then sign in with your password. Opening it on another device? Sign in
-        there first.
+        in this browser, then sign in with your password. Opening it in another browser or on
+        another device? Sign in there first.
       </p>
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>

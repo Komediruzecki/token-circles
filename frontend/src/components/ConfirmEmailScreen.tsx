@@ -41,8 +41,9 @@ export const SENT_SHOWN_MS = 30_000
  *
  * It lets the account in once the address is confirmed. A link this browser opened before signing
  * in is finished here (finishEmailLink). A link opened in another tab of this browser confirms at
- * once, with this session. A link opened on another device confirms only once the account signs
- * in there with its password: the link leaves its marker in that browser alone. Coming back to the
+ * once, with this session. A link opened in another browser, on this device or another, confirms
+ * only once the account signs in there with its password: the link leaves its marker in that
+ * browser alone. Coming back to the
  * tab asks the Worker again, and once the address is confirmed the app reloads, signed in.
  */
 export default function ConfirmEmailScreen(props: {
@@ -171,8 +172,8 @@ export default function ConfirmEmailScreen(props: {
           >
             send it again
           </button>
-          . Opening it on another device? Sign in there with your password, then come back to this
-          tab.
+          . Opening it in another browser or on another device? Sign in there with your password,
+          then come back to this tab.
         </p>
         <Show when={sentNote()}>
           <p class={stepStyles.lead} role="status" data-test-id="confirm-email-sent">

@@ -41,7 +41,7 @@ const CONFIRMED = 'Email confirmed. Your account is all set.'
 const CHANGED = 'Email changed. Your account uses the new address from now on.'
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -489,7 +489,7 @@ for (const boot of BOOTS) {
         })
         // It says where to sign in: in the browser that opens the link.
         await expect(page.getByTestId('check-inbox-lead')).toHaveText(
-          `We sent a link to ${email}. Open it in this browser, then sign in with your password. Opening it on another device? Sign in there first.`
+          `We sent a link to ${email}. Open it in this browser, then sign in with your password. Opening it in another browser or on another device? Sign in there first.`
         )
         await accountMade(email)
         await expect.poll(() => accountState(email)?.waiting).toBe(1)

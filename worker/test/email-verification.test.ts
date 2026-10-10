@@ -440,12 +440,12 @@ describe('the mail itself', () => {
     expect(mail.text).toContain('https://x/y');
   });
 
-  it('says in both mails, html and text, that a password sign-in where the link asks for one confirms the address', () => {
+  it('says in both mails, html and text, that a password sign-in where the link asks for one confirms the address, in another browser or on another device too', () => {
     const link = 'https://api.example.com/api/auth/verify-email?token=abc';
     const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
     const resent = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
     const sentence =
-      'If the link asks you to sign in, sign in right there with your password, and your address is confirmed.';
+      'If the link asks you to sign in, sign in right there with your password, even in another browser or on another device, and your address is confirmed.';
     for (const mail of [welcome, resent]) {
       expect(mail.html).toContain(sentence);
     }

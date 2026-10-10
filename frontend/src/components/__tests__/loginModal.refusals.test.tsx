@@ -68,7 +68,7 @@ const settle = async () => {
 
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
 
 const inboxAddress = () =>
   host.querySelector('[data-test-id="check-inbox-address"]')?.textContent ?? null

@@ -133,11 +133,11 @@ describe('Confirm your email', () => {
     expect(reloads).toBe(0)
   })
 
-  it('says that the link lets the account in from this browser, and that on another device a password sign-in there comes first', async () => {
+  it('says that the link lets the account in from this browser, and that in another browser or on another device a password sign-in there comes first', async () => {
     await mount('waiting@example.com')
 
     expect(byTestId('confirm-email-lead')?.textContent).toBe(
-      "Open the link we sent to waiting@example.com in this browser and you're in, or send it again. Opening it on another device? Sign in there with your password, then come back to this tab."
+      "Open the link we sent to waiting@example.com in this browser and you're in, or send it again. Opening it in another browser or on another device? Sign in there with your password, then come back to this tab."
     )
   })
 

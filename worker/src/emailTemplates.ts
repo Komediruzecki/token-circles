@@ -244,7 +244,7 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
  * browser confirms the address (routes/auth.ts, POST /api/auth/login).
  */
 const SIGN_IN_WHERE_OPENED =
-  'If the link asks you to sign in, sign in right there with your password, and your address is confirmed.';
+  'If the link asks you to sign in, sign in right there with your password, even in another browser or on another device, and your address is confirmed.';
 
 /**
  * Confirm-your-email link on its own — the resend, where the welcome copy would be wrong
