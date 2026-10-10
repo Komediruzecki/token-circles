@@ -204,7 +204,7 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
   const confirm = opts.verifyUrl;
   const subject = confirm
     ? `Welcome to ${BRAND}: confirm your email`
-    : `Welcome to ${BRAND} — your orbit is ready`;
+    : `Welcome to ${BRAND}: your orbit is ready`;
   const body = confirm
     ? `
     ${h1('Welcome aboard')}
@@ -227,7 +227,7 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
       title: subject,
       preheader: confirm
         ? 'Confirm your email address to start using your account.'
-        : 'Your account is ready — set up your first account and bring your history.',
+        : 'Your account is ready. Set up your first account and bring your history.',
       body,
       footerReason: 'You received this because an account was created with this address.',
       assetOrigin: opts.appUrl,
@@ -362,7 +362,7 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const subject = `You already have a ${BRAND} account`;
   const body = `
     ${h1('You already have an account')}
-    ${p(`Someone just tried to create a ${BRAND} account with this email address — but one already exists.`)}
+    ${p(`Someone just tried to create a ${BRAND} account with this email address, but one already exists.`)}
     ${p(`If that was you, simply sign in, or reset your password if you've forgotten it. If it wasn't you, no action is needed; your account is unchanged.`)}
     <div style="padding:8px 0 4px">${btn(app, 'Sign in')}</div>
   `;
@@ -370,13 +370,13 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
     subject,
     html: shell({
       title: subject,
-      preheader: 'A signup was attempted with your address — your account is unchanged.',
+      preheader: 'Someone tried to sign up with your address. Your account is unchanged.',
       body,
       footerReason: 'Security notice for your existing account.',
       orbit: false,
       assetOrigin: opts.appUrl,
     }),
-    text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in at ${app} — or reset your password. If it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
+    text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in or reset your password at ${app}\n\nIf it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
   };
 }
 

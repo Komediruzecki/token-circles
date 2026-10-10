@@ -16,7 +16,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { unconfirmedSessionCookie } from './helpers/session';
-import { renderEmailVerification, renderWelcome } from '../src/emailTemplates';
+import { renderAccountExists, renderEmailVerification, renderWelcome } from '../src/emailTemplates';
 import { fetchSettled } from './helpers/after-answer';
 
 const USER_ID = 8100;
@@ -454,6 +454,30 @@ describe('the mail itself', () => {
     );
     expect(resent.text).toContain(
       `Open this link to confirm your address and start using your account (it expires in 24 hours):\n${link}\n\n${sentence} Links we sent before this one no longer work.`
+    );
+  });
+
+  it('words the account-exists notice and the Google welcome without an em dash, up to the shared text footer', () => {
+    const upToFooter = (text: string) => text.slice(0, text.indexOf('\n—\n'));
+    const exists = renderAccountExists({ appUrl: APP });
+    const google = renderWelcome({ appUrl: APP });
+    for (const mail of [exists, google]) {
+      expect(mail.subject).not.toContain('—');
+      expect(mail.html).not.toContain('—');
+      expect(upToFooter(mail.text)).not.toContain('—');
+    }
+    expect(google.subject).toBe('Welcome to Token Circles: your orbit is ready');
+    expect(google.html).toContain(
+      'Your account is ready. Set up your first account and bring your history.'
+    );
+    expect(exists.html).toContain(
+      'Someone just tried to create a Token Circles account with this email address, but one already exists.'
+    );
+    expect(exists.html).toContain(
+      'Someone tried to sign up with your address. Your account is unchanged.'
+    );
+    expect(exists.text).toContain(
+      `If that was you, sign in or reset your password at ${APP}\n\nIf it wasn't you, no action is needed.`
     );
   });
 
