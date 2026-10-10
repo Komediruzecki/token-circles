@@ -8,15 +8,16 @@
  * with no account against a hash of the same cost as a real one.
  *
  * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
- * sent or is held. The two that store a row for the address after their answer (a reset link, a
- * sign-in code) answer ok while that row cannot be written.
+ * sent or is held. The three that store a row for the address after their answer (a reset link, a
+ * sign-in code, a new account) answer ok while that row cannot be written, and creating an account
+ * answers before it looks the address up.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
 import { DUMMY_PASSWORD_HASH } from '../src/routes/auth';
 import { fetchSettled, fetchUnsettled } from './helpers/after-answer';
-import { dbThatNotes, realDb, withDb } from './helpers/racing-db';
+import { dbThatNotes, dbWithStep, realDb, withDb } from './helpers/racing-db';
 
 const BASE = 'https://api.example.com';
 const HAS_ACCOUNT = 'same-answer-account@example.com';
@@ -130,6 +131,11 @@ const STORING: { path: string; table: string; logged: string }[] = [
     path: '/api/auth/email-code/request',
     table: 'login_codes',
     logged: 'Sign-in code could not be sent:',
+  },
+  {
+    path: '/api/auth/register',
+    table: 'users',
+    logged: 'Sign-up could not make the account:',
   },
 ];
 
@@ -305,6 +311,44 @@ describe('while the row a route stores cannot be written', () => {
       expect(errors).toHaveBeenCalledWith(logged, expect.anything());
     });
   }
+});
+
+describe('while the look-up of the address is held', () => {
+  it('/api/auth/register answers first, and ok, and makes the account once it goes on', async () => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holding = dbWithStep(realDb, /SELECT id FROM users WHERE email = \?/, () => held);
+    const accounts = async () =>
+      (
+        await realDb
+          .prepare('SELECT COUNT(*) AS n FROM users WHERE email = ?')
+          .bind(NO_ACCOUNT)
+          .first<{ n: number }>()
+      )?.n;
+
+    await withDb(holding.db, async () => {
+      const sent = fetchUnsettled(
+        `${BASE}/api/auth/register`,
+        sending(bodyFor('/api/auth/register')(NO_ACCOUNT))
+      );
+      try {
+        const answered = await Promise.race([
+          sent.answer.then(read),
+          new Promise<'no answer'>((resolve) => setTimeout(() => resolve('no answer'), 5_000)),
+        ]);
+        expect(answered, 'the answer, while the look-up is held').toMatchObject(OK);
+        expect(await accounts()).toBe(0);
+      } finally {
+        release();
+        await sent.settled();
+      }
+    });
+
+    expect(holding.ran()).toBe(true);
+    expect(await accounts()).toBe(1);
+  });
 });
 
 describe('signing in with an address that has no account', () => {

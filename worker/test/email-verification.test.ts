@@ -373,7 +373,8 @@ describe('POST /api/auth/resend-verification', () => {
 describe('POST /api/auth/register', () => {
   it('creates the account unverified and leaves a confirm link waiting to be clicked', async () => {
     const email = 'fresh@example.com';
-    const res = await SELF.fetch('https://api.example.com/api/auth/register', {
+    // The account is made after the answer: this comes back once that work is done.
+    const res = await fetchSettled('https://api.example.com/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: 'correct horse battery staple' }),

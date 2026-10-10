@@ -185,8 +185,62 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   });
 });
 
-// Email + password registration. Anti-enumeration (CR-9): identical neutral response whether or not
-// the email already exists, and no session is set — the user signs in afterward.
+/**
+ * The work a sign-up does after its answer. A new address gets an account, with a profile, and
+ * its welcome mail with the confirm link. An address that has an account already gets a notice
+ * that someone tried, and nothing else changes. A failure is logged; the answer has gone.
+ */
+async function signUpAfterAnswer(
+  env: Env,
+  email: string,
+  password: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const passwordHash = await hashPassword(password);
+  const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (existing) {
+    const notice = renderAccountExists({ appUrl: base });
+    await sendMail(env, email, notice.subject, notice.html, { text: notice.text }).catch(
+      (e: unknown) => {
+        console.error('account-exists notice email failed to send:', e);
+      }
+    );
+    return;
+  }
+  const res = await env.DB.prepare(
+    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+  )
+    .bind(email, passwordHash)
+    .run();
+  const userId = res.meta.last_row_id as number;
+  await env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
+    .bind('Personal Profile', userId)
+    .run();
+  // A welcome without a confirm link still goes: the account can ask for one from the sign-in
+  // form or the Confirm your email screen.
+  let verifyUrl: string | undefined;
+  try {
+    const token = await createEmailVerification(env.DB, userId, email);
+    verifyUrl = verifyLink(apiOrigin, token, base);
+  } catch (e) {
+    console.error('Verification token could not be minted:', e);
+  }
+  const welcome = renderWelcome({ appUrl: base, verifyUrl });
+  await sendMail(env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+    (e: unknown) => {
+      console.error('Welcome email failed:', e);
+    }
+  );
+}
+
+// Email + password registration. Anti-enumeration (CR-9): the answer is the same whether or not
+// the address already has an account, and it comes before any work on one. Making the account,
+// or telling the address's owner that someone tried, happens after the answer
+// (signUpAfterAnswer), and a failure there is logged, not answered. No session is set: a password
+// account signs in once its address is confirmed.
 authRoutes.post('/api/auth/register', async (c) => {
   const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
   if (rl) return rl;
@@ -207,55 +261,14 @@ authRoutes.post('/api/auth/register', async (c) => {
   // from rotating IPs. Mirrors forgot-password; the response stays neutral (429 for existing + new).
   const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
-  // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
-  // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
-  // existing owner by email — returning the SAME neutral response with NO session either way. The
-  // user signs in afterward, so a new vs existing email is indistinguishable to the caller. Either
-  // mail is sent after the answer.
-  const passwordHash = await hashPassword(password);
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (existing) {
-    const notice = renderAccountExists({ appUrl: base });
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
-        (e: unknown) => {
-          console.error('account-exists notice email failed to send:', e);
-        }
-      )
-    );
-  } else {
-    const res = await c.env.DB.prepare(
-      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+  c.executionCtx.waitUntil(
+    signUpAfterAnswer(c.env, email, password, base, new URL(c.req.url).origin).catch(
+      (e: unknown) => {
+        console.error('Sign-up could not make the account:', e);
+      }
     )
-      .bind(email, passwordHash)
-      .run();
-    const userId = res.meta.last_row_id as number;
-    await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
-      .bind('Personal Profile', userId)
-      .run();
-    // Best-effort, exactly like the mail it replaces: a signup is never held up, or failed, by
-    // the mail server, which is why the mail goes after the answer. An account with no confirm
-    // link can always ask for one from the app.
-    let verifyUrl: string | undefined;
-    try {
-      const token = await createEmailVerification(c.env.DB, userId, email);
-      verifyUrl = verifyLink(new URL(c.req.url).origin, token, base);
-    } catch (e) {
-      console.error('Verification token could not be minted:', e);
-    }
-    const welcome = renderWelcome({ appUrl: base, verifyUrl });
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
-        (e: unknown) => {
-          console.error('Welcome email failed:', e);
-        }
-      )
-    );
-  }
-  // Identical response regardless of existence; no session cookie is set (the user signs in next).
+  );
   return c.json({ ok: true });
 });
 
