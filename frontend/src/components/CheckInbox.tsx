@@ -14,6 +14,10 @@ import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } fro
  * already had an account: the Worker answered both the same, and an address with an account gets
  * a notice instead of a link.
  *
+ * It says where to sign in: in the browser that opened the link. Opened without a session, the
+ * link leaves its marker in that browser only, and a password sign-in there confirms the address
+ * (routes/auth.ts). A sign-in anywhere else is refused until then.
+ *
  * "Send the link again" asks for a fresh confirm link, signed out (POST
  * /api/auth/verify-email/resend), behind the captcha. A limit reached and a request the captcha
  * stopped are said in the notice (captchaGate.ts).
@@ -42,9 +46,10 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
 
   return (
     <div data-test-id="check-inbox">
-      <p class={styles.lead}>
-        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>. Open
-        it, then sign in to start using Token Circles.
+      <p class={styles.lead} data-test-id="check-inbox-lead">
+        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>. Open it
+        in this browser, then sign in with your password. Opening it on another device? Sign in
+        there first.
       </p>
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>

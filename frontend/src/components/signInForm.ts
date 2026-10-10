@@ -55,10 +55,11 @@ export const SIGN_IN_FAILED = "That didn't work. Try again."
 
 /**
  * A password sign-in the Worker refused (401): a wrong address or password, or an account whose
- * address is not confirmed yet. The Worker answers both the same, so this says both.
+ * address is not confirmed yet. The Worker answers both the same, so this says both. A sign-in
+ * confirms the address only in the browser that opened the link, so it says where.
  */
 export const SIGN_IN_REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you, then sign in."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it on another device? Sign in there first."
 
 /** What each mode asks of the fields before it sends. */
 export function signInChecks(mode: SignInMode, values: SignInValues): FieldErrors {

@@ -133,6 +133,14 @@ describe('Confirm your email', () => {
     expect(reloads).toBe(0)
   })
 
+  it('says that the link lets the account in from this browser, and that on another device a password sign-in there comes first', async () => {
+    await mount('waiting@example.com')
+
+    expect(byTestId('confirm-email-lead')?.textContent).toBe(
+      "We sent a link to waiting@example.com. Open it in this browser and you're in. Opening it on another device? Sign in there with your password, then come back to this tab."
+    )
+  })
+
   it('sends the link again through the signed-in resend, and says it went', async () => {
     answers['/api/auth/resend-verification'] = () => json({ ok: true })
     await mount()

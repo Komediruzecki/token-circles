@@ -37,8 +37,10 @@ const PORTAL_FAILED = "Couldn't open the billing page. Try again in a moment."
  * from cancelling.
  *
  * It lets the account in once the address is confirmed. A link this browser opened before signing
- * in is finished here (finishEmailLink), and coming back to the tab asks the Worker again, for a
- * link opened in another tab or on another device. Either way the app reloads, signed in.
+ * in is finished here (finishEmailLink). A link opened in another tab of this browser confirms at
+ * once, with this session. A link opened on another device confirms only once the account signs
+ * in there with its password: the link leaves its marker in that browser alone. Coming back to the
+ * tab asks the Worker again, and once the address is confirmed the app reloads, signed in.
  */
 export default function ConfirmEmailScreen(props: {
   email: string
@@ -129,9 +131,10 @@ export default function ConfirmEmailScreen(props: {
           </div>
           <h1 class={styles.title}>Confirm your email</h1>
         </div>
-        <p class={stepStyles.lead}>
+        <p class={stepStyles.lead} data-test-id="confirm-email-lead">
           We sent a link to <strong data-test-id="confirm-email-address">{props.email}</strong>.
-          Open it to start using Token Circles.
+          Open it in this browser and you're in. Opening it on another device? Sign in there with
+          your password, then come back to this tab.
         </p>
         <Show when={said()}>
           <p class={stepStyles.lead} role="status" data-test-id="confirm-email-said">
