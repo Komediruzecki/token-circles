@@ -25,6 +25,19 @@ export async function sha256Hex(input: string): Promise<string> {
 export const VERIFY_TOKEN_TTL_HOURS = 24;
 
 /**
+ * Confirm links mailed to one address in an hour by the ways of sending one again: Send the link
+ * again while signed out, signing up again with the address, and the Confirm your email screen.
+ * Each way keeps its own limit on requests; this one budget is shared by the three, so taking
+ * turns between them mails no more links than one of them allows alone. The welcome's link is not
+ * counted: it goes once, with the account.
+ */
+export const CONFIRM_LINKS_PER_HOUR = 3;
+
+/** The rate_limits bucket that counts the confirm links mailed to `email`. */
+export const confirmLinksMailed = (email: string): string =>
+  `confirm-links-mailed:${email.toLowerCase()}`;
+
+/**
  * What opening the link does: 'confirm' marks the account's current address verified, 'change'
  * moves the account to the address the link was mailed to (migration 0031).
  */

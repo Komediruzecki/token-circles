@@ -38,6 +38,8 @@ import {
   type EmailLink,
 } from '../email-link';
 import {
+  CONFIRM_LINKS_PER_HOUR,
+  confirmLinksMailed,
   createEmailVerification,
   firstConfirmLink,
   randomToken,
@@ -51,7 +53,7 @@ import {
   renderPasswordReset,
   renderWelcome,
 } from '../emailTemplates';
-import { clearRateLimit, enforce, clientIp } from '../ratelimit';
+import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
@@ -677,7 +679,12 @@ async function mailConfirmLinkIfWaiting(
   await mailFreshConfirmLink(env, user.id, email, base, apiOrigin);
 }
 
-/** Mint a fresh confirm link for account `userId`, which retires the ones it had, and mail it. */
+/**
+ * Mint a fresh confirm link for account `userId`, which retires the ones it had, and mail it. For
+ * the ways of asking that answer before they look the address up: once the address has had its
+ * confirm links for the hour (CONFIRM_LINKS_PER_HOUR), nothing is minted or mailed, and the link
+ * it has keeps working. Their answer has gone, the same either way.
+ */
 async function mailFreshConfirmLink(
   env: Env,
   userId: number,
@@ -685,6 +692,8 @@ async function mailFreshConfirmLink(
   base: string,
   apiOrigin: string
 ): Promise<void> {
+  const budget = await rateLimit(env, confirmLinksMailed(email), CONFIRM_LINKS_PER_HOUR, 3600);
+  if (!budget.ok) return;
   const token = await createEmailVerification(env.DB, userId, email);
   const mail = renderEmailVerification({
     link: verifyLink(apiOrigin, token, base),
@@ -741,6 +750,10 @@ authRoutes.post('/api/auth/resend-verification', requireAuthEvenUnconfirmed, asy
   // rotates addresses, and this route sends real mail to a real inbox.
   const emailRl = await enforce(c, `resend-verification:${user.email}`, 3, 3600);
   if (emailRl) return emailRl;
+  // The links this address has had in the hour, by every way of asking (mailFreshConfirmLink).
+  // Only this account's own session reads the answer, so the limit can be said.
+  const mailedRl = await enforce(c, confirmLinksMailed(user.email), CONFIRM_LINKS_PER_HOUR, 3600);
+  if (mailedRl) return mailedRl;
 
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
   const token = await createEmailVerification(c.env.DB, userId, user.email, 'confirm', boundTo(c));
