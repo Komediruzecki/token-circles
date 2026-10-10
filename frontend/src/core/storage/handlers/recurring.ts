@@ -152,8 +152,24 @@ export async function recurringUpcoming(): Promise<Response> {
   )
 }
 
-export async function recurringPopulate(params: Record<string, string>): Promise<Response> {
+/**
+ * Moves rule `id`'s next date from `from` on to `to`, if it is still `from`: the claim on the period
+ * `from` dates. It rereads the rule in the same readwrite transaction that moves it, and IndexedDB
+ * runs two of those on one store one after the other, so of two populates of one period (two
+ * presses, two tabs) the second finds the date moved and claims nothing. False when it claimed
+ * nothing.
+ */
+async function claimPeriod(id: number, from: unknown, to: string | null): Promise<boolean> {
   const db = await getDB()
+  const tx = db.transaction('recurring', 'readwrite')
+  const rule = (await tx.store.get(id)) as Rule | undefined
+  const claimed = rule !== undefined && (rule.next_date ?? null) === (from ?? null)
+  if (claimed) await tx.store.put({ ...rule, next_date: to })
+  await tx.done
+  return claimed
+}
+
+export async function recurringPopulate(params: Record<string, string>): Promise<Response> {
   const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
   const invariantError = transactionInvariantError(
@@ -187,27 +203,37 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   // for the same rule (was hard-coded 'EUR' here vs the schema-default 'USD' on the worker,
   // audit M-02) and keeps balances/reports in one currency via computeBalanceDeltas.
   const baseCurrency = getLocalCurrency()
-  const transactionId = await adapter.createTransaction({
-    profile_id: pid,
-    description: item.description,
-    amount: item.amount,
-    type: item.type,
-    category_id: item.category_id,
-    date,
-    currency: baseCurrency,
-    amount_local: item.amount,
-    reconciled: 0,
-    notes: item.notes || '',
-    account_id: item.account_id ?? null,
-    transfer_account_id: item.transfer_account_id ?? null,
-  } as unknown as Parameters<typeof adapter.createTransaction>[0])
 
-  // Advance next_date past the populated period — every frequency must move forward so the
-  // guard above can engage on the next call. nextOccurrence works on the date string, the same
-  // step as the Worker's: setMonth() overflowed past a shorter month, so a rule on the 31st went
-  // from January to 3 March.
-  item.next_date = nextDate
-  await db.put('recurring', item)
+  // Claim the period before writing anything: next_date moves past it, and every frequency must
+  // move it forward, or the guard above never engages and each call debits the account again.
+  // nextOccurrence works on the date string, the same step as the Worker's: setMonth() overflowed
+  // past a shorter month, so a rule on the 31st went from January to 3 March. A populate that
+  // finds the period claimed already is refused as the Worker refuses one that lost the race.
+  if (!(await claimPeriod(item.id as number, item.next_date, nextDate))) {
+    return json({ error: M.populated }, 409)
+  }
+
+  let transactionId: number
+  try {
+    transactionId = await adapter.createTransaction({
+      profile_id: pid,
+      description: item.description,
+      amount: item.amount,
+      type: item.type,
+      category_id: item.category_id,
+      date,
+      currency: baseCurrency,
+      amount_local: item.amount,
+      reconciled: 0,
+      notes: item.notes || '',
+      account_id: item.account_id ?? null,
+      transfer_account_id: item.transfer_account_id ?? null,
+    } as unknown as Parameters<typeof adapter.createTransaction>[0])
+  } catch (error) {
+    // Nothing was added for the period, so it is given back for the next press.
+    await claimPeriod(item.id as number, nextDate, (item.next_date as string | null) ?? null)
+    throw error
+  }
 
   // What the Worker answers: the transaction it added, and the date the rule moved on to.
   return json({ ok: true, transactionId, next_date: nextDate })
