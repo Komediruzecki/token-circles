@@ -1,10 +1,20 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { normalizeTagRuleCriteria } from '../../../shared/tagRules';
+import {
+  checkTagCreate,
+  checkTagEdit,
+  clashingTagName,
+  defaultTagColor,
+  readTagIds,
+  renamesTag,
+  TAG_MESSAGES,
+  tagNameTaken,
+} from '../../../shared/tagSchema';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
-import { HttpError } from '../http';
+import { accept, HttpError, refuse } from '../http';
 import * as db from '../db';
 import {
   explainTagRule,
@@ -15,22 +25,17 @@ import {
 
 // Port of backend/routes/tags.js (tags CRUD + transaction tagging), plus the tag-rule engine
 // (saved filters that attach a tag to matching transactions) and per-tag analytics.
-const TAG_COLORS = [
-  '#3b82f6',
-  '#ef4444',
-  '#10b981',
-  '#f59e0b',
-  '#8b5cf6',
-  '#ec4899',
-  '#06b6d4',
-  '#f97316',
-  '#84cc16',
-  '#6366f1',
-  '#14b8a6',
-  '#a855f7',
-];
-
+// A tag's name and colour are checked by shared/tagSchema.ts, as local-first checks them.
 export const tagsRoutes = new Hono<AppEnv>();
+
+/** The profile's tags: what a new name must not repeat, and how many there are. */
+function ownTags(c: Context<AppEnv>, pid: number) {
+  return db.all<{ id: number; name: string; color: string }>(
+    c.env.DB,
+    'SELECT id, name, color FROM tags WHERE profile_id = ?',
+    pid
+  );
+}
 
 tagsRoutes.get('/api/tags', requireAuth, async (c) => {
   const pid = await getProfileId(c);
@@ -46,27 +51,13 @@ tagsRoutes.get('/api/tags', requireAuth, async (c) => {
 
 tagsRoutes.post('/api/tags', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const name = typeof b.name === 'string' ? b.name.trim() : '';
-  if (!name) throw new HttpError(400, 'Tag name is required');
-  const dupe = await db.first(
-    c.env.DB,
-    'SELECT id FROM tags WHERE name = ? AND profile_id = ?',
-    name,
-    pid
-  );
-  if (dupe) throw new HttpError(400, 'Tag already exists');
-  let color = b.color;
-  if (!color) {
-    const row = await db.first<{ c: number }>(
-      c.env.DB,
-      'SELECT COUNT(*) AS c FROM tags WHERE profile_id = ?',
-      pid
-    );
-    color = TAG_COLORS[(row?.c ?? 0) % TAG_COLORS.length];
-  }
+  const own = await ownTags(c, pid);
+  // Sent without a colour, a tag takes the one the Tags page offers the profile's next tag.
+  const { name, color } = accept(checkTagCreate(await c.req.json(), defaultTagColor(own.length)));
+  const taken = clashingTagName(own, name);
+  if (taken !== null) throw refuse(tagNameTaken(taken));
   const res = await db.insert(c.env.DB, 'tags', { name, color, profile_id: pid });
-  return c.json({ id: res.meta.last_row_id, name, color });
+  return c.json({ id: res.meta.last_row_id, name, color }, 201);
 });
 
 // ── Tag rules & analytics ────────────────────────────────────────────────────
@@ -482,27 +473,20 @@ tagsRoutes.get('/api/tags/:id/summary', requireAuth, async (c) => {
 
 tagsRoutes.put('/api/tags/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  const name = typeof b.name === 'string' ? b.name.trim() : '';
-  if (!name) throw new HttpError(400, 'Tag name is required');
-  // tags(name, profile_id) is UNIQUE: answer what the create route answers, before the write.
-  const dupe = await db.first(
-    c.env.DB,
-    'SELECT id FROM tags WHERE name = ? AND profile_id = ? AND id != ?',
-    name,
-    pid,
-    Number(c.req.param('id'))
-  );
-  if (dupe) throw new HttpError(400, 'Tag already exists');
-  const res = await db.update(
-    c.env.DB,
-    'tags',
-    { name, color: b.color || '#6b7280' },
-    'id = ? AND profile_id = ?',
-    c.req.param('id'),
-    pid
-  );
-  if (!res.meta.changes) throw new HttpError(404, 'Not found');
+  const id = Number(c.req.param('id'));
+  const own = await ownTags(c, pid);
+  const stored = own.find((tag) => tag.id === id);
+  if (!stored) throw new HttpError(404, TAG_MESSAGES.notFound);
+  // Only what the edit changes is checked and written: a colour left out stays as it is.
+  const edit = accept(checkTagEdit(await c.req.json(), stored));
+  if (edit.name !== undefined) {
+    // tags(name, profile_id) is UNIQUE: answer what the create route answers, before the write.
+    const taken = clashingTagName(own, edit.name, id, !renamesTag(stored.name, edit.name));
+    if (taken !== null) throw refuse(tagNameTaken(taken));
+  }
+  if (Object.keys(edit).length > 0) {
+    await db.update(c.env.DB, 'tags', edit, 'id = ? AND profile_id = ?', id, pid);
+  }
   return c.json({ ok: true });
 });
 
@@ -525,8 +509,8 @@ tagsRoutes.delete('/api/tags/:id', requireAuth, async (c) => {
 // Replace the set of tags on a transaction (POST and PUT are aliases).
 async function replaceTransactionTags(c: Context<AppEnv>): Promise<Response> {
   const pid = await getProfileId(c);
-  const b = (await c.req.json()) as Record<string, any>;
-  if (!Array.isArray(b.tagIds)) throw new HttpError(400, 'tagIds must be an array');
+  const b = (await c.req.json()) as Record<string, unknown>;
+  const tagIds = accept(readTagIds(b.tagIds));
   const txId = c.req.param('id');
   const tx = await db.first(
     c.env.DB,
@@ -539,9 +523,7 @@ async function replaceTransactionTags(c: Context<AppEnv>): Promise<Response> {
   // and the SELECT de-dupes so a repeated id can't violate the PK.
   // Cap (and de-dupe) so the ownership SELECT's IN-list stays under D1's ~100 bound-variable
   // limit — a transaction realistically needs only a handful of tags.
-  const ids = [
-    ...new Set(b.tagIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n))),
-  ].slice(0, 50);
+  const ids = tagIds.slice(0, 50);
   let owned: Array<{ id: number }> = [];
   if (ids.length) {
     const ph = ids.map(() => '?').join(',');
@@ -551,9 +533,8 @@ async function replaceTransactionTags(c: Context<AppEnv>): Promise<Response> {
       pid,
       ...ids
     );
-    if (owned.length !== ids.length) {
-      throw new HttpError(403, 'One or more tags do not belong to this profile');
-    }
+    // Another profile's tag is refused at the field, as local-first refuses it.
+    if (owned.length !== ids.length) throw refuse({ tagIds: TAG_MESSAGES.tagIds });
   }
   const stmts = [
     c.env.DB.prepare('DELETE FROM transaction_tags WHERE transaction_id = ?').bind(txId),
@@ -607,12 +588,13 @@ tagsRoutes.get('/api/transactions/by-tag/:tagId', requireAuth, async (c) => {
   const endDate = c.req.query('endDate');
   const categoryIds = c.req.query('category_ids');
   const type = c.req.query('type');
+  // The date part only, as the tag summaries compare it (dateWindow) and local-first does.
   if (startDate) {
-    sql += ' AND t.date >= ?';
+    sql += ' AND substr(t.date, 1, 10) >= ?';
     params.push(startDate);
   }
   if (endDate) {
-    sql += ' AND t.date <= ?';
+    sql += ' AND substr(t.date, 1, 10) <= ?';
     params.push(endDate);
   }
   if (categoryIds) {
@@ -631,10 +613,11 @@ tagsRoutes.get('/api/transactions/by-tag/:tagId', requireAuth, async (c) => {
     params.push(type);
   }
   sql += ' ORDER BY t.date DESC, t.id DESC';
-  const limit = c.req.query('limit');
-  const offset = c.req.query('offset');
-  if (limit && !isNaN(parseInt(limit))) sql += ` LIMIT ${Math.min(parseInt(limit), 1000)}`;
-  if (offset && !isNaN(parseInt(offset))) sql += ` OFFSET ${parseInt(offset)}`;
+  const limit = parseInt(c.req.query('limit') ?? '');
+  const offset = parseInt(c.req.query('offset') ?? '');
+  // SQLite takes an OFFSET only after a LIMIT: an offset alone pages through every row (-1).
+  if (!isNaN(limit) || !isNaN(offset)) sql += ` LIMIT ${isNaN(limit) ? -1 : Math.min(limit, 1000)}`;
+  if (!isNaN(offset)) sql += ` OFFSET ${offset}`;
   const rows = await db.all(c.env.DB, sql, ...params);
   return c.json({ rows, total: rows.length });
 });

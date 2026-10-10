@@ -14,6 +14,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TAG_MESSAGES } from '../../../../shared/tagSchema'
 import { TRANSACTION_MESSAGES as M } from '../../../../shared/transactionSchema'
 import { setCurrentProfile, setPage, setProfiles } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
@@ -417,6 +418,22 @@ describe('a save', () => {
     })
     expect(successToasts()).toEqual(['Added "Market run" to your transactions.'])
     expect(failureToasts()).toEqual([])
+  })
+
+  it('says why a tag typed into the form could not be created, in the tag rules words', async () => {
+    await mountPage()
+    await openAddForm()
+    byTestId('tx-advanced-toggle').click()
+    const box = byTestId('tx-tag-new-input')
+    box.value = 'Weekend trips to the seaside and the mountains in summer'
+
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    await vi.waitFor(() => {
+      expect(failureToasts()).toEqual([TAG_MESSAGES.nameLength])
+    })
+    expect(box.value).toBe('Weekend trips to the seaside and the mountains in summer')
+    expect(((await (await getDB()).getAll('tags')) as Row[]).map((t) => t.name)).toEqual(['Trip'])
   })
 
   it('adds a transfer between two accounts, and moves both balances', async () => {

@@ -6,19 +6,32 @@
  * `matchBrand`, so a subscription arrives looking the way it will in the list.
  *
  * Prices are held as raw text while editing (so "0", an empty field, and
- * trailing decimals all type cleanly), then validated when the checkmark or
+ * trailing decimals all type cleanly), then checked when the checkmark or the
  * batch-add button commits them.
+ *
+ * The shelf is a form-kit form (components/form): each chosen subscription's price is a field,
+ * named by the subscription, and checked by the rules both runtimes run for a bill
+ * (shared/billSchema.ts). A price they refuse is said under its token, in their words, and focus
+ * goes to it; one the runtime refuses is marked there too, and the rest of the batch is added. A
+ * refusal no price can fix (another profile's category, being offline) is said in the notice,
+ * naming the subscription. Price mistakes used to be a toast, "Fix the highlighted subscription
+ * prices", and a refusal from the runtime a toast too, after the shelf had closed.
  */
-import { createMemo, createSignal, For, Show } from 'solid-js'
+import { createMemo, createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js'
+import { checkBillCreate } from '../../../shared/billSchema'
 import { apiPost, getLocalCurrency, showToast } from '../core/api'
+import { ApiError } from '../core/apiError'
 import { paletteColor } from '../core/brandPalette'
 import { currencySymbol } from '../core/currencies'
 import { parseDecimalInput } from '../core/decimalInput'
 import { matchBrand } from '../features/subscriptionBrands'
 import { CATALOG_ITEMS, SUBSCRIPTION_CATALOG } from '../features/subscriptionCatalog'
 import { localToday } from '../utils/period'
+import { createForm, FormNotice, SubmitButton } from './form'
 import { refusedMessages } from './refusedSubscriptions'
 import styles from './SubscriptionCatalogModal.module.css'
+import type { JSX } from 'solid-js'
+import type { FieldErrors } from '../../../shared/refusal'
 import type { CatalogItem } from '../features/subscriptionCatalog'
 import type { RefusedSubscription } from './refusedSubscriptions'
 
@@ -40,73 +53,160 @@ const priceOf = (text: string): number => {
   return parseDecimalInput(text) ?? 0
 }
 
+/**
+ * The amount a token's price text stands for: the catalog price when it is blank, a number when it
+ * reads as one, and the text itself when it does not, so the bill rules say what is wrong with it.
+ */
+function amountOf(item: CatalogItem, text: string | undefined): number | string {
+  const raw = (text ?? '').trim()
+  if (raw === '') return item.price
+  return parseDecimalInput(raw) ?? raw
+}
+
+/** What the bill rules say about a token's price, or undefined when it can be added. */
+function priceProblem(item: CatalogItem, text: string | undefined): string | undefined {
+  const checked = checkBillCreate({
+    name: item.name,
+    amount: amountOf(item, text),
+    dueDate: todayIso(),
+    frequency: 'monthly',
+    type: 'subscription',
+  })
+  return checked.ok ? undefined : checked.fields.amount
+}
+
 export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
   const [search, setSearch] = createSignal('')
-  // `selected` holds committed prices; `draftPrices` preserves exactly what is
-  // in each input until the user applies it with the checkmark.
+  // `selected` holds each chosen subscription's committed price, in the order they were chosen;
+  // the form holds exactly what is in each price input until the checkmark (or Add) applies it.
   const [selected, setSelected] = createSignal<Record<string, string>>({})
-  const [draftPrices, setDraftPrices] = createSignal<Record<string, string>>({})
-  const [priceErrors, setPriceErrors] = createSignal<Record<string, string>>({})
-  const [submitting, setSubmitting] = createSignal(false)
+
+  const itemNamed = (name: string) => CATALOG_ITEMS.find((candidate) => candidate.name === name)
 
   const isSelected = (name: string) => Object.prototype.hasOwnProperty.call(selected(), name)
-  const priceText = (name: string) => draftPrices()[name] ?? selected()[name] ?? ''
-  const priceError = (name: string) => priceErrors()[name]
-  const clearRecordValue = (
-    setter: (update: (prev: Record<string, string>) => Record<string, string>) => void,
-    name: string
-  ) => {
-    setter((prev) => {
+  const unselect = (name: string) => {
+    setSelected((prev) => {
       const next = { ...prev }
       delete next[name]
       return next
     })
   }
 
+  const form = createForm<Record<string, string>, number>({
+    initial: {},
+    check: (values) => {
+      const fields: FieldErrors = {}
+      for (const name of Object.keys(selected())) {
+        const item = itemNamed(name)
+        const problem = item ? priceProblem(item, values[name]) : undefined
+        if (problem) fields[name] = problem
+      }
+      return fields
+    },
+    send: async (values) => {
+      const pending: Array<{ item: CatalogItem; amount: number }> = []
+      for (const name of Object.keys(selected())) {
+        const item = itemNamed(name)
+        const amount = item ? amountOf(item, values[name]) : null
+        if (item && typeof amount === 'number') pending.push({ item, amount })
+      }
+      // Clicking Add is also an explicit commit, so a valid draft is never ignored merely because
+      // the user skipped the per-row checkmark.
+      for (const { item, amount } of pending) commit(item, String(amount))
+
+      const due = todayIso()
+      let ok = 0
+      const refused: Array<RefusedSubscription & { fields: FieldErrors }> = []
+      for (const { item, amount } of pending) {
+        try {
+          await apiPost('/api/bills', {
+            name: item.name,
+            amount,
+            dueDate: due,
+            category_id: resolveCategoryId(item),
+            frequency: 'monthly',
+            type: 'subscription',
+          })
+          ok += 1
+          unselect(item.name)
+        } catch (err) {
+          console.error('Failed to add subscription', item.name, err)
+          refused.push({
+            name: item.name,
+            error: err,
+            fields: err instanceof ApiError ? err.fields : {},
+          })
+        }
+      }
+      if (ok > 0) {
+        showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
+      }
+      if (refused.length === 0) return ok
+
+      // A price the runtime refused is marked under its token; anything else goes in the notice,
+      // under a name no field has, naming the subscriptions it is about.
+      const marks: FieldErrors = {}
+      const elsewhere: RefusedSubscription[] = []
+      for (const { name, error, fields } of refused) {
+        if (fields.amount) marks[name] = fields.amount
+        else elsewhere.push({ name, error })
+      }
+      refusedMessages(elsewhere).forEach((message, index) => {
+        marks[`refused:${String(index)}`] = message
+      })
+      throw new ApiError(400, Object.values(marks).join(' '), marks)
+    },
+    saved: () => {
+      setSelected({})
+      form.reset({})
+      props.onClose()
+    },
+    failure: "Couldn't add the subscriptions. Try again.",
+  })
+
+  /** Make `price` the committed price of `item`, and what its input shows. */
+  const commit = (item: CatalogItem, price: string) => {
+    setSelected((prev) => ({ ...prev, [item.name]: price }))
+    form.set(item.name, price)
+  }
+
+  const priceText = (name: string) => form.values[name] ?? selected()[name] ?? ''
+
   const toggle = (item: CatalogItem) => {
     if (isSelected(item.name)) {
-      clearRecordValue(setSelected, item.name)
-      clearRecordValue(setDraftPrices, item.name)
-      clearRecordValue(setPriceErrors, item.name)
+      unselect(item.name)
+      form.mark(item.name, undefined)
       return
     }
-    const initialPrice = String(item.price)
-    setSelected((prev) => ({ ...prev, [item.name]: initialPrice }))
-    setDraftPrices((prev) => ({ ...prev, [item.name]: initialPrice }))
-    clearRecordValue(setPriceErrors, item.name)
+    commit(item, String(item.price))
   }
   const setPriceText = (name: string, raw: string) => {
-    // Preserve the exact text so Solid never rewrites the input under the caret.
-    // Validation and normalization happen only when the value is applied/submitted.
-    setDraftPrices((prev) => ({ ...prev, [name]: raw }))
-    clearRecordValue(setPriceErrors, name)
+    // Preserve the exact text so Solid never rewrites the input under the caret. Checking and
+    // normalizing happen only when the value is applied or submitted.
+    form.set(name, raw)
   }
   const pickPlan = (item: CatalogItem, price: number) => {
-    const text = String(price)
-    setSelected((prev) => ({ ...prev, [item.name]: text }))
-    setDraftPrices((prev) => ({ ...prev, [item.name]: text }))
-    clearRecordValue(setPriceErrors, item.name)
-  }
-  const validatedPrice = (item: CatalogItem): number | null => {
-    const raw = priceText(item.name).trim()
-    const parsed = raw === '' ? item.price : parseDecimalInput(raw)
-    return parsed !== null && parsed > 0 ? parsed : null
+    commit(item, String(price))
+    form.mark(item.name, undefined)
   }
   const applyPrice = (item: CatalogItem): boolean => {
     if (!isSelected(item.name)) return false
-    const parsed = validatedPrice(item)
-    if (parsed === null) {
-      setPriceErrors((prev) => ({
-        ...prev,
-        [item.name]: 'Enter a positive price using a comma or dot for cents',
-      }))
-      return false
-    }
-    const normalized = String(parsed)
-    setSelected((prev) => ({ ...prev, [item.name]: normalized }))
-    setDraftPrices((prev) => ({ ...prev, [item.name]: normalized }))
-    clearRecordValue(setPriceErrors, item.name)
+    const problem = priceProblem(item, priceText(item.name))
+    form.mark(item.name, problem)
+    if (problem) return false
+    commit(item, String(amountOf(item, priceText(item.name))))
     return true
+  }
+
+  /**
+   * A chosen token's price input, registered with the form while it is on the page, as a `Field`
+   * registers its control: the form moves focus to it and keeps its words out of the notice. A
+   * `Field` would put its own label and message inside the token's row.
+   */
+  const Registered = (p: { name: string; id: string; children: JSX.Element }) => {
+    // A token's name and input are fixed while it is chosen, so it registers once.
+    onCleanup(form.register(p.name, p.id))
+    return p.children
   }
 
   const groups = createMemo(() => {
@@ -140,80 +240,15 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
     return undefined
   }
 
-  const addAll = async () => {
-    if (submitting() || chosen().length === 0) return
-
-    const pending: Array<{ item: CatalogItem; amount: number }> = []
-    const errors: Record<string, string> = {}
-    for (const name of chosen()) {
-      const item = CATALOG_ITEMS.find((candidate) => candidate.name === name)
-      if (!item) continue
-      const amount = validatedPrice(item)
-      if (amount === null) {
-        errors[name] = 'Enter a positive price using a comma or dot for cents'
-      } else {
-        pending.push({ item, amount })
-      }
-    }
-    if (Object.keys(errors).length > 0) {
-      setPriceErrors(errors)
-      showToast('Fix the highlighted subscription prices', 'error')
-      return
-    }
-
-    // Clicking Add is also an explicit commit, so a valid draft is never ignored
-    // merely because the user skipped the per-row checkmark.
-    setSelected((prev) => {
-      const next = { ...prev }
-      for (const { item, amount } of pending) next[item.name] = String(amount)
-      return next
-    })
-    setDraftPrices((prev) => {
-      const next = { ...prev }
-      for (const { item, amount } of pending) next[item.name] = String(amount)
-      return next
-    })
-
-    setSubmitting(true)
-    const due = todayIso()
-    let ok = 0
-    const refused: RefusedSubscription[] = []
-    try {
-      for (const { item, amount } of pending) {
-        try {
-          await apiPost('/api/bills', {
-            name: item.name,
-            amount,
-            dueDate: due,
-            category_id: resolveCategoryId(item),
-            frequency: 'monthly',
-            type: 'subscription',
-          })
-          ok += 1
-        } catch (err) {
-          console.error('Failed to add subscription', item.name, err)
-          refused.push({ name: item.name, error: err })
-        }
-      }
-      if (ok > 0) {
-        showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
-      }
-      for (const message of refusedMessages(refused)) showToast(message, 'error')
-      setSelected({})
-      setDraftPrices({})
-      setPriceErrors({})
-      props.onClose()
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
   const token = (item: CatalogItem) => {
     const brand = matchBrand(item.name)
     const known = brand.displayName !== ''
     const idx = CATALOG_ITEMS.findIndex((i) => i.name === item.name)
     const tint = known ? brand.color : paletteColor(idx < 0 ? 0 : idx)
     const priceDirty = () => isSelected(item.name) && priceText(item.name) !== selected()[item.name]
+    const priceId = `catalog-price-${createUniqueId()}`
+    const errorId = `${priceId}-error`
+    const problem = () => (isSelected(item.name) ? form.error(item.name) : undefined)
     // Tier label follows the committed plan; a custom draft becomes active only
     // after the checkmark (or Add) validates it.
     const activeTier = () => {
@@ -261,36 +296,43 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
             when={isSelected(item.name)}
             fallback={<span class={styles.price}>{money(item.price)}</span>}
           >
-            <span
-              class={styles.priceEdit}
-              classList={{ [styles.priceEditError]: Boolean(priceError(item.name)) }}
-              onClick={(e) => {
-                e.stopPropagation()
-              }}
-              onKeyDown={(e) => {
-                e.stopPropagation()
-              }}
-            >
-              <span class={styles.cur}>{currencySymbol(getLocalCurrency())}</span>
-              <input
-                class={styles.priceInput}
-                type="text"
-                inputmode="decimal"
-                value={priceText(item.name)}
+            <Registered name={item.name} id={priceId}>
+              <span
+                class={styles.priceEdit}
+                classList={{ [styles.priceEditError]: Boolean(problem()) }}
                 onClick={(e) => {
                   e.stopPropagation()
                 }}
                 onKeyDown={(e) => {
                   e.stopPropagation()
-                  if (e.key === 'Enter' && applyPrice(item)) e.currentTarget.blur()
                 }}
-                onInput={(e) => {
-                  setPriceText(item.name, e.currentTarget.value)
-                }}
-                aria-label={`${item.name} price`}
-                aria-invalid={Boolean(priceError(item.name))}
-              />
-            </span>
+              >
+                <span class={styles.cur}>{currencySymbol(getLocalCurrency())}</span>
+                <input
+                  id={priceId}
+                  class={styles.priceInput}
+                  type="text"
+                  inputmode="decimal"
+                  value={priceText(item.name)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                  }}
+                  onKeyDown={(e) => {
+                    e.stopPropagation()
+                    if (e.key !== 'Enter') return
+                    // Enter applies this price; it does not add the batch.
+                    e.preventDefault()
+                    if (applyPrice(item)) e.currentTarget.blur()
+                  }}
+                  onInput={(e) => {
+                    setPriceText(item.name, e.currentTarget.value)
+                  }}
+                  aria-label={`${item.name} price`}
+                  aria-invalid={problem() ? 'true' : undefined}
+                  aria-describedby={problem() ? errorId : undefined}
+                />
+              </span>
+            </Registered>
           </Show>
           <button
             type="button"
@@ -303,8 +345,8 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
             aria-label={isSelected(item.name) ? `Apply ${item.name} price` : `Add ${item.name}`}
             onClick={(e) => {
               e.stopPropagation()
-              if (isSelected(item.name)) applyPrice(item)
-              else toggle(item)
+              if (!isSelected(item.name)) toggle(item)
+              else if (!applyPrice(item)) document.getElementById(priceId)?.focus()
             }}
           >
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -312,10 +354,10 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
             </svg>
           </button>
         </div>
-        <Show when={priceError(item.name)}>
-          <span class={styles.priceError} role="alert">
-            {priceError(item.name)}
-          </span>
+        <Show when={problem()}>
+          <p id={errorId} class={styles.priceError}>
+            {problem()}
+          </p>
         </Show>
 
         <Show when={item.plans && item.plans.length > 0}>
@@ -375,50 +417,60 @@ export function SubscriptionCatalogModal(props: SubscriptionCatalogModalProps) {
           </button>
         </div>
 
-        <div class={styles.searchRow}>
-          <input
-            class={styles.search}
-            type="text"
-            placeholder="Search services…"
-            value={search()}
-            onInput={(e) => setSearch(e.currentTarget.value)}
-            aria-label="Search the catalog"
-          />
-        </div>
+        <form class={styles.form} {...form.attrs} data-test-id="catalog-form">
+          <div class={styles.searchRow}>
+            <input
+              class={styles.search}
+              type="text"
+              placeholder="Search services…"
+              value={search()}
+              onInput={(e) => setSearch(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                // Enter searches; it does not add the batch.
+                if (e.key === 'Enter') e.preventDefault()
+              }}
+              aria-label="Search the catalog"
+            />
+          </div>
 
-        <div class={styles.body}>
-          <For each={groups()}>
-            {(g) => (
-              <section class={styles.group}>
-                <h3 class={styles.groupLabel}>{g.label}</h3>
-                <div class={styles.tokens}>
-                  <For each={g.items}>{(item) => token(item)}</For>
-                </div>
-              </section>
-            )}
-          </For>
-          <Show when={groups().length === 0}>
-            <p class={styles.empty}>
-              No services match “{search()}”. You can still add it from the form.
-            </p>
-          </Show>
-        </div>
-
-        <div class={styles.footer}>
-          <span class={styles.tot}>
-            <Show when={chosen().length > 0} fallback="Nothing selected yet">
-              {chosen().length} selected · <b>{money(total())}</b>/mo
+          <div class={styles.body}>
+            <For each={groups()}>
+              {(g) => (
+                <section class={styles.group}>
+                  <h3 class={styles.groupLabel}>{g.label}</h3>
+                  <div class={styles.tokens}>
+                    <For each={g.items}>{(item) => token(item)}</For>
+                  </div>
+                </section>
+              )}
+            </For>
+            <Show when={groups().length === 0}>
+              <p class={styles.empty}>
+                No services match “{search()}”. You can still add it from the form.
+              </p>
             </Show>
-          </span>
-          <button
-            class={styles.add}
-            disabled={chosen().length === 0 || submitting()}
-            onClick={() => void addAll()}
-            type="button"
-          >
-            {submitting() ? 'Adding…' : `Add ${chosen().length || ''}`.trim()}
-          </button>
-        </div>
+          </div>
+
+          <div class={styles.noticeRow}>
+            <FormNotice form={form} testId="catalog-notice" />
+          </div>
+
+          <div class={styles.footer}>
+            <span class={styles.tot}>
+              <Show when={chosen().length > 0} fallback="Nothing selected yet">
+                {chosen().length} selected · <b>{money(total())}</b>/mo
+              </Show>
+            </span>
+            <SubmitButton
+              class={styles.add}
+              busy={form.submitting()}
+              busyLabel="Adding…"
+              unchanged={chosen().length === 0}
+            >
+              {`Add ${chosen().length || ''}`.trim()}
+            </SubmitButton>
+          </div>
+        </form>
       </div>
     </div>
   )

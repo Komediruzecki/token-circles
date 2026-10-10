@@ -9,8 +9,8 @@
  * the tour menu. Auto-opens via `maybeOfferOnboarding()` for pristine
  * profiles only.
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
-import { api, apiGet, apiPost, getLocalCurrency, toast } from '../../core/api'
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js'
+import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
   bumpProfileVersion,
   getProfiles,
@@ -34,10 +34,12 @@ import { ImportDataEntry } from '../../features/import/ImportDataEntry'
 import { createImportFlow } from '../../features/import/importFlow'
 import { ImportMappingStep } from '../../features/import/ImportMappingStep'
 import { ImportPreviewStep } from '../../features/import/ImportPreviewStep'
+import { Field, FormNotice, SubmitButton } from '../form'
 import { LogoMark } from '../Logo'
 import { OrbitSpinner } from '../OrbitSpinner'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 import styles from './Onboarding.module.css'
+import { createFirstAccountForm, createSpaceForm } from './onboardingForms'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 
@@ -188,17 +190,45 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const showingSummary = () => importSummary() !== null && !importingMore()
 
   // ---- step: your space ----
-  const [spaceName, setSpaceName] = createSignal('')
-  const [baseCurrency, setBaseCurrency] = createSignal(getLocalCurrency())
-  const [savingSpace, setSavingSpace] = createSignal(false)
+  // What it checks and says is onboardingForms.ts; a refused name is said under the name.
+  const spaceForm = createSpaceForm({
+    current: () => state.currentProfile,
+    save: async ({ name, currency }) => {
+      localStorage.setItem('localCurrency', currency)
+      const current = state.currentProfile
+      if (current) {
+        if (current.name !== name) {
+          await api.updateProfile(current.id, name)
+          setCurrentProfile({ ...current, name })
+          setProfiles(getProfiles().map((p) => (p.id === current.id ? { ...p, name } : p)))
+          bumpProfileVersion()
+        }
+        return
+      }
+      // Truly empty workspace (no profile at all): create and select one, through App's one
+      // way of choosing profiles, as a profile created from the sidebar is. This used to write
+      // the two storage keys itself and leave App's copy of the selection on the old one, which
+      // the next close of the sidebar dropdown wrote back.
+      const created = await api.createProfile(name)
+      setProfiles([...getProfiles(), created])
+      props.selectProfiles([created.id])
+    },
+    onSaved: () => {
+      nextOnboardingStep()
+    },
+  })
 
   // ---- step: first account ----
-  const [accName, setAccName] = createSignal('')
-  const [accType, setAccType] = createSignal<AccountType>('giro')
-  const [accCurrency, setAccCurrency] = createSignal(getLocalCurrency())
-  const [accBalance, setAccBalance] = createSignal('')
-  const [accDate, setAccDate] = createSignal('')
-  const [creatingAccount, setCreatingAccount] = createSignal(false)
+  // What it checks and says is onboardingForms.ts; a refusal is said under its field, or in the
+  // step's notice when no field is the reason.
+  const accountForm = createFirstAccountForm({
+    onCreated: async (account) => {
+      setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      showToast(`Account "${account.name}" created`, 'success')
+      bumpProfileVersion()
+      await refreshProfileAccounts()
+    },
+  })
   // What the profile ALREADY has — a relaunched wizard must recognize existing
   // accounts instead of pitching "your first account" at a five-account user.
   const [profileAccounts, setProfileAccounts] = createSignal<
@@ -247,12 +277,19 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   createEffect(() => {
     if (!onboardingOpen()) return
     const step = onboardingStep()
+    // Untracked: a form is seeded when its step opens, not again as it is typed in or saved. A
+    // rename that re-ran this reset the form while it saved, and the step never moved on; the
+    // name typed in reset the currency chosen.
     if (step === 'space') {
-      if (!spaceName()) setSpaceName(state.currentProfile?.name ?? 'Personal Profile')
-      setBaseCurrency(getLocalCurrency())
+      untrack(() => {
+        spaceForm.reset({
+          name: spaceForm.values.name || (state.currentProfile?.name ?? 'Personal Profile'),
+          currency: getLocalCurrency(),
+        })
+      })
     }
     if (step === 'account') {
-      setAccCurrency(baseCurrency())
+      untrack(() => accountForm.set('currency', spaceForm.values.currency))
       void refreshProfileAccounts()
     }
     if (step === 'import') {
@@ -312,68 +349,6 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   }
 
   // ---- step actions ----
-
-  const saveSpace = async () => {
-    const name = spaceName().trim()
-    if (!name) return
-    setSavingSpace(true)
-    try {
-      localStorage.setItem('localCurrency', baseCurrency())
-      const current = state.currentProfile
-      if (current) {
-        if (current.name !== name) {
-          await api.updateProfile(current.id, name)
-          setCurrentProfile({ ...current, name })
-          setProfiles(getProfiles().map((p) => (p.id === current.id ? { ...p, name } : p)))
-          bumpProfileVersion()
-        }
-      } else {
-        // Truly empty workspace (no profile at all): create and select one, through App's one
-        // way of choosing profiles, as a profile created from the sidebar is. This used to write
-        // the two storage keys itself and leave App's copy of the selection on the old one, which
-        // the next close of the sidebar dropdown wrote back.
-        const created = await api.createProfile(name)
-        setProfiles([...getProfiles(), created])
-        props.selectProfiles([created.id])
-      }
-      nextOnboardingStep()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not save your space', 'error')
-    } finally {
-      setSavingSpace(false)
-    }
-  }
-
-  const createAccount = async () => {
-    const name = accName().trim()
-    if (!name || creatingAccount()) return
-    setCreatingAccount(true)
-    try {
-      const opening = parseFloat(accBalance().replace(',', '.')) || 0
-      await apiPost('/api/accounts', {
-        name,
-        type: accType(),
-        currency: accCurrency(),
-        balance: opening,
-        starting_balance: opening,
-        ...(accDate() ? { starting_date: accDate() } : {}),
-      })
-      setCreatedAccounts((prev) => [
-        ...prev,
-        { name, type: accType(), currency: accCurrency(), balance: opening },
-      ])
-      toast(`Account "${name}" created`, 'success')
-      setAccName('')
-      setAccBalance('')
-      setAccDate('')
-      bumpProfileVersion()
-      await refreshProfileAccounts()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not create the account', 'error')
-    } finally {
-      setCreatingAccount(false)
-    }
-  }
 
   const continueFromAccounts = async () => {
     // Any account counts — created here or already on the profile (relaunch).
@@ -532,40 +507,62 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         A profile is one financial space — yours, a partner's, or a shared household view. You can
         add more later.
       </p>
-      <div class={styles.formGrid}>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Profile name</span>
-          <input
-            class={styles.input}
-            data-test-id="onboarding-profile-name"
-            value={spaceName()}
-            maxlength={60}
-            // Select the prefilled default on focus: typing replaces it outright,
-            // an arrow key keeps it and positions the caret for a tweak.
-            onFocus={(e) => {
-              e.currentTarget.select()
-            }}
-            onInput={(e) => setSpaceName(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void saveSpace()
-            }}
-          />
-        </label>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Base currency</span>
-          <select
-            class={styles.input}
-            data-test-id="onboarding-currency"
-            value={baseCurrency()}
-            onChange={(e) => setBaseCurrency(e.currentTarget.value)}
+      {/* Enter in the name continues, as the footer's Continue does. */}
+      <form class={styles.stepForm} {...spaceForm.attrs} data-test-id="onboarding-space-form">
+        <FormNotice form={spaceForm} testId="onboarding-space-notice" />
+        <div class={styles.formGrid}>
+          <Field
+            form={spaceForm}
+            name="name"
+            label="Profile name"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
           >
-            <For each={CURRENCIES}>{(c) => <option value={c}>{c}</option>}</For>
-          </select>
-          <span class={styles.fieldHint}>
-            Totals and charts are shown in this currency. Individual accounts can still hold others.
-          </span>
-        </label>
-      </div>
+            {(control) => (
+              <input
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-profile-name"
+                value={spaceForm.values.name}
+                maxlength={60}
+                // Select the prefilled default on focus: typing replaces it outright,
+                // an arrow key keeps it and positions the caret for a tweak.
+                onFocus={(e) => {
+                  e.currentTarget.select()
+                }}
+                onInput={(e) => spaceForm.set('name', e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field
+            form={spaceForm}
+            name="currency"
+            label="Base currency"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
+            hint="Totals and charts are shown in this currency. Individual accounts can still hold others."
+            hintClass={styles.fieldHint}
+          >
+            {(control) => (
+              <select
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-currency"
+                value={spaceForm.values.currency}
+                onInput={(e) => spaceForm.set('currency', e.currentTarget.value)}
+              >
+                <For each={CURRENCIES}>
+                  {(c) => (
+                    <option value={c} selected={c === spaceForm.values.currency}>
+                      {c}
+                    </option>
+                  )}
+                </For>
+              </select>
+            )}
+          </Field>
+        </div>
+      </form>
     </div>
   )
 
@@ -605,80 +602,127 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </For>
         </div>
       </Show>
-      <div class={styles.formGrid}>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Account name</span>
-          <input
-            class={styles.input}
-            data-test-id="onboarding-account-name"
-            placeholder="e.g. Main Checking"
-            value={accName()}
-            onInput={(e) => setAccName(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void createAccount()
-            }}
-          />
-        </label>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Type</span>
-          <select
-            class={styles.input}
-            data-test-id="onboarding-account-type"
-            value={accType()}
-            onChange={(e) => setAccType(e.currentTarget.value as AccountType)}
+      <form class={styles.stepForm} {...accountForm.attrs} data-test-id="onboarding-account-form">
+        <FormNotice form={accountForm} testId="onboarding-account-notice" />
+        <div class={styles.formGrid}>
+          <Field
+            form={accountForm}
+            name="name"
+            label="Account name"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
           >
-            <For each={ACCOUNT_TYPE_LABELS}>
-              {(t) => <option value={t.value}>{t.label}</option>}
-            </For>
-          </select>
-        </label>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Currency</span>
-          <select
-            class={styles.input}
-            data-test-id="onboarding-account-currency"
-            value={accCurrency()}
-            onChange={(e) => setAccCurrency(e.currentTarget.value)}
+            {(control) => (
+              <input
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-name"
+                placeholder="e.g. Main Checking"
+                value={accountForm.values.name}
+                onInput={(e) => accountForm.set('name', e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field
+            form={accountForm}
+            name="type"
+            label="Type"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
           >
-            <For each={CURRENCIES}>{(c) => <option value={c}>{c}</option>}</For>
-          </select>
-        </label>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Current balance</span>
-          <input
-            class={styles.input}
-            data-test-id="onboarding-account-balance"
-            type="text"
-            inputmode="decimal"
-            placeholder="0.00"
-            value={accBalance()}
-            onInput={(e) => setAccBalance(e.currentTarget.value.replace(/[^\d.,-]/g, ''))}
-          />
-          <span class={styles.fieldHint}>Used as the opening balance.</span>
-        </label>
-        <label class={styles.field}>
-          <span class={styles.fieldLabel}>Tracking since (optional)</span>
-          <input
-            class={styles.input}
-            data-test-id="onboarding-account-date"
-            type="date"
-            value={accDate()}
-            onChange={(e) => setAccDate(e.currentTarget.value)}
-          />
-        </label>
-      </div>
-      <button
-        class={styles.secondaryAction}
-        data-test-id="onboarding-account-create"
-        disabled={!accName().trim() || creatingAccount()}
-        onClick={() => void createAccount()}
-      >
-        {creatingAccount()
-          ? 'Creating…'
-          : profileAccounts().length > 0
-            ? 'Add another account'
-            : 'Create account'}
-      </button>
+            {(control) => (
+              <select
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-type"
+                value={accountForm.values.type}
+                onInput={(e) => accountForm.set('type', e.currentTarget.value)}
+              >
+                <For each={ACCOUNT_TYPE_LABELS}>
+                  {(t) => (
+                    <option value={t.value} selected={t.value === accountForm.values.type}>
+                      {t.label}
+                    </option>
+                  )}
+                </For>
+              </select>
+            )}
+          </Field>
+          <Field
+            form={accountForm}
+            name="currency"
+            label="Currency"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
+          >
+            {(control) => (
+              <select
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-currency"
+                value={accountForm.values.currency}
+                onInput={(e) => accountForm.set('currency', e.currentTarget.value)}
+              >
+                <For each={CURRENCIES}>
+                  {(c) => (
+                    <option value={c} selected={c === accountForm.values.currency}>
+                      {c}
+                    </option>
+                  )}
+                </For>
+              </select>
+            )}
+          </Field>
+          <Field
+            form={accountForm}
+            name="balance"
+            label="Current balance"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
+            hint="Used as the opening balance."
+            hintClass={styles.fieldHint}
+          >
+            {(control) => (
+              <input
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-balance"
+                type="text"
+                inputmode="decimal"
+                placeholder="0.00"
+                value={accountForm.values.balance}
+                onInput={(e) => accountForm.set('balance', e.currentTarget.value)}
+              />
+            )}
+          </Field>
+          <Field
+            form={accountForm}
+            name="starting_date"
+            label="Tracking since (optional)"
+            class={styles.field}
+            labelClass={styles.fieldLabel}
+          >
+            {(control) => (
+              <input
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-date"
+                type="date"
+                value={accountForm.values.starting_date}
+                onInput={(e) => accountForm.set('starting_date', e.currentTarget.value)}
+              />
+            )}
+          </Field>
+        </div>
+        <SubmitButton
+          class={styles.secondaryAction}
+          data-test-id="onboarding-account-create"
+          busy={accountForm.submitting()}
+          busyLabel="Creating…"
+        >
+          {profileAccounts().length > 0 ? 'Add another account' : 'Create account'}
+        </SubmitButton>
+      </form>
     </div>
   )
 
@@ -879,15 +923,15 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         }
       case 'space':
         return {
-          label: savingSpace() ? 'Saving…' : 'Continue',
-          run: () => void saveSpace(),
-          disabled: !spaceName().trim() || savingSpace(),
+          label: spaceForm.submitting() ? 'Saving…' : 'Continue',
+          run: () => void spaceForm.submit(),
+          disabled: spaceForm.submitting(),
         }
       case 'account':
         return {
           label: profileAccounts().length > 0 ? 'Continue' : 'Continue without an account',
           run: () => void continueFromAccounts(),
-          disabled: creatingAccount() || !accountsLoaded(),
+          disabled: accountForm.submitting() || !accountsLoaded(),
         }
       case 'import': {
         // The footer carries the import flow's true forward action at each
@@ -1000,7 +1044,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             label: `Add ${picked} subscription${picked === 1 ? '' : 's'} & continue`,
             run: () => {
               void scan!.addSelected().then(() => {
-                nextOnboardingStep()
+                // A subscription that was refused stays chosen, marked under its row or named in
+                // the panel's notice: the step stays until it is fixed or left out.
+                if (scan!.chosenCount() === 0) nextOnboardingStep()
               })
             },
             disabled: scan!.submitting(),

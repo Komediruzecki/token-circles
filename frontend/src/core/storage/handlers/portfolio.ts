@@ -1,8 +1,11 @@
 /**
  * Portfolio handlers — IndexedDB-backed implementations
+ *
+ * A holding's body is checked by shared/holdingSchema.ts, as the Worker checks it.
  */
+import { checkHoldingCreate, checkHoldingEdit } from '../../../../../shared/holdingSchema'
 import { getDB } from '../idb'
-import { adapter, currentProfileRecord, idParam, json, notFound } from './helpers'
+import { adapter, currentProfileRecord, idParam, json, notFound, refuse } from './helpers'
 
 export async function portfolioHoldingsList(): Promise<Response> {
   try {
@@ -32,34 +35,11 @@ export async function portfolioHoldingsList(): Promise<Response> {
 
 export async function portfolioHoldingsCreate(body: unknown): Promise<Response> {
   try {
-    if (typeof body !== 'object' || body === null) {
-      return json({ error: 'Invalid request body' }, 400)
-    }
-    const data = body as Record<string, unknown>
-    const tickerVal = data.ticker
-    const sharesVal = data.shares
-    const priceVal = data.purchase_price
-    const dateVal = data.purchase_date
-    const notesVal = data.notes
-    if (typeof tickerVal !== 'string' && typeof tickerVal !== 'number') {
-      return json({ error: 'ticker is required' }, 400)
-    }
-    if (typeof sharesVal !== 'number' && typeof sharesVal !== 'string') {
-      return json({ error: 'shares is required' }, 400)
-    }
-    if (typeof priceVal !== 'number' && typeof priceVal !== 'string') {
-      return json({ error: 'purchase_price is required' }, 400)
-    }
-    if (typeof dateVal !== 'string') {
-      return json({ error: 'purchase_date is required' }, 400)
-    }
+    const checked = checkHoldingCreate(body)
+    if (!checked.ok) return refuse(checked.fields)
     const db = await getDB()
     const holding = {
-      ticker: String(tickerVal).toUpperCase(),
-      shares: parseFloat(String(sharesVal)),
-      purchase_price: parseFloat(String(priceVal)),
-      purchase_date: dateVal,
-      notes: typeof notesVal === 'string' ? notesVal : '',
+      ...checked.value,
       created_at: new Date().toISOString(),
       profile_id: await adapter.getCurrentProfileId(),
     }
@@ -76,32 +56,15 @@ export async function portfolioHoldingsUpdate(
 ): Promise<Response> {
   try {
     const id = idParam(params)
-    const data = body as Record<string, unknown>
     const db = await getDB()
     // The active profile's own holding only, as the Worker's `AND profile_id = ?`.
     const existing = await currentProfileRecord('portfolioHoldings', id)
     if (!existing) return notFound('Holding')
-    const updTicker = typeof data.ticker === 'string' ? data.ticker.toUpperCase() : existing.ticker
-    const updShares =
-      typeof data.shares === 'number' || typeof data.shares === 'string'
-        ? parseFloat(String(data.shares))
-        : existing.shares
-    const updPrice =
-      typeof data.purchase_price === 'number' || typeof data.purchase_price === 'string'
-        ? parseFloat(String(data.purchase_price))
-        : existing.purchase_price
-    const updDate =
-      typeof data.purchase_date === 'string' ? data.purchase_date : existing.purchase_date
-    const updNotes = typeof data.notes === 'string' ? data.notes : existing.notes
-    const updated = {
-      ...existing,
-      ticker: updTicker,
-      shares: updShares,
-      purchase_price: updPrice,
-      purchase_date: updDate,
-      notes: updNotes,
-      updated_at: new Date().toISOString(),
-    }
+    // Only what the edit changes is checked and written (decision 2): a field left out stays.
+    const checked = checkHoldingEdit(body, existing)
+    if (!checked.ok) return refuse(checked.fields)
+    if (Object.keys(checked.value).length === 0) return json(existing)
+    const updated = { ...existing, ...checked.value, updated_at: new Date().toISOString() }
     await db.put('portfolioHoldings', updated)
     return json(updated)
   } catch (err) {

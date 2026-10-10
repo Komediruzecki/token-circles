@@ -7,15 +7,40 @@
  * Two faces of the same panel:
  *   - `SubscriptionScanPanel`: embeddable (onboarding wizard step, modal body).
  *   - `SubscriptionScanModal`: overlay wrapper for the Bills and Import pages.
+ *
+ * The panel is a form-kit form (components/form): each row's price is a field, named by the
+ * row, and checked by the rules both runtimes run for a bill (shared/billSchema.ts). A price they
+ * refuse is said under its row, in their words, with focus on it, and nothing is sent; one the
+ * runtime refuses is marked there too, while the rest are added. A refusal no price can fix is said
+ * in the notice, naming the subscription. Both used to be a toast, with nothing marked, and the
+ * price field dropped any letter typed into it.
+ *
+ * While it adds, the form is busy (`aria-busy`) and nothing on it is disabled: a disabled control
+ * drops the focus to the page, and Enter in a price used to leave a keyboard user there. A tick or
+ * a Rescan is `aria-disabled` and does nothing until the add is done, as the Add button does.
  */
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js'
+import { checkBillCreate } from '../../../shared/billSchema'
 import { apiGet, apiPost, getLocalCurrency, listRows, showToast } from '../core/api'
+import { ApiError } from '../core/apiError'
+import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
 import { detectSubscriptions } from '../features/subscriptionDetection'
+import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
 import styles from './SubscriptionScan.module.css'
+import type { JSX } from 'solid-js'
+import type { FieldErrors } from '../../../shared/refusal'
 import type {
   DetectableTransaction,
   DetectedFrequency,
@@ -66,8 +91,14 @@ export interface SubscriptionScanPanelProps {
 
 interface RowState {
   included: boolean
-  priceText: string
   frequency: DetectedFrequency
+}
+
+/** A row's price as typed: a number when it reads as one, the text when it does not, or null. */
+function amountOf(text: string | undefined): number | string | null {
+  const raw = (text ?? '').trim()
+  if (raw === '') return null
+  return parseDecimalInput(raw) ?? raw
 }
 
 export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
@@ -76,7 +107,6 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   const [detected, setDetected] = createSignal<DetectedSubscription[]>([])
   const [rows, setRows] = createSignal<Record<string, RowState>>({})
   const [categories, setCategories] = createSignal<CategoryRow[]>([])
-  const [submitting, setSubmitting] = createSignal(false)
   const [added, setAdded] = createSignal<Set<string>>(new Set())
 
   const scan = async () => {
@@ -100,19 +130,22 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       const found = detectSubscriptions(recent, bills)
       setDetected(found)
       const next: Record<string, RowState> = {}
+      const prices: Record<string, string> = {}
       for (const d of found) {
         next[d.key] = {
           included: !d.alreadyTracked && d.confidence !== 'low',
-          priceText: String(d.amount),
           frequency: d.frequency,
         }
+        prices[d.key] = String(d.amount)
       }
       setRows(next)
+      form.reset(prices)
       setAdded(new Set<string>())
     } catch (err) {
       console.error('Subscription scan failed:', err)
       setDetected([])
       setRows({})
+      form.reset({})
     } finally {
       setScanning(false)
       setScanned(true)
@@ -125,15 +158,14 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     if (props.active()) void scan()
   })
 
-  const row = (key: string): RowState =>
-    rows()[key] ?? { included: false, priceText: '', frequency: 'monthly' }
+  const row = (key: string): RowState => rows()[key] ?? { included: false, frequency: 'monthly' }
   const patchRow = (key: string, patch: Partial<RowState>) => {
     setRows((prev) => ({ ...prev, [key]: { ...row(key), ...patch } }))
   }
 
-  const priceOf = (text: string): number => {
-    const n = parseFloat((text || '').replace(',', '.'))
-    return Number.isFinite(n) ? n : 0
+  const priceOf = (text: string | undefined): number => {
+    const amount = amountOf(text)
+    return typeof amount === 'number' ? amount : 0
   }
 
   const selectable = createMemo(() =>
@@ -144,7 +176,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   const monthlyTotal = createMemo(() =>
     chosen().reduce((sum, d) => {
       const r = row(d.key)
-      return sum + monthlyEquivalent(priceOf(r.priceText), r.frequency)
+      return sum + monthlyEquivalent(priceOf(form.values[d.key]), r.frequency)
     }, 0)
   )
 
@@ -170,43 +202,78 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     return undefined
   }
 
-  const addSelected = async (): Promise<number> => {
-    const picks = chosen()
-    if (submitting() || picks.length === 0) return 0
-    setSubmitting(true)
-    let ok = 0
-    const refused: RefusedSubscription[] = []
-    try {
-      for (const d of picks) {
-        const r = row(d.key)
+  /** The bill a row adds. */
+  const billOf = (d: DetectedSubscription, price: string | undefined) => ({
+    name: d.name,
+    amount: amountOf(price),
+    dueDate: d.suggestedDueDate,
+    category_id: resolveCategoryId(d),
+    frequency: row(d.key).frequency,
+    type: 'subscription',
+  })
+
+  /** How many the last add created, for the host's `addSelected`. */
+  let lastAdded = 0
+
+  const form = createForm<Record<string, string>>({
+    initial: {},
+    check: (values) => {
+      const fields: FieldErrors = {}
+      for (const d of chosen()) {
+        const checked = checkBillCreate(billOf(d, values[d.key]))
+        if (!checked.ok && checked.fields.amount) fields[d.key] = checked.fields.amount
+      }
+      return fields
+    },
+    send: async (values) => {
+      lastAdded = 0
+      const refused: Array<RefusedSubscription & { key: string; fields: FieldErrors }> = []
+      for (const d of chosen()) {
         try {
-          await apiPost('/api/bills', {
-            name: d.name,
-            amount: priceOf(r.priceText),
-            dueDate: d.suggestedDueDate,
-            category_id: resolveCategoryId(d),
-            frequency: r.frequency,
-            type: 'subscription',
-          })
-          ok += 1
+          await apiPost('/api/bills', billOf(d, values[d.key]))
+          lastAdded += 1
           setAdded((prev) => new Set(prev).add(d.key))
         } catch (err) {
           console.error('Failed to add subscription', d.name, err)
-          refused.push({ name: d.name, error: err })
+          refused.push({
+            key: d.key,
+            name: d.name,
+            error: err,
+            fields: err instanceof ApiError ? err.fields : {},
+          })
         }
       }
-      if (ok > 0) {
-        showToast(`${ok} subscription${ok === 1 ? '' : 's'} added`, 'success')
-        props.onAdded?.(ok)
+      if (lastAdded > 0) {
+        showToast(`${lastAdded} subscription${lastAdded === 1 ? '' : 's'} added`, 'success')
+        props.onAdded?.(lastAdded)
       }
-      for (const message of refusedMessages(refused)) showToast(message, 'error')
-    } finally {
-      setSubmitting(false)
-    }
-    return ok
+      if (refused.length === 0) return
+
+      // A price the runtime refused is marked under its row; anything else goes in the notice,
+      // under a name no field has, naming the subscriptions it is about.
+      const marks: FieldErrors = {}
+      const elsewhere: RefusedSubscription[] = []
+      for (const { key, name, error, fields } of refused) {
+        if (fields.amount) marks[key] = fields.amount
+        else elsewhere.push({ name, error })
+      }
+      refusedMessages(elsewhere).forEach((message, index) => {
+        marks[`refused:${String(index)}`] = message
+      })
+      throw new ApiError(400, Object.values(marks).join(' '), marks)
+    },
+    failure: "Couldn't add the subscriptions. Try again.",
+  })
+
+  /** Adds the chosen rows; resolves with how many were created. */
+  const addSelected = async (): Promise<number> => {
+    if (form.submitting() || chosen().length === 0) return 0
+    lastAdded = 0
+    await form.submit()
+    return lastAdded
   }
 
-  props.expose?.({ chosenCount: () => chosen().length, submitting, addSelected })
+  props.expose?.({ chosenCount: () => chosen().length, submitting: form.submitting, addSelected })
 
   const confidenceLabel: Record<DetectedSubscription['confidence'], string> = {
     high: 'High confidence',
@@ -214,10 +281,24 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     low: 'Possible',
   }
 
+  /**
+   * A row's price input, registered with the form while it is on the page, as a `Field` registers
+   * its control: the form moves focus to it and keeps its words out of the notice.
+   */
+  const Registered = (p: { name: string; id: string; children: JSX.Element }) => {
+    // A row's key and input are fixed while it is on the page, so it registers once.
+    onCleanup(form.register(p.name, p.id))
+    return p.children
+  }
+
   const detectedRow = (d: DetectedSubscription) => {
     const brand = matchBrand(d.name)
     const known = brand.displayName !== ''
     const isTracked = () => d.alreadyTracked || added().has(d.key)
+    const priceId = `sub-scan-price-${createUniqueId()}`
+    const errorId = `${priceId}-error`
+    // A row left out is not added, so what was wrong with its price is not said.
+    const problem = () => (!isTracked() && row(d.key).included ? form.error(d.key) : undefined)
     return (
       <div
         class={styles.row}
@@ -234,7 +315,12 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             class={styles.check}
             data-test-id="sub-scan-row-checkbox"
             checked={!isTracked() && row(d.key).included}
-            disabled={isTracked() || submitting()}
+            disabled={isTracked()}
+            aria-disabled={form.submitting() ? 'true' : undefined}
+            onClick={(e) => {
+              // The add took the rows it was pressed on.
+              if (form.submitting()) e.preventDefault()
+            }}
             onChange={(e) => {
               patchRow(d.key, { included: e.currentTarget.checked })
             }}
@@ -265,26 +351,32 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
         </label>
         <Show when={!isTracked()}>
           <span class={styles.controls}>
-            <span class={styles.priceWrap}>
-              <input
-                class={styles.price}
-                type="text"
-                inputmode="decimal"
-                data-test-id="sub-scan-price"
-                value={row(d.key).priceText}
-                disabled={submitting()}
-                onInput={(e) => {
-                  patchRow(d.key, { priceText: e.currentTarget.value.replace(/[^\d.,]/g, '') })
-                }}
-                aria-label={`${d.name} price`}
-              />
-              <span class={styles.cur}>{d.currency || getLocalCurrency()}</span>
-            </span>
+            <Registered name={d.key} id={priceId}>
+              <span
+                class={styles.priceWrap}
+                classList={{ [styles.priceWrapError]: Boolean(problem()) }}
+              >
+                <input
+                  id={priceId}
+                  class={styles.price}
+                  type="text"
+                  inputmode="decimal"
+                  data-test-id="sub-scan-price"
+                  value={form.values[d.key] ?? ''}
+                  onInput={(e) => {
+                    form.set(d.key, e.currentTarget.value)
+                  }}
+                  aria-label={`${d.name} price`}
+                  aria-invalid={problem() ? 'true' : undefined}
+                  aria-describedby={problem() ? errorId : undefined}
+                />
+                <span class={styles.cur}>{d.currency || getLocalCurrency()}</span>
+              </span>
+            </Registered>
             <select
               class={styles.freq}
               data-test-id="sub-scan-frequency"
               value={row(d.key).frequency}
-              disabled={submitting()}
               onChange={(e) => {
                 patchRow(d.key, { frequency: e.currentTarget.value as DetectedFrequency })
               }}
@@ -297,12 +389,17 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
             </select>
           </span>
         </Show>
+        <Show when={problem()}>
+          <p id={errorId} class={styles.priceError} data-test-id="sub-scan-price-error">
+            {problem()}
+          </p>
+        </Show>
       </div>
     )
   }
 
   return (
-    <div class={styles.panel} data-test-id="subscription-scan">
+    <form class={styles.panel} {...form.attrs} data-test-id="subscription-scan">
       <Show
         when={!scanning()}
         fallback={
@@ -333,6 +430,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               <For each={tracked()}>{detectedRow}</For>
             </div>
           </Show>
+          <FormNotice form={form} testId="sub-scan-notice" />
           <div class={styles.footer}>
             <span class={styles.total}>
               <Show when={chosen().length > 0} fallback="Nothing selected">
@@ -343,27 +441,31 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               <button
                 class={styles.rescan}
                 type="button"
-                disabled={scanning() || submitting()}
-                onClick={() => void scan()}
+                disabled={scanning()}
+                aria-disabled={form.submitting() ? 'true' : undefined}
+                onClick={() => {
+                  // A rescan resets the rows under an add still on its way.
+                  if (!form.submitting()) void scan()
+                }}
               >
                 Rescan
               </button>
               <Show when={!props.hideAddButton}>
-                <button
+                <SubmitButton
                   class={styles.add}
-                  type="button"
                   data-test-id="sub-scan-add-btn"
-                  disabled={chosen().length === 0 || submitting()}
-                  onClick={() => void addSelected()}
+                  busy={form.submitting()}
+                  busyLabel="Adding…"
+                  unchanged={chosen().length === 0}
                 >
-                  {submitting() ? 'Adding…' : `Add ${chosen().length || ''}`.trim()}
-                </button>
+                  {`Add ${chosen().length || ''}`.trim()}
+                </SubmitButton>
               </Show>
             </span>
           </div>
         </Show>
       </Show>
-    </div>
+    </form>
   )
 }
 

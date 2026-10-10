@@ -1,6 +1,19 @@
 /**
  * Tags handlers — IndexedDB-backed implementations
+ *
+ * A tag's name and colour, and the tags put on a transaction, are checked by shared/tagSchema.ts,
+ * as the Worker checks them.
  */
+import {
+  checkTagCreate,
+  checkTagEdit,
+  clashingTagName,
+  defaultTagColor,
+  readTagIds,
+  renamesTag,
+  TAG_MESSAGES,
+  tagNameTaken,
+} from '../../../../../shared/tagSchema'
 import { getDB } from '../idb'
 import {
   adapter,
@@ -10,6 +23,7 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
 
 /**
@@ -29,24 +43,26 @@ export async function tagsList(): Promise<Response> {
 }
 
 export async function tagsCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  const b = body as Record<string, unknown>
-  const name = (b.name as string) || ''
-  if (!name.trim()) return json({ error: 'Tag name is required' }, 400)
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
-  // The Worker's table is UNIQUE(name, profile_id), so a second tag of one name is refused there.
-  const own = (await db.getAllFromIndex('tags', 'by_profile', pid)) as { name?: unknown }[]
-  if (own.some((tag) => tag.name === name.trim())) {
-    return json({ error: 'Tag already exists' }, 400)
-  }
+  const own = (await db.getAllFromIndex('tags', 'by_profile', pid)) as {
+    id: number
+    name: unknown
+  }[]
+  // Sent without a colour, a tag takes the one the Tags page offers the profile's next tag.
+  const checked = checkTagCreate(body, defaultTagColor(own.length))
+  if (!checked.ok) return refuse(checked.fields)
+  const { name, color } = checked.value
+  // The Worker's table is UNIQUE(name, profile_id): a second tag of one name is refused in both.
+  const taken = clashingTagName(own, name)
+  if (taken !== null) return refuse(tagNameTaken(taken))
   const id = await db.add('tags', {
     profile_id: pid,
-    name: name.trim(),
-    color: (b.color as string) || '#6e9bff',
+    name,
+    color,
     created_at: new Date().toISOString(),
   })
-  return json({ id, name: name.trim(), color: (b.color as string) || '#6e9bff' }, 201)
+  return json({ id, name, color }, 201)
 }
 
 export async function tagsGetTransactions(params: Record<string, string>): Promise<Response> {
@@ -68,11 +84,19 @@ export async function tagsUpdate(params: Record<string, string>, body: unknown):
   const tagId = idParam(params)
   const tag = await currentProfileRecord('tags', tagId)
   if (!tag) return notFound('Tag')
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>
-    if (b.name !== undefined) tag.name = (b.name as string).trim()
-    if (b.color !== undefined) tag.color = b.color as string
+  // Only what the edit changes is checked and written: a colour left out stays as it is.
+  const checked = checkTagEdit(body, tag)
+  if (!checked.ok) return refuse(checked.fields)
+  const edit = checked.value
+  if (edit.name !== undefined) {
+    const own = (await db.getAllFromIndex('tags', 'by_profile', tag.profile_id)) as {
+      id: number
+      name: unknown
+    }[]
+    const taken = clashingTagName(own, edit.name, tagId, !renamesTag(tag.name, edit.name))
+    if (taken !== null) return refuse(tagNameTaken(taken))
   }
+  Object.assign(tag, edit)
   await db.put('tags', tag)
 
   // Transactions carry a denormalized copy of their tags (see transactionTagsSet), so a rename
@@ -158,13 +182,12 @@ export async function transactionTagsSet(
     const txId = idParam(params)
     const tx = await db.get('transactions', txId)
     if (!tx || tx.profile_id !== pid) return notFound('Transaction')
-    const data = body as Record<string, unknown>
-    const tagIds = data.tagIds as number[] | undefined
-    if (!Array.isArray(tagIds)) return json({ error: 'tagIds must be an array' }, 400)
+    const read = readTagIds((body as Record<string, unknown> | null)?.tagIds)
+    if (!read.ok) return refuse(read.fields)
+    const tagIds = read.value
     for (const tagId of tagIds) {
-      if (!(await currentProfileOwns('tags', tagId))) {
-        return json({ error: 'Tag does not belong to this profile' }, 400)
-      }
+      // Another profile's tag is refused at the field, as the Worker refuses it.
+      if (!(await currentProfileOwns('tags', tagId))) return refuse({ tagIds: TAG_MESSAGES.tagIds })
     }
     const updated = {
       ...tx,
@@ -184,17 +207,59 @@ export async function transactionTagsSet(
   }
 }
 
-export async function transactionsByTag(params: Record<string, string>): Promise<Response> {
+/**
+ * A tag's transactions, as the Worker answers them: newest first (the later id first on one day),
+ * narrowed by startDate, endDate, category_ids (a comma list), type, limit (at most 1000) and
+ * offset, each with its category's name, colour and icon. `total` counts the rows answered.
+ */
+export async function transactionsByTag(
+  params: Record<string, string>,
+  query: URLSearchParams = new URLSearchParams()
+): Promise<Response> {
   try {
     const db = await getDB()
     const pid = await adapter.getCurrentProfileId()
     const tagId = idParam(params)
-    const allTxns = await db.getAllFromIndex('transactions', 'by_profile', pid)
-    const filtered = (allTxns as Record<string, unknown>[]).filter((t) => {
-      const tagIds = (t.tag_ids as number[]) || []
-      return tagIds.includes(tagId)
+    const startDate = query.get('startDate')
+    const endDate = query.get('endDate')
+    const type = query.get('type')
+    const categoryIds = (query.get('category_ids') ?? '')
+      .split(',')
+      .filter((part) => part.trim() !== '')
+      .map(Number)
+      .filter((n) => !Number.isNaN(n))
+    const allTxns = (await db.getAllFromIndex('transactions', 'by_profile', pid)) as Record<
+      string,
+      any
+    >[]
+    const day = (t: Record<string, any>) => String(t.date ?? '').slice(0, 10)
+    const tagged = allTxns
+      .filter((t) => ((t.tag_ids as number[]) || []).includes(tagId))
+      .filter((t) => !startDate || day(t) >= startDate)
+      .filter((t) => !endDate || day(t) <= endDate)
+      .filter((t) => categoryIds.length === 0 || categoryIds.includes(Number(t.category_id)))
+      .filter((t) => !type || t.type === type)
+      .sort((a, b) => day(b).localeCompare(day(a)) || Number(b.id) - Number(a.id))
+    const limit = parseInt(query.get('limit') ?? '', 10)
+    const offset = parseInt(query.get('offset') ?? '', 10)
+    const from = Number.isNaN(offset) ? 0 : Math.max(0, offset)
+    // As SQLite reads LIMIT and OFFSET: a negative limit is none, a negative offset is 0.
+    const to = Number.isNaN(limit) || limit < 0 ? undefined : from + Math.min(limit, 1000)
+    const categories = new Map(
+      ((await db.getAllFromIndex('categories', 'by_profile', pid)) as Record<string, any>[]).map(
+        (c) => [Number(c.id), c]
+      )
+    )
+    const rows = tagged.slice(from, to).map((t) => {
+      const category = categories.get(Number(t.category_id))
+      return {
+        ...t,
+        category_name: category?.name ?? null,
+        category_color: category?.color ?? null,
+        category_icon: category?.icon ?? null,
+      }
     })
-    return json({ rows: filtered, total: filtered.length })
+    return json({ rows, total: rows.length })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
   }

@@ -1,6 +1,7 @@
 import { addCalendarMonths } from '../../calendarMonths';
+import { RECURRING_MESSAGES as M } from '../../recurringSchema';
 import { addCategory, balanceOf, expectMoney, isoDay, listTransactions } from '../helpers';
-import { added, expectOk, scenario } from '../types';
+import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { account } from './accounts';
 
@@ -21,8 +22,14 @@ export function ruleForm(fields: Record<string, unknown> = {}) {
   };
 }
 
+/** Adds a rule. Both runtimes answer 201 with its id, and nothing else. */
 async function rule(api: ContractApi, expect: Expect, fields: Record<string, unknown> = {}) {
-  return added(api, expect, '/api/recurring', ruleForm(fields));
+  const reply = await api.post('/api/recurring', ruleForm(fields));
+  expectOk(expect, reply, 'POST /api/recurring');
+  expect(reply.status, 'POST /api/recurring').toBe(201);
+  expect(Object.keys(reply.body), 'POST /api/recurring').toEqual(['id']);
+  expect(reply.body.id).toEqual(expect.any(Number));
+  return reply.body.id as number;
 }
 
 async function rules(api: ContractApi, expect: Expect): Promise<Json[]> {
@@ -60,10 +67,12 @@ export const recurring = [
       next_date: '2026-03-01',
       category_id: rent,
       notes: '',
+      active: 1,
     });
     expectMoney(expect, one.body.amount, 850.5);
-    // DIFFERENCE day-of-month-default: the form sends null when the day is left empty.
-    expect(one.body.day_of_month).toBe(api.runtime === 'worker' ? null : 1);
+    // The form sends null when the day is left empty: the rule has none, and its next date's day
+    // is its day.
+    expect(one.body.day_of_month).toBeNull();
     expect(await rules(api, expect)).toContainEqual(
       expect.objectContaining({ id, description: 'Rent' })
     );
@@ -109,10 +118,11 @@ export const recurring = [
       expect(await rules(other, expect)).toEqual([]);
       expect((await other.put(`/api/recurring/${id}`, ruleForm({ amount: 1 }))).status).toBe(404);
       expect((await other.post(`/api/recurring/${id}/populate`)).status).toBe(404);
-      // DIFFERENCE delete-missing
-      expect((await other.delete(`/api/recurring/${id}`)).status).toBe(
-        api.runtime === 'worker' ? 200 : 404
-      );
+      const gone = await other.delete(`/api/recurring/${id}`);
+      expect({ status: gone.status, body: gone.body }).toEqual({
+        status: 404,
+        body: { error: M.notFound },
+      });
 
       const mine = (await api.get(`/api/recurring/${id}`)).body;
       expect(mine).toMatchObject({ id, next_date: '2026-03-01' });
@@ -120,19 +130,35 @@ export const recurring = [
       expect(await listTransactions(api, expect)).toEqual([]);
       expect(await listTransactions(other, expect)).toEqual([]);
 
-      // DIFFERENCE foreign-link-status: a rule on another profile's category or account.
-      const refused = api.runtime === 'worker' ? 403 : 400;
+      // A rule on another profile's category or account is refused at that field.
       const theirCategory = await addCategory(other, expect, 'Their rent');
       const theirAccount = await account(other, expect, 'Their account', 10);
-      expect(
-        (await api.post('/api/recurring', ruleForm({ category_id: theirCategory }))).status
-      ).toBe(refused);
-      expect(
-        (await api.post('/api/recurring', ruleForm({ account_id: theirAccount }))).status
-      ).toBe(refused);
-      expect(
-        (await api.put(`/api/recurring/${id}`, ruleForm({ account_id: theirAccount }))).status
-      ).toBe(refused);
+      const refusedAt = async (
+        reply: Promise<{ status: number; body: Json }>,
+        field: string,
+        message: string
+      ) => {
+        const { status, body } = await reply;
+        expect({ status, body }).toEqual({
+          status: 400,
+          body: { error: message, fields: { [field]: message } },
+        });
+      };
+      await refusedAt(
+        api.post('/api/recurring', ruleForm({ category_id: theirCategory })),
+        'category_id',
+        M.category
+      );
+      await refusedAt(
+        api.post('/api/recurring', ruleForm({ account_id: theirAccount })),
+        'account_id',
+        M.account
+      );
+      await refusedAt(
+        api.put(`/api/recurring/${id}`, ruleForm({ account_id: theirAccount })),
+        'account_id',
+        M.account
+      );
       expect(await rules(api, expect)).toHaveLength(1);
     }
   ),
@@ -151,19 +177,16 @@ export const recurring = [
       });
 
       const ran = await populate(api, expect, monthly);
-      expect(ran.ok).toBe(true);
-      // DIFFERENCE recurring-populate-answer
-      if (api.runtime === 'worker') {
-        expect(ran).toMatchObject({
-          transactionId: expect.any(Number),
-          next_date: monthAfter(today),
-        });
-      } else {
-        expect(ran).toEqual({ ok: true });
-      }
+      // The transaction it added, and the date the rule moved on to.
+      expect(ran).toEqual({
+        ok: true,
+        transactionId: expect.any(Number),
+        next_date: monthAfter(today),
+      });
       let rows = await listTransactions(api, expect);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
+        id: ran.transactionId,
         description: 'Rent',
         type: 'expense',
         date: today,
@@ -175,8 +198,12 @@ export const recurring = [
       expectMoney(expect, await balanceOf(api, expect, everyday), 149.5, 'Everyday');
       expect((await api.get(`/api/recurring/${monthly}`)).body.next_date).toBe(monthAfter(today));
 
-      // This period is done: running it again adds nothing.
-      expect((await api.post(`/api/recurring/${monthly}/populate`)).status).toBe(409);
+      // This period is done: running it again adds nothing, and says so.
+      const again = await api.post(`/api/recurring/${monthly}/populate`);
+      expect({ status: again.status, body: again.body }).toEqual({
+        status: 409,
+        body: { error: M.populated },
+      });
       expect(await listTransactions(api, expect)).toHaveLength(1);
 
       // A rule behind catches up a period at a time, and a transfer moves both accounts.
@@ -236,26 +263,35 @@ export const recurring = [
       category_id: coffee,
     });
 
-    const reply = await api.get('/api/recurring/upcoming');
-    expectOk(expect, reply, 'GET /api/recurring/upcoming');
-    // DIFFERENCE recurring-upcoming
-    if (api.runtime === 'worker') {
-      // Every week of the next 30 days, today included.
-      expect(reply.body.transactions.map((t: Json) => t.next_date)[0]).toBe(today);
-      expect(reply.body.transactions).toHaveLength(5);
-      expectMoney(expect, reply.body.totalMonthly, 100, 'the next 30 days');
-      expect(reply.body.byCategory).toEqual([
-        expect.objectContaining({ name: 'Coffee', total: 100 }),
-      ]);
-      expect(reply.body.currency).toBe('EUR');
-    } else {
-      expect(reply.body).toEqual([expect.objectContaining({ id: weekly, next_date: today })]);
-    }
+    const upcoming = async () => {
+      const reply = await api.get('/api/recurring/upcoming');
+      expectOk(expect, reply, 'GET /api/recurring/upcoming');
+      return reply.body;
+    };
+    // Every week of the next 30 days, today included.
+    let next = await upcoming();
+    expect(next.transactions.map((t: Json) => t.next_date)[0]).toBe(today);
+    expect(next.transactions).toHaveLength(5);
+    expect(next.transactions[0]).toMatchObject({ id: weekly, description: 'Beans' });
+    expectMoney(expect, next.totalMonthly, 100, 'the next 30 days');
+    expect(next.byCategory).toEqual([expect.objectContaining({ name: 'Coffee', total: 100 })]);
+    expect(next.currency).toBe('EUR');
 
-    // DIFFERENCE recurring-pause: the Worker's switch is `active`, and its list leaves a paused rule out.
+    // `active` pauses a rule, and so does `is_active`, local-first's name for it: the list and the
+    // upcoming payments leave a paused rule out, and an active one comes back.
+    const daily = await rule(api, expect, {
+      description: 'Paper',
+      frequency: 'daily',
+      next_date: today,
+    });
     expectOk(expect, await api.put(`/api/recurring/${weekly}`, { active: 0 }), 'pause');
-    expect((await rules(api, expect)).map((r) => r.id)).toEqual(
-      api.runtime === 'worker' ? [] : [weekly]
-    );
+    expectOk(expect, await api.put(`/api/recurring/${daily}`, { is_active: false }), 'pause');
+    expect(await rules(api, expect)).toEqual([]);
+    next = await upcoming();
+    expect(next.transactions).toEqual([]);
+    expect(next.totalMonthly).toBe(0);
+    expectOk(expect, await api.put(`/api/recurring/${weekly}`, { active: 1 }), 'resume');
+    expect((await rules(api, expect)).map((r) => r.id)).toEqual([weekly]);
+    expect((await api.get(`/api/recurring/${daily}`)).body.active).toBe(0);
   }),
 ];

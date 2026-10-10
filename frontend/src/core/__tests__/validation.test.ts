@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod/v4'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { BUDGET_MESSAGES } from '../../../../shared/budgetSchema'
 import { GOAL_MESSAGES } from '../../../../shared/goalSchema'
 import { LOAN_MESSAGES } from '../../../../shared/loanSchema'
 import { TRANSACTION_MESSAGES } from '../../../../shared/transactionSchema'
-import { validateBody } from '../validation'
+import { validateBody, zodCheck } from '../validation'
 
 describe('validation - validateBody', () => {
   it('passes valid transaction create body', () => {
@@ -177,6 +178,23 @@ describe('validation - validateBody', () => {
     expect(result).toBeNull()
   })
 
+  it('checks a new recurring rule by the shared rules, and leaves an edit to its handler', async () => {
+    expect(
+      await fieldsOf('/api/recurring', {
+        description: 'Rent',
+        amount: 900,
+        frequency: 'fortnightly',
+        next_date: '2026-06-01',
+        category_id: 0,
+      })
+    ).toEqual({
+      frequency: 'Choose Daily, Weekly, Monthly or Yearly.',
+      category_id: 'Choose a category from the list, or leave it blank.',
+    })
+    // An edit that sends one field is checked against the stored rule (checkRecurringEdit).
+    expect(validateBody('PUT', '/api/recurring/4', { notes: 'Flat 5' })).toBeNull()
+  })
+
   it('validates tag create body', () => {
     const result = validateBody('POST', '/api/tags', {
       name: 'groceries',
@@ -252,55 +270,79 @@ describe('validation - validateBody', () => {
   })
 })
 
-describe('validation - a zod refusal in plain words', () => {
-  async function fieldsOf(path: string, body: unknown): Promise<Record<string, string>> {
-    const result = validateBody('POST', path, body)
-    expect(result?.status).toBe(400)
-    return (await result!.json()).fields
-  }
+/** The field messages of a POST the body checks refuse. */
+async function fieldsOf(path: string, body: unknown): Promise<Record<string, string>> {
+  const result = validateBody('POST', path, body)
+  expect(result?.status).toBe(400)
+  return (await result!.json()).fields
+}
 
-  it('says what to do with a number out of range, a list value and a date', async () => {
-    expect(
-      await fieldsOf('/api/housings', { name: 'Flat', purchase_price: 0, interest_rate: -1 })
-    ).toEqual({
-      purchase_price: 'Make the purchase price more than zero.',
-      interest_rate: "The interest rate can't be negative.",
+describe('validation - the shared checks', () => {
+  it('checks a housing expense at /api/housing, the path the Housing page posts to', async () => {
+    expect(await fieldsOf('/api/housing', { property_name: '', monthly_amount: 0 })).toEqual({
+      property_name: 'Name the property or the payment.',
+      monthly_amount: 'Enter an amount more than zero.',
     })
     expect(
+      validateBody('POST', '/api/housing', { property_name: 'Flat', monthly_amount: 850.5 })
+    ).toBeNull()
+    // The path the old zod schema was registered under is called by nothing.
+    expect(validateBody('POST', '/api/housings', {})).toBeNull()
+  })
+
+  it('checks a new holding, and leaves an edit to its handler', async () => {
+    expect(
       await fieldsOf('/api/portfolio/holdings', {
-        ticker: 'VWCE',
+        ticker: 'SAMPL',
         shares: 10,
         purchase_price: 100,
         purchase_date: '1 May',
       })
-    ).toEqual({ purchase_date: 'Enter a valid purchase date.' })
-    expect(
-      await fieldsOf('/api/recurring', {
-        description: 'Rent',
-        amount: 900,
-        type: 'expense',
-        frequency: 'fortnightly',
-        next_date: '2026-06-01',
-        category_id: 0,
-      })
-    ).toEqual({
-      frequency: 'Choose the frequency from the list.',
-      category_id: 'Choose the category from the list.',
+    ).toEqual({ purchase_date: 'Enter a real date, written like 2026-02-10.' })
+    // An edit that sends one field is checked against the stored holding (checkHoldingEdit).
+    expect(validateBody('PUT', '/api/portfolio/holdings/4', { notes: 'Paused' })).toBeNull()
+  })
+})
+
+describe('validation - a zod refusal in plain words', () => {
+  // No write local-first serves is checked by a zod schema now: counterparties, the last, are only
+  // read here, and the router answers a write to them 405 before any check. A zod schema put back
+  // in the map is still answered in plain words, never zod's.
+  const counterparty = z.object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['individual', 'business']).optional(),
+  })
+
+  it("says which field to check, not zod's words for what is wrong with it", () => {
+    expect(zodCheck(counterparty, { name: '', type: 'company' })).toEqual({
+      ok: false,
+      fields: { name: 'Check the name.', type: 'Check the type.' },
     })
+  })
+
+  it("passes on a refine's own message, which is written for people", () => {
+    const trip = z
+      .object({ from: z.string(), to: z.string() })
+      .refine((t) => t.to >= t.from, { message: 'End the trip after it starts.', path: ['to'] })
+    expect(zodCheck(trip, { from: '2026-03-02', to: '2026-03-01' })).toEqual({
+      ok: false,
+      fields: { to: 'End the trip after it starts.' },
+    })
+  })
+
+  it('names no field for a body that is not an object, for the summary to cover', () => {
+    expect(zodCheck(counterparty, 'not json')).toEqual({ ok: false, fields: {} })
+  })
+
+  it('leaves a write to counterparties to the router, which refuses it before any check', () => {
+    expect(validateBody('POST', '/api/counterparties', { name: '' })).toBeNull()
+    expect(validateBody('PUT', '/api/counterparties/3', { name: '' })).toBeNull()
   })
 
   it('names a too-long name, and a wrong kind of value, by the field', async () => {
     expect(await fieldsOf('/api/tags', { name: 'x'.repeat(51), color: 5 })).toEqual({
       name: 'Keep the name to 50 characters or fewer.',
-      color: 'Enter a valid color.',
-    })
-  })
-
-  it('answers a body that is not an object with a summary and no fields', async () => {
-    const result = validateBody('POST', '/api/tags', 'not json')
-    expect(result?.status).toBe(400)
-    expect(await result!.json()).toEqual({
-      error: 'Some details need another look. Check them and try again.',
+      color: "That color can't be used. Pick another one.",
     })
   })
 })

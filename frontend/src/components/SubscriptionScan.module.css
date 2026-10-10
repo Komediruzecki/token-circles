@@ -215,7 +215,7 @@
   cursor: pointer;
 }
 
-.rescan:hover:not(:disabled) {
+.rescan:hover:not(:disabled):not([aria-disabled='true']) {
   color: var(--text);
   background: var(--surface-hover);
 }
@@ -241,6 +241,14 @@
   opacity: 0.55;
   cursor: default;
   box-shadow: none;
+}
+
+/* While the scan adds, a tick and Rescan keep focus, so they are aria-disabled, not disabled, and
+   this is the look :disabled gave them. */
+.check[aria-disabled='true'],
+.rescan[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: progress;
 }
 
 /* ---- modal shell (mirrors SubscriptionCatalogModal) ---- */
@@ -337,4 +345,18 @@
   .row {
     transition: none;
   }
+}
+
+/* A price the bill rules refuse: the field's border, and the words on a line of their own. */
+.price-wrap-error {
+  border-color: var(--danger);
+}
+
+.price-error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--danger-text);
+  overflow-wrap: anywhere;
 }

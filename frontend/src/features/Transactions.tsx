@@ -569,8 +569,10 @@ export default function Transactions() {
       bumpTagsVersion()
       return tag
     } catch (error) {
+      // In the runtime's words, so a name the tag rules refuse says why ("Keep the name to 50
+      // characters or fewer."), and the name stays in the box to be shortened.
       console.error('Failed to create tag:', error)
-      toast('Failed to create tag', 'error')
+      toast(plainMessage(error, "Couldn't create the tag. Try again."), 'error')
       return null
     }
   }

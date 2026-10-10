@@ -580,7 +580,7 @@ describe('account deletion and the rows its routes save', () => {
     });
     expect(source.status).toBe(201);
     const tag = await post('/api/tags', { name: 'Holiday' });
-    expect(tag.status).toBe(200);
+    expect(tag.status).toBe(201);
     const { id: tagId } = (await tag.json()) as { id: number };
     const rule = await post('/api/tags/rules', {
       tag_id: tagId,

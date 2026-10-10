@@ -181,8 +181,9 @@ From `validation.ts` against each Worker route; each PR re-checks its own entiti
   4a._
 - **Housing.** The local schemas are registered as `/api/housings`, but the route is
   `/api/housing`, so they never run. (They would refuse the form: they require a purchase price
-  the Housing form does not send.)
+  the Housing form does not send.) _Settled in slice 5._
 - **Profiles and tags.** Both runtimes refuse a duplicate name; tags compare exactly on the Worker.
+  _Profiles settled in slice 4b, tags in slice 5._
 
 ## Design
 
@@ -678,9 +679,111 @@ refused where they were stored; a base currency in lower case accepted; the word
 messages and toasts; and the mapping step, which still lets a person continue with the date or the
 amount column unmapped, where the page says they are required.
 
+## Slice 5: housing, portfolio, tags, recurring and subscriptions (2026-10-10)
+
+On `feat/forms-slice-5`, from ceb43bb3 (slice 4b, #611), with main merged in at 29d85467 (#612 and
+#613).
+
+- **One set of rules each, in `shared/`.** `shared/tagSchema.ts` (a tag, and the tags put on a
+  transaction), `shared/housingSchema.ts`, `shared/holdingSchema.ts` and `shared/recurringSchema.ts`
+  hold the rules and their words; `shared/palette.ts` the app's palette, whose next colour a tag
+  created without one gets, and `shared/recurringUpcoming.ts` the upcoming list both runtimes
+  answer. The Worker routes (`tags.ts`, `housing.ts`, `portfolio.ts`, `recurring.ts`), the
+  local-first handlers and the forms run them. Both runtimes answer a refusal with 400 `{ error,
+fields }`, and an edit of a tag, a housing expense, a holding or a recurring rule checks and
+  writes only what it changes. In `validation.ts` the shared checks take the place of local-first's
+  zod schemas for housing (registered at `/api/housings`, a path nothing calls), holdings and
+  recurring rules. No entity is checked by zod there now: the counterparty schema, the last,
+  checked writes local-first does not serve, and went in the fix round.
+- **The forms are on the kit.** The Tags page's tag form (`features/tagForm.ts`), the Housing
+  dialog (`features/housingForm.ts`), the Portfolio dialog with its merge of a buy into a holding
+  (`features/holdingForm.ts`), the Recurring section's dialog (`features/recurringForm.ts`), the
+  subscription catalog and the subscription scan, each chosen price a field, and the setup
+  wizard's "Name your space" and "Create your first account"
+  (`components/onboarding/onboardingForms.ts`). A refusal no price can fix (a category deleted
+  elsewhere, being offline) is said in the catalog's or the scan's notice, naming the
+  subscription. Tags, `RecurringSection` and `OnboardingWizard` leave the toast guard's known
+  list.
+
+What the runtimes now agree on:
+
+| Question                                                                   | Before                                                                                                                                                | Now, in both                                                                                                                               |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| A tag name blank, over 50 characters, or another tag's in other case       | "Tag name is required" or "Tag already exists" at no field on the Worker, which compared case; a rename onto another tag's name stored in local-first | Refused at `name`; re-casing a tag's own name is allowed                                                                                   |
+| A tag's colour                                                             | Any text on the Worker; #6e9bff in local-first for none                                                                                               | #RRGGBB, refused at `color`; none is the palette's next colour                                                                             |
+| A tag edit without a colour                                                | Reset to grey on the Worker                                                                                                                           | Kept                                                                                                                                       |
+| Another profile's tag on a transaction, category or account on a rule      | 403 on the Worker, 400 in local-first                                                                                                                 | 400 at the field it names (`tagIds`, `category_id`, `account_id`)                                                                          |
+| Transactions by tag                                                        | Every tagged row in key order, unfiltered, in local-first                                                                                             | Newest first, with the Worker's filters and paging                                                                                         |
+| A housing expense's name, type, amount, due month and day                  | A name and an amount above zero, in one sentence at no field; the rest stored as sent (local-first's own check never ran)                             | Refused at the field: a name up to 100 characters, six types, an amount to the cent, a real due month and a day it has (29 February taken) |
+| A housing expense without a due month                                      | January on the Worker, this month in local-first                                                                                                      | This month                                                                                                                                 |
+| A housing edit that sends no name                                          | A 500 from D1 on the Worker, and the type could not change                                                                                            | The fields it sends change                                                                                                                 |
+| Housing's answers                                                          | 200 on the Worker, autopay 0 or 1; local-first's rows carried the form's own fields                                                                   | 201, autopay true or false, the Worker's columns                                                                                           |
+| A new tag's and a new recurring rule's answers                             | 200 on the Worker; a rule's `{ id, profile_id }` in local-first                                                                                       | 201: a rule `{ id }`, a tag `{ id, name, color }`                                                                                          |
+| A holding without its ticker, shares, price or date                        | One sentence at no field on the Worker; zod's words in local-first                                                                                    | Refused at each field                                                                                                                      |
+| A holding's ticker, shares, price and date                                 | Stored on the Worker (a price below zero, a date of "soon", shares as text a 500); a ticker over 10 refused in local-first                            | A ticker up to 20, in capitals; shares and price above zero, below one trillion; a real date                                               |
+| A holding edit                                                             | Every field written on the Worker; checked as a whole new holding in local-first                                                                      | Checks and writes only what it changes                                                                                                     |
+| A recurring rule's description, amount, type, frequency, day and next date | The amount refused in the transaction rules' sentence and the rest stored as sent on the Worker; zod's words in local-first                           | Refused at each field                                                                                                                      |
+| A recurring rule saved without a day of the month                          | Day 1 in local-first                                                                                                                                  | No day                                                                                                                                     |
+| Deleting a recurring rule the profile does not have                        | 200 on the Worker                                                                                                                                     | 404                                                                                                                                        |
+| Pausing a recurring rule                                                   | `active` on the Worker, `is_active` in local-first, each blind to the other's                                                                         | `active`, `is_active` read as it; a paused rule leaves the list                                                                            |
+| Adding a rule's period to the transactions                                 | `{ ok }` in local-first, where two at once each added the period                                                                                      | `{ ok, transactionId, next_date }`; a period is added once, and a second add of it is a 409 that says so                                   |
+| The upcoming list                                                          | The active rules themselves in local-first                                                                                                            | Every occurrence in the next 30 days, totals to the cent                                                                                   |
+
+The contract's `foreign-link-status`, `transactions-by-tag`, `tag-default-colour`,
+`tag-edit-without-colour`, `tag-rename-duplicate`, `housing-due-month-default`,
+`housing-answer-shape`, `day-of-month-default`, `delete-missing`, `recurring-populate-answer`,
+`recurring-upcoming` and `recurring-pause` are settled and their pins removed.
+`portfolio-prices` stays pinned: live quotes come from a quote service the Worker can reach and the
+browser cannot.
+
+Fixed on the way, each with a test that failed before: an empty tag name was ignored without a
+word, and a taken one was a toast; a due day that was not a number became the 1st, and a housing
+row with no due date said "undefined / undefined"; the holding dialog's shares and price dropped
+letters as they were typed, and a merged position kept a sum's float error, as did an edit that
+opened on it; the Recurring dialog's number fields dropped letters, and a delete or "Add to
+transactions" that failed said nothing (a rule another tab had deleted now says it already was,
+and leaves the list); the catalog closed on a refusal and said so in a toast; the scan's price
+dropped letters and read "1.234,56" as 1.234; and the wizard put the chosen base currency back as
+a name was typed, and moved on from "Add 2 subscriptions & continue" whether or not they were
+added. The Tags, Housing, Portfolio and Recurring failures toasted a caught error's own words;
+they go through `plainMessage`.
+
+The fix round after the review (2026-10-10), each with a test that failed before: a holding edit
+rounded shares and a price stored past eight decimals and wrote them back on any save; a buy was
+offered as a merge into another profile's holding the household view lists; a due day the month
+does not have, 31 April, was stored; two overlapping "Add to transactions" each added the period
+in local-first, and a second press sent a second populate; a new tag and a new recurring rule
+answered 200 on the Worker; MCP's `upsert_tag_rule` made a padded twin of a tag (`"  travel "`
+beside "Travel") a new tag, and created one with a name up to 100 characters; a rule stored as a
+`deduction` or `biweekly` opened with blank selects; a tag the Transactions form could not create
+said "Failed to create tag"; the scan disabled its fields while it added, which dropped the focus
+to the page; and deleting a housing expense, a holding or a tag another tab had deleted said the
+runtime's "not found" as an error.
+
+Open for the owner, each a change no decision covers: a tag name capped at 50 characters and
+compared without case on the Worker; a tag's colour checked as #RRGGBB there too; another profile's
+tag, category or account a 400 where the Worker answered 403; a housing expense's six types, its
+name capped at 100 characters, its amount to the cent, and a create answered 201; the due month of
+an expense posted without one, this month where the Worker used January; a holding's ticker up to 20
+characters where local-first stopped at 10, its date required to be real; a recurring rule's
+description and next date required on the Worker, its day left blank in local-first, a paused rule
+left out of local-first's list; a deleted rule's second delete a 404; the words of a period already
+added (409); the upcoming list in local-first; the Recurring dialog's selects opening blank on a
+category or account no longer listed; the catalog staying open with what was refused still chosen;
+the scan refusing a price it cannot read where it dropped letters; the wizard's Continue and Create
+no longer disabled for a blank name; the subscriptions step staying put while a subscription is
+refused; and the wording of the new messages and toasts. From the review: a recurring rule's three
+types and four frequencies, where the Worker's transactions take a `deduction` and its populate
+steps a `biweekly` rule; a recurring amount refused past two decimal places, where the Worker
+stored any; a transaction's tag list refused as a whole for one bad entry, where the Worker dropped
+it; local-first's transactions by tag read with the Worker's dates, filters and paging; a merged
+holding rounded to eight decimal places; and a rule with no next date opening on today, which any
+save of it then stores.
+
 ## Slice 6: sign-in and support (2026-10-09)
 
-On `feat/forms-slice-6`, from main ceb43bb3, with main merged in at 29d85467 (#612, #613).
+On `feat/forms-slice-6`, from main ceb43bb3, with main merged in at 29d85467 (#612, #613)
+and at 08ad6413 (#614, slice 5).
 
 The owner's rule for this slice: the sign-in system cannot break, so it changes how a refusal is
 shown, never what the Worker accepts.
