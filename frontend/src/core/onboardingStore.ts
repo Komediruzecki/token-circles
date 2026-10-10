@@ -4,14 +4,20 @@
  * The wizard auto-opens exactly once per account, for a pristine profile: no
  * accounts, no transactions, no bills (a fresh email/Google signup in server
  * mode, or a truly empty serverless workspace). Finishing or skipping stamps a
- * localStorage flag kept under the account it belongs to (setOnboardingOwner),
- * so each account signed in on one browser has its own, AND mirrors it into the
- * profile's settings KV, so in server mode, logging in from a new device
- * respects a decision made elsewhere. It can always be relaunched from
+ * localStorage flag kept under the account it belongs to (setOnboardingOwner,
+ * onboardingFlag.ts), so each account signed in on one browser has its own, AND
+ * mirrors it into the profile's settings KV, so in server mode, logging in from
+ * a new device respects a decision made elsewhere. It can always be relaunched from
  * Settings → About or the tour-selection modal.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { apiGet, apiPut } from './api'
+import {
+  accountOnboardingOwner,
+  BROWSER_WIDE_ONBOARDING_KEY,
+  LOCAL_ONBOARDING_OWNER,
+  onboardingFlagKey,
+} from './onboardingFlag'
 
 export type OnboardingStep = 'welcome' | 'space' | 'account' | 'import' | 'subscriptions' | 'done'
 
@@ -24,18 +30,12 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   'done',
 ]
 
-/**
- * The browser-wide flag, from before the flag was kept per account. setOnboardingOwner moves it to
- * the first account it is given.
- */
-const BROWSER_WIDE_KEY = 'finance_onboarding'
-
 export type OnboardingStatus = 'completed' | 'skipped' | null
 
 /** Whose flag is read and written: an account (`account-<id>`), `local`, or nobody yet. */
 let owner: string | null = null
 
-const keyOf = (of: string) => `${BROWSER_WIDE_KEY}:${of}`
+const keyOf = onboardingFlagKey
 
 const isDecision = (raw: string | null): raw is Exclude<OnboardingStatus, null> =>
   raw === 'completed' || raw === 'skipped'
@@ -48,24 +48,25 @@ export function onboardingOwnerFor(
   serverMode: boolean,
   accountId: number | null | undefined
 ): string | null {
-  if (!serverMode) return 'local'
-  return typeof accountId === 'number' ? `account-${accountId}` : null
+  if (!serverMode) return LOCAL_ONBOARDING_OWNER
+  return typeof accountId === 'number' ? accountOnboardingOwner(accountId) : null
 }
 
 /**
- * Read and write the flag of `next` from now on. A browser-wide flag still here goes to the first
- * owner given, unless that owner has a decision of its own, and is then removed.
+ * Read and write the flag of `next` from now on. The browser-wide flag goes to the local account
+ * only, unless it has a decision of its own, and is then removed. No server account takes it: the
+ * account's settings and whether its profile is pristine decide there, as on a new device.
  */
 export function setOnboardingOwner(next: string | null): void {
   owner = next
-  if (next === null) return
+  if (next !== LOCAL_ONBOARDING_OWNER) return
   try {
-    const browserWide = localStorage.getItem(BROWSER_WIDE_KEY)
+    const browserWide = localStorage.getItem(BROWSER_WIDE_ONBOARDING_KEY)
     if (browserWide === null) return
     if (isDecision(browserWide) && localStorage.getItem(keyOf(next)) === null) {
       localStorage.setItem(keyOf(next), browserWide)
     }
-    localStorage.removeItem(BROWSER_WIDE_KEY)
+    localStorage.removeItem(BROWSER_WIDE_ONBOARDING_KEY)
   } catch {
     // Non-fatal: the move is tried again at the next start.
   }
@@ -80,20 +81,25 @@ export function forgetOnboardingStatus(of: string): void {
   }
 }
 
-export function getOnboardingStatus(): OnboardingStatus {
-  if (owner === null) return null
+/** The decision `of` made, or the current owner's. */
+export function getOnboardingStatus(of: string | null = owner): OnboardingStatus {
+  if (of === null) return null
   try {
-    const raw = localStorage.getItem(keyOf(owner))
+    const raw = localStorage.getItem(keyOf(of))
     return isDecision(raw) ? raw : null
   } catch {
     return null
   }
 }
 
-function setOnboardingStatus(status: Exclude<OnboardingStatus, null>) {
-  if (owner === null) return
+/** Keep `status` as the decision of `of`, the current owner unless named. */
+function setOnboardingStatus(
+  status: Exclude<OnboardingStatus, null>,
+  of: string | null = owner
+): void {
+  if (of === null) return
   try {
-    localStorage.setItem(keyOf(owner), status)
+    localStorage.setItem(keyOf(of), status)
   } catch {
     // Non-fatal: the wizard may auto-open again next visit.
   }
@@ -186,7 +192,10 @@ export function collectionIsEmpty(res: unknown): boolean {
  * error counts as "no" — a broken bootstrap must not trap the user in a wizard.
  */
 export async function shouldOfferOnboarding(): Promise<boolean> {
-  if (owner === null || getOnboardingStatus() !== null) return false
+  // The owner as the check starts: a decision found in settings is kept for the account that
+  // asked, even if another signs in before the answer.
+  const asking = owner
+  if (asking === null || getOnboardingStatus(asking) !== null) return false
   try {
     const [accounts, transactions, bills, settings] = await Promise.all([
       apiGet('/api/accounts'),
@@ -198,7 +207,7 @@ export async function shouldOfferOnboarding(): Promise<boolean> {
     const remote = settings?.onboarding
     if (remote === 'completed' || remote === 'skipped') {
       // Done/skipped on another device: cache locally and stay quiet.
-      setOnboardingStatus(remote)
+      setOnboardingStatus(remote, asking)
       return false
     }
     return (

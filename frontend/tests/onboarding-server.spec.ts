@@ -84,8 +84,8 @@ test.describe('onboarding — server mode @smoke', () => {
     const me = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
     const first = ((await me.json()) as { id: number }).id
 
-    // This browser onboarded before the flag was kept per account: one browser-wide flag. The
-    // fixture account is signed in when the app first loads, so the flag becomes its own.
+    // This browser onboarded before the flag was kept per account: one browser-wide flag. No
+    // server account takes it over; the fixture account's data keeps the wizard closed.
     await ctx.addInitScript(() => {
       if (!sessionStorage.getItem('onb_second_seeded')) {
         sessionStorage.setItem('onb_second_seeded', '1')
@@ -98,12 +98,11 @@ test.describe('onboarding — server mode @smoke', () => {
     })
     await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
-    await expect
-      .poll(() => page.evaluate(() => localStorage.getItem('finance_onboarding')))
-      .toBeNull()
+    await page.waitForTimeout(1200)
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     expect(
       await page.evaluate((id) => localStorage.getItem(`finance_onboarding:account-${id}`), first)
-    ).toBe('completed')
+    ).toBeNull()
 
     // A second person signs in to their own new account in the same browser.
     const email = `e2e-onboarding-${randomBytes(6).toString('hex')}@tokencircles.test`
@@ -124,10 +123,6 @@ test.describe('onboarding — server mode @smoke', () => {
       await page.reload({ waitUntil: 'domcontentloaded' })
 
       await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30000 })
-      // The fixture account keeps the decision it made.
-      expect(
-        await page.evaluate((id) => localStorage.getItem(`finance_onboarding:account-${id}`), first)
-      ).toBe('completed')
     } finally {
       // Delete the second account, and only it: the session may still be the fixture's.
       const who = await ctx.request.get(`${E2E_BASE}/api/auth/me`)

@@ -22,6 +22,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { onboardingDecided } from '../../tests/onboarding-decided'
 import {
   setCurrentProfile,
   setIsProfileModalOpen,
@@ -240,7 +241,8 @@ afterEach(() => {
 
 async function mountApp(mode: StorageMode, current: number, selected: number[] = [current]) {
   localStorage.setItem('finance_storage_mode', mode)
-  localStorage.setItem('finance_onboarding', 'skipped')
+  // The stand-in Worker's account is id 1; local-first has its one local account.
+  for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
   localStorage.setItem('finance_had_profiles', '1')
   localStorage.setItem('currentProfileId', String(current))
   localStorage.setItem('selectedProfileIds', JSON.stringify(selected))

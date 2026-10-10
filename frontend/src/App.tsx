@@ -334,7 +334,10 @@ export function App() {
   const handleLoginSuccess = async () => {
     setIsLoginModalOpen(false)
     setIsAuthenticated(true)
-    // Onboarding is decided per account: the one that just signed in.
+    // Onboarding is decided per account: the one that just signed in. Every sign-in in
+    // LoginModal (password, emailed code, Google, passkey) reloads the page, so the owner set at
+    // start (onMount) is the one that counts; confirmEmailGate.test.tsx covers it and sign-out.
+    // This keeps a sign-in that lands here without a reload on the right account too.
     const account = await api.signedInAccount()
     setOnboardingOwner(onboardingOwnerFor(serverMode, account?.id))
     void loadBillingPlan()

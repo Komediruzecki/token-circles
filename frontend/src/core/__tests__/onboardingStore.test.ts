@@ -236,36 +236,17 @@ describe('onboardingStore', () => {
       expect(localStorage.getItem('finance_onboarding:account-2')).toBe('completed')
     })
 
-    it('moves the browser-wide decision to the first account signed in, and only to it', () => {
+    it('gives the browser-wide decision to no server account', async () => {
       localStorage.setItem('finance_onboarding', 'skipped')
 
       setOnboardingOwner('account-7')
 
-      expect(getOnboardingStatus()).toBe('skipped')
-      expect(localStorage.getItem('finance_onboarding')).toBeNull()
-      expect(localStorage.getItem('finance_onboarding:account-7')).toBe('skipped')
-      setOnboardingOwner('account-8')
+      // The account's own settings and its pristine profile decide, as for a new device.
       expect(getOnboardingStatus()).toBeNull()
-    })
-
-    it('waits for an account before moving the browser-wide decision', () => {
-      localStorage.setItem('finance_onboarding', 'completed')
-
-      setOnboardingOwner(null)
-
-      expect(localStorage.getItem('finance_onboarding')).toBe('completed')
-      setOnboardingOwner('account-3')
-      expect(getOnboardingStatus()).toBe('completed')
-    })
-
-    it("leaves an account's own decision as it is", () => {
-      localStorage.setItem('finance_onboarding:account-5', 'completed')
-      localStorage.setItem('finance_onboarding', 'skipped')
-
-      setOnboardingOwner('account-5')
-
-      expect(getOnboardingStatus()).toBe('completed')
-      expect(localStorage.getItem('finance_onboarding')).toBeNull()
+      expect(localStorage.getItem('finance_onboarding:account-7')).toBeNull()
+      await expect(shouldOfferOnboarding()).resolves.toBe(true)
+      // It stays for the local account, should this browser go local-first.
+      expect(localStorage.getItem('finance_onboarding')).toBe('skipped')
     })
 
     it('moves the browser-wide decision to the local account in local-first', () => {
@@ -276,6 +257,29 @@ describe('onboardingStore', () => {
 
       expect(getOnboardingStatus()).toBe('completed')
       expect(localStorage.getItem('finance_onboarding:local')).toBe('completed')
+      expect(localStorage.getItem('finance_onboarding')).toBeNull()
+    })
+
+    it("leaves the local account's own decision as it is", () => {
+      localStorage.setItem('finance_onboarding:local', 'completed')
+      localStorage.setItem('finance_onboarding', 'skipped')
+
+      setOnboardingOwner('local')
+
+      expect(getOnboardingStatus()).toBe('completed')
+      expect(localStorage.getItem('finance_onboarding')).toBeNull()
+    })
+
+    it('keeps a decision found in settings for the account that asked, after a switch', async () => {
+      await settingsUpdate({ onboarding: 'completed' })
+      setOnboardingOwner('account-1')
+
+      const asked = shouldOfferOnboarding()
+      setOnboardingOwner('account-2')
+
+      await expect(asked).resolves.toBe(false)
+      expect(localStorage.getItem('finance_onboarding:account-1')).toBe('completed')
+      expect(localStorage.getItem('finance_onboarding:account-2')).toBeNull()
     })
 
     it('offers nothing and keeps nothing on this device while no account is known', async () => {

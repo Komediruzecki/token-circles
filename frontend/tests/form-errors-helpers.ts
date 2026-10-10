@@ -12,6 +12,7 @@
  * (bill-form-errors.spec.ts and the rest).
  */
 import { expect, test } from '@playwright/test'
+import { onboardingDecided } from './onboarding-decided'
 import {
   E2E_BASE,
   firstProfileId,
@@ -66,12 +67,17 @@ export const MODES: Mode[] = [
     name: 'cloud',
     open: async (page, route, ready, profile) => {
       const id = await newCloudProfile(page, profile)
-      await page.addInitScript((pid) => {
-        localStorage.setItem('currentProfileId', String(pid))
-        localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-        // A recorded decision keeps the setup wizard from covering a new profile's page.
-        localStorage.setItem('finance_onboarding', 'skipped')
-      }, id)
+      const me = await page.request.get(`${E2E_BASE}/api/auth/me`)
+      // A recorded decision keeps the setup wizard from covering a new profile's page.
+      const decided = onboardingDecided([((await me.json()) as { id: number }).id])
+      await page.addInitScript(
+        ({ pid, decided }) => {
+          localStorage.setItem('currentProfileId', String(pid))
+          localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
+          for (const [key, value] of decided) localStorage.setItem(key, value)
+        },
+        { pid: id, decided }
+      )
       await leaveOnboarding(page)
       await login(page)
       await navigateToRoute(page, route)

@@ -8,6 +8,7 @@
  * currency is one for the whole browser there, and the demo has data). The data a case looks at is
  * arranged after the currency is set, in pounds.
  */
+import { onboardingDecided } from '../onboarding-decided'
 import { arrangeCategory, arrangeExpense, localIso, reloadOn, shownPage } from './follow-helpers'
 import { recurringSection } from './page-handles'
 import { both, expect } from './release-fixtures'
@@ -33,9 +34,12 @@ async function setBaseCurrency(page: Page, currency: string): Promise<void> {
 async function emptyBooksIn(m: Mode, currency: string): Promise<void> {
   const { page } = m
   // This device has seen the setup wizard, so it does not open over the empty books.
-  await page.evaluate(() => {
-    localStorage.setItem('finance_onboarding', 'skipped')
-  })
+  const decided = onboardingDecided([
+    m.kind === 'cloud' ? (await m.api<{ id: number }>('/api/auth/me')).id : 'local',
+  ])
+  await page.evaluate((entries) => {
+    for (const [key, value] of entries) localStorage.setItem(key, value)
+  }, decided)
   if (m.kind === 'cloud') {
     await createProfileFromSidebar(page, `zz-books${m.suffix}`)
     await expect(page.getByTestId('profile-dropdown-btn')).toContainText(`zz-books${m.suffix}`)
