@@ -62,6 +62,23 @@ function withTimeZone(headers: HeadersInit | undefined): Headers {
 }
 
 /**
+ * Dispatched on window when the Worker refuses a request because the account's address is not
+ * confirmed (403 EMAIL_UNCONFIRMED). App shows Confirm your email (ConfirmEmailScreen) on it.
+ */
+export const EMAIL_UNCONFIRMED_EVENT = 'auth:email-unconfirmed'
+
+/** Say so when `response` is the Worker refusing an account whose address is not confirmed. */
+async function noteEmailUnconfirmed(response: Response): Promise<void> {
+  if (response.status !== 403) return
+  try {
+    const body = (await response.clone().json()) as { code?: unknown } | null
+    if (body?.code === 'EMAIL_UNCONFIRMED') window.dispatchEvent(new Event(EMAIL_UNCONFIRMED_EVENT))
+  } catch {
+    // Not JSON, so not that refusal.
+  }
+}
+
+/**
  * Everything that must happen after a completed app-API request, in one place so the two storage
  * branches below cannot drift apart.
  */
@@ -105,6 +122,8 @@ export async function apiFetch(url: string, init?: RequestInit): Promise<Respons
         throw error
       }
       announceWrite(apiPath, init, response.ok)
+      // Only the Worker answers this; local-first has no account to confirm.
+      await noteEmailUnconfirmed(response)
       return response
     }
     return fetch(url, init)

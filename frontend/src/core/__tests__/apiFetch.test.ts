@@ -208,3 +208,71 @@ describe('apiFetch sends the person’s time zone', () => {
     expect(sentHeaders(fetchSpy).has('X-Time-Zone')).toBe(false)
   })
 })
+
+describe('a refusal because the address is not confirmed yet', () => {
+  const unlisten: Array<() => void> = []
+  afterEach(() => {
+    for (const stop of unlisten.splice(0)) stop()
+  })
+
+  /** apiFetch in `mode`, where every request is answered by `answer`, and what window heard. */
+  async function load(mode: 'serverless' | 'self-hosted', answer: () => Response) {
+    vi.resetModules()
+    vi.stubEnv('VITE_API_URL', '')
+    vi.doMock('../storage/storageFactory', () => ({ getStorageMode: () => mode }))
+    vi.doMock('../storage/localApiRouter', () => ({
+      routeApiRequest: () => Promise.resolve(answer()),
+    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(answer()))
+    )
+    const { apiFetch, EMAIL_UNCONFIRMED_EVENT } = await import('../apiFetch')
+    let heard = 0
+    const listener = () => {
+      heard += 1
+    }
+    window.addEventListener(EMAIL_UNCONFIRMED_EVENT, listener)
+    unlisten.push(() => {
+      window.removeEventListener(EMAIL_UNCONFIRMED_EVENT, listener)
+    })
+    return { apiFetch, heard: () => heard }
+  }
+
+  const answering =
+    (status: number, body: string, type = 'application/json') =>
+    () =>
+      new Response(body, { status, headers: { 'Content-Type': type } })
+  const unconfirmed = answering(
+    403,
+    JSON.stringify({ error: 'Confirm your email address.', code: 'EMAIL_UNCONFIRMED' })
+  )
+
+  it('is said on window once, and the caller still reads the answer', async () => {
+    const { apiFetch, heard } = await load('self-hosted', unconfirmed)
+
+    const res = await apiFetch('/api/profiles')
+
+    expect(heard()).toBe(1)
+    expect(res.status).toBe(403)
+    expect(await res.json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' })
+  })
+
+  it('is not said for a 403 with another code, or one that is not JSON', async () => {
+    const other = await load('self-hosted', answering(403, JSON.stringify({ error: 'Forbidden' })))
+    await other.apiFetch('/api/profiles')
+    expect(other.heard()).toBe(0)
+
+    const page = await load('self-hosted', answering(403, '<html>Forbidden</html>', 'text/html'))
+    await page.apiFetch('/api/profiles')
+    expect(page.heard()).toBe(0)
+  })
+
+  it('is not said in local-first mode, which has no account to confirm', async () => {
+    const { apiFetch, heard } = await load('serverless', unconfirmed)
+
+    await apiFetch('/api/profiles')
+
+    expect(heard()).toBe(0)
+  })
+})

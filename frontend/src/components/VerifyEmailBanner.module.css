@@ -1,9 +1,8 @@
 /*
- * VerifyEmailBanner — the confirm-your-email nudge.
+ * VerifyEmailBanner: what the app says about the account's address.
  *
- * A strip above the page content rather than a floating pill: the message names an address and
- * carries two actions, which at a phone width is more than a pill can hold without truncating
- * the one part that matters.
+ * A strip above the page content rather than a floating pill: a message about an address can be
+ * long, and at a phone width a pill would truncate it.
  */
 
 .banner {
@@ -31,17 +30,18 @@
   overflow-wrap: anywhere;
 }
 
-.address {
-  font-weight: 600;
-}
-
-.resend,
 .close {
   flex: none;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Touch target, without the glyph growing to match. */
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--text-secondary);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -49,40 +49,10 @@
     color 0.15s ease;
 }
 
-.resend {
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.resend:hover:not(:disabled),
 .close:hover {
   border-color: var(--primary);
   color: var(--primary);
   background: color-mix(in oklab, var(--primary) 12%, transparent);
-}
-
-.resend:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.sent {
-  flex: none;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--success);
-}
-
-.close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* Touch target, without the glyph growing to match. */
-  width: 28px;
-  height: 28px;
-  border-color: transparent;
-  color: var(--text-secondary);
 }
 
 @media (max-width: 560px) {
@@ -98,11 +68,6 @@
 
   .icon {
     order: 0;
-  }
-
-  .resend,
-  .sent {
-    order: 2;
   }
 
   .close {

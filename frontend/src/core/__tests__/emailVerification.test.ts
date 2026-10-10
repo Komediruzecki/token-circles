@@ -3,10 +3,8 @@
  *
  * The fragment handling matters more than it looks: `#everified=1` is not a page, so leaving it
  * in the address bar hands the hash router something it resolves to a 404, and re-announces the
- * outcome on every reload. And `fetchVerificationStatus` has to stay silent on a backend that
- * does not report the field at all — the legacy self-hosted server — rather than reading its
- * absence as "unverified" and nagging every user of it forever. An address confirmed on the way
- * into the app (noteAddressConfirmed) has to outlast the reload that follows, and be said once.
+ * outcome on every reload. An address confirmed on the way into the app (noteAddressConfirmed)
+ * has to outlast the reload that follows, and be said once.
  */
 import { openDB } from 'idb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -270,50 +268,6 @@ describe('consumeEmailVerifyRedirect', () => {
 
     expect(takeEmailVerifyResult()).toEqual({ ok: true })
     expect(takeEmailVerifyResult()).toBeNull()
-  })
-})
-
-describe('fetchVerificationStatus', () => {
-  it('reports an unverified password account', async () => {
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: 'a@b.com', email_verified: 0, auth_provider: 'password' })
-    )
-
-    expect(await fetchVerificationStatus()).toEqual({
-      email: 'a@b.com',
-      verified: false,
-      provider: 'password',
-    })
-  })
-
-  it('says nothing when the server does not report the field', async () => {
-    // The legacy self-hosted backend's /me has no email_verified. Reading that as "unverified"
-    // would show every one of its users a banner whose Resend button its API cannot answer.
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: 'a@b.com', auth_provider: 'password' })
-    )
-
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('says nothing without a session', async () => {
-    const { fetchVerificationStatus } = await load(() => json({ error: 'Unauthorized' }, 401))
-
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('says nothing for an account with no address', async () => {
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: null, email_verified: 0, auth_provider: 'google' })
-    )
-
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('swallows a network failure rather than surfacing it as a banner', async () => {
-    const { fetchVerificationStatus } = await load(() => Promise.reject(new Error('offline')))
-
-    expect(await fetchVerificationStatus()).toBeNull()
   })
 })
 

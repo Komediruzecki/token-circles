@@ -27,6 +27,23 @@ function rangeQuery(range?: { startDate?: string; endDate?: string }): string {
   return query ? `?${query}` : ''
 }
 
+/** Who is signed in, as GET /api/auth/me says. */
+export interface SignedInAccount {
+  email: string
+  emailVerified: boolean
+  /** How the account signs in: 'password' or 'google'. */
+  provider: string | null
+}
+
+/**
+ * Whether the account waits for its confirm link before it can use the app: a password account
+ * whose address is not confirmed. The Worker answers its every other request 403
+ * EMAIL_UNCONFIRMED, so the app shows the Confirm your email screen instead.
+ */
+export function waitsForConfirmLink(account: SignedInAccount): boolean {
+  return account.provider === 'password' && !account.emailVerified
+}
+
 /**
  * API Client class for making authenticated requests
  */
@@ -144,14 +161,28 @@ export class ApiClient {
   // ============ AUTH ============
 
   /**
-   * Check if a session cookie is valid (worker: GET /api/auth/me).
+   * The account a valid session cookie is for (worker: GET /api/auth/me), or null with no session
+   * or no answer. A password account whose address is not confirmed is answered here too: the app
+   * shows it the Confirm your email screen (waitsForConfirmLink).
    */
-  async checkLogin(): Promise<boolean> {
+  async signedInAccount(): Promise<SignedInAccount | null> {
     try {
-      await this.request('/auth/me', undefined)
-      return true
+      const me = await this.request<{
+        email?: unknown
+        email_verified?: unknown
+        auth_provider?: unknown
+      }>('/auth/me', undefined)
+      return {
+        email: typeof me?.email === 'string' ? me.email : '',
+        // Absent is a server with no opinion, which is no reason to stop anyone.
+        emailVerified:
+          me?.email_verified === undefined || me?.email_verified === null
+            ? true
+            : Boolean(me.email_verified),
+        provider: typeof me?.auth_provider === 'string' ? me.auth_provider : null,
+      }
     } catch {
-      return false
+      return null
     }
   }
 

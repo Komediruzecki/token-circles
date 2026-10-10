@@ -1,11 +1,11 @@
 /**
  * ResendVerification — the "send me that link again" button, wherever it is needed.
  *
- * It exists as its own component because the confirm-your-email ask now appears in two places
- * (the banner, and the billing panel that refuses to sell to an unconfirmed address) and the
- * interesting part is the same in both: one in-flight request at a time, a terminal "sent" state
- * so the user is not left wondering, and a failure that returns to idle rather than stranding
- * them on a disabled button.
+ * It exists as its own component because the confirm-your-email ask appears in two places (the
+ * Confirm your email screen, and the billing panel that refuses to sell to an unconfirmed
+ * address) and the interesting part is the same in both: one in-flight request at a time, a
+ * terminal "sent" state so the user is not left wondering, and a failure that returns to idle
+ * rather than stranding them on a disabled button.
  */
 import { Show } from 'solid-js'
 import { createSignal } from 'solid-js'
@@ -17,6 +17,10 @@ import type { Component } from 'solid-js'
 export interface ResendVerificationProps {
   /** `inline` sits in a sentence of running text; `button` is a control in its own right. */
   variant?: 'inline' | 'button'
+  /** The button's words. */
+  label?: string
+  /** What replaces the button once the link is sent. */
+  sentLabel?: string
   'data-testid'?: string
 }
 
@@ -39,7 +43,7 @@ export const ResendVerification: Component<ResendVerificationProps> = (props) =>
   return (
     <Show
       when={state() !== 'sent'}
-      fallback={<span class={styles.sent}>Sent — check your inbox</span>}
+      fallback={<span class={styles.sent}>{props.sentLabel ?? 'Sent — check your inbox'}</span>}
     >
       <button
         type="button"
@@ -48,7 +52,7 @@ export const ResendVerification: Component<ResendVerificationProps> = (props) =>
         disabled={state() === 'sending'}
         data-testid={props['data-testid'] ?? 'resend-verification'}
       >
-        {state() === 'sending' ? 'Sending...' : 'Resend'}
+        {state() === 'sending' ? 'Sending...' : (props.label ?? 'Resend')}
       </button>
     </Show>
   )

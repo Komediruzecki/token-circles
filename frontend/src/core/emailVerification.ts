@@ -1,6 +1,10 @@
 /**
  * Email verification — the client half of the confirm-your-address flow.
  *
+ * A password account uses the app once its address is confirmed. Until then the Worker answers
+ * its session 403 EMAIL_UNCONFIRMED almost everywhere, and the app shows the Confirm your email
+ * screen (ConfirmEmailScreen) instead of itself.
+ *
  * A password signup gets a link that routes through the worker
  * (`GET /api/auth/verify-email`), which does the whole job and bounces the browser back here
  * with `#everified=1` or `#everified_error=<reason>`. There is no page to render: the fragment
@@ -138,9 +142,10 @@ export async function finishEmailLink(): Promise<LinkFinish | null> {
 const CONFIRMED_KEY = 'tc:email-confirmed'
 
 /**
- * The address was just confirmed in this browser, by a password sign-in that spent the link this
- * browser opened (signInForm.ts). Said once the app has loaded: a sign-in ends in a reload, and
- * the second factor may come first. The link is no longer waiting.
+ * The address was just confirmed in this browser: by a password sign-in that spent the link this
+ * browser opened (signInForm.ts), or on the Confirm your email screen (ConfirmEmailScreen). Said
+ * once the app has loaded: both end in a reload, and the second factor may come first. The link
+ * is no longer waiting.
  */
 export function noteAddressConfirmed(): void {
   clearLinkWaiting()
@@ -166,40 +171,6 @@ export function takeEmailVerifyResult(): EmailVerifyResult | null {
   const result = pending ?? takeAddressConfirmed()
   pending = null
   return result
-}
-
-/** What the banner needs to decide whether to show itself. */
-export interface VerificationStatus {
-  email: string
-  verified: boolean
-  provider: string | null
-}
-
-/**
- * Ask the server about the signed-in account. Returns null whenever there is nothing to nudge
- * about — no session, no email, a Google account (already verified by Google), or a backend
- * that does not report the field at all, which is how the legacy self-hosted server answers.
- */
-export async function fetchVerificationStatus(): Promise<VerificationStatus | null> {
-  try {
-    const res = await apiFetch('/api/auth/me', { credentials: 'include' })
-    if (!res.ok) return null
-    const user = (await res.json()) as {
-      email?: string | null
-      email_verified?: number | boolean | null
-      auth_provider?: string | null
-    }
-    if (typeof user?.email !== 'string' || user.email === '') return null
-    // Absent means "this server has no opinion" — treat it as verified so no banner appears.
-    if (user.email_verified === undefined || user.email_verified === null) return null
-    return {
-      email: user.email,
-      verified: Boolean(user.email_verified),
-      provider: user.auth_provider ?? null,
-    }
-  } catch {
-    return null
-  }
 }
 
 /** Ask for the confirm link again. Throws with the server's message so the caller can show it. */
