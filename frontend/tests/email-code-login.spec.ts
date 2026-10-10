@@ -16,7 +16,7 @@ import { expect, request, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn } from './boot'
 import { E2E_BASE } from './e2e-constants'
-import { sql, sqlRows } from './db'
+import { accountMade, sql, sqlRows } from './db'
 import { getByTestId } from './test-helpers'
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema'
 
@@ -61,6 +61,7 @@ for (const boot of BOOTS) {
     sql(`DELETE FROM login_codes WHERE email = '${EMAIL}'`)
     await api.post('/api/auth/register', { data: { email: EMAIL, password: PASSWORD } })
     await api.dispose()
+    await accountMade(EMAIL)
     await bootApp(context, boot, EMAIL)
 
     // ── Request: the login screen's passwordless path ──────────────────────────────────────────
@@ -100,6 +101,7 @@ for (const boot of BOOTS) {
       const api = await request.newContext({ baseURL: E2E_BASE })
       await api.post('/api/auth/register', { data: { email, password: PASSWORD } })
       await api.dispose()
+      await accountMade(email)
       await bootApp(page.context(), boot, email)
 
       await openSignIn(page, boot, E2E_BASE)

@@ -89,10 +89,6 @@ export function formatMoney(amount: number, currency?: string | null): string {
 const btn = (href: string, label: string, testId?: string) =>
   `<a href="${href}" ${testId ? `data-tid="${testId}"` : ''}style="display:inline-block;background:${C.primaryStrong};color:#ffffff;text-decoration:none;font-family:${FONT};font-size:15px;font-weight:600;padding:12px 26px;border-radius:10px">${escapeHtml(label)}</a>`;
 
-/** Secondary call to action — a plain link, so a mail with a confirm button has one primary. */
-const linkBtn = (href: string, label: string) =>
-  `<a href="${href}" style="font-family:${FONT};font-size:14px;font-weight:600;color:${C.primaryStrong};text-decoration:none">${escapeHtml(label)} &rarr;</a>`;
-
 /** Left-accented feature/info card (welcome mail, notices). */
 const card = (title: string, body: string, accent: string = C.primary) =>
   `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr>
@@ -190,27 +186,39 @@ const textFooter = (reason: string, unsubUrl?: string | null) =>
 /**
  * Welcome — sent to every brand-new account (email/password AND Google).
  *
- * A password signup gets `verifyUrl`, which turns the primary button into "Confirm your email"
+ * A password sign-up gets `verifyUrl`, which turns the primary button into "Confirm your email"
  * and adds a line saying why. One mail rather than two: a welcome and a confirm arriving
- * together read as a duplicate, and the confirm is the one action the user has to take.
- * Google accounts arrive already verified and see today's welcome unchanged.
+ * together read as a duplicate, and the confirm is the one action the user has to take. The
+ * account opens once its address is confirmed, so that welcome says so, and points nowhere but
+ * the link: before it, a sign-in is refused. Google accounts arrive already verified, and their
+ * welcome says the account is ready.
  */
+/** What to do first, in both welcomes. */
+const welcomeCards = () => `
+    ${card('Create your first account', 'The home for your balance and transactions: checking, savings, cash or brokerage. The setup wizard walks you through it.')}
+    ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
+    ${card('Subscriptions, spotted', 'We recognize recurring charges (Netflix, Spotify, Claude and 40+ more) from your imported transactions and offer to track them.')}`;
+
 export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
   const confirm = opts.verifyUrl;
   const subject = confirm
-    ? `Confirm your email — welcome to ${BRAND}`
-    : `Welcome to ${BRAND} — your orbit is ready`;
-  const body = `
+    ? `Welcome to ${BRAND}: confirm your email`
+    : `Welcome to ${BRAND}: your orbit is ready`;
+  const body = confirm
+    ? `
+    ${h1('Welcome aboard')}
+    ${p(`Confirm this is your address to start using your account. It's also how we reach you about password resets and anything that needs your attention.`)}
+    <div style="padding:8px 0 12px">${btn(confirm, 'Confirm your email')}</div>
+    ${p(SIGN_IN_WHERE_OPENED, `font-size:12.5px;color:${C.faint}`)}
+    ${welcomeCards()}
+    ${p(`If you didn't create this account, you can safely ignore this email.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
+  `
+    : `
     ${h1('Welcome aboard')}
     ${p(`Your ${BRAND} account is ready. Everything orbits your accounts: add one, bring your history, and the dashboards light up.`)}
-    ${confirm ? p(`First, confirm this is your address so we can reach you about your account — password resets, and anything that needs your attention.`) : ''}
-    ${confirm ? `<div style="padding:8px 0 12px">${btn(confirm, 'Confirm your email')}</div>` : ''}
-    ${confirm ? p(`If you're asked to sign in first, your address is confirmed as soon as you do.`, `font-size:12.5px;color:${C.faint}`) : ''}
-    ${card('Create your first account', 'The home for your balance and transactions — checking, savings, cash or brokerage. The setup wizard walks you through it.')}
-    ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
-    ${card('Subscriptions, spotted', 'We recognize recurring charges — Netflix, Spotify, Claude and 40+ more — from your imported transactions and offer to track them.')}
-    <div style="padding:8px 0 4px">${confirm ? linkBtn(app, `Open ${BRAND}`) : btn(app, `Open ${BRAND}`)}</div>
+    ${welcomeCards()}
+    <div style="padding:8px 0 4px">${btn(app, `Open ${BRAND}`)}</div>
     ${p(`If you didn't create this account, you can safely ignore this email.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
   `;
   return {
@@ -218,21 +226,30 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
     html: shell({
       title: subject,
       preheader: confirm
-        ? 'Confirm your email address to finish setting up your account.'
-        : 'Your account is ready — set up your first account and bring your history.',
+        ? 'Confirm your email address to start using your account.'
+        : 'Your account is ready. Set up your first account and bring your history.',
       body,
       footerReason: 'You received this because an account was created with this address.',
       assetOrigin: opts.appUrl,
     }),
     text: confirm
-      ? `Welcome to ${BRAND}\n\nConfirm this is your address so we can reach you about your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${confirm}\n\nThen set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`
+      ? `Welcome to ${BRAND}\n\nConfirm this is your address to start using your account:\n${confirm}\n\n${SIGN_IN_WHERE_OPENED}\n\nThen set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`
       : `Welcome to ${BRAND}\n\nYour account is ready. Sign in to set up your first account, import your history (bank statements, CSV, Google Sheets), and let us spot your subscriptions automatically.\n\nOpen the app: ${app}\n\nIf you didn't create this account, you can safely ignore this email.${textFooter('You received this because an account was created with this address.')}`,
   };
 }
 
 /**
+ * What the confirm mails say about the sign-in the link may ask for. The link confirms where its
+ * account is signed in; anywhere else it asks for a sign-in, and a password sign-in in that same
+ * browser confirms the address (routes/auth.ts, POST /api/auth/login).
+ */
+const SIGN_IN_WHERE_OPENED =
+  'If the link asks you to sign in, sign in right there with your password, even in another browser or on another device, and your address is confirmed.';
+
+/**
  * Confirm-your-email link on its own — the resend, where the welcome copy would be wrong
- * because the user already has the account and is asking for the link again.
+ * because the user already has the account and is asking for the link again. Minting it retires
+ * the links sent before it (createEmailVerification), and the mail says so.
  */
 export function renderEmailVerification(opts: {
   link: string;
@@ -243,23 +260,23 @@ export function renderEmailVerification(opts: {
   const subject = `Confirm your ${BRAND} email address`;
   const body = `
     ${h1('Confirm your email')}
-    ${p(`Click below to confirm this is your address. It lets us reach you about your account — password resets, and anything that needs your attention.`)}
+    ${p(`Click below to confirm this is your address and start using your account. It's also how we reach you about password resets and anything that needs your attention.`)}
     <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm your email')}</div>
-    ${p(`If you're asked to sign in first, your address is confirmed as soon as you do.`, `font-size:12.5px;color:${C.faint}`)}
-    ${p(`This link expires in ${ttl}. Your account keeps working either way — confirming just means we can reach you.`, `font-size:12.5px;color:${C.faint}`)}
+    ${p(SIGN_IN_WHERE_OPENED, `font-size:12.5px;color:${C.faint}`)}
+    ${p(`This link expires in ${ttl}. Links we sent before this one no longer work.`, `font-size:12.5px;color:${C.faint}`)}
     ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
   `;
   return {
     subject,
     html: shell({
       title: subject,
-      preheader: `Confirm your address — the link expires in ${ttl}.`,
+      preheader: `Confirm your address. The link expires in ${ttl}.`,
       body,
       footerReason: 'Sent because a confirmation link was requested for this address.',
       orbit: false,
       assetOrigin: opts.assetOrigin,
     }),
-    text: `Confirm your ${BRAND} email address\n\nOpen this link to confirm your address (expires in ${ttl}). If you're asked to sign in first, it's confirmed as soon as you do:\n${opts.link}\n\nYour account keeps working either way — confirming just means we can reach you.${textFooter('Sent because a confirmation link was requested for this address.')}`,
+    text: `Confirm your ${BRAND} email address\n\nOpen this link to confirm your address and start using your account (it expires in ${ttl}):\n${opts.link}\n\n${SIGN_IN_WHERE_OPENED} Links we sent before this one no longer work.${textFooter('Sent because a confirmation link was requested for this address.')}`,
   };
 }
 
@@ -345,7 +362,7 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const subject = `You already have a ${BRAND} account`;
   const body = `
     ${h1('You already have an account')}
-    ${p(`Someone just tried to create a ${BRAND} account with this email address — but one already exists.`)}
+    ${p(`Someone just tried to create a ${BRAND} account with this email address, but one already exists.`)}
     ${p(`If that was you, simply sign in, or reset your password if you've forgotten it. If it wasn't you, no action is needed; your account is unchanged.`)}
     <div style="padding:8px 0 4px">${btn(app, 'Sign in')}</div>
   `;
@@ -353,13 +370,13 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
     subject,
     html: shell({
       title: subject,
-      preheader: 'A signup was attempted with your address — your account is unchanged.',
+      preheader: 'Someone tried to sign up with your address. Your account is unchanged.',
       body,
       footerReason: 'Security notice for your existing account.',
       orbit: false,
       assetOrigin: opts.appUrl,
     }),
-    text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in at ${app} — or reset your password. If it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
+    text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in or reset your password at ${app}\n\nIf it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
   };
 }
 

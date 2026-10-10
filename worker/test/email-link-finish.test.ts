@@ -1,7 +1,8 @@
 /**
  * An emailed link opened in a browser without its account's session finishes once that account
- * signs in there: verify-email leaves a marker (an HttpOnly cookie only the finish route
- * receives), and POST /api/auth/email-link/finish spends the link for the signed-in account.
+ * signs in there: verify-email leaves a marker (an HttpOnly cookie only the /api/auth routes
+ * receive), and POST /api/auth/email-link/finish spends the link for the signed-in account. A
+ * password sign-in to an account waiting for its confirm link spends that link itself.
  *
  * Every way of signing in is tried, for both kinds of link: the one that confirms the address and
  * the one that moves the account to a new address.
@@ -13,14 +14,17 @@ import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import {
+  accessRows,
   accountRow,
   PASSWORD,
   post,
   removeAccounts,
   seedAccount,
   sessionFrom,
+  whileConfirmed,
 } from './helpers/account-access';
-import { sessionCookie } from './helpers/session';
+import { bumpTokenVersion, dbThatNotes, dbWithStep, realDb, withDb } from './helpers/racing-db';
+import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
 
@@ -161,9 +165,16 @@ const dropSecondFactor = () =>
 interface SignInWay {
   /** Set the account up for this way in, before the link is opened. */
   seed(verified: 0 | 1): Promise<void>;
-  /** Sign in that way, in a browser without a session, and return the session it gets. */
-  signIn(): Promise<string>;
-  /** Whether this sign-in confirms an unconfirmed address itself (and so removes its links). */
+  /**
+   * Sign in that way, in the browser holding `marker` and no session, and return the session it
+   * gets. The browser sends the marker to every /api/auth route.
+   */
+  signIn(marker: string): Promise<string>;
+  /**
+   * Whether this sign-in confirms an unconfirmed address itself: a password spends the confirm
+   * link the marker names, and Google and an emailed code remove the links. Either way the
+   * marker has nothing left to finish.
+   */
   confirmsItself: boolean;
 }
 
@@ -172,25 +183,25 @@ function signInWays(): Record<string, SignInWay> {
   let authenticator: SoftwareAuthenticator | null = null;
   return {
     'a password': {
-      confirmsItself: false,
+      confirmsItself: true,
       async seed(verified) {
         await seedAccount(UID, ADDRESS, verified);
         await dropSecondFactor();
       },
-      async signIn() {
-        const res = await post('/api/auth/login', { email: ADDRESS, password: PASSWORD });
+      async signIn(marker) {
+        const res = await post('/api/auth/login', { email: ADDRESS, password: PASSWORD }, marker);
         expect(res.status).toBe(200);
         return sessionFrom(res)!;
       },
     },
     'a password and a second factor': {
-      confirmsItself: false,
+      confirmsItself: true,
       async seed(verified) {
         totpSecret = (await seedAccount(UID, ADDRESS, verified)).totpSecret;
       },
-      async signIn() {
-        const first = await post('/api/auth/login', { email: ADDRESS, password: PASSWORD });
-        expect(await first.json()).toEqual({ twofaRequired: true });
+      async signIn(marker) {
+        const first = await post('/api/auth/login', { email: ADDRESS, password: PASSWORD }, marker);
+        expect(await first.json()).toMatchObject({ twofaRequired: true });
         const code = await totpCode(totpSecret, currentStep());
         const res = await post('/api/auth/2fa/verify', { code }, cookieFrom(first, 'fm_2fa'));
         expect(res.status).toBe(200);
@@ -201,16 +212,20 @@ function signInWays(): Record<string, SignInWay> {
       confirmsItself: false,
       async seed(verified) {
         const { session } = await seedAccount(UID, ADDRESS, verified);
-        const options = await post('/api/auth/passkeys/register/options', {}, session);
-        const { challenge } = (await options.json()) as { challenge: string };
-        authenticator = await createAuthenticator();
-        const attestation = await authenticator.register(challenge, ORIGIN, RP_ID);
-        const registered = await post(
-          '/api/auth/passkeys/register/verify',
-          { response: attestation, name: 'Laptop' },
-          `${session}; ${cookieFrom(options, 'fm_webauthn')}`
-        );
-        expect(registered.status).toBe(200);
+        // An account waiting for its link registers no passkey now, but one made earlier may
+        // have: so it is registered while the address counts as confirmed.
+        await whileConfirmed(UID, async () => {
+          const options = await post('/api/auth/passkeys/register/options', {}, session);
+          const { challenge } = (await options.json()) as { challenge: string };
+          authenticator = await createAuthenticator();
+          const attestation = await authenticator.register(challenge, ORIGIN, RP_ID);
+          const registered = await post(
+            '/api/auth/passkeys/register/verify',
+            { response: attestation, name: 'Laptop' },
+            `${session}; ${cookieFrom(options, 'fm_webauthn')}`
+          );
+          expect(registered.status).toBe(200);
+        });
       },
       async signIn() {
         const options = await post('/api/auth/passkeys/login/options', {});
@@ -266,7 +281,7 @@ describe.each(Object.keys(signInWays()))('after signing in with %s', (how) => {
     await way.seed(1);
     const token = await mintLink('change');
     const marker = await openSignedOut(token);
-    const session = await way.signIn();
+    const session = await way.signIn(marker);
 
     const { res, body } = await finishWith(`${session}; ${marker}`);
 
@@ -281,11 +296,11 @@ describe.each(Object.keys(signInWays()))('after signing in with %s', (how) => {
     await way.seed(0);
     const token = await mintLink('confirm');
     const marker = await openSignedOut(token);
-    const session = await way.signIn();
+    const session = await way.signIn(marker);
 
     const { res, body } = await finishWith(`${session}; ${marker}`);
 
-    // A sign-in that confirms the address itself has also removed its links, so there is
+    // A sign-in that confirms the address itself has also spent or removed its link, so there is
     // nothing left for the marker to finish.
     expect(body).toEqual(
       way.confirmsItself
@@ -298,19 +313,14 @@ describe.each(Object.keys(signInWays()))('after signing in with %s', (how) => {
 });
 
 describe('the marker verify-email leaves', () => {
-  it('is HttpOnly, SameSite=Lax, host-only, sent only to the finish route, and lasts 30 minutes', async () => {
+  it('is HttpOnly, SameSite=Lax, host-only, sent only to the /api/auth routes, and lasts 30 minutes', async () => {
     await seedAccount(UID, ADDRESS, 0);
     const res = await open(await mintLink('confirm'));
 
     const line = markerLine(res)!;
     expect(line).toMatch(/^fm_email_link=[^;]+; /);
     const attrs = line.split('; ').slice(1);
-    expect(attrs).toEqual([
-      'Path=/api/auth/email-link/finish',
-      'HttpOnly',
-      'SameSite=Lax',
-      'Max-Age=1800',
-    ]);
+    expect(attrs).toEqual(['Path=/api/auth', 'HttpOnly', 'SameSite=Lax', 'Max-Age=1800']);
   });
 
   it('is Secure outside development', async () => {
@@ -394,7 +404,8 @@ describe('POST /api/auth/email-link/finish', () => {
     expect((await accountRow(UID))?.email_verified).toBe(0);
     expect((await accountRow(OTHER))?.email_verified).toBe(1);
 
-    const mine = (await sessionCookie(UID)).split(';')[0]!;
+    // Its own session, which leaves the address unconfirmed until the link confirms it.
+    const mine = (await unconfirmedSessionCookie(UID)).split(';')[0]!;
     const right = await finishWith(`${mine}; ${marker}`);
 
     expect(right.body).toEqual({ outcome: 'confirmed', change: false });
@@ -463,11 +474,16 @@ describe('POST /api/auth/email-link/finish', () => {
   it('refuses a marker that was altered, and clears it', async () => {
     const { session } = await seedAccount(UID, ADDRESS, 0);
     const marker = await openSignedOut(await mintLink('confirm'));
-    const [id, exp, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
     // The first character carries six bits of the signature; the last one has padding in it.
     const flipped = `${sig!.startsWith('A') ? 'B' : 'A'}${sig!.slice(1)}`;
+    const otherHash = `${hash!.startsWith('a') ? 'b' : 'a'}${hash!.slice(1)}`;
 
-    for (const altered of [`${id}.${exp}.${flipped}`, `${id}.${Number(exp) + 60}.${sig}`]) {
+    for (const altered of [
+      `${id}.${exp}.${hash}.${flipped}`,
+      `${id}.${Number(exp) + 60}.${hash}.${sig}`,
+      `${id}.${exp}.${otherHash}.${sig}`,
+    ]) {
       const { res, body } = await finishWith(`${session}; ${MARKER}=${altered}`);
       expect(body).toEqual({ outcome: 'none', change: false });
       cleared(res);
@@ -484,9 +500,9 @@ describe('POST /api/auth/email-link/finish', () => {
     )
       .bind(await sha256(change))
       .first<{ id: number }>())!.id;
-    const [, exp, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const [, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
 
-    const { body } = await finishWith(`${session}; ${MARKER}=${changeId}.${exp}.${sig}`);
+    const { body } = await finishWith(`${session}; ${MARKER}=${changeId}.${exp}.${hash}.${sig}`);
 
     expect(body).toEqual({ outcome: 'none', change: false });
     expect((await accountRow(UID))?.email).toBe(ADDRESS);
@@ -533,10 +549,157 @@ describe('POST /api/auth/email-link/finish', () => {
     expect((await linkRow(token))?.used_at).toBeNull();
   });
 
+  it('reads no link for a marker whose signature does not hold', async () => {
+    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const marker = await openSignedOut(await mintLink('confirm'));
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const flipped = `${sig!.startsWith('A') ? 'B' : 'A'}${sig!.slice(1)}`;
+    const noting = dbThatNotes(realDb);
+
+    const { body } = await withDb(noting.db, () =>
+      finishWith(`${session}; ${MARKER}=${id}.${exp}.${hash}.${flipped}`)
+    );
+
+    expect(body).toEqual({ outcome: 'none', change: false });
+    expect(noting.statements.filter((sql) => /email_verifications/.test(sql))).toEqual([]);
+  });
+
+  it('looks at the first three markers a request carries, and no further', async () => {
+    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const marker = await openSignedOut(await mintLink('confirm'));
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const forged = (n: number) =>
+      `${MARKER}=${id}.${exp}.${hash}.${`${'AB'[n % 2]}${sig!.slice(1)}`}`;
+    const genuine = `${MARKER}=${id}.${exp}.${hash}.${sig}`;
+
+    const fourth = await finishWith([session, forged(0), forged(1), forged(2), genuine].join('; '));
+    expect(fourth.body).toEqual({ outcome: 'none', change: false });
+    expect((await accountRow(UID))?.email_verified).toBe(0);
+
+    const third = await finishWith([session, forged(0), forged(1), genuine].join('; '));
+    expect(third.body).toEqual({ outcome: 'confirmed', change: false });
+  });
+
   it('is rate-limited like opening a link', async () => {
     const { session } = await seedAccount(UID, ADDRESS, 0);
     for (let i = 0; i < 30; i++) expect((await finish(session)).status).toBe(200);
 
     expect((await finish(session)).status).toBe(429);
+  });
+});
+
+describe('a password sign-in in the browser that opened the confirm link', () => {
+  const WRONG_PASSWORD = { error: 'Invalid email or password' };
+  const signIn = (marker: string, password = PASSWORD) =>
+    post('/api/auth/login', { email: ADDRESS, password }, marker);
+
+  it('confirms the address, signs in, says so, and clears the marker', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    const token = await mintLink('confirm');
+    const marker = await openSignedOut(token);
+
+    const res = await signIn(marker);
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ id: UID, email: ADDRESS, emailConfirmed: true });
+    expect(sessionFrom(res)).not.toBeNull();
+    cleared(res);
+    expect((await accountRow(UID))?.email_verified).toBe(1);
+    expect((await linkRow(token))?.used_at).not.toBeNull();
+  });
+
+  it('confirms the address, then asks for the second factor', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    const marker = await openSignedOut(await mintLink('confirm'));
+
+    const res = await signIn(marker);
+
+    expect(await res.json()).toEqual({ twofaRequired: true, emailConfirmed: true });
+    expect(cookieFrom(res, 'fm_2fa')).toBeTruthy();
+    expect(sessionFrom(res)).toBeNull();
+    cleared(res);
+    expect((await accountRow(UID))?.email_verified).toBe(1);
+  });
+
+  it('answers a wrong password as a wrong password, and leaves the link waiting', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    const token = await mintLink('confirm');
+    const marker = await openSignedOut(token);
+
+    const res = await signIn(marker, 'not-the-password');
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(WRONG_PASSWORD);
+    expect(res.headers.getSetCookie()).toEqual([]);
+    expect((await accountRow(UID))?.email_verified).toBe(0);
+    expect((await linkRow(token))?.used_at).toBeNull();
+  });
+
+  it("answers as a wrong password does when the link is another account's, and leaves both as they were", async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    await seedAccount(OTHER, OTHER_ADDRESS, 0);
+    const theirs = await mintLink('confirm', { userId: OTHER, email: OTHER_ADDRESS });
+    const marker = await openSignedOut(theirs);
+
+    const res = await signIn(marker);
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(WRONG_PASSWORD);
+    expect(res.headers.getSetCookie()).toEqual([]);
+    expect((await accountRow(UID))?.email_verified).toBe(0);
+    expect((await accountRow(OTHER))?.email_verified).toBe(0);
+    expect((await linkRow(theirs))?.used_at).toBeNull();
+  });
+
+  it('answers as a wrong password does when the link has expired since', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    const token = await mintLink('confirm');
+    const marker = await openSignedOut(token);
+    await env.DB.prepare('UPDATE email_verifications SET expires_at = ? WHERE token_hash = ?')
+      .bind(new Date(Date.now() - 1000).toISOString(), await sha256(token))
+      .run();
+
+    const res = await signIn(marker);
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(WRONG_PASSWORD);
+    expect((await accountRow(UID))?.email_verified).toBe(0);
+    expect((await linkRow(token))?.used_at).toBeNull();
+  });
+
+  it('answers as a wrong password does for a link that changes the address', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    const token = await mintLink('change');
+    const marker = await openSignedOut(token);
+
+    const res = await signIn(marker);
+
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(WRONG_PASSWORD);
+    expect(await accountRow(UID)).toMatchObject({ email: ADDRESS, email_verified: 0 });
+    expect((await linkRow(token))?.used_at).toBeNull();
+  });
+
+  it('is refused when the account moved on after the link confirmed it', async () => {
+    await seedAccount(UID, ADDRESS, 0);
+    await dropSecondFactor();
+    const marker = await openSignedOut(await mintLink('confirm'));
+    const before = (await accessRows(UID)).auth_sessions;
+    const racing = dbWithStep(realDb, /UPDATE users SET email_verified = 1/, () =>
+      bumpTokenVersion(UID)
+    );
+
+    const res = await withDb(racing.db, () => signIn(marker));
+
+    expect(racing.ran()).toBe(true);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'Please try again.' });
+    expect(sessionFrom(res)).toBeNull();
+    expect((await accessRows(UID)).auth_sessions).toEqual(before);
   });
 });

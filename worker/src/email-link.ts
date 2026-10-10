@@ -4,21 +4,35 @@
  *
  * GET /api/auth/verify-email spends a link only for its own account's session. Opened in a
  * browser without that session, the link stays unspent and the browser gets a marker: an HttpOnly
- * cookie on this API origin, sent only to POST /api/auth/email-link/finish, that names the link
- * and lasts 30 minutes. The app calls that route once someone signs in there, and the link
+ * cookie on this API origin, sent only to the /api/auth routes, that names the link and lasts 30
+ * minutes. Two routes read it. A password sign-in to an account waiting for its confirm link
+ * spends that link (confirmWithOwnLink): the password and the mailbox are both proved there. And
+ * the app calls POST /api/auth/email-link/finish once someone signs in any other way, and the link
  * finishes if the session's account is the link's and the link is still unspent and unexpired.
  *
- * The marker is the link's row id and the marker's own expiry, signed with JWT_SECRET over the
- * link's token hash as well, so it names that one link and nothing a later row could reuse.
+ * The marker is the link's row id, the marker's own expiry and the link's token hash, signed with
+ * JWT_SECRET, so it names that one link and nothing a later row could reuse. It carries everything
+ * it signs, so a request's marker is checked before anything is read for it: a password sign-in
+ * reads the marker on every attempt, and a forged one costs no read.
  */
 import type { Env } from './index';
 import { b64urlDecode, b64urlEncode, hmacKey, readCookies } from './auth';
 import { applyEmailChange } from './email-change';
 
 export const EMAIL_LINK_COOKIE = 'fm_email_link';
-/** The one route that reads the marker. A cookie's Path is a prefix, so this is as narrow as it gets. */
+/** The route that finishes a link after a sign-in other than a password's. */
 export const EMAIL_LINK_FINISH_PATH = '/api/auth/email-link/finish';
+/**
+ * Where the marker is sent: a cookie's Path is a prefix, and this is the narrowest one that
+ * covers both routes that read it, POST /api/auth/login and the finish route.
+ */
+export const EMAIL_LINK_MARKER_PATH = '/api/auth';
 export const EMAIL_LINK_MARKER_SECONDS = 30 * 60;
+/**
+ * How many markers of one request are looked at. A browser holds one; a request with more is
+ * either odd or made up, and each costs a signature check.
+ */
+export const EMAIL_LINK_MARKERS_READ = 3;
 
 /** A row of email_verifications, as the routes that spend one read it. */
 export interface EmailLink {
@@ -82,14 +96,30 @@ export async function spendLink(db: D1Database, link: EmailLink): Promise<SpentL
   }
 }
 
+/**
+ * Spend `link`, the one a marker in this request names, when it is `userId`'s own confirm link
+ * and still unspent and unexpired. True once it has confirmed the address. A password sign-in
+ * calls this for an account waiting for its link: the password is right, and the marker says
+ * this browser opened the link from the mailbox.
+ */
+export async function confirmWithOwnLink(
+  db: D1Database,
+  userId: number,
+  link: EmailLink | null
+): Promise<boolean> {
+  if (!link || link.user_id !== userId || link.purpose !== 'confirm') return false;
+  if (link.used_at !== null || linkExpired(link)) return false;
+  return (await spendLink(db, link)) === 'confirmed';
+}
+
 // ── The marker ─────────────────────────────────────────────────────────────────────────────────
 
 function markerCookie(value: string, maxAgeSeconds: number, env: Env): string {
-  // Host-only (no Domain) and Path-limited: no other route and no other host ever receives it.
+  // Host-only (no Domain) and Path-limited: only the /api/auth routes on this host receive it.
   const secure = env.APP_ENV !== 'development'; // local http dev can't send Secure cookies
   return [
     `${EMAIL_LINK_COOKIE}=${value}`,
-    `Path=${EMAIL_LINK_FINISH_PATH}`,
+    `Path=${EMAIL_LINK_MARKER_PATH}`,
     'HttpOnly',
     'SameSite=Lax',
     `Max-Age=${maxAgeSeconds}`,
@@ -107,7 +137,7 @@ async function markerKey(env: Env): Promise<CryptoKey> {
 const markerData = (id: number, exp: number, tokenHash: string) =>
   new TextEncoder().encode(`email-link.${id}.${exp}.${tokenHash}`);
 
-/** The Set-Cookie that leaves `link`'s marker in this browser. */
+/** The Set-Cookie that leaves `link`'s marker in this browser: `id.exp.tokenHash.signature`. */
 export async function markerFor(
   env: Env,
   link: Pick<EmailLink, 'id' | 'token_hash'>
@@ -118,7 +148,11 @@ export async function markerFor(
     await markerKey(env),
     markerData(link.id, exp, link.token_hash)
   );
-  return markerCookie(`${link.id}.${exp}.${b64urlEncode(sig)}`, EMAIL_LINK_MARKER_SECONDS, env);
+  return markerCookie(
+    `${link.id}.${exp}.${link.token_hash}.${b64urlEncode(sig)}`,
+    EMAIL_LINK_MARKER_SECONDS,
+    env
+  );
 }
 
 /** The Set-Cookie that removes the marker. */
@@ -130,6 +164,9 @@ export function clearedMarker(env: Env): string {
  * The link this request's marker names, or null when it carries none that is genuine and
  * unexpired. `carried` says whether it carried a marker at all, so the caller clears only a
  * cookie that exists.
+ *
+ * Only the first EMAIL_LINK_MARKERS_READ markers are looked at, and each one's signature is
+ * checked before its link is read: the row it names must still have the token hash it signed.
  */
 export async function markedLink(
   request: Request,
@@ -137,18 +174,14 @@ export async function markedLink(
   db: D1Database
 ): Promise<{ link: EmailLink | null; carried: boolean }> {
   const values = readCookies(request, EMAIL_LINK_COOKIE).filter((v) => v !== '');
-  for (const value of values) {
-    const [idPart, expPart, sigPart, ...rest] = value.split('.');
-    if (rest.length > 0 || !idPart || !expPart || !sigPart) continue;
+  for (const value of values.slice(0, EMAIL_LINK_MARKERS_READ)) {
+    const [idPart, expPart, hashPart, sigPart, ...rest] = value.split('.');
+    if (rest.length > 0 || !idPart || !expPart || !hashPart || !sigPart) continue;
     const id = Number(idPart);
     const exp = Number(expPart);
     if (!Number.isSafeInteger(id) || !Number.isSafeInteger(exp)) continue;
     if (exp <= Math.floor(Date.now() / 1000)) continue;
-    const link = await db
-      .prepare(`SELECT ${EMAIL_LINK_COLUMNS} FROM email_verifications WHERE id = ?`)
-      .bind(id)
-      .first<EmailLink>();
-    if (!link) continue;
+    if (!/^[0-9a-f]{64}$/.test(hashPart)) continue;
     let sig: Uint8Array;
     try {
       sig = b64urlDecode(sigPart);
@@ -159,9 +192,16 @@ export async function markedLink(
       'HMAC',
       await markerKey(env),
       sig,
-      markerData(id, exp, link.token_hash)
+      markerData(id, exp, hashPart)
     );
-    if (genuine) return { link, carried: true };
+    if (!genuine) continue;
+    const link = await db
+      .prepare(
+        `SELECT ${EMAIL_LINK_COLUMNS} FROM email_verifications WHERE id = ? AND token_hash = ?`
+      )
+      .bind(id, hashPart)
+      .first<EmailLink>();
+    if (link) return { link, carried: true };
   }
   return { link: null, carried: values.length > 0 };
 }

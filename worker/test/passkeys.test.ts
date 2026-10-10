@@ -12,6 +12,7 @@ import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
 import { confirmTotp, enrollTotp } from '../src/twofa';
 import { currentStep, totpCode } from '../src/totp';
+import { signUpConfirmed } from './helpers/sign-up';
 
 const BASE = 'https://api.example.com';
 const ORIGIN = 'http://localhost:3800';
@@ -35,8 +36,7 @@ async function post(path: string, body?: unknown, cookie?: string | null): Promi
 }
 
 async function session(): Promise<string> {
-  const reg = await post('/api/auth/register', { email: EMAIL, password: PASSWORD });
-  expect(reg.status).toBe(200);
+  await signUpConfirmed(BASE, EMAIL, PASSWORD);
   const login = await post('/api/auth/login', { email: EMAIL, password: PASSWORD });
   expect(login.status).toBe(200);
   return cookieValue(login, 'fm_session')!;

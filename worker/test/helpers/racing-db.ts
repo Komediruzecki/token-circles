@@ -2,7 +2,8 @@
  * A D1 that runs one more step right after a chosen statement, before the route that ran it
  * carries on. A test uses it to change an account at an exact point inside a request: between a
  * route's check of a credential and the write that follows it. Or a D1 that notes each statement
- * it runs, for a test of what a route runs.
+ * it runs, for a test of what a route runs. Or a D1 that refuses chosen statements, for a test of
+ * what a route does when a write fails.
  *
  * The suite's `env` is the object the Worker's own requests see, so swapping its DB for the
  * request (withDb) is enough for SELF.fetch to run on this one.
@@ -90,6 +91,60 @@ export function dbThatNotes(db: D1Database): { db: D1Database; statements: strin
     statements.push(sql);
   });
   return { db: noting, statements };
+}
+
+/**
+ * `db`, which refuses the first `times` statements whose SQL matches `matching`, before they run:
+ * a statement alone throws, and a batch that holds one throws whole, as a failed transaction
+ * does. Each refusal throws an error that says which one it was: `refused for the test (1)`, and
+ * so on.
+ */
+export function dbThatRefuses(
+  db: D1Database,
+  matching: RegExp,
+  times: number
+): { db: D1Database; refused: () => number } {
+  let refused = 0;
+  const refuse = (sqls: string[]) => {
+    if (refused >= times || !sqls.some((sql) => matching.test(sql))) return;
+    refused += 1;
+    throw new Error(`refused for the test (${refused})`);
+  };
+  const wrap = (statement: D1PreparedStatement, sql: string): D1PreparedStatement => {
+    const proxy = new Proxy(statement, {
+      get(target, prop) {
+        if (prop === 'bind') {
+          return (...values: unknown[]) => wrap(target.bind(...values), sql);
+        }
+        if (prop === 'first' || prop === 'all' || prop === 'run' || prop === 'raw') {
+          return async (...args: unknown[]) => {
+            refuse([sql]);
+            const method = target[prop] as (...a: unknown[]) => Promise<unknown>;
+            return method.apply(target, args);
+          };
+        }
+        const value: unknown = Reflect.get(target, prop, target);
+        return typeof value === 'function' ? (value as Function).bind(target) : value;
+      },
+    });
+    unwrapped.set(proxy, statement);
+    sqlOf.set(proxy, sql);
+    return proxy;
+  };
+  const refusing = new Proxy(db, {
+    get(target, prop) {
+      if (prop === 'prepare') return (sql: string) => wrap(target.prepare(sql), sql);
+      if (prop === 'batch') {
+        return async (statements: D1PreparedStatement[]) => {
+          refuse(statements.map((s) => sqlOf.get(s) ?? ''));
+          return target.batch(statements.map((s) => unwrapped.get(s) ?? s));
+        };
+      }
+      const value: unknown = Reflect.get(target, prop, target);
+      return typeof value === 'function' ? (value as Function).bind(target) : value;
+    },
+  });
+  return { db: refusing, refused: () => refused };
 }
 
 /** Run `request` with `db` as the Worker's database, then put the real one back. */

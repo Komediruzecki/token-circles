@@ -8,7 +8,9 @@ import {
   clearedAccess,
   clearedWorthSaying,
   clearUnconfirmedAccess,
+  emailUnconfirmed,
   requireAuth,
+  requireAuthEvenUnconfirmed,
   verifyGoogleIdToken,
   signState,
   verifyState,
@@ -26,6 +28,7 @@ import { sendMail } from '../email';
 import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
 import {
   clearedMarker,
+  confirmWithOwnLink,
   EMAIL_LINK_COLUMNS,
   EMAIL_LINK_FINISH_PATH,
   linkExpired,
@@ -35,7 +38,10 @@ import {
   type EmailLink,
 } from '../email-link';
 import {
+  CONFIRM_LINKS_PER_HOUR,
+  confirmLinksMailed,
   createEmailVerification,
+  firstConfirmLink,
   randomToken,
   sha256Hex,
   verifyLink,
@@ -47,7 +53,7 @@ import {
   renderPasswordReset,
   renderWelcome,
 } from '../emailTemplates';
-import { clearRateLimit, enforce, clientIp } from '../ratelimit';
+import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
@@ -182,8 +188,100 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   });
 });
 
-// Email + password registration. Anti-enumeration (CR-9): identical neutral response whether or not
-// the email already exists, and no session is set — the user signs in afterward.
+/** An account as signing up, and sending its confirm link again, look one up. */
+interface AccountAtAddress {
+  id: number;
+  email_verified: number;
+  auth_provider: string;
+}
+
+/** The account at `email`, or null. */
+function lookUpAddress(env: Env, email: string): Promise<AccountAtAddress | null> {
+  return env.DB.prepare('SELECT id, email_verified, auth_provider FROM users WHERE email = ?')
+    .bind(email)
+    .first<AccountAtAddress>();
+}
+
+/**
+ * The account at `email` (`found`), or the one sign-up makes there (`made`, with the token of its
+ * first confirm link). The account, its profile and that link are written in one batch, so a
+ * failure leaves none of them behind and the work can run again from the start.
+ */
+async function accountAt(
+  env: Env,
+  email: string,
+  passwordHash: string
+): Promise<{ found: AccountAtAddress } | { made: { token: string } }> {
+  const found = await lookUpAddress(env, email);
+  if (found) return { found };
+  const token = randomToken();
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+    ).bind(email, passwordHash),
+    env.DB.prepare(
+      "INSERT INTO profiles (name, user_id) SELECT 'Personal Profile', id FROM users WHERE email = ?"
+    ).bind(email),
+    await firstConfirmLink(env.DB, email, token),
+  ]);
+  return { made: { token } };
+}
+
+/**
+ * The work a sign-up does after its answer. A new address gets an account, with a profile, and
+ * its welcome mail with the confirm link. A password account waiting for its confirm link gets a
+ * fresh one, as Send the link again would mail it, and keeps its password. Any other address with
+ * an account gets a notice that someone tried, and nothing else changes.
+ *
+ * Finding or making the account runs a second time when the first try fails. A second failure
+ * reaches the caller, which logs it: the answer has gone.
+ */
+async function signUpAfterAnswer(
+  env: Env,
+  email: string,
+  password: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const passwordHash = await hashPassword(password);
+  const account = await accountAt(env, email, passwordHash).catch(() =>
+    accountAt(env, email, passwordHash)
+  );
+  if ('found' in account && emailUnconfirmed(account.found)) {
+    await mailFreshConfirmLink(env, account.found.id, email, base, apiOrigin).catch(
+      (e: unknown) => {
+        console.error('Confirm link could not be sent again:', e);
+      }
+    );
+    return;
+  }
+  if ('found' in account) {
+    const notice = renderAccountExists({ appUrl: base });
+    await sendMail(env, email, notice.subject, notice.html, { text: notice.text }).catch(
+      (e: unknown) => {
+        console.error('account-exists notice email failed to send:', e);
+      }
+    );
+    return;
+  }
+  // A password account's welcome always carries its confirm link: the account opens with it.
+  const welcome = renderWelcome({
+    appUrl: base,
+    verifyUrl: verifyLink(apiOrigin, account.made.token, base),
+  });
+  await sendMail(env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+    (e: unknown) => {
+      console.error('Welcome email failed:', e);
+    }
+  );
+}
+
+// Email + password registration. Anti-enumeration (CR-9): the answer is the same whether or not
+// the address already has an account, and it comes before any work on one. Making the account,
+// or telling the address's owner that someone tried, happens after the answer
+// (signUpAfterAnswer), which tries the account work twice; a failure it cannot get past is
+// logged, not answered. No session is set: a password account signs in once its address is
+// confirmed.
 authRoutes.post('/api/auth/register', async (c) => {
   const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
   if (rl) return rl;
@@ -204,55 +302,14 @@ authRoutes.post('/api/auth/register', async (c) => {
   // from rotating IPs. Mirrors forgot-password; the response stays neutral (429 for existing + new).
   const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
-  // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
-  // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
-  // existing owner by email — returning the SAME neutral response with NO session either way. The
-  // user signs in afterward, so a new vs existing email is indistinguishable to the caller. Either
-  // mail is sent after the answer.
-  const passwordHash = await hashPassword(password);
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-  const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (existing) {
-    const notice = renderAccountExists({ appUrl: base });
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
-        (e: unknown) => {
-          console.error('account-exists notice email failed to send:', e);
-        }
-      )
-    );
-  } else {
-    const res = await c.env.DB.prepare(
-      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+  c.executionCtx.waitUntil(
+    signUpAfterAnswer(c.env, email, password, base, new URL(c.req.url).origin).catch(
+      (e: unknown) => {
+        console.error('Sign-up could not make the account:', e);
+      }
     )
-      .bind(email, passwordHash)
-      .run();
-    const userId = res.meta.last_row_id as number;
-    await c.env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
-      .bind('Personal Profile', userId)
-      .run();
-    // Best-effort, exactly like the mail it replaces: a signup is never held up, or failed, by
-    // the mail server, which is why the mail goes after the answer. An account with no confirm
-    // link can always ask for one from the app.
-    let verifyUrl: string | undefined;
-    try {
-      const token = await createEmailVerification(c.env.DB, userId, email);
-      verifyUrl = verifyLink(new URL(c.req.url).origin, token, base);
-    } catch (e) {
-      console.error('Verification token could not be minted:', e);
-    }
-    const welcome = renderWelcome({ appUrl: base, verifyUrl });
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
-        (e: unknown) => {
-          console.error('Welcome email failed:', e);
-        }
-      )
-    );
-  }
-  // Identical response regardless of existence; no session cookie is set (the user signs in next).
+  );
   return c.json({ ok: true });
 });
 
@@ -272,6 +329,9 @@ const sessionOrigin = (c: Context<AppEnv>) => ({
 const LOGIN_WINDOW_SEC = 900;
 const LOGIN_IP_LIMIT = 30;
 const LOGIN_EMAIL_LIMIT = 10;
+
+/** What a sign-in with a wrong address or password is answered, with 401. */
+const WRONG_PASSWORD = { error: 'Invalid email or password' };
 
 // Email + password login.
 authRoutes.post('/api/auth/login', async (c) => {
@@ -310,20 +370,48 @@ authRoutes.post('/api/auth/login', async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_email', email });
     return emailRl;
   }
-  // token_version is read with the password: the session below is bound to it.
+  // token_version is read with the password: the session below is bound to it. So is whether the
+  // account waits for its confirm link.
   const user = await c.env.DB.prepare(
-    'SELECT id, password_hash, token_version FROM users WHERE email = ?'
+    'SELECT id, password_hash, token_version, email_verified, auth_provider FROM users WHERE email = ?'
   )
     .bind(email)
-    .first<{ id: number; password_hash: string | null; token_version: number }>();
+    .first<{
+      id: number;
+      password_hash: string | null;
+      token_version: number;
+      email_verified: number;
+      auth_provider: string;
+    }>();
+  // A confirm link this browser opened before signing in (email-link.ts). It is read before the
+  // password is checked, whatever the password turns out to be, so a request that carries one
+  // does the same work for a wrong password as for a right one.
+  const { link: opened } = await markedLink(c.req.raw, c.env, c.env.DB);
   // Always run a verification — against a dummy hash when the account/hash is missing — so login
   // takes the same time regardless of whether the email exists (anti-enumeration). Then branch on
   // the real outcome.
   const passwordOk = await verifyPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || !user.password_hash || !passwordOk) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_credentials', email });
-    return c.json({ error: 'Invalid email or password' }, 401);
+    return c.json(WRONG_PASSWORD, 401);
   }
+  // An account waiting for its confirm link is answered as a wrong password is, after the same
+  // work, and its limits are left as a wrong password leaves them: nothing in the answer says the
+  // password was right. Unless this browser opened that account's confirm link: then the password
+  // and the mailbox are both proved, and the link confirms the address before the sign-in goes on.
+  let confirmedNow = false;
+  if (emailUnconfirmed(user)) {
+    confirmedNow = await confirmWithOwnLink(c.env.DB, user.id, opened);
+    if (!confirmedNow) {
+      logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'email_unconfirmed', email });
+      return c.json(WRONG_PASSWORD, 401);
+    }
+  }
+  // The marker has done its work once the link is spent.
+  const finished = confirmedNow ? { emailConfirmed: true } : {};
+  const clearMarker = () => {
+    if (confirmedNow) c.header('Set-Cookie', clearedMarker(c.env), { append: true });
+  };
   // Signing in correctly proves the credentials are right, so it must not spend the budget that
   // exists to stop people guessing them. Without this, ten successful logins in a quarter of an
   // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
@@ -341,13 +429,15 @@ authRoutes.post('/api/auth/login', async (c) => {
       email,
     });
     c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
-    return c.json({ twofaRequired: true });
+    clearMarker();
+    return c.json({ twofaRequired: true, ...finished });
   }
   const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
   if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
   c.header('Set-Cookie', session);
-  return c.json({ id: user.id, email });
+  clearMarker();
+  return c.json({ id: user.id, email, ...finished });
 });
 
 /**
@@ -496,7 +586,8 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // on the parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation
 // from a mail client. Opened without that session, the link stays unspent, the answer is
 // `signin_required`, and the browser keeps a marker that finishes the link once its account
-// signs in there (email-link.ts, POST /api/auth/email-link/finish).
+// signs in there: a password sign-in spends a confirm link itself (POST /api/auth/login), and
+// the app finishes any other link after a sign-in (email-link.ts, POST /api/auth/email-link/finish).
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -551,7 +642,10 @@ type EmailLinkOutcome = 'confirmed' | 'changed' | 'email_taken' | 'server_error'
 //
 // The marker stays for another account's session, so signing out and in to the right account
 // still finishes the link. Every other answer clears it: the link finished, or it never can.
-authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
+//
+// An account waiting for its confirm link reaches this route: finishing the link is how a session
+// it already had (one from before, or a passkey's) confirms its address.
+authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) => {
   const rl = await enforce(c, `email-link-finish:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
   const { link, carried } = await markedLink(c.req.raw, c.env, c.env.DB);
@@ -569,9 +663,81 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
   return done(spent, change);
 });
 
+/**
+ * The work a signed-out "Send the link again" does after its answer: when `email` belongs to a
+ * password account waiting for its confirm link, mail it a fresh link (mailFreshConfirmLink). An
+ * address with no account, a confirmed one and a Google account's get nothing.
+ */
+async function mailConfirmLinkIfWaiting(
+  env: Env,
+  email: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const user = await lookUpAddress(env, email);
+  if (!user || !emailUnconfirmed(user)) return;
+  await mailFreshConfirmLink(env, user.id, email, base, apiOrigin);
+}
+
+/**
+ * Mint a fresh confirm link for account `userId`, which retires the ones it had, and mail it. For
+ * the ways of asking that answer before they look the address up: once the address has had its
+ * confirm links for the hour (CONFIRM_LINKS_PER_HOUR), nothing is minted or mailed, and the link
+ * it has keeps working. Their answer has gone, the same either way.
+ */
+async function mailFreshConfirmLink(
+  env: Env,
+  userId: number,
+  email: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const budget = await rateLimit(env, confirmLinksMailed(email), CONFIRM_LINKS_PER_HOUR, 3600);
+  if (!budget.ok) return;
+  const token = await createEmailVerification(env.DB, userId, email);
+  const mail = renderEmailVerification({
+    link: verifyLink(apiOrigin, token, base),
+    ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    assetOrigin: base,
+  });
+  await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
+}
+
+// Send the confirm link again, signed out: from Check your inbox after signing up, and from the
+// sign-in form when a password sign-in is refused. It takes an address, and the answer is the same
+// for every address, whether it has no account, a confirmed one, a Google account or one waiting
+// for its link: the work comes after the answer (mailConfirmLinkIfWaiting). Its limits and captcha
+// are a reset request's, with buckets of its own, and they run before anything looks at the
+// address.
+authRoutes.post('/api/auth/verify-email/resend', async (c) => {
+  const ipRl = await enforce(c, `confirm-resend-ip:${clientIp(c)}`, 5, 900);
+  if (ipRl) return ipRl;
+  const body = (await c.req.json().catch(() => ({}))) as {
+    email?: string;
+    turnstileToken?: string;
+  };
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
+  const email = (body.email ?? '').trim().toLowerCase();
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
+  const emailRl = await enforce(c, `confirm-resend-email:${email}`, 3, 3600);
+  if (emailRl) return emailRl;
+
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailConfirmLinkIfWaiting(c.env, email, base, new URL(c.req.url).origin).catch((e: unknown) => {
+      console.error('Confirm link could not be sent again:', e);
+    })
+  );
+  return c.json({ ok: true });
+});
+
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
 // keep secret — the caller has already proved the account is theirs, and a 429 can be shown.
-authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
+// An account waiting for its confirm link reaches it: this is the Confirm your email screen's
+// "Send the link again".
+authRoutes.post('/api/auth/resend-verification', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare('SELECT email, email_verified FROM users WHERE id = ?')
     .bind(userId)
@@ -580,10 +746,15 @@ authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
   if (!user.email) return c.json({ error: 'This account has no email address' }, 400);
   // Not an error: the address is confirmed, which is what the caller wanted.
   if (user.email_verified) return c.json({ ok: true, alreadyVerified: true });
-  // Per-address cap on top of the per-IP one — the IP bucket does nothing against a caller who
-  // rotates addresses, and this route sends real mail to a real inbox.
+  // No limit per network address, unlike the signed-out ways of asking: the session decides the
+  // address, so this route mails nobody but the account's own address, whoever calls it. That
+  // address has two limits: its requests here, and the links it was mailed in the hour (below).
   const emailRl = await enforce(c, `resend-verification:${user.email}`, 3, 3600);
   if (emailRl) return emailRl;
+  // The links this address has had in the hour, by every way of asking (mailFreshConfirmLink).
+  // Only this account's own session reads the answer, so the limit can be said.
+  const mailedRl = await enforce(c, confirmLinksMailed(user.email), CONFIRM_LINKS_PER_HOUR, 3600);
+  if (mailedRl) return mailedRl;
 
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
   const token = await createEmailVerification(c.env.DB, userId, user.email, 'confirm', boundTo(c));
@@ -617,12 +788,17 @@ authRoutes.delete('/api/auth/email-change', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
-// Current user. email_verified rides along because the app's confirm-your-email banner is the
-// only thing that reads it, and this is the call it already makes.
-authRoutes.get('/api/auth/me', requireAuth, async (c) => {
+// Current user. An account waiting for its confirm link reaches it too: email_verified and
+// auth_provider ride along, and from them the app shows its Confirm your email screen, with the
+// address, instead of the app. billing_account (1 or 0) says whether the account has a billing
+// account at Stripe: that screen offers the billing portal, where a subscription is managed or
+// cancelled, to an account that has one.
+authRoutes.get('/api/auth/me', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare(
-    'SELECT id, username, email, auth_provider, email_verified FROM users WHERE id = ?'
+    `SELECT id, username, email, auth_provider, email_verified,
+            stripe_customer_id IS NOT NULL AS billing_account
+       FROM users WHERE id = ?`
   )
     .bind(userId)
     .first();
@@ -641,8 +817,10 @@ authRoutes.get('/api/auth/me', requireAuth, async (c) => {
  * technically valid until it expires, which is the standing trade-off for a stateless token —
  * and the case that trade-off is wrong for (a session you believe is stolen) is exactly what
  * /api/auth/logout-all is for.
+ *
+ * An account waiting for its confirm link reaches it: the Confirm your email screen signs out.
  */
-authRoutes.post('/api/auth/logout', requireAuth, async (c) => {
+authRoutes.post('/api/auth/logout', requireAuthEvenUnconfirmed, async (c) => {
   const sessionId = c.get('sessionId');
   // Deleting the row is what actually ends it — clearing the cookie only ends it for a browser
   // that cooperates. A token issued before the sessions table existed has no row to delete and

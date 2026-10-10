@@ -15,6 +15,8 @@ import {
   callMcp,
   dataRows,
   me,
+  passwordIs,
+  profilesWith,
   removeAccounts,
   seedAccount,
   seededData,
@@ -82,9 +84,12 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
   it('removes every way in that was set up before, then joins the account', async () => {
     const { session, apiToken } = await seed(0);
     // Each of them gets in beforehand.
-    expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(UID)).toBe(true);
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     const before = await account();
 
     const res = await googleSignIn();
@@ -104,6 +109,8 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
       auth_provider: 'google',
       email_verified: 1,
     });
+    // It reaches the app's routes, which a session of an account waiting for its link does not.
+    expect((await profilesWith(google!)).status).toBe(200);
     expect(await account()).toMatchObject({
       password_hash: null,
       provider_id: GOOGLE_SUB,
@@ -162,9 +169,12 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
 
     expect(await account()).toEqual(before);
     expect(await accessRows(UID)).toEqual(rowsBefore);
-    expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(UID)).toBe(true);
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
   });
 });
 

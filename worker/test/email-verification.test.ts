@@ -3,19 +3,20 @@
  *
  * The interesting cases are all the ones where a link should NOT work: spent, expired, minted for
  * an address the account no longer has, or pointed at somebody else's origin. Each is asserted to
- * leave email_verified alone, because a soft gate that can be talked into flipping is no gate.
+ * leave email_verified alone, because that flag is what lets a password account into the app: a
+ * link that can be talked into flipping it opens the account to an address nobody read.
  *
  * The link confirms only for its own account, signed in where it is opened. Anywhere else it is
  * left unspent and the browser is asked to sign in, so the cases above open it signed in.
  *
- * Runs the real worker in workerd via Miniflare. RESEND_API_KEY is unset in tests, so sendMail
- * logs and skips — the token rows are what these assert on; the mail bodies have their own test
- * in email-templates.test.ts.
+ * Runs the real worker in workerd via Miniflare. RESEND_API_KEY is unset unless a test sets it to
+ * read the mail it sends; otherwise sendMail logs and skips, and the token rows are what these
+ * assert on. The mail bodies have more tests in email-templates.test.ts.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { sessionCookie } from './helpers/session';
-import { renderEmailVerification, renderWelcome } from '../src/emailTemplates';
+import { unconfirmedSessionCookie } from './helpers/session';
+import { renderAccountExists, renderEmailVerification, renderWelcome } from '../src/emailTemplates';
 import { fetchSettled } from './helpers/after-answer';
 
 const USER_ID = 8100;
@@ -27,13 +28,15 @@ const APP = 'http://localhost:3800';
 /** The seeded account's session, which `confirm` sends unless told otherwise. */
 let signedIn = '';
 
+/** A password account, confirmed as `verified` says, and the sessions here leave it that way. */
 async function seedUser(id = USER_ID, email = EMAIL, verified = 0): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO users (id, email, password_hash, auth_provider, email_verified, token_version) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', ?, 1)"
   )
     .bind(id, email, verified)
     .run();
-  if (id === USER_ID) signedIn = (await sessionCookie(id, 'password', env)).split(';')[0];
+  if (id === USER_ID)
+    signedIn = (await unconfirmedSessionCookie(id, 'password', env)).split(';')[0];
 }
 
 /** Mint a confirm row directly, so a test can choose the expiry and the address it is bound to. */
@@ -197,7 +200,7 @@ describe('GET /api/auth/verify-email, opened where its account is not signed in'
     await seedUser();
     await seedUser(8101, 'someone-else@example.com');
     await mintToken({ token: 'good-token' });
-    const other = (await sessionCookie(8101, 'password', env)).split(';')[0];
+    const other = (await unconfirmedSessionCookie(8101, 'password', env)).split(';')[0];
 
     const res = await confirm('good-token', APP, other);
 
@@ -231,9 +234,10 @@ describe('GET /api/auth/verify-email, opened where its account is not signed in'
 });
 
 describe('the welcome mail of a new sign-up', () => {
-  // Registration sets no session, and the app signs in straight after with the same password
-  // (LoginScreen), so the browser that signed up is signed in when the mail arrives. The mail is
-  // caught here, as in forgot-password.test.ts, so the test opens the link the Worker sent.
+  // Registration sets no session, and an account waiting for its link signs in with its password
+  // only together with that link. So the link is opened signed out, it asks for a sign-in, and
+  // the password sign-in in that browser confirms the address. The mail is caught here, as in
+  // forgot-password.test.ts, so the test opens the link the Worker sent.
   const ADDRESS = 'fresh-signup@example.com';
   const SIGNUP_PASSWORD = 'correct horse battery staple';
   const realFetch = globalThis.fetch;
@@ -282,20 +286,23 @@ describe('the welcome mail of a new sign-up', () => {
     return { id: user!.id, link: link![0] };
   }
 
-  it('confirms the address when opened in the browser that signed up', async () => {
+  it('confirms the address with the password sign-in in the browser that opened it', async () => {
     const { id, link } = await signUp();
-    const signedInAfterSignUp = await post('/api/auth/login', {
-      email: ADDRESS,
-      password: SIGNUP_PASSWORD,
+    const opened = await SELF.fetch(link, { redirect: 'manual' });
+    expect(opened.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required`);
+    const marker = opened.headers
+      .getSetCookie()
+      .find((line) => line.startsWith('fm_email_link='))!
+      .split(';')[0]!;
+
+    const signedIn = await fetchSettled('https://api.example.com/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: marker },
+      body: JSON.stringify({ email: ADDRESS, password: SIGNUP_PASSWORD }),
     });
-    expect(signedInAfterSignUp.status).toBe(200);
-    const session = /(?:^|[,;]\s*)(fm_session=[^;,]+)/.exec(
-      signedInAfterSignUp.headers.get('Set-Cookie') ?? ''
-    )![1];
 
-    const res = await SELF.fetch(link, { redirect: 'manual', headers: { Cookie: session } });
-
-    expect(res.headers.get('Location')).toBe(`${APP}/#everified=1`);
+    expect(signedIn.status).toBe(200);
+    expect(await signedIn.json()).toEqual({ id, email: ADDRESS, emailConfirmed: true });
     expect(await isVerified(id)).toBe(1);
   });
 
@@ -318,7 +325,7 @@ describe('POST /api/auth/resend-verification', () => {
     });
 
   const sessionFor = async (id = USER_ID): Promise<string> =>
-    (await sessionCookie(id, 'password', env)).split(';')[0];
+    (await unconfirmedSessionCookie(id, 'password', env)).split(';')[0];
 
   it('needs a session', async () => {
     const res = await resend();
@@ -339,6 +346,17 @@ describe('POST /api/auth/resend-verification', () => {
     const stale = await confirm('superseded');
     expect(stale.headers.get('Location')).toBe(`${APP}/#everified_error=invalid_or_used`);
     expect(await isVerified()).toBe(0);
+  });
+
+  it('counts against a limit of three an hour on the address, for a session whose address waits for its link', async () => {
+    await seedUser();
+    const session = await sessionFor();
+
+    const statuses = [];
+    for (let i = 0; i < 4; i += 1) statuses.push((await resend(session)).status);
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
+    expect(await unusedTokens()).toBe(1);
   });
 
   it('says so, rather than sending mail, when the address is already confirmed', async () => {
@@ -367,7 +385,8 @@ describe('POST /api/auth/resend-verification', () => {
 describe('POST /api/auth/register', () => {
   it('creates the account unverified and leaves a confirm link waiting to be clicked', async () => {
     const email = 'fresh@example.com';
-    const res = await SELF.fetch('https://api.example.com/api/auth/register', {
+    // The account is made after the answer: this comes back once that work is done.
+    const res = await fetchSettled('https://api.example.com/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: 'correct horse battery staple' }),
@@ -390,7 +409,7 @@ describe('POST /api/auth/register', () => {
 describe('GET /api/auth/me', () => {
   it('reports email_verified, which is the only thing that reads it', async () => {
     await seedUser(USER_ID, EMAIL, 1);
-    const cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
+    const cookie = (await unconfirmedSessionCookie(USER_ID, 'password', env)).split(';')[0];
 
     const res = await SELF.fetch('https://api.example.com/api/auth/me', {
       headers: { Cookie: cookie },
@@ -421,26 +440,99 @@ describe('the mail itself', () => {
     expect(mail.text).toContain('https://x/y');
   });
 
-  it('says in both mails that a sign-in the link asks for confirms the address', () => {
+  it('says in both mails, html and text, that a password sign-in where the link asks for one confirms the address, in another browser or on another device too', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
+    const resent = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
+    const sentence =
+      'If the link asks you to sign in, sign in right there with your password, even in another browser or on another device, and your address is confirmed.';
+    for (const mail of [welcome, resent]) {
+      expect(mail.html).toContain(sentence);
+    }
+    expect(welcome.text).toContain(
+      `Confirm this is your address to start using your account:\n${link}\n\n${sentence}\n\nThen set up your first account,`
+    );
+    expect(resent.text).toContain(
+      `Open this link to confirm your address and start using your account (it expires in 24 hours):\n${link}\n\n${sentence} Links we sent before this one no longer work.`
+    );
+  });
+
+  it('words the account-exists notice and the Google welcome without an em dash, up to the shared text footer', () => {
+    const upToFooter = (text: string) => text.slice(0, text.indexOf('\n—\n'));
+    const exists = renderAccountExists({ appUrl: APP });
+    const google = renderWelcome({ appUrl: APP });
+    for (const mail of [exists, google]) {
+      expect(mail.subject).not.toContain('—');
+      expect(mail.html).not.toContain('—');
+      expect(upToFooter(mail.text)).not.toContain('—');
+    }
+    expect(google.subject).toBe('Welcome to Token Circles: your orbit is ready');
+    expect(google.html).toContain(
+      'Your account is ready. Set up your first account and bring your history.'
+    );
+    expect(exists.html).toContain(
+      'Someone just tried to create a Token Circles account with this email address, but one already exists.'
+    );
+    expect(exists.html).toContain(
+      'Someone tried to sign up with your address. Your account is unchanged.'
+    );
+    expect(exists.text).toContain(
+      `If that was you, sign in or reset your password at ${APP}\n\nIf it wasn't you, no action is needed.`
+    );
+  });
+
+  it('words the cards of both welcomes, the password one and the Google one, without an em dash', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    for (const welcome of [
+      renderWelcome({ appUrl: APP, verifyUrl: link }),
+      renderWelcome({ appUrl: APP }),
+    ]) {
+      expect(welcome.html).toContain(
+        'The home for your balance and transactions: checking, savings, cash or brokerage.'
+      );
+      expect(welcome.html).toContain(
+        'We recognize recurring charges (Netflix, Spotify, Claude and 40+ more) from your imported transactions and offer to track them.'
+      );
+    }
+  });
+
+  it('says in the welcome of a password sign-up, html and text, that the link opens the account, and never that it is ready or to open the app first', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
+    expect(welcome.subject).toBe('Welcome to Token Circles: confirm your email');
+    for (const part of [welcome.html, welcome.text]) {
+      expect(part).toContain('Confirm this is your address to start using your account');
+      expect(part).not.toMatch(/is ready/);
+      expect(part).not.toContain('Open Token Circles');
+      expect(part).not.toContain('Open the app:');
+    }
+    expect(welcome.html).toContain('Confirm your email address to start using your account.');
+  });
+
+  it('says in the confirm mail, html and text, that the links sent before it no longer work', () => {
+    const mail = renderEmailVerification({ link: 'https://x/y', ttlHours: 24, assetOrigin: APP });
+    expect(mail.html).toContain(
+      'This link expires in 24 hours. Links we sent before this one no longer work.'
+    );
+    expect(mail.html).toContain('Confirm your address. The link expires in 24 hours.');
+    expect(mail.text).toContain('Links we sent before this one no longer work.');
+  });
+
+  it('says in both mails, html and text, that the account is for using once the address is confirmed, and never that it works without', () => {
     const link = 'https://api.example.com/api/auth/verify-email?token=abc';
     const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
     const resent = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
     for (const mail of [welcome, resent]) {
-      expect(mail.html).toContain(
-        "If you're asked to sign in first, your address is confirmed as soon as you do."
-      );
+      for (const part of [mail.html, mail.text]) {
+        expect(part).toContain('start using your account');
+        expect(part).not.toContain('keeps working');
+      }
     }
-    expect(welcome.text).toContain(
-      `Confirm this is your address so we can reach you about your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${link}\n\nThen set up your first account,`
-    );
-    expect(resent.text).toContain(
-      `Open this link to confirm your address (expires in 24 hours). If you're asked to sign in first, it's confirmed as soon as you do:\n${link}`
-    );
   });
 
   it('leaves the sign-in sentence out of the welcome that has nothing to confirm', () => {
     const plain = renderWelcome({ appUrl: APP });
-    expect(plain.html).not.toContain("If you're asked to sign in first");
-    expect(plain.text).not.toContain("If you're asked to sign in first");
+    expect(plain.html).not.toContain('If the link asks you to sign in');
+    expect(plain.text).not.toContain('If the link asks you to sign in');
   });
 });

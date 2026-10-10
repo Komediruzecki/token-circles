@@ -58,7 +58,7 @@ describe('ResendVerification', () => {
 
     expect(calls).toBe(1)
     expect(btn()).toBeNull()
-    expect(host.textContent).toContain('check your inbox')
+    expect(host.textContent).toBe('Sent. Check your inbox.')
   })
 
   it('sends once however many times it is clicked', async () => {
@@ -77,7 +77,7 @@ describe('ResendVerification', () => {
   })
 
   it('hands the button back after a failure, with the reason', async () => {
-    send = () => Promise.reject(new Error('Too many requests — try again a little later'))
+    send = () => Promise.reject(new Error('Too many requests. Try again a little later.'))
     await mount()
 
     btn()!.click()
@@ -86,7 +86,7 @@ describe('ResendVerification', () => {
     expect(btn()).not.toBeNull()
     expect(btn()!.disabled).toBe(false)
     expect(toasts).toEqual([
-      { message: 'Too many requests — try again a little later', type: 'error' },
+      { message: 'Too many requests. Try again a little later.', type: 'error' },
     ])
   })
 

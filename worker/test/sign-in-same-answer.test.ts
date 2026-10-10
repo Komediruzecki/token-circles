@@ -2,23 +2,28 @@
  * Signing in with a wrong password, asking for a reset link, asking for a sign-in code and
  * creating an account answer with the same status, headers and body for an address that has an
  * account and for one that has none, and so does each route's limit on one address once it is
- * reached. Every header but Date is compared, the cookie a sign-in code request sets without its
+ * reached. Signing in with the right password to an account waiting for its confirm link is
+ * answered as a wrong password is, after the same statements, and counts against the same limit. Every header but Date is compared, the cookie a sign-in code request sets without its
  * value: that is a new random handle on every request. Signing in checks a password for an address
  * with no account against a hash of the same cost as a real one.
  *
  * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
- * sent or is held. The two that store a row for the address after their answer (a reset link, a
- * sign-in code) answer ok while that row cannot be written.
+ * sent or is held. The three that store a row for the address after their answer (a reset link, a
+ * sign-in code, a new account) answer ok while that row cannot be written, and creating an account
+ * answers before it looks the address up.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
 import { DUMMY_PASSWORD_HASH } from '../src/routes/auth';
 import { fetchSettled, fetchUnsettled } from './helpers/after-answer';
+import { dbThatNotes, dbWithStep, realDb, withDb } from './helpers/racing-db';
 
 const BASE = 'https://api.example.com';
 const HAS_ACCOUNT = 'same-answer-account@example.com';
 const NO_ACCOUNT = 'same-answer-nobody@example.com';
+/** A password account whose address waits for its confirm link. */
+const WAITING = 'same-answer-waiting@example.com';
 
 let ip = 0;
 
@@ -127,6 +132,11 @@ const STORING: { path: string; table: string; logged: string }[] = [
     table: 'login_codes',
     logged: 'Sign-in code could not be sent:',
   },
+  {
+    path: '/api/auth/register',
+    table: 'users',
+    logged: 'Sign-up could not make the account:',
+  },
 ];
 
 const realFetch = globalThis.fetch;
@@ -168,18 +178,22 @@ beforeEach(async () => {
   for (const t of ['login_codes', 'password_resets', 'rate_limits', 'email_verifications']) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
   }
-  const theirs = 'SELECT id FROM users WHERE email IN (?, ?)';
+  const theirs = 'SELECT id FROM users WHERE email IN (?, ?, ?)';
   await env.DB.prepare(`DELETE FROM profiles WHERE user_id IN (${theirs})`)
-    .bind(HAS_ACCOUNT, NO_ACCOUNT)
+    .bind(HAS_ACCOUNT, NO_ACCOUNT, WAITING)
     .run();
-  await env.DB.prepare('DELETE FROM users WHERE email IN (?, ?)')
-    .bind(HAS_ACCOUNT, NO_ACCOUNT)
+  await env.DB.prepare('DELETE FROM users WHERE email IN (?, ?, ?)')
+    .bind(HAS_ACCOUNT, NO_ACCOUNT, WAITING)
     .run();
-  await env.DB.prepare(
-    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 1, 'password')"
-  )
-    .bind(HAS_ACCOUNT, await hashPassword('the-password'))
-    .run();
+  const hash = await hashPassword('the-password');
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 1, 'password')"
+    ).bind(HAS_ACCOUNT, hash),
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+    ).bind(WAITING, hash),
+  ]);
 });
 
 describe('an address with an account and one without', () => {
@@ -299,6 +313,44 @@ describe('while the row a route stores cannot be written', () => {
   }
 });
 
+describe('while the look-up of the address is held', () => {
+  it('/api/auth/register answers first, and ok, and makes the account once it goes on', async () => {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const holding = dbWithStep(realDb, /FROM users WHERE email = \?/, () => held);
+    const accounts = async () =>
+      (
+        await realDb
+          .prepare('SELECT COUNT(*) AS n FROM users WHERE email = ?')
+          .bind(NO_ACCOUNT)
+          .first<{ n: number }>()
+      )?.n;
+
+    await withDb(holding.db, async () => {
+      const sent = fetchUnsettled(
+        `${BASE}/api/auth/register`,
+        sending(bodyFor('/api/auth/register')(NO_ACCOUNT))
+      );
+      try {
+        const answered = await Promise.race([
+          sent.answer.then(read),
+          new Promise<'no answer'>((resolve) => setTimeout(() => resolve('no answer'), 5_000)),
+        ]);
+        expect(answered, 'the answer, while the look-up is held').toMatchObject(OK);
+        expect(await accounts()).toBe(0);
+      } finally {
+        release();
+        await sent.settled();
+      }
+    });
+
+    expect(holding.ran()).toBe(true);
+    expect(await accounts()).toBe(1);
+  });
+});
+
 describe('signing in with an address that has no account', () => {
   it('checks the password against a stand-in hash with the scheme, cost and lengths of a real one', async () => {
     const fields = (stored: string) => {
@@ -311,5 +363,54 @@ describe('signing in with an address that has no account', () => {
       };
     };
     expect(fields(DUMMY_PASSWORD_HASH)).toEqual(fields(await hashPassword('a real password')));
+  });
+});
+
+describe('a sign-in with the right password to an account waiting for its confirm link', () => {
+  const signIn = (email: string, password: string) =>
+    answer('/api/auth/login', { email, password });
+
+  it('gets the status, headers and body a wrong password gets', async () => {
+    const right = await signIn(WAITING, 'the-password');
+    const wrong = await signIn(WAITING, 'not-the-password');
+    const elsewhere = await signIn(HAS_ACCOUNT, 'not-the-password');
+
+    expect(wrong.status).toBe(401);
+    expect(right).toEqual(wrong);
+    expect(right).toEqual(elsewhere);
+  });
+
+  it('runs the statements a wrong password runs', async () => {
+    const statements = async (password: string) => {
+      const noting = dbThatNotes(realDb);
+      await withDb(noting.db, () => signIn(WAITING, password));
+      return noting.statements;
+    };
+
+    const right = await statements('the-password');
+    const wrong = await statements('not-the-password');
+
+    expect(right.length).toBeGreaterThan(0);
+    expect(right).toEqual(wrong);
+  });
+
+  it('counts against the limit on the address as a wrong password does', async () => {
+    const last = async (email: string, password: string) => {
+      for (let i = 0; i < 10; i += 1) await signIn(email, password);
+      return signIn(email, password);
+    };
+
+    const right = await last(WAITING, 'the-password');
+    await env.DB.prepare('DELETE FROM rate_limits').run();
+    const wrong = await last(WAITING, 'not-the-password');
+
+    expect(right.status).toBe(429);
+    const anyWait = (said: string) => said.replace(/\d+/g, 'N');
+    const waitAside = (one: Answer) => ({
+      ...one,
+      headers: one.headers.map(anyWait),
+      body: anyWait(one.body),
+    });
+    expect(waitAside(right)).toEqual(waitAside(wrong));
   });
 });

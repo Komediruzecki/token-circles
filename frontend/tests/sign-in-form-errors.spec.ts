@@ -3,8 +3,9 @@
  * (boot.ts): what is wrong is marked at the field it is about, and the screen says the same for an
  * address with an account and one without.
  *
- * A wrong password for an account, and any password for an address with no account, get the same
- * status and body from the Worker and the same words on the screen, and neither field is marked.
+ * A wrong password for an account, any password for an address with no account, and the right
+ * password for an account whose address waits for its confirm link, get the same status and body
+ * from the Worker and the same words on the screen, and neither field is marked.
  * Asking for a reset link gets the same status, body and words for both. A field left empty, or
  * filled in a way the Worker would refuse, is marked with its message as its accessible
  * description, and nothing is sent: on the sign-in, account, email-code and support forms, on the
@@ -18,7 +19,7 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
-import { sql } from './db'
+import { accountMade, confirmAccount, sql } from './db'
 import { E2E_BASE } from './e2e-constants'
 import { isNetworkNoise } from './test-helpers'
 import { SIGN_IN_MESSAGES as SAY } from '../../shared/signInSchema'
@@ -33,7 +34,7 @@ test.use({ storageState: { cookies: [], origins: [] } })
 const stamp = () => randomBytes(6).toString('hex')
 const sha256Hex = (s: string) => createHash('sha256').update(s).digest('hex')
 
-/** An account made for the run. */
+/** An account made for the run, with its address confirmed, so it signs in with PASSWORD. */
 async function signUp(api: APIRequestContext): Promise<string> {
   const email = `e2e-signin-${stamp()}@example.com`
   sql("DELETE FROM rate_limits WHERE bucket LIKE 'register%'")
@@ -41,6 +42,7 @@ async function signUp(api: APIRequestContext): Promise<string> {
     data: { email, password: PASSWORD },
   })
   expect(registered.ok(), `sign-up failed: ${registered.status()}`).toBeTruthy()
+  await confirmAccount(email)
   return email
 }
 
@@ -152,6 +154,54 @@ for (const boot of BOOTS) {
         expect(errors).toEqual([])
       } finally {
         await deleteRunAccount(request, account)
+      }
+    })
+
+    test(`the right password to an account waiting for its link gets the same status, body and words as a wrong password (${boot})`, async ({
+      page,
+      context,
+      request,
+    }) => {
+      test.setTimeout(150_000)
+      const errors = watchErrors(page)
+      const confirmed = await signUp(request)
+      const waiting = `e2e-signin-waiting-${stamp()}@example.com`
+      try {
+        sql("DELETE FROM rate_limits WHERE bucket LIKE 'register%'")
+        const registered = await request.post(`${E2E_BASE}/api/auth/register`, {
+          data: { email: waiting, password: PASSWORD },
+        })
+        expect(registered.ok(), `sign-up failed: ${registered.status()}`).toBeTruthy()
+        await accountMade(waiting)
+        await bootApp(context, boot)
+        await openSignIn(page, boot, E2E_BASE)
+
+        const tryWith = async (
+          address: string,
+          secret: string
+        ): Promise<{ answer: Answer; said: string }> => {
+          sql("DELETE FROM rate_limits WHERE bucket LIKE 'login%'")
+          await email(page).fill(address)
+          await password(page).fill(secret)
+          const answer = await sendAndRead(page, '/api/auth/login', () => submit(page))
+          await expect(page.getByTestId('login-error')).not.toHaveText('')
+          return { answer, said: (await page.getByTestId('login-error').textContent()) ?? '' }
+        }
+
+        const right = await tryWith(waiting, PASSWORD)
+        await expectUnmarked(page)
+        await expect(page.getByTestId('send-confirm-link')).toBeVisible()
+        const wrong = await tryWith(confirmed, WRONG_PASSWORD)
+
+        expect(right.answer.status).toBe(401)
+        expect(right.answer).toEqual(wrong.answer)
+        expect(right.said).toBe(wrong.said)
+        await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0)
+        expect(errors).toEqual([])
+      } finally {
+        await deleteRunAccount(request, confirmed)
+        await confirmAccount(waiting).catch(() => undefined)
+        await deleteRunAccount(request, waiting)
       }
     })
 

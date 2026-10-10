@@ -1,6 +1,6 @@
 import * as db from './db';
 import { planHasFeature } from './plans';
-import { SAME_TOKEN_VERSION, type Bound } from './auth';
+import { EMAIL_UNCONFIRMED, emailUnconfirmed, SAME_TOKEN_VERSION, type Bound } from './auth';
 
 // Personal access tokens. Bearer credentials for /mcp and /api/v1/*, and for nothing else --
 // see requireToken (added alongside the middleware) for why that boundary is an allow-list
@@ -17,6 +17,8 @@ export interface TokenIdentity {
   userId: number;
   scopes: Scope[];
   defaultProfileId: number | null;
+  /** The account waits for its confirm link (emailUnconfirmed): requireToken answers 403. */
+  unconfirmed: boolean;
 }
 
 function b64url(bytes: Uint8Array): string {
@@ -135,9 +137,12 @@ export async function verifyApiToken(DB: D1Database, raw: string): Promise<Token
     expires_at: string | null;
     revoked_at: string | null;
     plan: string | null;
+    email_verified: number | null;
+    auth_provider: string | null;
   }>(
     DB,
-    `SELECT t.id, t.user_id, t.scopes, t.default_profile_id, t.expires_at, t.revoked_at, u.plan
+    `SELECT t.id, t.user_id, t.scopes, t.default_profile_id, t.expires_at, t.revoked_at, u.plan,
+            u.email_verified, u.auth_provider
        FROM api_tokens t JOIN users u ON u.id = t.user_id
       WHERE t.token_hash = ?`,
     await hashToken(raw)
@@ -167,6 +172,7 @@ export async function verifyApiToken(DB: D1Database, raw: string): Promise<Token
     userId: row.user_id,
     scopes,
     defaultProfileId: row.default_profile_id,
+    unconfirmed: emailUnconfirmed(row),
   };
 }
 
@@ -188,6 +194,8 @@ export const requireToken: MiddlewareHandler<AppEnv> = async (c, next) => {
   const raw = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
   const identity = raw ? await verifyApiToken(c.env.DB, raw) : null;
   if (!identity) return c.json({ error: 'Unauthorized' }, 401);
+  // The token works again once its account confirms the address, as a session does.
+  if (identity.unconfirmed) return c.json(EMAIL_UNCONFIRMED, 403);
   c.set('userId', identity.userId);
   c.set('token', identity);
   await next();

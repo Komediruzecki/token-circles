@@ -2,7 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
-import { linkWaiting } from '../core/emailVerification'
+import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -11,14 +11,14 @@ import {
   signInWithPasskey,
 } from '../core/webauthn'
 import { createCaptchaGate } from './captchaGate'
+import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
 import { Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import LegalLinks from './LegalLinks'
 import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
-import { OrbitSpinner } from './OrbitSpinner'
-import { createSignInForm, reloadIntoTheApp, RESET_LINK_SENT } from './signInForm'
+import { createSignInForm, RESET_LINK_SENT, SIGN_IN_REFUSED } from './signInForm'
 import SupportContact from './SupportContact'
 import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
@@ -30,18 +30,23 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * into client-only mode. Client-only mode itself never renders this.
  *
  * The password form is on the form kit (signInForm.ts): a field that is wrong is said under it,
- * and a wrong address or password is one message for the whole form.
+ * and a wrong address or password is one message for the whole form. That message also covers an
+ * account whose address is not confirmed yet, and offers to send the confirm link again. Creating
+ * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
  */
 export default function LoginScreen() {
   const [mode, setMode] = createSignal<SignInMode>('login')
-  // What the screen says that is not a problem with the form: a reset link on its way, the
-  // register hand-off, a link from an email waiting for this sign-in.
+  // What the screen says that is not a problem with the form: a reset link on its way, or a link
+  // from an email waiting for this sign-in.
   const [notice, setNotice] = createSignal('')
   // A way in other than the form that failed (a passkey). The form's own problems are its notice.
   const [elsewhere, setElsewhere] = createSignal('')
-  // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
-  // handoff runs; 'twofa' is the second factor's code step; 'email-code' is passwordless sign-in.
-  const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
+  // A confirm link opened in this browser that did not confirm: why, with the way to a fresh one.
+  const [linkProblem, setLinkProblem] = createSignal('')
+  // 'inbox' is Check your inbox, for the address `inbox` holds; 'twofa' is the second factor's code
+  // step; 'email-code' is passwordless sign-in.
+  const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
+  const [inbox, setInbox] = createSignal('')
 
   // The Google callback can't stop for a code mid-redirect, so the worker parks the challenge
   // cookie and sends the browser back with ?twofa=1 — land straight on the code step.
@@ -52,6 +57,13 @@ export default function LoginScreen() {
   // A reset that also confirmed the address reloads onto this screen with what else it cleared.
   onMount(() => {
     if (takeAccessCleared('reset')) setNotice(ACCESS_CLEARED_NOTICE.reset)
+  })
+
+  // A confirm link opened in this browser that had expired, or had been used or replaced, comes
+  // back here signed out: nothing else would say why it did not confirm.
+  onMount(() => {
+    const problem = takeConfirmLinkProblem()
+    if (problem !== null) setLinkProblem(problem)
   })
 
   // A link from an email, opened in this browser before signing in: signing in here finishes it
@@ -98,38 +110,13 @@ export default function LoginScreen() {
   // on a token: the send waits for one instead (captchaGate.ts).
   const captcha = createCaptchaGate()
 
-  /**
-   * Creating an account sets no session, and the answer is the same whether or not the address
-   * already had an account. Sign in with the password just chosen, on a fresh captcha token (the
-   * last one was spent): it works for a new account, and for anything else the form takes over.
-   */
-  const handOff = async (email: string, password: string) => {
-    setStage('signing-in')
-    try {
-      const handoff = await api.loginWithPassword(email, password, await captcha.next())
-      captcha.spent()
-      if (handoff?.twofaRequired) {
-        // "Create account" with an existing two-factor account whose password matched: the code
-        // step, not a reload onto an empty form.
-        setStage('twofa')
-        return
-      }
-      await reloadIntoTheApp()
-    } catch {
-      // An existing account or a captcha hiccup: hand over to signing in by hand, without saying
-      // which it was.
-      captcha.spent()
-      setMode('login')
-      form.reset({ email, password: '' })
-      setNotice('Almost done — sign in with your password below.')
-      setStage('form')
-    }
-  }
-
   const saved = (outcome: SignInOutcome) => {
     if (outcome.kind === 'second-factor') setStage('twofa')
     else if (outcome.kind === 'reset-link-sent') setNotice(RESET_LINK_SENT)
-    else void handOff(outcome.email, outcome.password)
+    else {
+      setInbox(outcome.email)
+      setStage('inbox')
+    }
   }
 
   const form = createSignInForm({ mode, captcha, saved })
@@ -139,7 +126,14 @@ export default function LoginScreen() {
     setMode(next)
     setNotice('')
     setElsewhere('')
+    setLinkProblem('')
     form.reset({ ...form.values })
+  }
+
+  /** From the refused sign-in: send the confirm link to the address in the form, signed out. */
+  const sendConfirmLink = () => {
+    switchTo('confirm')
+    void form.submit()
   }
 
   // Demo = client-only mode (seeded example profiles, no account). Switch storage mode to
@@ -158,8 +152,8 @@ export default function LoginScreen() {
           </div>
           <h1 class={styles.title}>Token Circles</h1>
           <p class={styles.subtitle}>
-            {stage() === 'signing-in'
-              ? 'Welcome aboard.'
+            {stage() === 'inbox'
+              ? 'Check your inbox.'
               : stage() === 'twofa'
                 ? 'Two-factor authentication'
                 : stage() === 'email-code'
@@ -168,7 +162,9 @@ export default function LoginScreen() {
                     ? 'Create your account.'
                     : mode() === 'forgot'
                       ? 'Reset your password.'
-                      : 'Sign in to access your finances.'}
+                      : mode() === 'confirm'
+                        ? 'Send the confirm link again.'
+                        : 'Sign in to access your finances.'}
           </p>
         </div>
 
@@ -189,22 +185,14 @@ export default function LoginScreen() {
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <div class={styles.signingIn}>
-                {/* Deliberately does not say "account created". The register endpoint returns the
-                    same neutral response whether or not the email already existed — that is the
-                    anti-enumeration guarantee — so this screen cannot know which happened, and
-                    claiming creation tells an existing owner something untrue. Signing in is what
-                    is actually happening in both branches. */}
-                <OrbitSpinner size={72} label="Signing you in…" />
-                {/* The form's widget unmounted with the form; this fresh instance issues the
-                    sign-in token. A new mount is also a first execution, which is the only time
-                    Cloudflare decides an interaction-only widget may show itself. */}
-                <Turnstile
-                  appearance="interaction-only"
-                  onToken={captcha.onToken}
-                  onStatus={captcha.onStatus}
-                />
-              </div>
+              <CheckInbox
+                email={inbox()}
+                onBack={() => {
+                  switchTo('login')
+                  form.reset({ email: inbox(), password: '' })
+                  setStage('form')
+                }}
+              />
             )
           }
         >
@@ -227,7 +215,36 @@ export default function LoginScreen() {
             </div>
           </Show>
 
+          <Show when={linkProblem()}>
+            <div data-test-id="link-problem" role="status" class={styles.linkProblem}>
+              <p class={styles.linkProblemText}>{linkProblem()}</p>
+              <button
+                type="button"
+                data-test-id="link-problem-resend"
+                class={styles.accountLink}
+                onClick={() => {
+                  switchTo('confirm')
+                }}
+              >
+                Send the link again
+              </button>
+            </div>
+          </Show>
+
           <FormNotice form={form} testId="login-error" />
+          {/* The refused sign-in may be an account that is not confirmed yet: the way to its link. */}
+          <Show when={mode() === 'login' && form.notice() === SIGN_IN_REFUSED}>
+            <p class={styles.resendLine}>
+              <button
+                type="button"
+                data-test-id="send-confirm-link"
+                class={styles.accountLink}
+                onClick={sendConfirmLink}
+              >
+                Send the link again
+              </button>
+            </p>
+          </Show>
 
           <form
             class={styles.form}
@@ -263,7 +280,7 @@ export default function LoginScreen() {
               )}
             </Field>
 
-            <Show when={mode() !== 'forgot'}>
+            <Show when={mode() !== 'forgot' && mode() !== 'confirm'}>
               <Field
                 form={form}
                 name="password"
@@ -329,7 +346,7 @@ export default function LoginScreen() {
               busyLabel={
                 mode() === 'register'
                   ? 'Creating your account…'
-                  : mode() === 'forgot'
+                  : mode() === 'forgot' || mode() === 'confirm'
                     ? 'Sending…'
                     : 'Signing in…'
               }
@@ -339,11 +356,13 @@ export default function LoginScreen() {
                 ? 'Create account'
                 : mode() === 'forgot'
                   ? 'Send reset link'
-                  : 'Sign in'}
+                  : mode() === 'confirm'
+                    ? 'Send the link again'
+                    : 'Sign in'}
             </SubmitButton>
           </form>
 
-          <Show when={mode() !== 'forgot'}>
+          <Show when={mode() !== 'forgot' && mode() !== 'confirm'}>
             <div class={styles.divider}>or</div>
 
             <div class={styles.alts}>
@@ -400,7 +419,7 @@ export default function LoginScreen() {
               compete with — a sign-up link above them reads as the only way in. */}
           <p class={styles.accountLine}>
             <Show
-              when={mode() !== 'forgot'}
+              when={mode() !== 'forgot' && mode() !== 'confirm'}
               fallback={
                 <button
                   type="button"

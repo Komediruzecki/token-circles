@@ -263,7 +263,41 @@ export interface AuthUser {
   sessionId?: string;
   /** users.token_version as this request's check read it, for writes bound to it. */
   tokenVersion: number;
+  /** The account waits for its confirm link (emailUnconfirmed), as this request's check read it. */
+  unconfirmed: boolean;
 }
+
+/**
+ * Whether an account waits for its confirm link before it can use the app: a password account
+ * whose address is not confirmed. Google confirms the address it hands over, and an account that
+ * Google signed into is never asked. The row decides, so an account made before this rule is
+ * asked too.
+ */
+export function emailUnconfirmed(row: {
+  auth_provider: string | null;
+  email_verified: number | null;
+}): boolean {
+  return row.auth_provider === 'password' && !row.email_verified;
+}
+
+/**
+ * The opposite of emailUnconfirmed in SQL, for the work that runs with no request in front of it:
+ * the account in `users` (the name the query gives the users table) does not wait for its confirm
+ * link. A query that LEFT JOINs users and finds no account counts it as not waiting.
+ */
+export function notWaitingForConfirmLinkSql(users: string): string {
+  return `(${users}.auth_provider IS NOT 'password' OR ${users}.email_verified <> 0)`;
+}
+
+/**
+ * What a session or API token of an account waiting for its confirm link is answered, with 403,
+ * on a route that needs a confirmed address. `code` is what the app reads; `error` is for anyone
+ * else.
+ */
+export const EMAIL_UNCONFIRMED = {
+  error: 'Confirm your email address to use this account. Open the link we emailed you.',
+  code: 'EMAIL_UNCONFIRMED',
+} as const;
 
 /**
  * How stale `last_seen_at` is allowed to get. Writing it on every request would put a D1 write in
@@ -313,10 +347,13 @@ export async function authenticateRequest(request: Request, env: Env): Promise<A
     const payload = await verifyJwt(token, env.JWT_SECRET);
     if (!payload) continue;
     // Fail closed: the user must still exist, and a token whose version is below the
-    // stored token_version was revoked (logout / "sign out everywhere").
-    const user = await env.DB.prepare('SELECT token_version FROM users WHERE id = ?')
+    // stored token_version was revoked (logout / "sign out everywhere"). Whether the account
+    // waits for its confirm link is read in the same statement (requireAuth).
+    const user = await env.DB.prepare(
+      'SELECT token_version, email_verified, auth_provider FROM users WHERE id = ?'
+    )
       .bind(Number(payload.sub))
-      .first<{ token_version: number }>();
+      .first<{ token_version: number; email_verified: number; auth_provider: string }>();
     if (!user) {
       if (reason === 'bad_token') reason = 'unknown_user';
       continue;
@@ -352,6 +389,7 @@ export async function authenticateRequest(request: Request, env: Env): Promise<A
         provider: payload.provider,
         ...(payload.sid !== undefined ? { sessionId: payload.sid } : {}),
         tokenVersion: user.token_version,
+        unconfirmed: emailUnconfirmed(user),
       },
       cookieCount: tokens.length,
     };
@@ -382,25 +420,44 @@ export async function getAuthFromRequest(request: Request, env: Env): Promise<Au
   return (await authenticateRequest(request, env)).user;
 }
 
-/** Hono middleware: 401 unless authenticated; exposes the user id via c.get('userId'). */
-export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {
-  const auth = await authenticateRequest(c.req.raw, c.env);
-  if (!auth.user) {
-    // A 401 is the one 4xx that can mean the SERVER is wrong, so unlike the other 4xx it is
-    // recorded — with the reason, and with how many session cookies came in.
-    logAuthEvent(c, {
-      event: 'session',
-      outcome: 'denied',
-      reason: auth.reason,
-      cookieCount: auth.cookieCount,
-    });
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  c.set('userId', auth.user.userId);
-  c.set('tokenVersion', auth.user.tokenVersion);
-  if (auth.user.sessionId !== undefined) c.set('sessionId', auth.user.sessionId);
-  await next();
-};
+/**
+ * The session check, for a route an account waiting for its confirm link may reach
+ * (`unconfirmedToo`) or may not.
+ */
+function sessionCheck(unconfirmedToo: boolean): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    const auth = await authenticateRequest(c.req.raw, c.env);
+    if (!auth.user) {
+      // A 401 is the one 4xx that can mean the SERVER is wrong, so unlike the other 4xx it is
+      // recorded — with the reason, and with how many session cookies came in.
+      logAuthEvent(c, {
+        event: 'session',
+        outcome: 'denied',
+        reason: auth.reason,
+        cookieCount: auth.cookieCount,
+      });
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    if (auth.user.unconfirmed && !unconfirmedToo) return c.json(EMAIL_UNCONFIRMED, 403);
+    c.set('userId', auth.user.userId);
+    c.set('tokenVersion', auth.user.tokenVersion);
+    if (auth.user.sessionId !== undefined) c.set('sessionId', auth.user.sessionId);
+    await next();
+  };
+}
+
+/**
+ * Hono middleware: 401 unless authenticated; exposes the user id via c.get('userId'). A session of
+ * an account waiting for its confirm link (emailUnconfirmed) is answered 403 EMAIL_UNCONFIRMED.
+ */
+export const requireAuth: MiddlewareHandler<AppEnv> = sessionCheck(false);
+
+/**
+ * requireAuth that also lets in an account waiting for its confirm link, for the few routes it
+ * needs to confirm its address or leave: who is signed in, signing out, sending the link again,
+ * and finishing a link opened before signing in. Every other route uses requireAuth.
+ */
+export const requireAuthEvenUnconfirmed: MiddlewareHandler<AppEnv> = sessionCheck(true);
 
 // ── Google Sign-In ────────────────────────────────────────────────────────────
 export interface GoogleClaims {

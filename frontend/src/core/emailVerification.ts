@@ -1,6 +1,10 @@
 /**
  * Email verification — the client half of the confirm-your-address flow.
  *
+ * A password account uses the app once its address is confirmed. Until then the Worker answers
+ * its session 403 EMAIL_UNCONFIRMED almost everywhere, and the app shows the Confirm your email
+ * screen (ConfirmEmailScreen) instead of itself.
+ *
  * A password signup gets a link that routes through the worker
  * (`GET /api/auth/verify-email`), which does the whole job and bounces the browser back here
  * with `#everified=1` or `#everified_error=<reason>`. There is no page to render: the fragment
@@ -13,11 +17,10 @@
  * leaves it unspent, answers `signin_required`, and gives this browser a marker that scripts
  * cannot read. Once the link's account signs in here, finishEmailLink asks the worker to spend
  * it. Until then a note says a link is waiting (linkWaiting): the sign-in screen says what
- * signing in will do, and the note outlasts the reload every sign-in ends in.
- *
- * The gate is soft by design. The account works unverified; the only consequence is the banner
- * in <VerifyEmailBanner/>. Nothing here blocks anything.
+ * signing in will do, and the note outlasts the reload every sign-in ends in. A password sign-in
+ * spends a confirm link itself, and says so (noteAddressConfirmed).
  */
+import { ApiError } from './apiError'
 import { apiFetch } from './apiFetch'
 import { getStorageMode, setStorageMode } from './storage/storageFactory'
 
@@ -35,10 +38,16 @@ let pending: EmailVerifyResult | null = null
  * outcome on every reload.
  *
  * A link that needs a sign-in is noted as waiting, and the device moves to account mode, because
- * local-first mode has no sign-in screen. The switch is the one Sign In makes from local-first
- * mode (App.handleLogin): data kept on the device is not touched, and choosing local-first again
+ * local-first mode has no sign-in screen. So does a confirm link that did not confirm (it had
+ * expired, or had been used or replaced): the sign-in screen says why, with a way to send a fresh
+ * one (takeConfirmLinkProblem). The switch is the one Sign In makes from local-first mode
+ * (App.handleLogin): data kept on the device is not touched, and choosing local-first again
  * (Settings, or the sign-in screen's way in without an account) brings it back. Being early is
  * what makes it cheap: the app reads the mode on the way in, so it comes up on the sign-in screen.
+ *
+ * A change-of-address link that did not finish leaves the mode as it was. The sign-in screen has
+ * no words for it, and the outcome would not outlast the reload a sign-in ends in, while in
+ * local-first mode the banner (VerifyEmailBanner) says it, with what to do in Settings.
  */
 export function consumeEmailVerifyRedirect(): void {
   const hash = window.location.hash
@@ -48,7 +57,7 @@ export function consumeEmailVerifyRedirect(): void {
   history.replaceState(null, '', window.location.pathname + window.location.search)
   if (params.get('everified') !== '1' && params.get('everified_error') === 'signin_required') {
     noteLinkWaiting(change)
-    if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
+    toAccountMode()
     return
   }
   const changed = change ? ({ change: true } as const) : {}
@@ -56,6 +65,11 @@ export function consumeEmailVerifyRedirect(): void {
     params.get('everified') === '1'
       ? { ok: true, ...changed }
       : { ok: false, error: params.get('everified_error') ?? 'unknown', ...changed }
+  if (!pending.ok && !change) toAccountMode()
+}
+
+function toAccountMode(): void {
+  if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
 }
 
 // ── A link waiting for a sign-in ──────────────────────────────────────────────────────────────
@@ -135,59 +149,84 @@ export async function finishEmailLink(): Promise<LinkFinish | null> {
   }
 }
 
-/** The outcome of the confirm link, once. Returns null when there was nothing to report. */
-export function takeEmailVerifyResult(): EmailVerifyResult | null {
-  const result = pending
-  pending = null
-  return result
-}
+// ── An address confirmed on the way into the app ──────────────────────────────────────────────
 
-/** What the banner needs to decide whether to show itself. */
-export interface VerificationStatus {
-  email: string
-  verified: boolean
-  provider: string | null
-}
+const CONFIRMED_KEY = 'tc:email-confirmed'
 
 /**
- * Ask the server about the signed-in account. Returns null whenever there is nothing to nudge
- * about — no session, no email, a Google account (already verified by Google), or a backend
- * that does not report the field at all, which is how the legacy self-hosted server answers.
+ * The address was just confirmed in this browser: by a password sign-in that spent the link this
+ * browser opened (signInForm.ts), or on the Confirm your email screen (ConfirmEmailScreen). Said
+ * once the app has loaded: both end in a reload, and the second factor may come first. The link
+ * is no longer waiting.
  */
-export async function fetchVerificationStatus(): Promise<VerificationStatus | null> {
+export function noteAddressConfirmed(): void {
+  clearLinkWaiting()
   try {
-    const res = await apiFetch('/api/auth/me', { credentials: 'include' })
-    if (!res.ok) return null
-    const user = (await res.json()) as {
-      email?: string | null
-      email_verified?: number | boolean | null
-      auth_provider?: string | null
-    }
-    if (typeof user?.email !== 'string' || user.email === '') return null
-    // Absent means "this server has no opinion" — treat it as verified so no banner appears.
-    if (user.email_verified === undefined || user.email_verified === null) return null
-    return {
-      email: user.email,
-      verified: Boolean(user.email_verified),
-      provider: user.auth_provider ?? null,
-    }
+    sessionStorage.setItem(CONFIRMED_KEY, '1')
+  } catch {
+    // No storage: the address is confirmed all the same, only unannounced.
+  }
+}
+
+function takeAddressConfirmed(): EmailVerifyResult | null {
+  try {
+    if (sessionStorage.getItem(CONFIRMED_KEY) !== '1') return null
+    sessionStorage.removeItem(CONFIRMED_KEY)
+    return { ok: true }
   } catch {
     return null
   }
 }
 
-/** Ask for the confirm link again. Throws with the server's message so the caller can show it. */
-export async function resendVerificationEmail(): Promise<void> {
+/**
+ * Why a confirm link the person opened did not confirm the address, for a screen that offers to
+ * send the link again: it had expired, or it was used, replaced by a newer one, or unknown.
+ */
+export function confirmLinkProblem(error: string): string {
+  return error === 'expired'
+    ? 'That link has expired. Send the link again for a fresh one.'
+    : "That link doesn't work anymore. Send the link again for a fresh one."
+}
+
+/** The outcome of the confirm link, once. Returns null when there was nothing to report. */
+export function takeEmailVerifyResult(): EmailVerifyResult | null {
+  const result = pending ?? takeAddressConfirmed()
+  pending = null
+  return result
+}
+
+/**
+ * Why the confirm link this browser just opened did not confirm the address, once, for the
+ * sign-in screen; null when it did not open one that failed. Any other outcome stays for the app
+ * to say once it is signed in: an address confirmed on the way in, or a change of address.
+ */
+export function takeConfirmLinkProblem(): string | null {
+  if (pending === null || pending.ok || pending.change) return null
+  const problem = confirmLinkProblem(pending.error)
+  pending = null
+  return problem
+}
+
+/**
+ * Ask for the confirm link again. `alreadyVerified` is the Worker saying the address is confirmed
+ * already, so it sent nothing. Throws an ApiError with the server's message, so the caller can
+ * show it (plainMessage passes an ApiError's words through).
+ */
+export async function resendVerificationEmail(): Promise<{ alreadyVerified: boolean }> {
   const res = await apiFetch('/api/auth/resend-verification', {
     method: 'POST',
     credentials: 'include',
   })
-  if (res.ok) return
+  if (res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { alreadyVerified?: unknown }
+    return { alreadyVerified: body.alreadyVerified === true }
+  }
   const detail = (await res.json().catch(() => ({}))) as { error?: string }
-  throw new Error(
+  throw new ApiError(
+    res.status,
     detail.error ??
       (res.status === 429
-        ? 'Too many requests — try again a little later'
+        ? 'Too many requests. Try again a little later.'
         : `Could not resend the email (${res.status})`)
   )
 }

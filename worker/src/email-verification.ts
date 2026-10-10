@@ -16,13 +16,28 @@ export async function sha256Hex(input: string): Promise<string> {
 
 // ── Email verification (password signups) ──────────────────────────────────────────────────────
 //
-// A password account starts unverified and works anyway: the confirm link is a soft gate, so
-// nothing is blocked on it — the app shows a banner until it is clicked. Google accounts arrive
-// with Google's own email_verified claim and never see any of this.
+// A password account starts unconfirmed and uses the app once its address is confirmed. Until
+// then the Worker answers it 403 EMAIL_UNCONFIRMED everywhere but a few account routes
+// (requireAuth and requireAuthEvenUnconfirmed in auth.ts), and the app shows the Confirm your
+// email screen. Google accounts arrive with Google's own email_verified claim and never see any
+// of this.
 //
 // The link stays valid long enough to survive a night in a spam folder. It is longer than the
 // password-reset TTL on purpose: a reset link is a live credential, a confirm link is not.
 export const VERIFY_TOKEN_TTL_HOURS = 24;
+
+/**
+ * Confirm links mailed to one address in an hour by the ways of sending one again: Send the link
+ * again while signed out, signing up again with the address, and the Confirm your email screen.
+ * Each way keeps its own limit on requests; this one budget is shared by the three, so taking
+ * turns between them mails no more links than one of them allows alone. The welcome's link is not
+ * counted: it goes once, with the account.
+ */
+export const CONFIRM_LINKS_PER_HOUR = 3;
+
+/** The rate_limits bucket that counts the confirm links mailed to `email`. */
+export const confirmLinksMailed = (email: string): string =>
+  `confirm-links-mailed:${email.toLowerCase()}`;
 
 /**
  * What opening the link does: 'confirm' marks the account's current address verified, 'change'
@@ -72,6 +87,24 @@ export async function createEmailVerification(
     await insertStatement(db, userId, email, purpose, token, guard, values),
   ]);
   return (results[1]?.meta.changes ?? 0) > 0 ? token : null;
+}
+
+/**
+ * The statement that stores the first confirm link of the account at `email`, for the batch that
+ * makes that account: it reads the account's id inside the batch, once the account is written.
+ */
+export async function firstConfirmLink(
+  db: D1Database,
+  email: string,
+  token: string
+): Promise<D1PreparedStatement> {
+  const expiresAt = new Date(Date.now() + VERIFY_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  return db
+    .prepare(
+      `INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose)
+       SELECT id, ?, ?, ?, 'confirm' FROM users WHERE email = ?`
+    )
+    .bind(email, await sha256Hex(token), expiresAt, email);
 }
 
 /**

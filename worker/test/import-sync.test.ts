@@ -60,14 +60,14 @@ beforeEach(async () => {
   }
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'sheetsync@example.com', 'password', 1)"
+      "INSERT INTO users (id, email, auth_provider, email_verified, token_version) VALUES (?, 'sheetsync@example.com', 'password', 1, 1)"
     ).bind(USER_ID),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Main')").bind(
       PROFILE_ID,
       USER_ID
     ),
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'othersync@example.com', 'password', 1)"
+      "INSERT INTO users (id, email, auth_provider, email_verified, token_version) VALUES (?, 'othersync@example.com', 'password', 1, 1)"
     ).bind(OTHER_USER_ID),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Theirs')").bind(
       OTHER_PROFILE_ID,
@@ -203,6 +203,39 @@ describe('daily sheet sync — which crons and which sources', () => {
 
     expect(fetchCalls).toEqual([]);
     expect(await txFor()).toHaveLength(0);
+  });
+
+  it("leaves the sources of an account waiting for its confirm link alone, and syncs a confirmed account's", async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 0 WHERE id = ?')
+      .bind(OTHER_USER_ID)
+      .run();
+    const waiting = await addSource({
+      sheetId: 'WAITING1',
+      body: csv(ROW_COFFEE),
+      profileId: OTHER_PROFILE_ID,
+    });
+    const confirmed = await addSource({ sheetId: 'CONFIRMED1', body: csv(ROW_RENT) });
+
+    await runScheduledSheetSyncs(DAILY_CRON, env);
+
+    expect(fetchCalls.some((url) => url.includes('/WAITING1/'))).toBe(false);
+    expect(await txFor(OTHER_PROFILE_ID)).toHaveLength(0);
+    expect((await sourceRow(waiting))?.last_synced_at).toBeNull();
+    expect(await txFor()).toHaveLength(1);
+    expect((await sourceRow(confirmed))?.last_synced_at).not.toBeNull();
+  });
+
+  it('syncs the sources of a Google account, whatever its email_verified says', async () => {
+    await env.DB.prepare(
+      "UPDATE users SET auth_provider = 'google', email_verified = 0 WHERE id = ?"
+    )
+      .bind(USER_ID)
+      .run();
+    await addSource({ sheetId: 'GOOGLE1', body: csv(ROW_COFFEE) });
+
+    await runScheduledSheetSyncs(DAILY_CRON, env);
+
+    expect(await txFor()).toHaveLength(1);
   });
 
   it('skips a source with no URL saved in its config', async () => {

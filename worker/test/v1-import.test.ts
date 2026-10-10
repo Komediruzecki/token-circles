@@ -9,6 +9,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { signCapability } from '../src/signed-url';
+import { apiTokenRow } from './helpers/capability';
 // Imported as text, not read from disk: these tests run inside workerd, which has no host
 // filesystem. Vite inlines the ?raw import at build time.
 import cleanCsv from './fixtures/statement-clean.csv?raw';
@@ -27,10 +28,13 @@ async function seed(): Promise<void> {
   await env.DB.prepare('DELETE FROM transactions WHERE profile_id = ?').bind(PROFILE_ID).run();
   await env.DB.prepare('DELETE FROM import_logs WHERE profile_id = ?').bind(PROFILE_ID).run();
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, 'v1@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, email_verified, token_version) VALUES (?, 'v1@example.com', 'pbkdf2$100000$x$y', 'password', 1, 1)"
   )
     .bind(USER_ID)
     .run();
+  // The API tokens the capabilities here name: the routes read them when a capability is used.
+  await apiTokenRow('tok-v1', USER_ID);
+  await apiTokenRow('t', USER_ID);
   await env.DB.prepare(
     "INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, 'V1 Profile', ?)"
   )

@@ -29,7 +29,7 @@ async function call(name: string, args: Record<string, unknown> = {}): Promise<a
 
 beforeAll(async () => {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version, plan) VALUES (?, 'read@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced')"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, email_verified, token_version, plan) VALUES (?, 'read@example.com', 'pbkdf2$100000$x$y', 'password', 1, 1, 'advanced')"
   )
     .bind(USER_ID)
     .run();

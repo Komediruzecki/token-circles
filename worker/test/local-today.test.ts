@@ -26,6 +26,7 @@ import { mintApiToken } from '../src/apitoken';
 import { composeReminderPreview } from '../src/reminders';
 import { wallClockIn } from '../../shared/calendarDate';
 import { signCapability } from '../src/signed-url';
+import { apiTokenRow } from './helpers/capability';
 
 const USER = 81;
 const PROFILE = 810;
@@ -699,6 +700,8 @@ describe('more routes that answer on the person’s calendar', () => {
 
   it('an account an /api/v1 upload creates opens on the uploader’s today (/api/v1/import)', async () => {
     await at(LATE_ON_THE_7TH);
+    // The API token the capability names: the route reads it when the capability is used.
+    await apiTokenRow('tok-today', USER);
     const upload = async (zone?: string) => {
       const sig = await signCapability(
         { tokenId: 'tok-today', userId: USER, profileId: PROFILE, purpose: 'import' },

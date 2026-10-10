@@ -19,6 +19,7 @@ import { Dynamic } from 'solid-js/web'
 import AchievementsHost from './components/AchievementsHost'
 import CommandBar from './components/CommandBar'
 import ConfirmDialog from './components/ConfirmDialog'
+import ConfirmEmailScreen from './components/ConfirmEmailScreen'
 import GuidedOrbit from './components/GuidedOrbit'
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal'
 import layoutStyles from './components/Layout.module.css'
@@ -33,7 +34,8 @@ import ResetPassword from './components/ResetPassword'
 import Spotlight from './components/Spotlight'
 import TourSelectionModal from './components/TourSelectionModal'
 import { VerifyEmailBanner } from './components/VerifyEmailBanner'
-import { api, toast } from './core/api.js'
+import { api, toast, waitsForConfirmLink } from './core/api.js'
+import { EMAIL_UNCONFIRMED_EVENT } from './core/apiFetch'
 import {
   bumpProfileVersion,
   setCurrentProfile as setCurrentProfileStore,
@@ -71,6 +73,7 @@ import {
 } from './core/spotlightStore'
 import { getStorageMode, setStorageMode } from './core/storage/storageFactory'
 import { pages as allPages } from './router.tsx'
+import type { SignedInAccount } from './core/api.js'
 import type { PageName } from './router.tsx'
 import type { Account, Category, Profile } from './types/models'
 
@@ -107,6 +110,10 @@ export function App() {
   const setIsAuthenticated = (v: boolean) => {
     setIsAuthenticatedStore(v)
   }
+  // A signed-in password account that waits for its confirm link, which sees Confirm your email
+  // (ConfirmEmailScreen) instead of the app, and is not signed in to it. Null for every other
+  // account.
+  const [confirmGate, setConfirmGate] = createSignal<SignedInAccount | null>(null)
   const showDropdown = () => state.showDropdown
   const setShowDropdown = (v: boolean) => {
     setShowDropdownStore(v)
@@ -347,6 +354,7 @@ export function App() {
       logger.error('Logout API call failed', {}, 'App')
     }
     localStorage.removeItem('currentProfileId')
+    setConfirmGate(null)
     setIsAuthenticated(false)
     setCurrentProfile(null)
     // The list is the signed-out account's. A failed read no longer clears it (loadProfiles), so
@@ -407,7 +415,12 @@ export function App() {
       for (const teardown of lateTeardowns.splice(0)) teardown()
     })
 
-    const loggedIn = await api.checkLogin()
+    const account = await api.signedInAccount()
+    // A password account whose address is not confirmed gets Confirm your email and none of the
+    // loads below, which the Worker would refuse (EMAIL_UNCONFIRMED). Local-first never waits.
+    const waiting = serverMode && account !== null && waitsForConfirmLink(account)
+    if (waiting) setConfirmGate(account)
+    const loggedIn = account !== null && !waiting
     setIsAuthenticated(loggedIn)
     // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
     // both the mode switch and sign-in itself reload the page. Now that there is an account,
@@ -603,6 +616,20 @@ export function App() {
   window.addEventListener('auth:required', handleAuthRequired)
   onCleanup(() => {
     window.removeEventListener('auth:required', handleAuthRequired)
+  })
+
+  // The Worker refused a request because the account's address is not confirmed (apiFetch):
+  // Confirm your email replaces the app, as it does at boot.
+  const handleEmailUnconfirmed = () => {
+    void api.signedInAccount().then((account) => {
+      if (account === null || !waitsForConfirmLink(account)) return
+      setConfirmGate(account)
+      setIsAuthenticated(false)
+    })
+  }
+  window.addEventListener(EMAIL_UNCONFIRMED_EVENT, handleEmailUnconfirmed)
+  onCleanup(() => {
+    window.removeEventListener(EMAIL_UNCONFIRMED_EVENT, handleEmailUnconfirmed)
   })
 
   // Navigation items with icons for sidebar
@@ -813,7 +840,20 @@ export function App() {
   return (
     <Show when={!isResetRoute} fallback={<ResetPassword />}>
       <Show when={!_isLoading()} fallback={<OrbitBootScreen />}>
-        <Show when={!serverMode || isAuthenticated()} fallback={<LoginScreen />}>
+        <Show
+          when={!serverMode || isAuthenticated()}
+          fallback={
+            <Show when={confirmGate() !== null} fallback={<LoginScreen />}>
+              <ConfirmEmailScreen
+                email={confirmGate()?.email ?? ''}
+                billingAccount={confirmGate()?.billingAccount ?? false}
+                onSignOut={() => {
+                  void handleLogout()
+                }}
+              />
+            </Show>
+          }
+        >
           <Suspense fallback={<OrbitBootScreen label="Loading…" />}>
             <div
               class={layoutStyles.sidebar}

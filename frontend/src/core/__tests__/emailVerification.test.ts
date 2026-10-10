@@ -3,9 +3,8 @@
  *
  * The fragment handling matters more than it looks: `#everified=1` is not a page, so leaving it
  * in the address bar hands the hash router something it resolves to a 404, and re-announces the
- * outcome on every reload. And `fetchVerificationStatus` has to stay silent on a backend that
- * does not report the field at all — the legacy self-hosted server — rather than reading its
- * absence as "unverified" and nagging every user of it forever.
+ * outcome on every reload. An address confirmed on the way into the app (noteAddressConfirmed)
+ * has to outlast the reload that follows, and be said once.
  */
 import { openDB } from 'idb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -155,17 +154,56 @@ describe('a link that needs a sign-in first', () => {
     deleteDatabase.mockRestore()
   })
 
-  it('leaves every other outcome for the banner, and the mode as it was', async () => {
+  it('leaves a confirmed address for the banner, and the mode as it was', async () => {
     localStorage.setItem('finance_storage_mode', 'serverless')
-    history.replaceState(null, '', '/#everified_error=expired')
+    history.replaceState(null, '', '/#everified=1')
     const { consumeEmailVerifyRedirect, linkWaiting, takeEmailVerifyResult } = await load()
 
     consumeEmailVerifyRedirect()
 
     expect(linkWaiting()).toBeNull()
-    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired' })
+    expect(takeEmailVerifyResult()).toEqual({ ok: true })
     expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
   })
+
+  it('leaves a change of address that did not finish for the banner, and the mode as it was', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified_error=expired&change=1')
+    const { consumeEmailVerifyRedirect, takeConfirmLinkProblem, takeEmailVerifyResult } =
+      await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(takeConfirmLinkProblem()).toBeNull()
+    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired', change: true })
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  })
+})
+
+describe('a confirm link that did not confirm, opened in a fresh browser', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  for (const [error, words] of [
+    ['expired', 'That link has expired. Send the link again for a fresh one.'],
+    ['invalid_or_used', "That link doesn't work anymore. Send the link again for a fresh one."],
+  ] as const) {
+    it(`moves the device to account mode, and keeps why for the sign-in screen (${error})`, async () => {
+      // frontend/.env, which the tests read, sets VITE_DEFAULT_STORAGE=dexie, as production does.
+      history.replaceState(null, '', `/#everified_error=${error}`)
+      const { consumeEmailVerifyRedirect, linkWaiting, takeConfirmLinkProblem } = await load()
+      const { getStorageMode } = await import('../storage/storageFactory')
+      expect(localStorage.getItem('finance_storage_mode')).toBeNull()
+      expect(getStorageMode()).toBe('serverless')
+
+      consumeEmailVerifyRedirect()
+
+      expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
+      expect(linkWaiting()).toBeNull()
+      expect(takeConfirmLinkProblem()).toBe(words)
+    })
+  }
 })
 
 describe('finishEmailLink', () => {
@@ -272,51 +310,63 @@ describe('consumeEmailVerifyRedirect', () => {
   })
 })
 
-describe('fetchVerificationStatus', () => {
-  it('reports an unverified password account', async () => {
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: 'a@b.com', email_verified: 0, auth_provider: 'password' })
+describe('noteAddressConfirmed', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    localStorage.clear()
+  })
+
+  it('is said once, by the next takeEmailVerifyResult, as a confirmed address', async () => {
+    const { noteAddressConfirmed, takeEmailVerifyResult } = await load()
+
+    noteAddressConfirmed()
+
+    expect(takeEmailVerifyResult()).toEqual({ ok: true })
+    expect(takeEmailVerifyResult()).toBeNull()
+  })
+
+  it('outlasts the reload that follows: a fresh load of the module still says it', async () => {
+    const before = await load()
+    before.noteAddressConfirmed()
+
+    const after = await load()
+
+    expect(after.takeEmailVerifyResult()).toEqual({ ok: true })
+  })
+
+  it('stops the link this browser opened from waiting', async () => {
+    localStorage.setItem(
+      'tc:email-link-waiting',
+      JSON.stringify({ change: false, until: Date.now() + 60_000 })
     )
+    const { noteAddressConfirmed, linkWaiting } = await load()
+    expect(linkWaiting()).toEqual({ change: false })
 
-    expect(await fetchVerificationStatus()).toEqual({
-      email: 'a@b.com',
-      verified: false,
-      provider: 'password',
-    })
+    noteAddressConfirmed()
+
+    expect(linkWaiting()).toBeNull()
   })
 
-  it('says nothing when the server does not report the field', async () => {
-    // The legacy self-hosted backend's /me has no email_verified. Reading that as "unverified"
-    // would show every one of its users a banner whose Resend button its API cannot answer.
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: 'a@b.com', auth_provider: 'password' })
-    )
+  it('says nothing when nothing was noted', async () => {
+    const { takeEmailVerifyResult } = await load()
 
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('says nothing without a session', async () => {
-    const { fetchVerificationStatus } = await load(() => json({ error: 'Unauthorized' }, 401))
-
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('says nothing for an account with no address', async () => {
-    const { fetchVerificationStatus } = await load(() =>
-      json({ email: null, email_verified: 0, auth_provider: 'google' })
-    )
-
-    expect(await fetchVerificationStatus()).toBeNull()
-  })
-
-  it('swallows a network failure rather than surfacing it as a banner', async () => {
-    const { fetchVerificationStatus } = await load(() => Promise.reject(new Error('offline')))
-
-    expect(await fetchVerificationStatus()).toBeNull()
+    expect(takeEmailVerifyResult()).toBeNull()
   })
 })
 
 describe('resendVerificationEmail', () => {
+  it('says when the address is confirmed already, so nothing was sent', async () => {
+    const { resendVerificationEmail } = await load(() => json({ ok: true, alreadyVerified: true }))
+
+    expect(await resendVerificationEmail()).toEqual({ alreadyVerified: true })
+  })
+
+  it('says a link went otherwise', async () => {
+    const { resendVerificationEmail } = await load(() => json({ ok: true }))
+
+    expect(await resendVerificationEmail()).toEqual({ alreadyVerified: false })
+  })
+
   it('posts to the resend endpoint with the session', async () => {
     const { resendVerificationEmail, calls } = await load(() => json({ ok: true }))
 
@@ -335,11 +385,25 @@ describe('resendVerificationEmail', () => {
     await expect(resendVerificationEmail()).rejects.toThrow('This account has no email address')
   })
 
+  it('throws an ApiError with the status and the server’s message', async () => {
+    const { resendVerificationEmail } = await load(() =>
+      json({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
+    )
+
+    await expect(resendVerificationEmail()).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 429,
+      message: 'Too many attempts. Please try again in about 40 minutes.',
+    })
+  })
+
   it('explains a rate limit in words, since the endpoint answers 429 with no body', async () => {
     const { resendVerificationEmail } = await load(() =>
       Promise.resolve(new Response('', { status: 429 }))
     )
 
-    await expect(resendVerificationEmail()).rejects.toThrow(/try again/i)
+    await expect(resendVerificationEmail()).rejects.toThrow(
+      'Too many requests. Try again a little later.'
+    )
   })
 })

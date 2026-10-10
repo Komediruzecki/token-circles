@@ -27,6 +27,25 @@ function rangeQuery(range?: { startDate?: string; endDate?: string }): string {
   return query ? `?${query}` : ''
 }
 
+/** Who is signed in, as GET /api/auth/me says. */
+export interface SignedInAccount {
+  email: string
+  emailVerified: boolean
+  /** How the account signs in: 'password' or 'google'. */
+  provider: string | null
+  /** The account has a billing account, whose portal manages or cancels its subscription. */
+  billingAccount: boolean
+}
+
+/**
+ * Whether the account waits for its confirm link before it can use the app: a password account
+ * whose address is not confirmed. The Worker answers its every other request 403
+ * EMAIL_UNCONFIRMED, so the app shows the Confirm your email screen instead.
+ */
+export function waitsForConfirmLink(account: SignedInAccount): boolean {
+  return account.provider === 'password' && !account.emailVerified
+}
+
 /**
  * API Client class for making authenticated requests
  */
@@ -144,14 +163,30 @@ export class ApiClient {
   // ============ AUTH ============
 
   /**
-   * Check if a session cookie is valid (worker: GET /api/auth/me).
+   * The account a valid session cookie is for (worker: GET /api/auth/me), or null with no session
+   * or no answer. A password account whose address is not confirmed is answered here too: the app
+   * shows it the Confirm your email screen (waitsForConfirmLink).
    */
-  async checkLogin(): Promise<boolean> {
+  async signedInAccount(): Promise<SignedInAccount | null> {
     try {
-      await this.request('/auth/me', undefined)
-      return true
+      const me = await this.request<{
+        email?: unknown
+        email_verified?: unknown
+        auth_provider?: unknown
+        billing_account?: unknown
+      }>('/auth/me', undefined)
+      return {
+        email: typeof me?.email === 'string' ? me.email : '',
+        // Absent is a server with no opinion, which is no reason to stop anyone.
+        emailVerified:
+          me?.email_verified === undefined || me?.email_verified === null
+            ? true
+            : Boolean(me.email_verified),
+        provider: typeof me?.auth_provider === 'string' ? me.auth_provider : null,
+        billingAccount: Boolean(me?.billing_account),
+      }
     } catch {
-      return false
+      return null
     }
   }
 
@@ -168,8 +203,8 @@ export class ApiClient {
   /**
    * Register an email/password account (worker: POST /api/auth/register). Anti-enumeration:
    * the worker always resolves with a neutral ok and NO session cookie, whether or not the
-   * email already existed — the caller signs in afterwards (see the auto-sign-in flow in
-   * LoginScreen/LoginModal).
+   * email already existed. The new account signs in once its address is confirmed, so the
+   * caller shows Check your inbox (CheckInbox), not the app.
    */
   async register(email: string, password: string, turnstileToken?: string): Promise<void> {
     await this.request('/auth/register', undefined, {
@@ -182,16 +217,30 @@ export class ApiClient {
    * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success —
    * unless the account has 2FA, in which case the worker parks a challenge cookie instead and
    * answers `{ twofaRequired: true }`; the caller then shows the code step (TwofaChallenge).
+   * `emailConfirmed` says this sign-in also confirmed the address, with the confirm link this
+   * browser opened before signing in.
    */
   async loginWithPassword(
     email: string,
     password: string,
     turnstileToken?: string
-  ): Promise<{ twofaRequired?: boolean }> {
+  ): Promise<{ twofaRequired?: boolean; emailConfirmed?: boolean }> {
     return (await this.request('/auth/login', undefined, {
       method: 'POST',
       body: { email, password, turnstileToken },
-    })) as { twofaRequired?: boolean }
+    })) as { twofaRequired?: boolean; emailConfirmed?: boolean }
+  }
+
+  /**
+   * Send the confirm link again, signed out (worker: POST /api/auth/verify-email/resend). Always
+   * resolves for an address the worker takes: it never says whether the address has an account,
+   * or one waiting for its link, which is the only kind it mails.
+   */
+  async resendConfirmLink(email: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/verify-email/resend', undefined, {
+      method: 'POST',
+      body: { email, turnstileToken },
+    })
   }
 
   /**

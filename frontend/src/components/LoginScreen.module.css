@@ -72,6 +72,29 @@
   flex: none;
 }
 
+/* A confirm link opened here that did not confirm: why, and the way to a fresh one. */
+.linkProblem {
+  text-align: left;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border-radius: 10px;
+  border: 1px solid
+    color-mix(in oklab, var(--warning, #d97f2e) 45%, var(--border, rgba(255, 255, 255, 0.12)));
+  background: color-mix(in oklab, var(--warning, #d97f2e) 10%, transparent);
+  color: var(--text, #e6e8eb);
+  font-size: 13px;
+}
+
+.linkProblemText {
+  margin: 0 0 6px;
+}
+
+/* Under a refused sign-in: the way to the confirm link, for an account still waiting for it. */
+.resendLine {
+  margin: -4px 0 14px;
+  font-size: 13px;
+}
+
 /* ---------- form ---------- */
 
 .form {
@@ -264,13 +287,6 @@
   font-size: 11px;
   opacity: 0.7;
   font-variant-numeric: tabular-nums;
-}
-
-.signingIn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 22px 0 14px;
 }
 
 @media (max-width: 420px) {

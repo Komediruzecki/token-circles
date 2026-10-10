@@ -28,6 +28,8 @@ import {
   callMcp,
   dataRows,
   me,
+  passwordIs,
+  profilesWith,
   removeAccounts,
   seedAccount,
   seededData,
@@ -430,9 +432,12 @@ describe('a code for an account whose address was never confirmed', () => {
   it('removes every way in that was set up before, then signs in', async () => {
     const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
     // Each of them gets in beforehand.
-    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(SEEDED)).toBe(true);
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     const { code, cookie, id } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
 
     const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
@@ -450,6 +455,8 @@ describe('a code for an account whose address was never confirmed', () => {
       email_verified: 1,
     });
     expect(await accountRow(SEEDED)).toMatchObject({ password_hash: null, email_verified: 1 });
+    // It reaches the app's routes, which a session of an account waiting for its link does not.
+    expect((await profilesWith(signedIn!)).status).toBe(200);
 
     // Nothing set up before gets in any more.
     expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);
@@ -490,9 +497,12 @@ describe('a code for an account whose address was never confirmed', () => {
       ...rowsBefore,
       login_codes: withSpent(rowsBefore.login_codes, id),
     });
-    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(SEEDED)).toBe(true);
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
   });
 });
 
