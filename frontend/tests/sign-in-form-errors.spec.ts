@@ -157,7 +157,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`the right password to an account waiting for its link gets the same status, body and words as a wrong password (${boot}) @smoke`, async ({
+    test(`the right password to an account waiting for its link gets the same status, body and words as a wrong password (${boot})`, async ({
       page,
       context,
       request,

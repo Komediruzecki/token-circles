@@ -190,6 +190,9 @@ async function deleteRunAccounts(page: Page, emails: string[]): Promise<void> {
 }
 
 for (const boot of BOOTS) {
+  // Pull requests run the cases tagged `@smoke`, and the ones tagged `serverSmoke` in the dev
+  // boot only: main runs every case in both boots.
+  const serverSmoke = boot === 'server' ? ' @smoke' : ''
   test.describe(`booted as ${boot === 'prod' ? 'a fresh browser on production' : 'dev boots'}`, () => {
     test(`a confirm link opened without a session finishes once signed in there (${boot}) @smoke`, async ({
       page,
@@ -464,7 +467,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`signing up says to check the inbox, the password is refused until the link is opened, and then it signs in (${boot}) @smoke`, async ({
+    test(`signing up says to check the inbox, the password is refused until the link is opened, and then it signs in (${boot})${serverSmoke}`, async ({
       page,
       context,
     }) => {
@@ -517,7 +520,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`a session from before gets Confirm your email, which sends the link again and signs out, and the link lets it in (${boot}) @smoke`, async ({
+    test(`a session from before gets Confirm your email, which sends the link again and signs out, and the link lets it in (${boot})${serverSmoke}`, async ({
       page,
       context,
     }) => {
