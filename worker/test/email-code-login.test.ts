@@ -29,6 +29,7 @@ import {
   dataRows,
   me,
   passwordIs,
+  profilesWith,
   removeAccounts,
   seedAccount,
   seededData,
@@ -454,6 +455,8 @@ describe('a code for an account whose address was never confirmed', () => {
       email_verified: 1,
     });
     expect(await accountRow(SEEDED)).toMatchObject({ password_hash: null, email_verified: 1 });
+    // It reaches the app's routes, which a session of an account waiting for its link does not.
+    expect((await profilesWith(signedIn!)).status).toBe(200);
 
     // Nothing set up before gets in any more.
     expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);

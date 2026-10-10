@@ -204,6 +204,10 @@ export const signIn = (email: string, password = PASSWORD) =>
 export const me = (cookie: string) =>
   SELF.fetch('https://example.com/api/auth/me', { headers: { Cookie: cookie } });
 
+/** A read of the app's own data, which a session of an account waiting for its link is refused. */
+export const profilesWith = (cookie: string) =>
+  SELF.fetch('https://example.com/api/profiles', { headers: { Cookie: cookie } });
+
 /** A call to the MCP server, which takes an API token. */
 export const callMcp = (token: string) =>
   SELF.fetch('https://example.com/mcp', {

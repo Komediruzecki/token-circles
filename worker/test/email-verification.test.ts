@@ -347,6 +347,17 @@ describe('POST /api/auth/resend-verification', () => {
     expect(await isVerified()).toBe(0);
   });
 
+  it('counts against a limit of three an hour on the address, for a session whose address waits for its link', async () => {
+    await seedUser();
+    const session = await sessionFor();
+
+    const statuses = [];
+    for (let i = 0; i < 4; i += 1) statuses.push((await resend(session)).status);
+
+    expect(statuses).toEqual([200, 200, 200, 429]);
+    expect(await unusedTokens()).toBe(1);
+  });
+
   it('says so, rather than sending mail, when the address is already confirmed', async () => {
     await seedUser(USER_ID, EMAIL, 1);
 

@@ -16,6 +16,7 @@ import {
   dataRows,
   me,
   passwordIs,
+  profilesWith,
   removeAccounts,
   seedAccount,
   seededData,
@@ -108,6 +109,8 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
       auth_provider: 'google',
       email_verified: 1,
     });
+    // It reaches the app's routes, which a session of an account waiting for its link does not.
+    expect((await profilesWith(google!)).status).toBe(200);
     expect(await account()).toMatchObject({
       password_hash: null,
       provider_id: GOOGLE_SUB,
