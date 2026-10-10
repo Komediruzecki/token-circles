@@ -206,7 +206,7 @@ export async function resendVerificationEmail(): Promise<void> {
   throw new Error(
     detail.error ??
       (res.status === 429
-        ? 'Too many requests — try again a little later'
+        ? 'Too many requests. Try again a little later.'
         : `Could not resend the email (${res.status})`)
   )
 }

@@ -79,7 +79,7 @@ describe('the confirm link’s outcome', () => {
     await mount()
 
     expect(toasts).toContainEqual({
-      message: 'Email confirmed — your account is all set',
+      message: 'Email confirmed. Your account is all set.',
       type: 'success',
     })
   })
@@ -167,7 +167,7 @@ describe('a link opened in this browser before signing in', () => {
 
     expect(finishCalls).toBe(1)
     expect(toasts).toEqual([
-      { message: 'Email confirmed — your account is all set', type: 'success' },
+      { message: 'Email confirmed. Your account is all set.', type: 'success' },
     ])
     expect(waiting).toBeNull()
   })

@@ -190,9 +190,15 @@ const textFooter = (reason: string, unsubUrl?: string | null) =>
  * and adds a line saying why. One mail rather than two: a welcome and a confirm arriving
  * together read as a duplicate, and the confirm is the one action the user has to take. The
  * account opens once its address is confirmed, so that welcome says so, and points nowhere but
- * the link: before it, a sign-in is refused. Google accounts arrive already verified and see
- * today's welcome unchanged.
+ * the link: before it, a sign-in is refused. Google accounts arrive already verified, and their
+ * welcome says the account is ready.
  */
+/** What to do first, in both welcomes. */
+const welcomeCards = () => `
+    ${card('Create your first account', 'The home for your balance and transactions: checking, savings, cash or brokerage. The setup wizard walks you through it.')}
+    ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
+    ${card('Subscriptions, spotted', 'We recognize recurring charges (Netflix, Spotify, Claude and 40+ more) from your imported transactions and offer to track them.')}`;
+
 export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
   const confirm = opts.verifyUrl;
@@ -205,17 +211,13 @@ export function renderWelcome(opts: { appUrl?: string; verifyUrl?: string }): Re
     ${p(`Confirm this is your address to start using your account. It's also how we reach you about password resets and anything that needs your attention.`)}
     <div style="padding:8px 0 12px">${btn(confirm, 'Confirm your email')}</div>
     ${p(SIGN_IN_WHERE_OPENED, `font-size:12.5px;color:${C.faint}`)}
-    ${card('Create your first account', 'The home for your balance and transactions — checking, savings, cash or brokerage. The setup wizard walks you through it.')}
-    ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
-    ${card('Subscriptions, spotted', 'We recognize recurring charges — Netflix, Spotify, Claude and 40+ more — from your imported transactions and offer to track them.')}
+    ${welcomeCards()}
     ${p(`If you didn't create this account, you can safely ignore this email.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
   `
     : `
     ${h1('Welcome aboard')}
     ${p(`Your ${BRAND} account is ready. Everything orbits your accounts: add one, bring your history, and the dashboards light up.`)}
-    ${card('Create your first account', 'The home for your balance and transactions — checking, savings, cash or brokerage. The setup wizard walks you through it.')}
-    ${card('Bring your history', 'Import bank statements (Revolut, Erste, PBZ), CSV files, or Google Sheets. Duplicates are detected and skipped automatically.', C.warm)}
-    ${card('Subscriptions, spotted', 'We recognize recurring charges — Netflix, Spotify, Claude and 40+ more — from your imported transactions and offer to track them.')}
+    ${welcomeCards()}
     <div style="padding:8px 0 4px">${btn(app, `Open ${BRAND}`)}</div>
     ${p(`If you didn't create this account, you can safely ignore this email.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
   `;

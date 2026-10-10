@@ -456,6 +456,21 @@ describe('the mail itself', () => {
     );
   });
 
+  it('words the cards of both welcomes, the password one and the Google one, without an em dash', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    for (const welcome of [
+      renderWelcome({ appUrl: APP, verifyUrl: link }),
+      renderWelcome({ appUrl: APP }),
+    ]) {
+      expect(welcome.html).toContain(
+        'The home for your balance and transactions: checking, savings, cash or brokerage.'
+      );
+      expect(welcome.html).toContain(
+        'We recognize recurring charges (Netflix, Spotify, Claude and 40+ more) from your imported transactions and offer to track them.'
+      );
+    }
+  });
+
   it('says in the welcome of a password sign-up, html and text, that the link opens the account, and never that it is ready or to open the app first', () => {
     const link = 'https://api.example.com/api/auth/verify-email?token=abc';
     const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });

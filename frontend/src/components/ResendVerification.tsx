@@ -43,7 +43,7 @@ export const ResendVerification: Component<ResendVerificationProps> = (props) =>
   return (
     <Show
       when={state() !== 'sent'}
-      fallback={<span class={styles.sent}>{props.sentLabel ?? 'Sent — check your inbox'}</span>}
+      fallback={<span class={styles.sent}>{props.sentLabel ?? 'Sent. Check your inbox.'}</span>}
     >
       <button
         type="button"

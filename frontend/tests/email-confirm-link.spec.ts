@@ -37,7 +37,7 @@ import { E2E_API_BASE, E2E_BASE } from './e2e-constants'
 
 // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway fixture account
 const PASSWORD = 'confirm-link-spec-password-1'
-const CONFIRMED = 'Email confirmed — your account is all set'
+const CONFIRMED = 'Email confirmed. Your account is all set.'
 const CHANGED = 'Email changed. Your account uses the new address from now on.'
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =

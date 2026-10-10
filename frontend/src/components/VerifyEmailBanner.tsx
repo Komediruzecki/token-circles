@@ -54,7 +54,7 @@ function announce(result: EmailVerifyResult): void {
     return
   }
   if (result.ok) {
-    toast('Email confirmed — your account is all set', 'success')
+    toast('Email confirmed. Your account is all set.', 'success')
   } else if (result.error === 'expired') {
     toast('That confirmation link has expired.', 'error')
   } else {

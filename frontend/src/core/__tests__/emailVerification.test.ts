@@ -339,6 +339,8 @@ describe('resendVerificationEmail', () => {
       Promise.resolve(new Response('', { status: 429 }))
     )
 
-    await expect(resendVerificationEmail()).rejects.toThrow(/try again/i)
+    await expect(resendVerificationEmail()).rejects.toThrow(
+      'Too many requests. Try again a little later.'
+    )
   })
 })
