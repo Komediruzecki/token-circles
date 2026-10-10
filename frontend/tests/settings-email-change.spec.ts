@@ -23,7 +23,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
 import { E2E_BASE } from './e2e-constants'
-import { sql, sqlRows } from './db'
+import { confirmAccount, sql, sqlRows } from './db'
 import { getByTestId, gotoServerless } from './test-helpers'
 
 // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway fixture account
@@ -76,6 +76,7 @@ for (const boot of BOOTS) {
       await page.request.post(`${E2E_BASE}/api/auth/register`, {
         data: { email, password: PASSWORD },
       })
+      await confirmAccount(email)
       // Email reminders, and with them the Save button, need a paid plan.
       sql(`UPDATE users SET plan = 'ultimate' WHERE email = '${email}'`)
       userId = sqlRows<{ id: number }>(`SELECT id FROM users WHERE email = '${email}'`)[0].id
@@ -113,7 +114,7 @@ for (const boot of BOOTS) {
         `We sent a link to ${next}. Your sign-in address changes when you open it.`
       )
       await expect(field).toHaveValue(email)
-      expect(accountRows()).toEqual([{ email, email_verified: 0 }])
+      expect(accountRows()).toEqual([{ email, email_verified: 1 }])
 
       // ── Send again: a fresh link, and the first one stops working ──────────────────────────────
       const [first] = changeRows()

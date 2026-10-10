@@ -6,6 +6,7 @@
  * resetting a fixture user's 2FA between runs, planting a login code whose raw value the spec
  * knows. Same mechanism global.setup.ts uses; kept here so auth specs don't each grow a copy.
  */
+import { expect } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -59,4 +60,28 @@ export function sqlRows<T>(command: string): T[] {
   ])
   const parsed = JSON.parse(out) as { results: T[] }[]
   return parsed[0]?.results ?? []
+}
+
+/**
+ * Wait until signing up `email` has made its account and its profile. The Worker answers a
+ * sign-up before it makes the account, so a spec that reads or changes the account waits here.
+ */
+export async function accountMade(email: string): Promise<void> {
+  const made = () =>
+    sqlRows<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM profiles JOIN users ON users.id = profiles.user_id
+       WHERE users.email = '${email}'`
+    )[0]?.n ?? 0
+  await expect
+    .poll(made, { timeout: 15_000, message: `the account for ${email}` })
+    .toBeGreaterThan(0)
+}
+
+/**
+ * Confirm the address `email` signed up with, as opening its confirm link does. A password account
+ * signs in only once its address is confirmed, and no spec can read the mail with the link.
+ */
+export async function confirmAccount(email: string): Promise<void> {
+  await accountMade(email)
+  sql(`UPDATE users SET email_verified = 1 WHERE email = '${email}'`)
 }

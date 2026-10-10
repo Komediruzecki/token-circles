@@ -14,7 +14,7 @@
 import { type APIRequestContext, type Browser, expect, type Page, test } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn, signInWithPassword, storedMode } from './boot'
-import { sql, sqlRows } from './db'
+import { accountMade, sql, sqlRows } from './db'
 import { E2E_BASE } from './e2e-constants'
 
 // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway fixture account
@@ -33,21 +33,27 @@ async function signUp(api: APIRequestContext, email: string): Promise<void> {
     data: { email, password: OLD_PASSWORD },
   })
   expect(registered.ok(), `sign-up failed: ${registered.status()}`).toBeTruthy()
+  await accountMade(email)
 }
 
-/** Sign in on `api` and make the account an API token, which a reset otherwise keeps. */
+/**
+ * Sign in on `api` and make the account an API token, which a reset otherwise keeps. An account
+ * whose address waits for its link can do neither, so this is an account from before addresses
+ * had to be confirmed: confirmed while it sets the token up, and waiting again after.
+ */
 async function addApiToken(api: APIRequestContext, email: string): Promise<void> {
   sql("DELETE FROM rate_limits WHERE bucket LIKE 'login%'")
+  // API tokens come with a paid plan.
+  sql(`UPDATE users SET plan = 'ultimate', email_verified = 1 WHERE email = '${email}'`)
   const signedIn = await api.post(`${E2E_BASE}/api/auth/login`, {
     data: { email, password: OLD_PASSWORD },
   })
   expect(signedIn.ok(), `sign-in failed: ${signedIn.status()}`).toBeTruthy()
-  // API tokens come with a paid plan.
-  sql(`UPDATE users SET plan = 'ultimate' WHERE email = '${email}'`)
   const minted = await api.post(`${E2E_BASE}/api/account/api-tokens`, {
     data: { name: 'Reset spec', scopes: ['read'] },
   })
   expect(minted.status(), 'making an API token').toBe(201)
+  sql(`UPDATE users SET email_verified = 0 WHERE email = '${email}'`)
 }
 
 const apiTokensOf = (email: string) =>

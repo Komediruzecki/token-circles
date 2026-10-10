@@ -15,7 +15,7 @@ import { expect, request, test } from '@playwright/test'
 import { createHmac } from 'node:crypto'
 import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
 import { E2E_BASE } from './e2e-constants'
-import { sql } from './db'
+import { confirmAccount, sql } from './db'
 import { getByTestId } from './test-helpers'
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema'
 
@@ -87,7 +87,7 @@ for (const boot of BOOTS) {
       `DELETE FROM totp_credentials WHERE user_id IN (SELECT id FROM users WHERE email = '${EMAIL}')`
     )
     await api.post('/api/auth/register', { data: { email: EMAIL, password: PASSWORD } })
-    sql(`UPDATE users SET email_verified = 1 WHERE email = '${EMAIL}'`)
+    await confirmAccount(EMAIL)
     if (boot === 'server') {
       const login = await api.post('/api/auth/login', {
         data: { email: EMAIL, password: PASSWORD },
@@ -142,15 +142,17 @@ for (const boot of BOOTS) {
     // which then re-authenticates the browser (exactly what CI's slower runners hit).
     await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 15_000 })
 
-    // ── "Create account" with this existing 2FA-protected email also lands on the challenge ────
+    // ── "Create account" with this existing 2FA-protected email signs in to nothing: it says to
+    // check the inbox, as it does for a new address ───────────────────────────────────────────
     await context.clearCookies()
     await page.goto(`${E2E_BASE}/`)
     await page.getByText('Create one').click()
     await page.locator('#login-email').fill(EMAIL)
     await page.locator('#login-password').fill(PASSWORD)
     await page.locator('button[type="submit"]').click()
-    await expect(getByTestId(page, 'twofa-code')).toBeVisible()
-    await getByTestId(page, 'twofa-back').click()
+    await expect(getByTestId(page, 'check-inbox-address')).toHaveText(EMAIL)
+    await expect(getByTestId(page, 'twofa-code')).toHaveCount(0)
+    await getByTestId(page, 'check-inbox-back').click()
     await expect(page.locator('#login-email')).toBeVisible()
 
     // ── A recovery code also gets in — once ────────────────────────────────────────────────────

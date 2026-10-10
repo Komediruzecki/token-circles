@@ -19,7 +19,7 @@
 import { expect, request, test } from '@playwright/test'
 import { BOOTS, bootApp, openSignIn, signInWithPassword } from './boot'
 import { E2E_BASE } from './e2e-constants'
-import { sql } from './db'
+import { confirmAccount, sql } from './db'
 import { getByTestId } from './test-helpers'
 
 const LOCALHOST_BASE = E2E_BASE.replace('127.0.0.1', 'localhost')
@@ -45,6 +45,7 @@ for (const boot of BOOTS) {
       `DELETE FROM webauthn_credentials WHERE user_id IN (SELECT id FROM users WHERE email = '${EMAIL}')`
     )
     await api.post('/api/auth/register', { data: { email: EMAIL, password: PASSWORD } })
+    await confirmAccount(EMAIL)
     if (boot === 'server') {
       const login = await api.post('/api/auth/login', {
         data: { email: EMAIL, password: PASSWORD },

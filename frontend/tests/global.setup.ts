@@ -14,6 +14,7 @@ import { expect, request, test as setup } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
+import { accountMade } from './db'
 import { E2E_BASE, E2E_EMAIL, E2E_PASSWORD, E2E_PROFILE, STORAGE_STATE } from './e2e-constants'
 import { seedProfile } from './e2e-seed'
 
@@ -32,12 +33,13 @@ setup('sign in and save the session', async () => {
   await api.post('/api/auth/register', {
     data: { email: E2E_EMAIL, password: E2E_PASSWORD },
   })
+  // The Worker answers a sign-up before it makes the account.
+  await accountMade(E2E_EMAIL)
 
   // Two adjustments the API cannot make to its own fixture account:
   //
-  // `email_verified` — the account is real, so it starts unverified and the app shows a
-  // confirm-your-email strip. Nothing here is testing that strip, and letting it push the layout
-  // down changes what is on screen for every other spec. There is no mail server to click.
+  // `email_verified` — the account is real, so its address starts unconfirmed, and a password
+  // account signs in only once it is confirmed. There is no mail server to click the link in.
   //
   // `plan` — Free allows two profiles, and specs that need isolation create their own. The third
   // one hit the cap and failed with a plan error, which is a true thing about the Free tier and a
