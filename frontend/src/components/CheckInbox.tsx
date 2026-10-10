@@ -21,6 +21,10 @@ import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } fro
  * "Send the link again" asks for a fresh confirm link, signed out (POST
  * /api/auth/verify-email/resend), behind the captcha. A limit reached and a request the captcha
  * stopped are said in the notice (captchaGate.ts).
+ *
+ * With no mail at all, creating the account again is the other way: it makes the account when
+ * the first sign-up did not, and mails a fresh link to one still waiting for it. That account
+ * keeps the password it was created with, hence "the same password".
  */
 export default function CheckInbox(props: { email: string; onBack: () => void }) {
   // Its own widget: the form that sent the address is gone, and its token with it.
@@ -84,6 +88,10 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
         >
           Send the link again
         </SubmitButton>
+        <p class={styles.hint} data-test-id="check-inbox-no-mail">
+          No mail after a few minutes? Check your spam folder, or create the account again with the
+          same password.
+        </p>
         <p class={styles.links}>
           <button
             type="button"

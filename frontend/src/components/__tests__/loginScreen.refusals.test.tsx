@@ -395,6 +395,20 @@ describe('creating an account', () => {
     )
   })
 
+  it('says on Check your inbox to look in spam, or to create the account again with the same password', async () => {
+    answers['/api/auth/register'] = () => json({ ok: true })
+    await mount()
+    button('Create one').click()
+    await settle()
+    type(email(), 'name@example.com')
+    type(password(), 'a-new-password')
+    await submit()
+
+    expect(host.querySelector('[data-test-id="check-inbox-no-mail"]')?.textContent?.trim()).toBe(
+      'No mail after a few minutes? Check your spam folder, or create the account again with the same password.'
+    )
+  })
+
   it('shows Check your inbox for the address, and signs in to nothing', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
     await mount()
