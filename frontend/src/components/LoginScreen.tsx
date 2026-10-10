@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
-import { accessClearedNotice, takeAccessCleared } from '../core/accessCleared'
+import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
@@ -56,7 +56,7 @@ export default function LoginScreen() {
 
   // A reset that also confirmed the address reloads onto this screen with what else it removed.
   onMount(() => {
-    const words = accessClearedNotice('reset', takeAccessCleared('reset'))
+    const words = takeAccessClearedNotice('sign-in-screen')
     if (words !== null) setNotice(words)
   })
 

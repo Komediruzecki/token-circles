@@ -169,7 +169,7 @@ for (const boot of BOOTS) {
 
         // It names the API token, the one thing the account had besides its password.
         await expect(opened.page.getByTestId('auth-notice')).toHaveText(
-          'Your new password is set, and confirming your email removed your API tokens. Sign in, then add them again in Settings.'
+          'Resetting your password confirmed your email, so your API tokens no longer work. Sign in, then set them up again in Settings.'
         )
         expect(apiTokensOf(email)).toBe(0)
         expect(await signInStatus(request, email, OLD_PASSWORD)).toBe(401)

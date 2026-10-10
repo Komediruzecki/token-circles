@@ -108,16 +108,16 @@ describe('the sign-in screen after a reset that cleared the account', () => {
     await mount()
 
     expect(notice()).toBe(
-      'Your new password is set, and confirming your email removed your passkeys and your API tokens. Sign in, then add them again in Settings.'
+      'Resetting your password confirmed your email, so your passkeys and API tokens no longer work. Sign in, then set them up again in Settings.'
     )
     expect(sessionStorage.getItem('tc:access-cleared')).toBeNull()
   })
 
   it('leaves the notice of a sign-in for the app', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'sign-in:password')
+    sessionStorage.setItem('tc:access-cleared', 'google:password')
     await mount()
 
     expect(notice()).toBeNull()
-    expect(sessionStorage.getItem('tc:access-cleared')).toBe('sign-in:password')
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('google:password')
   })
 })

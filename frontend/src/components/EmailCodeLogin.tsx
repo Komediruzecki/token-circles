@@ -59,7 +59,7 @@ export default function EmailCodeLogin(props: {
       // Inbox proven, but the account wants the authenticator too: hand over.
       if (answer.twofaRequired) return 'second-factor'
       // What confirming the address removed, if anything: the app names it after the reload.
-      markAccessCleared('sign-in', answer.cleared)
+      markAccessCleared('email-code', answer.cleared)
       return reloadIntoTheApp()
     },
     saved: () => {

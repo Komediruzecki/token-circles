@@ -15,11 +15,12 @@ export type ClearedKind = (typeof CLEARED_KINDS)[number];
 
 /**
  * The kinds `raw` names, in CLEARED_KINDS order and each once: a list, or a comma-separated query
- * value. Anything that is not one of the names is left out, so a notice never names what nothing
- * reported.
+ * value, with any space around a name ignored. Anything that is not one of the names is left out,
+ * so a notice never names what nothing reported.
  */
 export function readClearedKinds(raw: unknown): ClearedKind[] {
-  const named =
+  const listed =
     typeof raw === 'string' ? raw.split(',') : Array.isArray(raw) ? (raw as unknown[]) : [];
+  const named = listed.map((name) => (typeof name === 'string' ? name.trim() : name));
   return CLEARED_KINDS.filter((kind) => named.includes(kind));
 }

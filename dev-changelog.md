@@ -214,10 +214,12 @@ All notable changes to Token Circles are documented here. The format is based on
   `?cleared=password,passkeys`; the emailed-code sign-in and the reset answer carry them as
   `cleared: ['password']`, and leave `cleared` out when nothing went. Sessions are never named, and
   a reset never names the password it set. `accessClearedNotice`
-  (`frontend/src/core/accessCleared.ts`) writes one sentence naming those kinds, then the next step:
-  Forgot password on the sign-in screen when the password went, Settings otherwise. Nothing named,
-  no notice. A `?cleared=` value that names no known kind is stripped without one. What is cleared,
-  and the batch that clears it, are unchanged.
+  (`frontend/src/core/accessCleared.ts`) writes one sentence that names the step (Google sign-in,
+  an emailed code or a reset) and only those kinds, then one next step: sign out and choose Forgot
+  password when the password went, set them up again in Settings otherwise, and after a reset, sign
+  in first. Nothing named, no notice. A `?cleared=` value that names no known kind is stripped
+  without one, and a kept notice the app does not recognise is removed. What is cleared, and the
+  batch that clears it, are unchanged.
 - **Sign-in history is kept 90 days, and goes with the account** (#613). Account deletion deletes
   its `auth_logs` rows in the same D1 batch: rows with its user id, and attempts at its address that
   carry none. The scheduled run deletes rows older than `AUTH_LOG_RETENTION_DAYS` (90,

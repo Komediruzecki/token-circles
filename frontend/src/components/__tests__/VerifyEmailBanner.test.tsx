@@ -116,17 +116,17 @@ describe('after a sign-in that confirmed the address and cleared the account', (
   const notice = () => host.querySelector('[data-testid="access-cleared-notice"]')
 
   it('names what went and what to do, once', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'sign-in:password')
+    sessionStorage.setItem('tc:access-cleared', 'google:password')
     await mount()
 
     expect(notice()?.textContent).toBe(
-      'Confirming your email removed the password you signed up with. To set a new password, choose Forgot password on the sign-in screen.'
+      'Signing in with Google confirmed your email, so your password no longer works. To set a new one, sign out and choose Forgot password.'
     )
     expect(sessionStorage.getItem('tc:access-cleared')).toBeNull()
   })
 
   it('goes away when dismissed', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'sign-in:password')
+    sessionStorage.setItem('tc:access-cleared', 'email-code:password')
     await mount()
 
     host.querySelector<HTMLButtonElement>('[data-testid="access-cleared-dismiss"]')!.click()

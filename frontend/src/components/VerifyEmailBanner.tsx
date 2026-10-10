@@ -14,7 +14,7 @@
  * so for any other, and it shows the answer.
  */
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js'
-import { accessClearedNotice, takeAccessCleared } from '../core/accessCleared'
+import { takeAccessClearedNotice } from '../core/accessCleared'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import {
@@ -111,7 +111,7 @@ export const VerifyEmailBanner: Component = () => {
   )
 
   onMount(() => {
-    setCleared(accessClearedNotice('sign-in', takeAccessCleared('sign-in')))
+    setCleared(takeAccessClearedNotice('app'))
     const result = takeEmailVerifyResult()
     if (result !== null) announce(result)
   })

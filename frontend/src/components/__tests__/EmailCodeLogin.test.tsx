@@ -248,7 +248,7 @@ describe('verifying', () => {
     await vi.waitFor(() => {
       expect(reloads).toBe(1)
     })
-    expect(sessionStorage.getItem('tc:access-cleared')).toBe('sign-in:password')
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('email-code:password')
   })
 
   it('keeps nothing when nothing was cleared', async () => {

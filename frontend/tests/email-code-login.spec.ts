@@ -117,7 +117,7 @@ for (const boot of BOOTS) {
       // The password it signed up with went when the code confirmed the address, and the app,
       // after its reload, says so.
       await expect(page.locator('[data-testid="access-cleared-notice"]')).toHaveText(
-        'Confirming your email removed the password you signed up with. To set a new password, choose Forgot password on the sign-in screen.'
+        'Signing in with an emailed code confirmed your email, so your password no longer works. To set a new one, sign out and choose Forgot password.'
       )
     } finally {
       await page.request
