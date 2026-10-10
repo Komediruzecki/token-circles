@@ -1,5 +1,11 @@
 import type { Env } from './index';
 
+/**
+ * How long a mail call waits for Resend. Past it the call is aborted and sendMail throws, as it
+ * does when the network fails, so a caller's own handling of that failure runs.
+ */
+const MAIL_TIMEOUT_MS = 10_000;
+
 // Outbound transactional email via Resend's HTTP API (Workers can't open SMTP sockets).
 // Dev parity with the legacy console-log mode: when RESEND_API_KEY is unset, log + skip.
 export async function sendMail(
@@ -29,6 +35,7 @@ export async function sendMail(
       ...(opts?.text ? { text: opts.text } : {}),
       ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}),
     }),
+    signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
