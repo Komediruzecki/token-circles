@@ -983,7 +983,8 @@ describe("the form's tags are the transaction's, not the list filter's", () => {
 
     expect(formTags()).toEqual([])
     expect(inputById('tx-tag-new-input').value).toBe('Commute')
-    expect(vi.mocked(toast)).toHaveBeenCalledWith('Failed to create tag', 'error')
+    // Not the runtime's answer (a plain Error), so the fallback: an ApiError says its own words.
+    expect(vi.mocked(toast)).toHaveBeenCalledWith("Couldn't create the tag. Try again.", 'error')
 
     // Nothing is left stuck: Enter again tries again, and this time the tag is made and attached.
     inputById('tx-tag-new-input').dispatchEvent(
