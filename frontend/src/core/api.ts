@@ -33,6 +33,8 @@ export interface SignedInAccount {
   emailVerified: boolean
   /** How the account signs in: 'password' or 'google'. */
   provider: string | null
+  /** The account has a billing account, whose portal manages or cancels its subscription. */
+  billingAccount: boolean
 }
 
 /**
@@ -171,6 +173,7 @@ export class ApiClient {
         email?: unknown
         email_verified?: unknown
         auth_provider?: unknown
+        billing_account?: unknown
       }>('/auth/me', undefined)
       return {
         email: typeof me?.email === 'string' ? me.email : '',
@@ -180,6 +183,7 @@ export class ApiClient {
             ? true
             : Boolean(me.email_verified),
         provider: typeof me?.auth_provider === 'string' ? me.auth_provider : null,
+        billingAccount: Boolean(me?.billing_account),
       }
     } catch {
       return null

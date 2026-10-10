@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api, waitsForConfirmLink } from '../core/api'
+import { apiFetch } from '../core/apiFetch'
 import { displayVersion } from '../core/appVersion'
 import {
   clearLinkWaiting,
@@ -23,19 +24,51 @@ function linkProblem(error: string): string {
     : "That link doesn't work anymore. Send the link again for a fresh one."
 }
 
+/** Said when the billing portal did not open and the Worker gave no words of its own. */
+const PORTAL_FAILED = "Couldn't open the billing page. Try again in a moment."
+
 /**
  * Confirm your email: what a signed-in password account sees instead of the app until its address
  * is confirmed. The Worker refuses that session everything but a few account routes
  * (EMAIL_UNCONFIRMED), so there is nothing else to show it. It names the address, sends the link
- * again (POST /api/auth/resend-verification), and signs out.
+ * again (POST /api/auth/resend-verification), and signs out. An account with a billing account
+ * (`billingAccount`) also gets the billing portal, where its subscription is managed or cancelled:
+ * the Worker lets that request through for such an account, so the gate never keeps a subscriber
+ * from cancelling.
  *
  * It lets the account in once the address is confirmed. A link this browser opened before signing
  * in is finished here (finishEmailLink), and coming back to the tab asks the Worker again, for a
  * link opened in another tab or on another device. Either way the app reloads, signed in.
  */
-export default function ConfirmEmailScreen(props: { email: string; onSignOut: () => void }) {
+export default function ConfirmEmailScreen(props: {
+  email: string
+  billingAccount?: boolean
+  onSignOut: () => void
+}) {
   // About a link the person opened: why it did not confirm, or that it is another account's.
   const [said, setSaid] = createSignal('')
+  const [openingPortal, setOpeningPortal] = createSignal(false)
+  const [portalProblem, setPortalProblem] = createSignal('')
+
+  // The Stripe-hosted portal, as Settings opens it. The page leaves for it, so the button stays
+  // busy on the way out; anything else is said here, and the button comes back.
+  const openPortal = async () => {
+    if (openingPortal()) return
+    setOpeningPortal(true)
+    setPortalProblem('')
+    try {
+      const res = await apiFetch('/api/billing/portal', { method: 'POST', credentials: 'include' })
+      const body = (await res.json().catch(() => ({}))) as { url?: unknown; error?: unknown }
+      if (res.ok && typeof body.url === 'string') {
+        window.location.href = body.url
+        return
+      }
+      setPortalProblem(typeof body.error === 'string' ? body.error : PORTAL_FAILED)
+    } catch {
+      setPortalProblem(PORTAL_FAILED)
+    }
+    setOpeningPortal(false)
+  }
 
   const letIn = () => {
     noteAddressConfirmed()
@@ -111,6 +144,26 @@ export default function ConfirmEmailScreen(props: { email: string; onSignOut: ()
           sentLabel="Sent. Check your inbox."
           data-testid="confirm-email-resend"
         />
+        <Show when={props.billingAccount}>
+          <p class={stepStyles.links}>
+            <button
+              type="button"
+              data-test-id="confirm-email-billing"
+              class={stepStyles.link}
+              disabled={openingPortal()}
+              onClick={() => {
+                void openPortal()
+              }}
+            >
+              {openingPortal() ? 'Opening the billing page…' : 'Manage or cancel your subscription'}
+            </button>
+          </p>
+          <Show when={portalProblem()}>
+            <p class={stepStyles.lead} role="alert" data-test-id="confirm-email-billing-problem">
+              {portalProblem()}
+            </p>
+          </Show>
+        </Show>
         <p class={stepStyles.links}>
           <button
             type="button"

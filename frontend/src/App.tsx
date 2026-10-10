@@ -73,6 +73,7 @@ import {
 } from './core/spotlightStore'
 import { getStorageMode, setStorageMode } from './core/storage/storageFactory'
 import { pages as allPages } from './router.tsx'
+import type { SignedInAccount } from './core/api.js'
 import type { PageName } from './router.tsx'
 import type { Account, Category, Profile } from './types/models'
 
@@ -109,10 +110,10 @@ export function App() {
   const setIsAuthenticated = (v: boolean) => {
     setIsAuthenticatedStore(v)
   }
-  // The address of a signed-in password account that waits for its confirm link, which sees
-  // Confirm your email (ConfirmEmailScreen) instead of the app, and is not signed in to it. Null
-  // for every other account.
-  const [confirmGate, setConfirmGate] = createSignal<string | null>(null)
+  // A signed-in password account that waits for its confirm link, which sees Confirm your email
+  // (ConfirmEmailScreen) instead of the app, and is not signed in to it. Null for every other
+  // account.
+  const [confirmGate, setConfirmGate] = createSignal<SignedInAccount | null>(null)
   const showDropdown = () => state.showDropdown
   const setShowDropdown = (v: boolean) => {
     setShowDropdownStore(v)
@@ -418,7 +419,7 @@ export function App() {
     // A password account whose address is not confirmed gets Confirm your email and none of the
     // loads below, which the Worker would refuse (EMAIL_UNCONFIRMED). Local-first never waits.
     const waiting = serverMode && account !== null && waitsForConfirmLink(account)
-    if (waiting) setConfirmGate(account.email)
+    if (waiting) setConfirmGate(account)
     const loggedIn = account !== null && !waiting
     setIsAuthenticated(loggedIn)
     // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
@@ -622,7 +623,7 @@ export function App() {
   const handleEmailUnconfirmed = () => {
     void api.signedInAccount().then((account) => {
       if (account === null || !waitsForConfirmLink(account)) return
-      setConfirmGate(account.email)
+      setConfirmGate(account)
       setIsAuthenticated(false)
     })
   }
@@ -844,7 +845,8 @@ export function App() {
           fallback={
             <Show when={confirmGate() !== null} fallback={<LoginScreen />}>
               <ConfirmEmailScreen
-                email={confirmGate() ?? ''}
+                email={confirmGate()?.email ?? ''}
+                billingAccount={confirmGate()?.billingAccount ?? false}
                 onSignOut={() => {
                   void handleLogout()
                 }}

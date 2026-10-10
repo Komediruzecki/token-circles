@@ -2,7 +2,9 @@
  * Confirm your email (ConfirmEmailScreen), against the real client with only the network answered
  * here: what a signed-in password account sees instead of the app until its address is confirmed.
  *
- * It names the address, sends the link again through the signed-in route, and signs out. It lets
+ * It names the address, sends the link again through the signed-in route, and signs out. An
+ * account with a billing account can open the billing portal from it, to manage or cancel its
+ * subscription. It lets
  * the account in, by reloading, once the address is confirmed: by the link this browser opened
  * before signing in, which it finishes, or elsewhere, which it asks about when the person comes
  * back to the tab. Anything else keeps it where it is.
@@ -35,7 +37,8 @@ const WAITING_KEY = 'tc:email-link-waiting'
 /** The screen for `email`, after `before` has run against the same modules it uses. */
 async function mount(
   email = 'waiting@example.com',
-  before?: (verification: typeof EmailVerification) => void
+  before?: (verification: typeof EmailVerification) => void,
+  billingAccount = false
 ) {
   vi.resetModules()
   vi.doMock('../../core/apiFetch', () => ({
@@ -56,6 +59,7 @@ async function mount(
     () => (
       <ConfirmEmailScreen
         email={email}
+        billingAccount={billingAccount}
         onSignOut={() => {
           signOuts += 1
         }}
@@ -146,6 +150,41 @@ describe('Confirm your email', () => {
     byTestId('confirm-email-sign-out')!.click()
 
     expect(signOuts).toBe(1)
+  })
+})
+
+describe('an account with a billing account', () => {
+  const PORTAL = 'https://billing.stripe.com/p/session/test_portal'
+
+  it('opens the billing portal from Manage or cancel your subscription', async () => {
+    answers['/api/billing/portal'] = () => json({ url: PORTAL })
+    await mount('waiting@example.com', undefined, true)
+
+    byTestId('confirm-email-billing')!.click()
+    await settle()
+
+    expect(sent).toEqual([{ url: '/api/billing/portal', method: 'POST' }])
+    expect(window.location.href).toBe(PORTAL)
+  })
+
+  it('says why when the portal does not open, and offers the button again', async () => {
+    answers['/api/billing/portal'] = () => json({ error: 'Billing is not configured' }, 501)
+    await mount('waiting@example.com', undefined, true)
+
+    byTestId('confirm-email-billing')!.click()
+    await settle()
+
+    expect(byTestId('confirm-email-billing-problem')?.textContent).toBe('Billing is not configured')
+    expect(byTestId('confirm-email-billing')?.hasAttribute('disabled')).toBe(false)
+    expect(window.location.href).toBe('https://app.example.com/')
+  })
+})
+
+describe('an account with no billing account', () => {
+  it('is not offered the billing portal', async () => {
+    await mount()
+
+    expect(byTestId('confirm-email-billing')).toBeNull()
   })
 })
 

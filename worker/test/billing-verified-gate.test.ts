@@ -1,10 +1,12 @@
 /**
  * A password account has to confirm its address before it can start paying.
  *
- * Its session reaches no billing route before then: requireAuth answers it 403 EMAIL_UNCONFIRMED
- * (confirm-email-gate.test.ts), ahead of billing's own check. The cases that matter are the ones
- * it must NOT catch: a Google account (verified by Google), and a password account once its
- * address is confirmed.
+ * Its session reaches no billing route before then but one: requireAuth answers it 403
+ * EMAIL_UNCONFIRMED (confirm-email-gate.test.ts), ahead of billing's own check. The one is the
+ * portal, for an account that already has a billing account: a gate that traps an existing
+ * subscriber away from the cancel button is worse than no gate. The other cases it must NOT catch
+ * are a Google account (verified by Google), and a password account once its address is
+ * confirmed.
  *
  * STRIPE_SECRET_KEY is unset in tests, so "got past the gate" reads as 501 (billing not
  * configured) rather than a real Stripe call. That is exactly why the account precondition is
@@ -99,18 +101,50 @@ describe('POST /api/billing/checkout', () => {
 });
 
 describe('POST /api/billing/portal', () => {
-  it('opens for an account already paying once its address is confirmed, and not before', async () => {
-    // A password account that subscribed before checkout asked for a confirmed address. It meets
-    // the confirm screen like any other, and reaches the portal from the moment it confirms.
+  it('stays open to an unconfirmed account that is already paying', async () => {
+    // The one thing this gate must never do: strand a subscriber away from the cancel button.
     await seed({ provider: 'password', verified: 0, customer: 'cus_existing' });
 
-    const before = await portal();
-    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(UID).run();
-    const after = await portal();
+    const res = await portal();
 
-    expect(before.status).toBe(403);
-    expect(await before.json()).toEqual(UNCONFIRMED);
-    expect(after.status).toBe(501);
+    // 501 = past the gate, stopped by billing not being configured in tests.
+    expect(res.status).toBe(501);
+  });
+
+  it('answers an unconfirmed account with no billing account as the gate answers it', async () => {
+    await seed({ provider: 'password', verified: 0 });
+
+    const res = await portal();
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual(UNCONFIRMED);
+  });
+
+  it('opens for a confirmed account with a billing account', async () => {
+    await seed({ provider: 'password', verified: 1, customer: 'cus_existing' });
+
+    expect((await portal()).status).toBe(501);
+  });
+});
+
+describe('GET /api/auth/me', () => {
+  const me = async () =>
+    (await (
+      await SELF.fetch('https://api.example.com/api/auth/me', {
+        headers: { Cookie: await session() },
+      })
+    ).json()) as { billing_account?: unknown };
+
+  it('says 1 for an unconfirmed account that has a billing account, which its confirm screen offers the portal to', async () => {
+    await seed({ provider: 'password', verified: 0, customer: 'cus_existing' });
+
+    expect((await me()).billing_account).toBe(1);
+  });
+
+  it('says 0 for an account with no billing account', async () => {
+    await seed({ provider: 'password', verified: 0 });
+
+    expect((await me()).billing_account).toBe(0);
   });
 });
 

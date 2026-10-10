@@ -129,6 +129,26 @@ describe('a password account whose address is not confirmed', () => {
     expect(apiSent()).toEqual([])
   })
 
+  it('is offered Manage or cancel your subscription when it has a billing account, and not otherwise', async () => {
+    worker.me = { ...WAITING, billing_account: 1 }
+    await mountApp()
+    await vi.waitFor(() => {
+      expect(gateShown()).toBe(true)
+    }, waitLong)
+    expect(byTestId('confirm-email-billing')?.textContent).toBe(
+      'Manage or cancel your subscription'
+    )
+
+    dispose?.()
+    dispose = undefined
+    worker.me = { ...WAITING, billing_account: 0 }
+    await mountApp()
+    await vi.waitFor(() => {
+      expect(gateShown()).toBe(true)
+    }, waitLong)
+    expect(byTestId('confirm-email-billing')).toBeNull()
+  })
+
   it('goes to the sign-in screen from Sign out', async () => {
     worker.me = WAITING
     await mountApp()

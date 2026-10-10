@@ -789,11 +789,15 @@ authRoutes.delete('/api/auth/email-change', requireAuth, async (c) => {
 
 // Current user. An account waiting for its confirm link reaches it too: email_verified and
 // auth_provider ride along, and from them the app shows its Confirm your email screen, with the
-// address, instead of the app.
+// address, instead of the app. billing_account (1 or 0) says whether the account has a billing
+// account at Stripe: that screen offers the billing portal, where a subscription is managed or
+// cancelled, to an account that has one.
 authRoutes.get('/api/auth/me', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare(
-    'SELECT id, username, email, auth_provider, email_verified FROM users WHERE id = ?'
+    `SELECT id, username, email, auth_provider, email_verified,
+            stripe_customer_id IS NOT NULL AS billing_account
+       FROM users WHERE id = ?`
   )
     .bind(userId)
     .first();

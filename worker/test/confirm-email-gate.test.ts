@@ -1,7 +1,8 @@
 /**
  * A password account whose address is not confirmed reaches, from a session or an API token, only
- * what confirming the address needs. Every other route that takes a session answers its session
- * 403 EMAIL_UNCONFIRMED, and every route that takes an API token answers its token the same.
+ * what confirming the address needs, and the billing portal when it has a billing account
+ * (billing-verified-gate.test.ts). Every other route that takes a session answers its session 403
+ * EMAIL_UNCONFIRMED, and every route that takes an API token answers its token the same.
  *
  * The rows decide: an account made before this rule, and a session issued before it, are answered
  * the same way, and both work again once the address is confirmed. A Google account is never

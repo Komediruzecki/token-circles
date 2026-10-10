@@ -1,6 +1,11 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../index';
-import { requireAuth } from '../auth';
+import {
+  EMAIL_UNCONFIRMED,
+  emailUnconfirmed,
+  requireAuth,
+  requireAuthEvenUnconfirmed,
+} from '../auth';
 import { HttpError } from '../http';
 import * as db from '../db';
 import { sendMail } from '../email';
@@ -354,14 +359,23 @@ billingRoutes.post('/api/billing/checkout', requireAuth, async (c) => {
 });
 
 // POST /api/billing/portal — Stripe-hosted manage/cancel portal; returns { url }.
-billingRoutes.post('/api/billing/portal', requireAuth, async (c) => {
-  if (!c.env.STRIPE_SECRET_KEY) throw new HttpError(501, 'Billing is not configured');
+//
+// The one billing route an account waiting for its confirm link reaches, and only with a billing
+// account: the gate must never stand between a subscriber and the cancel button. Without one it
+// is answered as the gate answers every other route.
+billingRoutes.post('/api/billing/portal', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
-  const u = await db.first<{ stripe_customer_id: string | null }>(
+  const u = await db.first<{
+    stripe_customer_id: string | null;
+    auth_provider: string | null;
+    email_verified: number | null;
+  }>(
     c.env.DB,
-    'SELECT stripe_customer_id FROM users WHERE id = ?',
+    'SELECT stripe_customer_id, auth_provider, email_verified FROM users WHERE id = ?',
     userId
   );
+  if (u && emailUnconfirmed(u) && !u.stripe_customer_id) return c.json(EMAIL_UNCONFIRMED, 403);
+  if (!c.env.STRIPE_SECRET_KEY) throw new HttpError(501, 'Billing is not configured');
   if (!u?.stripe_customer_id) throw new HttpError(400, 'No billing account yet');
   const origin = c.env.CORS_ORIGIN ?? new URL(c.req.url).origin;
   const portal = await stripePost(c.env, 'billing_portal/sessions', {
@@ -664,8 +678,7 @@ billingRoutes.post('/api/billing/webhook', async (c) => {
       const metaPlan = paidPlan(meta?.plan);
       const item = (
         obj.items as
-          | { data?: Array<{ price?: { id?: string }; current_period_end?: number }> }
-          | undefined
+          { data?: Array<{ price?: { id?: string }; current_period_end?: number }> } | undefined
       )?.data?.[0];
       const subPlan = item?.price?.id ? planForPrice(c.env, item.price.id) : null;
       // basil moved current_period_end onto the subscription item and removed the top-level
