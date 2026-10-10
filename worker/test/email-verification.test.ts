@@ -438,11 +438,23 @@ describe('the mail itself', () => {
       );
     }
     expect(welcome.text).toContain(
-      `Confirm this is your address so we can reach you about your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${link}\n\nThen set up your first account,`
+      `Confirm this is your address to start using your account. If you're asked to sign in first, it's confirmed as soon as you do:\n${link}\n\nThen set up your first account,`
     );
     expect(resent.text).toContain(
       `Open this link to confirm your address (expires in 24 hours). If you're asked to sign in first, it's confirmed as soon as you do:\n${link}`
     );
+  });
+
+  it('says in both mails, html and text, that the account is for using once the address is confirmed, and never that it works without', () => {
+    const link = 'https://api.example.com/api/auth/verify-email?token=abc';
+    const welcome = renderWelcome({ appUrl: APP, verifyUrl: link });
+    const resent = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
+    for (const mail of [welcome, resent]) {
+      for (const part of [mail.html, mail.text]) {
+        expect(part).toContain('start using your account');
+        expect(part).not.toContain('keeps working');
+      }
+    }
   });
 
   it('leaves the sign-in sentence out of the welcome that has nothing to confirm', () => {
