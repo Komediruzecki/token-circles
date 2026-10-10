@@ -17,28 +17,34 @@ vi.mock('../../core/api', async (importOriginal) => ({
 
 let host: HTMLDivElement
 let dispose: () => void
+const onClose = vi.fn()
+
+/** Choose the catalog's `name` token: search for it and click it. */
+function choose(name: string) {
+  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search the catalog"]')!
+  input(search, name)
+  const row = Array.from(host.querySelectorAll<HTMLElement>('[role="button"]')).find(
+    (element) => element.querySelector('[class*="name"]')?.textContent === name
+  )!
+  click(row)
+}
 
 function mountCatalog() {
   host = document.createElement('div')
   document.body.appendChild(host)
   dispose = render(
-    () => <SubscriptionCatalogModal isOpen={() => true} onClose={vi.fn()} categories={() => []} />,
+    () => <SubscriptionCatalogModal isOpen={() => true} onClose={onClose} categories={() => []} />,
     host
   )
 
-  const search = host.querySelector<HTMLInputElement>('input[aria-label="Search the catalog"]')!
-  input(search, 'Netflix')
-  const row = Array.from(host.querySelectorAll<HTMLElement>('[role="button"]')).find((element) =>
-    element.textContent?.includes('Netflix')
-  )!
-  click(row)
+  choose('Netflix')
 
   return {
     price: host.querySelector<HTMLInputElement>('input[aria-label="Netflix price"]')!,
     apply: host.querySelector<HTMLButtonElement>('button[aria-label="Apply Netflix price"]')!,
     add: () =>
-      Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find(
-        (button) => button.textContent?.trim() === 'Add 1'
+      Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
+        /^Add \d+$/.test(button.textContent?.trim() ?? '')
       )!,
     total: () =>
       Array.from(host.querySelectorAll<HTMLElement>('span')).find((element) =>
@@ -62,7 +68,18 @@ beforeEach(() => {
   apiMocks.apiPost.mockReset()
   apiMocks.apiPost.mockResolvedValue({ id: 1 })
   apiMocks.showToast.mockReset()
+  onClose.mockReset()
 })
+
+/** The words under a price field, through its aria-describedby. */
+const describedBy = (element: HTMLElement): string =>
+  (element.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' | ')
+
+const notice = () => host.querySelector('[data-test-id="catalog-notice"]')?.textContent ?? ''
 
 afterEach(() => {
   dispose?.()
@@ -99,30 +116,82 @@ describe('SubscriptionCatalogModal custom prices', () => {
     })
   })
 
-  it('validates malformed drafts instead of coercing them to a wrong amount', async () => {
+  it("says what is wrong with a malformed draft under the token, in the bill rules' words", () => {
     const catalog = mountCatalog()
     input(catalog.price, '12,3,4')
+    catalog.apply.focus()
     click(catalog.apply)
 
     expect(catalog.price.value).toBe('12,3,4')
     expect(catalog.price.getAttribute('aria-invalid')).toBe('true')
-    expect(host.querySelector('[role="alert"]')?.textContent).toMatch(/positive price/i)
+    expect(describedBy(catalog.price)).toBe(BILL_MESSAGES.amountNumber)
+    expect(document.activeElement).toBe(catalog.price)
+  })
+
+  it('marks a price of zero when Add is pressed, focuses it, and sends nothing', async () => {
+    const catalog = mountCatalog()
+    input(catalog.price, '0')
+    catalog.add().focus()
 
     click(catalog.add())
     await vi.waitFor(() => {
-      expect(apiMocks.showToast).toHaveBeenCalledWith(
-        'Fix the highlighted subscription prices',
-        'error'
-      )
+      expect(describedBy(catalog.price)).toBe(BILL_MESSAGES.amountPositive)
     })
+    expect(document.activeElement).toBe(catalog.price)
     expect(apiMocks.apiPost).not.toHaveBeenCalled()
+    expect(apiMocks.showToast).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('takes a mark away with the token when it is unchosen, and leaves none in the notice', async () => {
+    const catalog = mountCatalog()
+    input(catalog.price, '0')
+    click(catalog.add())
+    await vi.waitFor(() => {
+      expect(catalog.price.getAttribute('aria-invalid')).toBe('true')
+    })
+
+    choose('Netflix')
+
+    expect(host.querySelector('input[aria-label="Netflix price"]')).toBeNull()
+    expect(notice()).toBe('')
+  })
+
+  it('keeps Enter in the search and in a price from adding the batch', () => {
+    const catalog = mountCatalog()
+    const enter = () =>
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    const search = host.querySelector<HTMLInputElement>('input[aria-label="Search the catalog"]')!
+
+    const inSearch = enter()
+    search.dispatchEvent(inSearch)
+    const inPrice = enter()
+    catalog.price.dispatchEvent(inPrice)
+
+    // A browser submits a form on Enter in a text field unless the keydown is cancelled.
+    expect(inSearch.defaultPrevented).toBe(true)
+    expect(inPrice.defaultPrevented).toBe(true)
+  })
+
+  it('takes the mark away once the price is fixed', async () => {
+    const catalog = mountCatalog()
+    input(catalog.price, '0')
+    click(catalog.add())
+    await vi.waitFor(() => {
+      expect(catalog.price.getAttribute('aria-invalid')).toBe('true')
+    })
+
+    input(catalog.price, '9,99')
+
+    expect(catalog.price.getAttribute('aria-invalid')).toBeNull()
   })
 })
 
-// A subscription the runtime refuses is named, with the reason it was refused for. The catalog
-// said "Some subscriptions could not be added", whatever the reason, and named none.
+// A subscription the runtime refuses stays chosen, with the reason it was refused for: under its
+// price when the price is the reason, in the notice, naming it, when it is not. The catalog said
+// "Some subscriptions could not be added", whatever the reason, named none, and closed.
 describe('SubscriptionCatalogModal refusals', () => {
-  it('says which subscription was not added, and why', async () => {
+  it("marks a price the runtime refuses under its token, in the runtime's words", async () => {
     apiMocks.apiPost.mockRejectedValue(
       new ApiError(400, BILL_MESSAGES.amountCents, { amount: BILL_MESSAGES.amountCents })
     )
@@ -131,12 +200,49 @@ describe('SubscriptionCatalogModal refusals', () => {
     click(catalog.add())
 
     await vi.waitFor(() => {
-      expect(apiMocks.showToast).toHaveBeenCalledWith(
-        `Couldn't add "Netflix". ${BILL_MESSAGES.amountCents}`,
-        'error'
-      )
+      expect(describedBy(catalog.price)).toBe(BILL_MESSAGES.amountCents)
     })
+    expect(catalog.price.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(catalog.price)
+    expect(apiMocks.showToast).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('names a subscription refused for what no price can fix, and adds the rest', async () => {
+    apiMocks.apiPost.mockImplementation((_url: string, body: { name: string }) =>
+      body.name === 'Spotify'
+        ? Promise.reject(
+            new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+          )
+        : Promise.resolve({ id: 1 })
+    )
+    const catalog = mountCatalog()
+    choose('Spotify')
+
+    click(catalog.add())
+
+    await vi.waitFor(() => {
+      expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+    })
+    expect(apiMocks.showToast).toHaveBeenCalledWith('1 subscription added', 'success')
     expect(apiMocks.showToast).toHaveBeenCalledTimes(1)
+    // Netflix was added and is no longer chosen; Spotify is, to try again.
+    expect(host.querySelector('input[aria-label="Netflix price"]')).toBeNull()
+    expect(host.querySelector('input[aria-label="Spotify price"]')).not.toBeNull()
+    expect(catalog.add().textContent?.trim()).toBe('Add 1')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('closes once everything chosen was added', async () => {
+    const catalog = mountCatalog()
+
+    click(catalog.add())
+
+    await vi.waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+    expect(apiMocks.showToast).toHaveBeenCalledWith('1 subscription added', 'success')
+    expect(notice()).toBe('')
   })
 })
 

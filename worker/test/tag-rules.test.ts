@@ -78,7 +78,7 @@ function call(
 
 async function createTag(name = 'Company'): Promise<number> {
   const res = await call('/api/tags', { method: 'POST', body: { name, color: '#6e9bff' } });
-  expect(res.status).toBe(200);
+  expect(res.status).toBe(201);
   return (await res.json<{ id: number }>()).id;
 }
 

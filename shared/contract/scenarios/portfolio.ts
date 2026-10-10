@@ -1,3 +1,4 @@
+import { HOLDING_MESSAGES as M } from '../../holdingSchema';
 import { expectMoney } from '../helpers';
 import { QUOTES } from '../outbound';
 import { expectOk, scenario } from '../types';
@@ -130,6 +131,41 @@ export const portfolio = [
       expectOk(expect, theirs, "GET the other profile's summary");
       expect(theirs.body.allocation).toEqual([
         expect.objectContaining({ ticker: 'THEIRS', shares: 10 }),
+      ]);
+    }
+  ),
+
+  scenario(
+    'a holding the rules refuse is refused at its field, and an edit changes only what it sends',
+    async (api, expect) => {
+      const refused = await api.post(
+        '/api/portfolio/holdings',
+        holdingForm({ ticker: ' ', shares: 'lots', purchase_date: 'soon' })
+      );
+      expect(refused.status).toBe(400);
+      expect(refused.body).toEqual({
+        error: `${M.ticker} ${M.sharesNumber} ${M.dateReal}`,
+        fields: { ticker: M.ticker, shares: M.sharesNumber, purchase_date: M.dateReal },
+      });
+      expect(await holdings(api, expect)).toEqual([]);
+
+      // The ticker is stored trimmed and in capitals.
+      const { id } = await addHolding(api, expect, { ticker: ' acme ' });
+      const notes = await api.put(`/api/portfolio/holdings/${id}`, { notes: 'Paused' });
+      expectOk(expect, notes, 'PUT one field of the holding');
+      expect(notes.body).toMatchObject({ id, ticker: 'ACME', shares: 10, notes: 'Paused' });
+
+      const free = await api.put(
+        `/api/portfolio/holdings/${id}`,
+        holdingForm({ purchase_price: 0 })
+      );
+      expect(free.status).toBe(400);
+      expect(free.body).toEqual({
+        error: M.pricePositive,
+        fields: { purchase_price: M.pricePositive },
+      });
+      expect(await holdings(api, expect)).toEqual([
+        expect.objectContaining({ id, purchase_price: 100.25, notes: 'Paused' }),
       ]);
     }
   ),

@@ -366,3 +366,17 @@
     transition: none;
   }
 }
+
+/* The form holds the search, the shelf and the footer: it takes the column the modal lays out, so
+   the shelf still scrolls between them. */
+.form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* The form's notice, between the shelf and the footer: what a price cannot fix. */
+.noticeRow {
+  padding: 0 22px;
+}

@@ -12,6 +12,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sessionCookie } from './helpers/session';
+import { RECURRING_MESSAGES } from '../../shared/recurringSchema';
 
 let cookie = '';
 const today = new Date().toISOString().split('T')[0];
@@ -151,7 +152,11 @@ describe('recurring populate + bill mark-paid balance integrity', () => {
       frequency: 'monthly',
       next_date: today,
     });
-    expect(res.status).toBe(403);
+    // A 400 at the field, as a transaction's foreign account is (shared/recurringSchema.ts).
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { fields: object }).fields).toEqual({
+      transfer_account_id: RECURRING_MESSAGES.transferAccount,
+    });
   });
 
   it('a daily recurring advances next_date so a second same-day populate is a 409', async () => {

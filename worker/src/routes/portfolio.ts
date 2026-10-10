@@ -2,8 +2,13 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../index'
 import { requireAuth } from '../auth'
 import { getProfileId, getProfileIds } from '../profile'
-import { HttpError } from '../http'
+import { accept, HttpError } from '../http'
 import * as db from '../db'
+import {
+  checkHoldingCreate,
+  checkHoldingEdit,
+  HOLDING_MESSAGES,
+} from '../../../shared/holdingSchema'
 
 // Port of backend/routes/portfolio.js + backend/repositories/portfolioRepo.js.
 // Holdings are profile-scoped. Live prices come from Yahoo Finance (external),
@@ -11,6 +16,7 @@ import * as db from '../db'
 // already applies (currentPrice = purchase_price) and the enriched fields are
 // computed in JS exactly as upstream. The enriched keys are camelCase because
 // the Express route spreads computed JS fields onto the snake_case DB row.
+// A holding's body is checked by shared/holdingSchema.ts, as local-first checks it.
 export const portfolioRoutes = new Hono<AppEnv>()
 
 interface Holding {
@@ -97,18 +103,8 @@ portfolioRoutes.get('/api/portfolio/summary', requireAuth, async (c) => {
 
 portfolioRoutes.post('/api/portfolio/holdings', requireAuth, async (c) => {
   const pid = await getProfileId(c)
-  const b = (await c.req.json()) as Record<string, any>
-  if (!b.ticker || !b.shares || !b.purchase_price || !b.purchase_date) {
-    throw new HttpError(400, 'ticker, shares, purchase_price, and purchase_date are required')
-  }
-  const res = await db.insert(c.env.DB, 'portfolio_holdings', {
-    ticker: String(b.ticker).toUpperCase(),
-    shares: parseFloat(b.shares),
-    purchase_price: parseFloat(b.purchase_price),
-    purchase_date: b.purchase_date,
-    notes: b.notes || '',
-    profile_id: pid,
-  })
+  const input = accept(checkHoldingCreate(await c.req.json()))
+  const res = await db.insert(c.env.DB, 'portfolio_holdings', { ...input, profile_id: pid })
   const holding = await db.first(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
@@ -121,29 +117,26 @@ portfolioRoutes.post('/api/portfolio/holdings', requireAuth, async (c) => {
 portfolioRoutes.put('/api/portfolio/holdings/:id', requireAuth, async (c) => {
   const pid = await getProfileId(c)
   const id = c.req.param('id')
-  const b = (await c.req.json()) as Record<string, any>
+  const b: unknown = await c.req.json()
   const existing = await db.first<Holding>(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
     id,
     pid
   )
-  if (!existing) throw new HttpError(404, 'Holding not found')
-  await db.update(
-    c.env.DB,
-    'portfolio_holdings',
-    {
-      ticker: String(b.ticker || existing.ticker).toUpperCase(),
-      shares: b.shares !== undefined ? parseFloat(b.shares) : existing.shares,
-      purchase_price: b.purchase_price !== undefined ? parseFloat(b.purchase_price) : existing.purchase_price,
-      purchase_date: b.purchase_date || existing.purchase_date,
-      notes: b.notes !== undefined ? b.notes : existing.notes,
-      updated_at: new Date().toISOString(),
-    },
-    'id = ? AND profile_id = ?',
-    id,
-    pid
-  )
+  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound)
+  // Only what the edit changes is checked and written (decision 2): a field left out stays.
+  const edit = accept(checkHoldingEdit(b, existing))
+  if (Object.keys(edit).length > 0) {
+    await db.update(
+      c.env.DB,
+      'portfolio_holdings',
+      { ...edit, updated_at: new Date().toISOString() },
+      'id = ? AND profile_id = ?',
+      id,
+      pid
+    )
+  }
   const holding = await db.first(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
@@ -162,7 +155,7 @@ portfolioRoutes.delete('/api/portfolio/holdings/:id', requireAuth, async (c) => 
     id,
     pid
   )
-  if (!existing) throw new HttpError(404, 'Holding not found')
+  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound)
   await db.del(c.env.DB, 'portfolio_holdings', 'id = ? AND profile_id = ?', id, pid)
   return c.json({ ok: true })
 })

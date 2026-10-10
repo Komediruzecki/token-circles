@@ -67,7 +67,18 @@ function respond(url: string): unknown {
         },
       ]
     case '/api/portfolio/holdings':
-      return [{ id: 1, ticker: 'ACME', shares: 2, purchase_price: 10, purchase_date: '2026-01-01' }]
+      // With its profile, as both runtimes answer a holding: a buy merges only into the open
+      // profile's.
+      return [
+        {
+          id: 1,
+          ticker: 'ACME',
+          shares: 2,
+          purchase_price: 10,
+          purchase_date: '2026-01-01',
+          profile_id: 1,
+        },
+      ]
     case '/api/portfolio/summary':
       return {
         totalValue: 20,

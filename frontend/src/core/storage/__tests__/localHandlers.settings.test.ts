@@ -92,18 +92,23 @@ describe('localHandlers - recurring', () => {
     })
     expect(res.status).toBe(201)
     const data = await res.json()
-    expect(data.id).toBeDefined()
-    expect(data.profile_id).toBe(1)
+    // Its id alone, as the Worker answers. The rule is the active profile's.
+    expect(data).toEqual({ id: expect.any(Number) })
+    expect(
+      ((await (await getDB()).get('recurring', data.id)) as { profile_id: number }).profile_id
+    ).toBe(1)
   })
 
   it('lists created recurring transactions', async () => {
     await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Rent',
       amount: 1200,
       type: 'expense',
       frequency: 'monthly',
     })
     await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Salary',
       amount: 5000,
       type: 'income',
@@ -139,7 +144,7 @@ describe('localHandlers - recurring', () => {
     expect(item.day_of_month).toBe(1)
     expect(item.next_date).toBe('2026-07-01')
     expect(item.notes).toBe('annual membership')
-    expect(item.is_active).toBe(1)
+    expect(item.active).toBe(1)
   })
 
   it('returns 404 for a non-existent recurring transaction', async () => {
@@ -151,6 +156,7 @@ describe('localHandlers - recurring', () => {
 
   it('updates a recurring transaction', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Insurance',
       amount: 200,
       type: 'expense',
@@ -177,6 +183,7 @@ describe('localHandlers - recurring', () => {
 
   it('deletes a recurring transaction', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'To Delete',
       amount: 10,
       type: 'expense',
@@ -194,6 +201,7 @@ describe('localHandlers - recurring', () => {
 
   it('recurringUpcoming returns only active items', async () => {
     const res1 = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Active Sub',
       amount: 10,
       type: 'expense',
@@ -202,6 +210,7 @@ describe('localHandlers - recurring', () => {
     const item1 = await res1.json()
 
     const res2 = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Cancelled Sub',
       amount: 20,
       type: 'expense',
@@ -209,19 +218,19 @@ describe('localHandlers - recurring', () => {
     })
     const item2 = await res2.json()
 
-    // Deactivate the second one
+    // Deactivate the second one, with the name local-first used to give the switch
     await recurringUpdate({ p1: item2.id.toString() }, { is_active: false })
 
     const upRes = await recurringUpcoming()
     expect(upRes.status).toBe(200)
-    const upcoming = await upRes.json()
-    expect(upcoming).toHaveLength(1)
-    expect(upcoming[0].id).toBe(item1.id)
-    expect(upcoming[0].description).toBe('Active Sub')
+    const upcoming = (await upRes.json()) as { transactions: { id: number; description: string }[] }
+    expect(new Set(upcoming.transactions.map((t) => t.id))).toEqual(new Set([item1.id]))
+    expect(upcoming.transactions[0].description).toBe('Active Sub')
   })
 
   it('recurringUpcoming returns empty when all are inactive', async () => {
     const res = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Inactive',
       amount: 5,
       type: 'expense',
@@ -231,8 +240,9 @@ describe('localHandlers - recurring', () => {
     await recurringUpdate({ p1: created.id.toString() }, { is_active: false })
 
     const upRes = await recurringUpcoming()
-    const upcoming = await upRes.json()
-    expect(upcoming).toHaveLength(0)
+    const upcoming = (await upRes.json()) as { transactions: unknown[]; totalMonthly: number }
+    expect(upcoming.transactions).toHaveLength(0)
+    expect(upcoming.totalMonthly).toBe(0)
   })
 
   it('returns 400 when creating with invalid body', async () => {
@@ -241,7 +251,11 @@ describe('localHandlers - recurring', () => {
   })
 
   it('uses default values for non-financial optional fields during create', async () => {
-    const createRes = await recurringCreate({ description: 'Minimal', amount: 1 })
+    const createRes = await recurringCreate({
+      description: 'Minimal',
+      amount: 1,
+      next_date: '2026-06-01',
+    })
     const created = await createRes.json()
 
     const getRes = await recurringGet({ p1: created.id.toString() })
@@ -249,16 +263,24 @@ describe('localHandlers - recurring', () => {
     expect(item.amount).toBe(1)
     expect(item.type).toBe('expense')
     expect(item.frequency).toBe('monthly')
-    expect(item.day_of_month).toBe(1)
-    expect(item.next_date).toBe('')
+    // No day of the month, as the Worker stores it (the contract's day-of-month-default).
+    expect(item.day_of_month).toBeNull()
+    expect(item.next_date).toBe('2026-06-01')
     expect(item.category_id).toBeNull()
     expect(item.notes).toBe('')
-    expect(item.is_active).toBe(1)
+    expect(item.active).toBe(1)
     expect(item.created_at).toBeDefined()
+  })
+
+  it('refuses a rule without a next date, at the field', async () => {
+    const res = await recurringCreate({ description: 'Minimal', amount: 1 })
+    expect(res.status).toBe(400)
+    expect((await res.json()).fields).toEqual({ next_date: 'Choose the date it is next due.' })
   })
 
   it('accepts the "day" alias for day_of_month', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Day Alias Test',
       amount: 50,
       day: 15,
@@ -272,6 +294,7 @@ describe('localHandlers - recurring', () => {
 
   it('update with "day" field sets day_of_month', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Day Update',
       amount: 10,
       day_of_month: 1,
@@ -287,6 +310,7 @@ describe('localHandlers - recurring', () => {
 
   it('parses amount as float from string during create', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'String Amount',
       amount: '42.50',
     })
@@ -299,6 +323,7 @@ describe('localHandlers - recurring', () => {
 
   it('parses amount as float from string during update', async () => {
     const createRes = await recurringCreate({
+      next_date: '2026-06-01',
       description: 'Update Amount',
       amount: 10,
     })

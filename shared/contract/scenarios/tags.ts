@@ -1,9 +1,16 @@
+import { defaultTagColor, TAG_MESSAGES } from '../../tagSchema';
 import { expectMoney, listTransactions, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 
+/** Adds a tag. Both runtimes answer 201 with the tag as stored: its id, name and colour. */
 async function tag(api: ContractApi, expect: Expect, name: string, color = '#22aa66') {
-  return added(api, expect, '/api/tags', { name, color });
+  const reply = await api.post('/api/tags', { name, color });
+  expectOk(expect, reply, 'POST /api/tags');
+  expect(reply.status, 'POST /api/tags').toBe(201);
+  expect(Object.keys(reply.body).sort(), 'POST /api/tags').toEqual(['color', 'id', 'name']);
+  expect(reply.body.id).toEqual(expect.any(Number));
+  return reply.body.id as number;
 }
 
 async function category(api: ContractApi, expect: Expect, name: string) {
@@ -64,8 +71,8 @@ export const tags = [
 
       const theirs = await spend(other, expect, {});
       const attached = await other.put(`/api/transactions/${theirs}/tags`, { tagIds: [id] });
-      // DIFFERENCE foreign-link-status
-      expect(attached.status).toBe(api.runtime === 'worker' ? 403 : 400);
+      expect(attached.status).toBe(400);
+      expect(attached.body.fields).toEqual({ tagIds: TAG_MESSAGES.tagIds });
       expect(await tagsOn(other, expect, theirs)).toEqual([]);
       expect(
         (await other.post(`/api/tags/${id}/transactions`, { transactionIds: [theirs] })).status
@@ -107,12 +114,18 @@ export const tags = [
       const listed = (await listTransactions(api, expect)).find((t) => t.id === first);
       expect(listed.tags).toEqual([expect.objectContaining({ id: beta, name: 'Beta' })]);
 
-      const byTag = await api.get(`/api/transactions/by-tag/${beta}`);
-      expectOk(expect, byTag, 'GET by tag');
-      expect(byTag.body.total).toBe(2);
-      // DIFFERENCE transactions-by-tag
-      const order = (byTag.body.rows as Json[]).map((t) => t.id);
-      expect(order).toEqual(api.runtime === 'worker' ? [second, first] : [first, second]);
+      // Newest first, narrowed and paged as the query asks.
+      const byTag = async (query = '') => {
+        const reply = await api.get(`/api/transactions/by-tag/${beta}${query}`);
+        expectOk(expect, reply, `GET by tag${query}`);
+        expect(reply.body.total).toBe(reply.body.rows.length);
+        return (reply.body.rows as Json[]).map((t) => t.id);
+      };
+      expect(await byTag()).toEqual([second, first]);
+      expect(await byTag('?startDate=2026-03-02&endDate=2026-03-31')).toEqual([second]);
+      expect(await byTag('?type=income')).toEqual([]);
+      expect(await byTag('?limit=1&offset=1')).toEqual([first]);
+      expect(await byTag('?offset=1')).toEqual([first]);
       expect((await api.other.get(`/api/transactions/by-tag/${beta}`)).body.rows).toEqual([]);
 
       expectOk(expect, await api.delete(`/api/tags/${beta}`), 'DELETE the tag');
@@ -293,20 +306,31 @@ export const tags = [
     ]);
   }),
 
-  scenario('a tag answers some writes differently in each runtime', async (api, expect) => {
-    const plain = await added(api, expect, '/api/tags', { name: 'Plain' });
-    const listed = ((await api.get('/api/tags')).body as Json[]).find((t) => t.id === plain);
-    // DIFFERENCE tag-default-colour
-    expect(listed.color).toBe(api.runtime === 'worker' ? '#3b82f6' : '#6e9bff');
+  scenario(
+    "a tag without a colour takes the palette's next, an edit without one keeps it, and a name is the profile's once",
+    async (api, expect) => {
+      // The colour the Tags page offers a new tag: the palette's next, by the profile's tag count.
+      const before = (await rowsOf(api, expect, '/api/tags')).length;
+      const plain = await added(api, expect, '/api/tags', { name: 'Plain' });
+      const listed = (await rowsOf(api, expect, '/api/tags')).find((t) => t.id === plain);
+      expect(listed.color).toBe(defaultTagColor(before));
 
-    const coloured = await tag(api, expect, 'Coloured', '#123456');
-    expectOk(expect, await api.put(`/api/tags/${coloured}`, { name: 'Recoloured' }), 'rename');
-    const renamed = ((await api.get('/api/tags')).body as Json[]).find((t) => t.id === coloured);
-    // DIFFERENCE tag-edit-without-colour
-    expect(renamed.color).toBe(api.runtime === 'worker' ? '#6b7280' : '#123456');
+      const coloured = await tag(api, expect, 'Coloured', '#123456');
+      expectOk(expect, await api.put(`/api/tags/${coloured}`, { name: 'Recoloured' }), 'rename');
+      const renamed = (await rowsOf(api, expect, '/api/tags')).find((t) => t.id === coloured);
+      expect(renamed).toMatchObject({ name: 'Recoloured', color: '#123456' });
 
-    const twin = await api.put(`/api/tags/${coloured}`, { name: 'Plain', color: '#123456' });
-    // DIFFERENCE tag-rename-duplicate
-    expect(twin.status).toBe(api.runtime === 'worker' ? 400 : 200);
-  }),
+      // Another tag's name, in any case, is refused at the name, on a create and on a rename.
+      const taken = 'You already have a tag called "Plain". Choose another name.';
+      for (const reply of [
+        await api.put(`/api/tags/${coloured}`, { name: 'PLAIN', color: '#123456' }),
+        await api.post('/api/tags', { name: ' plain ', color: '#123456' }),
+      ]) {
+        expect(reply.status).toBe(400);
+        expect(reply.body).toEqual({ error: taken, fields: { name: taken } });
+      }
+      const names = (await rowsOf(api, expect, '/api/tags')).map((t) => t.name).sort();
+      expect(names.filter((name: string) => name.toLowerCase() === 'plain')).toEqual(['Plain']);
+    }
+  ),
 ];

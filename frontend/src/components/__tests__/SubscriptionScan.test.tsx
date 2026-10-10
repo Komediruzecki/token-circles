@@ -1,7 +1,9 @@
 /**
- * The subscription scan's Add, with the runtime refusing an entry: the scan names it, with the
- * reason it was refused for, and keeps it selected so that it can be fixed and added again. It
- * said "Some subscriptions could not be added", whatever the reason, and named none.
+ * The subscription scan's Add. A price the bill rules refuse is marked under its row, in their
+ * words, before anything is sent. With the runtime refusing an entry, the scan keeps it selected so
+ * that it can be fixed and added again: a refused price is marked under its row, and any other
+ * reason is said in the notice, naming it. It said "Some subscriptions could not be added",
+ * whatever the reason, and named none; then the reason in a toast, with nothing marked.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,8 +75,29 @@ async function mountScan(): Promise<Exposed> {
   return exposed!
 }
 
+/** The price field of the row for `name`. */
+const price = (name: string) =>
+  host.querySelector<HTMLInputElement>(`[data-name="${name}"] [data-test-id="sub-scan-price"]`)!
+
+const describedBy = (element: HTMLElement): string =>
+  (element.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' | ')
+
+const notice = () => host.querySelector('[data-test-id="sub-scan-notice"]')?.textContent ?? ''
+
+function type(element: HTMLInputElement, value: string) {
+  element.focus()
+  element.value = value
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+const errorToasts = () => apiMocks.showToast.mock.calls.filter(([, kind]) => kind === 'error')
+
 describe('adding what the scan found', () => {
-  it('says which subscription was not added, and why, and keeps it selected', async () => {
+  it("marks a price the runtime refuses under its row, in the runtime's words, and keeps it selected", async () => {
     apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
       if (body.name === 'Netflix') {
         throw new ApiError(400, BILL_MESSAGES.amountCents, { amount: BILL_MESSAGES.amountCents })
@@ -85,10 +108,130 @@ describe('adding what the scan found', () => {
 
     expect(await scan.addSelected()).toBe(1)
 
-    const toasts = apiMocks.showToast.mock.calls
-    expect(toasts.filter(([, kind]) => kind === 'error')).toEqual([
-      [`Couldn't add "Netflix". ${BILL_MESSAGES.amountCents}`, 'error'],
-    ])
+    expect(describedBy(price('Netflix'))).toBe(BILL_MESSAGES.amountCents)
+    expect(price('Netflix').getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(price('Netflix'))
+    expect(errorToasts()).toEqual([])
+    expect(apiMocks.showToast).toHaveBeenCalledWith('1 subscription added', 'success')
     expect(scan.chosenCount()).toBe(1)
+  })
+
+  it('names a subscription refused for what no price can fix, in the notice', async () => {
+    apiMocks.apiPost.mockImplementation(async (_url: string, body: { name: string }) => {
+      if (body.name === 'Spotify') {
+        throw new ApiError(400, BILL_MESSAGES.category, { category_id: BILL_MESSAGES.category })
+      }
+      return { id: 1 }
+    })
+    const scan = await mountScan()
+
+    expect(await scan.addSelected()).toBe(1)
+
+    expect(notice()).toBe(`Couldn't add "Spotify". ${BILL_MESSAGES.category}`)
+    expect(price('Spotify').getAttribute('aria-invalid')).toBeNull()
+    expect(errorToasts()).toEqual([])
+    expect(scan.chosenCount()).toBe(1)
+  })
+
+  it('marks a price of zero and one with letters before sending anything, and focuses the first', async () => {
+    const scan = await mountScan()
+    type(price('Netflix'), '0')
+    type(price('Spotify'), 'ten')
+
+    expect(await scan.addSelected()).toBe(0)
+
+    expect(describedBy(price('Netflix'))).toBe(BILL_MESSAGES.amountPositive)
+    expect(describedBy(price('Spotify'))).toBe(BILL_MESSAGES.amountNumber)
+    expect(document.activeElement).toBe(price('Netflix'))
+    expect(apiMocks.apiPost).not.toHaveBeenCalled()
+    expect(apiMocks.showToast).not.toHaveBeenCalled()
+    expect(scan.chosenCount()).toBe(2)
+  })
+
+  it('reads a comma for the cents, and adds every chosen row', async () => {
+    const scan = await mountScan()
+    type(price('Netflix'), '15,49')
+
+    expect(await scan.addSelected()).toBe(2)
+
+    expect(apiMocks.apiPost).toHaveBeenCalledWith(
+      '/api/bills',
+      expect.objectContaining({ name: 'Netflix', amount: 15.49, type: 'subscription' })
+    )
+    expect(apiMocks.showToast).toHaveBeenCalledWith('2 subscriptions added', 'success')
+    expect(scan.chosenCount()).toBe(0)
+  })
+
+  it('keeps its controls enabled while it adds, with focus where Enter left it', async () => {
+    let release = (): void => undefined
+    apiMocks.apiPost.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve({ id: 1 })
+          }
+        })
+    )
+    apiMocks.apiPost.mockResolvedValue({ id: 2 })
+    const scan = await mountScan()
+    const form = host.querySelector('form')!
+    const box = host.querySelector<HTMLInputElement>(
+      '[data-name="Netflix"] [data-test-id="sub-scan-row-checkbox"]'
+    )!
+    const period = host.querySelector<HTMLSelectElement>(
+      '[data-name="Netflix"] [data-test-id="sub-scan-frequency"]'
+    )!
+    const rescan = [...host.querySelectorAll('button')].find((b) => b.textContent === 'Rescan')!
+
+    // Enter in a price submits the form; jsdom has no implicit submission, so this stands for it.
+    price('Netflix').focus()
+    form.requestSubmit()
+    await vi.waitFor(() => {
+      expect(apiMocks.apiPost).toHaveBeenCalledTimes(1)
+    })
+
+    // A disabled control drops the focus to the page: nothing is disabled while it adds.
+    expect(form.getAttribute('aria-busy')).toBe('true')
+    expect(price('Netflix').disabled).toBe(false)
+    expect(document.activeElement).toBe(price('Netflix'))
+    expect(period.disabled).toBe(false)
+    expect(box.disabled).toBe(false)
+    expect(rescan.disabled).toBe(false)
+    // The add took the rows it was pressed on: a tick, or a rescan that would reset the rows under
+    // it, does nothing until it is done.
+    expect(box.getAttribute('aria-disabled')).toBe('true')
+    expect(rescan.getAttribute('aria-disabled')).toBe('true')
+    const scans = apiMocks.apiGet.mock.calls.length
+    box.click()
+    rescan.click()
+    expect(box.checked).toBe(true)
+    expect(scan.chosenCount()).toBe(2)
+    expect(apiMocks.apiGet).toHaveBeenCalledTimes(scans)
+
+    release()
+    await vi.waitFor(() => {
+      expect(scan.chosenCount()).toBe(0)
+    })
+    expect(apiMocks.apiPost).toHaveBeenCalledTimes(2)
+    expect(apiMocks.showToast).toHaveBeenCalledWith('2 subscriptions added', 'success')
+    expect(form.getAttribute('aria-busy')).toBeNull()
+    expect(rescan.getAttribute('aria-disabled')).toBeNull()
+  })
+
+  it('takes the mark away when its row is left out', async () => {
+    const scan = await mountScan()
+    type(price('Netflix'), '0')
+    await scan.addSelected()
+    expect(price('Netflix').getAttribute('aria-invalid')).toBe('true')
+
+    host
+      .querySelector<HTMLInputElement>(
+        '[data-name="Netflix"] [data-test-id="sub-scan-row-checkbox"]'
+      )!
+      .click()
+
+    expect(price('Netflix').getAttribute('aria-invalid')).toBeNull()
+    expect(notice()).toBe('')
+    expect(await scan.addSelected()).toBe(1)
   })
 })

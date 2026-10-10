@@ -474,7 +474,7 @@ const routes: RouteDef[] = [
   {
     pattern: /^\/transactions\/by-tag\/(\d+)$/,
     methods: ['GET'],
-    handler: dispatch({ GET: (ctx) => h.transactionsByTag(ctx.params) }),
+    handler: dispatch({ GET: (ctx) => h.transactionsByTag(ctx.params, ctx.query) }),
   },
   {
     pattern: /^\/transactions\/bulk$/,

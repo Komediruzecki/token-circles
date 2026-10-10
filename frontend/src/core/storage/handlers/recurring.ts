@@ -1,7 +1,19 @@
 /**
  * Recurring handlers — IndexedDB-backed implementations
+ *
+ * A body is checked by shared/recurringSchema.ts and the upcoming list worked out by
+ * shared/recurringUpcoming.ts, as the Worker does both. A rule is paused with `active`, as the
+ * Worker stores it; a rule an older version paused with `is_active` reads as paused too, and is
+ * stored with `active` the next time it is written.
  */
 import { nextOccurrence } from '../../../../../shared/calendarMonths'
+import {
+  checkRecurringCreate,
+  checkRecurringEdit,
+  RECURRING_MESSAGES as M,
+  recurringIsActive,
+} from '../../../../../shared/recurringSchema'
+import { upcomingRecurring } from '../../../../../shared/recurringUpcoming'
 import { transactionInvariantError } from '../../../../../shared/transactionInvariant'
 import { localToday } from '../../../utils/period'
 import { getLocalCurrency } from '../../api'
@@ -14,41 +26,68 @@ import {
   json,
   notFound,
   ok,
+  refuse,
 } from './helpers'
+import type { UpcomingRule } from '../../../../../shared/recurringUpcoming'
+import type { FieldErrors } from '../../../../../shared/refusal'
 
-/**
- * The active profile's rules, as the Worker lists them. This used to read every ticked profile
- * (Settings > Household) while every other route here, like the Worker's, answers for the active
- * profile alone: the Recurring section offered Edit, Delete and "Add to transactions" on another
- * profile's rules, and each answered 404.
- */
-export async function recurringList(): Promise<Response> {
+type Rule = Record<string, unknown>
+
+/** A stored rule as both runtimes answer it: paused or not as `active`, 1 or 0. */
+function answerOf(rule: Rule): Rule {
+  const { is_active: _older, ...rest } = rule
+  return { ...rest, active: recurringIsActive(rule) ? 1 : 0 }
+}
+
+/** The links in `links` that are not the active profile's, as refusals at their fields. */
+async function foreignLinks(links: {
+  category_id?: number | null
+  account_id?: number | null
+  transfer_account_id?: number | null
+}): Promise<FieldErrors> {
+  const fields: FieldErrors = {}
+  if (!(await currentProfileOwns('accounts', links.account_id))) fields.account_id = M.account
+  if (!(await currentProfileOwns('accounts', links.transfer_account_id))) {
+    fields.transfer_account_id = M.transferAccount
+  }
+  if (!(await currentProfileOwns('categories', links.category_id))) fields.category_id = M.category
+  return fields
+}
+
+/** The active profile's active rules, each with its category's name, colour and type. */
+async function activeRules(): Promise<Rule[]> {
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
+  const rows = (await db.getAllFromIndex('recurring', 'by_profile', pid)) as Rule[]
+  const categories = new Map(
+    (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => [c.id, c])
+  )
+  return rows.filter(recurringIsActive).map((r) => {
+    const c = categories.get(r.category_id as number)
+    return {
+      ...answerOf(r),
+      category_name: c?.name ?? null,
+      category_color: c?.color ?? null,
+      category_type: c?.type ?? null,
+    }
+  })
+}
+
+/**
+ * The active profile's active rules, as the Worker lists them: a paused rule is left out. This
+ * used to read every ticked profile (Settings > Household) while every other route here, like the
+ * Worker's, answers for the active profile alone: the Recurring section offered Edit, Delete and
+ * "Add to transactions" on another profile's rules, and each answered 404.
+ */
+export async function recurringList(): Promise<Response> {
   try {
-    const rows = await db.getAllFromIndex('recurring', 'by_profile', pid)
+    const rows = await activeRules()
     // Soonest first, as the Worker orders them (ORDER BY next_date) and the section shows them.
-    rows.sort(
-      (a, b) =>
-        String(a.next_date ?? '').localeCompare(String(b.next_date ?? '')) ||
-        Number(a.id) - Number(b.id)
-    )
-    // Each rule with its category's name, colour and type, joined as the Worker joins them: the
-    // Recurring section and the dashboard card colour a rule by its category.
-    const categories = new Map(
-      (await db.getAllFromIndex('categories', 'by_profile', pid)).map((c) => [c.id, c])
-    )
-    return json(
-      rows.map((r) => {
-        const c = categories.get(r.category_id as number)
-        return {
-          ...r,
-          category_name: c?.name ?? null,
-          category_color: c?.color ?? null,
-          category_type: c?.type ?? null,
-        }
-      })
-    )
+    // Each rule carries its category's name, colour and type, joined as the Worker joins them:
+    // the Recurring section and the dashboard card colour a rule by its category.
+    const next = (r: Rule) => (typeof r.next_date === 'string' ? r.next_date : '')
+    rows.sort((a, b) => next(a).localeCompare(next(b)) || Number(a.id) - Number(b.id))
+    return json(rows)
   } catch {
     return json([])
   }
@@ -57,42 +96,24 @@ export async function recurringList(): Promise<Response> {
 export async function recurringGet(params: Record<string, string>): Promise<Response> {
   const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
-  return json(item)
+  return json(answerOf(item))
 }
 
 export async function recurringCreate(body: unknown): Promise<Response> {
-  if (!body || typeof body !== 'object') return json({ error: 'Invalid data' }, 400)
-  const b = body as Record<string, unknown>
+  const checked = checkRecurringCreate(body)
+  if (!checked.ok) return refuse(checked.fields)
+  const foreign = await foreignLinks(checked.value)
+  if (Object.keys(foreign).length > 0) return refuse(foreign)
   const db = await getDB()
   const pid = await adapter.getCurrentProfileId()
-  for (const [store, id, label] of [
-    ['categories', b.category_id, 'Category'],
-    ['accounts', b.account_id, 'Account'],
-    ['accounts', b.transfer_account_id, 'Transfer account'],
-  ] as const) {
-    if (!(await currentProfileOwns(store, id))) {
-      return json({ error: `${label} does not belong to this profile` }, 400)
-    }
-  }
   const item = {
     profile_id: pid,
-    description: (b.description as string) || '',
-    amount: parseFloat(String((b.amount as string | number) || 0)),
-    type: (b.type as string) || 'expense',
-    frequency: (b.frequency as string) || 'monthly',
-    day_of_month: (b.day_of_month as number) || (b.day as number) || 1,
-    next_date: (b.next_date as string) || '',
-    category_id: (b.category_id as number) || null,
-    account_id: (b.account_id as number | null) ?? null,
-    transfer_account_id: (b.transfer_account_id as number | null) ?? null,
-    notes: (b.notes as string) || '',
-    is_active: 1,
+    ...checked.value,
+    active: 1,
     created_at: new Date().toISOString(),
   }
-  const invariantError = transactionInvariantError(item)
-  if (invariantError) return json({ error: invariantError }, 400)
   const id = await db.add('recurring', item)
-  return json({ id, profile_id: pid }, 201)
+  return json({ id }, 201)
 }
 
 export async function recurringUpdate(
@@ -102,36 +123,16 @@ export async function recurringUpdate(
   const db = await getDB()
   const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
-  if (body && typeof body === 'object') {
-    const b = body as Record<string, unknown>
-    for (const [store, field, label] of [
-      ['categories', 'category_id', 'Category'],
-      ['accounts', 'account_id', 'Account'],
-      ['accounts', 'transfer_account_id', 'Transfer account'],
-    ] as const) {
-      if (field in b && !(await currentProfileOwns(store, b[field]))) {
-        return json({ error: `${label} does not belong to this profile` }, 400)
-      }
-    }
-    if (b.description !== undefined) item.description = b.description
-    if (b.amount !== undefined) item.amount = parseFloat(String((b.amount as string | number) || 0))
-    if (b.type !== undefined) item.type = b.type
-    if (b.frequency !== undefined) item.frequency = b.frequency
-    if (b.day_of_month !== undefined) item.day_of_month = b.day_of_month
-    if (b.day !== undefined) item.day_of_month = b.day
-    if (b.next_date !== undefined) item.next_date = b.next_date
-    if (b.category_id !== undefined) item.category_id = b.category_id
-    if (b.account_id !== undefined) item.account_id = b.account_id
-    if (b.transfer_account_id !== undefined) item.transfer_account_id = b.transfer_account_id
-    if (b.notes !== undefined) item.notes = b.notes
-    if (b.is_active !== undefined) item.is_active = b.is_active ? 1 : 0
-  }
-  if (item.type !== 'transfer') item.transfer_account_id = null
-  const invariantError = transactionInvariantError(
-    item as Parameters<typeof transactionInvariantError>[0]
-  )
-  if (invariantError) return json({ error: invariantError }, 400)
-  await db.put('recurring', item)
+  // Only what the edit changes is checked and written (decision 2): a link the rule already holds
+  // is not checked again.
+  const checked = checkRecurringEdit(body, item)
+  if (!checked.ok) return refuse(checked.fields)
+  const foreign = await foreignLinks(checked.value)
+  if (Object.keys(foreign).length > 0) return refuse(foreign)
+  const { active, ...edit } = checked.value
+  const updated: Rule = { ...answerOf(item), ...edit }
+  if (active !== undefined) updated.active = active ? 1 : 0
+  await db.put('recurring', updated)
   return ok()
 }
 
@@ -143,20 +144,32 @@ export async function recurringDelete(params: Record<string, string>): Promise<R
   return ok()
 }
 
+/** What the active rules add in the next 30 days, as the Worker answers it. */
 export async function recurringUpcoming(): Promise<Response> {
+  const rules = await activeRules()
+  return json(
+    upcomingRecurring(rules as unknown as UpcomingRule[], localToday(), getLocalCurrency())
+  )
+}
+
+/**
+ * Moves rule `id`'s next date from `from` on to `to`, if it is still `from`: the claim on the period
+ * `from` dates. It rereads the rule in the same readwrite transaction that moves it, and IndexedDB
+ * runs two of those on one store one after the other, so of two populates of one period (two
+ * presses, two tabs) the second finds the date moved and claims nothing. False when it claimed
+ * nothing.
+ */
+async function claimPeriod(id: number, from: unknown, to: string | null): Promise<boolean> {
   const db = await getDB()
-  const pid = await adapter.getCurrentProfileId()
-  try {
-    const all = await db.getAllFromIndex('recurring', 'by_profile', pid)
-    const active = all.filter((r: Record<string, unknown>) => r.is_active !== 0)
-    return json(active)
-  } catch {
-    return json([])
-  }
+  const tx = db.transaction('recurring', 'readwrite')
+  const rule = (await tx.store.get(id)) as Rule | undefined
+  const claimed = rule !== undefined && (rule.next_date ?? null) === (from ?? null)
+  if (claimed) await tx.store.put({ ...rule, next_date: to })
+  await tx.done
+  return claimed
 }
 
 export async function recurringPopulate(params: Record<string, string>): Promise<Response> {
-  const db = await getDB()
   const item = await currentProfileRecord('recurring', idParam(params))
   if (!item) return notFound('Recurring transaction')
   const invariantError = transactionInvariantError(
@@ -171,17 +184,12 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   // current period is already populated, so a repeat call must not create another
   // transaction (and, now that balances move, must not double-count).
   if (item.next_date && item.next_date > todayStr) {
-    return json({ error: 'Recurring transaction already populated for current period' }, 409)
+    return json({ error: M.populated }, 409)
   }
   const date = item.next_date || todayStr
   // Worked out before anything is written: a date it cannot read is refused, not stored as NaN.
   const nextDate = nextOccurrence(date, item.frequency, item.day_of_month)
-  if (!nextDate) {
-    return json(
-      { error: "This rule's next date can't be read. Edit the rule and set its date again." },
-      400
-    )
-  }
+  if (!nextDate) return json({ error: M.unreadableNextDate }, 400)
 
   // Go through the adapter so account balances move via computeBalanceDeltas —
   // which handles a two-legged transfer when both account_id and
@@ -195,27 +203,38 @@ export async function recurringPopulate(params: Record<string, string>): Promise
   // for the same rule (was hard-coded 'EUR' here vs the schema-default 'USD' on the worker,
   // audit M-02) and keeps balances/reports in one currency via computeBalanceDeltas.
   const baseCurrency = getLocalCurrency()
-  await adapter.createTransaction({
-    profile_id: pid,
-    description: item.description,
-    amount: item.amount,
-    type: item.type,
-    category_id: item.category_id,
-    date,
-    currency: baseCurrency,
-    amount_local: item.amount,
-    reconciled: 0,
-    notes: item.notes || '',
-    account_id: item.account_id ?? null,
-    transfer_account_id: item.transfer_account_id ?? null,
-  } as unknown as Parameters<typeof adapter.createTransaction>[0])
 
-  // Advance next_date past the populated period — every frequency must move forward so the
-  // guard above can engage on the next call. nextOccurrence works on the date string, the same
-  // step as the Worker's: setMonth() overflowed past a shorter month, so a rule on the 31st went
-  // from January to 3 March.
-  item.next_date = nextDate
-  await db.put('recurring', item)
+  // Claim the period before writing anything: next_date moves past it, and every frequency must
+  // move it forward, or the guard above never engages and each call debits the account again.
+  // nextOccurrence works on the date string, the same step as the Worker's: setMonth() overflowed
+  // past a shorter month, so a rule on the 31st went from January to 3 March. A populate that
+  // finds the period claimed already is refused as the Worker refuses one that lost the race.
+  if (!(await claimPeriod(item.id as number, item.next_date, nextDate))) {
+    return json({ error: M.populated }, 409)
+  }
 
-  return json({ ok: true })
+  let transactionId: number
+  try {
+    transactionId = await adapter.createTransaction({
+      profile_id: pid,
+      description: item.description,
+      amount: item.amount,
+      type: item.type,
+      category_id: item.category_id,
+      date,
+      currency: baseCurrency,
+      amount_local: item.amount,
+      reconciled: 0,
+      notes: item.notes || '',
+      account_id: item.account_id ?? null,
+      transfer_account_id: item.transfer_account_id ?? null,
+    } as unknown as Parameters<typeof adapter.createTransaction>[0])
+  } catch (error) {
+    // Nothing was added for the period, so it is given back for the next press.
+    await claimPeriod(item.id as number, nextDate, (item.next_date as string | null) ?? null)
+    throw error
+  }
+
+  // What the Worker answers: the transaction it added, and the date the rule moved on to.
+  return json({ ok: true, transactionId, next_date: nextDate })
 }

@@ -61,7 +61,9 @@ describe('PUT /api/tags/:id', () => {
   it("refuses a name another tag in the profile has, with the create route's answer", async () => {
     const res = await send('/api/tags/9202', 'PUT', { name: 'Groceries', color: '#f97316' });
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'Tag already exists' });
+    // Its words are shared/tagSchema.ts's since slice 5; tag-refusals.test.ts has the rest.
+    const taken = 'You already have a tag called "Groceries". Choose another name.';
+    expect(await res.json()).toEqual({ error: taken, fields: { name: taken } });
     expect(await nameOf('tags', 9202)).toBe('Takeaway');
   });
 

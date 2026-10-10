@@ -130,6 +130,25 @@
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 40%, transparent);
 }
 
+/* The name takes the form's first line, as the input itself did before it had a field around it:
+   its message sits under it, and the swatches and buttons wrap below. */
+.tagNameField {
+  width: 100%;
+}
+
+/* Read by a screen reader, not shown: the placeholder and the swatches say what each field is. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── Summary cards ───────────────────────────────────────────────────────── */
 
 .summaryRow {

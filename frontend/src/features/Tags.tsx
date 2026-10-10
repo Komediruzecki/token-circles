@@ -19,17 +19,21 @@ import {
   isTagRuleCriteriaEmpty,
   normalizeTagRuleCriteria,
 } from '../../../shared/tagRules'
+import { defaultTagColor } from '../../../shared/tagSchema'
 import Chart from '../components/Chart'
 import ConfirmButton from '../components/ConfirmButton'
+import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
-import { api, formatCurrency, showToast } from '../core/api'
+import { api, errorStatus, formatCurrency, showToast } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
 import { entityVersion } from '../core/dataVersions'
 import { gatedSource } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
 import { toRange } from '../utils/period'
+import { createTagForm } from './tagForm'
 import styles from './TagsPage.module.css'
 import type { TagRuleCriteria } from '../../../shared/tagRules'
 import type * as Models from '../types/models'
@@ -83,10 +87,15 @@ export default function Tags() {
   const [preview, setPreview] = createSignal<Models.TagRulePreview | null>(null)
   const [previewing, setPreviewing] = createSignal(false)
   const [applying, setApplying] = createSignal(false)
-  const [showTagForm, setShowTagForm] = createSignal(false)
-  const [editingTag, setEditingTag] = createSignal<Models.TagSummary | null>(null)
-  const [tagName, setTagName] = createSignal('')
-  const [tagColor, setTagColor] = createSignal(TAG_COLORS[0])
+  // The name and colour form, for a new tag (at the top of the page) or an edit (in the card).
+  const tagForm = createTagForm({
+    onSaved: (tag) => {
+      if (tag.created) setSelectedTagId(tag.id)
+      // The Transactions page keeps its own tag list for the filter bar and bulk-tag modal.
+      bumpTagsVersion()
+      refreshOverview()
+    },
+  })
 
   // Overview: tags + their totals for the focus period, refetched on profile/period change.
   //
@@ -206,62 +215,34 @@ export default function Tags() {
 
   // ── Tag CRUD ───────────────────────────────────────────────────────────────
 
-  /** Close the tag form and leave no half-open state behind. `showTagForm` drives the create
-   *  form at the top of the page and `editingTag` drives the in-card edit form, so clearing only
-   *  one of them left the card's form open after a save — the toast said "Tag updated" while the
-   *  editor still covered the name it had just changed. */
-  const closeTagForm = () => {
-    setShowTagForm(false)
-    setEditingTag(null)
-  }
-
+  /** A new tag starts on the colour the runtimes give one sent without any: the palette's next. */
   const openNewTag = () => {
-    setEditingTag(null)
-    setTagName('')
-    setTagColor(TAG_COLORS[tags().length % TAG_COLORS.length])
-    setShowTagForm(true)
+    tagForm.openNew(defaultTagColor(tags().length))
   }
 
   const openEditTag = (tag: Models.TagSummary) => {
-    setEditingTag(tag)
-    setTagName(tag.name)
-    setTagColor(tag.color || TAG_COLORS[0])
-    setShowTagForm(true)
+    tagForm.openEdit({ id: tag.id, name: tag.name, color: tag.color || TAG_COLORS[0] })
   }
 
-  const saveTag = async (e: Event) => {
-    e.preventDefault()
-    const name = tagName().trim()
-    if (!name) return
-    try {
-      const existing = editingTag()
-      if (existing) {
-        await api.updateTag(existing.id, name, tagColor())
-        showToast('Tag updated', 'success')
-      } else {
-        const created = await api.createTag(name, tagColor())
-        showToast('Tag created', 'success')
-        if (created?.id) setSelectedTagId(created.id)
-      }
-      closeTagForm()
-      // The Transactions page keeps its own tag list for the filter bar and bulk-tag modal.
-      bumpTagsVersion()
-      refreshOverview()
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not save tag', 'error')
-    }
-  }
-
+  // A tag deleted in another tab or on another device first answers 404: gone is what was asked,
+  // so the page says so and lets it go, as a delete here does. The list is the open profile's
+  // tags only, so a tag it shows that answers 404 is gone.
   const deleteTag = async (tag: Models.TagSummary) => {
     try {
       await api.deleteTag(tag.id)
       showToast(`Tag "${tag.name}" deleted`, 'success')
-      if (selectedTagId() === tag.id) setSelectedTagId(null)
-      bumpTagsVersion()
-      refreshOverview()
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not delete tag', 'error')
+      if (errorStatus(err) !== 404) {
+        showToast(plainMessage(err, "Couldn't delete the tag. Try again."), 'error')
+        return
+      }
+      showToast('That tag was already deleted.', 'info')
     }
+    if (selectedTagId() === tag.id) setSelectedTagId(null)
+    // A tag deleted while its edit form is open takes the form with it.
+    if (tagForm.editing()?.id === tag.id) tagForm.close()
+    bumpTagsVersion()
+    refreshOverview()
   }
 
   // ── Rule editing ───────────────────────────────────────────────────────────
@@ -309,7 +290,7 @@ export default function Tags() {
       if (draft()?.criteria === criteria) setPreview(result)
     } catch (err) {
       if (draft()?.criteria === criteria) {
-        showToast(err instanceof Error ? err.message : 'Preview failed', 'error')
+        showToast(plainMessage(err, "Couldn't preview the rule. Try again."), 'error')
       }
     } finally {
       setPreviewing(false)
@@ -341,7 +322,7 @@ export default function Tags() {
       setPreview(null)
       refreshOverview()
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not save rule', 'error')
+      showToast(plainMessage(err, "Couldn't save the rule. Try again."), 'error')
     }
   }
 
@@ -352,7 +333,7 @@ export default function Tags() {
       if (draft()?.id === rule.id) setDraft(null)
       refreshOverview()
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not delete rule', 'error')
+      showToast(plainMessage(err, "Couldn't delete the rule. Try again."), 'error')
     }
   }
 
@@ -383,7 +364,7 @@ export default function Tags() {
       refreshOverview()
       refreshDetail()
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not apply rules', 'error')
+      showToast(plainMessage(err, "Couldn't apply the rules. Try again."), 'error')
     } finally {
       setApplying(false)
     }
@@ -538,43 +519,74 @@ export default function Tags() {
     </>
   )
 
-  /** The name + colour form, rendered either at the top (creating) or inside a card (editing). */
-  const tagForm = () => (
-    <form class={styles.tagForm} onSubmit={(e) => void saveTag(e)}>
+  /**
+   * The name + colour form, rendered either at the top (creating) or inside a card (editing). Its
+   * labels are read, not shown: the placeholder and the swatches say what each is for.
+   */
+  const tagFormView = () => (
+    <form class={styles.tagForm} {...tagForm.attrs} data-test-id="tag-form">
+      <FormNotice form={tagForm} testId="tag-form-notice" />
       <div class={styles.tagFormRow}>
-        <input
-          class={styles.input}
-          type="text"
-          placeholder="Tag name (e.g. Company, Trip to Rome)"
-          value={tagName()}
-          onInput={(e) => setTagName(e.currentTarget.value)}
-          // Focus explicitly on mount rather than with the `autofocus` attribute: the browser
-          // refuses autofocus when something already holds focus (the button that opened this
-          // form) and logs a console warning every time.
-          ref={(el) => {
-            queueMicrotask(() => {
-              el.focus()
-            })
+        <Field
+          form={tagForm}
+          name="name"
+          label="Tag name"
+          class={styles.tagNameField}
+          labelClass={styles.visuallyHidden}
+        >
+          {(control) => (
+            <input
+              {...control}
+              class={styles.input}
+              type="text"
+              required
+              placeholder="Tag name (e.g. Company, Trip to Rome)"
+              value={tagForm.values.name}
+              onInput={(e) => tagForm.set('name', e.currentTarget.value)}
+              // Focus explicitly on mount rather than with the `autofocus` attribute: the browser
+              // refuses autofocus when something already holds focus (the button that opened this
+              // form) and logs a console warning every time.
+              ref={(el) => {
+                queueMicrotask(() => {
+                  el.focus()
+                })
+              }}
+              data-test-id="tag-name-input"
+            />
+          )}
+        </Field>
+        <Field form={tagForm} name="color" label="Color" group labelClass={styles.visuallyHidden}>
+          {(control) => (
+            <div {...control} class={styles.swatches}>
+              <For each={TAG_COLORS}>
+                {(color) => (
+                  <button
+                    type="button"
+                    class={`${styles.swatch} ${tagForm.values.color === color ? styles.swatchActive : ''}`}
+                    style={{ background: color }}
+                    aria-label={`Use color ${color}`}
+                    aria-pressed={tagForm.values.color === color}
+                    onClick={() => tagForm.set('color', color)}
+                  />
+                )}
+              </For>
+            </div>
+          )}
+        </Field>
+        <SubmitButton
+          class={styles.primaryButton}
+          busy={tagForm.submitting()}
+          busyLabel={tagForm.editing() ? 'Saving…' : 'Creating…'}
+        >
+          {tagForm.editing() ? 'Save' : 'Create'}
+        </SubmitButton>
+        <button
+          class={styles.ghostButton}
+          type="button"
+          onClick={() => {
+            tagForm.close()
           }}
-          data-test-id="tag-name-input"
-        />
-        <div class={styles.swatches}>
-          <For each={TAG_COLORS}>
-            {(color) => (
-              <button
-                type="button"
-                class={`${styles.swatch} ${tagColor() === color ? styles.swatchActive : ''}`}
-                style={{ background: color }}
-                aria-label={`Use color ${color}`}
-                onClick={() => setTagColor(color)}
-              />
-            )}
-          </For>
-        </div>
-        <button class={styles.primaryButton} type="submit">
-          {editingTag() ? 'Save' : 'Create'}
-        </button>
-        <button class={styles.ghostButton} type="button" onClick={closeTagForm}>
+        >
           Cancel
         </button>
       </div>
@@ -601,7 +613,7 @@ export default function Tags() {
       {/* Creating a tag shows the form here, next to the button that opened it. EDITING renders
           the same form inside the card being edited (see the grid below) — it used to appear up
           here too, detached from the tag it was changing and above every other card. */}
-      <Show when={showTagForm() && !editingTag()}>{tagForm()}</Show>
+      <Show when={tagForm.isOpen() && !tagForm.editing()}>{tagFormView()}</Show>
 
       <div class={styles.summaryRow}>
         <div class={styles.summaryCard}>
@@ -659,10 +671,10 @@ export default function Tags() {
                   class={`${styles.tagCard} ${selectedTagId() === tag.id ? styles.tagCardActive : ''}`}
                   data-test-id={`tag-card-${tag.id}`}
                 >
-                  <Show when={editingTag()?.id === tag.id} fallback={<>{tagCardBody(tag)}</>}>
+                  <Show when={tagForm.editing()?.id === tag.id} fallback={<>{tagCardBody(tag)}</>}>
                     {/* Edit in place. The form used to open above the whole grid, so on a page
                         with several tags you were editing one thing while looking at another. */}
-                    <div class={styles.tagCardEditing}>{tagForm()}</div>
+                    <div class={styles.tagCardEditing}>{tagFormView()}</div>
                   </Show>
                 </div>
               )}
