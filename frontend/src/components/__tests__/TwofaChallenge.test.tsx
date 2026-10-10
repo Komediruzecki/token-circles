@@ -1,10 +1,12 @@
 /**
  * TwofaChallenge — the second login step: one code swaps the challenge cookie for a session.
- * Success reloads (the app re-checks /auth/me); a wrong code keeps the form with the server's
- * message; the recovery toggle switches what the field accepts and posts the same endpoint.
+ * Success reloads (the app re-checks /auth/me); a wrong code keeps the form and is marked at the
+ * code field; the recovery toggle switches what the field accepts and posts the same endpoint.
+ * Against the real client: only the network is answered here.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -23,7 +25,10 @@ async function mount() {
   vi.resetModules()
   vi.doMock('../../core/apiFetch', () => ({
     apiFetch: (url: string, init?: RequestInit) => {
-      requests.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined })
+      requests.push({
+        url,
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      })
       return verifyResponse()
     },
   }))
@@ -40,6 +45,12 @@ const flush = async () => {
 }
 
 const codeInput = () => host.querySelector<HTMLInputElement>('[data-test-id="twofa-code"]')!
+const notice = () => host.querySelector('[data-test-id="twofa-error"]')!.textContent ?? ''
+const describedBy = (el: HTMLElement): string[] =>
+  (el.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((id) => document.getElementById(id)?.textContent ?? `(missing #${id})`)
 const submit = () => host.querySelector<HTMLButtonElement>('[data-test-id="twofa-submit"]')!
 
 async function enterAndSubmit(code: string) {
@@ -82,23 +93,57 @@ describe('verifying', () => {
     })
   })
 
-  it('keeps the form and shows the server message on a wrong code', async () => {
-    verifyResponse = () => Promise.resolve(json({ error: 'That code did not match' }, 401))
+  it('keeps the form and marks the code the Worker does not take', async () => {
+    verifyResponse = () =>
+      Promise.resolve(
+        json({ error: SAY.secondFactorRefused, fields: { code: SAY.secondFactorRefused } }, 401)
+      )
     await mount()
     await enterAndSubmit('000000')
 
     expect(reloads).toBe(0)
-    expect(host.querySelector('[data-test-id="twofa-error"]')!.textContent).toContain(
-      'That code did not match'
-    )
-    expect(codeInput()).not.toBeNull()
+    expect(codeInput().getAttribute('aria-invalid')).toBe('true')
+    expect(describedBy(codeInput())).toEqual([SAY.secondFactorRefused])
+    expect(document.activeElement).toBe(codeInput())
+    expect(notice()).toBe('')
   })
 
-  it('refuses to submit an empty code without a network call', async () => {
+  it('refuses to submit an empty code without a network call, and says which code', async () => {
     await mount()
     submit().click()
     await flush()
     expect(requests).toHaveLength(0)
+    expect(describedBy(codeInput())).toEqual([SAY.appCode])
+    expect(document.activeElement).toBe(codeInput())
+  })
+
+  it('says an expired sign-in in the notice, not at the code', async () => {
+    verifyResponse = () =>
+      Promise.resolve(json({ error: 'Sign-in expired — enter your password again' }, 401))
+    await mount()
+    await enterAndSubmit('123456')
+
+    expect(notice()).toBe('Sign-in expired — enter your password again')
+    expect(codeInput().getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('says when to try again once the limit is reached, with the code unmarked', async () => {
+    verifyResponse = () =>
+      Promise.resolve(json({ error: 'Too many attempts. Please try again in 40 seconds.' }, 429))
+    await mount()
+    await enterAndSubmit('123456')
+
+    expect(notice()).toBe('Too many attempts. Please try again in 40 seconds.')
+    expect(codeInput().getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('labels the code field for the kind of code it takes', async () => {
+    await mount()
+    const label = () => host.querySelector(`label[for="${codeInput().id}"]`)?.textContent
+    expect(label()).toBe('Authentication code')
+    host.querySelector<HTMLElement>('[data-test-id="twofa-use-recovery"]')!.click()
+    await flush()
+    expect(label()).toBe('Recovery code')
   })
 })
 

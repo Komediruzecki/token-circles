@@ -9,7 +9,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signState } from '../src/auth';
-import { createLoginCode } from '../src/login-codes';
+import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import {
@@ -232,8 +232,9 @@ function signInWays(): Record<string, SignInWay> {
         await dropSecondFactor();
       },
       async signIn() {
-        const { code, id } = await createLoginCode(env, UID, ADDRESS);
-        const ceremony = (await issueLoginCodeCookie(env, id, ADDRESS)).split(';')[0]!;
+        const handle = newCodeHandle();
+        const { code } = await createLoginCode(env, UID, ADDRESS, handle);
+        const ceremony = issueLoginCodeCookie(env, handle).split(';')[0]!;
         const res = await post('/api/auth/email-code/verify', { email: ADDRESS, code }, ceremony);
         expect(res.status).toBe(200);
         return sessionFrom(res)!;

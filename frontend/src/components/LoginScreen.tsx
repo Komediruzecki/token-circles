@@ -10,41 +10,35 @@ import {
   passkeysSupported,
   signInWithPasskey,
 } from '../core/webauthn'
+import { createCaptchaGate } from './captchaGate'
 import EmailCodeLogin from './EmailCodeLogin'
+import { Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import LegalLinks from './LegalLinks'
 import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
 import { OrbitSpinner } from './OrbitSpinner'
+import { createSignInForm, reloadIntoTheApp, RESET_LINK_SENT } from './signInForm'
 import SupportContact from './SupportContact'
-import Turnstile, {
-  captchaIsStuck,
-  captchaStatusMessage,
-  resetTurnstile,
-  turnstileEnabled,
-  waitForTurnstileToken,
-} from './Turnstile'
+import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
-import type { TurnstileStatus } from './Turnstile'
+import type { SignInMode, SignInOutcome } from './signInForm'
 
 /**
  * Full-page sign-in gate, shown in server (self-hosted) mode when there's no valid session.
  * Offers email/password (register + login), Google sign-in, and a no-account demo that drops
  * into client-only mode. Client-only mode itself never renders this.
+ *
+ * The password form is on the form kit (signInForm.ts): a field that is wrong is said under it,
+ * and a wrong address or password is one message for the whole form.
  */
-// Format check for inline feedback (matches the worker's own EMAIL_RE, so the
-// client can't pass something the server will reject). Deliberately simple —
-// exhaustive RFC-5322 validation belongs to the mail server, not a signup form.
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
-const isEmailValid = (value: string) => EMAIL_RE.test(value.trim())
-
 export default function LoginScreen() {
-  const [mode, setMode] = createSignal<'login' | 'register' | 'forgot'>('login')
-  const [email, setEmail] = createSignal('')
-  const [password, setPassword] = createSignal('')
-  const [error, setError] = createSignal('')
+  const [mode, setMode] = createSignal<SignInMode>('login')
+  // What the screen says that is not a problem with the form: a reset link on its way, the
+  // register hand-off, a link from an email waiting for this sign-in.
   const [notice, setNotice] = createSignal('')
-  const [loading, setLoading] = createSignal(false)
+  // A way in other than the form that failed (a passkey). The form's own problems are its notice.
+  const [elsewhere, setElsewhere] = createSignal('')
   // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
   // handoff runs; 'twofa' is the second factor's code step; 'email-code' is passwordless sign-in.
   const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
@@ -100,137 +94,52 @@ export default function LoginScreen() {
       })
   })
   onCleanup(stopConditional)
-  const [turnstileToken, setTurnstileToken] = createSignal('')
-  const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
-    turnstileEnabled ? 'loading' : 'disabled'
-  )
-  // A captcha token is single-use, so every attempt ends by burning it and re-arming the widget.
-  // The status has to follow: left at 'solved' while we hold no token, the form would explain
-  // nothing at all under a submit button it has just disabled. A widget that is stuck stays
-  // stuck — resetting a script that never loaded does not load it.
-  const clearCaptcha = () => {
-    resetTurnstile()
-    setTurnstileToken('')
-    setCaptchaStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
-  }
+  // The widget is invisible until Cloudflare wants a click, so the submit button is never gated
+  // on a token: the send waits for one instead (captchaGate.ts).
+  const captcha = createCaptchaGate()
 
   /**
-   * The widget is invisible until Cloudflare wants a click, so gating the submit button on a token
-   * would disable it with nothing on screen to say why. The button stays live and the wait happens
-   * here instead — normally already resolved, since the challenge passes long before anyone has
-   * finished typing a password.
+   * Creating an account sets no session, and the answer is the same whether or not the address
+   * already had an account. Sign in with the password just chosen, on a fresh captcha token (the
+   * last one was spent): it works for a new account, and for anything else the form takes over.
    */
-  const captchaToken = async (): Promise<string> => {
-    if (!turnstileEnabled) return ''
-    if (turnstileToken()) return turnstileToken()
-    return waitForTurnstileToken(turnstileToken, 20000)
-  }
-  // Show the "invalid email" hint only after the user has interacted with the
-  // field (on blur or first submit), so an untouched empty form isn't red.
-  const [emailTouched, setEmailTouched] = createSignal(false)
-  const emailInvalid = () => emailTouched() && email().trim() !== '' && !isEmailValid(email())
-
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    setError('')
-    setNotice('')
-    setEmailTouched(true)
-    const em = email().trim()
-
-    // Reject a malformed address up front — clearer than the server's generic 4xx,
-    // and it never burns a captcha token on a request that can't succeed.
-    if (em !== '' && !isEmailValid(em)) {
-      setError('Please enter a valid email address')
-      return
-    }
-
-    // Forgot-password: ask the worker to email a reset link. The response never reveals whether
-    // the account exists, so we always show the same neutral confirmation.
-    if (mode() === 'forgot') {
-      if (!em) {
-        setError('Email is required')
-        return
-      }
-      setLoading(true)
-      try {
-        await api.forgotPassword(em, await captchaToken())
-        setNotice(
-          'If an account exists for that email, a reset link is on its way. Check your inbox.'
-        )
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Something went wrong')
-      } finally {
-        setLoading(false)
-        clearCaptcha()
-      }
-      return
-    }
-
-    const pw = password()
-    if (!em || !pw) {
-      setError('Email and password are required')
-      return
-    }
-    if (mode() === 'register' && pw.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-    setLoading(true)
+  const handOff = async (email: string, password: string) => {
+    setStage('signing-in')
     try {
-      if (mode() === 'register') {
-        await api.register(em, pw, await captchaToken())
-        // The register endpoint deliberately sets no session and never reveals
-        // whether the email already existed (anti-enumeration), and login is not
-        // gated on email verification — so sign the user straight in with the
-        // credentials they just chose instead of bouncing them back to the form.
-        // The register call consumed the single-use captcha token; reset and
-        // wait for the widget to issue a fresh one before the login call.
-        setStage('signing-in')
-        clearCaptcha()
-        try {
-          const token = await waitForTurnstileToken(turnstileToken, 20000)
-          const handoff = await api.loginWithPassword(em, pw, token)
-          if (handoff?.twofaRequired) {
-            // "Register" with an existing 2FA-protected account: the password matched, so the
-            // server answered with a challenge, not a session. Show the code step — reloading
-            // here would land back on an empty form with no explanation.
-            setStage('twofa')
-            setLoading(false)
-            clearCaptcha()
-            return
-          }
-          // Cookie is set; reload lands in the app (a pristine profile opens onboarding).
-          markPasskeyNudgeAfterLogin()
-          window.location.reload()
-          return
-        } catch {
-          // Existing account or a captcha hiccup — hand over to manual sign-in
-          // without revealing which it was.
-          setStage('form')
-          setMode('login')
-          setPassword('')
-          setNotice('Almost done — sign in with your password below.')
-          setLoading(false)
-          clearCaptcha()
-          return
-        }
-      }
-      const login = await api.loginWithPassword(em, pw, await captchaToken())
-      if (login?.twofaRequired) {
-        // Password verified; the session waits behind the authenticator code.
+      const handoff = await api.loginWithPassword(email, password, await captcha.next())
+      captcha.spent()
+      if (handoff?.twofaRequired) {
+        // "Create account" with an existing two-factor account whose password matched: the code
+        // step, not a reload onto an empty form.
         setStage('twofa')
-        setLoading(false)
-        clearCaptcha()
         return
       }
-      // Cookie is set; reload so the app re-checks /auth/me and renders authenticated.
-      markPasskeyNudgeAfterLogin()
-      window.location.reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-      setLoading(false)
-      clearCaptcha()
+      await reloadIntoTheApp()
+    } catch {
+      // An existing account or a captcha hiccup: hand over to signing in by hand, without saying
+      // which it was.
+      captcha.spent()
+      setMode('login')
+      form.reset({ email, password: '' })
+      setNotice('Almost done — sign in with your password below.')
+      setStage('form')
     }
+  }
+
+  const saved = (outcome: SignInOutcome) => {
+    if (outcome.kind === 'second-factor') setStage('twofa')
+    else if (outcome.kind === 'reset-link-sent') setNotice(RESET_LINK_SENT)
+    else void handOff(outcome.email, outcome.password)
+  }
+
+  const form = createSignInForm({ mode, captcha, saved })
+
+  /** Another mode, or another way in: the values stay, and nothing from before is said. */
+  const switchTo = (next: SignInMode) => {
+    setMode(next)
+    setNotice('')
+    setElsewhere('')
+    form.reset({ ...form.values })
   }
 
   // Demo = client-only mode (seeded example profiles, no account). Switch storage mode to
@@ -270,12 +179,12 @@ export default function LoginScreen() {
               <TwofaChallenge
                 onBack={() => {
                   setStage('form')
-                  setPassword('')
+                  form.reset({ email: form.values.email, password: '' })
                 }}
               />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
-                email={email()}
+                email={form.values.email}
                 onBack={() => setStage('form')}
                 onTwofa={() => setStage('twofa')}
               />
@@ -292,8 +201,8 @@ export default function LoginScreen() {
                     Cloudflare decides an interaction-only widget may show itself. */}
                 <Turnstile
                   appearance="interaction-only"
-                  onToken={setTurnstileToken}
-                  onStatus={setCaptchaStatus}
+                  onToken={captcha.onToken}
+                  onStatus={captcha.onStatus}
                 />
               </div>
             )
@@ -318,67 +227,76 @@ export default function LoginScreen() {
             </div>
           </Show>
 
-          <form class={styles.form} onSubmit={submit}>
-            <div class={styles.field}>
-              <div class={styles.labelRow}>
-                <label class={styles.label} for="login-email">
-                  Email address
-                </label>
-              </div>
-              <input
-                type="email"
-                name="email"
-                id="login-email"
-                value={email()}
-                onInput={(e) => setEmail(e.currentTarget.value)}
-                onBlur={() => setEmailTouched(true)}
-                aria-invalid={emailInvalid()}
-                // `username` (not `email`) is the token password managers pair with the password
-                // field; combined with name/id it's what Android Chrome autofill keys off of.
-                // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
-                // the conditional request from onMount is pending.
-                autocomplete="username webauthn"
-                class={`${styles.input} ${emailInvalid() ? styles.inputInvalid : ''}`}
-              />
-              <Show when={emailInvalid()}>
-                <span class={styles.fieldError}>That doesn't look like a valid email address.</span>
-              </Show>
-            </div>
+          <FormNotice form={form} testId="login-error" />
+
+          <form
+            class={styles.form}
+            {...form.attrs}
+            onSubmit={(event) => {
+              setNotice('')
+              setElsewhere('')
+              void form.submit(event)
+            }}
+          >
+            <Field
+              form={form}
+              name="email"
+              id="login-email"
+              label="Email address"
+              class={styles.field}
+              labelClass={styles.label}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="email"
+                  name="email"
+                  value={form.values.email}
+                  onInput={(e) => form.set('email', e.currentTarget.value)}
+                  // `username` (not `email`) is the token password managers pair with the password
+                  // field; combined with name/id it's what Android Chrome autofill keys off of.
+                  // `webauthn` additionally lets the autofill dropdown offer saved passkeys while
+                  // the conditional request from onMount is pending.
+                  autocomplete="username webauthn"
+                  class={styles.input}
+                />
+              )}
+            </Field>
 
             <Show when={mode() !== 'forgot'}>
-              <div class={styles.field}>
-                <div class={styles.labelRow}>
-                  <label class={styles.label} for="login-password">
-                    Password
-                  </label>
+              <Field
+                form={form}
+                name="password"
+                id="login-password"
+                label={<span class={styles.label}>Password</span>}
+                class={styles.field}
+                labelClass={styles.labelRow}
+                tip={
                   <Show when={mode() === 'login'}>
                     <button
                       type="button"
                       class={styles.accountLink}
                       onClick={() => {
-                        setMode('forgot')
-                        setError('')
-                        setNotice('')
+                        switchTo('forgot')
                       }}
                     >
                       Forgot password?
                     </button>
                   </Show>
-                </div>
-                <input
-                  type="password"
-                  name="password"
-                  id="login-password"
-                  value={password()}
-                  onInput={(e) => setPassword(e.currentTarget.value)}
-                  autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
-                  class={styles.input}
-                />
-              </div>
-            </Show>
-
-            <Show when={error()}>
-              <div class={styles.formError}>{error()}</div>
+                }
+              >
+                {(control) => (
+                  <input
+                    {...control}
+                    type="password"
+                    name="password"
+                    value={form.values.password}
+                    onInput={(e) => form.set('password', e.currentTarget.value)}
+                    autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
+                    class={styles.input}
+                  />
+                )}
+              </Field>
             </Show>
 
             {/* Invisible unless Cloudflare wants a click. It sits directly above the button so
@@ -386,8 +304,8 @@ export default function LoginScreen() {
             <div class={styles.captchaSlot}>
               <Turnstile
                 appearance="interaction-only"
-                onToken={setTurnstileToken}
-                onStatus={setCaptchaStatus}
+                onToken={captcha.onToken}
+                onStatus={captcha.onStatus}
               />
             </div>
             {/* Only while a submit is actually waiting on the token. Before that there is nothing
@@ -396,29 +314,33 @@ export default function LoginScreen() {
             <Show
               when={
                 turnstileEnabled &&
-                loading() &&
-                !turnstileToken() &&
-                !captchaIsStuck(captchaStatus())
+                form.submitting() &&
+                !captcha.token() &&
+                !captchaIsStuck(captcha.status())
               }
             >
               <div data-test-id="captcha-hint" class={styles.captchaHint}>
-                {captchaStatusMessage(captchaStatus())}
+                {captchaStatusMessage(captcha.status())}
               </div>
             </Show>
 
-            <button
-              type="submit"
-              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
-              disabled={loading()}
-            >
-              {loading()
-                ? 'Please wait…'
-                : mode() === 'register'
-                  ? 'Create account'
+            <SubmitButton
+              busy={form.submitting()}
+              busyLabel={
+                mode() === 'register'
+                  ? 'Creating your account…'
                   : mode() === 'forgot'
-                    ? 'Send reset link'
-                    : 'Sign in'}
-            </button>
+                    ? 'Sending…'
+                    : 'Signing in…'
+              }
+              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
+            >
+              {mode() === 'register'
+                ? 'Create account'
+                : mode() === 'forgot'
+                  ? 'Send reset link'
+                  : 'Sign in'}
+            </SubmitButton>
           </form>
 
           <Show when={mode() !== 'forgot'}>
@@ -442,8 +364,7 @@ export default function LoginScreen() {
                 data-test-id="emailcode-open"
                 class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.altBtn}`}
                 onClick={() => {
-                  setError('')
-                  setNotice('')
+                  switchTo(mode())
                   setStage('email-code')
                 }}
                 type="button"
@@ -455,17 +376,22 @@ export default function LoginScreen() {
                   data-test-id="passkey-signin"
                   class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.altBtn}`}
                   onClick={() => {
-                    setError('')
+                    setElsewhere('')
                     stopConditional()
                     void signInWithPasskey().then((result) => {
                       if (result.ok) window.location.reload()
-                      else if (!result.aborted) setError(result.error)
+                      else if (!result.aborted) setElsewhere(result.error)
                     })
                   }}
                   type="button"
                 >
                   Sign in with a passkey
                 </button>
+              </Show>
+            </div>
+            <div role="alert" data-test-id="passkey-error">
+              <Show when={elsewhere()}>
+                <p class={styles.elsewhere}>{elsewhere()}</p>
               </Show>
             </div>
           </Show>
@@ -480,9 +406,7 @@ export default function LoginScreen() {
                   type="button"
                   class={styles.accountLink}
                   onClick={() => {
-                    setMode('login')
-                    setError('')
-                    setNotice('')
+                    switchTo('login')
                   }}
                 >
                   Back to sign in
@@ -494,9 +418,7 @@ export default function LoginScreen() {
                 type="button"
                 class={styles.accountLink}
                 onClick={() => {
-                  setMode(mode() === 'login' ? 'register' : 'login')
-                  setError('')
-                  setNotice('')
+                  switchTo(mode() === 'login' ? 'register' : 'login')
                 }}
               >
                 {mode() === 'login' ? 'Create one' : 'Sign in'}

@@ -12,6 +12,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { hashPassword } from '../src/auth';
+import { fetchSettled } from './helpers/after-answer';
 import {
   ACCESS_TABLES,
   accessRows,
@@ -35,8 +36,9 @@ const SEEDED_ADDRESS = 'household-reset@example.com';
 const realFetch = globalThis.fetch;
 let sent: Array<Record<string, unknown>>;
 
+/** Each request comes back once the work its route does after the answer (the mail) is done. */
 function post(path: string, body: unknown) {
-  return SELF.fetch(`https://example.com${path}`, {
+  return fetchSettled(`https://example.com${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

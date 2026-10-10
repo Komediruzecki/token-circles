@@ -1,18 +1,16 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
+import { createCaptchaGate } from './captchaGate'
 import EmailCodeLogin from './EmailCodeLogin'
+import { Field, FormNotice, SubmitButton } from './form'
 import styles from './LoginModal.module.css'
 import { OrbitSpinner } from './OrbitSpinner'
-import Turnstile, {
-  captchaIsStuck,
-  captchaStatusMessage,
-  resetTurnstile,
-  turnstileEnabled,
-  waitForTurnstileToken,
-} from './Turnstile'
+import { createSignInForm, reloadIntoTheApp } from './signInForm'
+import stepStyles from './SignInSteps.module.css'
+import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
-import type { TurnstileStatus } from './Turnstile'
+import type { SignInMode, SignInOutcome } from './signInForm'
 
 export interface LoginModalProps {
   onClose: () => void
@@ -22,26 +20,16 @@ export interface LoginModalProps {
 }
 
 export default function LoginModal(props: LoginModalProps) {
-  const [mode, setMode] = createSignal<'login' | 'register'>('login')
-  const [email, setEmail] = createSignal('')
-  const [password, setPassword] = createSignal('')
-  const [error, setError] = createSignal('')
+  const [mode, setMode] = createSignal<SignInMode>('login')
+  // What the dialog says that is not a problem with the form: the register hand-off.
   const [notice, setNotice] = createSignal('')
-  const [loading, setLoading] = createSignal(false)
+  // A way in other than the form that failed (a passkey). The form's own problems are its notice.
+  const [elsewhere, setElsewhere] = createSignal('')
   // 'signing-in' replaces the form with a branded transition while the register → auto-sign-in
   // handoff runs (mirrors LoginScreen); 'twofa' and 'email-code' are the extra sign-in steps.
   const [stage, setStage] = createSignal<'form' | 'signing-in' | 'twofa' | 'email-code'>('form')
-  const [turnstileToken, setTurnstileToken] = createSignal('')
-  const [captchaStatus, setCaptchaStatus] = createSignal<TurnstileStatus>(
-    turnstileEnabled ? 'loading' : 'disabled'
-  )
-  // See LoginScreen: a spent token has to take the status with it, or the form explains
-  // nothing under a submit button it has just disabled. A stuck widget stays stuck.
-  const clearCaptcha = () => {
-    resetTurnstile()
-    setTurnstileToken('')
-    setCaptchaStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
-  }
+  // The send waits for the token rather than the button waiting for it (captchaGate.ts).
+  const captcha = createCaptchaGate()
 
   // Set when the user closes the modal; the register → auto-sign-in
   // continuation checks it so a completed login can't reload the page out from
@@ -64,92 +52,53 @@ export default function LoginModal(props: LoginModalProps) {
     })
   })
 
-  const submit = async (e: Event) => {
-    e.preventDefault()
-    setError('')
-    setNotice('')
-    const em = email().trim()
-    const pw = password()
-    if (!em || !pw) {
-      setError('Email and password are required')
-      return
-    }
-    if (mode() === 'register' && pw.length < 8) {
-      setError('Password must be at least 8 characters')
-      return
-    }
-    setLoading(true)
+  /**
+   * Creating an account sets no session, and the answer is the same whether or not the address
+   * already had an account. Sign in with the password just chosen, on a fresh captcha token: it
+   * works for a new account, and for anything else the form takes over (LoginScreen does the same).
+   */
+  const handOff = async (email: string, password: string) => {
+    setStage('signing-in')
     try {
-      if (mode() === 'register') {
-        await api.register(em, pw, turnstileToken())
-        // The register endpoint deliberately sets no session and never reveals
-        // whether the email already existed (anti-enumeration), and login is not
-        // gated on email verification — sign the user straight in with the
-        // credentials they just chose. The register call consumed the single-use
-        // captcha token; reset and wait for a fresh one before the login call.
-        setStage('signing-in')
-        clearCaptcha()
-        try {
-          const token = await waitForTurnstileToken(turnstileToken, 20000)
-          // The user closed the modal while we waited — drop the handoff
-          // (the account exists; they can sign in whenever) instead of
-          // reloading the page out from under them.
-          if (dismissed) return
-          const handoff = await api.loginWithPassword(em, pw, token)
-          if (dismissed) return
-          if (handoff?.twofaRequired) {
-            // "Register" with an existing 2FA-protected account: password matched, the server
-            // answered with a challenge — show the code step instead of a dead reload.
-            setStage('twofa')
-            setLoading(false)
-            clearCaptcha()
-            return
-          }
-          // Cookie is set; reload so the app re-checks /auth/me.
-          markPasskeyNudgeAfterLogin()
-          window.location.reload()
-          return
-        } catch {
-          if (dismissed) return
-          // Existing account or a captcha hiccup — hand over to manual sign-in
-          // without revealing which it was.
-          setStage('form')
-          setMode('login')
-          setPassword('')
-          setNotice('Almost done — sign in with your password below.')
-          setLoading(false)
-          clearCaptcha()
-          return
-        }
-      }
-      const login = await api.loginWithPassword(em, pw, turnstileToken())
-      if (login?.twofaRequired) {
-        // Password verified; the session waits behind the authenticator code.
+      const token = await captcha.next()
+      // The user closed the dialog while we waited: drop the hand-off (the account exists; they
+      // can sign in whenever) instead of reloading the page out from under them.
+      if (dismissed) return
+      const handoff = await api.loginWithPassword(email, password, token)
+      captcha.spent()
+      if (dismissed) return
+      if (handoff?.twofaRequired) {
+        // "Create account" with an existing two-factor account whose password matched: the code
+        // step, not a dead reload.
         setStage('twofa')
-        setLoading(false)
-        clearCaptcha()
         return
       }
-      // Session cookie is set; reload so the app re-checks /auth/me and loads the user's profile.
-      markPasskeyNudgeAfterLogin()
-      window.location.reload()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-      setLoading(false)
-      clearCaptcha()
+      await reloadIntoTheApp()
+    } catch {
+      if (dismissed) return
+      // An existing account or a captcha hiccup: hand over to signing in by hand, without saying
+      // which it was.
+      captcha.spent()
+      setMode('login')
+      form.reset({ email, password: '' })
+      setNotice('Almost done — sign in with your password below.')
+      setStage('form')
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    'margin-bottom': '10px',
-    'border-radius': '8px',
-    border: '1px solid var(--border, rgba(255,255,255,0.12))',
-    background: 'var(--bg, #0b0e14)',
-    color: 'var(--text, #e6e8eb)',
-    'font-size': '14px',
-    'box-sizing': 'border-box' as const,
+  const saved = (outcome: SignInOutcome) => {
+    if (outcome.kind === 'second-factor') setStage('twofa')
+    else if (outcome.kind === 'registered') void handOff(outcome.email, outcome.password)
+  }
+
+  const form = createSignInForm({ mode, captcha, saved })
+
+  /** The other mode: the values stay, and nothing from before is said. */
+  const switchTo = (next: SignInMode) => {
+    setMode(next)
+    setNotice('')
+    setElsewhere('')
+    form.reset({ ...form.values })
   }
 
   return (
@@ -178,12 +127,12 @@ export default function LoginModal(props: LoginModalProps) {
               <TwofaChallenge
                 onBack={() => {
                   setStage('form')
-                  setPassword('')
+                  form.reset({ email: form.values.email, password: '' })
                 }}
               />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
-                email={email()}
+                email={form.values.email}
                 onBack={() => setStage('form')}
                 onTwofa={() => setStage('twofa')}
               />
@@ -196,11 +145,14 @@ export default function LoginModal(props: LoginModalProps) {
                   padding: '18px 0 12px',
                 }}
               >
-                <OrbitSpinner size={64} label="Account created — signing you in…" />
+                {/* Not "account created": the answer to creating an account is the same whether or
+                    not the address had one, so this cannot know which happened. Signing in is
+                    what happens in both. */}
+                <OrbitSpinner size={64} label="Signing you in…" />
                 {/* The form's widget unmounted with the form; this fresh instance
                     issues the sign-in token (and stays visible in case Cloudflare
                     wants an interactive check). */}
-                <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
+                <Turnstile onToken={captcha.onToken} onStatus={captcha.onStatus} />
               </div>
             )
           }
@@ -240,50 +192,61 @@ export default function LoginModal(props: LoginModalProps) {
             </div>
           </Show>
 
-          <form onSubmit={submit}>
-            <input
-              type="email"
+          <FormNotice form={form} testId="login-error" />
+
+          <form
+            {...form.attrs}
+            onSubmit={(event) => {
+              setNotice('')
+              setElsewhere('')
+              void form.submit(event)
+            }}
+          >
+            <Field
+              form={form}
               name="email"
               id="login-modal-email"
-              placeholder="Email"
-              value={email()}
-              onInput={(e) => setEmail(e.currentTarget.value)}
-              autocomplete="username"
-              style={inputStyle}
-            />
-            <input
-              type="password"
+              label="Email address"
+              class={styles.field}
+              labelClass={styles.label}
+            >
+              {(control) => (
+                <input
+                  {...control}
+                  type="email"
+                  name="email"
+                  value={form.values.email}
+                  onInput={(e) => form.set('email', e.currentTarget.value)}
+                  autocomplete="username"
+                  class={stepStyles.input}
+                />
+              )}
+            </Field>
+            <Field
+              form={form}
               name="password"
               id="login-modal-password"
-              placeholder="Password"
-              value={password()}
-              onInput={(e) => setPassword(e.currentTarget.value)}
-              autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
-              style={inputStyle}
-            />
-            <Show when={error()}>
-              <div
-                style={{
-                  color: 'var(--danger, #ef4444)',
-                  'font-size': '13px',
-                  margin: '2px 0 10px',
-                }}
-              >
-                {error()}
-              </div>
-            </Show>
-            <Turnstile onToken={setTurnstileToken} onStatus={setCaptchaStatus} />
-            {/* Turnstile draws its own, actionable panel for the states the user has to fix
-                (blocked script, widget error); this is only the ordinary "not solved yet" hint.
-                Without it the modal disabled Sign in and said nothing about why. */}
-            <Show
-              when={
-                turnstileEnabled &&
-                !turnstileToken() &&
-                !loading() &&
-                !captchaIsStuck(captchaStatus())
-              }
+              label="Password"
+              class={styles.field}
+              labelClass={styles.label}
             >
+              {(control) => (
+                <input
+                  {...control}
+                  type="password"
+                  name="password"
+                  value={form.values.password}
+                  onInput={(e) => form.set('password', e.currentTarget.value)}
+                  autocomplete={mode() === 'register' ? 'new-password' : 'current-password'}
+                  class={stepStyles.input}
+                />
+              )}
+            </Field>
+            <Turnstile onToken={captcha.onToken} onStatus={captcha.onStatus} />
+            {/* Turnstile draws its own, actionable panel for the states the user has to fix
+                (blocked script, widget error); this is only the ordinary "not solved yet" hint,
+                which also says why a submit is waiting. */}
+            <Show when={turnstileEnabled && !captcha.token() && !captchaIsStuck(captcha.status())}>
               <div
                 data-test-id="captcha-hint"
                 style={{
@@ -292,17 +255,17 @@ export default function LoginModal(props: LoginModalProps) {
                   margin: '2px 0 10px',
                 }}
               >
-                {captchaStatusMessage(captchaStatus())}
+                {captchaStatusMessage(captcha.status())}
               </div>
             </Show>
-            <button
+            <SubmitButton
+              busy={form.submitting()}
+              busyLabel={mode() === 'register' ? 'Creating your account…' : 'Signing in…'}
               class={styles.btnSubmit}
-              type="submit"
-              disabled={loading() || (turnstileEnabled && !turnstileToken())}
               style={{ width: '100%', 'justify-content': 'center' }}
             >
-              {loading() ? 'Please wait…' : mode() === 'register' ? 'Create account' : 'Sign in'}
-            </button>
+              {mode() === 'register' ? 'Create account' : 'Sign in'}
+            </SubmitButton>
           </form>
 
           <p
@@ -316,9 +279,7 @@ export default function LoginModal(props: LoginModalProps) {
             {mode() === 'login' ? "Don't have an account? " : 'Already have an account? '}
             <a
               onClick={() => {
-                setMode(mode() === 'login' ? 'register' : 'login')
-                setError('')
-                setNotice('')
+                switchTo(mode() === 'login' ? 'register' : 'login')
               }}
               style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
             >
@@ -373,8 +334,7 @@ export default function LoginModal(props: LoginModalProps) {
             <a
               data-test-id="emailcode-open"
               onClick={() => {
-                setError('')
-                setNotice('')
+                switchTo(mode())
                 setStage('email-code')
               }}
               style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
@@ -386,10 +346,10 @@ export default function LoginModal(props: LoginModalProps) {
               <a
                 data-test-id="passkey-signin"
                 onClick={() => {
-                  setError('')
+                  setElsewhere('')
                   void signInWithPasskey().then((result) => {
                     if (result.ok) window.location.reload()
-                    else if (!result.aborted) setError(result.error)
+                    else if (!result.aborted) setElsewhere(result.error)
                   })
                 }}
                 style={{ cursor: 'pointer', color: 'var(--primary)', 'font-weight': 600 }}
@@ -398,6 +358,11 @@ export default function LoginModal(props: LoginModalProps) {
               </a>
             </Show>
           </p>
+          <div role="alert" data-test-id="passkey-error">
+            <Show when={elsewhere()}>
+              <p class={styles.error}>{elsewhere()}</p>
+            </Show>
+          </div>
         </Show>
       </div>
     </div>

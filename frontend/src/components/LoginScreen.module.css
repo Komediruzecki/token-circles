@@ -117,20 +117,6 @@
   outline-offset: 1px;
 }
 
-.inputInvalid {
-  border-color: var(--danger, #ef4444);
-}
-
-.fieldError {
-  color: var(--danger, #ef4444);
-  font-size: 12.5px;
-}
-
-.formError {
-  color: var(--danger, #ef4444);
-  font-size: 13px;
-}
-
 /*
  * Turnstile in interaction-only mode renders nothing at all when it passes silently, so this slot
  * collapses to zero height rather than reserving a gap for a widget that usually never appears.
@@ -198,6 +184,13 @@
 .altBtn {
   width: 100%;
   justify-content: center;
+}
+
+/* A way in other than the form that failed, said under the buttons that offer it. */
+.elsewhere {
+  margin: 10px 0 0;
+  color: var(--danger-text, #ef4444);
+  font-size: 13px;
 }
 
 /*

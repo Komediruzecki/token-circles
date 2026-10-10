@@ -12,8 +12,9 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword } from '../src/auth';
 import { sessionCookie } from './helpers/session';
-import { createLoginCode } from '../src/login-codes';
+import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
+import { fetchSettled } from './helpers/after-answer';
 
 const UID = 9500;
 const OTHER = 9510;
@@ -35,8 +36,9 @@ const realFetch = globalThis.fetch;
 let sent: Mail[] = [];
 let cookie = '';
 
+/** Each request comes back once the work its route does after the answer (a mail) is done. */
 function call(method: string, path: string, body?: unknown, withCookie = true) {
-  return SELF.fetch(`https://example.com${path}`, {
+  return fetchSettled(`https://example.com${path}`, {
     method,
     headers: {
       ...(withCookie ? { Cookie: cookie } : {}),
@@ -87,8 +89,9 @@ const resetPassword = (token: string) =>
 
 /** A sign-in code for `email`, minted as /email-code/request mints one, with its ceremony cookie. */
 async function codeFor(email: string): Promise<{ code: string; ceremony: string }> {
-  const { code, id } = await createLoginCode(env, UID, email);
-  return { code, ceremony: (await issueLoginCodeCookie(env, id, email)).split(';')[0] };
+  const handle = newCodeHandle();
+  const { code } = await createLoginCode(env, UID, email, handle);
+  return { code, ceremony: issueLoginCodeCookie(env, handle).split(';')[0] };
 }
 
 const signInWithCode = (email: string, { code, ceremony }: { code: string; ceremony: string }) =>

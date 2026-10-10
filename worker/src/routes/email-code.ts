@@ -1,26 +1,25 @@
 /**
- * "Email me a code" sign-in: POST /request mints a 6-digit code and mails it (identical neutral
- * answer whether or not the address has an account — the forgot-password anti-enumeration rule),
- * POST /verify trades a live code for a session. The 2FA challenge still applies after: an email
- * code proves the inbox, which is one factor, not two. On an account whose address was never
- * confirmed, the code first removes every way in that was set up before (clearUnconfirmedAccess).
+ * "Email me a code" sign-in: POST /request mints a 6-digit code and mails it, after its answer
+ * (identical neutral answer whether or not the address has an account — the forgot-password
+ * anti-enumeration rule), POST /verify trades a live code for a session. The 2FA challenge still
+ * applies after: an email code proves the inbox, which is one factor, not two. On an account whose
+ * address was never confirmed, the code first removes every way in that was set up before
+ * (clearUnconfirmedAccess).
  *
- * The verify step is bound to the browser that requested the code by a signed ceremony cookie
- * (fm_logincode, same construction as fm_2fa). That binding is what keeps a 10^6 code space
- * defensible: a third party who fires /request for someone else's address gets a cookie for a
- * code they cannot read, and has NO surface to guess at the victim's own code — nor any way to
- * exhaust a victim's verify budget, which is why there is no per-address verify bucket here.
+ * The verify step is bound to the browser that requested the code by a ceremony cookie
+ * (fm_logincode): a random handle, whose SHA-256 hash the code's row keeps (login-codes.ts). That
+ * binding is what keeps a 10^6 code space defensible: a third party who fires /request for
+ * someone else's address gets a cookie for a code they cannot read, and has NO surface to guess at
+ * the victim's own code — nor any way to exhaust a victim's verify budget, which is why there is
+ * no per-address verify bucket here.
  */
 import { Hono } from 'hono';
 import type { AppEnv, Env } from '../index';
 import {
-  b64urlDecode,
-  b64urlEncode,
   clearedAccess,
   clearedWorthSaying,
   clearUnconfirmedAccess,
   cookie,
-  hmacKey,
   issueSessionCookie,
   readCookies,
   TRY_AGAIN,
@@ -30,71 +29,53 @@ import { sendMail } from '../email';
 import { renderLoginCode } from '../emailTemplates';
 import {
   createLoginCode,
-  generateLoginCode,
-  hashLoginCode,
   LOGIN_CODE_TTL_MINUTES,
+  newCodeHandle,
   verifyLoginCode,
 } from '../login-codes';
 import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { refusalOf } from '../../../shared/refusal';
+import {
+  addressProblems,
+  emailCodeProblems,
+  noProblems,
+  SIGN_IN_MESSAGES,
+} from '../../../shared/signInSchema';
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/**
+ * The answer to a code that does not sign in: wrong, spent, expired, or asked for in another
+ * browser. One answer for all of them, at the code field, in the words the form uses.
+ */
+const CODE_REFUSED = refusalOf({ code: SIGN_IN_MESSAGES.emailCodeRefused });
 
-// ── The ceremony cookie: which code row this browser may attempt ─────────────
+// ── The ceremony cookie: the handle of the request this browser made ──────────
 export const LOGINCODE_COOKIE = 'fm_logincode';
 const CEREMONY_TTL_SECONDS = LOGIN_CODE_TTL_MINUTES * 60;
 
-interface CodeCeremony {
-  codeId: number;
-  email: string;
-  exp: number;
+/** The cookie that carries a code request's handle (newCodeHandle) back to the verify step. */
+export function issueLoginCodeCookie(env: Env, handle: string): string {
+  return cookie(LOGINCODE_COOKIE, handle, CEREMONY_TTL_SECONDS, env);
 }
 
-async function hmacB64url(payload: string, secret: string): Promise<string> {
-  const key = await hmacKey(secret);
-  return b64urlEncode(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload)));
-}
-
-export async function issueLoginCodeCookie(
+/**
+ * The work a code request does after its answer: when `email` has an account, mint its code under
+ * the request's handle and mail it. A failure here changes no answer; the person asks again.
+ */
+async function mailCodeIfAccount(
   env: Env,
-  codeId: number,
-  email: string
-): Promise<string> {
-  if (!env.JWT_SECRET) throw new Error('Auth not configured');
-  const ceremony: CodeCeremony = {
-    codeId,
-    email,
-    exp: Math.floor(Date.now() / 1000) + CEREMONY_TTL_SECONDS,
-  };
-  const payload = b64urlEncode(new TextEncoder().encode(JSON.stringify(ceremony)));
-  const token = `${payload}.${await hmacB64url(payload, env.JWT_SECRET)}`;
-  return cookie(LOGINCODE_COOKIE, token, CEREMONY_TTL_SECONDS, env);
-}
-
-async function readCodeCeremony(
-  request: Request,
-  env: Env
-): Promise<{ codeId: number; email: string } | null> {
-  if (!env.JWT_SECRET) return null;
-  for (const raw of readCookies(request, LOGINCODE_COOKIE)) {
-    const [payload, mac] = raw.split('.');
-    if (!payload || !mac) continue;
-    const expected = await hmacB64url(payload, env.JWT_SECRET);
-    if (mac.length !== expected.length) continue;
-    let diff = 0;
-    for (let i = 0; i < mac.length; i++) diff |= mac.charCodeAt(i) ^ expected.charCodeAt(i);
-    if (diff !== 0) continue;
-    try {
-      const ceremony = JSON.parse(new TextDecoder().decode(b64urlDecode(payload))) as CodeCeremony;
-      if (!ceremony.exp || ceremony.exp < Math.floor(Date.now() / 1000)) continue;
-      if (typeof ceremony.codeId !== 'number' || typeof ceremony.email !== 'string') continue;
-      return { codeId: ceremony.codeId, email: ceremony.email };
-    } catch {
-      continue;
-    }
-  }
-  return null;
+  email: string,
+  handle: string,
+  base: string
+): Promise<void> {
+  const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (!user) return;
+  const { code } = await createLoginCode(env, user.id, email, handle);
+  const mail = renderLoginCode({ code, ttlMinutes: LOGIN_CODE_TTL_MINUTES, assetOrigin: base });
+  await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
 }
 
 export const emailCodeRoutes = new Hono<AppEnv>();
@@ -110,33 +91,24 @@ emailCodeRoutes.post('/api/auth/email-code/request', async (c) => {
   const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-address cap on top of per-IP (the forgot-password layering): one inbox can't be bombed
   // from rotating IPs, and the neutral 429 stays neutral for existing and unknown alike.
   const emailRl = await enforce(c, `logincode-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
 
-  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (user) {
-    const { code, id } = await createLoginCode(c.env, user.id, email);
-    c.header('Set-Cookie', await issueLoginCodeCookie(c.env, id, email));
-    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-    const mail = renderLoginCode({ code, ttlMinutes: LOGIN_CODE_TTL_MINUTES, assetOrigin: base });
-    // Off the response path: the awaited Resend round-trip (~100-400ms) was a timing oracle
-    // separating known from unknown addresses, and its failures leaked the same way as 500s.
-    c.executionCtx.waitUntil(
-      sendMail(c.env, email, mail.subject, mail.html, { text: mail.text }).catch(() => {})
-    );
-  } else {
-    // Unknown address: do the same visible work — mint a code nobody will read, sign a cookie
-    // addressed to a row that does not exist (id 0 never matches) — so the response differs
-    // from the known-address branch by one INSERT, not by crypto or mail latency.
-    const decoy = generateLoginCode();
-    await hashLoginCode(decoy);
-    c.header('Set-Cookie', await issueLoginCodeCookie(c.env, 0, email));
-  }
+  // The answer comes first: a new handle as the cookie, and ok. Looking the address up, minting
+  // its code and mailing it come after the answer (mailCodeIfAccount), and a failure there is
+  // logged, not answered.
+  const handle = newCodeHandle();
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailCodeIfAccount(c.env, email, handle, base).catch((e: unknown) => {
+      console.error('Sign-in code could not be sent:', e);
+    })
+  );
+  c.header('Set-Cookie', issueLoginCodeCookie(c.env, handle));
   return c.json({ ok: true });
 });
 
@@ -148,21 +120,20 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as { email?: string; code?: string };
   const email = (body.email ?? '').trim().toLowerCase();
   const code = (body.code ?? '').trim();
-  if (!EMAIL_RE.test(email) || !code) {
-    return c.json({ error: 'Email and code are required' }, 400);
-  }
+  const refused = emailCodeProblems({ email, code });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Only the browser that requested the code holds its ceremony cookie; without it there is
-  // nothing to guess against. The email must match the one the ceremony was minted for.
-  const ceremony = await readCodeCeremony(c.req.raw, c.env);
-  if (!ceremony || ceremony.email !== email) {
+  // nothing to guess against. The row it finds must be the one minted for this email.
+  const handles = readCookies(c.req.raw, LOGINCODE_COOKIE).filter(Boolean);
+  if (handles.length === 0) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'code_ceremony_missing', email });
-    return c.json({ error: 'Invalid or expired code' }, 401);
+    return c.json(CODE_REFUSED, 401);
   }
 
-  const userId = await verifyLoginCode(c.env, ceremony.codeId, email, code);
+  const userId = await verifyLoginCode(c.env, handles, email, code);
   if (userId === null) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_code', email });
-    return c.json({ error: 'Invalid or expired code' }, 401);
+    return c.json(CODE_REFUSED, 401);
   }
   // Proof of humanity and possession: the shared per-IP budget resets so one office/CGNAT
   // address can keep signing its users in (the auth.ts clear-on-success rule).
@@ -181,7 +152,7 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
   const after = results.at(-1)?.results[0] as { token_version: number } | undefined;
   c.header('Set-Cookie', cookie(LOGINCODE_COOKIE, '', 0, c.env), { append: true });
-  if (!after) return c.json({ error: 'Invalid or expired code' }, 401);
+  if (!after) return c.json(CODE_REFUSED, 401);
   const signIn = { userId, provider: 'email', tokenVersion: after.token_version };
 
   // Second factor: identical rule to password login — the inbox is one factor, not two.

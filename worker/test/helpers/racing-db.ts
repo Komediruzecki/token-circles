@@ -1,7 +1,8 @@
 /**
  * A D1 that runs one more step right after a chosen statement, before the route that ran it
  * carries on. A test uses it to change an account at an exact point inside a request: between a
- * route's check of a credential and the write that follows it.
+ * route's check of a credential and the write that follows it. Or a D1 that notes each statement
+ * it runs, for a test of what a route runs.
  *
  * The suite's `env` is the object the Worker's own requests see, so swapping its DB for the
  * request (withDb) is enough for SELF.fetch to run on this one.
@@ -22,20 +23,10 @@ export interface DbWithStep {
 }
 
 /**
- * `db`, which runs `step` once, right after the first statement whose SQL matches `after` has run
- * (alone or in a batch), and before its result reaches the code that ran it.
+ * `db`, which calls `ran` with the SQL of each statement right after it has run (alone or in a
+ * batch), before its result reaches the code that ran it.
  */
-export function dbWithStep(
-  db: D1Database,
-  after: RegExp,
-  step: () => Promise<unknown>
-): DbWithStep {
-  let ran = false;
-  const fire = async (sql: string): Promise<void> => {
-    if (ran || !after.test(sql)) return;
-    ran = true;
-    await step();
-  };
+function dbThatTells(db: D1Database, ran: (sql: string) => Promise<void>): D1Database {
   const wrap = (statement: D1PreparedStatement, sql: string): D1PreparedStatement => {
     const proxy = new Proxy(statement, {
       get(target, prop) {
@@ -46,7 +37,7 @@ export function dbWithStep(
           return async (...args: unknown[]) => {
             const method = target[prop] as (...a: unknown[]) => Promise<unknown>;
             const result = await method.apply(target, args);
-            await fire(sql);
+            await ran(sql);
             return result;
           };
         }
@@ -58,13 +49,13 @@ export function dbWithStep(
     sqlOf.set(proxy, sql);
     return proxy;
   };
-  const wrapped = new Proxy(db, {
+  return new Proxy(db, {
     get(target, prop) {
       if (prop === 'prepare') return (sql: string) => wrap(target.prepare(sql), sql);
       if (prop === 'batch') {
         return async (statements: D1PreparedStatement[]) => {
           const results = await target.batch(statements.map((s) => unwrapped.get(s) ?? s));
-          for (const s of statements) await fire(sqlOf.get(s) ?? '');
+          for (const s of statements) await ran(sqlOf.get(s) ?? '');
           return results;
         };
       }
@@ -72,7 +63,33 @@ export function dbWithStep(
       return typeof value === 'function' ? (value as Function).bind(target) : value;
     },
   });
+}
+
+/**
+ * `db`, which runs `step` once, right after the first statement whose SQL matches `after` has run
+ * (alone or in a batch), and before its result reaches the code that ran it.
+ */
+export function dbWithStep(
+  db: D1Database,
+  after: RegExp,
+  step: () => Promise<unknown>
+): DbWithStep {
+  let ran = false;
+  const wrapped = dbThatTells(db, async (sql) => {
+    if (ran || !after.test(sql)) return;
+    ran = true;
+    await step();
+  });
   return { db: wrapped, ran: () => ran };
+}
+
+/** `db`, which notes in `statements` the SQL of each statement it runs, alone or in a batch. */
+export function dbThatNotes(db: D1Database): { db: D1Database; statements: string[] } {
+  const statements: string[] = [];
+  const noting = dbThatTells(db, async (sql) => {
+    statements.push(sql);
+  });
+  return { db: noting, statements };
 }
 
 /** Run `request` with `db` as the Worker's database, then put the real one back. */

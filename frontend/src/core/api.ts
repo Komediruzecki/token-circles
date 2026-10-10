@@ -205,13 +205,18 @@ export class ApiClient {
     })
   }
 
-  /** Check whether a reset token is still valid (worker: GET /api/auth/reset-password?token=). */
+  /**
+   * Whether a reset link still works, as the Worker answers it (GET /api/auth/reset-password?token=):
+   * `valid: false` for a link that is unknown, spent or expired. Throws when the check fails: no
+   * answer, an error, or an answer that does not say.
+   */
   async validateResetToken(token: string): Promise<boolean> {
-    const r = await this.request<{ valid?: boolean }>(
+    const r = await this.request<{ valid?: unknown }>(
       `/auth/reset-password?token=${encodeURIComponent(token)}`,
       undefined
     )
-    return !!r?.valid
+    if (typeof r?.valid !== 'boolean') throw new Error('The reset link check did not say')
+    return r.valid
   }
 
   /**
@@ -225,6 +230,43 @@ export class ApiClient {
     })
     // True when the reset also confirmed the address and cleared what the account had set up.
     return { cleared: answer?.cleared === true }
+  }
+
+  /**
+   * Ask for a sign-in code by email (worker: POST /api/auth/email-code/request). The answer is the
+   * same whether or not the address has an account; it also sets the cookie the code is traded
+   * with, so only this browser can use the code.
+   */
+  async requestEmailCode(email: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/email-code/request', undefined, {
+      method: 'POST',
+      body: { email, turnstileToken },
+    })
+  }
+
+  /**
+   * Trade a sign-in code for the session (worker: POST /api/auth/email-code/verify), or for the
+   * second-factor step when the account has one. `cleared` is true when confirming the address
+   * this way also cleared what the account had set up.
+   */
+  async verifyEmailCode(
+    email: string,
+    code: string
+  ): Promise<{ twofaRequired: boolean; cleared: boolean }> {
+    const answer = await this.request<{ twofaRequired?: boolean; cleared?: boolean }>(
+      '/auth/email-code/verify',
+      undefined,
+      { method: 'POST', body: { email, code } }
+    )
+    return { twofaRequired: answer?.twofaRequired === true, cleared: answer?.cleared === true }
+  }
+
+  /**
+   * The second sign-in step (worker: POST /api/auth/2fa/verify): an authenticator or recovery
+   * code, traded with the challenge cookie the first step set for the session.
+   */
+  async verifySecondFactor(code: string): Promise<void> {
+    await this.request('/auth/2fa/verify', undefined, { method: 'POST', body: { code } })
   }
 
   /**

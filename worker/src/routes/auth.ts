@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import type { AppEnv } from '../index';
+import type { AppEnv, Env } from '../index';
 import * as db from '../db';
 import { deviceLabel } from '../deviceLabel';
 import {
@@ -51,16 +51,22 @@ import { clearRateLimit, enforce, clientIp } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { refusalOf } from '../../../shared/refusal';
+import {
+  addressProblems,
+  noProblems,
+  registrationProblems,
+  resetPasswordProblems,
+  signInProblems,
+} from '../../../shared/signInSchema';
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-// A fixed, valid-format PBKDF2 hash (same 600k cost as a freshly minted real one) that no password
-// matches. Login verifies against this when the account or its hash is absent, so the response time
-// is the same whether or not the email is registered — closing the user-enumeration timing oracle.
-// Kept in lock-step with PBKDF2_ITERATIONS in auth.ts so the dummy verify costs the same as a real
-// one — and, critically, stays within the Workers PBKDF2 100k cap (a 600k dummy made login throw
-// for non-existent accounts instead of returning 401).
-const DUMMY_PASSWORD_HASH = `pbkdf2$100000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
+// A fixed, valid-format PBKDF2 hash (the same 100k cost as a freshly minted real one) that no
+// password matches. Login verifies against this when the account or its hash is absent, so the
+// response time is the same whether or not the email is registered — closing the user-enumeration
+// timing oracle. Kept in lock-step with PBKDF2_ITERATIONS in auth.ts so the dummy verify costs the
+// same as a real one — and, critically, stays within the Workers PBKDF2 100k cap (a 600k dummy
+// made login throw for non-existent accounts instead of returning 401). A test compares the two.
+export const DUMMY_PASSWORD_HASH = `pbkdf2$100000$${'A'.repeat(22)}$${'A'.repeat(43)}`;
 
 // How long a password-reset magic link stays valid. Tune freely (a few hours is the
 // safe default; raise toward 24–72h if you want links to survive longer email delays).
@@ -191,8 +197,9 @@ authRoutes.post('/api/auth/register', async (c) => {
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
-  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  // The field each problem is about, in the words the form uses (shared/signInSchema.ts).
+  const refused = registrationProblems({ email, password });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-email cap (on top of the per-IP cap) so one address can't be email-bombed / junk-registered
   // from rotating IPs. Mirrors forgot-password; the response stays neutral (429 for existing + new).
   const emailRl = await enforce(c, `register-email:${email}`, 3, 3600);
@@ -200,7 +207,8 @@ authRoutes.post('/api/auth/register', async (c) => {
   // Anti-enumeration (CR-9): never reveal whether the email already exists. Always run the password
   // hash (so timing doesn't betray the branch), then EITHER create a new account OR notify the
   // existing owner by email — returning the SAME neutral response with NO session either way. The
-  // user signs in afterward, so a new vs existing email is indistinguishable to the caller.
+  // user signs in afterward, so a new vs existing email is indistinguishable to the caller. Either
+  // mail is sent after the answer.
   const passwordHash = await hashPassword(password);
   const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
@@ -208,10 +216,12 @@ authRoutes.post('/api/auth/register', async (c) => {
     .first<{ id: number }>();
   if (existing) {
     const notice = renderAccountExists({ appUrl: base });
-    await sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
-      (e: unknown) => {
-        console.error('account-exists notice email failed to send:', e);
-      }
+    c.executionCtx.waitUntil(
+      sendMail(c.env, email, notice.subject, notice.html, { text: notice.text }).catch(
+        (e: unknown) => {
+          console.error('account-exists notice email failed to send:', e);
+        }
+      )
     );
   } else {
     const res = await c.env.DB.prepare(
@@ -224,7 +234,8 @@ authRoutes.post('/api/auth/register', async (c) => {
       .bind('Personal Profile', userId)
       .run();
     // Best-effort, exactly like the mail it replaces: a signup is never held up, or failed, by
-    // the mail server. An account with no confirm link can always ask for one from the app.
+    // the mail server, which is why the mail goes after the answer. An account with no confirm
+    // link can always ask for one from the app.
     let verifyUrl: string | undefined;
     try {
       const token = await createEmailVerification(c.env.DB, userId, email);
@@ -233,10 +244,12 @@ authRoutes.post('/api/auth/register', async (c) => {
       console.error('Verification token could not be minted:', e);
     }
     const welcome = renderWelcome({ appUrl: base, verifyUrl });
-    await sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
-      (e) => {
-        console.error('Welcome email failed:', e);
-      }
+    c.executionCtx.waitUntil(
+      sendMail(c.env, email, welcome.subject, welcome.html, { text: welcome.text }).catch(
+        (e: unknown) => {
+          console.error('Welcome email failed:', e);
+        }
+      )
     );
   }
   // Identical response regardless of existence; no session cookie is set (the user signs in next).
@@ -286,7 +299,9 @@ authRoutes.post('/api/auth/login', async (c) => {
   }
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
-  if (!email || !password) return c.json({ error: 'Email and password are required' }, 400);
+  // Only a field left empty is named. A wrong address or password names neither (below).
+  const missing = signInProblems({ email, password });
+  if (!noProblems(missing)) return c.json(refusalOf(missing), 400);
   // Per-account throttle (on top of per-IP) so a single account can't be brute-forced from rotating
   // IPs. Mirrors the layered approach used in forgot-password.
   const emailBucket = `login-email:${email}`;
@@ -335,6 +350,33 @@ authRoutes.post('/api/auth/login', async (c) => {
   return c.json({ id: user.id, email });
 });
 
+/**
+ * The work a reset request does after its answer: when `email` has an account, end the links it
+ * has not used, mint a new one and mail it. A failure here changes no answer; the person asks
+ * again.
+ */
+async function mailResetLinkIfAccount(env: Env, email: string, base: string): Promise<void> {
+  const user = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (!user) return;
+  // Invalidate any previous unused links for this user, then mint a fresh one.
+  await env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
+    .bind(user.id)
+    .run();
+  const token = randomToken();
+  const tokenHash = await sha256Hex(token);
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_HOURS * 3_600_000).toISOString();
+  await env.DB.prepare(
+    'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
+  )
+    .bind(user.id, tokenHash, expiresAt)
+    .run();
+  const link = `${base}/#reset-password?token=${token}`;
+  const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
+  await sendMail(env, email, reset.subject, reset.html, { text: reset.text });
+}
+
 // Forgot password: email a magic reset link. Always returns 200 with no hint about whether
 // the account exists (anti-enumeration). Only one active token per user at a time.
 authRoutes.post('/api/auth/forgot-password', async (c) => {
@@ -347,32 +389,20 @@ authRoutes.post('/api/auth/forgot-password', async (c) => {
   const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
   // Per-email cap (on top of per-IP) so one address can't be bombed from rotating IPs.
   const emailRl = await enforce(c, `forgot-email:${email}`, 3, 3600);
   if (emailRl) return emailRl;
 
-  const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (user) {
-    // Invalidate any previous unused links for this user, then mint a fresh one.
-    await c.env.DB.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL')
-      .bind(user.id)
-      .run();
-    const token = randomToken();
-    const tokenHash = await sha256Hex(token);
-    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_HOURS * 3_600_000).toISOString();
-    await c.env.DB.prepare(
-      'INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)'
-    )
-      .bind(user.id, tokenHash, expiresAt)
-      .run();
-    const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
-    const link = `${base}/#reset-password?token=${token}`;
-    const reset = renderPasswordReset({ link, ttlHours: RESET_TOKEN_TTL_HOURS, assetOrigin: base });
-    await sendMail(c.env, email, reset.subject, reset.html, { text: reset.text });
-  }
+  // The answer comes first. Looking the address up, minting its link and mailing it come after
+  // the answer (mailResetLinkIfAccount), and a failure there is logged, not answered.
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailResetLinkIfAccount(c.env, email, base).catch((e: unknown) => {
+      console.error('Password reset link could not be sent:', e);
+    })
+  );
   return c.json({ ok: true });
 });
 
@@ -399,7 +429,8 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   const token = (body.token ?? '').trim();
   const password = body.password ?? '';
   if (!token) return c.json({ error: 'Missing reset token' }, 400);
-  if (password.length < 8) return c.json({ error: 'Password must be at least 8 characters' }, 400);
+  const refused = resetPasswordProblems({ password });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
 
   // Deliberately does NOT filter on `used_at IS NULL`. Whether the link is still unspent is
   // decided by the conditional UPDATE below and nowhere else — two gates for one fact means the

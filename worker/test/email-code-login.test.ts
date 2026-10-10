@@ -1,7 +1,7 @@
 /**
  * Email-code sign-in: request a 6-digit code by mail, trade it for a session. Anti-enumeration
  * (the request endpoint answers identically for unknown addresses, cookie included), single-use,
- * 10-minute TTL — and the verify step is BOUND to the browser that requested it by a signed
+ * 10-minute TTL — and the verify step is BOUND to the browser that requested it by the
  * ceremony cookie, so a code can only be guessed at by the party that triggered it: five wrong
  * attempts burn it. On a confirmed account the 2FA challenge still applies after the code; on one
  * whose address was never confirmed, the code first removes every way in that was set up before.
@@ -12,10 +12,15 @@ import {
   createLoginCode,
   LOGIN_CODE_MAX_ATTEMPTS,
   LOGIN_CODE_TTL_MINUTES,
+  newCodeHandle,
 } from '../src/login-codes';
+import { b64urlEncode, hmacKey } from '../src/auth';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
+import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
+import { fetchSettled } from './helpers/after-answer';
+import { dbThatNotes, realDb, withDb } from './helpers/racing-db';
 import {
   ACCESS_TABLES,
   accessRows,
@@ -32,9 +37,19 @@ import {
 
 const BASE = 'https://api.example.com';
 const EMAIL = 'codeuser@example.com';
+/** A code that does not sign in, at the code field, as the form shows it. */
+const CODE_REFUSED = {
+  error: SIGN_IN_MESSAGES.emailCodeRefused,
+  fields: { code: SIGN_IN_MESSAGES.emailCodeRefused },
+};
 /** An account with every kind of access set up on it (helpers/account-access.ts). */
 const SEEDED = 6610;
 const SEEDED_ADDRESS = 'household-code@example.com';
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
 
 function cookieValue(res: Response, name: string): string | null {
   for (const c of res.headers.getSetCookie()) {
@@ -43,8 +58,9 @@ function cookieValue(res: Response, name: string): string | null {
   return null;
 }
 
+/** Each request comes back once the work its route does after the answer is done, too. */
 async function post(path: string, body: unknown, cookie?: string): Promise<Response> {
-  return SELF.fetch(`${BASE}${path}`, {
+  return fetchSettled(`${BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(cookie ? { Cookie: cookie } : {}) },
     body: JSON.stringify(body),
@@ -56,8 +72,9 @@ async function mintWithCookie(
   email = EMAIL,
   user = userId
 ): Promise<{ code: string; cookie: string; id: number }> {
-  const { code, id } = await createLoginCode(env, user, email);
-  const cookie = (await issueLoginCodeCookie(env, id, email)).split(';')[0]!;
+  const handle = newCodeHandle();
+  const { code, id } = await createLoginCode(env, user, email, handle);
+  const cookie = issueLoginCodeCookie(env, handle).split(';')[0]!;
   return { code, cookie, id };
 }
 
@@ -108,8 +125,17 @@ describe('requesting a code', () => {
     expect(rows.results).toHaveLength(1); // only the real account got a code minted
   });
 
+  it('sets as its cookie the handle whose SHA-256 hash the code row keeps', async () => {
+    const res = await post('/api/auth/email-code/request', { email: EMAIL });
+    const handle = cookieValue(res, 'fm_logincode')!.slice('fm_logincode='.length);
+    const rows = await env.DB.prepare('SELECT handle_hash FROM login_codes WHERE email = ?')
+      .bind(EMAIL)
+      .all<{ handle_hash: string }>();
+    expect(rows.results).toEqual([{ handle_hash: await sha256Hex(handle) }]);
+  });
+
   it('stores only a hash, never the code', async () => {
-    const { code } = await createLoginCode(env, userId, EMAIL);
+    const { code } = await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const row = await env.DB.prepare('SELECT code_hash FROM login_codes WHERE user_id = ?')
       .bind(userId)
       .first<{ code_hash: string }>();
@@ -130,7 +156,7 @@ describe('requesting a code', () => {
     // The old delete-previous behavior let anyone invalidate the code a user was busy typing,
     // just by firing /request for their address.
     const first = await mintWithCookie();
-    await createLoginCode(env, userId, EMAIL);
+    await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const res = await post(
       '/api/auth/email-code/verify',
       { email: EMAIL, code: first.code },
@@ -140,7 +166,7 @@ describe('requesting a code', () => {
   });
 
   it('keeps at most three live codes per user', async () => {
-    for (let i = 0; i < 5; i++) await createLoginCode(env, userId, EMAIL);
+    for (let i = 0; i < 5; i++) await createLoginCode(env, userId, EMAIL, newCodeHandle());
     const row = await env.DB.prepare(
       'SELECT COUNT(*) AS n FROM login_codes WHERE user_id = ? AND used_at IS NULL'
     )
@@ -173,6 +199,8 @@ describe('verifying a code', () => {
     const res = await post('/api/auth/email-code/verify', { email: EMAIL, code });
     expect(res.status).toBe(401);
     expect(cookieValue(res, 'fm_session')).toBeNull();
+    // The same answer as a wrong code: at the code field.
+    expect(await res.json()).toEqual(CODE_REFUSED);
   });
 
   it('says the password was cleared on an unconfirmed account that had nothing else', async () => {
@@ -202,6 +230,60 @@ describe('verifying a code', () => {
     const res = await post('/api/auth/email-code/verify', { email: EMAIL, code: '000000' }, cookie);
     expect(res.status).toBe(401);
     expect(cookieValue(res, 'fm_session')).toBeNull();
+    expect(await res.json()).toEqual(CODE_REFUSED);
+  });
+
+  it('runs one attempts update for a wrong code, and one for a cookie that finds no code', async () => {
+    const { code, cookie } = await mintWithCookie();
+    const wrong = code === '000000' ? '111111' : '000000';
+    const noCode = issueLoginCodeCookie(env, newCodeHandle()).split(';')[0]!;
+    const attemptsUpdates = async (withCookie: string) => {
+      const noting = dbThatNotes(realDb);
+      const res = await withDb(noting.db, () =>
+        post('/api/auth/email-code/verify', { email: EMAIL, code: wrong }, withCookie)
+      );
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual(CODE_REFUSED);
+      return noting.statements.filter((sql) => sql.startsWith('UPDATE login_codes SET attempts'));
+    };
+    expect(await attemptsUpdates(cookie), 'a wrong code').toHaveLength(1);
+    expect(await attemptsUpdates(noCode), 'a cookie that finds no code').toHaveLength(1);
+  });
+
+  it('refuses a cookie in the signed form it had before, as it refuses an expired code', async () => {
+    // A cookie as a code request set it before this change, for a code that is still live.
+    const signedForm = async (id: number) => {
+      const payload = b64urlEncode(
+        new TextEncoder().encode(
+          JSON.stringify({ codeId: id, email: EMAIL, exp: Math.floor(Date.now() / 1000) + 600 })
+        )
+      );
+      const mac = await crypto.subtle.sign(
+        'HMAC',
+        await hmacKey(env.JWT_SECRET),
+        new TextEncoder().encode(payload)
+      );
+      return `fm_logincode=${payload}.${b64urlEncode(mac)}`;
+    };
+    const minted = await mintWithCookie();
+    const earlier = await post(
+      '/api/auth/email-code/verify',
+      { email: EMAIL, code: minted.code },
+      await signedForm(minted.id)
+    );
+    await env.DB.prepare("UPDATE login_codes SET expires_at = datetime('now', '-1 minute')").run();
+    const expired = await post(
+      '/api/auth/email-code/verify',
+      { email: EMAIL, code: minted.code },
+      minted.cookie
+    );
+
+    expect(earlier.status).toBe(401);
+    expect(cookieValue(earlier, 'fm_session')).toBeNull();
+    expect({ status: earlier.status, body: await earlier.json() }).toEqual({
+      status: expired.status,
+      body: await expired.json(),
+    });
   });
 
   it('rejects an expired code', async () => {
@@ -249,9 +331,58 @@ describe('verifying a code', () => {
   });
 });
 
+describe('two codes asked for from two browsers, on a confirmed account', () => {
+  const realFetch = globalThis.fetch;
+  /** The codes the Worker mailed, in the order it mailed them. */
+  let mailed: string[] = [];
+
+  beforeEach(async () => {
+    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId).run();
+    (env as unknown as Record<string, string>).RESEND_API_KEY = 'rk_test';
+    mailed = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.includes('api.resend.com')) return realFetch(input as RequestInfo, init);
+      const { subject } = JSON.parse(String(init?.body)) as { subject: string };
+      mailed.push(/^\d{6}/.exec(subject)![0]);
+      return new Response('{"id":"re_1"}', { headers: { 'Content-Type': 'application/json' } });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    delete (env as unknown as Record<string, string>).RESEND_API_KEY;
+  });
+
+  for (const order of [
+    ['first', 'second'],
+    ['second', 'first'],
+  ] as const) {
+    it(`each sign in with the cookie of their own request, the ${order[0]} one traded first`, async () => {
+      const cookies = { first: '', second: '' };
+      for (const which of ['first', 'second'] as const) {
+        const asked = await post('/api/auth/email-code/request', { email: EMAIL });
+        expect(asked.status).toBe(200);
+        cookies[which] = cookieValue(asked, 'fm_logincode')!;
+      }
+      const codes = { first: mailed[0]!, second: mailed[1]! };
+
+      for (const which of order) {
+        const res = await post(
+          '/api/auth/email-code/verify',
+          { email: EMAIL, code: codes[which] },
+          cookies[which]
+        );
+        expect(res.status, `the ${which} code`).toBe(200);
+        expect(cookieValue(res, 'fm_session'), `a session from the ${which} code`).toBeTruthy();
+      }
+    });
+  }
+});
+
 describe('account deletion', () => {
   it('removes the login_codes rows with the account', async () => {
-    await createLoginCode(env, userId, EMAIL);
+    await createLoginCode(env, userId, EMAIL, newCodeHandle());
     // The fixture user's password_hash is a dummy, so mint the session directly.
     const { sessionCookie } = await import('./helpers/session');
     const session = (

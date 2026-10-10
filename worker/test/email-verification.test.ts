@@ -16,6 +16,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sessionCookie } from './helpers/session';
 import { renderEmailVerification, renderWelcome } from '../src/emailTemplates';
+import { fetchSettled } from './helpers/after-answer';
 
 const USER_ID = 8100;
 const EMAIL = 'verify-me@example.com';
@@ -256,8 +257,9 @@ describe('the welcome mail of a new sign-up', () => {
     delete (env as unknown as Record<string, string>).RESEND_API_KEY;
   });
 
+  /** Each request comes back once the work its route does after the answer (the mail) is done. */
   const post = (path: string, body: unknown) =>
-    SELF.fetch(`https://api.example.com${path}`, {
+    fetchSettled(`https://api.example.com${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

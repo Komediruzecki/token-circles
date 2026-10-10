@@ -5,6 +5,10 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { currentStep, totpCode } from '../src/totp';
+import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
+
+/** A refusal at the code field, as the form shows it. */
+const atTheCode = (words: string) => ({ error: words, fields: { code: words } });
 
 const BASE = 'https://api.example.com';
 const EMAIL = 'twofa@example.com';
@@ -102,6 +106,7 @@ describe('enrollment', () => {
     await post('/api/auth/2fa/setup', session);
     const res = await post('/api/auth/2fa/enable', session, { code: '000000' });
     expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(atTheCode(SIGN_IN_MESSAGES.appCodeRefused));
     const status = await SELF.fetch(`${BASE}/api/auth/2fa/status`, {
       headers: { Cookie: session },
     });
@@ -144,12 +149,17 @@ describe('login challenge', () => {
   it('rejects a wrong code', async () => {
     await enable2fa(await freshSession());
     const challenge = cookieValue(await login(), 'fm_2fa')!;
-    expect((await post('/api/auth/2fa/verify', challenge, { code: '000000' })).status).toBe(401);
+    const res = await post('/api/auth/2fa/verify', challenge, { code: '000000' });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(atTheCode(SIGN_IN_MESSAGES.secondFactorRefused));
   });
 
   it('rejects a verify with no challenge cookie', async () => {
     await enable2fa(await freshSession());
-    expect((await post('/api/auth/2fa/verify', null, { code: '123456' })).status).toBe(401);
+    const res = await post('/api/auth/2fa/verify', null, { code: '123456' });
+    expect(res.status).toBe(401);
+    // Not the code's fault: the sign-in it belonged to has to start again.
+    expect(await res.json()).toEqual({ error: 'Sign-in expired — enter your password again' });
   });
 
   it('the same TOTP code is never accepted twice (anti-replay)', async () => {
@@ -205,7 +215,9 @@ describe('disable', () => {
   it('refuses to disable with a wrong code', async () => {
     const session = await freshSession();
     await enable2fa(session);
-    expect((await post('/api/auth/2fa/disable', session, { code: '000000' })).status).toBe(401);
+    const res = await post('/api/auth/2fa/disable', session, { code: '000000' });
+    expect(res.status).toBe(401);
+    expect(await res.json()).toEqual(atTheCode(SIGN_IN_MESSAGES.secondFactorRefused));
   });
 });
 

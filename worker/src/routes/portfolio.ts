@@ -1,14 +1,14 @@
-import { Hono } from 'hono'
-import type { AppEnv } from '../index'
-import { requireAuth } from '../auth'
-import { getProfileId, getProfileIds } from '../profile'
-import { accept, HttpError } from '../http'
-import * as db from '../db'
+import { Hono } from 'hono';
+import type { AppEnv } from '../index';
+import { requireAuth } from '../auth';
+import { getProfileId, getProfileIds } from '../profile';
+import { accept, HttpError } from '../http';
+import * as db from '../db';
 import {
   checkHoldingCreate,
   checkHoldingEdit,
   HOLDING_MESSAGES,
-} from '../../../shared/holdingSchema'
+} from '../../../shared/holdingSchema';
 
 // Port of backend/routes/portfolio.js + backend/repositories/portfolioRepo.js.
 // Holdings are profile-scoped. Live prices come from Yahoo Finance (external),
@@ -17,45 +17,45 @@ import {
 // computed in JS exactly as upstream. The enriched keys are camelCase because
 // the Express route spreads computed JS fields onto the snake_case DB row.
 // A holding's body is checked by shared/holdingSchema.ts, as local-first checks it.
-export const portfolioRoutes = new Hono<AppEnv>()
+export const portfolioRoutes = new Hono<AppEnv>();
 
 interface Holding {
-  ticker: string
-  shares: number
-  purchase_price: number
-  [key: string]: any
+  ticker: string;
+  shares: number;
+  purchase_price: number;
+  [key: string]: any;
 }
 
 function enrich(h: Holding) {
   // Fallback used by the Express route when live prices are unavailable.
-  const currentPrice = h.purchase_price
-  const marketValue = currentPrice * h.shares
-  const costBasis = h.purchase_price * h.shares
-  const gain = marketValue - costBasis
-  const gainPercent = costBasis > 0 ? (gain / costBasis) * 100 : 0
-  return { ...h, currentPrice, marketValue, costBasis, gain, gainPercent }
+  const currentPrice = h.purchase_price;
+  const marketValue = currentPrice * h.shares;
+  const costBasis = h.purchase_price * h.shares;
+  const gain = marketValue - costBasis;
+  const gainPercent = costBasis > 0 ? (gain / costBasis) * 100 : 0;
+  return { ...h, currentPrice, marketValue, costBasis, gain, gainPercent };
 }
 
 // Aggregating read across profiles -> getProfileIds.
 portfolioRoutes.get('/api/portfolio/holdings', requireAuth, async (c) => {
-  const pids = await getProfileIds(c)
-  const inClause = pids.map(() => '?').join(',')
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const holdings = await db.all<Holding>(
     c.env.DB,
     `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause}) ORDER BY purchase_date DESC`,
     ...pids
-  )
-  return c.json(holdings.map(enrich))
-})
+  );
+  return c.json(holdings.map(enrich));
+});
 
 portfolioRoutes.get('/api/portfolio/summary', requireAuth, async (c) => {
-  const pids = await getProfileIds(c)
-  const inClause = pids.map(() => '?').join(',')
+  const pids = await getProfileIds(c);
+  const inClause = pids.map(() => '?').join(',');
   const holdings = await db.all<Holding>(
     c.env.DB,
     `SELECT * FROM portfolio_holdings WHERE profile_id IN (${inClause})`,
     ...pids
-  )
+  );
 
   if (holdings.length === 0) {
     return c.json({
@@ -65,31 +65,31 @@ portfolioRoutes.get('/api/portfolio/summary', requireAuth, async (c) => {
       totalGainPercent: 0,
       holdings: [],
       allocation: [],
-    })
+    });
   }
 
-  let totalValue = 0
-  let totalCostBasis = 0
+  let totalValue = 0;
+  let totalCostBasis = 0;
   const enrichedHoldings = holdings.map((h) => {
-    const e = enrich(h)
-    totalValue += e.marketValue
-    totalCostBasis += e.costBasis
-    return e
-  })
+    const e = enrich(h);
+    totalValue += e.marketValue;
+    totalCostBasis += e.costBasis;
+    return e;
+  });
 
-  const allocationMap: Record<string, { ticker: string; value: number; shares: number }> = {}
+  const allocationMap: Record<string, { ticker: string; value: number; shares: number }> = {};
   for (const h of enrichedHoldings) {
-    const key = h.ticker
-    if (!allocationMap[key]) allocationMap[key] = { ticker: h.ticker, value: 0, shares: 0 }
-    allocationMap[key].value += h.marketValue
-    allocationMap[key].shares += h.shares
+    const key = h.ticker;
+    if (!allocationMap[key]) allocationMap[key] = { ticker: h.ticker, value: 0, shares: 0 };
+    allocationMap[key].value += h.marketValue;
+    allocationMap[key].shares += h.shares;
   }
   const allocation = Object.values(allocationMap)
     .map((a) => ({ ...a, percentage: totalValue > 0 ? (a.value / totalValue) * 100 : 0 }))
-    .sort((a, b) => b.value - a.value)
+    .sort((a, b) => b.value - a.value);
 
-  const totalGain = totalValue - totalCostBasis
-  const totalGainPercent = totalCostBasis > 0 ? (totalGain / totalCostBasis) * 100 : 0
+  const totalGain = totalValue - totalCostBasis;
+  const totalGainPercent = totalCostBasis > 0 ? (totalGain / totalCostBasis) * 100 : 0;
 
   return c.json({
     totalValue,
@@ -98,35 +98,35 @@ portfolioRoutes.get('/api/portfolio/summary', requireAuth, async (c) => {
     totalGainPercent,
     holdings: enrichedHoldings,
     allocation,
-  })
-})
+  });
+});
 
 portfolioRoutes.post('/api/portfolio/holdings', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const input = accept(checkHoldingCreate(await c.req.json()))
-  const res = await db.insert(c.env.DB, 'portfolio_holdings', { ...input, profile_id: pid })
+  const pid = await getProfileId(c);
+  const input = accept(checkHoldingCreate(await c.req.json()));
+  const res = await db.insert(c.env.DB, 'portfolio_holdings', { ...input, profile_id: pid });
   const holding = await db.first(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
     res.meta.last_row_id,
     pid
-  )
-  return c.json(holding, 201)
-})
+  );
+  return c.json(holding, 201);
+});
 
 portfolioRoutes.put('/api/portfolio/holdings/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const id = c.req.param('id')
-  const b: unknown = await c.req.json()
+  const pid = await getProfileId(c);
+  const id = c.req.param('id');
+  const b: unknown = await c.req.json();
   const existing = await db.first<Holding>(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
     id,
     pid
-  )
-  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound)
+  );
+  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound);
   // Only what the edit changes is checked and written (decision 2): a field left out stays.
-  const edit = accept(checkHoldingEdit(b, existing))
+  const edit = accept(checkHoldingEdit(b, existing));
   if (Object.keys(edit).length > 0) {
     await db.update(
       c.env.DB,
@@ -135,39 +135,39 @@ portfolioRoutes.put('/api/portfolio/holdings/:id', requireAuth, async (c) => {
       'id = ? AND profile_id = ?',
       id,
       pid
-    )
+    );
   }
   const holding = await db.first(
     c.env.DB,
     'SELECT * FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
     id,
     pid
-  )
-  return c.json(holding)
-})
+  );
+  return c.json(holding);
+});
 
 portfolioRoutes.delete('/api/portfolio/holdings/:id', requireAuth, async (c) => {
-  const pid = await getProfileId(c)
-  const id = c.req.param('id')
+  const pid = await getProfileId(c);
+  const id = c.req.param('id');
   const existing = await db.first(
     c.env.DB,
     'SELECT id FROM portfolio_holdings WHERE id = ? AND profile_id = ?',
     id,
     pid
-  )
-  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound)
-  await db.del(c.env.DB, 'portfolio_holdings', 'id = ? AND profile_id = ?', id, pid)
-  return c.json({ ok: true })
-})
+  );
+  if (!existing) throw new HttpError(404, HOLDING_MESSAGES.notFound);
+  await db.del(c.env.DB, 'portfolio_holdings', 'id = ? AND profile_id = ?', id, pid);
+  return c.json({ ok: true });
+});
 
 interface YahooQuote {
-  symbol: string
-  regularMarketPrice: number
-  regularMarketPreviousClose: number
-  regularMarketChange: number
-  regularMarketChangePercent: number
-  currency: string | null
-  shortName: string
+  symbol: string;
+  regularMarketPrice: number;
+  regularMarketPreviousClose: number;
+  regularMarketChange: number;
+  regularMarketChangePercent: number;
+  currency: string | null;
+  shortName: string;
 }
 
 // Fetch a single symbol's current price from Yahoo's v8 chart endpoint. The old v7
@@ -175,7 +175,7 @@ interface YahooQuote {
 // crumb+cookie, so prices never loaded. The v8 chart endpoint is still public and needs
 // no auth; meta carries regularMarketPrice, chartPreviousClose and the quote currency.
 async function fetchYahooQuote(symbol: string): Promise<YahooQuote | null> {
-  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com']
+  const hosts = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
   for (const host of hosts) {
     try {
       const resp = await fetch(
@@ -188,19 +188,19 @@ async function fetchYahooQuote(symbol: string): Promise<YahooQuote | null> {
             Accept: 'application/json',
           },
         }
-      )
-      if (!resp.ok) continue
-      const data = (await resp.json()) as any
-      const meta = data?.chart?.result?.[0]?.meta
-      const price = meta?.regularMarketPrice
-      if (typeof price !== 'number') continue
+      );
+      if (!resp.ok) continue;
+      const data = (await resp.json()) as any;
+      const meta = data?.chart?.result?.[0]?.meta;
+      const price = meta?.regularMarketPrice;
+      if (typeof price !== 'number') continue;
       const prev =
         typeof meta.chartPreviousClose === 'number'
           ? meta.chartPreviousClose
           : typeof meta.previousClose === 'number'
             ? meta.previousClose
-            : price
-      const change = price - prev
+            : price;
+      const change = price - prev;
       return {
         symbol: meta.symbol || symbol,
         regularMarketPrice: price,
@@ -209,31 +209,31 @@ async function fetchYahooQuote(symbol: string): Promise<YahooQuote | null> {
         regularMarketChangePercent: prev ? (change / prev) * 100 : 0,
         currency: meta.currency ?? null,
         shortName: meta.shortName || meta.longName || symbol,
-      }
+      };
     } catch {
       // Try the next host, else return null for this symbol.
     }
   }
-  return null
+  return null;
 }
 
 // Fetch prices for many symbols in parallel (the v8 endpoint is one-symbol-per-request).
 async function fetchYahooQuotes(symbols: string[]): Promise<YahooQuote[]> {
-  if (!symbols || symbols.length === 0) return []
-  const results = await Promise.all(symbols.map((s) => fetchYahooQuote(s)))
-  return results.filter((q): q is YahooQuote => q !== null)
+  if (!symbols || symbols.length === 0) return [];
+  const results = await Promise.all(symbols.map((s) => fetchYahooQuote(s)));
+  return results.filter((q): q is YahooQuote => q !== null);
 }
 
 portfolioRoutes.post('/api/portfolio/prices', requireAuth, async (c) => {
-  const b = (await c.req.json()) as Record<string, any>
-  const tickers: any[] | undefined = b.tickers
+  const b = (await c.req.json()) as Record<string, any>;
+  const tickers: any[] | undefined = b.tickers;
   if (!tickers || !Array.isArray(tickers) || tickers.length === 0) {
-    throw new HttpError(400, 'tickers array is required')
+    throw new HttpError(400, 'tickers array is required');
   }
 
-  const quotes = await fetchYahooQuotes(tickers.map((t) => String(t).toUpperCase()))
+  const quotes = await fetchYahooQuotes(tickers.map((t) => String(t).toUpperCase()));
 
-  const prices: Record<string, any> = {}
+  const prices: Record<string, any> = {};
   for (const q of quotes) {
     if (q && q.symbol && q.regularMarketPrice) {
       prices[q.symbol] = {
@@ -245,9 +245,9 @@ portfolioRoutes.post('/api/portfolio/prices', requireAuth, async (c) => {
         // to the user's base currency before computing gain.
         currency: q.currency,
         name: q.shortName,
-      }
+      };
     }
   }
 
-  return c.json(prices)
-})
+  return c.json(prices);
+});

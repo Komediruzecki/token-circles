@@ -27,8 +27,16 @@ import {
   turnOnTotp,
   verifyTwofaChallenge,
 } from '../twofa';
+import { refusalOf } from '../../../shared/refusal';
+import { SIGN_IN_MESSAGES } from '../../../shared/signInSchema';
 
 const TOTP_ISSUER = 'Token Circles';
+
+/**
+ * A code that does not match, where an authenticator code or a recovery code would do (signing
+ * in, turning two-factor off): at the code field, in the words the form uses.
+ */
+const SECOND_FACTOR_REFUSED = refusalOf({ code: SIGN_IN_MESSAGES.secondFactorRefused });
 
 /** Attempt budget per user: enough for fat fingers, useless for guessing 1e6 codes. */
 const VERIFY_LIMIT = 10;
@@ -66,7 +74,7 @@ twofaRoutes.post('/api/auth/2fa/enable', requireAuth, async (c) => {
   const matched = await verifyTotp(secret, code ?? '');
   if (matched === null) {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'enable_bad_code', userId });
-    return c.json({ error: 'That code did not match — check the app and try again' }, 401);
+    return c.json(refusalOf({ code: SIGN_IN_MESSAGES.appCodeRefused }), 401);
   }
   const recoveryCodes = generateRecoveryCodes();
   if (!(await turnOnTotp(c.env, boundTo(c), recoveryCodes))) {
@@ -130,7 +138,7 @@ twofaRoutes.post('/api/auth/2fa/disable', requireAuth, async (c) => {
   const { code } = (await c.req.json().catch(() => ({}))) as { code?: string };
   if (!(await verifySecondFactor(c, userId, code ?? ''))) {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'disable_bad_code', userId });
-    return c.json({ error: 'That code did not match' }, 401);
+    return c.json(SECOND_FACTOR_REFUSED, 401);
   }
   await clearRateLimit(c.env, bucket);
   await disableTotp(c.env, userId);
@@ -161,7 +169,7 @@ twofaRoutes.post('/api/auth/2fa/verify', async (c) => {
   const { code } = (await c.req.json().catch(() => ({}))) as { code?: string };
   if (!(await verifySecondFactor(c, userId, code ?? ''))) {
     logAuthEvent(c, { event: 'twofa', outcome: 'denied', reason: 'bad_code', userId });
-    return c.json({ error: 'That code did not match — check the app and try again' }, 401);
+    return c.json(SECOND_FACTOR_REFUSED, 401);
   }
   await clearRateLimit(c.env, bucket);
   const user = await c.env.DB.prepare('SELECT email FROM users WHERE id = ?')

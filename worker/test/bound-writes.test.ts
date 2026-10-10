@@ -10,7 +10,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { signState } from '../src/auth';
-import { createLoginCode } from '../src/login-codes';
+import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
 import { accessRows, removeAccounts, seedAccount, sessionFrom } from './helpers/account-access';
@@ -174,8 +174,9 @@ describe('a sign-in is refused when the account changed after the check', () => 
 
   it('an emailed code, when the account moved on after the code confirmed it', async () => {
     await seedAccount(UID, ADDRESS, 0);
-    const { code, id } = await createLoginCode(env, UID, ADDRESS);
-    const ceremony = (await issueLoginCodeCookie(env, id, ADDRESS)).split(';')[0]!;
+    const handle = newCodeHandle();
+    const { code } = await createLoginCode(env, UID, ADDRESS, handle);
+    const ceremony = issueLoginCodeCookie(env, handle).split(';')[0]!;
     const racing = dbWithStep(realDb, /UPDATE users SET email_verified = 1/, () =>
       bumpTokenVersion(UID)
     );

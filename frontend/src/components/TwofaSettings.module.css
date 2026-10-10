@@ -1,0 +1,27 @@
+/*
+ * The two-factor card's code steps. The instruction above each code is the field's label, laid
+ * out as the paragraph it was before it named the field.
+ */
+
+.stepLabel {
+  display: block;
+  margin: 10px 0 6px;
+}
+
+.disableLabel {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+}
+
+/* A code field, its width fixed beside its buttons. The border is set here and not on the element,
+   so the form kit's marked border (Form.module.css) takes over when the field is marked. */
+.codeInput {
+  width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: var(--bg, #0b0e14);
+  color: var(--text, #e6e8eb);
+  font-size: 14px;
+}

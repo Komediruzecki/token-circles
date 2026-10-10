@@ -4,8 +4,8 @@ import { sendMail } from '../email';
 import { renderSupportAck } from '../emailTemplates';
 import { enforce, clientIp, rateLimit } from '../ratelimit';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
-
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+import { refusalOf } from '../../../shared/refusal';
+import { noProblems, supportProblems } from '../../../shared/signInSchema';
 
 function escapeHtml(s: string): string {
   return s
@@ -40,9 +40,9 @@ supportRoutes.post('/api/support/contact', async (c) => {
   if (!captcha.ok) return captchaRejection(c, captcha);
   const email = (body.email ?? '').trim();
   const message = (body.message ?? '').trim();
-  if (!EMAIL_RE.test(email)) return c.json({ error: 'A valid email is required' }, 400);
-  if (message.length < 5) return c.json({ error: 'Please enter a message' }, 400);
-  if (message.length > 5000) return c.json({ error: 'Message is too long (5000 chars max)' }, 400);
+  // The field each problem is about, in the words the form uses (shared/signInSchema.ts).
+  const refused = supportProblems({ email, message });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
 
   // Not configured (no SUPPORT_EMAIL secret) → accept but no-op, so the UI degrades gracefully.
   if (!c.env.SUPPORT_EMAIL) {
