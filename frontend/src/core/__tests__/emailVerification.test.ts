@@ -5,7 +5,8 @@
  * in the address bar hands the hash router something it resolves to a 404, and re-announces the
  * outcome on every reload. And `fetchVerificationStatus` has to stay silent on a backend that
  * does not report the field at all — the legacy self-hosted server — rather than reading its
- * absence as "unverified" and nagging every user of it forever.
+ * absence as "unverified" and nagging every user of it forever. An address confirmed on the way
+ * into the app (noteAddressConfirmed) has to outlast the reload that follows, and be said once.
  */
 import { openDB } from 'idb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -313,6 +314,50 @@ describe('fetchVerificationStatus', () => {
     const { fetchVerificationStatus } = await load(() => Promise.reject(new Error('offline')))
 
     expect(await fetchVerificationStatus()).toBeNull()
+  })
+})
+
+describe('noteAddressConfirmed', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    localStorage.clear()
+  })
+
+  it('is said once, by the next takeEmailVerifyResult, as a confirmed address', async () => {
+    const { noteAddressConfirmed, takeEmailVerifyResult } = await load()
+
+    noteAddressConfirmed()
+
+    expect(takeEmailVerifyResult()).toEqual({ ok: true })
+    expect(takeEmailVerifyResult()).toBeNull()
+  })
+
+  it('outlasts the reload that follows: a fresh load of the module still says it', async () => {
+    const before = await load()
+    before.noteAddressConfirmed()
+
+    const after = await load()
+
+    expect(after.takeEmailVerifyResult()).toEqual({ ok: true })
+  })
+
+  it('stops the link this browser opened from waiting', async () => {
+    localStorage.setItem(
+      'tc:email-link-waiting',
+      JSON.stringify({ change: false, until: Date.now() + 60_000 })
+    )
+    const { noteAddressConfirmed, linkWaiting } = await load()
+    expect(linkWaiting()).toEqual({ change: false })
+
+    noteAddressConfirmed()
+
+    expect(linkWaiting()).toBeNull()
+  })
+
+  it('says nothing when nothing was noted', async () => {
+    const { takeEmailVerifyResult } = await load()
+
+    expect(takeEmailVerifyResult()).toBeNull()
   })
 })
 

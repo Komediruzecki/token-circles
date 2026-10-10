@@ -13,10 +13,8 @@
  * leaves it unspent, answers `signin_required`, and gives this browser a marker that scripts
  * cannot read. Once the link's account signs in here, finishEmailLink asks the worker to spend
  * it. Until then a note says a link is waiting (linkWaiting): the sign-in screen says what
- * signing in will do, and the note outlasts the reload every sign-in ends in.
- *
- * The gate is soft by design. The account works unverified; the only consequence is the banner
- * in <VerifyEmailBanner/>. Nothing here blocks anything.
+ * signing in will do, and the note outlasts the reload every sign-in ends in. A password sign-in
+ * spends a confirm link itself, and says so (noteAddressConfirmed).
  */
 import { apiFetch } from './apiFetch'
 import { getStorageMode, setStorageMode } from './storage/storageFactory'
@@ -135,9 +133,37 @@ export async function finishEmailLink(): Promise<LinkFinish | null> {
   }
 }
 
+// ── An address confirmed on the way into the app ──────────────────────────────────────────────
+
+const CONFIRMED_KEY = 'tc:email-confirmed'
+
+/**
+ * The address was just confirmed in this browser, by a password sign-in that spent the link this
+ * browser opened (signInForm.ts). Said once the app has loaded: a sign-in ends in a reload, and
+ * the second factor may come first. The link is no longer waiting.
+ */
+export function noteAddressConfirmed(): void {
+  clearLinkWaiting()
+  try {
+    sessionStorage.setItem(CONFIRMED_KEY, '1')
+  } catch {
+    // No storage: the address is confirmed all the same, only unannounced.
+  }
+}
+
+function takeAddressConfirmed(): EmailVerifyResult | null {
+  try {
+    if (sessionStorage.getItem(CONFIRMED_KEY) !== '1') return null
+    sessionStorage.removeItem(CONFIRMED_KEY)
+    return { ok: true }
+  } catch {
+    return null
+  }
+}
+
 /** The outcome of the confirm link, once. Returns null when there was nothing to report. */
 export function takeEmailVerifyResult(): EmailVerifyResult | null {
-  const result = pending
+  const result = pending ?? takeAddressConfirmed()
   pending = null
   return result
 }

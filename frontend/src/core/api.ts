@@ -168,8 +168,8 @@ export class ApiClient {
   /**
    * Register an email/password account (worker: POST /api/auth/register). Anti-enumeration:
    * the worker always resolves with a neutral ok and NO session cookie, whether or not the
-   * email already existed — the caller signs in afterwards (see the auto-sign-in flow in
-   * LoginScreen/LoginModal).
+   * email already existed. The new account signs in once its address is confirmed, so the
+   * caller shows Check your inbox (CheckInbox), not the app.
    */
   async register(email: string, password: string, turnstileToken?: string): Promise<void> {
     await this.request('/auth/register', undefined, {
@@ -182,16 +182,30 @@ export class ApiClient {
    * Email/password login (worker: POST /api/auth/login). Sets the session cookie on success —
    * unless the account has 2FA, in which case the worker parks a challenge cookie instead and
    * answers `{ twofaRequired: true }`; the caller then shows the code step (TwofaChallenge).
+   * `emailConfirmed` says this sign-in also confirmed the address, with the confirm link this
+   * browser opened before signing in.
    */
   async loginWithPassword(
     email: string,
     password: string,
     turnstileToken?: string
-  ): Promise<{ twofaRequired?: boolean }> {
+  ): Promise<{ twofaRequired?: boolean; emailConfirmed?: boolean }> {
     return (await this.request('/auth/login', undefined, {
       method: 'POST',
       body: { email, password, turnstileToken },
-    })) as { twofaRequired?: boolean }
+    })) as { twofaRequired?: boolean; emailConfirmed?: boolean }
+  }
+
+  /**
+   * Send the confirm link again, signed out (worker: POST /api/auth/verify-email/resend). Always
+   * resolves for an address the worker takes: it never says whether the address has an account,
+   * or one waiting for its link, which is the only kind it mails.
+   */
+  async resendConfirmLink(email: string, turnstileToken?: string): Promise<void> {
+    await this.request('/auth/verify-email/resend', undefined, {
+      method: 'POST',
+      body: { email, turnstileToken },
+    })
   }
 
   /**

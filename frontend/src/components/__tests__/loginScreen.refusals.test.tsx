@@ -3,9 +3,12 @@
  * client (the typed `api`, `ApiError`) with only the network answered here.
  *
  * A field that is wrong is marked and focused before anything is sent. A field the Worker names
- * is marked the same way. A wrong address or password is one message for the whole form and marks
- * neither field, whatever the answer carries. A limit reached and a request the captcha stopped are
- * said in words of their own, and mark no field. None of it is a toast.
+ * is marked the same way. A refused sign-in is one message for the whole form and marks neither
+ * field, whatever the answer carries: the Worker answers a wrong password and an address not
+ * confirmed yet the same, so the message covers both and offers the confirm link again. A limit
+ * reached and a request the captcha stopped are said in words of their own, and mark no field.
+ * None of it is a toast. Creating an account, or asking for the confirm link again, ends on Check
+ * your inbox, never in the app.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -87,6 +90,10 @@ async function mount(captcha?: Captcha) {
   await settle()
 }
 
+/** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
+const REFUSED =
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you, then sign in."
+
 const settle = async () => {
   for (let i = 0; i < 8; i += 1) await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
@@ -96,6 +103,10 @@ const email = () => host.querySelector<HTMLInputElement>('#login-email')!
 const password = () => host.querySelector<HTMLInputElement>('#login-password')!
 const notice = () => host.querySelector('[data-test-id="login-error"]')!.textContent ?? ''
 const authNotice = () => host.querySelector('[data-test-id="auth-notice"]')?.textContent ?? ''
+const sendConfirmLink = () =>
+  host.querySelector<HTMLButtonElement>('[data-test-id="send-confirm-link"]')
+const inboxAddress = () =>
+  host.querySelector('[data-test-id="check-inbox-address"]')?.textContent ?? null
 const submitButton = () => host.querySelector<HTMLButtonElement>('button[type="submit"]')!
 const describedBy = (el: HTMLElement): string[] =>
   (el.getAttribute('aria-describedby') ?? '')
@@ -121,6 +132,7 @@ function button(text: string): HTMLButtonElement {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()
   sent = []
   answers = {}
   reloads = 0
@@ -173,14 +185,14 @@ describe('signing in', () => {
     expect(submitButton().textContent).toBe('Signing in…')
   })
 
-  it('says a wrong address or password once, for the whole form, with no field marked', async () => {
+  it('says a refused sign-in once, for the whole form, as a wrong password or an address not confirmed yet, with no field marked', async () => {
     answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
     await mount()
     type(email(), 'name@example.com')
     type(password(), 'not-the-password')
     await submit()
 
-    expect(notice()).toBe('Invalid email or password')
+    expect(notice()).toBe(REFUSED)
     expect(marked(email())).toBe(false)
     expect(marked(password())).toBe(false)
     expect(toasts()).toEqual([])
@@ -201,9 +213,66 @@ describe('signing in', () => {
     type(password(), 'not-the-password')
     await submit()
 
-    expect(notice()).toBe('Invalid email or password')
+    expect(notice()).toBe(REFUSED)
     expect(marked(email())).toBe(false)
     expect(marked(password())).toBe(false)
+  })
+
+  it('offers to send the confirm link again under a refused sign-in, and not under a limit reached', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    await mount()
+    type(email(), 'name@example.com')
+    type(password(), 'the-password')
+    await submit()
+    expect(sendConfirmLink()?.textContent).toBe('Send the link again')
+
+    answers['/api/auth/login'] = () =>
+      json({ error: 'Too many attempts. Please try again in about 15 minutes.' }, 429)
+    await submit()
+    expect(sendConfirmLink()).toBeNull()
+  })
+
+  it('sends the confirm link for the address in the form from a refused sign-in, and shows Check your inbox for it', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    answers['/api/auth/verify-email/resend'] = () => json({ ok: true })
+    await mount()
+    type(email(), ' name@example.com ')
+    type(password(), 'the-password')
+    await submit()
+    sendConfirmLink()!.click()
+    await settle()
+
+    expect(sent.slice(1)).toEqual([
+      {
+        url: '/api/auth/verify-email/resend',
+        body: { email: 'name@example.com', turnstileToken: '' },
+      },
+    ])
+    expect(inboxAddress()).toBe('name@example.com')
+    expect(reloads).toBe(0)
+  })
+
+  it('notes a sign-in that also confirmed the address, for the app to say once it has loaded', async () => {
+    answers['/api/auth/login'] = () =>
+      json({ id: 7, email: 'name@example.com', emailConfirmed: true })
+    await mount()
+    type(email(), 'name@example.com')
+    type(password(), 'the-password')
+    await submit()
+
+    expect(reloads).toBe(1)
+    expect(sessionStorage.getItem('tc:email-confirmed')).toBe('1')
+  })
+
+  it('notes nothing for a sign-in that did not confirm the address', async () => {
+    answers['/api/auth/login'] = () => json({ id: 7, email: 'name@example.com' })
+    await mount()
+    type(email(), 'name@example.com')
+    type(password(), 'the-password')
+    await submit()
+
+    expect(reloads).toBe(1)
+    expect(sessionStorage.getItem('tc:email-confirmed')).toBeNull()
   })
 
   it('says when to try again once the limit is reached, with no field marked', async () => {
@@ -304,24 +373,60 @@ describe('creating an account', () => {
     expect(sent).toEqual([])
   })
 
-  it('hands over to signing in by hand when the new password does not sign in', async () => {
+  it('shows Check your inbox for the address, and signs in to nothing', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
-    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
     await mount()
     button('Create one').click()
     await settle()
     type(email(), 'name@example.com')
     type(password(), 'a-new-password')
     await submit()
+
+    expect(sent.map((s) => s.url)).toEqual(['/api/auth/register'])
+    expect(inboxAddress()).toBe('name@example.com')
+    expect(host.querySelector('#login-password')).toBeNull()
+    expect(reloads).toBe(0)
+  })
+
+  it('sends the link again from Check your inbox, for the same address, and says one is on its way', async () => {
+    answers['/api/auth/register'] = () => json({ ok: true })
+    answers['/api/auth/verify-email/resend'] = () => json({ ok: true })
+    await mount()
+    button('Create one').click()
+    await settle()
+    type(email(), 'name@example.com')
+    type(password(), 'a-new-password')
+    await submit()
+    host.querySelector<HTMLButtonElement>('[data-test-id="check-inbox-resend"]')!.click()
     await settle()
 
-    expect(sent.map((s) => s.url)).toEqual(['/api/auth/register', '/api/auth/login'])
-    expect(authNotice()).toBe('Almost done — sign in with your password below.')
+    expect(sent.slice(1)).toEqual([
+      {
+        url: '/api/auth/verify-email/resend',
+        body: { email: 'name@example.com', turnstileToken: '' },
+      },
+    ])
+    expect(host.querySelector('[data-test-id="check-inbox-sent"]')?.textContent).toBe(
+      'If that address is waiting for its link, a new one is on its way.'
+    )
+  })
+
+  it('goes back from Check your inbox to signing in, with the address kept and no password', async () => {
+    answers['/api/auth/register'] = () => json({ ok: true })
+    await mount()
+    button('Create one').click()
+    await settle()
+    type(email(), 'name@example.com')
+    type(password(), 'a-new-password')
+    await submit()
+    host.querySelector<HTMLButtonElement>('[data-test-id="check-inbox-back"]')!.click()
+    await settle()
+
+    expect(inboxAddress()).toBeNull()
     expect(submitButton().textContent).toBe('Sign in')
     expect(email().value).toBe('name@example.com')
     expect(password().value).toBe('')
     expect(notice()).toBe('')
-    expect(marked(email())).toBe(false)
   })
 })
 
