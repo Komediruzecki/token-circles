@@ -2,7 +2,7 @@ import { createSignal, onMount, Show } from 'solid-js'
 import { resetPasswordProblems, SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
-import { ApiError } from '../core/apiError'
+import { ApiError, plainMessage } from '../core/apiError'
 import { setStorageMode } from '../core/storage/storageFactory'
 import { createForm, Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
@@ -16,6 +16,10 @@ import type { FieldErrors } from '../../../shared/refusal'
  * (#reset-password?token=…). Validates the token up front, then lets the user pick a new
  * password; the worker deliberately does not sign them in, so on success we drop into
  * server mode and reload onto the sign-in screen.
+ *
+ * A link the Worker answers does not work (unknown, spent or expired) shows the screen that says
+ * to ask for a new one. A check that failed says so, with the kit's words for the failure, and
+ * Try again checks the link again.
  *
  * A kit form: a password shorter than 8 characters, and a second entry that differs from the
  * first, are marked under their fields before anything is sent. A link that stopped working while
@@ -38,7 +42,21 @@ type ResetOutcome = 'done' | 'link-gone'
 
 export default function ResetPassword() {
   const token = tokenFromHash()
-  const [status, setStatus] = createSignal<'checking' | 'ready' | 'invalid' | 'done'>('checking')
+  const [status, setStatus] = createSignal<'checking' | 'ready' | 'invalid' | 'unchecked' | 'done'>(
+    'checking'
+  )
+  // Why the last check of the link failed, in the kit's words.
+  const [checkFailed, setCheckFailed] = createSignal('')
+
+  const checkLink = async () => {
+    setStatus('checking')
+    try {
+      setStatus((await api.validateResetToken(token)) ? 'ready' : 'invalid')
+    } catch (error) {
+      setCheckFailed(plainMessage(error, SIGN_IN_FAILED))
+      setStatus('unchecked')
+    }
+  }
 
   onMount(async () => {
     if (!token) {
@@ -49,11 +67,7 @@ export default function ResetPassword() {
     // local-first. Account mode from here, as Sign In switches it, so the check and the new
     // password reach the server. The device's local data is not touched.
     setStorageMode('self-hosted')
-    try {
-      setStatus((await api.validateResetToken(token)) ? 'ready' : 'invalid')
-    } catch {
-      setStatus('invalid')
-    }
+    await checkLink()
   })
 
   const form = createForm<NewPassword, ResetOutcome>({
@@ -146,6 +160,36 @@ export default function ResetPassword() {
           >
             Back to sign in
           </button>
+        </Show>
+
+        <Show when={status() === 'unchecked'}>
+          <p style={{ color: 'var(--text-secondary)', 'font-size': '14px', margin: '0 0 8px' }}>
+            Your reset link wasn't checked, so it may still work.
+          </p>
+          <p
+            data-test-id="reset-check-failed"
+            style={{ color: 'var(--text-secondary)', 'font-size': '14px', margin: '0 0 16px' }}
+          >
+            {checkFailed()}
+          </p>
+          <div style={{ display: 'flex', 'flex-direction': 'column', gap: '8px' }}>
+            <button
+              class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
+              style={{ 'justify-content': 'center' }}
+              onClick={() => void checkLink()}
+              type="button"
+            >
+              Try again
+            </button>
+            <button
+              class={`${layoutStyles.btn} ${layoutStyles.btnSecondary}`}
+              style={{ 'justify-content': 'center' }}
+              onClick={goToLogin}
+              type="button"
+            >
+              Back to sign in
+            </button>
+          </div>
         </Show>
 
         <Show when={status() === 'done'}>

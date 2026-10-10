@@ -205,13 +205,18 @@ export class ApiClient {
     })
   }
 
-  /** Check whether a reset token is still valid (worker: GET /api/auth/reset-password?token=). */
+  /**
+   * Whether a reset link still works, as the Worker answers it (GET /api/auth/reset-password?token=):
+   * `valid: false` for a link that is unknown, spent or expired. Throws when the check fails: no
+   * answer, an error, or an answer that does not say.
+   */
   async validateResetToken(token: string): Promise<boolean> {
-    const r = await this.request<{ valid?: boolean }>(
+    const r = await this.request<{ valid?: unknown }>(
       `/auth/reset-password?token=${encodeURIComponent(token)}`,
       undefined
     )
-    return !!r?.valid
+    if (typeof r?.valid !== 'boolean') throw new Error('The reset link check did not say')
+    return r.valid
   }
 
   /**
