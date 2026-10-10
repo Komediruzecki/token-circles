@@ -14,6 +14,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
 import { signCapability } from '../src/signed-url';
+import { apiTokenRow } from './helpers/capability';
 
 const USER_ID = 9600;
 const PROFILE_ID = 9601;
@@ -57,10 +58,12 @@ async function seed(): Promise<void> {
   await env.DB.prepare('DELETE FROM import_logs WHERE profile_id = ?').bind(PROFILE_ID).run();
   await env.DB.prepare('DELETE FROM accounts WHERE profile_id = ?').bind(PROFILE_ID).run();
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, token_version) VALUES (?, 'xlsx@example.com', 'pbkdf2$100000$x$y', 'password', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, email_verified, token_version) VALUES (?, 'xlsx@example.com', 'pbkdf2$100000$x$y', 'password', 1, 1)"
   )
     .bind(USER_ID)
     .run();
+  // The API token the capabilities here name: the route reads it when a capability is used.
+  await apiTokenRow('tok-xlsx', USER_ID);
   await env.DB.prepare(
     "INSERT OR IGNORE INTO profiles (id, name, user_id) VALUES (?, 'Sheet Profile', ?)"
   )

@@ -4,8 +4,10 @@ import { autoDetectMapping } from '../../../shared/importMapping';
 import { detectBank, getAdapter, processFiles, toDetectInput } from '../../../shared/bankImport';
 import type { BankId } from '../../../shared/bankImport';
 import type { AppEnv } from '../index';
+import { EMAIL_UNCONFIRMED, emailUnconfirmed } from '../auth';
 import { HttpError } from '../http';
 import { verifyCapability } from '../signed-url';
+import type { Capability } from '../signed-url';
 import { assessImport } from '../import-gate';
 import { parseAttachment } from '../import-email';
 import { localToday } from '../local-date';
@@ -18,22 +20,47 @@ import * as db from '../db';
 // more importantly, the file bytes never travel through an MCP tool argument.
 export const v1Routes = new Hono<AppEnv>();
 
+/**
+ * Whether a capability still holds, read in one query when it is used, since it was signed up to
+ * 15 minutes before:
+ * - its profile still belongs to the user it was minted for: a profile can be deleted or
+ *   reassigned inside the window (403);
+ * - the API token it was minted from is live: revoking the token ends the links it handed out,
+ *   and `expired` is said, as for a link past its time (401);
+ * - the account is not waiting for its confirm link, which requireToken answers for the token
+ *   itself (403 EMAIL_UNCONFIRMED).
+ * Null when it holds; otherwise the answer.
+ */
+async function capabilityRefused(
+  c: Context<AppEnv>,
+  cap: Capability,
+  expired: string
+): Promise<Response | null> {
+  const account = await db.first<{ auth_provider: string; email_verified: number; live: number }>(
+    c.env.DB,
+    `SELECT u.auth_provider, u.email_verified,
+            EXISTS (SELECT 1 FROM api_tokens t
+                     WHERE t.id = ? AND t.user_id = u.id AND t.revoked_at IS NULL) AS live
+       FROM profiles p JOIN users u ON u.id = p.user_id
+      WHERE p.id = ? AND p.user_id = ?`,
+    cap.tokenId,
+    cap.profileId,
+    cap.userId
+  );
+  if (!account) throw new HttpError(403, 'That profile does not belong to this user.');
+  if (!account.live) return c.json({ error: expired }, 401);
+  if (emailUnconfirmed(account)) return c.json(EMAIL_UNCONFIRMED, 403);
+  return null;
+}
+
 v1Routes.post('/api/v1/import', async (c) => {
   const secret = c.env.JWT_SECRET;
   if (!secret) throw new HttpError(503, 'Server is not configured for signed uploads.');
 
   const cap = await verifyCapability(c.req.query('sig') ?? '', 'import', secret);
   if (!cap) return c.json({ error: 'Invalid or expired upload link.' }, 401);
-
-  // The capability names a profile; confirm it still belongs to the user it was minted for.
-  // A profile can be deleted or reassigned inside the 15-minute window.
-  const owned = await db.first(
-    c.env.DB,
-    'SELECT 1 AS ok FROM profiles WHERE id = ? AND user_id = ?',
-    cap.profileId,
-    cap.userId
-  );
-  if (!owned) throw new HttpError(403, 'That profile does not belong to this user.');
+  const refused = await capabilityRefused(c, cap, 'Invalid or expired upload link.');
+  if (refused) return refused;
 
   // Its own bucket: sharing `import:` with the three cookie-authed UI import routes let an
   // agent's batch upload spend the quota a person needs to import a file by hand.
@@ -269,14 +296,8 @@ v1Routes.get('/api/v1/snapshot', async (c) => {
 
   const cap = await verifyCapability(c.req.query('sig') ?? '', 'snapshot', secret);
   if (!cap) return c.json({ error: 'Invalid or expired download link.' }, 401);
-
-  const owned = await db.first(
-    c.env.DB,
-    'SELECT 1 AS ok FROM profiles WHERE id = ? AND user_id = ?',
-    cap.profileId,
-    cap.userId
-  );
-  if (!owned) throw new HttpError(403, 'That profile does not belong to this user.');
+  const refused = await capabilityRefused(c, cap, 'Invalid or expired download link.');
+  if (refused) return refused;
 
   const limited = await enforce(c, `snapshot:${cap.userId}`, 10, 300);
   if (limited) return limited;
