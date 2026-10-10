@@ -218,6 +218,7 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'GET /api/auth/sessions': 'Signing in. Local-first has no account to sign in to.',
   'DELETE /api/auth/sessions/:id': 'Signing in. Local-first has no account to sign in to.',
   'GET /api/auth/verify-email': 'Signing in. Local-first has no account to sign in to.',
+  'POST /api/auth/verify-email/resend': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/email-link/finish':
     'Signing in. Local-first has no account to sign in to; a link that asks for a sign-in switches the device to cloud mode first (core/emailVerification.ts).',
   'POST /api/import/file-sheet':

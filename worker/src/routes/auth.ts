@@ -622,6 +622,62 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) =>
   return done(spent, change);
 });
 
+/**
+ * The work a signed-out "Send the link again" does after its answer: when `email` belongs to a
+ * password account waiting for its confirm link, mint a fresh link, which retires the ones it had,
+ * and mail it. An address with no account, a confirmed one and a Google account's get nothing.
+ */
+async function mailConfirmLinkIfWaiting(
+  env: Env,
+  email: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const user = await env.DB.prepare(
+    'SELECT id, email_verified, auth_provider FROM users WHERE email = ?'
+  )
+    .bind(email)
+    .first<{ id: number; email_verified: number; auth_provider: string }>();
+  if (!user || !emailUnconfirmed(user)) return;
+  const token = await createEmailVerification(env.DB, user.id, email);
+  const mail = renderEmailVerification({
+    link: verifyLink(apiOrigin, token, base),
+    ttlHours: VERIFY_TOKEN_TTL_HOURS,
+    assetOrigin: base,
+  });
+  await sendMail(env, email, mail.subject, mail.html, { text: mail.text });
+}
+
+// Send the confirm link again, signed out: from Check your inbox after signing up, and from the
+// sign-in form when a password sign-in is refused. It takes an address, and the answer is the same
+// for every address, whether it has no account, a confirmed one, a Google account or one waiting
+// for its link: the work comes after the answer (mailConfirmLinkIfWaiting). Its limits and captcha
+// are a reset request's, with buckets of its own, and they run before anything looks at the
+// address.
+authRoutes.post('/api/auth/verify-email/resend', async (c) => {
+  const ipRl = await enforce(c, `confirm-resend-ip:${clientIp(c)}`, 5, 900);
+  if (ipRl) return ipRl;
+  const body = (await c.req.json().catch(() => ({}))) as {
+    email?: string;
+    turnstileToken?: string;
+  };
+  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
+  if (!captcha.ok) return captchaRejection(c, captcha);
+  const email = (body.email ?? '').trim().toLowerCase();
+  const refused = addressProblems({ email });
+  if (!noProblems(refused)) return c.json(refusalOf(refused), 400);
+  const emailRl = await enforce(c, `confirm-resend-email:${email}`, 3, 3600);
+  if (emailRl) return emailRl;
+
+  const base = c.env.CORS_ORIGIN || c.env.APP_ORIGINS?.split(',')[0] || new URL(c.req.url).origin;
+  c.executionCtx.waitUntil(
+    mailConfirmLinkIfWaiting(c.env, email, base, new URL(c.req.url).origin).catch((e: unknown) => {
+      console.error('Confirm link could not be sent again:', e);
+    })
+  );
+  return c.json({ ok: true });
+});
+
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
 // keep secret — the caller has already proved the account is theirs, and a 429 can be shown.
 // An account waiting for its confirm link reaches it: this is the Confirm your email screen's
