@@ -1,5 +1,6 @@
 import { resolveHeaderMapping } from '../../shared/importMapping';
 import type { Env } from './index';
+import { notWaitingForConfirmLinkSql } from './auth';
 import * as db from './db';
 import { executeImport, fetchGoogleSheetRows } from './routes/imports';
 
@@ -28,12 +29,18 @@ const parseJson = (v: string | null): any => {
 };
 
 // Best-effort per source: one failing sheet must not stop the rest. Runs only on the daily trigger
-// so the Monday/1st-15th reminder crons don't re-sync.
+// so the Monday/1st-15th reminder crons don't re-sync. The sources of an account waiting for its
+// confirm link are left alone: until the address is confirmed the account reaches nothing, its
+// imports included, and its sheets sync again from the first run after.
 export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<void> {
   if (cron !== '0 8 * * *') return;
   const sources = await db.all<SourceRow>(
     env.DB,
-    "SELECT id, profile_id, kind, config, mapping, category_types FROM import_sources WHERE schedule = 'daily' AND kind = 'google_sheet'"
+    `SELECT s.id, s.profile_id, s.kind, s.config, s.mapping, s.category_types
+       FROM import_sources s
+       LEFT JOIN profiles p ON p.id = s.profile_id
+       LEFT JOIN users u ON u.id = p.user_id
+      WHERE s.schedule = 'daily' AND s.kind = 'google_sheet' AND ${notWaitingForConfirmLinkSql('u')}`
   );
   for (const src of sources) {
     try {

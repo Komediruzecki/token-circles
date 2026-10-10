@@ -1,4 +1,5 @@
 import type { Env } from './index';
+import { notWaitingForConfirmLinkSql } from './auth';
 import * as db from './db';
 import { sendMail } from './email';
 import { planHasFeature, planLimit } from './plans';
@@ -499,11 +500,14 @@ export async function composeReminderPreview(
 }
 
 // ── Cron dispatch (scheduled handler) ────────────────────────────────────────
+// An account waiting for its confirm link gets no reminder: its address is not confirmed, and the
+// app the mail points to shows it nothing but Confirm your email until it is.
 async function usersWithEmail(env: Env): Promise<UserRow[]> {
   return db.all<UserRow>(
     env.DB,
     `SELECT id, email, plan, notifications_unsubscribed, unsubscribe_token
-     FROM users WHERE email IS NOT NULL AND email != ''`
+     FROM users
+     WHERE email IS NOT NULL AND email != '' AND ${notWaitingForConfirmLinkSql('users')}`
   );
 }
 

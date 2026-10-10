@@ -281,6 +281,15 @@ export function emailUnconfirmed(row: {
 }
 
 /**
+ * The opposite of emailUnconfirmed in SQL, for the work that runs with no request in front of it:
+ * the account in `users` (the name the query gives the users table) does not wait for its confirm
+ * link. A query that LEFT JOINs users and finds no account counts it as not waiting.
+ */
+export function notWaitingForConfirmLinkSql(users: string): string {
+  return `(${users}.auth_provider IS NOT 'password' OR ${users}.email_verified <> 0)`;
+}
+
+/**
  * What a session or API token of an account waiting for its confirm link is answered, with 403,
  * on a route that needs a confirmed address. `code` is what the app reads; `error` is for anyone
  * else.
