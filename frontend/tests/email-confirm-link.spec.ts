@@ -401,7 +401,7 @@ for (const boot of BOOTS) {
       }
     })
 
-    test(`the marker of a link that expired since does not let the password in (${boot})`, async ({
+    test(`the marker of a link that expired since does not let the password in, and a fresh browser that opens it is told why (${boot})`, async ({
       page,
       context,
       request,
@@ -428,6 +428,22 @@ for (const boot of BOOTS) {
         await refusedSignIn(page, email)
 
         expect(accountState(email)).toMatchObject({ email_verified: 0, waiting: 1 })
+
+        // A fresh browser opens the link: no cookies, nothing stored.
+        await context.clearCookies()
+        await page.evaluate(() => {
+          localStorage.clear()
+        })
+        const fragment = await openLink(page, link)
+        expect(fragment).toBe('#everified_error=expired')
+        await land(page, fragment)
+        await expect(page.getByTestId('link-problem')).toContainText(
+          'That link has expired. Send the link again for a fresh one.',
+          { timeout: 30_000 }
+        )
+        await expect(page.getByTestId('link-problem-resend')).toBeVisible()
+        // A local-first browser moved to account mode to get here.
+        expect(await storedMode(page)).toBe('self-hosted')
       } finally {
         await deleteRunAccounts(page, [email])
       }

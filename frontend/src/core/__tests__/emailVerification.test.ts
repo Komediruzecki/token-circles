@@ -154,17 +154,56 @@ describe('a link that needs a sign-in first', () => {
     deleteDatabase.mockRestore()
   })
 
-  it('leaves every other outcome for the banner, and the mode as it was', async () => {
+  it('leaves a confirmed address for the banner, and the mode as it was', async () => {
     localStorage.setItem('finance_storage_mode', 'serverless')
-    history.replaceState(null, '', '/#everified_error=expired')
+    history.replaceState(null, '', '/#everified=1')
     const { consumeEmailVerifyRedirect, linkWaiting, takeEmailVerifyResult } = await load()
 
     consumeEmailVerifyRedirect()
 
     expect(linkWaiting()).toBeNull()
-    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired' })
+    expect(takeEmailVerifyResult()).toEqual({ ok: true })
     expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
   })
+
+  it('leaves a change of address that did not finish for the banner, and the mode as it was', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified_error=expired&change=1')
+    const { consumeEmailVerifyRedirect, takeConfirmLinkProblem, takeEmailVerifyResult } =
+      await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(takeConfirmLinkProblem()).toBeNull()
+    expect(takeEmailVerifyResult()).toEqual({ ok: false, error: 'expired', change: true })
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  })
+})
+
+describe('a confirm link that did not confirm, opened in a fresh browser', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  for (const [error, words] of [
+    ['expired', 'That link has expired. Send the link again for a fresh one.'],
+    ['invalid_or_used', "That link doesn't work anymore. Send the link again for a fresh one."],
+  ] as const) {
+    it(`moves the device to account mode, and keeps why for the sign-in screen (${error})`, async () => {
+      // frontend/.env, which the tests read, sets VITE_DEFAULT_STORAGE=dexie, as production does.
+      history.replaceState(null, '', `/#everified_error=${error}`)
+      const { consumeEmailVerifyRedirect, linkWaiting, takeConfirmLinkProblem } = await load()
+      const { getStorageMode } = await import('../storage/storageFactory')
+      expect(localStorage.getItem('finance_storage_mode')).toBeNull()
+      expect(getStorageMode()).toBe('serverless')
+
+      consumeEmailVerifyRedirect()
+
+      expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
+      expect(linkWaiting()).toBeNull()
+      expect(takeConfirmLinkProblem()).toBe(words)
+    })
+  }
 })
 
 describe('finishEmailLink', () => {

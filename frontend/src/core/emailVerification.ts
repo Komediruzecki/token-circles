@@ -38,10 +38,16 @@ let pending: EmailVerifyResult | null = null
  * outcome on every reload.
  *
  * A link that needs a sign-in is noted as waiting, and the device moves to account mode, because
- * local-first mode has no sign-in screen. The switch is the one Sign In makes from local-first
- * mode (App.handleLogin): data kept on the device is not touched, and choosing local-first again
+ * local-first mode has no sign-in screen. So does a confirm link that did not confirm (it had
+ * expired, or had been used or replaced): the sign-in screen says why, with a way to send a fresh
+ * one (takeConfirmLinkProblem). The switch is the one Sign In makes from local-first mode
+ * (App.handleLogin): data kept on the device is not touched, and choosing local-first again
  * (Settings, or the sign-in screen's way in without an account) brings it back. Being early is
  * what makes it cheap: the app reads the mode on the way in, so it comes up on the sign-in screen.
+ *
+ * A change-of-address link that did not finish leaves the mode as it was. The sign-in screen has
+ * no words for it, and the outcome would not outlast the reload a sign-in ends in, while in
+ * local-first mode the banner (VerifyEmailBanner) says it, with what to do in Settings.
  */
 export function consumeEmailVerifyRedirect(): void {
   const hash = window.location.hash
@@ -51,7 +57,7 @@ export function consumeEmailVerifyRedirect(): void {
   history.replaceState(null, '', window.location.pathname + window.location.search)
   if (params.get('everified') !== '1' && params.get('everified_error') === 'signin_required') {
     noteLinkWaiting(change)
-    if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
+    toAccountMode()
     return
   }
   const changed = change ? ({ change: true } as const) : {}
@@ -59,6 +65,11 @@ export function consumeEmailVerifyRedirect(): void {
     params.get('everified') === '1'
       ? { ok: true, ...changed }
       : { ok: false, error: params.get('everified_error') ?? 'unknown', ...changed }
+  if (!pending.ok && !change) toAccountMode()
+}
+
+function toAccountMode(): void {
+  if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
 }
 
 // ── A link waiting for a sign-in ──────────────────────────────────────────────────────────────

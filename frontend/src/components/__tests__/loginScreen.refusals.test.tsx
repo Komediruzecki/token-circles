@@ -79,7 +79,11 @@ async function mount(captcha?: Captcha, opened?: string) {
       Promise.resolve(passkeyAnswer ?? { ok: false, error: 'x', aborted: true }),
   }))
   vi.doMock('../../core/appVersion', () => ({ displayVersion: () => '9.9.9' }))
-  vi.doMock('../../core/storage/storageFactory', () => ({ setStorageMode: () => undefined }))
+  // The sign-in screen is account mode's.
+  vi.doMock('../../core/storage/storageFactory', () => ({
+    getStorageMode: () => 'self-hosted',
+    setStorageMode: () => undefined,
+  }))
   vi.doMock('../SupportContact', () => ({ default: () => null }))
   vi.doMock('../EmailCodeLogin', () => ({ default: () => null }))
   vi.doMock('../TwofaChallenge', () => ({
