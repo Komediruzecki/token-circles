@@ -319,7 +319,7 @@ describe('while the look-up of the address is held', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const holding = dbWithStep(realDb, /SELECT id FROM users WHERE email = \?/, () => held);
+    const holding = dbWithStep(realDb, /FROM users WHERE email = \?/, () => held);
     const accounts = async () =>
       (
         await realDb

@@ -186,6 +186,20 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   });
 });
 
+/** An account as signing up, and sending its confirm link again, look one up. */
+interface AccountAtAddress {
+  id: number;
+  email_verified: number;
+  auth_provider: string;
+}
+
+/** The account at `email`, or null. */
+function lookUpAddress(env: Env, email: string): Promise<AccountAtAddress | null> {
+  return env.DB.prepare('SELECT id, email_verified, auth_provider FROM users WHERE email = ?')
+    .bind(email)
+    .first<AccountAtAddress>();
+}
+
 /**
  * The account at `email` (`found`), or the one sign-up makes there (`made`, with the token of its
  * first confirm link). The account, its profile and that link are written in one batch, so a
@@ -195,10 +209,8 @@ async function accountAt(
   env: Env,
   email: string,
   passwordHash: string
-): Promise<{ found: { id: number } } | { made: { token: string } }> {
-  const found = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
+): Promise<{ found: AccountAtAddress } | { made: { token: string } }> {
+  const found = await lookUpAddress(env, email);
   if (found) return { found };
   const token = randomToken();
   await env.DB.batch([
@@ -215,8 +227,9 @@ async function accountAt(
 
 /**
  * The work a sign-up does after its answer. A new address gets an account, with a profile, and
- * its welcome mail with the confirm link. An address that has an account already gets a notice
- * that someone tried, and nothing else changes.
+ * its welcome mail with the confirm link. A password account waiting for its confirm link gets a
+ * fresh one, as Send the link again would mail it, and keeps its password. Any other address with
+ * an account gets a notice that someone tried, and nothing else changes.
  *
  * Finding or making the account runs a second time when the first try fails. A second failure
  * reaches the caller, which logs it: the answer has gone.
@@ -232,6 +245,14 @@ async function signUpAfterAnswer(
   const account = await accountAt(env, email, passwordHash).catch(() =>
     accountAt(env, email, passwordHash)
   );
+  if ('found' in account && emailUnconfirmed(account.found)) {
+    await mailFreshConfirmLink(env, account.found.id, email, base, apiOrigin).catch(
+      (e: unknown) => {
+        console.error('Confirm link could not be sent again:', e);
+      }
+    );
+    return;
+  }
   if ('found' in account) {
     const notice = renderAccountExists({ appUrl: base });
     await sendMail(env, email, notice.subject, notice.html, { text: notice.text }).catch(
@@ -642,8 +663,8 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) =>
 
 /**
  * The work a signed-out "Send the link again" does after its answer: when `email` belongs to a
- * password account waiting for its confirm link, mint a fresh link, which retires the ones it had,
- * and mail it. An address with no account, a confirmed one and a Google account's get nothing.
+ * password account waiting for its confirm link, mail it a fresh link (mailFreshConfirmLink). An
+ * address with no account, a confirmed one and a Google account's get nothing.
  */
 async function mailConfirmLinkIfWaiting(
   env: Env,
@@ -651,13 +672,20 @@ async function mailConfirmLinkIfWaiting(
   base: string,
   apiOrigin: string
 ): Promise<void> {
-  const user = await env.DB.prepare(
-    'SELECT id, email_verified, auth_provider FROM users WHERE email = ?'
-  )
-    .bind(email)
-    .first<{ id: number; email_verified: number; auth_provider: string }>();
+  const user = await lookUpAddress(env, email);
   if (!user || !emailUnconfirmed(user)) return;
-  const token = await createEmailVerification(env.DB, user.id, email);
+  await mailFreshConfirmLink(env, user.id, email, base, apiOrigin);
+}
+
+/** Mint a fresh confirm link for account `userId`, which retires the ones it had, and mail it. */
+async function mailFreshConfirmLink(
+  env: Env,
+  userId: number,
+  email: string,
+  base: string,
+  apiOrigin: string
+): Promise<void> {
+  const token = await createEmailVerification(env.DB, userId, email);
   const mail = renderEmailVerification({
     link: verifyLink(apiOrigin, token, base),
     ttlHours: VERIFY_TOKEN_TTL_HOURS,
