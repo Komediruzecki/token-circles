@@ -88,23 +88,21 @@ describe('the confirm link’s outcome', () => {
     bootResult = { ok: false, error: 'expired' }
     await mount()
 
-    expect(toasts).toEqual([{ message: 'That confirmation link has expired.', type: 'error' }])
+    expect(toasts).toEqual([{ message: 'That link has expired.', type: 'error' }])
   })
 
   it('does not guess at a reason it was not given', async () => {
     bootResult = { ok: false, error: 'invalid_or_used' }
     await mount()
 
-    expect(toasts[0].message).toBe('That confirmation link is no longer valid')
+    expect(toasts[0].message).toBe("That link doesn't work anymore.")
   })
 
   it('answers a reason it does not know with its own fixed words', async () => {
     bootResult = { ok: false, error: 'a_reason_added_later' }
     await mount()
 
-    expect(toasts).toEqual([
-      { message: 'That confirmation link is no longer valid', type: 'error' },
-    ])
+    expect(toasts).toEqual([{ message: "That link doesn't work anymore.", type: 'error' }])
   })
 
   it('says nothing when the user simply opened the app', async () => {
@@ -322,8 +320,6 @@ describe('the email change link’s outcome', () => {
     bootResult = { ok: false, error: 'a_reason_added_later', change: true }
     await mount()
 
-    expect(toasts).toEqual([
-      { message: 'That confirmation link is no longer valid', type: 'error' },
-    ])
+    expect(toasts).toEqual([{ message: "That link doesn't work anymore.", type: 'error' }])
   })
 })

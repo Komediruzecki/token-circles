@@ -49,16 +49,16 @@ function announce(result: EmailVerifyResult): void {
     } else if (result.error === 'email_taken') {
       toast('Another account uses that address now, so your email stays as it was.', 'error')
     } else {
-      toast('That confirmation link is no longer valid', 'error')
+      toast("That link doesn't work anymore.", 'error')
     }
     return
   }
   if (result.ok) {
     toast('Email confirmed. Your account is all set.', 'success')
   } else if (result.error === 'expired') {
-    toast('That confirmation link has expired.', 'error')
+    toast('That link has expired.', 'error')
   } else {
-    toast('That confirmation link is no longer valid', 'error')
+    toast("That link doesn't work anymore.", 'error')
   }
 }
 
