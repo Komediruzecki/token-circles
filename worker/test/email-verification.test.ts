@@ -233,9 +233,10 @@ describe('GET /api/auth/verify-email, opened where its account is not signed in'
 });
 
 describe('the welcome mail of a new sign-up', () => {
-  // Registration sets no session, and the app signs in straight after with the same password
-  // (LoginScreen), so the browser that signed up is signed in when the mail arrives. The mail is
-  // caught here, as in forgot-password.test.ts, so the test opens the link the Worker sent.
+  // Registration sets no session, and an account waiting for its link signs in with its password
+  // only together with that link. So the link is opened signed out, it asks for a sign-in, and
+  // the password sign-in in that browser confirms the address. The mail is caught here, as in
+  // forgot-password.test.ts, so the test opens the link the Worker sent.
   const ADDRESS = 'fresh-signup@example.com';
   const SIGNUP_PASSWORD = 'correct horse battery staple';
   const realFetch = globalThis.fetch;
@@ -284,20 +285,23 @@ describe('the welcome mail of a new sign-up', () => {
     return { id: user!.id, link: link![0] };
   }
 
-  it('confirms the address when opened in the browser that signed up', async () => {
+  it('confirms the address with the password sign-in in the browser that opened it', async () => {
     const { id, link } = await signUp();
-    const signedInAfterSignUp = await post('/api/auth/login', {
-      email: ADDRESS,
-      password: SIGNUP_PASSWORD,
+    const opened = await SELF.fetch(link, { redirect: 'manual' });
+    expect(opened.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required`);
+    const marker = opened.headers
+      .getSetCookie()
+      .find((line) => line.startsWith('fm_email_link='))!
+      .split(';')[0]!;
+
+    const signedIn = await fetchSettled('https://api.example.com/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: marker },
+      body: JSON.stringify({ email: ADDRESS, password: SIGNUP_PASSWORD }),
     });
-    expect(signedInAfterSignUp.status).toBe(200);
-    const session = /(?:^|[,;]\s*)(fm_session=[^;,]+)/.exec(
-      signedInAfterSignUp.headers.get('Set-Cookie') ?? ''
-    )![1];
 
-    const res = await SELF.fetch(link, { redirect: 'manual', headers: { Cookie: session } });
-
-    expect(res.headers.get('Location')).toBe(`${APP}/#everified=1`);
+    expect(signedIn.status).toBe(200);
+    expect(await signedIn.json()).toEqual({ id, email: ADDRESS, emailConfirmed: true });
     expect(await isVerified(id)).toBe(1);
   });
 

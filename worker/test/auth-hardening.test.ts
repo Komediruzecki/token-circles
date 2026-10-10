@@ -40,7 +40,7 @@ describe('password hashing (audit S7)', () => {
     const password = 'correct horse battery staple';
     const stored = await hashPassword(password);
     await env.DB.prepare(
-      "INSERT INTO users (id, email, password_hash, auth_provider, token_version) VALUES (701, ?, ?, 'password', 1)"
+      "INSERT INTO users (id, email, password_hash, auth_provider, email_verified, token_version) VALUES (701, ?, ?, 'password', 1, 1)"
     )
       .bind(email, stored)
       .run();

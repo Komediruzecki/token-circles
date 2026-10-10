@@ -8,6 +8,7 @@ import {
   clearedAccess,
   clearedWorthSaying,
   clearUnconfirmedAccess,
+  emailUnconfirmed,
   requireAuth,
   requireAuthEvenUnconfirmed,
   verifyGoogleIdToken,
@@ -27,6 +28,7 @@ import { sendMail } from '../email';
 import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
 import {
   clearedMarker,
+  confirmWithOwnLink,
   EMAIL_LINK_COLUMNS,
   EMAIL_LINK_FINISH_PATH,
   linkExpired,
@@ -274,6 +276,9 @@ const LOGIN_WINDOW_SEC = 900;
 const LOGIN_IP_LIMIT = 30;
 const LOGIN_EMAIL_LIMIT = 10;
 
+/** What a sign-in with a wrong address or password is answered, with 401. */
+const WRONG_PASSWORD = { error: 'Invalid email or password' };
+
 // Email + password login.
 authRoutes.post('/api/auth/login', async (c) => {
   // Per-IP, and generous: an IP is not a person. A household, an office and an entire mobile
@@ -311,20 +316,48 @@ authRoutes.post('/api/auth/login', async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'rate_limited_email', email });
     return emailRl;
   }
-  // token_version is read with the password: the session below is bound to it.
+  // token_version is read with the password: the session below is bound to it. So is whether the
+  // account waits for its confirm link.
   const user = await c.env.DB.prepare(
-    'SELECT id, password_hash, token_version FROM users WHERE email = ?'
+    'SELECT id, password_hash, token_version, email_verified, auth_provider FROM users WHERE email = ?'
   )
     .bind(email)
-    .first<{ id: number; password_hash: string | null; token_version: number }>();
+    .first<{
+      id: number;
+      password_hash: string | null;
+      token_version: number;
+      email_verified: number;
+      auth_provider: string;
+    }>();
+  // A confirm link this browser opened before signing in (email-link.ts). It is read before the
+  // password is checked, whatever the password turns out to be, so a request that carries one
+  // does the same work for a wrong password as for a right one.
+  const { link: opened } = await markedLink(c.req.raw, c.env, c.env.DB);
   // Always run a verification — against a dummy hash when the account/hash is missing — so login
   // takes the same time regardless of whether the email exists (anti-enumeration). Then branch on
   // the real outcome.
   const passwordOk = await verifyPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || !user.password_hash || !passwordOk) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_credentials', email });
-    return c.json({ error: 'Invalid email or password' }, 401);
+    return c.json(WRONG_PASSWORD, 401);
   }
+  // An account waiting for its confirm link is answered as a wrong password is, after the same
+  // work, and its limits are left as a wrong password leaves them: nothing in the answer says the
+  // password was right. Unless this browser opened that account's confirm link: then the password
+  // and the mailbox are both proved, and the link confirms the address before the sign-in goes on.
+  let confirmedNow = false;
+  if (emailUnconfirmed(user)) {
+    confirmedNow = await confirmWithOwnLink(c.env.DB, user.id, opened);
+    if (!confirmedNow) {
+      logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'email_unconfirmed', email });
+      return c.json(WRONG_PASSWORD, 401);
+    }
+  }
+  // The marker has done its work once the link is spent.
+  const finished = confirmedNow ? { emailConfirmed: true } : {};
+  const clearMarker = () => {
+    if (confirmedNow) c.header('Set-Cookie', clearedMarker(c.env), { append: true });
+  };
   // Signing in correctly proves the credentials are right, so it must not spend the budget that
   // exists to stop people guessing them. Without this, ten successful logins in a quarter of an
   // hour — one person with a phone, a tablet and a laptop — locked the account out of its own
@@ -342,13 +375,15 @@ authRoutes.post('/api/auth/login', async (c) => {
       email,
     });
     c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
-    return c.json({ twofaRequired: true });
+    clearMarker();
+    return c.json({ twofaRequired: true, ...finished });
   }
   const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
   if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
   c.header('Set-Cookie', session);
-  return c.json({ id: user.id, email });
+  clearMarker();
+  return c.json({ id: user.id, email, ...finished });
 });
 
 /**
@@ -497,7 +532,8 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
 // on the parent domain (COOKIE_DOMAIN), so it reaches this API origin on a top-level navigation
 // from a mail client. Opened without that session, the link stays unspent, the answer is
 // `signin_required`, and the browser keeps a marker that finishes the link once its account
-// signs in there (email-link.ts, POST /api/auth/email-link/finish).
+// signs in there: a password sign-in spends a confirm link itself (POST /api/auth/login), and
+// the app finishes any other link after a sign-in (email-link.ts, POST /api/auth/email-link/finish).
 authRoutes.get('/api/auth/verify-email', async (c) => {
   const rl = await enforce(c, `verify-email:${clientIp(c)}`, 30, 60);
   if (rl) return rl;

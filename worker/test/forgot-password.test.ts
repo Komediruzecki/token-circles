@@ -20,6 +20,7 @@ import {
   callMcp,
   dataRows,
   me,
+  passwordIs,
   removeAccounts,
   seedAccount,
   seededData,
@@ -185,7 +186,9 @@ describe('a reset link for an account whose address was never confirmed', () => 
   it('removes every way in that was set up before, then sets the new password', async () => {
     const { session, apiToken } = await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
     // Each of them gets in beforehand.
-    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(SEEDED)).toBe(true);
     expect((await me(session)).status).toBe(200);
     // The API token is known: it is answered as one whose account waits for its link.
     expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
@@ -244,7 +247,9 @@ describe('a reset link for an account whose address was never confirmed', () => 
       ...rowsBefore,
       password_resets: spent(rowsBefore.password_resets),
     });
-    expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(SEEDED)).toBe(true);
     expect((await me(session)).status).toBe(200);
     // The API token is known: it is answered as one whose account waits for its link.
     expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });

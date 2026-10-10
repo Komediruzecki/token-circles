@@ -15,6 +15,7 @@ import {
   callMcp,
   dataRows,
   me,
+  passwordIs,
   removeAccounts,
   seedAccount,
   seededData,
@@ -82,7 +83,9 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
   it('removes every way in that was set up before, then joins the account', async () => {
     const { session, apiToken } = await seed(0);
     // Each of them gets in beforehand.
-    expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(UID)).toBe(true);
     expect((await me(session)).status).toBe(200);
     // The API token is known: it is answered as one whose account waits for its link.
     expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
@@ -163,7 +166,9 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
 
     expect(await account()).toEqual(before);
     expect(await accessRows(UID)).toEqual(rowsBefore);
-    expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
+    // The password is the account's: a sign-in answers it as a wrong one while the address
+    // waits for its link.
+    expect(await passwordIs(UID)).toBe(true);
     expect((await me(session)).status).toBe(200);
     // The API token is known: it is answered as one whose account waits for its link.
     expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });

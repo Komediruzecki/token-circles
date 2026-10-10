@@ -4,7 +4,7 @@
  * passes ids of its own, so files sharing the test database never touch each other's rows.
  */
 import { env, SELF } from 'cloudflare:test';
-import { hashPassword } from '../../src/auth';
+import { hashPassword, verifyPassword } from '../../src/auth';
 import { unconfirmedSessionCookie } from './session';
 import { mintApiToken } from '../../src/apitoken';
 import { generateTotpSecret } from '../../src/totp';
@@ -146,6 +146,15 @@ export async function accountRow(id: number) {
       provider_id: string | null;
       token_version: number;
     }>();
+}
+
+/**
+ * Whether `password` is account `id`'s password now. A sign-in cannot tell a test that for an
+ * account waiting for its confirm link: it answers a right password there as a wrong one.
+ */
+export async function passwordIs(id: number, password = PASSWORD): Promise<boolean> {
+  const hash = (await accountRow(id))?.password_hash;
+  return !!hash && (await verifyPassword(password, hash));
 }
 
 /** The account's rows in every access table, as they stand. */

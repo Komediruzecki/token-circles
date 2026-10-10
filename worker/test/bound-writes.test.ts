@@ -129,18 +129,23 @@ async function googleCallback(): Promise<Response> {
 }
 
 describe('a sign-in is refused when the account changed after the check', () => {
-  it('a password, when the address was confirmed after the password was checked', async () => {
-    await seedAccount(UID, ADDRESS, 0);
-    const racing = dbWithStep(realDb, /FROM users WHERE email = \?/, () => clearAndConfirm(UID));
+  // A password account waiting for its confirm link signs in with its password only together
+  // with that link (email-link-finish.test.ts), so these two sign in to a confirmed account.
+  it('a password, when the account was signed out everywhere after the password was checked', async () => {
+    await seedAccount(UID, ADDRESS, 1);
+    await realDb.prepare('DELETE FROM totp_credentials WHERE user_id = ?').bind(UID).run();
+    const before = (await accessRows(UID)).auth_sessions;
+    const racing = dbWithStep(realDb, /FROM users WHERE email = \?/, () => bumpTokenVersion(UID));
     const res = await withDb(racing.db, () =>
       post('/api/auth/login', { email: ADDRESS, password: 'the-password-from-signup' })
     );
     await expectRefused(res, racing.ran);
-    expect((await accessRows(UID)).auth_sessions).toEqual([]);
+    // The session seedAccount issued, and no other.
+    expect((await accessRows(UID)).auth_sessions).toEqual(before);
   });
 
-  it('a second factor, when the address was confirmed after the code was checked', async () => {
-    const { totpSecret } = await seedAccount(UID, ADDRESS, 0);
+  it('a second factor, when the account was signed out everywhere after the code was checked', async () => {
+    const { totpSecret } = await seedAccount(UID, ADDRESS, 1);
     const first = await post('/api/auth/login', {
       email: ADDRESS,
       password: 'the-password-from-signup',
@@ -148,14 +153,15 @@ describe('a sign-in is refused when the account changed after the check', () => 
     expect(await first.json()).toEqual({ twofaRequired: true });
     const challenge = cookieFrom(first, 'fm_2fa');
     const code = await totpCode(totpSecret, currentStep());
+    const before = (await accessRows(UID)).auth_sessions;
     const racing = dbWithStep(
       realDb,
       /FROM totp_credentials WHERE user_id = \? AND confirmed_at IS NOT NULL/,
-      () => clearAndConfirm(UID)
+      () => bumpTokenVersion(UID)
     );
     const res = await withDb(racing.db, () => post('/api/auth/2fa/verify', { code }, challenge));
     await expectRefused(res, racing.ran);
-    expect((await accessRows(UID)).auth_sessions).toEqual([]);
+    expect((await accessRows(UID)).auth_sessions).toEqual(before);
   });
 
   it('a passkey, when the address was confirmed after the passkey was checked', async () => {

@@ -2,7 +2,8 @@
  * Signing in with a wrong password, asking for a reset link, asking for a sign-in code and
  * creating an account answer with the same status, headers and body for an address that has an
  * account and for one that has none, and so does each route's limit on one address once it is
- * reached. Every header but Date is compared, the cookie a sign-in code request sets without its
+ * reached. Signing in with the right password to an account waiting for its confirm link is
+ * answered as a wrong password is, after the same statements, and counts against the same limit. Every header but Date is compared, the cookie a sign-in code request sets without its
  * value: that is a new random handle on every request. Signing in checks a password for an address
  * with no account against a hash of the same cost as a real one.
  *
@@ -15,10 +16,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { b64urlDecode, hashPassword } from '../src/auth';
 import { DUMMY_PASSWORD_HASH } from '../src/routes/auth';
 import { fetchSettled, fetchUnsettled } from './helpers/after-answer';
+import { dbThatNotes, realDb, withDb } from './helpers/racing-db';
 
 const BASE = 'https://api.example.com';
 const HAS_ACCOUNT = 'same-answer-account@example.com';
 const NO_ACCOUNT = 'same-answer-nobody@example.com';
+/** A password account whose address waits for its confirm link. */
+const WAITING = 'same-answer-waiting@example.com';
 
 let ip = 0;
 
@@ -168,18 +172,22 @@ beforeEach(async () => {
   for (const t of ['login_codes', 'password_resets', 'rate_limits', 'email_verifications']) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
   }
-  const theirs = 'SELECT id FROM users WHERE email IN (?, ?)';
+  const theirs = 'SELECT id FROM users WHERE email IN (?, ?, ?)';
   await env.DB.prepare(`DELETE FROM profiles WHERE user_id IN (${theirs})`)
-    .bind(HAS_ACCOUNT, NO_ACCOUNT)
+    .bind(HAS_ACCOUNT, NO_ACCOUNT, WAITING)
     .run();
-  await env.DB.prepare('DELETE FROM users WHERE email IN (?, ?)')
-    .bind(HAS_ACCOUNT, NO_ACCOUNT)
+  await env.DB.prepare('DELETE FROM users WHERE email IN (?, ?, ?)')
+    .bind(HAS_ACCOUNT, NO_ACCOUNT, WAITING)
     .run();
-  await env.DB.prepare(
-    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 1, 'password')"
-  )
-    .bind(HAS_ACCOUNT, await hashPassword('the-password'))
-    .run();
+  const hash = await hashPassword('the-password');
+  await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 1, 'password')"
+    ).bind(HAS_ACCOUNT, hash),
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+    ).bind(WAITING, hash),
+  ]);
 });
 
 describe('an address with an account and one without', () => {
@@ -311,5 +319,54 @@ describe('signing in with an address that has no account', () => {
       };
     };
     expect(fields(DUMMY_PASSWORD_HASH)).toEqual(fields(await hashPassword('a real password')));
+  });
+});
+
+describe('a sign-in with the right password to an account waiting for its confirm link', () => {
+  const signIn = (email: string, password: string) =>
+    answer('/api/auth/login', { email, password });
+
+  it('gets the status, headers and body a wrong password gets', async () => {
+    const right = await signIn(WAITING, 'the-password');
+    const wrong = await signIn(WAITING, 'not-the-password');
+    const elsewhere = await signIn(HAS_ACCOUNT, 'not-the-password');
+
+    expect(wrong.status).toBe(401);
+    expect(right).toEqual(wrong);
+    expect(right).toEqual(elsewhere);
+  });
+
+  it('runs the statements a wrong password runs', async () => {
+    const statements = async (password: string) => {
+      const noting = dbThatNotes(realDb);
+      await withDb(noting.db, () => signIn(WAITING, password));
+      return noting.statements;
+    };
+
+    const right = await statements('the-password');
+    const wrong = await statements('not-the-password');
+
+    expect(right.length).toBeGreaterThan(0);
+    expect(right).toEqual(wrong);
+  });
+
+  it('counts against the limit on the address as a wrong password does', async () => {
+    const last = async (email: string, password: string) => {
+      for (let i = 0; i < 10; i += 1) await signIn(email, password);
+      return signIn(email, password);
+    };
+
+    const right = await last(WAITING, 'the-password');
+    await env.DB.prepare('DELETE FROM rate_limits').run();
+    const wrong = await last(WAITING, 'not-the-password');
+
+    expect(right.status).toBe(429);
+    const anyWait = (said: string) => said.replace(/\d+/g, 'N');
+    const waitAside = (one: Answer) => ({
+      ...one,
+      headers: one.headers.map(anyWait),
+      body: anyWait(one.body),
+    });
+    expect(waitAside(right)).toEqual(waitAside(wrong));
   });
 });
