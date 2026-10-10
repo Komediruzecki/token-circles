@@ -98,10 +98,16 @@ export default function RecurringSection(props: RecurringSectionProps) {
     }
   }
 
+  // The rules whose "Add to transactions" is on its way. A second press while it is sends nothing:
+  // two quick presses sent two populates, and in local-first both added the period.
+  const [populating, setPopulating] = createSignal<ReadonlySet<number>>(new Set())
+
   // The row this adds reaches the transaction list the way every write does: populating bumps
   // `recurring`, which moves `transactions`, and the list follows that counter. A period already
   // added is refused (409) in words that say so.
   const handlePopulate = async (item: RecurringTransaction) => {
+    if (populating().has(item.id)) return
+    setPopulating((ids) => new Set(ids).add(item.id))
     try {
       await api.populateRecurring(item.id)
       toast(`Added ${ruleName(item.description)} to your transactions.`, 'success')
@@ -113,6 +119,12 @@ export default function RecurringSection(props: RecurringSectionProps) {
       }
       console.error('Failed to populate recurring:', error)
       toast(plainMessage(error, "Couldn't add it to your transactions. Try again."), 'error')
+    } finally {
+      setPopulating((ids) => {
+        const left = new Set(ids)
+        left.delete(item.id)
+        return left
+      })
     }
   }
 
@@ -201,6 +213,7 @@ export default function RecurringSection(props: RecurringSectionProps) {
                       class={styles.itemAction}
                       onClick={() => handlePopulate(item)}
                       title="Add to transactions"
+                      aria-disabled={populating().has(item.id) ? 'true' : undefined}
                     >
                       <svg
                         width="14"

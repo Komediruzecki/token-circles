@@ -418,6 +418,28 @@ describe('deleting and running a rule', () => {
     expect(await (await getDB()).getAll('transactions')).toHaveLength(1)
   })
 
+  it('sends nothing for a second press while the first is on its way', async () => {
+    await seed({ next_date: localToday() })
+    await showSection()
+    await vi.waitFor(() => {
+      expect(host.querySelector('button[title="Add to transactions"]')).not.toBeNull()
+    })
+
+    button('Add to transactions').click()
+    expect(button('Add to transactions').getAttribute('aria-disabled')).toBe('true')
+    button('Add to transactions').click()
+
+    await vi.waitFor(() => {
+      expect(toastsOf('success')).toEqual(['Added "Rent" to your transactions.'])
+    })
+    await settle()
+    expect(failureToasts()).toEqual([])
+    expect(await (await getDB()).getAll('transactions')).toHaveLength(1)
+    await vi.waitFor(() => {
+      expect(button('Add to transactions').getAttribute('aria-disabled')).toBeNull()
+    })
+  })
+
   it('says a rule deleted elsewhere already was, when it is run', async () => {
     await seed({ next_date: localToday() })
     await showSection()
