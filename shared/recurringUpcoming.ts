@@ -57,12 +57,14 @@ export function upcomingRecurring(
   const end = addDays(today, UPCOMING_DAYS);
   const upcoming: UpcomingItem[] = [];
   for (const r of rules) {
-    // From the rule's next date. A rule whose next date has passed is listed once on today, for
-    // what populate has not written yet, and after today on its own dates, stepped from its next
-    // date and not from today's day. Each step is the one populate takes, so the list shows the
-    // dates populate will write. The monthly step here used to be setMonth() and then the day,
-    // and setMonth() overflows first: a rule on the 31st went from January to March, and February
-    // was never listed.
+    // From the rule's next date. A rule whose next date has passed is listed once, on today, for
+    // all it has missed: populate writes each missed period on its own date, one press each (a
+    // monthly rule due 15 August, run on 10 October, writes 15 August, then 15 September), so
+    // this one entry stands for them and is not one of their dates. After today the rule is
+    // listed on its own dates, stepped from its next date and not from today's day, with the step
+    // populate takes, so those are the dates populate will write. The monthly step here used to
+    // be setMonth() and then the day, and setMonth() overflows first: a rule on the 31st went
+    // from January to March, and February was never listed.
     const dates: string[] = [];
     let cursor = r.next_date || today;
     if (cursor <= today) {
