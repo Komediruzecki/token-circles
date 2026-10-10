@@ -19,6 +19,7 @@ import {
   accountRow,
   callMcp,
   dataRows,
+  keepOnly,
   me,
   passwordIs,
   removeAccounts,
@@ -196,8 +197,12 @@ describe('a reset link for an account whose address was never confirmed', () => 
 
     const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
     expect(reset.status, await reset.clone().text()).toBe(200);
-    // The answer says that something a reset would have kept was cleared, so the app can say what.
-    expect(await reset.json()).toEqual({ ok: true, cleared: true });
+    // The answer names what a reset would have kept, so the app can say what. The password it has
+    // just set and the sessions it ends anyway are not among them.
+    expect(await reset.json()).toEqual({
+      ok: true,
+      cleared: ['passkeys', 'two-factor', 'api-tokens'],
+    });
     expect(await accountRow(SEEDED)).toMatchObject({
       password_hash: expect.any(String),
       email_verified: 1,
@@ -302,5 +307,35 @@ describe('a reset link for a confirmed account', () => {
     expect((await signIn(SEEDED_ADDRESS)).status).toBe(401);
     expect((await me(session)).status).toBe(401);
     expect((await callMcp(apiToken)).status).toBe(200);
+  });
+});
+
+describe('what a reset that confirms the address names', () => {
+  it.each([
+    { had: 'a passkey', keep: ['passkeys'], named: ['passkeys'] },
+    { had: 'two-factor', keep: ['two-factor'], named: ['two-factor'] },
+    {
+      had: 'a passkey and an API token',
+      keep: ['passkeys', 'api-tokens'],
+      named: ['passkeys', 'api-tokens'],
+    },
+  ] as const)('names only what went from an account with $had', async ({ keep, named }) => {
+    await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    await keepOnly(SEEDED, [...keep]);
+    const token = await resetLinkFor(SEEDED_ADDRESS);
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+
+    expect(await reset.json()).toEqual({ ok: true, cleared: named });
+  });
+
+  it('names nothing when the account had only its password and a session', async () => {
+    await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    await keepOnly(SEEDED, []);
+    const token = await resetLinkFor(SEEDED_ADDRESS);
+
+    const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
+
+    expect(await reset.json()).toEqual({ ok: true });
   });
 });

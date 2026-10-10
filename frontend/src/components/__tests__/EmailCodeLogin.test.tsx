@@ -237,9 +237,9 @@ describe('verifying', () => {
     })
   })
 
-  it('keeps the news that confirming cleared the account, for after the reload', async () => {
+  it('keeps what confirming removed, for after the reload', async () => {
     verifyResponse = () =>
-      Promise.resolve(json({ id: 1, email: 'user@example.com', cleared: true }))
+      Promise.resolve(json({ id: 1, email: 'user@example.com', cleared: ['password'] }))
     sessionStorage.clear()
     await mount()
     await requestCode()
@@ -248,7 +248,7 @@ describe('verifying', () => {
     await vi.waitFor(() => {
       expect(reloads).toBe(1)
     })
-    expect(sessionStorage.getItem('tc:access-cleared')).toBe('sign-in')
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('sign-in:password')
   })
 
   it('keeps nothing when nothing was cleared', async () => {

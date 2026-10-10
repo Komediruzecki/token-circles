@@ -173,12 +173,13 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   }
   const sessionCookie = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
   if (!sessionCookie) return c.json({ error: TRY_AGAIN }, 409);
-  // Joining cleared what the account had set up before its address was confirmed: ?cleared=1
-  // lets the app say what. Joining clears the TOTP too, so this never meets ?twofa=1.
+  // Joining removed what the account had set up before its address was confirmed: ?cleared=
+  // names what (`password,passkeys`), so the app can say so. Joining clears the TOTP too, so this
+  // never meets ?twofa=1.
   let location = state.returnTo;
-  if (cleared) {
+  if (cleared.length > 0) {
     const dest = new URL(state.returnTo);
-    dest.searchParams.set('cleared', '1');
+    dest.searchParams.set('cleared', cleared.join(','));
     location = dest.toString();
   }
   // Build the redirect explicitly so the Set-Cookie is guaranteed to ride along.
@@ -566,10 +567,10 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
   ]);
   // Do NOT auto-login: send the user back to the sign-in screen to log in with the new
   // password (avoids a half-authenticated state). The token_version bump above already
-  // revoked any existing sessions. `cleared` lets the app say what else went, if anything.
-  return c.json(
-    clearedWorthSaying(clearedAccess(results), 'reset') ? { ok: true, cleared: true } : { ok: true }
-  );
+  // revoked any existing sessions. `cleared` names what else went, if anything, so the app can
+  // say what.
+  const cleared = clearedWorthSaying(clearedAccess(results), 'reset');
+  return c.json(cleared.length > 0 ? { ok: true, cleared } : { ok: true });
 });
 
 // ── Email verification ─────────────────────────────────────────────────────────────────────────

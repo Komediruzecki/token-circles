@@ -115,18 +115,18 @@ describe('the confirm link’s outcome', () => {
 describe('after a sign-in that confirmed the address and cleared the account', () => {
   const notice = () => host.querySelector('[data-testid="access-cleared-notice"]')
 
-  it('says what went and what to do, once', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'sign-in')
+  it('names what went and what to do, once', async () => {
+    sessionStorage.setItem('tc:access-cleared', 'sign-in:password')
     await mount()
 
-    expect(notice()?.textContent).toContain(
-      'Confirming your email removed what was set up before it'
+    expect(notice()?.textContent).toBe(
+      'Confirming your email removed the password you signed up with. To set a new password, choose Forgot password on the sign-in screen.'
     )
     expect(sessionStorage.getItem('tc:access-cleared')).toBeNull()
   })
 
   it('goes away when dismissed', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'sign-in')
+    sessionStorage.setItem('tc:access-cleared', 'sign-in:password')
     await mount()
 
     host.querySelector<HTMLButtonElement>('[data-testid="access-cleared-dismiss"]')!.click()
@@ -135,11 +135,11 @@ describe('after a sign-in that confirmed the address and cleared the account', (
   })
 
   it('is not shown for a reset, whose words are on the sign-in screen', async () => {
-    sessionStorage.setItem('tc:access-cleared', 'reset')
+    sessionStorage.setItem('tc:access-cleared', 'reset:passkeys')
     await mount()
 
     expect(notice()).toBeNull()
-    expect(sessionStorage.getItem('tc:access-cleared')).toBe('reset')
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('reset:passkeys')
   })
 
   it('is not shown after an ordinary sign-in', async () => {

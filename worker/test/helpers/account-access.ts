@@ -90,6 +90,27 @@ export async function seedAccount(
   return { session, apiToken: token.secret, totpSecret };
 }
 
+/** The tables that hold each kind of access a confirming route names (shared/accessCleared.ts). */
+const KIND_TABLES = {
+  passkeys: ['webauthn_credentials'],
+  'two-factor': ['totp_credentials', 'recovery_codes'],
+  'api-tokens': ['api_tokens'],
+} as const;
+
+/**
+ * Leave account `id` (from seedAccount) with only the kinds in `keep` besides its password and
+ * session, so a test can say which kinds a route names.
+ */
+export async function keepOnly(id: number, keep: Array<keyof typeof KIND_TABLES>): Promise<void> {
+  const drop = (Object.keys(KIND_TABLES) as Array<keyof typeof KIND_TABLES>)
+    .filter((kind) => !keep.includes(kind))
+    .flatMap((kind) => KIND_TABLES[kind]);
+  if (drop.length === 0) return;
+  await env.DB.batch(
+    drop.map((table) => env.DB.prepare(`DELETE FROM ${table} WHERE user_id = ?`).bind(id))
+  );
+}
+
 /**
  * Run `setUp` with account `id`'s address counted as confirmed, then put email_verified back as
  * it was. A session of an account whose address waits for its link is refused everything that

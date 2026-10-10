@@ -16,6 +16,7 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './index';
 import { logAuthEvent } from './authlog';
+import { CLEARED_KINDS, type ClearedKind } from '../../shared/accessCleared';
 
 const encoder = new TextEncoder();
 
@@ -589,21 +590,27 @@ export function clearedAccess(results: D1Result[]): ClearedAccess {
 }
 
 /**
- * Whether the clearing removed something the person set up and would miss, which the app then
- * tells them. A reset replaces the password and signs every device out on any account, so after
- * a reset only what it would otherwise have kept counts.
+ * What the clearing removed that the person set up and would miss, by kind, which the app names
+ * in its notice; empty when nothing was. A reset sets the password, so it never names one.
+ * Sessions are not named: one on an account waiting for its link reaches only the Confirm your
+ * email screen, and a reset signs every device out on any account.
  */
-export function clearedWorthSaying(cleared: ClearedAccess, by: 'sign-in' | 'reset'): boolean {
-  const kept = cleared.passkeys + cleared.twoFactor + cleared.recoveryCodes + cleared.apiTokens;
-  return (by === 'reset' ? kept : kept + cleared.password + cleared.sessions) > 0;
+export function clearedWorthSaying(cleared: ClearedAccess, by: 'sign-in' | 'reset'): ClearedKind[] {
+  const removed: Record<ClearedKind, number> = {
+    password: by === 'sign-in' ? cleared.password : 0,
+    passkeys: cleared.passkeys,
+    'two-factor': cleared.twoFactor + cleared.recoveryCodes,
+    'api-tokens': cleared.apiTokens,
+  };
+  return CLEARED_KINDS.filter((kind) => removed[kind] > 0);
 }
 
 /**
  * Find-or-create the user for a verified Google account. `created` is true only
  * for a brand-new account (the caller sends the welcome email then — matching
  * the email/password registration path); linking Google to an existing account
- * is not a new signup. `cleared` is true when linking removed something the
- * person would miss (clearedWorthSaying), so the app can say what.
+ * is not a new signup. `cleared` names what linking removed that the person
+ * would miss (clearedWorthSaying), so the app can say what.
  *
  * Linking to an account whose address was never confirmed first clears what was set up on it
  * before the address was confirmed (clearUnconfirmedAccess). Its data stays. A confirmed account
@@ -616,7 +623,7 @@ export async function resolveGoogleUser(
   userId: number;
   created: boolean;
   email: string | null;
-  cleared: boolean;
+  cleared: ClearedKind[];
   /** users.token_version as of the look-up, or as the join's own batch left it. */
   tokenVersion: number;
 }> {
@@ -631,7 +638,7 @@ export async function resolveGoogleUser(
       userId: byProvider.id,
       created: false,
       email: null,
-      cleared: false,
+      cleared: [],
       tokenVersion: byProvider.token_version,
     };
   }
@@ -687,7 +694,7 @@ export async function resolveGoogleUser(
     userId,
     created: true,
     email: verified ? email : null,
-    cleared: false,
+    cleared: [],
     tokenVersion: created!.token_version,
   };
 }

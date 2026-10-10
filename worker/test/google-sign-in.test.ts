@@ -14,6 +14,7 @@ import {
   accountRow,
   callMcp,
   dataRows,
+  keepOnly,
   me,
   passwordIs,
   profilesWith,
@@ -94,9 +95,11 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
 
     const res = await googleSignIn();
     expect(res.status).toBe(302);
-    // Straight in, with no second-factor step: the TOTP went with the rest. The app is told that
-    // something was cleared, so it can say what.
-    expect(res.headers.get('Location')).toBe(`${RETURN_TO}/?cleared=1`);
+    // Straight in, with no second-factor step: the TOTP went with the rest. The app is told what
+    // went, so it can say what; the session is not among them.
+    expect(res.headers.get('Location')).toBe(
+      `${RETURN_TO}/?cleared=password%2Cpasskeys%2Ctwo-factor%2Capi-tokens`
+    );
     const google = sessionFrom(res);
     expect(google, 'a session cookie').not.toBeNull();
 
@@ -232,4 +235,29 @@ describe('Google sign-in whose address Google has not verified', () => {
       expect(results).toEqual([{ id: UID }]);
     }
   );
+});
+
+describe('what a Google sign-in that confirms the address names', () => {
+  it.each([
+    { had: 'a password', keep: [], named: ['password'] },
+    { had: 'a password and a passkey', keep: ['passkeys'], named: ['password', 'passkeys'] },
+    {
+      had: 'a password, two-factor and an API token',
+      keep: ['two-factor', 'api-tokens'],
+      named: ['password', 'two-factor', 'api-tokens'],
+    },
+    {
+      had: 'every kind',
+      keep: ['passkeys', 'two-factor', 'api-tokens'],
+      named: ['password', 'passkeys', 'two-factor', 'api-tokens'],
+    },
+  ] as const)('names only what went from an account with $had', async ({ keep, named }) => {
+    await seed(0);
+    await keepOnly(UID, [...keep]);
+
+    const res = await googleSignIn();
+
+    const location = new URL(res.headers.get('Location')!);
+    expect(location.searchParams.get('cleared')).toBe(named.join(','));
+  });
 });

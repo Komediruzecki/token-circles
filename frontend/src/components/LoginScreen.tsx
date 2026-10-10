@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
-import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
+import { accessClearedNotice, takeAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
@@ -54,9 +54,10 @@ export default function LoginScreen() {
     if (new URLSearchParams(window.location.search).get('twofa') === '1') setStage('twofa')
   })
 
-  // A reset that also confirmed the address reloads onto this screen with what else it cleared.
+  // A reset that also confirmed the address reloads onto this screen with what else it removed.
   onMount(() => {
-    if (takeAccessCleared('reset')) setNotice(ACCESS_CLEARED_NOTICE.reset)
+    const words = accessClearedNotice('reset', takeAccessCleared('reset'))
+    if (words !== null) setNotice(words)
   })
 
   // A confirm link opened in this browser that had expired, or had been used or replaced, comes

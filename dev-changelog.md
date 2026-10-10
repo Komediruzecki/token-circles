@@ -208,6 +208,16 @@ All notable changes to Token Circles are documented here. The format is based on
   to that account or through `POST /api/auth/email-link/finish` after any other sign-in. A browser
   that starts local-first opens the sign-in for these links, and the reset page works there. Google
   sign-in stores and matches addresses in lower case. Account deletion deletes its sessions.
+- **The notice after confirming an address names only what went.** `clearedWorthSaying`
+  (`worker/src/auth.ts`) returns the kinds that went, under the names in `shared/accessCleared.ts`
+  (`password`, `passkeys`, `two-factor`, `api-tokens`). Google sign-in puts them on its redirect as
+  `?cleared=password,passkeys`; the emailed-code sign-in and the reset answer carry them as
+  `cleared: ['password']`, and leave `cleared` out when nothing went. Sessions are never named, and
+  a reset never names the password it set. `accessClearedNotice`
+  (`frontend/src/core/accessCleared.ts`) writes one sentence naming those kinds, then the next step:
+  Forgot password on the sign-in screen when the password went, Settings otherwise. Nothing named,
+  no notice. A `?cleared=` value that names no known kind is stripped without one. What is cleared,
+  and the batch that clears it, are unchanged.
 - **Sign-in history is kept 90 days, and goes with the account** (#613). Account deletion deletes
   its `auth_logs` rows in the same D1 batch: rows with its user id, and attempts at its address that
   carry none. The scheduled run deletes rows older than `AUTH_LOG_RETENTION_DAYS` (90,

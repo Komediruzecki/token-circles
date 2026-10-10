@@ -27,6 +27,7 @@ import {
   accountRow,
   callMcp,
   dataRows,
+  keepOnly,
   me,
   passwordIs,
   profilesWith,
@@ -205,10 +206,10 @@ describe('verifying a code', () => {
     expect(await res.json()).toEqual(CODE_REFUSED);
   });
 
-  it('says the password was cleared on an unconfirmed account that had nothing else', async () => {
+  it('names the password on an unconfirmed account that had nothing else', async () => {
     const { code, cookie } = await mintWithCookie();
     const res = await post('/api/auth/email-code/verify', { email: EMAIL, code }, cookie);
-    expect(await res.json()).toEqual({ id: userId, email: EMAIL, cleared: true });
+    expect(await res.json()).toEqual({ id: userId, email: EMAIL, cleared: ['password'] });
   });
 
   it('says nothing was cleared on a confirmed account', async () => {
@@ -442,9 +443,13 @@ describe('a code for an account whose address was never confirmed', () => {
 
     const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
     expect(res.status).toBe(200);
-    // Straight in, with no second-factor step: the TOTP went with the rest. The answer says that
-    // something was cleared, so the app can say what.
-    expect(await res.json()).toEqual({ id: SEEDED, email: SEEDED_ADDRESS, cleared: true });
+    // Straight in, with no second-factor step: the TOTP went with the rest. The answer names
+    // what went, so the app can say what; the session is not among them.
+    expect(await res.json()).toEqual({
+      id: SEEDED,
+      email: SEEDED_ADDRESS,
+      cleared: ['password', 'passkeys', 'two-factor', 'api-tokens'],
+    });
     const signedIn = cookieValue(res, 'fm_session');
     expect(signedIn, 'a session cookie').toBeTruthy();
     const who = await me(signedIn!);
@@ -526,5 +531,30 @@ describe('a code for a confirmed account', () => {
     expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
     expect((await callMcp(apiToken)).status).toBe(200);
+  });
+});
+
+describe('what a code that confirms the address names', () => {
+  it.each([
+    { had: 'a password', keep: [], named: ['password'] },
+    { had: 'a password and a passkey', keep: ['passkeys'], named: ['password', 'passkeys'] },
+    {
+      had: 'a password, two-factor and an API token',
+      keep: ['two-factor', 'api-tokens'],
+      named: ['password', 'two-factor', 'api-tokens'],
+    },
+    {
+      had: 'every kind',
+      keep: ['passkeys', 'two-factor', 'api-tokens'],
+      named: ['password', 'passkeys', 'two-factor', 'api-tokens'],
+    },
+  ] as const)('names only what went from an account with $had', async ({ keep, named }) => {
+    await seedAccount(SEEDED, SEEDED_ADDRESS, 0);
+    await keepOnly(SEEDED, [...keep]);
+    const { code, cookie } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
+
+    const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
+
+    expect(await res.json()).toEqual({ id: SEEDED, email: SEEDED_ADDRESS, cleared: named });
   });
 });

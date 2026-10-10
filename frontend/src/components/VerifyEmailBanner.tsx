@@ -6,15 +6,15 @@
  * new address, which comes back the same way. An account whose address is not confirmed never
  * sees it: the app shows Confirm your email instead of itself (ConfirmEmailScreen).
  *
- * After a sign-in that confirmed the address and cleared what the account had set up before it,
- * it also shows that, once, in the same strip (core/accessCleared.ts).
+ * After a sign-in that confirmed the address and removed something the account had set up before
+ * it, it also says what, once, in the same strip (core/accessCleared.ts).
  *
  * And it finishes a link this browser opened before signing in (core/emailVerification.ts): once
  * someone is signed in, it asks the worker, which spends the link for its own account and says
  * so for any other, and it shows the answer.
  */
 import { createEffect, createSignal, on, onMount, Show } from 'solid-js'
-import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
+import { accessClearedNotice, takeAccessCleared } from '../core/accessCleared'
 import { toast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import {
@@ -81,7 +81,7 @@ function finishedAs(finished: LinkFinish): EmailVerifyResult | null {
 
 export const VerifyEmailBanner: Component = () => {
   const state = useAppState()
-  const [cleared, setCleared] = createSignal(false)
+  const [cleared, setCleared] = createSignal<string | null>(null)
   const [otherAccount, setOtherAccount] = createSignal<'confirm' | 'change' | null>(null)
 
   // A link opened in this browser before signing in. The worker decides: the link's own account
@@ -111,7 +111,7 @@ export const VerifyEmailBanner: Component = () => {
   )
 
   onMount(() => {
-    setCleared(takeAccessCleared('sign-in'))
+    setCleared(accessClearedNotice('sign-in', takeAccessCleared('sign-in')))
     const result = takeEmailVerifyResult()
     if (result !== null) announce(result)
   })
@@ -135,10 +135,10 @@ export const VerifyEmailBanner: Component = () => {
             <circle cx="12" cy="12" r="10" />
             <path d="M12 16v-4M12 8h.01" />
           </svg>
-          <p class={styles.text}>{ACCESS_CLEARED_NOTICE['sign-in']}</p>
+          <p class={styles.text}>{cleared()}</p>
           <button
             class={styles.close}
-            onClick={() => setCleared(false)}
+            onClick={() => setCleared(null)}
             aria-label="Dismiss"
             title="Dismiss"
             data-testid="access-cleared-dismiss"

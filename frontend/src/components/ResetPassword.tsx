@@ -79,8 +79,8 @@ export default function ResetPassword() {
     send: async (values) => {
       try {
         const { cleared } = await api.resetPassword(token, values.password)
-        // The sign-in screen this reloads onto says what else the reset cleared.
-        if (cleared) markAccessCleared('reset')
+        // The sign-in screen this reloads onto names what else the reset removed, if anything.
+        markAccessCleared('reset', cleared)
         return 'done'
       } catch (error) {
         // A refusal that names no field is about the link: it was spent or it expired.

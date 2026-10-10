@@ -1,13 +1,13 @@
 /**
  * ResetPassword: the link is checked and the password set on the account server, whatever mode
- * the browser was in. When the reset also confirmed the address and cleared what the account had
- * set up, the worker answers cleared: true, and the news is kept for the sign-in screen the page
- * reloads onto.
+ * the browser was in. When the reset also confirmed the address and removed what the account had
+ * set up, the worker names what in `cleared`, and the names are kept for the sign-in screen the
+ * page reloads onto.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-let resetAnswer: { cleared: boolean } = { cleared: false }
+let resetAnswer: { cleared: string[] } = { cleared: [] }
 /** What the page did, in order: the mode it chose and the calls it made. */
 let steps: string[] = []
 
@@ -34,7 +34,7 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 
 beforeEach(() => {
-  resetAnswer = { cleared: false }
+  resetAnswer = { cleared: [] }
   steps = []
   sessionStorage.clear()
   vi.useFakeTimers({ toFake: ['setTimeout'] })
@@ -87,12 +87,12 @@ describe('the link', () => {
 })
 
 describe('a reset that cleared the account', () => {
-  it('keeps the news for the sign-in screen', async () => {
-    resetAnswer = { cleared: true }
+  it('keeps what went for the sign-in screen', async () => {
+    resetAnswer = { cleared: ['passkeys', 'two-factor'] }
     await resetTo('a-new-password')
 
     expect(host.textContent).toContain('Password updated.')
-    expect(sessionStorage.getItem('tc:access-cleared')).toBe('reset')
+    expect(sessionStorage.getItem('tc:access-cleared')).toBe('reset:passkeys,two-factor')
   })
 
   it('keeps nothing when nothing was cleared', async () => {
