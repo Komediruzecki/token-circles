@@ -1,10 +1,10 @@
 /**
  * Signing in with a wrong password, asking for a reset link, asking for a sign-in code and
- * creating an account answer with the same status, content type and body for an address that has
- * an account and for one that has none, and so does each route's limit on one address once it is
- * reached. The cookie a sign-in code request sets is a new random handle on every request, and
- * signing in checks a password for an address with no account against a hash of the same cost as
- * a real one.
+ * creating an account answer with the same status, headers and body for an address that has an
+ * account and for one that has none, and so does each route's limit on one address once it is
+ * reached. Every header but Date is compared, the cookie a sign-in code request sets without its
+ * value: that is a new random handle on every request. Signing in checks a password for an address
+ * with no account against a hash of the same cost as a real one.
  *
  * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
  * sent or is held. The two that store a row for the address after their answer (a reset link, a
@@ -35,10 +35,26 @@ function sending(body: unknown): RequestInit {
   };
 }
 
+/**
+ * Every header of an answer but Date, one `name: value` line each, in order. The value of the
+ * cookie a sign-in code request sets is replaced by V.
+ */
+function headerLines(res: Response): string[] {
+  const lines: string[] = [];
+  res.headers.forEach((value, name) => {
+    if (name !== 'date' && name !== 'set-cookie') lines.push(`${name}: ${value}`);
+  });
+  for (const cookie of res.headers.getSetCookie()) {
+    lines.push(`set-cookie: ${cookie.replace(/^fm_logincode=[^;]*/, 'fm_logincode=V')}`);
+  }
+  return lines.sort();
+}
+
 async function read(res: Response) {
   return {
     status: res.status,
     type: res.headers.get('content-type'),
+    headers: headerLines(res),
     body: await res.text(),
   };
 }
@@ -71,7 +87,7 @@ const ROUTES: { path: string; body: (email: string) => unknown; status: number; 
     },
   ];
 
-/** What a route that takes the request answers: ok, as JSON. */
+/** What a route that takes the request answers: ok, as JSON. Its other headers are not checked. */
 const OK = { status: 200, type: 'application/json', body: '{"ok":true}' };
 
 const bodyFor = (path: string) => ROUTES.find((r) => r.path === path)!.body;
@@ -168,14 +184,14 @@ beforeEach(async () => {
 
 describe('an address with an account and one without', () => {
   for (const route of ROUTES) {
-    it(`get the same status, content type and body from ${route.path}`, async () => {
+    it(`get the same status, headers and body from ${route.path}`, async () => {
       const withAccount = await answer(route.path, route.body(HAS_ACCOUNT));
       const without = await answer(route.path, route.body(NO_ACCOUNT));
       expect(withAccount.status).toBe(route.status);
       expect(without).toEqual(withAccount);
     });
 
-    it(`get the same status, content type and body from ${route.path} once its limit on the address is reached`, async () => {
+    it(`get the same status, headers and body from ${route.path} once its limit on the address is reached`, async () => {
       const last = async (email: string) => {
         for (let i = 0; i < route.limit; i += 1) await answer(route.path, route.body(email));
         return answer(route.path, route.body(email));
@@ -185,10 +201,12 @@ describe('an address with an account and one without', () => {
       expect(withAccount.status).toBe(429);
       // The wait is counted from each address's first attempt, a second or so apart.
       const anyWait = (said: string) => said.replace(/\d+/g, 'N');
-      expect({ ...without, body: anyWait(without.body) }).toEqual({
-        ...withAccount,
-        body: anyWait(withAccount.body),
+      const waitAside = (one: Answer) => ({
+        ...one,
+        headers: one.headers.map(anyWait),
+        body: anyWait(one.body),
       });
+      expect(waitAside(without)).toEqual(waitAside(withAccount));
     });
   }
 });
@@ -231,7 +249,7 @@ describe('while the mail cannot be sent', () => {
       const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       for (const email of [HAS_ACCOUNT, NO_ACCOUNT]) {
-        expect(await answer(path, bodyFor(path)(email)), email).toEqual(OK);
+        expect(await answer(path, bodyFor(path)(email)), email).toMatchObject(OK);
       }
       // The mail that failed is in the log, after the answer.
       for (const line of logged) expect(errors).toHaveBeenCalledWith(line, expect.any(TypeError));
@@ -251,7 +269,7 @@ describe('while the mail is held', () => {
           Promise.all(sent.map(async (one) => read(await one.answer))),
           new Promise<'no answer'>((resolve) => setTimeout(() => resolve('no answer'), 5_000)),
         ]);
-        expect(answers, 'the answers, while the mail is held').toEqual([OK, OK]);
+        expect(answers, 'the answers, while the mail is held').toMatchObject([OK, OK]);
         expect(mailed).toEqual([]);
       } finally {
         service.release();
@@ -273,7 +291,7 @@ describe('while the row a route stores cannot be written', () => {
       const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
       for (const email of [HAS_ACCOUNT, NO_ACCOUNT]) {
-        expect(await answer(path, bodyFor(path)(email)), email).toEqual(OK);
+        expect(await answer(path, bodyFor(path)(email)), email).toMatchObject(OK);
       }
       // The write that failed is in the log, after the answer.
       expect(errors).toHaveBeenCalledWith(logged, expect.anything());
