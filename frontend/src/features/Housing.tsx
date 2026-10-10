@@ -35,7 +35,7 @@ import OrbitalDivider from '../components/OrbitalDivider'
 import RenewalCycle from '../components/RenewalCycle'
 import ToggleField from '../components/ToggleField'
 import { formatCurrency } from '../core/api'
-import { apiDelete, apiGet, showToast } from '../core/api'
+import { apiDelete, apiGet, errorStatus, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { useAppState } from '../core/appStore'
 import { paletteColor } from '../core/brandPalette'
@@ -115,12 +115,23 @@ export default function HousingForm() {
     }
   }
 
-  // Delete housing expense
+  // Delete housing expense. One deleted in another tab or on another device first answers 404:
+  // gone is what was asked, so the page reads the list again and says so, as Goals and Bills do.
+  // A failed write bumps no counter, so this reload has to be asked for. Another profile's
+  // expense, which the household view lists, answers 404 as well, because a delete goes to the
+  // open profile: it is still listed, so it is not said to be deleted.
   const deleteHousing = async (id: number) => {
     try {
       await apiDelete(`/api/housing/${id}`)
       showToast('Housing expense deleted', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        await loadHousings()
+        if (!housings().some((h) => h.id === id)) {
+          showToast('That housing expense was already deleted.', 'info')
+          return
+        }
+      }
       console.error('Failed to delete housing expense:', err)
       showToast(plainMessage(err, "Couldn't delete the housing expense. Try again."), 'error')
     }

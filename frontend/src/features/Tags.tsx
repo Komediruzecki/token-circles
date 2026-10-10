@@ -25,7 +25,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import PeriodBar from '../components/PeriodBar'
-import { api, formatCurrency, showToast } from '../core/api'
+import { api, errorStatus, formatCurrency, showToast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { bumpTagsVersion, useAppState } from '../core/appStore'
 import { CATEGORY_PALETTE } from '../core/brandPalette'
@@ -224,18 +224,25 @@ export default function Tags() {
     tagForm.openEdit({ id: tag.id, name: tag.name, color: tag.color || TAG_COLORS[0] })
   }
 
+  // A tag deleted in another tab or on another device first answers 404: gone is what was asked,
+  // so the page says so and lets it go, as a delete here does. The list is the open profile's
+  // tags only, so a tag it shows that answers 404 is gone.
   const deleteTag = async (tag: Models.TagSummary) => {
     try {
       await api.deleteTag(tag.id)
       showToast(`Tag "${tag.name}" deleted`, 'success')
-      if (selectedTagId() === tag.id) setSelectedTagId(null)
-      // A tag deleted while its edit form is open takes the form with it.
-      if (tagForm.editing()?.id === tag.id) tagForm.close()
-      bumpTagsVersion()
-      refreshOverview()
     } catch (err) {
-      showToast(plainMessage(err, "Couldn't delete the tag. Try again."), 'error')
+      if (errorStatus(err) !== 404) {
+        showToast(plainMessage(err, "Couldn't delete the tag. Try again."), 'error')
+        return
+      }
+      showToast('That tag was already deleted.', 'info')
     }
+    if (selectedTagId() === tag.id) setSelectedTagId(null)
+    // A tag deleted while its edit form is open takes the form with it.
+    if (tagForm.editing()?.id === tag.id) tagForm.close()
+    bumpTagsVersion()
+    refreshOverview()
   }
 
   // ── Rule editing ───────────────────────────────────────────────────────────

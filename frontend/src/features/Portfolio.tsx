@@ -11,6 +11,7 @@ import {
   apiDelete,
   apiHouseholdGet,
   apiPost,
+  errorStatus,
   formatCurrency,
   getLocalCurrency,
   showToast,
@@ -113,11 +114,23 @@ export default function Portfolio() {
   // The add and edit dialog. Its writes bump `portfolio` through apiFetch, which reloads the list.
   const holdingForm = createHoldingForm({ holdings })
 
+  // A holding deleted in another tab or on another device first answers 404: gone is what was
+  // asked, so the page reads the list again and says so, as Goals and Bills do. A failed write
+  // bumps no counter, so this reload has to be asked for. Another profile's holding, which the
+  // household view lists, answers 404 as well, because a delete goes to the open profile: it is
+  // still listed, so it is not said to be deleted.
   const deleteHolding = async (id: number) => {
     try {
       await apiDelete(`/api/portfolio/holdings/${id}`)
       showToast('Holding deleted', 'success')
     } catch (err) {
+      if (errorStatus(err) === 404) {
+        await loadData()
+        if (!holdings().some((h) => h.id === id)) {
+          showToast('That holding was already deleted.', 'info')
+          return
+        }
+      }
       console.error('Failed to delete holding', err)
       showToast(plainMessage(err, "Couldn't delete the holding. Try again."), 'error')
     }
