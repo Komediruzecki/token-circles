@@ -545,9 +545,11 @@ for (const boot of BOOTS) {
         const resent = page.waitForResponse((r) =>
           r.url().endsWith('/api/auth/resend-verification')
         )
-        await page.locator('[data-testid="confirm-email-resend"]').click()
+        await page.getByTestId('confirm-email-resend').click()
         expect((await resent).status()).toBe(200)
-        await expect(page.getByText('Sent. Check your inbox.')).toBeVisible()
+        await expect(page.getByTestId('confirm-email-sent')).toHaveText(
+          'Sent. Open the newest email: the links before it no longer work.'
+        )
         expect(newestConfirmLink(email)).toBeGreaterThan(first)
 
         // Sign out, then open the newest link here: the next sign-in confirms the address.

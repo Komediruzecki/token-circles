@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
-import { api, waitsForConfirmLink } from '../core/api'
+import { api, toast, waitsForConfirmLink } from '../core/api'
+import { plainMessage } from '../core/apiError'
 import { apiFetch } from '../core/apiFetch'
 import { displayVersion } from '../core/appVersion'
 import {
@@ -8,12 +9,12 @@ import {
   finishEmailLink,
   linkWaiting,
   noteAddressConfirmed,
+  resendVerificationEmail,
   takeEmailVerifyResult,
 } from '../core/emailVerification'
 import LegalLinks from './LegalLinks'
 import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
-import { ResendVerification } from './ResendVerification'
 import stepStyles from './SignInSteps.module.css'
 import SupportContact from './SupportContact'
 import { OTHER_ACCOUNT_NOTICE } from './VerifyEmailBanner'
@@ -21,11 +22,19 @@ import { OTHER_ACCOUNT_NOTICE } from './VerifyEmailBanner'
 /** Said when the billing portal did not open and the Worker gave no words of its own. */
 const PORTAL_FAILED = "Couldn't open the billing page. Try again in a moment."
 
+/** Said when the link could not be sent again and the failure brought no words of its own. */
+const RESEND_FAILED = "Couldn't send the link. Try again in a moment."
+
+/** How long the note that the link went stays. Sending it again clears the note at once. */
+export const SENT_SHOWN_MS = 30_000
+
 /**
  * Confirm your email: what a signed-in password account sees instead of the app until its address
  * is confirmed. The Worker refuses that session everything but a few account routes
- * (EMAIL_UNCONFIRMED), so there is nothing else to show it. It names the address, sends the link
- * again (POST /api/auth/resend-verification), and signs out. An account with a billing account
+ * (EMAIL_UNCONFIRMED), so there is nothing else to show it. It names the address, offers to send
+ * the link again in the same sentence (POST /api/auth/resend-verification), and signs out. The
+ * note that the link went clears after SENT_SHOWN_MS, or at the next press, so a second press is
+ * seen to do something. An account with a billing account
  * (`billingAccount`) also gets the billing portal, where its subscription is managed or cancelled:
  * the Worker lets that request through for such an account, so the gate never keeps a subscriber
  * from cancelling.
@@ -45,6 +54,28 @@ export default function ConfirmEmailScreen(props: {
   const [said, setSaid] = createSignal('')
   const [openingPortal, setOpeningPortal] = createSignal(false)
   const [portalProblem, setPortalProblem] = createSignal('')
+  const [sending, setSending] = createSignal(false)
+  const [sentNote, setSentNote] = createSignal(false)
+  let sentTimer: ReturnType<typeof setTimeout> | undefined
+
+  const sendAgain = async () => {
+    if (sending()) return
+    clearTimeout(sentTimer)
+    setSentNote(false)
+    setSending(true)
+    try {
+      await resendVerificationEmail()
+      setSentNote(true)
+      sentTimer = setTimeout(() => setSentNote(false), SENT_SHOWN_MS)
+    } catch (err) {
+      toast(plainMessage(err, RESEND_FAILED), 'error')
+    } finally {
+      setSending(false)
+    }
+  }
+  onCleanup(() => {
+    clearTimeout(sentTimer)
+  })
 
   // The Stripe-hosted portal, as Settings opens it. The page leaves for it, so the button stays
   // busy on the way out; anything else is said here, and the button comes back.
@@ -126,21 +157,33 @@ export default function ConfirmEmailScreen(props: {
           <h1 class={styles.title}>Confirm your email</h1>
         </div>
         <p class={stepStyles.lead} data-test-id="confirm-email-lead">
-          We sent a link to <strong data-test-id="confirm-email-address">{props.email}</strong>.
-          Open it in this browser and you're in. Opening it on another device? Sign in there with
-          your password, then come back to this tab.
+          Open the link we sent to{' '}
+          <strong data-test-id="confirm-email-address">{props.email}</strong> in this browser and
+          you're in, or{' '}
+          <button
+            type="button"
+            data-test-id="confirm-email-resend"
+            class={stepStyles.link}
+            disabled={sending()}
+            onClick={() => {
+              void sendAgain()
+            }}
+          >
+            send it again
+          </button>
+          . Opening it on another device? Sign in there with your password, then come back to this
+          tab.
         </p>
+        <Show when={sentNote()}>
+          <p class={stepStyles.lead} role="status" data-test-id="confirm-email-sent">
+            Sent. Open the newest email: the links before it no longer work.
+          </p>
+        </Show>
         <Show when={said()}>
           <p class={stepStyles.lead} role="status" data-test-id="confirm-email-said">
             {said()}
           </p>
         </Show>
-        <ResendVerification
-          variant="button"
-          label="Send the link again"
-          sentLabel="Sent. Check your inbox."
-          data-testid="confirm-email-resend"
-        />
         <Show when={props.billingAccount}>
           <p class={stepStyles.links}>
             <button

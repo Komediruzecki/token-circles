@@ -20,6 +20,7 @@
  * signing in will do, and the note outlasts the reload every sign-in ends in. A password sign-in
  * spends a confirm link itself, and says so (noteAddressConfirmed).
  */
+import { ApiError } from './apiError'
 import { apiFetch } from './apiFetch'
 import { getStorageMode, setStorageMode } from './storage/storageFactory'
 
@@ -195,7 +196,10 @@ export function takeConfirmLinkProblem(): string | null {
   return problem
 }
 
-/** Ask for the confirm link again. Throws with the server's message so the caller can show it. */
+/**
+ * Ask for the confirm link again. Throws an ApiError with the server's message, so the caller can
+ * show it (plainMessage passes an ApiError's words through).
+ */
 export async function resendVerificationEmail(): Promise<void> {
   const res = await apiFetch('/api/auth/resend-verification', {
     method: 'POST',
@@ -203,7 +207,8 @@ export async function resendVerificationEmail(): Promise<void> {
   })
   if (res.ok) return
   const detail = (await res.json().catch(() => ({}))) as { error?: string }
-  throw new Error(
+  throw new ApiError(
+    res.status,
     detail.error ??
       (res.status === 429
         ? 'Too many requests. Try again a little later.'

@@ -1,11 +1,9 @@
 /**
- * ResendVerification — the "send me that link again" button, wherever it is needed.
- *
- * It exists as its own component because the confirm-your-email ask appears in two places (the
- * Confirm your email screen, and the billing panel that refuses to sell to an unconfirmed
- * address) and the interesting part is the same in both: one in-flight request at a time, a
- * terminal "sent" state so the user is not left wondering, and a failure that returns to idle
- * rather than stranding them on a disabled button.
+ * ResendVerification: the "send me that link again" button of the billing panel that refuses to
+ * sell to an unconfirmed address. One in-flight request at a time, a terminal "sent" state so the
+ * user is not left wondering, and a failure that returns to idle rather than stranding them on a
+ * disabled button. The Confirm your email screen has its own, in its first sentence, whose note
+ * clears so the button can be pressed again.
  */
 import { Show } from 'solid-js'
 import { createSignal } from 'solid-js'

@@ -137,19 +137,95 @@ describe('Confirm your email', () => {
     await mount('waiting@example.com')
 
     expect(byTestId('confirm-email-lead')?.textContent).toBe(
-      "We sent a link to waiting@example.com. Open it in this browser and you're in. Opening it on another device? Sign in there with your password, then come back to this tab."
+      "Open the link we sent to waiting@example.com in this browser and you're in, or send it again. Opening it on another device? Sign in there with your password, then come back to this tab."
     )
+  })
+
+  it('offers to send the link again in its first sentence', async () => {
+    await mount()
+
+    const lead = byTestId('confirm-email-lead')!
+    const [firstSentence] = lead.textContent!.split(/(?<=[.?])\s/)
+    expect(firstSentence).toBe(
+      "Open the link we sent to waiting@example.com in this browser and you're in, or send it again."
+    )
+    expect(lead.querySelector('button')).toBe(byTestId('confirm-email-resend'))
   })
 
   it('sends the link again through the signed-in resend, and says it went', async () => {
     answers['/api/auth/resend-verification'] = () => json({ ok: true })
     await mount()
 
-    host.querySelector<HTMLButtonElement>('[data-testid="confirm-email-resend"]')!.click()
+    byTestId('confirm-email-resend')!.click()
     await settle()
 
     expect(sent).toEqual([{ url: '/api/auth/resend-verification', method: 'POST' }])
-    expect(byTestId('confirm-email-screen')?.textContent).toContain('Sent. Check your inbox.')
+    expect(byTestId('confirm-email-sent')?.textContent?.trim()).toBe(
+      'Sent. Open the newest email: the links before it no longer work.'
+    )
+  })
+
+  it('clears the note that the link went after SENT_SHOWN_MS, and keeps the button', async () => {
+    answers['/api/auth/resend-verification'] = () => json({ ok: true })
+    await mount()
+    const { SENT_SHOWN_MS } = await import('../ConfirmEmailScreen')
+    vi.useFakeTimers()
+    try {
+      byTestId('confirm-email-resend')!.click()
+      await vi.advanceTimersByTimeAsync(SENT_SHOWN_MS - 1)
+      expect(byTestId('confirm-email-sent')).not.toBeNull()
+
+      await vi.advanceTimersByTimeAsync(1)
+
+      expect(byTestId('confirm-email-sent')).toBeNull()
+      expect(byTestId('confirm-email-resend')?.hasAttribute('disabled')).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears the note at the next press, and says it again once that link went', async () => {
+    answers['/api/auth/resend-verification'] = () => json({ ok: true })
+    await mount()
+    byTestId('confirm-email-resend')!.click()
+    await settle()
+    expect(byTestId('confirm-email-sent')).not.toBeNull()
+
+    byTestId('confirm-email-resend')!.click()
+    const atThePress = byTestId('confirm-email-sent')
+    await settle()
+
+    expect(atThePress).toBeNull()
+    expect(byTestId('confirm-email-sent')).not.toBeNull()
+    expect(sent).toHaveLength(2)
+  })
+
+  it("says the Worker's words when the link is not sent, and shows no note that it went", async () => {
+    answers['/api/auth/resend-verification'] = () =>
+      json({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
+    await mount()
+    const { toasts } = await import('../../core/toastStore')
+
+    byTestId('confirm-email-resend')!.click()
+    await settle()
+
+    expect(toasts().map(({ message, type }) => ({ message, type }))).toEqual([
+      { message: 'Too many attempts. Please try again in about 40 minutes.', type: 'error' },
+    ])
+    expect(byTestId('confirm-email-sent')).toBeNull()
+    expect(byTestId('confirm-email-resend')?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it("says words of its own for a failure that brought none, never the error's", async () => {
+    await mount()
+    const { toasts } = await import('../../core/toastStore')
+
+    byTestId('confirm-email-resend')!.click()
+    await settle()
+
+    expect(toasts().map(({ message, type }) => ({ message, type }))).toEqual([
+      { message: "Couldn't send the link. Try again in a moment.", type: 'error' },
+    ])
   })
 
   it('signs out from Sign out', async () => {

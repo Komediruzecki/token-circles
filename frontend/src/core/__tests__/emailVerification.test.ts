@@ -334,6 +334,18 @@ describe('resendVerificationEmail', () => {
     await expect(resendVerificationEmail()).rejects.toThrow('This account has no email address')
   })
 
+  it('throws an ApiError with the status and the server’s message', async () => {
+    const { resendVerificationEmail } = await load(() =>
+      json({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
+    )
+
+    await expect(resendVerificationEmail()).rejects.toMatchObject({
+      name: 'ApiError',
+      status: 429,
+      message: 'Too many attempts. Please try again in about 40 minutes.',
+    })
+  })
+
   it('explains a rate limit in words, since the endpoint answers 429 with no body', async () => {
     const { resendVerificationEmail } = await load(() =>
       Promise.resolve(new Response('', { status: 429 }))
