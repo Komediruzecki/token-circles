@@ -8,6 +8,32 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Loans: try a what-if before you pay.** Each loan has its own page. Compare sets your plan beside a what-if (more each month, a one-off or yearly payment, a payoff date to hit, or a new rate) in "Finish sooner" or "Pay less each month" mode, and Month by month exports the schedule as CSV.
+- **Forms say what is wrong, under the field.** A refused save marks the field and says why, in the same words signed in or without an account. That covers the forms from transactions, budgets and loans to Settings, import, sign-in and support.
+
+### Changed
+
+- **New accounts confirm their email before using the app.** Create account ends on Check your inbox, and an account whose address is not confirmed yet sees Confirm your email, which can send the link again. A sign-in code, a reset link or Google sign-in also confirm it.
+- **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.
+- **Email links finish where you sign in.** A confirm or change-of-address link opened in another browser completes once you sign in to that account there.
+- **Sign-in history is kept for 90 days**, and deleting your account deletes it with everything else.
+
+### Fixed
+
+- **Loans show what you owe today.** The remaining balance, progress bar, next payment date and paid-off status count interest, extra payments and rate changes. Due dates stay on the loan's day of the month, or on the last day of a shorter month.
+- **Dates follow your calendar, not UTC's.** Just after midnight, today's transactions count in Analytics, forms open on your date, and a bill due today stays due today. A bill or recurring rule on the 31st falls on a shorter month's last day.
+- **Quick add and the Transactions form offer your profile's categories and accounts.** The + button, Cmd-K and the form list the active profile's rows as they are when you open them, so a category made on Budgets, Goals or Bills shows up. A form left open when you switch profile closes and says what was not saved.
+- **Editing a category keeps its parent and tax-deductible setting**, and its icon can be cleared.
+- **Editing a transaction keeps balances and goals right.** A foreign-currency amount moves the account by its converted value, a category change updates both categories' goals, and notes you clear stay cleared.
+- **Copy last month keeps the budgets you already set.** It fills only the categories without a budget and tells you how many already had one.
+- **Budgets and bills count the right month.** Set Budget changes the month's budget instead of adding another, Allocate uses the month on screen, budget alerts compare a month with its own budgets, and the Bills dialog saves its category. Weekly and biweekly bills fall due on their own schedule.
+- **Analytics and reports count every day.** Each day of a month falls in one of its weeks, a PDF report includes every transaction in its range, and net worth uses each account's latest balance for the day. In local-first mode, the heatmap's day view lists that day's transactions.
+- **Failures say what happened.** An unexpected server error reads "Something went wrong on our side. Try again in a moment.", deleting something another tab already deleted says so, and renaming a tag or profile to a name in use tells you it is taken.
+- **Backups keep each profile's connected sources and settings.** A restore puts each retirement plan back under its own profile, and any profile but your last can be deleted.
+- **Local-first mode: bills keep their account, and uploaded files import.** Paying a bill moves its account's balance, and a statement file uploaded on Import is read and imported.
+
 ## [5.16.1] — 2026-09-27
 
 ### Fixed
