@@ -187,7 +187,8 @@ describe('a reset link for an account whose address was never confirmed', () => 
     // Each of them gets in beforehand.
     expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     const token = await resetLinkFor(SEEDED_ADDRESS);
 
     const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });
@@ -245,15 +246,16 @@ describe('a reset link for an account whose address was never confirmed', () => 
     });
     expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
   });
 });
 
 describe('a reset link for an unconfirmed account with only a password and a session', () => {
   it('says nothing was cleared: a reset replaces the password and ends sessions anyway', async () => {
     await env.DB.prepare('UPDATE users SET email_verified = 0 WHERE id = ?').bind(UID).run();
-    const { sessionCookie } = await import('./helpers/session');
-    await sessionCookie(UID, 'password', env);
+    const { unconfirmedSessionCookie } = await import('./helpers/session');
+    await unconfirmedSessionCookie(UID, 'password', env);
     const token = await resetLinkFor(EMAIL);
 
     const reset = await post('/api/auth/reset-password', { token, password: 'a-new-password' });

@@ -19,8 +19,9 @@ import {
   removeAccounts,
   seedAccount,
   sessionFrom,
+  whileConfirmed,
 } from './helpers/account-access';
-import { sessionCookie } from './helpers/session';
+import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
 
@@ -201,16 +202,20 @@ function signInWays(): Record<string, SignInWay> {
       confirmsItself: false,
       async seed(verified) {
         const { session } = await seedAccount(UID, ADDRESS, verified);
-        const options = await post('/api/auth/passkeys/register/options', {}, session);
-        const { challenge } = (await options.json()) as { challenge: string };
-        authenticator = await createAuthenticator();
-        const attestation = await authenticator.register(challenge, ORIGIN, RP_ID);
-        const registered = await post(
-          '/api/auth/passkeys/register/verify',
-          { response: attestation, name: 'Laptop' },
-          `${session}; ${cookieFrom(options, 'fm_webauthn')}`
-        );
-        expect(registered.status).toBe(200);
+        // An account waiting for its link registers no passkey now, but one made earlier may
+        // have: so it is registered while the address counts as confirmed.
+        await whileConfirmed(UID, async () => {
+          const options = await post('/api/auth/passkeys/register/options', {}, session);
+          const { challenge } = (await options.json()) as { challenge: string };
+          authenticator = await createAuthenticator();
+          const attestation = await authenticator.register(challenge, ORIGIN, RP_ID);
+          const registered = await post(
+            '/api/auth/passkeys/register/verify',
+            { response: attestation, name: 'Laptop' },
+            `${session}; ${cookieFrom(options, 'fm_webauthn')}`
+          );
+          expect(registered.status).toBe(200);
+        });
       },
       async signIn() {
         const options = await post('/api/auth/passkeys/login/options', {});
@@ -394,7 +399,8 @@ describe('POST /api/auth/email-link/finish', () => {
     expect((await accountRow(UID))?.email_verified).toBe(0);
     expect((await accountRow(OTHER))?.email_verified).toBe(1);
 
-    const mine = (await sessionCookie(UID)).split(';')[0]!;
+    // Its own session, which leaves the address unconfirmed until the link confirms it.
+    const mine = (await unconfirmedSessionCookie(UID)).split(';')[0]!;
     const right = await finishWith(`${mine}; ${marker}`);
 
     expect(right.body).toEqual({ outcome: 'confirmed', change: false });

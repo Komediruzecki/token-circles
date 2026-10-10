@@ -1,10 +1,10 @@
 /**
  * A password account has to confirm its address before it can start paying.
  *
- * Everything else about verification is a soft nudge. This one is hard, and the cases that
- * matter are the ones it must NOT catch: a Google account (verified by Google), and anybody
- * already subscribed reaching the portal to cancel. A gate that traps an existing subscriber
- * away from the cancel button is worse than no gate.
+ * Its session reaches no billing route before then: requireAuth answers it 403 EMAIL_UNCONFIRMED
+ * (confirm-email-gate.test.ts), ahead of billing's own check. The cases that matter are the ones
+ * it must NOT catch: a Google account (verified by Google), and a password account once its
+ * address is confirmed.
  *
  * STRIPE_SECRET_KEY is unset in tests, so "got past the gate" reads as 501 (billing not
  * configured) rather than a real Stripe call. That is exactly why the account precondition is
@@ -12,7 +12,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { sessionCookie } from './helpers/session';
+import { unconfirmedSessionCookie } from './helpers/session';
 
 const UID = 8200;
 
@@ -31,8 +31,14 @@ async function seed(opts: { provider: string; verified: number; customer?: strin
     .run();
 }
 
+/** A session that leaves the address as the test seeded it. */
 const session = async (): Promise<string> =>
-  (await sessionCookie(UID, 'password', env)).split(';')[0];
+  (await unconfirmedSessionCookie(UID, 'password', env)).split(';')[0];
+
+const UNCONFIRMED = {
+  error: 'Confirm your email address to use this account. Open the link we emailed you.',
+  code: 'EMAIL_UNCONFIRMED',
+};
 
 const checkout = async () =>
   SELF.fetch('https://api.example.com/api/billing/checkout', {
@@ -48,11 +54,13 @@ const portal = async () =>
   });
 
 const status = async () =>
-  (await (
-    await SELF.fetch('https://api.example.com/api/billing/status', {
-      headers: { Cookie: await session() },
-    })
-  ).json()) as { email_verification_required?: boolean };
+  SELF.fetch('https://api.example.com/api/billing/status', {
+    headers: { Cookie: await session() },
+  });
+
+const asked = async () =>
+  ((await (await status()).json()) as { email_verification_required?: boolean })
+    .email_verification_required;
 
 beforeEach(async () => {
   await env.DB.prepare('DELETE FROM profiles').run();
@@ -66,7 +74,7 @@ describe('POST /api/billing/checkout', () => {
     const res = await checkout();
 
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: 'Confirm your email address before subscribing' });
+    expect(await res.json()).toEqual(UNCONFIRMED);
   });
 
   it('lets a confirmed password account through', async () => {
@@ -91,33 +99,40 @@ describe('POST /api/billing/checkout', () => {
 });
 
 describe('POST /api/billing/portal', () => {
-  it('stays open to an unconfirmed account that is already paying', async () => {
-    // The one thing this gate must never do: strand a subscriber away from the cancel button.
+  it('opens for an account already paying once its address is confirmed, and not before', async () => {
+    // A password account that subscribed before checkout asked for a confirmed address. It meets
+    // the confirm screen like any other, and reaches the portal from the moment it confirms.
     await seed({ provider: 'password', verified: 0, customer: 'cus_existing' });
 
-    const res = await portal();
+    const before = await portal();
+    await env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(UID).run();
+    const after = await portal();
 
-    expect(res.status).not.toBe(403);
-    expect(res.status).toBe(501);
+    expect(before.status).toBe(403);
+    expect(await before.json()).toEqual(UNCONFIRMED);
+    expect(after.status).toBe(501);
   });
 });
 
 describe('GET /api/billing/status', () => {
-  it('tells the upgrade panel to ask, rather than letting it find out at Stripe', async () => {
+  it('is not reached by an unconfirmed password account, which sees the confirm screen instead', async () => {
     await seed({ provider: 'password', verified: 0 });
 
-    expect((await status()).email_verification_required).toBe(true);
+    const res = await status();
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual(UNCONFIRMED);
   });
 
   it('says nothing to ask once the address is confirmed', async () => {
     await seed({ provider: 'password', verified: 1 });
 
-    expect((await status()).email_verification_required).toBe(false);
+    expect(await asked()).toBe(false);
   });
 
   it('says nothing to ask for a Google account', async () => {
     await seed({ provider: 'google', verified: 0 });
 
-    expect((await status()).email_verification_required).toBe(false);
+    expect(await asked()).toBe(false);
   });
 });

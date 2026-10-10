@@ -5,7 +5,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { hashPassword } from '../../src/auth';
-import { sessionCookie } from './session';
+import { unconfirmedSessionCookie } from './session';
 import { mintApiToken } from '../../src/apitoken';
 import { generateTotpSecret } from '../../src/totp';
 import {
@@ -85,8 +85,30 @@ export async function seedAccount(
   await confirmTotp(env, id);
   await storeRecoveryCodes(env, id, generateRecoveryCodes());
   const token = await mintApiToken(env.DB, id, { name: 'Nightly import', scopes: ['read'] });
-  const session = (await sessionCookie(id, 'password', env)).split(';')[0]!;
+  // The address stays as `emailVerified` says: this session does not confirm it.
+  const session = (await unconfirmedSessionCookie(id, 'password', env)).split(';')[0]!;
   return { session, apiToken: token.secret, totpSecret };
+}
+
+/**
+ * Run `setUp` with account `id`'s address counted as confirmed, then put email_verified back as
+ * it was. A session of an account whose address waits for its link is refused everything that
+ * adds a way in or changes the address (EMAIL_UNCONFIRMED), but an account made before that rule
+ * may have set either up already: a test of such an account sets it up through here.
+ */
+export async function whileConfirmed<T>(id: number, setUp: () => Promise<T>): Promise<T> {
+  const before = await env.DB.prepare('SELECT email_verified FROM users WHERE id = ?')
+    .bind(id)
+    .first<{ email_verified: number }>();
+  if (!before) throw new Error(`whileConfirmed: there is no user ${id}`);
+  const setVerified = (value: number) =>
+    env.DB.prepare('UPDATE users SET email_verified = ? WHERE id = ?').bind(value, id).run();
+  await setVerified(1);
+  try {
+    return await setUp();
+  } finally {
+    await setVerified(before.email_verified);
+  }
 }
 
 /** What seedAccount puts in besides access, in the shape dataRows reads it back. */

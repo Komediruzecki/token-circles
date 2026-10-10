@@ -11,7 +11,9 @@
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashPassword } from '../src/auth';
-import { sessionCookie } from './helpers/session';
+import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
+import { whileConfirmed } from './helpers/account-access';
+import { pendingEmailChange } from '../src/email-change';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { fetchSettled } from './helpers/after-answer';
@@ -57,6 +59,13 @@ const cancel = (withCookie = true) =>
 const settings = async () =>
   (await (await call('GET', '/api/notifications/settings')).json()) as Record<string, unknown>;
 const signIn = (email: string) => call('POST', '/api/auth/login', { email, password: PASSWORD });
+
+/**
+ * Save a change for an account whose own address waits for its link. Its session asks for no
+ * change now (EMAIL_UNCONFIRMED), but a change it asked for before that rule may still be waiting,
+ * and its link still works.
+ */
+const saveWhileUnconfirmed = (email: string) => whileConfirmed(UID, () => save(email));
 
 const mailsTo = (address: string) => sent.filter((m) => m.to === address);
 
@@ -149,7 +158,8 @@ async function seed(verified = 1): Promise<void> {
       "INSERT INTO users (id, email, auth_provider, email_verified, token_version) VALUES (?, ?, 'password', 1, 1)"
     ).bind(OTHER, TAKEN),
   ]);
-  cookie = (await sessionCookie(UID, 'password', env)).split(';')[0];
+  // A session that leaves the address as `verified` says.
+  cookie = (await unconfirmedSessionCookie(UID, 'password', env)).split(';')[0];
 }
 
 beforeEach(async () => {
@@ -204,17 +214,21 @@ describe('saving a new address', () => {
     expect(left).toBeLessThanOrEqual(24 * 3_600_000);
   });
 
-  it('leaves an unconfirmed address unconfirmed', async () => {
+  it('is refused while the address the account has waits for its link, and stores and mails nothing', async () => {
     await seed(0);
 
-    expect((await save(NEW)).status).toBe(200);
+    const res = await save(NEW);
 
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     expect(await account()).toEqual({ email: OLD, email_verified: 0 });
+    expect(await unusedLinks()).toEqual([]);
+    expect(sent).toEqual([]);
   });
 
   it('mails the new address a link that moves the account to it and marks it confirmed', async () => {
     await seed(0);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
 
     expect(mailsTo(NEW)).toHaveLength(1);
     expect(mailsTo(NEW)[0].subject).toMatch(/confirm/i);
@@ -412,7 +426,7 @@ describe('saving a new address', () => {
     expect((await call('POST', '/api/auth/resend-verification')).status).toBe(200);
     const confirmCurrent = latestLinkTo(OLD);
 
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
 
     expect((await open(confirmCurrent)).headers.get('Location')).toBe(`${APP}/#everified=1`);
     expect(await account()).toEqual({ email: OLD, email_verified: 1 });
@@ -420,7 +434,7 @@ describe('saving a new address', () => {
 
   it('keeps a change waiting when the confirm link for the current address is sent again', async () => {
     await seed(0);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
 
     expect((await call('POST', '/api/auth/resend-verification')).status).toBe(200);
 
@@ -450,13 +464,13 @@ describe('the link, when it should not work', () => {
 
   it('refuses an expired link, and changes nothing', async () => {
     await seed(0);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
     await env.DB.prepare('UPDATE email_verifications SET expires_at = ? WHERE user_id = ?')
       .bind(new Date(Date.now() - 1000).toISOString(), UID)
       .run();
 
     // An expired change is not waiting any more.
-    expect((await settings()).pendingEmail).toBeNull();
+    expect(await pendingEmailChange(env.DB, UID)).toBeNull();
     const res = await open(latestLinkTo(NEW));
 
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=expired&change=1`);
@@ -483,7 +497,7 @@ describe('the link, when it should not work', () => {
   it('says so when another account has taken the address since, and changes nothing', async () => {
     // Unconfirmed, so a refused link that marked the address it leaves as confirmed would show.
     await seed(0);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
     // Before the sign-up, whose welcome mail to the same address carries a link of its own.
     const link = latestLinkTo(NEW);
     expect(
@@ -503,7 +517,7 @@ describe('the link, when it should not work', () => {
 describe('the link, against an address stored in another case', () => {
   it('says so when another account has taken the address since, and changes nothing', async () => {
     await seed(0);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
     const link = latestLinkTo(NEW);
     await googleAccountAt('New-Home@Example.com');
 
@@ -584,7 +598,7 @@ describe('the link, opened where the account is not signed in', () => {
 
 describe('the link, for an account that is gone', () => {
   it('refuses it rather than reporting a change', async () => {
-    await seed(0);
+    await seed(1);
     await save(NEW);
     const link = latestLinkTo(NEW);
     // Profiles first, as account deletion does: they point at the user row.
@@ -606,7 +620,7 @@ describe('opening the link', () => {
   it('ends every other link the account has out', async () => {
     await seed(0);
     await call('POST', '/api/auth/resend-verification');
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
     expect(await unusedLinks()).toHaveLength(2);
 
     await open(latestLinkTo(NEW));
@@ -697,19 +711,6 @@ describe('the current address', () => {
     expect(notices[0].html).not.toContain('verify-email');
   });
 
-  it('is not told the new address while it is unconfirmed itself', async () => {
-    await seed(0);
-
-    expect((await save(NEW)).status).toBe(200);
-
-    const notices = mailsTo(OLD);
-    expect(notices).toHaveLength(1);
-    expect(notices[0].text).toMatch(/asked to change its email address/i);
-    expect(notices[0].subject).not.toContain(NEW);
-    expect(notices[0].text).not.toContain(NEW);
-    expect(notices[0].html).not.toContain(NEW);
-  });
-
   it('hears nothing about a request that was refused', async () => {
     await seed(1);
 
@@ -737,7 +738,7 @@ describe('the current address', () => {
     )
       .bind(UID)
       .run();
-    cookie = (await sessionCookie(UID, 'google', env)).split(';')[0];
+    cookie = (await unconfirmedSessionCookie(UID, 'google', env)).split(';')[0];
 
     expect((await save(NEW)).status).toBe(200);
 
@@ -875,9 +876,9 @@ describe('cancelling', () => {
     await seed(0);
     await call('POST', '/api/auth/resend-verification');
     const confirmCurrent = latestLinkTo(OLD);
-    await save(NEW);
+    await saveWhileUnconfirmed(NEW);
 
-    await cancel();
+    await whileConfirmed(UID, cancel);
 
     expect((await open(confirmCurrent)).headers.get('Location')).toBe(`${APP}/#everified=1`);
     expect(await account()).toEqual({ email: OLD, email_verified: 1 });

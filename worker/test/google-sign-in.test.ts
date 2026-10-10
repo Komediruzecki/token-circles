@@ -84,7 +84,8 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
     // Each of them gets in beforehand.
     expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     const before = await account();
 
     const res = await googleSignIn();
@@ -164,7 +165,8 @@ describe('Google sign-in to an account whose address was never confirmed', () =>
     expect(await accessRows(UID)).toEqual(rowsBefore);
     expect(await (await signIn(ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
   });
 });
 

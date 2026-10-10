@@ -159,7 +159,8 @@ async function stored(profile: number, owned: Owned = {}): Promise<Record<Stored
 }
 
 /**
- * A new person with two profiles, signed in. Every scenario gets its own, so none sees another's
+ * A new person with two profiles, signed in, whose address is confirmed (an unconfirmed one reaches
+ * almost no route). Every scenario gets its own, so none sees another's
  * rows. Local-first has no plans, so the person holds the plan with every feature: a scenario
  * compares what the runtimes do with data, and what a plan sells is tested on its own
  * (plan-gates.test.ts).
@@ -171,7 +172,7 @@ async function person(): Promise<ContractApi> {
   const partner = user * 10 + 2;
   await env.DB.batch([
     env.DB.prepare(
-      "INSERT INTO users (id, email, auth_provider, token_version, plan) VALUES (?, ?, 'password', 1, 'ultimate')"
+      "INSERT INTO users (id, email, auth_provider, email_verified, token_version, plan) VALUES (?, ?, 'password', 1, 1, 'ultimate')"
     ).bind(user, `contract-${user}@example.com`),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Me')").bind(me, user),
     env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Partner')").bind(

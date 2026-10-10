@@ -9,6 +9,7 @@ import {
   clearedWorthSaying,
   clearUnconfirmedAccess,
   requireAuth,
+  requireAuthEvenUnconfirmed,
   verifyGoogleIdToken,
   signState,
   verifyState,
@@ -551,7 +552,10 @@ type EmailLinkOutcome = 'confirmed' | 'changed' | 'email_taken' | 'server_error'
 //
 // The marker stays for another account's session, so signing out and in to the right account
 // still finishes the link. Every other answer clears it: the link finished, or it never can.
-authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
+//
+// An account waiting for its confirm link reaches this route: finishing the link is how a session
+// it already had (one from before, or a passkey's) confirms its address.
+authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) => {
   const rl = await enforce(c, `email-link-finish:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
   const { link, carried } = await markedLink(c.req.raw, c.env, c.env.DB);
@@ -571,7 +575,9 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuth, async (c) => {
 
 // Send the confirm link again. Authenticated, so unlike forgot-password there is no address to
 // keep secret — the caller has already proved the account is theirs, and a 429 can be shown.
-authRoutes.post('/api/auth/resend-verification', requireAuth, async (c) => {
+// An account waiting for its confirm link reaches it: this is the Confirm your email screen's
+// "Send the link again".
+authRoutes.post('/api/auth/resend-verification', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare('SELECT email, email_verified FROM users WHERE id = ?')
     .bind(userId)
@@ -617,9 +623,10 @@ authRoutes.delete('/api/auth/email-change', requireAuth, async (c) => {
   return c.json({ ok: true });
 });
 
-// Current user. email_verified rides along because the app's confirm-your-email banner is the
-// only thing that reads it, and this is the call it already makes.
-authRoutes.get('/api/auth/me', requireAuth, async (c) => {
+// Current user. An account waiting for its confirm link reaches it too: email_verified and
+// auth_provider ride along, and from them the app shows its Confirm your email screen, with the
+// address, instead of the app.
+authRoutes.get('/api/auth/me', requireAuthEvenUnconfirmed, async (c) => {
   const userId = c.get('userId');
   const user = await c.env.DB.prepare(
     'SELECT id, username, email, auth_provider, email_verified FROM users WHERE id = ?'
@@ -641,8 +648,10 @@ authRoutes.get('/api/auth/me', requireAuth, async (c) => {
  * technically valid until it expires, which is the standing trade-off for a stateless token —
  * and the case that trade-off is wrong for (a session you believe is stolen) is exactly what
  * /api/auth/logout-all is for.
+ *
+ * An account waiting for its confirm link reaches it: the Confirm your email screen signs out.
  */
-authRoutes.post('/api/auth/logout', requireAuth, async (c) => {
+authRoutes.post('/api/auth/logout', requireAuthEvenUnconfirmed, async (c) => {
   const sessionId = c.get('sessionId');
   // Deleting the row is what actually ends it — clearing the cookie only ends it for a browser
   // that cooperates. A token issued before the sessions table existed has no row to delete and

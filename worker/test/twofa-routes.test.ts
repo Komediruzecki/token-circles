@@ -6,6 +6,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { currentStep, totpCode } from '../src/totp';
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
+import { signUpConfirmed } from './helpers/sign-up';
 
 /** A refusal at the code field, as the form shows it. */
 const atTheCode = (words: string) => ({ error: words, fields: { code: words } });
@@ -24,14 +25,8 @@ function cookieValue(res: Response, name: string): string | null {
   return null;
 }
 
-async function register(email = EMAIL): Promise<void> {
-  const res = await SELF.fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: PASSWORD }),
-  });
-  expect(res.status).toBe(200);
-}
+/** Sign up, and confirm the address, so the account can sign in with its password. */
+const register = (email = EMAIL) => signUpConfirmed(BASE, email, PASSWORD);
 
 async function login(email = EMAIL): Promise<Response> {
   return SELF.fetch(`${BASE}/api/auth/login`, {

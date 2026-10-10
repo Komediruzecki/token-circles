@@ -432,7 +432,8 @@ describe('a code for an account whose address was never confirmed', () => {
     // Each of them gets in beforehand.
     expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     const { code, cookie, id } = await mintWithCookie(SEEDED_ADDRESS, SEEDED);
 
     const res = await post('/api/auth/email-code/verify', { email: SEEDED_ADDRESS, code }, cookie);
@@ -492,7 +493,8 @@ describe('a code for an account whose address was never confirmed', () => {
     });
     expect(await (await signIn(SEEDED_ADDRESS)).json()).toEqual({ twofaRequired: true });
     expect((await me(session)).status).toBe(200);
-    expect((await callMcp(apiToken)).status).toBe(200);
+    // The API token is known: it is answered as one whose account waits for its link.
+    expect(await (await callMcp(apiToken)).json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
   });
 });
 

@@ -14,7 +14,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { sessionCookie } from './helpers/session';
+import { unconfirmedSessionCookie } from './helpers/session';
 import { renderEmailVerification, renderWelcome } from '../src/emailTemplates';
 import { fetchSettled } from './helpers/after-answer';
 
@@ -27,13 +27,15 @@ const APP = 'http://localhost:3800';
 /** The seeded account's session, which `confirm` sends unless told otherwise. */
 let signedIn = '';
 
+/** A password account, confirmed as `verified` says, and the sessions here leave it that way. */
 async function seedUser(id = USER_ID, email = EMAIL, verified = 0): Promise<void> {
   await env.DB.prepare(
     "INSERT INTO users (id, email, password_hash, auth_provider, email_verified, token_version) VALUES (?, ?, 'pbkdf2$100000$x$y', 'password', ?, 1)"
   )
     .bind(id, email, verified)
     .run();
-  if (id === USER_ID) signedIn = (await sessionCookie(id, 'password', env)).split(';')[0];
+  if (id === USER_ID)
+    signedIn = (await unconfirmedSessionCookie(id, 'password', env)).split(';')[0];
 }
 
 /** Mint a confirm row directly, so a test can choose the expiry and the address it is bound to. */
@@ -197,7 +199,7 @@ describe('GET /api/auth/verify-email, opened where its account is not signed in'
     await seedUser();
     await seedUser(8101, 'someone-else@example.com');
     await mintToken({ token: 'good-token' });
-    const other = (await sessionCookie(8101, 'password', env)).split(';')[0];
+    const other = (await unconfirmedSessionCookie(8101, 'password', env)).split(';')[0];
 
     const res = await confirm('good-token', APP, other);
 
@@ -318,7 +320,7 @@ describe('POST /api/auth/resend-verification', () => {
     });
 
   const sessionFor = async (id = USER_ID): Promise<string> =>
-    (await sessionCookie(id, 'password', env)).split(';')[0];
+    (await unconfirmedSessionCookie(id, 'password', env)).split(';')[0];
 
   it('needs a session', async () => {
     const res = await resend();
@@ -390,7 +392,7 @@ describe('POST /api/auth/register', () => {
 describe('GET /api/auth/me', () => {
   it('reports email_verified, which is the only thing that reads it', async () => {
     await seedUser(USER_ID, EMAIL, 1);
-    const cookie = (await sessionCookie(USER_ID, 'password', env)).split(';')[0];
+    const cookie = (await unconfirmedSessionCookie(USER_ID, 'password', env)).split(';')[0];
 
     const res = await SELF.fetch('https://api.example.com/api/auth/me', {
       headers: { Cookie: cookie },

@@ -26,7 +26,7 @@ async function rpc(
 
 beforeAll(async () => {
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, plan, token_version) VALUES (?, 'mcp@example.com', 'pbkdf2$100000$x$y', 'password', 'advanced', 1)"
+    "INSERT OR IGNORE INTO users (id, email, password_hash, auth_provider, email_verified, plan, token_version) VALUES (?, 'mcp@example.com', 'pbkdf2$100000$x$y', 'password', 1, 'advanced', 1)"
   )
     .bind(USER_ID)
     .run();

@@ -13,7 +13,13 @@ import { signState } from '../src/auth';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
-import { accessRows, removeAccounts, seedAccount, sessionFrom } from './helpers/account-access';
+import {
+  accessRows,
+  removeAccounts,
+  seedAccount,
+  sessionFrom,
+  whileConfirmed,
+} from './helpers/account-access';
 import { bumpTokenVersion, clearAndConfirm, dbWithStep, realDb, withDb } from './helpers/racing-db';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
@@ -154,7 +160,7 @@ describe('a sign-in is refused when the account changed after the check', () => 
 
   it('a passkey, when the address was confirmed after the passkey was checked', async () => {
     const { session } = await seedAccount(UID, ADDRESS, 0);
-    const authenticator = await registerPasskey(session);
+    const authenticator = await whileConfirmed(UID, () => registerPasskey(session));
     const options = await post('/api/auth/passkeys/login/options', {});
     const { challenge } = (await options.json()) as { challenge: string };
     const assertion = await authenticator.authenticate(challenge, ORIGIN, RP_ID);
@@ -215,23 +221,28 @@ describe('a sign-in is refused when the account changed after the check', () => 
   });
 });
 
+// A session reaches these routes only once its account's address is confirmed, so the change that
+// can still come between its check and the write is signing out everywhere.
 describe('a new way in is refused when the account changed after the session was checked', () => {
   it('an API token', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
-    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => clearAndConfirm(UID));
+    const { session } = await seedAccount(UID, ADDRESS, 1);
+    const before = (await accessRows(UID)).api_tokens;
+    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => bumpTokenVersion(UID));
     const res = await withDb(racing.db, () =>
       post('/api/account/api-tokens', { name: 'Laptop', scopes: ['read'] }, session)
     );
     await expectRefused(res, racing.ran);
-    expect((await accessRows(UID)).api_tokens).toEqual([]);
+    // The token seedAccount minted, and no other.
+    expect((await accessRows(UID)).api_tokens).toEqual(before);
   });
 
   it('a passkey', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const { session } = await seedAccount(UID, ADDRESS, 1);
+    await realDb.prepare('DELETE FROM webauthn_credentials WHERE user_id = ?').bind(UID).run();
     const options = await post('/api/auth/passkeys/register/options', {}, session);
     const { challenge } = (await options.json()) as { challenge: string };
     const attestation = await (await createAuthenticator()).register(challenge, ORIGIN, RP_ID);
-    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => clearAndConfirm(UID));
+    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => bumpTokenVersion(UID));
     const res = await withDb(racing.db, () =>
       post(
         '/api/auth/passkeys/register/verify',
@@ -244,33 +255,15 @@ describe('a new way in is refused when the account changed after the session was
   });
 
   it('two-factor setup', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
-    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => clearAndConfirm(UID));
-    const res = await withDb(racing.db, () => post('/api/auth/2fa/setup', {}, session));
-    await expectRefused(res, racing.ran);
-    expect((await accessRows(UID)).totp_credentials).toEqual([]);
-  });
-
-  it('turning two-factor on, with its recovery codes', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const { session } = await seedAccount(UID, ADDRESS, 1);
     await realDb.batch([
       realDb.prepare('DELETE FROM totp_credentials WHERE user_id = ?').bind(UID),
       realDb.prepare('DELETE FROM recovery_codes WHERE user_id = ?').bind(UID),
     ]);
-    const setup = await post('/api/auth/2fa/setup', {}, session);
-    expect(setup.status).toBe(200);
-    const { secret } = (await setup.json()) as { secret: string };
-    const code = await totpCode(secret, currentStep());
-    const racing = dbWithStep(
-      realDb,
-      /FROM totp_credentials WHERE user_id = \? AND confirmed_at IS NULL/,
-      () => clearAndConfirm(UID)
-    );
-    const res = await withDb(racing.db, () => post('/api/auth/2fa/enable', { code }, session));
+    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => bumpTokenVersion(UID));
+    const res = await withDb(racing.db, () => post('/api/auth/2fa/setup', {}, session));
     await expectRefused(res, racing.ran);
-    const access = await accessRows(UID);
-    expect(access.totp_credentials).toEqual([]);
-    expect(access.recovery_codes).toEqual([]);
+    expect((await accessRows(UID)).totp_credentials).toEqual([]);
   });
 
   it('turning two-factor on, when the account was signed out everywhere after the check', async () => {
@@ -310,8 +303,8 @@ describe('a new way in is refused when the account changed after the session was
   });
 
   it('a change of address asked for in Settings', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
-    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => clearAndConfirm(UID));
+    const { session } = await seedAccount(UID, ADDRESS, 1);
+    const racing = dbWithStep(realDb, AFTER_SESSION_CHECK, () => bumpTokenVersion(UID));
     const res = await withDb(racing.db, () =>
       put('/api/notifications/settings', { email: 'moved-6640@example.com' }, session)
     );
@@ -322,24 +315,27 @@ describe('a new way in is refused when the account changed after the session was
   });
 
   it('a change of address sent again', async () => {
-    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const { session } = await seedAccount(UID, ADDRESS, 1);
     const asked = await put(
       '/api/notifications/settings',
       { email: 'moved-6640@example.com' },
       session
     );
     expect(asked.status).toBe(200);
+    const waiting = () =>
+      rows(
+        "SELECT id FROM email_verifications WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL"
+      );
+    const before = await waiting();
+    expect(before).toHaveLength(1);
     const racing = dbWithStep(
       realDb,
       /purpose = 'change' AND used_at IS NULL AND expires_at > \?/,
-      () => clearAndConfirm(UID)
+      () => bumpTokenVersion(UID)
     );
     const res = await withDb(racing.db, () => post('/api/auth/email-change/resend', {}, session));
     await expectRefused(res, racing.ran);
-    expect(
-      await rows(
-        "SELECT id FROM email_verifications WHERE user_id = ? AND purpose = 'change' AND used_at IS NULL"
-      )
-    ).toEqual([]);
+    // No second link: the one sent before is still the only one waiting.
+    expect(await waiting()).toEqual(before);
   });
 });

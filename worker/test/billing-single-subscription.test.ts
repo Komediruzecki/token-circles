@@ -20,7 +20,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sessionCookie } from './helpers/session';
+import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 import { STRIPE_API_VERSION } from '../src/stripe';
 
 const UID = 8500;
@@ -428,9 +428,18 @@ describe('the gates in front of all of this still hold', () => {
       .bind(UID, 'unverified@example.com', 'pbkdf2$100000$x$y', 'password', CUSTOMER)
       .run();
 
-    const res = await choose('advanced');
+    // Its own session, which leaves the address unconfirmed (choose's would confirm it).
+    const res = await SELF.fetch('https://api.example.com/api/billing/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: (await unconfirmedSessionCookie(UID, 'password', env)).split(';')[0],
+      },
+      body: JSON.stringify({ plan: 'advanced', interval: 'monthly' }),
+    });
 
     expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'EMAIL_UNCONFIRMED' });
     expect(calls).toHaveLength(0);
   });
 
