@@ -21,6 +21,7 @@ import {
 import { showConfirm } from '../../core/confirmStore'
 import {
   completeOnboarding,
+  forgetOnboardingStatus,
   nextOnboardingStep,
   ONBOARDING_STEPS,
   onboardingOpen,
@@ -426,7 +427,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // A relaunched wizard may carry a completed/skipped flag; a fresh local
       // workspace should offer setup again. (Harmless when local data exists —
       // a non-pristine profile never auto-opens the wizard.)
-      localStorage.removeItem('finance_onboarding')
+      forgetOnboardingStatus('local')
       // Server-mode profile selection is meaningless against the local DB;
       // stale ids would make the profile picker read empty or heal onto the
       // wrong profile (mirrors handleLogout's cleanup).

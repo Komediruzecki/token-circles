@@ -1,13 +1,14 @@
 /**
  * Onboarding store — the first-run setup wizard's state and trigger logic.
  *
- * The wizard auto-opens exactly once, for a pristine profile: no accounts, no
- * transactions, no bills (a fresh email/Google signup in server mode, or a
- * truly empty serverless workspace). Finishing or skipping stamps a
- * localStorage flag (mirroring the spotlight-tour completion pattern) AND
- * mirrors it into the profile's settings KV — so in server mode, logging in
- * from a new device respects a decision made elsewhere. It can always be
- * relaunched from Settings → About or the tour-selection modal.
+ * The wizard auto-opens exactly once per account, for a pristine profile: no
+ * accounts, no transactions, no bills (a fresh email/Google signup in server
+ * mode, or a truly empty serverless workspace). Finishing or skipping stamps a
+ * localStorage flag kept under the account it belongs to (setOnboardingOwner),
+ * so each account signed in on one browser has its own, AND mirrors it into the
+ * profile's settings KV, so in server mode, logging in from a new device
+ * respects a decision made elsewhere. It can always be relaunched from
+ * Settings → About or the tour-selection modal.
  */
 import { createRoot, createSignal } from 'solid-js'
 import { apiGet, apiPut } from './api'
@@ -23,22 +24,76 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   'done',
 ]
 
-const STORAGE_KEY = 'finance_onboarding'
+/**
+ * The browser-wide flag, from before the flag was kept per account. setOnboardingOwner moves it to
+ * the first account it is given.
+ */
+const BROWSER_WIDE_KEY = 'finance_onboarding'
 
 export type OnboardingStatus = 'completed' | 'skipped' | null
 
-export function getOnboardingStatus(): OnboardingStatus {
+/** Whose flag is read and written: an account (`account-<id>`), `local`, or nobody yet. */
+let owner: string | null = null
+
+const keyOf = (of: string) => `${BROWSER_WIDE_KEY}:${of}`
+
+const isDecision = (raw: string | null): raw is Exclude<OnboardingStatus, null> =>
+  raw === 'completed' || raw === 'skipped'
+
+/**
+ * The owner of the flag: in local-first, the browser's one local account; signed in to the
+ * server, that account by id; otherwise nobody, and nothing is offered.
+ */
+export function onboardingOwnerFor(
+  serverMode: boolean,
+  accountId: number | null | undefined
+): string | null {
+  if (!serverMode) return 'local'
+  return typeof accountId === 'number' ? `account-${accountId}` : null
+}
+
+/**
+ * Read and write the flag of `next` from now on. A browser-wide flag still here goes to the first
+ * owner given, unless that owner has a decision of its own, and is then removed.
+ */
+export function setOnboardingOwner(next: string | null): void {
+  owner = next
+  if (next === null) return
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw === 'completed' || raw === 'skipped' ? raw : null
+    const browserWide = localStorage.getItem(BROWSER_WIDE_KEY)
+    if (browserWide === null) return
+    if (isDecision(browserWide) && localStorage.getItem(keyOf(next)) === null) {
+      localStorage.setItem(keyOf(next), browserWide)
+    }
+    localStorage.removeItem(BROWSER_WIDE_KEY)
+  } catch {
+    // Non-fatal: the move is tried again at the next start.
+  }
+}
+
+/** Remove `of`'s flag, so its next pristine workspace is offered the wizard again. */
+export function forgetOnboardingStatus(of: string): void {
+  try {
+    localStorage.removeItem(keyOf(of))
+  } catch {
+    // Non-fatal: a pristine workspace may go without the offer.
+  }
+}
+
+export function getOnboardingStatus(): OnboardingStatus {
+  if (owner === null) return null
+  try {
+    const raw = localStorage.getItem(keyOf(owner))
+    return isDecision(raw) ? raw : null
   } catch {
     return null
   }
 }
 
 function setOnboardingStatus(status: Exclude<OnboardingStatus, null>) {
+  if (owner === null) return
   try {
-    localStorage.setItem(STORAGE_KEY, status)
+    localStorage.setItem(keyOf(owner), status)
   } catch {
     // Non-fatal: the wizard may auto-open again next visit.
   }
@@ -125,13 +180,13 @@ export function collectionIsEmpty(res: unknown): boolean {
 }
 
 /**
- * Whether the wizard should auto-open: never seen it before (on this device
- * OR, per the settings KV, anywhere) AND the current profile is pristine —
- * zero accounts, zero transactions, zero bills. Any fetch error counts as
- * "no" — a broken bootstrap must not trap the user in a wizard.
+ * Whether the wizard should auto-open: the account is known, has never seen it
+ * before (on this device OR, per the settings KV, anywhere) AND the current
+ * profile is pristine — zero accounts, zero transactions, zero bills. Any fetch
+ * error counts as "no" — a broken bootstrap must not trap the user in a wizard.
  */
 export async function shouldOfferOnboarding(): Promise<boolean> {
-  if (getOnboardingStatus() !== null) return false
+  if (owner === null || getOnboardingStatus() !== null) return false
   try {
     const [accounts, transactions, bills, settings] = await Promise.all([
       apiGet('/api/accounts'),

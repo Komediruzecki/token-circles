@@ -31,6 +31,8 @@ function rangeQuery(range?: { startDate?: string; endDate?: string }): string {
 
 /** Who is signed in, as GET /api/auth/me says. */
 export interface SignedInAccount {
+  /** The account's id, or null when the answer carried none. */
+  id: number | null
   email: string
   emailVerified: boolean
   /** How the account signs in: 'password' or 'google'. */
@@ -172,12 +174,14 @@ export class ApiClient {
   async signedInAccount(): Promise<SignedInAccount | null> {
     try {
       const me = await this.request<{
+        id?: unknown
         email?: unknown
         email_verified?: unknown
         auth_provider?: unknown
         billing_account?: unknown
       }>('/auth/me', undefined)
       return {
+        id: typeof me?.id === 'number' ? me.id : null,
         email: typeof me?.email === 'string' ? me.email : '',
         // Absent is a server with no opinion, which is no reason to stop anyone.
         emailVerified:

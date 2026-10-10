@@ -14,7 +14,12 @@
  * it can point the app at the pristine profile instead of the seeded one.
  */
 import { expect, test } from '@playwright/test'
+import { randomBytes } from 'node:crypto'
+import { confirmAccount, sql } from './db'
 import { E2E_BASE, firstProfileId } from './test-helpers'
+
+// eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway fixture account
+const SECOND_PASSWORD = 'onboarding-second-account-1'
 
 test.describe('onboarding — server mode @smoke', () => {
   test('auto-opens for a logged-in user whose active profile is pristine', async ({ page }) => {
@@ -45,7 +50,10 @@ test.describe('onboarding — server mode @smoke', () => {
       // ride on the settings-KV mirror winning a race (flaked on slow CI).
       if (!sessionStorage.getItem('onb_spec_cleared')) {
         sessionStorage.setItem('onb_spec_cleared', '1')
-        localStorage.removeItem('finance_onboarding')
+        // The flag is kept per account (finance_onboarding:account-<id>), browser-wide before.
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
+        }
       }
     }, created.id)
     await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
@@ -68,5 +76,65 @@ test.describe('onboarding — server mode @smoke', () => {
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
     await page.waitForTimeout(1200)
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+  })
+
+  test('a second account in the same browser is offered its own onboarding', async ({ page }) => {
+    test.setTimeout(120_000)
+    const ctx = page.context()
+    const me = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
+    const first = ((await me.json()) as { id: number }).id
+
+    // This browser onboarded before the flag was kept per account: one browser-wide flag. The
+    // fixture account is signed in when the app first loads, so the flag becomes its own.
+    await ctx.addInitScript(() => {
+      if (!sessionStorage.getItem('onb_second_seeded')) {
+        sessionStorage.setItem('onb_second_seeded', '1')
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
+        }
+        localStorage.setItem('finance_storage_mode', 'self-hosted')
+        localStorage.setItem('finance_onboarding', 'completed')
+      }
+    })
+    await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem('finance_onboarding')))
+      .toBeNull()
+    expect(
+      await page.evaluate((id) => localStorage.getItem(`finance_onboarding:account-${id}`), first)
+    ).toBe('completed')
+
+    // A second person signs in to their own new account in the same browser.
+    const email = `e2e-onboarding-${randomBytes(6).toString('hex')}@tokencircles.test`
+    try {
+      sql('DELETE FROM rate_limits')
+      await ctx.request.post(`${E2E_BASE}/api/auth/register`, {
+        data: { email, password: SECOND_PASSWORD },
+      })
+      await confirmAccount(email)
+      const signedIn = await ctx.request.post(`${E2E_BASE}/api/auth/login`, {
+        data: { email, password: SECOND_PASSWORD },
+      })
+      expect(signedIn.ok(), await signedIn.text()).toBeTruthy()
+      await page.evaluate(() => {
+        localStorage.removeItem('currentProfileId')
+        localStorage.removeItem('selectedProfileIds')
+      })
+      await page.reload({ waitUntil: 'domcontentloaded' })
+
+      await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30000 })
+      // The fixture account keeps the decision it made.
+      expect(
+        await page.evaluate((id) => localStorage.getItem(`finance_onboarding:account-${id}`), first)
+      ).toBe('completed')
+    } finally {
+      // Delete the second account, and only it: the session may still be the fixture's.
+      const who = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
+      const signedInAs = who.ok() ? ((await who.json()) as { email?: string }).email : undefined
+      if (signedInAs === email) {
+        await ctx.request.delete(`${E2E_BASE}/api/account`, { data: { confirm: 'delete' } })
+      }
+    }
   })
 })

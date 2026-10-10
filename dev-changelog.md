@@ -276,6 +276,18 @@ All notable changes to Token Circles are documented here. The format is based on
   icon stores the default `tag` on create and edit, and an edit keeps every stored category field it
   does not send (parent, `tax_deductible`).
 
+### Onboarding
+
+- **Onboarding is decided per account.** The completed-or-skipped flag in localStorage is kept
+  under the account it belongs to, `finance_onboarding:account-<id>`, or `finance_onboarding:local`
+  in local-first (`frontend/src/core/onboardingStore.ts`: `setOnboardingOwner`,
+  `onboardingOwnerFor`). The app sets the owner at start, after an in-app sign-in and at sign-out,
+  from the id `GET /api/auth/me` answers (`SignedInAccount.id`); with no owner, nothing is offered.
+  The browser-wide `finance_onboarding` flag moves to the first owner set, unless that owner has a
+  flag of its own, and is removed. The mirror into the profile's settings (`onboarding`) and the
+  pristine-profile check are unchanged, so an account with data is still never offered the wizard.
+  No migration.
+
 ### CRUD contract suite
 
 - **One CRUD suite for cloud and local-first** (#606). `shared/contract/scenarios/` holds 120
