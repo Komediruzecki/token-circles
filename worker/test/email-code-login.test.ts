@@ -20,6 +20,7 @@ import { currentStep, totpCode } from '../src/totp';
 import { confirmTotp, enrollTotp } from '../src/twofa';
 import { SIGN_IN_MESSAGES } from '../../shared/signInSchema';
 import { fetchSettled } from './helpers/after-answer';
+import { dbThatNotes, realDb, withDb } from './helpers/racing-db';
 import {
   ACCESS_TABLES,
   accessRows,
@@ -230,6 +231,23 @@ describe('verifying a code', () => {
     expect(res.status).toBe(401);
     expect(cookieValue(res, 'fm_session')).toBeNull();
     expect(await res.json()).toEqual(CODE_REFUSED);
+  });
+
+  it('runs one attempts update for a wrong code, and one for a cookie that finds no code', async () => {
+    const { code, cookie } = await mintWithCookie();
+    const wrong = code === '000000' ? '111111' : '000000';
+    const noCode = issueLoginCodeCookie(env, newCodeHandle()).split(';')[0]!;
+    const attemptsUpdates = async (withCookie: string) => {
+      const noting = dbThatNotes(realDb);
+      const res = await withDb(noting.db, () =>
+        post('/api/auth/email-code/verify', { email: EMAIL, code: wrong }, withCookie)
+      );
+      expect(res.status).toBe(401);
+      expect(await res.json()).toEqual(CODE_REFUSED);
+      return noting.statements.filter((sql) => sql.startsWith('UPDATE login_codes SET attempts'));
+    };
+    expect(await attemptsUpdates(cookie), 'a wrong code').toHaveLength(1);
+    expect(await attemptsUpdates(noCode), 'a cookie that finds no code').toHaveLength(1);
   });
 
   it('refuses a cookie in the signed form it had before, as it refuses an expired code', async () => {

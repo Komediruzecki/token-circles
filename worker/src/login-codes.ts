@@ -102,10 +102,11 @@ export async function verifyLoginCode(
   )
     .bind(...handleHashes, email)
     .first<{ id: number; user_id: number; code_hash: string }>();
-  if (!row) return null;
-  if (row.code_hash !== hash) {
+  if (!row || row.code_hash !== hash) {
+    // A wrong code counts one more try on its row. A cookie that finds no live code runs the same
+    // update, which matches no row.
     await env.DB.prepare('UPDATE login_codes SET attempts = attempts + 1 WHERE id = ?')
-      .bind(row.id)
+      .bind(row?.id ?? null)
       .run();
     return null;
   }
