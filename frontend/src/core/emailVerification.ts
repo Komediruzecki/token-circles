@@ -208,15 +208,19 @@ export function takeConfirmLinkProblem(): string | null {
 }
 
 /**
- * Ask for the confirm link again. Throws an ApiError with the server's message, so the caller can
+ * Ask for the confirm link again. `alreadyVerified` is the Worker saying the address is confirmed
+ * already, so it sent nothing. Throws an ApiError with the server's message, so the caller can
  * show it (plainMessage passes an ApiError's words through).
  */
-export async function resendVerificationEmail(): Promise<void> {
+export async function resendVerificationEmail(): Promise<{ alreadyVerified: boolean }> {
   const res = await apiFetch('/api/auth/resend-verification', {
     method: 'POST',
     credentials: 'include',
   })
-  if (res.ok) return
+  if (res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { alreadyVerified?: unknown }
+    return { alreadyVerified: body.alreadyVerified === true }
+  }
   const detail = (await res.json().catch(() => ({}))) as { error?: string }
   throw new ApiError(
     res.status,

@@ -65,7 +65,12 @@ export default function ConfirmEmailScreen(props: {
     setSentNote(false)
     setSending(true)
     try {
-      await resendVerificationEmail()
+      const { alreadyVerified } = await resendVerificationEmail()
+      // Nothing was sent: the address is confirmed already, so the account goes into the app.
+      if (alreadyVerified) {
+        await askAgain()
+        return
+      }
       setSentNote(true)
       sentTimer = setTimeout(() => setSentNote(false), SENT_SHOWN_MS)
     } catch (err) {

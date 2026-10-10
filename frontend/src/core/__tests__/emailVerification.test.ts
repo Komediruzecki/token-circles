@@ -355,6 +355,18 @@ describe('noteAddressConfirmed', () => {
 })
 
 describe('resendVerificationEmail', () => {
+  it('says when the address is confirmed already, so nothing was sent', async () => {
+    const { resendVerificationEmail } = await load(() => json({ ok: true, alreadyVerified: true }))
+
+    expect(await resendVerificationEmail()).toEqual({ alreadyVerified: true })
+  })
+
+  it('says a link went otherwise', async () => {
+    const { resendVerificationEmail } = await load(() => json({ ok: true }))
+
+    expect(await resendVerificationEmail()).toEqual({ alreadyVerified: false })
+  })
+
   it('posts to the resend endpoint with the session', async () => {
     const { resendVerificationEmail, calls } = await load(() => json({ ok: true }))
 

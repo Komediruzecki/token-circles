@@ -200,6 +200,23 @@ describe('Confirm your email', () => {
     expect(sent).toHaveLength(2)
   })
 
+  it('lets the account in when the Worker says the address is confirmed already, and says nothing went', async () => {
+    answers['/api/auth/resend-verification'] = () => json({ ok: true, alreadyVerified: true })
+    answers['/api/auth/me'] = () =>
+      json({ email: 'waiting@example.com', email_verified: 1, auth_provider: 'password' })
+    await mount()
+
+    byTestId('confirm-email-resend')!.click()
+    await settle()
+
+    expect(sent).toEqual([
+      { url: '/api/auth/resend-verification', method: 'POST' },
+      { url: '/api/auth/me', method: 'GET' },
+    ])
+    expect(reloads).toBe(1)
+    expect(byTestId('confirm-email-sent')).toBeNull()
+  })
+
   it("says the Worker's words when the link is not sent, and shows no note that it went", async () => {
     answers['/api/auth/resend-verification'] = () =>
       json({ error: 'Too many attempts. Please try again in about 40 minutes.' }, 429)
