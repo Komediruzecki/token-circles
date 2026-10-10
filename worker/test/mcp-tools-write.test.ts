@@ -7,6 +7,7 @@ import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
+import { defaultTagColor, TAG_MESSAGES } from '../../shared/tagSchema';
 
 const USER_ID = 9600;
 const PROFILE_ID = 9601;
@@ -309,6 +310,38 @@ describe('write tools', () => {
       .first<{ name: string; criteria: string }>();
     expect(rule?.name).toBe('Streaming services');
     expect(JSON.parse(rule!.criteria).descriptionContains).toContain('netflix');
+  });
+
+  // It wrote tags past the tag rules: a padded name was a second tag, a new one took no colour
+  // from the palette, and a name of 100 characters was stored where the Tags page stops at 50.
+  it('upsert_tag_rule finds a tag in any case or padding, and creates one by the tag rules', async () => {
+    await env.DB.prepare('DELETE FROM tags WHERE profile_id = ?').bind(PROFILE_ID).run();
+    const travel = { descriptionContains: ['rail'] };
+
+    const first = unwrap(
+      await call('upsert_tag_rule', { tagName: 'Travel', name: 'Trains', criteria: travel })
+    );
+    const twin = unwrap(
+      await call('upsert_tag_rule', { tagName: '  travel ', name: 'Planes', criteria: travel })
+    );
+
+    expect(twin.tagId).toBe(first.tagId);
+    const tags = await env.DB.prepare('SELECT name, color FROM tags WHERE profile_id = ?')
+      .bind(PROFILE_ID)
+      .all();
+    expect(tags.results).toEqual([{ name: 'Travel', color: defaultTagColor(0) }]);
+
+    const long = await call('upsert_tag_rule', {
+      tagName: 'Weekend trips to the seaside and the mountains in summer',
+      name: 'Long',
+      criteria: travel,
+    });
+    expect(long.isError).toBe(true);
+    expect(long.content[0].text).toBe(TAG_MESSAGES.nameLength);
+    const count = await env.DB.prepare('SELECT COUNT(*) AS n FROM tags WHERE profile_id = ?')
+      .bind(PROFILE_ID)
+      .first<{ n: number }>();
+    expect(count?.n).toBe(1);
   });
 
   it('every write tool refuses a read-only token', async () => {

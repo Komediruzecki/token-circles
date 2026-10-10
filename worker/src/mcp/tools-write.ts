@@ -7,6 +7,7 @@ import * as db from '../db';
 import { localMonth } from '../local-date';
 import { BUDGET_MESSAGES, checkBudgetCreate } from '../../../shared/budgetSchema';
 import { addCalendarMonths } from '../../../shared/calendarMonths';
+import { checkTagCreate, clashingTagName, defaultTagColor } from '../../../shared/tagSchema';
 
 // Write tools: append plus curate. No arbitrary update or delete -- an agent should be able to
 // add rows and to act on its own analysis, and its mistakes should stay additive and reversible
@@ -257,7 +258,7 @@ defineTool({
   name: 'upsert_tag_rule',
   title: 'Save a tagging rule',
   description:
-    'Create or update a rule that tags matching transactions automatically, now and in future. Use this to persist a categorization insight instead of only fixing the rows in front of you. The tag is created if it does not exist.',
+    'Create or update a rule that tags matching transactions automatically, now and in future. Use this to persist a categorization insight instead of only fixing the rows in front of you. The tag is found by its name in any case, and created, with a name of up to 50 characters, when the profile has none by that name.',
   scope: 'write',
   input: z
     .object({
@@ -271,18 +272,21 @@ defineTool({
     })
     .strict(),
   handler: async (c, args, profileId) => {
-    let tag = await db.first<{ id: number }>(
+    // The profile's tag of that name, in any case and with any space around it, as the Tags page
+    // finds a name taken; a new one is checked and coloured as the Tags page creates one.
+    const own = await db.all<{ id: number; name: string }>(
       c.env.DB,
-      'SELECT id FROM tags WHERE profile_id = ? AND lower(name) = lower(?)',
-      profileId,
-      args.tagName
+      'SELECT id, name FROM tags WHERE profile_id = ? ORDER BY id',
+      profileId
     );
+    const taken = clashingTagName(own, args.tagName);
+    let tag = taken === null ? undefined : own.find((row) => row.name === taken);
     if (!tag) {
-      const created = await db.insert(c.env.DB, 'tags', {
-        name: args.tagName,
-        profile_id: profileId,
-      });
-      tag = { id: Number(created.meta.last_row_id) };
+      const { name, color } = accept(
+        checkTagCreate({ name: args.tagName }, defaultTagColor(own.length))
+      );
+      const created = await db.insert(c.env.DB, 'tags', { name, color, profile_id: profileId });
+      tag = { id: Number(created.meta.last_row_id), name };
     }
 
     const existing = await db.first<{ id: number }>(
