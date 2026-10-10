@@ -2,7 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { ACCESS_CLEARED_NOTICE, takeAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
-import { linkWaiting } from '../core/emailVerification'
+import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -41,6 +41,8 @@ export default function LoginScreen() {
   const [notice, setNotice] = createSignal('')
   // A way in other than the form that failed (a passkey). The form's own problems are its notice.
   const [elsewhere, setElsewhere] = createSignal('')
+  // A confirm link opened in this browser that did not confirm: why, with the way to a fresh one.
+  const [linkProblem, setLinkProblem] = createSignal('')
   // 'inbox' is Check your inbox, for the address `inbox` holds; 'twofa' is the second factor's code
   // step; 'email-code' is passwordless sign-in.
   const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
@@ -55,6 +57,13 @@ export default function LoginScreen() {
   // A reset that also confirmed the address reloads onto this screen with what else it cleared.
   onMount(() => {
     if (takeAccessCleared('reset')) setNotice(ACCESS_CLEARED_NOTICE.reset)
+  })
+
+  // A confirm link opened in this browser that had expired, or had been used or replaced, comes
+  // back here signed out: nothing else would say why it did not confirm.
+  onMount(() => {
+    const problem = takeConfirmLinkProblem()
+    if (problem !== null) setLinkProblem(problem)
   })
 
   // A link from an email, opened in this browser before signing in: signing in here finishes it
@@ -117,6 +126,7 @@ export default function LoginScreen() {
     setMode(next)
     setNotice('')
     setElsewhere('')
+    setLinkProblem('')
     form.reset({ ...form.values })
   }
 
@@ -202,6 +212,22 @@ export default function LoginScreen() {
                 <path d="M20 6L9 17l-5-5" />
               </svg>
               <span>{notice()}</span>
+            </div>
+          </Show>
+
+          <Show when={linkProblem()}>
+            <div data-test-id="link-problem" role="status" class={styles.linkProblem}>
+              <p class={styles.linkProblemText}>{linkProblem()}</p>
+              <button
+                type="button"
+                data-test-id="link-problem-resend"
+                class={styles.accountLink}
+                onClick={() => {
+                  switchTo('confirm')
+                }}
+              >
+                Send the link again
+              </button>
             </div>
           </Show>
 

@@ -4,6 +4,7 @@ import { apiFetch } from '../core/apiFetch'
 import { displayVersion } from '../core/appVersion'
 import {
   clearLinkWaiting,
+  confirmLinkProblem,
   finishEmailLink,
   linkWaiting,
   noteAddressConfirmed,
@@ -16,13 +17,6 @@ import { ResendVerification } from './ResendVerification'
 import stepStyles from './SignInSteps.module.css'
 import SupportContact from './SupportContact'
 import { OTHER_ACCOUNT_NOTICE } from './VerifyEmailBanner'
-
-/** Why the confirm link the person opened did not confirm the address. */
-function linkProblem(error: string): string {
-  return error === 'expired'
-    ? 'That link has expired. Send the link again for a fresh one.'
-    : "That link doesn't work anymore. Send the link again for a fresh one."
-}
 
 /** Said when the billing portal did not open and the Worker gave no words of its own. */
 const PORTAL_FAILED = "Couldn't open the billing page. Try again in a moment."
@@ -91,7 +85,7 @@ export default function ConfirmEmailScreen(props: {
 
   onMount(() => {
     const result = takeEmailVerifyResult()
-    if (result !== null && !result.ok && !result.change) setSaid(linkProblem(result.error))
+    if (result !== null && !result.ok && !result.change) setSaid(confirmLinkProblem(result.error))
     if (linkWaiting() === null) return
     void finishEmailLink().then((finished) => {
       // No answer: the note stays, and the next load asks again.

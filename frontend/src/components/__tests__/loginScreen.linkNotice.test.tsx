@@ -14,6 +14,7 @@ let waiting: { change: boolean } | null = null
 
 vi.mock('../../core/emailVerification', () => ({
   linkWaiting: () => waiting,
+  takeConfirmLinkProblem: () => null,
 }))
 vi.mock('../../core/api', () => ({
   api: {

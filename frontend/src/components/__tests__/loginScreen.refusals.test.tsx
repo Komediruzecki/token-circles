@@ -44,8 +44,11 @@ interface Captcha {
   token?: string
 }
 
-/** The screen as the app mounts it, with the captcha off unless `captcha` turns it on. */
-async function mount(captcha?: Captcha) {
+/**
+ * The screen as the app mounts it, with the captcha off unless `captcha` turns it on. `opened` is
+ * the fragment a confirm link sent this browser back with, read at boot as index.tsx reads it.
+ */
+async function mount(captcha?: Captcha, opened?: string) {
   vi.resetModules()
   vi.doMock('../../core/apiFetch', () => ({
     apiFetch: (url: string, init?: RequestInit) => {
@@ -82,6 +85,10 @@ async function mount(captcha?: Captcha) {
   vi.doMock('../TwofaChallenge', () => ({
     default: () => <p data-test-id="second-factor">Second factor</p>,
   }))
+  if (opened !== undefined) {
+    window.location.hash = opened
+    ;(await import('../../core/emailVerification')).consumeEmailVerifyRedirect()
+  }
   const { default: LoginScreen } = await import('../LoginScreen')
   toasts = (await import('../../core/toastStore')).toasts
   host = document.createElement('div')
@@ -142,6 +149,7 @@ beforeEach(() => {
       reloads += 1
     },
     href: 'https://app.example.com/',
+    pathname: '/',
     search: '',
     hash: '',
   } as unknown as Location)
@@ -441,6 +449,56 @@ describe('creating an account', () => {
     expect(email().value).toBe('name@example.com')
     expect(password().value).toBe('')
     expect(notice()).toBe('')
+  })
+})
+
+describe('the sign-in screen after a confirm link that did not confirm', () => {
+  const problem = () => host.querySelector('[data-test-id="link-problem"]')
+  const resend = () => host.querySelector<HTMLButtonElement>('[data-test-id="link-problem-resend"]')
+
+  it('says the link has expired, with Send the link again', async () => {
+    await mount(undefined, '#everified_error=expired')
+
+    expect(problem()?.querySelector('p')?.textContent).toBe(
+      'That link has expired. Send the link again for a fresh one.'
+    )
+    expect(resend()?.textContent?.trim()).toBe('Send the link again')
+  })
+
+  it('says a used or replaced link does not work anymore, with Send the link again', async () => {
+    await mount(undefined, '#everified_error=invalid_or_used')
+
+    expect(problem()?.querySelector('p')?.textContent).toBe(
+      "That link doesn't work anymore. Send the link again for a fresh one."
+    )
+    expect(resend()?.textContent?.trim()).toBe('Send the link again')
+  })
+
+  it('opens the form that sends the link, and sends it for the address typed', async () => {
+    answers['/api/auth/verify-email/resend'] = () => json({ ok: true })
+    await mount(undefined, '#everified_error=expired')
+    resend()!.click()
+    await settle()
+    expect(problem()).toBeNull()
+    expect(submitButton().textContent).toBe('Send the link again')
+    type(email(), 'name@example.com')
+    await submit()
+
+    expect(sent).toEqual([
+      {
+        url: '/api/auth/verify-email/resend',
+        body: { email: 'name@example.com', turnstileToken: '' },
+      },
+    ])
+    expect(inboxAddress()).toBe('name@example.com')
+  })
+
+  it('leaves an address confirmed on the way in for the app to say, and shows no problem', async () => {
+    sessionStorage.setItem('tc:email-confirmed', '1')
+    await mount()
+
+    expect(problem()).toBeNull()
+    expect(sessionStorage.getItem('tc:email-confirmed')).toBe('1')
   })
 })
 

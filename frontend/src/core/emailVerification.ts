@@ -166,11 +166,33 @@ function takeAddressConfirmed(): EmailVerifyResult | null {
   }
 }
 
+/**
+ * Why a confirm link the person opened did not confirm the address, for a screen that offers to
+ * send the link again: it had expired, or it was used, replaced by a newer one, or unknown.
+ */
+export function confirmLinkProblem(error: string): string {
+  return error === 'expired'
+    ? 'That link has expired. Send the link again for a fresh one.'
+    : "That link doesn't work anymore. Send the link again for a fresh one."
+}
+
 /** The outcome of the confirm link, once. Returns null when there was nothing to report. */
 export function takeEmailVerifyResult(): EmailVerifyResult | null {
   const result = pending ?? takeAddressConfirmed()
   pending = null
   return result
+}
+
+/**
+ * Why the confirm link this browser just opened did not confirm the address, once, for the
+ * sign-in screen; null when it did not open one that failed. Any other outcome stays for the app
+ * to say once it is signed in: an address confirmed on the way in, or a change of address.
+ */
+export function takeConfirmLinkProblem(): string | null {
+  if (pending === null || pending.ok || pending.change) return null
+  const problem = confirmLinkProblem(pending.error)
+  pending = null
+  return problem
 }
 
 /** Ask for the confirm link again. Throws with the server's message so the caller can show it. */
