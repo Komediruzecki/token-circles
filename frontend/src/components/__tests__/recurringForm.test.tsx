@@ -348,6 +348,48 @@ describe('editing a recurring transaction', () => {
     expect(failureToasts()).toEqual([])
   })
 
+  it('shows a type and a frequency it no longer offers as they were stored', async () => {
+    await seed({ type: 'deduction', frequency: 'biweekly' })
+    await openEdit()
+
+    const kind = field('Type') as HTMLSelectElement
+    const often = field('Frequency') as HTMLSelectElement
+    expect([kind.value, kind.selectedOptions[0]?.textContent]).toEqual(['deduction', 'Deduction'])
+    expect([often.value, often.selectedOptions[0]?.textContent]).toEqual(['biweekly', 'Biweekly'])
+
+    // Changed and changed back, it is still there to choose.
+    type(kind, 'expense')
+    type(kind, 'deduction')
+    expect(kind.value).toBe('deduction')
+
+    type(field('Notes'), 'Every other Friday')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect(await rules()).toEqual([
+        expect.objectContaining({
+          type: 'deduction',
+          frequency: 'biweekly',
+          notes: 'Every other Friday',
+        }),
+      ])
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('offers a new rule only the types and frequencies it can save', async () => {
+    await openAdd()
+
+    const offered = (select: HTMLSelectElement) => Array.from(select.options).map((o) => o.value)
+    expect(offered(field('Type') as HTMLSelectElement)).toEqual(['expense', 'income', 'transfer'])
+    expect(offered(field('Frequency') as HTMLSelectElement)).toEqual([
+      'daily',
+      'weekly',
+      'monthly',
+      'yearly',
+    ])
+  })
+
   it('marks an amount changed to zero, and keeps the rule as it was', async () => {
     await seed({})
     await openEdit()

@@ -7,6 +7,7 @@
  * answer's own words when it has them; both used to fail without a word.
  */
 import { createSignal, For, Show } from 'solid-js'
+import { RECURRING_FREQUENCIES, RECURRING_TYPES } from '../../../shared/recurringSchema'
 import { api, errorStatus, formatCurrency, toast } from '../core/api'
 import { plainMessage } from '../core/apiError'
 import { profileReadScope } from '../core/apiProfileScope'
@@ -18,6 +19,17 @@ import { createRecurringForm, ruleName } from '../features/recurringForm'
 import { Field, FormNotice, SubmitButton } from './form'
 import styles from './RecurringSection.module.css'
 import type { Category, RecurringTransaction } from '../types/models'
+
+/**
+ * A type or frequency the rule being edited was stored with that the dialog no longer offers (an
+ * older version saved "deduction" and "biweekly"), or null. The select shows it as stored rather
+ * than blank, so the rule opens, and is saved untouched, as it was.
+ */
+function notOffered(offered: readonly string[], stored: string | undefined): string | null {
+  return stored && !offered.includes(stored) ? stored : null
+}
+
+const asLabel = (value: string): string => value.charAt(0).toUpperCase() + value.slice(1)
 
 interface RecurringSectionProps {
   categories: Category[]
@@ -366,6 +378,13 @@ export default function RecurringSection(props: RecurringSectionProps) {
                         <option value="expense">Expense</option>
                         <option value="income">Income</option>
                         <option value="transfer">Transfer</option>
+                        <Show when={notOffered(RECURRING_TYPES, ruleForm.editing()?.type)}>
+                          {(stored) => (
+                            <option value={stored()} selected={ruleForm.values.type === stored()}>
+                              {asLabel(stored())}
+                            </option>
+                          )}
+                        </Show>
                       </select>
                     )}
                   </Field>
@@ -390,6 +409,18 @@ export default function RecurringSection(props: RecurringSectionProps) {
                         <option value="weekly">Weekly</option>
                         <option value="monthly">Monthly</option>
                         <option value="yearly">Yearly</option>
+                        <Show
+                          when={notOffered(RECURRING_FREQUENCIES, ruleForm.editing()?.frequency)}
+                        >
+                          {(stored) => (
+                            <option
+                              value={stored()}
+                              selected={ruleForm.values.frequency === stored()}
+                            >
+                              {asLabel(stored())}
+                            </option>
+                          )}
+                        </Show>
                       </select>
                     )}
                   </Field>
