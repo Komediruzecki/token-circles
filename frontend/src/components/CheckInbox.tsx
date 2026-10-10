@@ -54,7 +54,8 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>
         <p class={styles.lead} role="status" data-test-id="check-inbox-sent">
-          If that address is waiting for its link, a new one is on its way.
+          If {props.email} still needs confirming, a fresh link is on its way. Only the newest link
+          works.
         </p>
       </Show>
       <form {...resend.attrs}>

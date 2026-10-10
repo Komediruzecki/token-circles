@@ -429,7 +429,7 @@ describe('creating an account', () => {
       },
     ])
     expect(host.querySelector('[data-test-id="check-inbox-sent"]')?.textContent).toBe(
-      'If that address is waiting for its link, a new one is on its way.'
+      'If name@example.com still needs confirming, a fresh link is on its way. Only the newest link works.'
     )
   })
 
