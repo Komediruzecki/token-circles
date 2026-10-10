@@ -186,9 +186,37 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
 });
 
 /**
+ * The account at `email` (`found`), or the one sign-up makes there (`made`, its id). The account
+ * and its profile are written in one batch, so a failure leaves neither behind and the work can
+ * run again from the start.
+ */
+async function accountAt(
+  env: Env,
+  email: string,
+  passwordHash: string
+): Promise<{ found: { id: number } } | { made: number }> {
+  const found = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
+    .bind(email)
+    .first<{ id: number }>();
+  if (found) return { found };
+  const [user] = await env.DB.batch([
+    env.DB.prepare(
+      "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
+    ).bind(email, passwordHash),
+    env.DB.prepare(
+      "INSERT INTO profiles (name, user_id) SELECT 'Personal Profile', id FROM users WHERE email = ?"
+    ).bind(email),
+  ]);
+  return { made: user!.meta.last_row_id as number };
+}
+
+/**
  * The work a sign-up does after its answer. A new address gets an account, with a profile, and
  * its welcome mail with the confirm link. An address that has an account already gets a notice
- * that someone tried, and nothing else changes. A failure is logged; the answer has gone.
+ * that someone tried, and nothing else changes.
+ *
+ * Finding or making the account runs a second time when the first try fails. A second failure
+ * reaches the caller, which logs it: the answer has gone.
  */
 async function signUpAfterAnswer(
   env: Env,
@@ -198,10 +226,10 @@ async function signUpAfterAnswer(
   apiOrigin: string
 ): Promise<void> {
   const passwordHash = await hashPassword(password);
-  const existing = await env.DB.prepare('SELECT id FROM users WHERE email = ?')
-    .bind(email)
-    .first<{ id: number }>();
-  if (existing) {
+  const account = await accountAt(env, email, passwordHash).catch(() =>
+    accountAt(env, email, passwordHash)
+  );
+  if ('found' in account) {
     const notice = renderAccountExists({ appUrl: base });
     await sendMail(env, email, notice.subject, notice.html, { text: notice.text }).catch(
       (e: unknown) => {
@@ -210,15 +238,7 @@ async function signUpAfterAnswer(
     );
     return;
   }
-  const res = await env.DB.prepare(
-    "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, ?, 0, 'password')"
-  )
-    .bind(email, passwordHash)
-    .run();
-  const userId = res.meta.last_row_id as number;
-  await env.DB.prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
-    .bind('Personal Profile', userId)
-    .run();
+  const userId = account.made;
   // A welcome without a confirm link still goes: the account can ask for one from the sign-in
   // form or the Confirm your email screen.
   let verifyUrl: string | undefined;
@@ -239,8 +259,9 @@ async function signUpAfterAnswer(
 // Email + password registration. Anti-enumeration (CR-9): the answer is the same whether or not
 // the address already has an account, and it comes before any work on one. Making the account,
 // or telling the address's owner that someone tried, happens after the answer
-// (signUpAfterAnswer), and a failure there is logged, not answered. No session is set: a password
-// account signs in once its address is confirmed.
+// (signUpAfterAnswer), which tries the account work twice; a failure it cannot get past is
+// logged, not answered. No session is set: a password account signs in once its address is
+// confirmed.
 authRoutes.post('/api/auth/register', async (c) => {
   const rl = await enforce(c, `register:${clientIp(c)}`, 5, 3600);
   if (rl) return rl;
