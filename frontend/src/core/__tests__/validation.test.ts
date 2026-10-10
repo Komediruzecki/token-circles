@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod/v4'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { BUDGET_MESSAGES } from '../../../../shared/budgetSchema'
 import { GOAL_MESSAGES } from '../../../../shared/goalSchema'
 import { LOAN_MESSAGES } from '../../../../shared/loanSchema'
 import { TRANSACTION_MESSAGES } from '../../../../shared/transactionSchema'
-import { validateBody } from '../validation'
+import { validateBody, zodCheck } from '../validation'
 
 describe('validation - validateBody', () => {
   it('passes valid transaction create body', () => {
@@ -304,29 +305,44 @@ describe('validation - the shared checks', () => {
 })
 
 describe('validation - a zod refusal in plain words', () => {
-  it('says what to do with a missing value and a value not on the list', async () => {
-    // Counterparties are the last entity with a zod schema (docs/plans/2026-10-07-form-errors.md).
-    expect(await fieldsOf('/api/counterparties', { name: '', type: 'company' })).toEqual({
-      name: 'Fill in the name.',
-      type: 'Choose the type from the list.',
+  // No write local-first serves is checked by a zod schema now: counterparties, the last, are only
+  // read here, and the router answers a write to them 405 before any check. A zod schema put back
+  // in the map is still answered in plain words, never zod's.
+  const counterparty = z.object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['individual', 'business']).optional(),
+  })
+
+  it("says which field to check, not zod's words for what is wrong with it", () => {
+    expect(zodCheck(counterparty, { name: '', type: 'company' })).toEqual({
+      ok: false,
+      fields: { name: 'Check the name.', type: 'Check the type.' },
     })
-    expect(await fieldsOf('/api/counterparties', { name: 'x'.repeat(101) })).toEqual({
-      name: 'Keep the name to 100 characters or fewer.',
+  })
+
+  it("passes on a refine's own message, which is written for people", () => {
+    const trip = z
+      .object({ from: z.string(), to: z.string() })
+      .refine((t) => t.to >= t.from, { message: 'End the trip after it starts.', path: ['to'] })
+    expect(zodCheck(trip, { from: '2026-03-02', to: '2026-03-01' })).toEqual({
+      ok: false,
+      fields: { to: 'End the trip after it starts.' },
     })
+  })
+
+  it('names no field for a body that is not an object, for the summary to cover', () => {
+    expect(zodCheck(counterparty, 'not json')).toEqual({ ok: false, fields: {} })
+  })
+
+  it('leaves a write to counterparties to the router, which refuses it before any check', () => {
+    expect(validateBody('POST', '/api/counterparties', { name: '' })).toBeNull()
+    expect(validateBody('PUT', '/api/counterparties/3', { name: '' })).toBeNull()
   })
 
   it('names a too-long name, and a wrong kind of value, by the field', async () => {
     expect(await fieldsOf('/api/tags', { name: 'x'.repeat(51), color: 5 })).toEqual({
       name: 'Keep the name to 50 characters or fewer.',
       color: "That color can't be used. Pick another one.",
-    })
-  })
-
-  it('answers a body that is not an object with a summary and no fields', async () => {
-    const result = validateBody('POST', '/api/counterparties', 'not json')
-    expect(result?.status).toBe(400)
-    expect(await result!.json()).toEqual({
-      error: 'Some details need another look. Check them and try again.',
     })
   })
 })
