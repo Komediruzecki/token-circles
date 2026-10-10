@@ -23,7 +23,7 @@ import {
   sessionFrom,
   whileConfirmed,
 } from './helpers/account-access';
-import { bumpTokenVersion, dbWithStep, realDb, withDb } from './helpers/racing-db';
+import { bumpTokenVersion, dbThatNotes, dbWithStep, realDb, withDb } from './helpers/racing-db';
 import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
@@ -474,11 +474,16 @@ describe('POST /api/auth/email-link/finish', () => {
   it('refuses a marker that was altered, and clears it', async () => {
     const { session } = await seedAccount(UID, ADDRESS, 0);
     const marker = await openSignedOut(await mintLink('confirm'));
-    const [id, exp, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
     // The first character carries six bits of the signature; the last one has padding in it.
     const flipped = `${sig!.startsWith('A') ? 'B' : 'A'}${sig!.slice(1)}`;
+    const otherHash = `${hash!.startsWith('a') ? 'b' : 'a'}${hash!.slice(1)}`;
 
-    for (const altered of [`${id}.${exp}.${flipped}`, `${id}.${Number(exp) + 60}.${sig}`]) {
+    for (const altered of [
+      `${id}.${exp}.${hash}.${flipped}`,
+      `${id}.${Number(exp) + 60}.${hash}.${sig}`,
+      `${id}.${exp}.${otherHash}.${sig}`,
+    ]) {
       const { res, body } = await finishWith(`${session}; ${MARKER}=${altered}`);
       expect(body).toEqual({ outcome: 'none', change: false });
       cleared(res);
@@ -495,9 +500,9 @@ describe('POST /api/auth/email-link/finish', () => {
     )
       .bind(await sha256(change))
       .first<{ id: number }>())!.id;
-    const [, exp, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const [, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
 
-    const { body } = await finishWith(`${session}; ${MARKER}=${changeId}.${exp}.${sig}`);
+    const { body } = await finishWith(`${session}; ${MARKER}=${changeId}.${exp}.${hash}.${sig}`);
 
     expect(body).toEqual({ outcome: 'none', change: false });
     expect((await accountRow(UID))?.email).toBe(ADDRESS);
@@ -542,6 +547,37 @@ describe('POST /api/auth/email-link/finish', () => {
     expect(body).toEqual({ outcome: 'none', change: false });
     cleared(res);
     expect((await linkRow(token))?.used_at).toBeNull();
+  });
+
+  it('reads no link for a marker whose signature does not hold', async () => {
+    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const marker = await openSignedOut(await mintLink('confirm'));
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const flipped = `${sig!.startsWith('A') ? 'B' : 'A'}${sig!.slice(1)}`;
+    const noting = dbThatNotes(realDb);
+
+    const { body } = await withDb(noting.db, () =>
+      finishWith(`${session}; ${MARKER}=${id}.${exp}.${hash}.${flipped}`)
+    );
+
+    expect(body).toEqual({ outcome: 'none', change: false });
+    expect(noting.statements.filter((sql) => /email_verifications/.test(sql))).toEqual([]);
+  });
+
+  it('looks at the first three markers a request carries, and no further', async () => {
+    const { session } = await seedAccount(UID, ADDRESS, 0);
+    const marker = await openSignedOut(await mintLink('confirm'));
+    const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
+    const forged = (n: number) =>
+      `${MARKER}=${id}.${exp}.${hash}.${`${'AB'[n % 2]}${sig!.slice(1)}`}`;
+    const genuine = `${MARKER}=${id}.${exp}.${hash}.${sig}`;
+
+    const fourth = await finishWith([session, forged(0), forged(1), forged(2), genuine].join('; '));
+    expect(fourth.body).toEqual({ outcome: 'none', change: false });
+    expect((await accountRow(UID))?.email_verified).toBe(0);
+
+    const third = await finishWith([session, forged(0), forged(1), genuine].join('; '));
+    expect(third.body).toEqual({ outcome: 'confirmed', change: false });
   });
 
   it('is rate-limited like opening a link', async () => {
