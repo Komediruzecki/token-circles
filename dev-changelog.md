@@ -251,7 +251,11 @@ All notable changes to Token Circles are documented here. The format is based on
   the app after signing in opens it again. It is a route outside the page router, like
   `#reset-password` (`isNonPageRoute` in `frontend/src/core/hashRoute.ts`): a signed-in app stays
   on its page instead of showing the 404, and `periodStore` keeps the period off it. The Reset
-  password button of `renderAccountExists` links there.
+  password button of `renderAccountExists` links there. Only account mode has a sign-in screen, so
+  `consumeForgotPasswordLink` (`frontend/src/core/forgotPasswordLink.ts`, called in `index.tsx`
+  before render) moves a browser in local-first mode to account mode first, always, as a confirm
+  link that needs a sign-in does (`toAccountMode`); a fresh production browser starts in
+  local-first mode (`VITE_DEFAULT_STORAGE=dexie`). Data kept on the device is not touched. `frontend/tests/forgot-password-link.spec.ts` opens the link under both boots.
 
 ### Mails
 

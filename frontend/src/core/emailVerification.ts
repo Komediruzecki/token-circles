@@ -68,7 +68,8 @@ export function consumeEmailVerifyRedirect(): void {
   if (!pending.ok && !change) toAccountMode()
 }
 
-function toAccountMode(): void {
+/** Move the device to account mode; local data stays where it is. Also used by forgotPasswordLink. */
+export function toAccountMode(): void {
   if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
 }
 
