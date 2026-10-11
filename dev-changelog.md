@@ -46,6 +46,9 @@ All notable changes to Token Circles are documented here. The format is based on
   account reader (`fix(accounts)`, the reader keeps a type it lacks) fails to load a list holding
   one, so that fix ships in an earlier release, and no rollback goes past it once a credit account
   exists.
+- `0038_import_bank_formats.sql` adds one nullable column to `import_logs`, `bank_formats TEXT`,
+  with no default and no rewrite: every existing log reads NULL. Safe to apply before the code: the
+  Worker before it names its columns on every insert.
 
 ### Loans
 
@@ -642,6 +645,21 @@ All notable changes to Token Circles are documented here. The format is based on
   `src/__tests__/accountTypeChoices.test.ts`, which fails when a place that offers account types
   and `ACCOUNT_TYPES` disagree. The tests that used `credit` as the type a build does not have use
   `loan` now.
+- **Import logs keep the bank formats a session read** (`shared/bankFormats.ts`, migration 0038):
+  the adapter ids, comma-separated, in a column of their own, because both runtimes cut `details`
+  at 8000 characters. Every writer goes through `storedBankFormats`, which keeps the ids in
+  `BANK_FORMAT_IDS` (the registry's, which a test holds equal) each once and drops the rest:
+  `POST /api/import-logs` in both runtimes (the Import page sends the recognised statements'
+  formats from the Bank Imports tab, `importedBankFormats`, and none from the other tabs), and
+  `/api/v1/import` (the adapter that read the file). The email import and the Google Sheet sync read
+  plain tables and write null. Local-first lists a log from before it with `bank_formats: null`, as
+  the Worker answers. Nothing reads the column yet; the region choice will.
+- **Tests:** `worker/test/import-bank-formats.test.ts` (the migration's column),
+  `v1-import-bank.test.ts` (the API import names its adapter, the generic path none),
+  `bankFormats.test.ts` (the reader, the registry, what the import page sends),
+  `importLogFormatsRead.test.ts` (a local log from before reads null), two scenarios in both
+  runtimes (stored and dropped; kept by a backup and restore), and `tests/import.spec.ts`, where a
+  Revolut statement imported through the Bank Imports tab is logged as `revolut`.
 
 ### CRUD contract suite
 

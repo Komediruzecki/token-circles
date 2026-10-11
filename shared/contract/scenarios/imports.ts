@@ -1,7 +1,7 @@
 import { ACCOUNT_MESSAGES, importedAccountTypeError } from '../../accountSchema';
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
 import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
-import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
+import { addCategory, balanceOf, expectMoney, listTransactions, rowsOf } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -210,6 +210,32 @@ export const imports = [
         accountBalanceDates: {},
       });
       expect(await accountNamed(api, expect, 'Pocket')).toMatchObject({ type: 'giro' });
+    }
+  ),
+
+  scenario(
+    'an import log keeps the bank formats its session read, and drops any the app does not read',
+    async (api, expect) => {
+      const sent = [
+        ['contract-formats-two', ['dkb', ' Sparkasse ', 'dkb'], 'dkb,sparkasse'],
+        ['contract-formats-text', 'erste, PBZ', 'erste,pbz'],
+        ['contract-formats-unknown', ['mybank'], null],
+        ['contract-formats-none', undefined, null],
+      ] as const;
+      for (const [importId, formats, stored] of sent) {
+        const reply = await api.post('/api/import-logs', {
+          import_id: importId,
+          source: 'statements',
+          imported: 2,
+          ...(formats === undefined ? {} : { bank_formats: formats }),
+        });
+        expectOk(expect, reply, `POST the log ${importId}`);
+        expect(reply.body.bank_formats, importId).toBe(stored);
+      }
+      const listed = await rowsOf(api, expect, '/api/import-logs');
+      expect(Object.fromEntries(listed.map((log) => [log.import_id, log.bank_formats]))).toEqual(
+        Object.fromEntries(sent.map(([importId, , stored]) => [importId, stored]))
+      );
     }
   ),
 

@@ -155,6 +155,25 @@ export const backup = [
     });
   }),
 
+  scenario('a backup keeps the bank formats an import read', async (api, expect) => {
+    expectOk(
+      expect,
+      await api.post('/api/import-logs', {
+        import_id: 'contract-backup-formats',
+        source: 'statements',
+        imported: 2,
+        bank_formats: ['dkb', 'ing'],
+      }),
+      'POST the import log'
+    );
+
+    const back = await restoredAsIs(api, expect);
+    const logs = (await back.get('/api/import-logs')).body as Json[];
+    expect(logs.find((log) => log.import_id === 'contract-backup-formats')).toMatchObject({
+      bank_formats: 'dkb,ing',
+    });
+  }),
+
   scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {
     const { mine, theirs } = await backUpAndRestore(api, expect);
     // Rate periods, extra payments, balance history and transaction tags belong to their loan,
