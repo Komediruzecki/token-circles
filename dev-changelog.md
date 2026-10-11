@@ -418,6 +418,16 @@ All notable changes to Token Circles are documented here. The format is based on
   account, resume after a reload, a skip seen from a second browser, a flag sent once and a second
   account in one browser; the cloud form-errors spec opens the wizard from the tour menu.
   `onboardingDecided` flags for other accounts still work, through the same one-time send.
+- **The tours finished are on the account** (`frontend/src/core/spotlightStore.ts`). Signed in,
+  `endSpotlight` adds the tour, or every tour after the full tour, to `tours.seen` with
+  `PUT /api/account/state/tours`. The writes go in order, so a tour ended while another's write is
+  out is kept, and each is made on a list that was read: a list that cannot be read is never
+  replaced. Reset All Tours sends `{ seen: [] }`. The tour menu reads the list as it opens
+  (`loadAccountTours`), and its badges and count follow the list as it arrives. An account with no
+  list yet takes this browser's `finance_spotlight_tours` map once; the map stays, and local-first
+  keeps using it. `scripts/walk-tours.mjs` clears the fixture account's list before each load, as
+  its init script clears the browser's. No notice keeps a dismissal in localStorage (advice
+  dismissals were already in the profile's settings), so tours are the only state that moved.
 
 ### CRUD contract suite
 

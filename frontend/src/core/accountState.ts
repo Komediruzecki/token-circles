@@ -57,25 +57,27 @@ export function setAccountStateOwner(next: string | null): void {
 }
 
 /**
- * The signed-in account's state, read from the Worker once per account. Null for local-first or
- * nobody, and when the read failed.
+ * The signed-in account's state, read from the Worker once per account, with every write since
+ * applied. Null for local-first or nobody, and when the read failed.
  */
 export function readAccountState(): Promise<UserState | null> {
   const of = owner
   if (!isServerAccount(of)) return Promise.resolve(null)
-  if (reading !== null) return reading
-  const attempt: Promise<UserState | null> = apiGet(USER_STATE_PATH).then(
-    (answer) => readUserState(answer),
-    () => null
-  )
-  reading = attempt
-  void attempt.then((state) => {
-    // A newer owner, or a newer read, has taken over: this answer is not theirs.
-    if (owner !== of || reading !== attempt) return
-    if (state === null) reading = null
-    else store.setState(state)
-  })
-  return attempt
+  if (reading === null) {
+    const attempt: Promise<UserState | null> = apiGet(USER_STATE_PATH).then(
+      (answer) => readUserState(answer),
+      () => null
+    )
+    reading = attempt
+    void attempt.then((state) => {
+      // A newer owner, or a newer read, has taken over: this answer is not theirs.
+      if (owner !== of || reading !== attempt) return
+      if (state === null) reading = null
+      else store.setState(state)
+    })
+  }
+  // The copy, not the first answer: a write made since the read is in the copy.
+  return reading.then((read) => (read !== null && owner === of ? (store.state() ?? read) : read))
 }
 
 /**

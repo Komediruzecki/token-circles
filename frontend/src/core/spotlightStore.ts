@@ -1,5 +1,9 @@
 /**
- * Spotlight Store — Per-page guided tours with localStorage tracking
+ * Spotlight Store — Per-page guided tours, and which ones the person has finished
+ *
+ * Signed in, the tours finished belong to the account (`tours` in `/api/account/state`,
+ * accountState.ts), so the tour menu shows them as done on every device. Local-first keeps them
+ * in this browser's localStorage.
  *
  * Targeting contract: every step points at a dedicated `data-tour="<key>"` attribute
  * (NOT a CSS class, tag, placeholder, or `data-test-id`). The anchor element must be
@@ -9,6 +13,13 @@
  * actually exists in the component source).
  */
 import { createSignal } from 'solid-js'
+import {
+  accountState,
+  accountStateOwner,
+  isServerAccount,
+  readAccountState,
+  writeAccountState,
+} from './accountState'
 
 export interface SpotlightStep {
   title: string
@@ -521,16 +532,85 @@ export const [showTourSelection, setShowTourSelection] = createSignal(false)
 
 // ── Persistence ──
 
-export function loadCompletedTours(): Record<string, boolean> {
+/** Signed in: the account keeps the list. Local-first, or nobody: this browser does. */
+const onTheAccount = (): boolean => isServerAccount(accountStateOwner())
+
+/** This browser's list: local-first's, and the one an account takes when it has none yet. */
+function loadBrowserTours(): Record<string, boolean> {
   try {
-    return JSON.parse(localStorage.getItem(TOURS_KEY) || '{}')
+    const raw: unknown = JSON.parse(localStorage.getItem(TOURS_KEY) || '{}')
+    return raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, boolean>)
+      : {}
   } catch {
     return {}
   }
 }
 
-function saveCompletedTours(tours: Record<string, boolean>) {
-  localStorage.setItem(TOURS_KEY, JSON.stringify(tours))
+/**
+ * The tours finished, by id. Signed in, the account's list as last read (none until it is read,
+ * or when it cannot be), and it updates as the list arrives; otherwise this browser's.
+ */
+export function loadCompletedTours(): Record<string, boolean> {
+  if (!onTheAccount()) return loadBrowserTours()
+  const seen = accountState()?.tours?.seen ?? []
+  return Object.fromEntries(seen.map((id) => [id, true]))
+}
+
+/** The tour writes in order, so a tour ended while another's write is out is not lost. */
+let toursWrite: Promise<void> = Promise.resolve()
+
+/** Resolves once every tour write sent so far has settled (tests await this). */
+export function toursWriteSettled(): Promise<void> {
+  return toursWrite
+}
+
+/**
+ * Signed in: the account's list, read once. An account with no list yet takes this browser's,
+ * once: the badges a person earned here before the list moved to the account. Null while the
+ * list cannot be read.
+ */
+async function accountTours(): Promise<string[] | null> {
+  const of = accountStateOwner()
+  const state = await readAccountState()
+  if (state === null || accountStateOwner() !== of) return null
+  if (state.tours !== null) return state.tours.seen
+  // Only the tours there are: a key left by an older version would be refused, and with it the rest.
+  const browser = loadBrowserTours()
+  const here = SPOTLIGHT_TOURS.map((tour) => tour.id).filter((id) => browser[id])
+  if (here.length === 0) return []
+  const kept = await writeAccountState('tours', { seen: here }).catch(() => null)
+  return kept?.seen ?? null
+}
+
+/** Signed in, read the account's list, so the tour menu shows its tours as done. */
+export function loadAccountTours(): Promise<void> {
+  if (!onTheAccount()) return Promise.resolve()
+  const read = toursWrite.then(async () => {
+    await accountTours()
+  })
+  toursWrite = read
+  return read
+}
+
+/** Keep `ids` as finished: on the account signed in, in this browser otherwise. */
+function markToursFinished(ids: string[]): void {
+  if (!onTheAccount()) {
+    const tours = loadBrowserTours()
+    for (const id of ids) tours[id] = true
+    localStorage.setItem(TOURS_KEY, JSON.stringify(tours))
+    return
+  }
+  toursWrite = toursWrite.then(async () => {
+    // Nothing is sent on a list that could not be read: it would replace the account's.
+    const seen = await accountTours()
+    if (seen === null) return
+    const next = [...new Set([...seen, ...ids])]
+    if (next.length === seen.length) return
+    await writeAccountState('tours', { seen: next }).catch(() => {
+      // Not kept: the tour shows as not done, and can be taken again.
+    })
+  })
 }
 
 export function isTourCompleted(tourId: string): boolean {
@@ -620,20 +700,9 @@ export function prevSpotlightStep() {
 
 export function endSpotlight() {
   const tourId = activeTourId()
-  if (tourId && tourId !== 'full') {
-    const tours = loadCompletedTours()
-    tours[tourId] = true
-    saveCompletedTours(tours)
-  }
-
-  // If full tour, mark all individual tours as completed
-  if (tourId === 'full') {
-    const tours = loadCompletedTours()
-    for (const tour of SPOTLIGHT_TOURS) {
-      tours[tour.id] = true
-    }
-    saveCompletedTours(tours)
-  }
+  // The full tour finishes every individual tour.
+  if (tourId === 'full') markToursFinished(SPOTLIGHT_TOURS.map((tour) => tour.id))
+  else if (tourId) markToursFinished([tourId])
 
   setSpotlightActive(false)
   setSpotlightStep(0)
@@ -642,5 +711,13 @@ export function endSpotlight() {
 }
 
 export function resetAllTours() {
-  localStorage.removeItem(TOURS_KEY)
+  if (!onTheAccount()) {
+    localStorage.removeItem(TOURS_KEY)
+    return
+  }
+  toursWrite = toursWrite.then(async () => {
+    await writeAccountState('tours', { seen: [] }).catch(() => {
+      // Not kept: the tours stay done, and Reset can be pressed again.
+    })
+  })
 }
