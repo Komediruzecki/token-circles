@@ -25,6 +25,7 @@ import {
   writeAccountState,
 } from './accountState'
 import { apiGet, apiPut } from './api'
+import { beginGettingStarted } from './gettingStarted'
 import {
   accountOnboardingOwner,
   BROWSER_WIDE_ONBOARDING_KEY,
@@ -215,7 +216,11 @@ export function prevOnboardingStep() {
   if (idx > 0) showStep(order[idx - 1])
 }
 
-/** Keep the decision and close: on the account's record signed in, else the flag and settings. */
+/**
+ * Keep the decision and close: on the account's record signed in, else the flag and settings. The
+ * first decision also gives the account its Getting started card (gettingStarted.ts); a wizard
+ * relaunched after that changes neither.
+ */
 function decide(outcome: OnboardingDecision): void {
   const of = owner
   store.setOnboardingOpen(false)
@@ -223,10 +228,13 @@ function decide(outcome: OnboardingDecision): void {
     // Relaunched over a finished record: the first decision stands, so there is nothing to send.
     if (onboardingFinished(accountState()?.onboarding ?? null)) return
     void recordDecision(of, outcome, store.onboardingStep())
+    beginGettingStarted(of)
     return
   }
+  const first = getOnboardingStatus(of) === null
   setOnboardingStatus(outcome, of)
   persistRemoteStatus(outcome)
+  if (first) beginGettingStarted(of)
 }
 
 /** Finish the wizard. */

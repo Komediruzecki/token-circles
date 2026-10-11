@@ -6,8 +6,8 @@
  * the Settings "View Logs" button landed on the error page, and finishing a password reset —
  * which clears the hash — left the user on it.
  */
-import { describe, expect, it } from 'vitest'
-import { resolvePageFromHash } from '../hashRoute'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resolvePageFromHash, takeHashFlag } from '../hashRoute'
 
 const PAGES = new Set([
   'dashboard',
@@ -73,5 +73,38 @@ describe('resolvePageFromHash', () => {
     // The "already has an account" mail links there. Signed in, the app stays where it is
     // instead of showing the 404 page.
     expect(resolve('#forgot-password')).toBeNull()
+  })
+})
+
+describe('takeHashFlag', () => {
+  afterEach(() => {
+    history.replaceState(null, '', '#')
+  })
+
+  it("answers a link's flag once, and takes it off the address without a hashchange", () => {
+    history.replaceState(null, '', '#bills?scan=1&period=2026-09')
+    const changes = vi.fn()
+    window.addEventListener('hashchange', changes)
+
+    expect(takeHashFlag('bills', 'scan')).toBe(true)
+    expect(window.location.hash).toBe('#bills?period=2026-09')
+    expect(takeHashFlag('bills', 'scan')).toBe(false)
+
+    history.replaceState(null, '', '#bills?scan=1')
+    expect(takeHashFlag('bills', 'scan')).toBe(true)
+    expect(window.location.hash).toBe('#bills')
+
+    window.removeEventListener('hashchange', changes)
+    expect(changes).not.toHaveBeenCalled()
+  })
+
+  it("leaves another page's flag, and a flag with another value, where they are", () => {
+    history.replaceState(null, '', '#transactions?scan=1')
+    expect(takeHashFlag('bills', 'scan')).toBe(false)
+    expect(window.location.hash).toBe('#transactions?scan=1')
+
+    history.replaceState(null, '', '#bills?scan=yes')
+    expect(takeHashFlag('bills', 'scan')).toBe(false)
+    expect(window.location.hash).toBe('#bills?scan=yes')
   })
 })

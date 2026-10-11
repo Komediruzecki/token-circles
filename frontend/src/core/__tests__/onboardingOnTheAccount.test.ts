@@ -9,6 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { checkUserStateWrite, sqliteDateTime } from '../../../../shared/accountState'
 import { __resetAccountStateForTest, readAccountState } from '../accountState'
 import {
+  __resetGettingStartedForTest,
+  gettingStartedRecord,
+  gettingStartedSettled,
+} from '../gettingStarted'
+import {
   completeOnboarding,
   getOnboardingStatus,
   maybeOfferOnboarding,
@@ -22,7 +27,7 @@ import {
   startOnboarding,
   whereToOfferOnboarding,
 } from '../onboardingStore'
-import type { OnboardingRecord } from '../../../../shared/accountStateKeys'
+import type { GettingStartedRecord, OnboardingRecord } from '../../../../shared/accountStateKeys'
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -31,6 +36,7 @@ const json = (body: unknown, status = 200) =>
 const worker = {
   signedIn: 5,
   records: new Map<number, OnboardingRecord>(),
+  gettingStarted: new Map<number, GettingStartedRecord>(),
   settings: new Map<number, Record<string, unknown>>(),
   failRead: false,
   failWrite: false,
@@ -51,8 +57,19 @@ function workerStandIn() {
       return json({
         onboarding: worker.records.get(id) ?? null,
         tours: null,
-        getting_started: null,
+        getting_started: worker.gettingStarted.get(id) ?? null,
       })
+    }
+    if (path === '/api/account/state/getting_started' && method === 'PUT') {
+      const checked = checkUserStateWrite(
+        'getting_started',
+        JSON.parse(body) as unknown,
+        worker.gettingStarted.get(id) ?? null,
+        sqliteDateTime(new Date())
+      )
+      if (!checked.ok) return json({ error: 'Check the fields.', fields: checked.fields }, 400)
+      worker.gettingStarted.set(id, checked.value)
+      return json({ getting_started: checked.value })
     }
     if (path === '/api/account/state/onboarding' && method === 'PUT') {
       if (worker.failWrite) return json({ error: 'Something went wrong on our side.' }, 500)
@@ -75,7 +92,12 @@ function workerStandIn() {
   }
 }
 
-const statePuts = () => worker.sent.filter((r) => r.startsWith('PUT /api/account/state'))
+const statePuts = () =>
+  worker.sent.filter(
+    (r) => r.startsWith('PUT /api/account/state') && !r.includes('/getting_started')
+  )
+const cardPuts = () =>
+  worker.sent.filter((r) => r.startsWith('PUT /api/account/state/getting_started'))
 const settingsPuts = () => worker.sent.filter((r) => r.startsWith('PUT /api/settings'))
 
 /** A page load signed in as `id`: nothing read yet. */
@@ -89,6 +111,7 @@ function signIn(id: number): void {
 /** Let the writes the store sends without waiting settle. */
 async function settled(): Promise<void> {
   await onboardingMirrorSettled()
+  await gettingStartedSettled()
   await vi.waitFor(async () => {
     const before = worker.sent.length
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -105,7 +128,9 @@ beforeEach(async () => {
   __resetAccountStateForTest()
   if (onboardingOpen()) skipOnboarding()
   await onboardingMirrorSettled()
+  __resetGettingStartedForTest()
   worker.records.clear()
+  worker.gettingStarted.clear()
   worker.settings.clear()
   worker.failRead = false
   worker.failWrite = false
@@ -302,6 +327,91 @@ describe('an account with no finished record', () => {
   })
 })
 
+describe('the Getting started card', () => {
+  it('comes with the first finish, shown, and follows the account to another device', async () => {
+    signIn(5)
+    await maybeOfferOnboarding()
+    completeOnboarding()
+    await settled()
+
+    expect(cardPuts()).toEqual(['PUT /api/account/state/getting_started {"hidden":false}'])
+    expect(worker.gettingStarted.get(5)).toEqual({ hidden: false })
+    expect(gettingStartedRecord()).toEqual({ hidden: false })
+
+    signIn(5)
+    expect(gettingStartedRecord()).toBeNull()
+    await readAccountState()
+    expect(gettingStartedRecord()).toEqual({ hidden: false })
+  })
+
+  it('comes with a skip too', async () => {
+    signIn(5)
+    await maybeOfferOnboarding()
+    skipOnboarding()
+    await settled()
+
+    expect(worker.gettingStarted.get(5)).toEqual({ hidden: false })
+  })
+
+  it('does not come to an account that decided before, in this browser or its settings', async () => {
+    localStorage.setItem('finance_onboarding:account-5', 'completed')
+    signIn(5)
+    expect(await whereToOfferOnboarding()).toBeNull()
+    worker.settings.set(6, { onboarding: 'skipped' })
+    signIn(6)
+    expect(await whereToOfferOnboarding()).toBeNull()
+    await settled()
+
+    expect(worker.records.get(5)?.outcome).toBe('completed')
+    expect(worker.records.get(6)?.outcome).toBe('skipped')
+    expect(cardPuts()).toEqual([])
+  })
+
+  it('is not shown again by a wizard relaunched over a finished record', async () => {
+    worker.records.set(5, {
+      step: 'done',
+      started_at: '2026-10-01 09:00:00',
+      finished_at: '2026-10-01 09:05:00',
+      outcome: 'completed',
+    })
+    worker.gettingStarted.set(5, { hidden: true })
+    signIn(5)
+    await maybeOfferOnboarding()
+
+    startOnboarding('welcome')
+    completeOnboarding()
+    await settled()
+
+    expect(cardPuts()).toEqual([])
+    expect(gettingStartedRecord()).toEqual({ hidden: true })
+  })
+
+  it('stays hidden on an account that already has it hidden', async () => {
+    worker.gettingStarted.set(5, { hidden: true })
+    signIn(5)
+    await maybeOfferOnboarding()
+    completeOnboarding()
+    await settled()
+
+    expect(worker.records.get(5)?.outcome).toBe('completed')
+    expect(cardPuts()).toEqual([])
+    expect(gettingStartedRecord()).toEqual({ hidden: true })
+  })
+
+  it('is not written when the account state could not be read', async () => {
+    worker.failRead = true
+    signIn(5)
+    await maybeOfferOnboarding()
+    // Opened by hand, from the tour menu.
+    startOnboarding('welcome')
+    skipOnboarding()
+    await settled()
+
+    expect(cardPuts()).toEqual([])
+    expect(worker.gettingStarted.get(5)).toBeUndefined()
+  })
+})
+
 describe('when the record cannot be read', () => {
   it('opens nothing and writes nothing, and keeps a flag for the next start', async () => {
     worker.failRead = true
@@ -374,7 +484,9 @@ describe('whose record it is', () => {
 
     // After the record is read, while the settings are on their way.
     signIn(1)
-    worker.whileSettingsRead = () => { setOnboardingOwner('account-2'); }
+    worker.whileSettingsRead = () => {
+      setOnboardingOwner('account-2')
+    }
     expect(await whereToOfferOnboarding()).toBeNull()
 
     await settled()

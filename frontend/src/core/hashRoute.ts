@@ -69,3 +69,21 @@ export function resolvePageFromHash(
   if (isNonPageRoute(name)) return null
   return 'notFound'
 }
+
+/**
+ * Whether the address is `page` with `flag=1` in its query: a link that asks the page to open
+ * something, such as Getting started's `#bills?scan=1`. A flag is answered once: it is taken off
+ * the address with history.replaceState, which fires no hashchange, so a reload or a later visit
+ * does not open the same thing again. The rest of the query (the period) stays.
+ */
+export function takeHashFlag(page: string, flag: string): boolean {
+  const raw = window.location.hash.replace(/^#/, '')
+  const q = raw.indexOf('?')
+  if (q < 0 || raw.slice(0, q) !== page) return false
+  const params = new URLSearchParams(raw.slice(q + 1))
+  if (params.get(flag) !== '1') return false
+  params.delete(flag)
+  const rest = params.toString()
+  history.replaceState(history.state, '', rest ? `#${page}?${rest}` : `#${page}`)
+  return true
+}

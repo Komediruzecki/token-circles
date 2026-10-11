@@ -530,6 +530,20 @@
   color: var(--text);
 }
 
+.next-steps {
+  width: 100%;
+  max-width: 540px;
+  text-align: left;
+}
+
+.next-steps-title {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
 .doneStep kbd {
   padding: 1px 6px;
   border: 1px solid var(--border);

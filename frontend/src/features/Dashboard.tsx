@@ -15,6 +15,7 @@ import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard
 import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
 import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
+import { GettingStartedCard } from '../components/GettingStarted'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
 import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
@@ -524,6 +525,7 @@ export default function Dashboard() {
         bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
       */}
       <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
+      <GettingStartedCard />
       <Show when={isWidgetVisible('badges')}>
         <BadgeRail />
       </Show>

@@ -38,6 +38,7 @@ import {
   Match,
   on,
   onCleanup,
+  onMount,
   Show,
   Switch,
   untrack,
@@ -64,6 +65,7 @@ import { showConfirm } from '../core/confirmStore'
 import { txBaseValue } from '../core/currency'
 import { asOneWrite, entityVersion } from '../core/dataVersions'
 import { handFocusTo } from '../core/domFocus'
+import { takeHashFlag } from '../core/hashRoute'
 import { refetchOnActive } from '../core/pageVisibility'
 import { setPeriod, usePeriod } from '../core/periodStore'
 import { rowsOfProfile } from '../core/quickEntryLists'
@@ -127,11 +129,21 @@ function unsavedOnSwitch(editing: boolean, profileName: string | undefined): str
     : `Your new entry wasn't saved. Switch back to ${profileName} to add it.`
 }
 
+/** The note above a list of the entries without a category, by how many it shows. */
+function uncategorisedNote(n: number): string {
+  if (n === 0) return 'Every entry has a category.'
+  if (n === 1) return 'Showing the entry without a category.'
+  return `Showing the ${n} entries without a category.`
+}
+
 export default function Transactions() {
   const state = useAppState()
   const { period, helpers } = usePeriod()
   // Set when we widened the focus period on the user's behalf, so the list can say so.
   const [periodWidenedFor, setPeriodWidenedFor] = createSignal<string | null>(null)
+  // On when the page was opened from Getting started's step for entries with no category
+  // (`#transactions?uncategorised=1`, below): the list shows those entries alone.
+  const [uncategorisedOnly, setUncategorisedOnly] = createSignal(false)
   // The global focus period drives the date filter (any mode → a range; "all" → no bound).
   const periodRange = () => (period().preset === 'all' ? null : toRange(period()))
   const [transactions, setTransactions] = createSignal<Transaction[]>([])
@@ -673,10 +685,21 @@ export default function Transactions() {
     )
   })
 
+  /**
+   * An entry of the active profile with no category, transfers aside: what Auto Categorize offers,
+   * and what Getting started counts as needing one.
+   */
+  const isUncategorisedEntry = (tx: Transaction): boolean =>
+    (tx.category_id === undefined || tx.category_id === null) &&
+    tx.type !== 'transfer' &&
+    tx.profile_id === activeId()
+
   // Calculate filtered results
   const filteredTransactions = createMemo(() => {
     const allTransactions = transactions()
     const filtered = allTransactions.filter((tx) => {
+      if (uncategorisedOnly() && !isUncategorisedEntry(tx)) return false
+
       // Filter by type
       if (filterType() !== 'all' && tx.type !== filterType()) {
         return false
@@ -784,15 +807,9 @@ export default function Transactions() {
   // So are other profiles' rows. With two profiles ticked the list covers the household, but an
   // edit is scoped to the profile in X-Profile-Id: another profile's row answers 404, as its
   // category would be refused for this one's.
-  const uncategorizedTransactions = createMemo(() => {
-    const active = activeId()
-    return transactions().filter(
-      (tx) =>
-        (tx.category_id === undefined || tx.category_id === null) &&
-        tx.type !== 'transfer' &&
-        tx.profile_id === active
-    )
-  })
+  const uncategorizedTransactions = createMemo(() =>
+    transactions().filter((tx) => isUncategorisedEntry(tx))
+  )
 
   // Calculate paginated results
   const paginatedTransactions = createMemo(() => {
@@ -1176,6 +1193,24 @@ export default function Transactions() {
   window.addEventListener('hashchange', handleTagHashChange)
   onCleanup(() => {
     window.removeEventListener('hashchange', handleTagHashChange)
+  })
+
+  /**
+   * Getting started's step for entries with no category links here as
+   * `#transactions?uncategorised=1`. The list then shows what the step counted, from all time,
+   * until "Show every entry" in the note above it. Pages stay mounted once visited, so a later
+   * link arrives as a hashchange.
+   */
+  const showUncategorisedFromLink = () => {
+    if (!takeHashFlag('transactions', 'uncategorised')) return
+    setUncategorisedOnly(true)
+    setPeriod(fromPill('all'))
+    setCurrentPage(1)
+  }
+  onMount(showUncategorisedFromLink)
+  window.addEventListener('hashchange', showUncategorisedFromLink)
+  onCleanup(() => {
+    window.removeEventListener('hashchange', showUncategorisedFromLink)
   })
 
   /**
@@ -2339,6 +2374,23 @@ export default function Transactions() {
                 </button>
               </div>
             )}
+          </Show>
+
+          <Show when={uncategorisedOnly()}>
+            <div class={styles.periodWidenedNote} data-test-id="uncategorised-note">
+              <span>{uncategorisedNote(filteredTransactions().length)}</span>
+              <button
+                class={styles.periodWidenedDismiss}
+                type="button"
+                data-test-id="uncategorised-show-all"
+                onClick={() => {
+                  setUncategorisedOnly(false)
+                  setCurrentPage(1)
+                }}
+              >
+                Show every entry
+              </button>
+            </div>
           </Show>
 
           {/* Page Summary (top) */}

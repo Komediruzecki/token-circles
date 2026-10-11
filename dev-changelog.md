@@ -461,6 +461,25 @@ All notable changes to Token Circles are documented here. The format is based on
   (`features/subscriptionDetection.ts`: `SCAN_WINDOW_DAYS`, `recentForScan`, `worthTracking`), so
   `SubscriptionScan.tsx` and the Getting started count read the same rows and tick the same
   proposals. The scan behaves as before.
+- **The Getting started card and the wizard's last step** (`components/GettingStarted.tsx`).
+  `NextSteps` lists `nextSteps(orientationFacts(snapshot))`, each step a link to its page.
+  `GettingStartedCard` sits on Dashboard between the period bar and the badge rail, and shows while
+  the account's `getting_started` record exists, is not hidden, and a step applies. The wizard's
+  done step runs `refreshAchievements()` and lists the steps; following one completes setup.
+- **The Getting started record** (`core/gettingStarted.ts`): `getting_started` in user_state signed
+  in, `finance_getting_started:local` in local-first. `onboardingStore`'s `decide` makes it
+  `{ hidden: false }` on the first finish or skip only: adopting an older decision, a wizard
+  relaunched over a finished record, and (signed in) an account whose state could not be read make
+  none, and an existing record is left as it is. Hide writes `{ hidden: true }`.
+- **Links that open something on a page.** `takeHashFlag(page, flag)` (`core/hashRoute.ts`) answers
+  `?flag=1` once and takes it off the address with `history.replaceState`. `#bills?scan=1` opens the
+  subscription scan on the Subscriptions tab. `#transactions?uncategorised=1` lists the active
+  profile's entries with no category, transfers aside, from all time (the rows Auto Categorize
+  offers), under a note with "Show every entry". The heavy-month step links to
+  `#transactions?period=YYYY-MM`, because Analytics shows a year at a time.
+- **E2E:** `tests/orientation.spec.ts` (three `@smoke` cases in both modes) pastes a generated
+  statement on Import and checks the steps and reasons on the card and the done step. The
+  own-account helpers of `onboarding-server.spec.ts` moved to `tests/own-account.ts`.
 
 ### CRUD contract suite
 

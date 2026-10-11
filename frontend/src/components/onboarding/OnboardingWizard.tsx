@@ -10,6 +10,7 @@
  * profiles only.
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js'
+import { refreshAchievements } from '../../core/achievementsStore'
 import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
   bumpProfileVersion,
@@ -36,11 +37,13 @@ import { createImportFlow } from '../../features/import/importFlow'
 import { ImportMappingStep } from '../../features/import/ImportMappingStep'
 import { ImportPreviewStep } from '../../features/import/ImportPreviewStep'
 import { Field, FormNotice, SubmitButton } from '../form'
+import { currentNextSteps, NextSteps } from '../GettingStarted'
 import { LogoMark } from '../Logo'
 import { OrbitSpinner } from '../OrbitSpinner'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 import styles from './Onboarding.module.css'
 import { createFirstAccountForm, createSpaceForm } from './onboardingForms'
+import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 
@@ -274,6 +277,15 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   })
   let importInitialized = false
 
+  // ---- step: done, with the next steps from what the profile now holds ----
+  const [nextUp, setNextUp] = createSignal<OrientationStep[]>([])
+  const loadNextSteps = async () => {
+    setNextUp([])
+    // Evaluated now rather than after the usual pause, so the steps count what was just imported.
+    await refreshAchievements().catch(() => undefined)
+    if (onboardingOpen() && onboardingStep() === 'done') setNextUp(currentNextSteps())
+  }
+
   // Seed per-step state when the wizard opens / advances.
   createEffect(() => {
     if (!onboardingOpen()) return
@@ -310,6 +322,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // The summary counts what's really on the profile (imports can create
       // accounts too), not just what this step's form made.
       void refreshProfileAccounts()
+      void untrack(loadNextSteps)
     }
   })
 
@@ -892,6 +905,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </li>
         </Show>
       </ul>
+      <Show when={nextUp().length > 0}>
+        <section class={styles.nextSteps} data-test-id="onboarding-next-steps">
+          <h3 class={styles.nextStepsTitle}>Next steps</h3>
+          {/* A step's link leaves setup the way Go to my dashboard does, for the step's page. */}
+          <NextSteps
+            steps={nextUp()}
+            onFollow={() => {
+              completeOnboarding()
+            }}
+          />
+        </section>
+      </Show>
       <p class={styles.stepLead}>
         Tip: press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere for quick entry, and take a page tour any
         time from the sidebar.
