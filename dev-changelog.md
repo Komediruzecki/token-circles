@@ -282,7 +282,10 @@ All notable changes to Token Circles are documented here. The format is based on
   one-click confirm (maff's call of 2026-10-11): "One link, one sign-in, and you're in." The
   Welcome (`renderWelcome`) goes to an account once: when its address is first confirmed, by its
   link (opened with its own session, a password sign-in in the browser that opened it, or
-  `POST /api/auth/email-link/finish`), Google sign-in, an emailed sign-in code or a reset link;
+  `POST /api/auth/email-link/finish`), a change link (a Google account stored with no confirmed
+  address that adds one in Settings: `applyEmailChange` claims it in the move's batch with
+  `claimWelcomeOnMove`, only while `email_verified = 0` and only when the move happens, and
+  `spendLink` mails it to the new address), Google sign-in, an emailed sign-in code or a reset link;
   and at once for a Google sign-up with a confirmed address. The record is a `reminder_dedup` row
   `(user_id, 'welcome')`. Each confirming D1 batch claims it before the write that confirms the
   address, and only while `email_verified = 0` (`claimWelcomeOnConfirm`), so of two confirmations

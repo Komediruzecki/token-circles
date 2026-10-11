@@ -1,7 +1,8 @@
 /**
  * The Welcome mail goes to an account once: when its address is first confirmed, by its confirm
- * link, Google sign-in, an emailed sign-in code or a reset link; or at once for a Google sign-up,
- * whose address Google has confirmed. A password sign-up gets Confirm instead, which carries only
+ * link, a change-of-address link (a Google account stored with no confirmed address that adds one
+ * in Settings), Google sign-in, an emailed sign-in code or a reset link; or at once for a Google
+ * sign-up, whose address Google has confirmed. A password sign-up gets Confirm instead, which carries only
  * the link (emailTemplates.ts).
  *
  * "Once" is a row in reminder_dedup, (user_id, 'welcome'): the table that already makes each
@@ -37,6 +38,25 @@ export function claimWelcomeOnConfirm(db: D1Database, userId: number): D1Prepare
        SELECT ?, '${WELCOME_KEY}' WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND email_verified = 0)`
     )
     .bind(userId, userId);
+}
+
+/**
+ * Claims `userId`'s welcome while its address is unconfirmed, for the batch that moves it to
+ * `email` and confirms that (applyEmailChange). Before the move, and only when the move will
+ * happen: no other account has `email`, the move's own condition.
+ */
+export function claimWelcomeOnMove(
+  db: D1Database,
+  userId: number,
+  email: string
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT OR IGNORE INTO reminder_dedup (user_id, dedup_key)
+       SELECT ?, '${WELCOME_KEY}' WHERE EXISTS (SELECT 1 FROM users WHERE id = ? AND email_verified = 0)
+         AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(?) AND id != ?)`
+    )
+    .bind(userId, userId, email, userId);
 }
 
 /** Claims the welcome of an account made with its address confirmed: a Google sign-up. */

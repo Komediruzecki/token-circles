@@ -62,8 +62,8 @@ export type SpentLink =
  * `AND used_at IS NULL` makes spending it the claim, so of two requests carrying the same link
  * only one gets past it.
  *
- * A confirm link that confirms an address for the first time claims the account's welcome in the
- * same batch (welcome.ts), and hands the account to `welcome` to mail it.
+ * A confirm or change link that confirms an account's address for the first time claims the
+ * account's welcome in the same batch (welcome.ts), and hands the account to `welcome` to mail it.
  */
 export async function spendLink(
   db: D1Database,
@@ -84,9 +84,11 @@ export async function spendLink(
     if (link.purpose === 'change') {
       // The account moves to the address this link was mailed to, unless another account has it
       // by now: a pending change holds nothing, so someone may have signed up with it meanwhile.
-      const outcome = await applyEmailChange(db, link.user_id, link.email);
+      const { outcome, welcome: claimed } = await applyEmailChange(db, link.user_id, link.email);
       if (outcome === 'taken') return 'email_taken';
       if (outcome === 'gone') return 'invalid';
+      // The account's first confirmed address: the Welcome goes to it, the address just moved to.
+      if (claimed) welcome?.(link.user_id);
       return 'changed';
     }
     const user = await db

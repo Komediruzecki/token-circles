@@ -1,6 +1,7 @@
 /**
  * The Welcome mail goes to an account once (worker/src/welcome.ts): when its address is first
- * confirmed, by its confirm link, Google sign-in, an emailed sign-in code or a reset link, and at
+ * confirmed, by its confirm link, a change link (a Google account stored with no confirmed address
+ * that adds one), Google sign-in, an emailed sign-in code or a reset link, and at
  * once for a Google sign-up, whose address Google has confirmed. A password sign-up gets Confirm,
  * which carries the link that opens the account and nothing of the welcome. An account made before
  * migration 0033 had the welcome of its day at sign-up, and gets no second one.
@@ -13,7 +14,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { signState } from '../src/auth';
 import { fetchSettled } from './helpers/after-answer';
-import { unconfirmedSessionCookie } from './helpers/session';
+import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 
 const API = 'https://api.example.com';
 // CORS_ORIGIN in wrangler.jsonc's test environment: the app the mails link into.
@@ -310,6 +311,121 @@ describe('the Welcome', () => {
     await resetPassword(account.email);
     await signInWithGoogle(account.email, `google-sub-${account.id}`);
     expect(welcomesTo(account.email)).toHaveLength(0);
+  });
+});
+
+describe('a Google account with no confirmed address', () => {
+  /** Ask to move the account to `email` in Settings, and open the link mailed there signed in. */
+  async function changeAddress(cookie: string, email: string): Promise<void> {
+    const saved = await fetchSettled(`${API}/api/notifications/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ email }),
+    });
+    expect(saved.status).toBe(200);
+    const link =
+      /https:\/\/api\.example\.com\/api\/auth\/verify-email\?token=[0-9a-f]+&returnTo=\S+/.exec(
+        mailsTo(email).at(-1)!.text
+      );
+    expect(link, 'the change link').not.toBeNull();
+    const opened = await fetchSettled(link![0], {
+      redirect: 'manual',
+      headers: { Cookie: cookie },
+    });
+    expect(opened.headers.get('Location')).toBe(`${APP}/#everified=1&change=1`);
+  }
+
+  it('gets the Welcome once, at the new address, when a change link confirms its first address', async () => {
+    // A Google sign-up whose address Google had not confirmed is stored with none.
+    const made = await env.DB.prepare(
+      "INSERT INTO users (email, email_verified, auth_provider, provider_id) VALUES (NULL, 0, 'google', ?) RETURNING id"
+    )
+      .bind(`google-sub-${crypto.randomUUID()}`)
+      .first<{ id: number }>();
+    const id = made!.id;
+    await env.DB.prepare("INSERT INTO profiles (name, user_id) VALUES ('Personal Profile', ?)")
+      .bind(id)
+      .run();
+    const cookie = (await unconfirmedSessionCookie(id, 'google')).split(';')[0]!;
+    const first = address('change-first');
+
+    await changeAddress(cookie, first);
+
+    expect(await emailVerified(id)).toBe(1);
+    expect(sent.filter((mail) => mail.subject === WELCOME_SUBJECT).map((mail) => mail.to)).toEqual([
+      first,
+    ]);
+
+    // A later change moves a confirmed account: no second Welcome, to either address.
+    const second = address('change-second');
+    await env.DB.prepare('DELETE FROM rate_limits').run();
+    await changeAddress(cookie, second);
+
+    expect(welcomesTo(second)).toHaveLength(0);
+    expect(sent.filter((mail) => mail.subject === WELCOME_SUBJECT)).toHaveLength(1);
+  });
+
+  it('gets no Welcome from a change link once its address is confirmed, with no welcome on record', async () => {
+    // Confirmed before the Welcome was recorded: confirming paths that see a confirmed address
+    // claim nothing, and a change link is one of them.
+    const made = await env.DB.prepare(
+      "INSERT INTO users (email, email_verified, auth_provider, provider_id) VALUES (?, 1, 'google', ?) RETURNING id"
+    )
+      .bind(address('confirmed-google'), `google-sub-${crypto.randomUUID()}`)
+      .first<{ id: number }>();
+    const id = made!.id;
+    await env.DB.prepare("INSERT INTO profiles (name, user_id) VALUES ('Personal Profile', ?)")
+      .bind(id)
+      .run();
+    const cookie = (await sessionCookie(id, 'google')).split(';')[0]!;
+    const moved = address('change-confirmed');
+
+    await changeAddress(cookie, moved);
+
+    expect(sent.filter((mail) => mail.subject === WELCOME_SUBJECT)).toHaveLength(0);
+  });
+
+  it('claims nothing with a change link refused because another account took the address', async () => {
+    const made = await env.DB.prepare(
+      "INSERT INTO users (email, email_verified, auth_provider, provider_id) VALUES (NULL, 0, 'google', ?) RETURNING id"
+    )
+      .bind(`google-sub-${crypto.randomUUID()}`)
+      .first<{ id: number }>();
+    const id = made!.id;
+    await env.DB.prepare("INSERT INTO profiles (name, user_id) VALUES ('Personal Profile', ?)")
+      .bind(id)
+      .run();
+    const cookie = (await unconfirmedSessionCookie(id, 'google')).split(';')[0]!;
+    const taken = address('change-taken');
+    const saved = await fetchSettled(`${API}/api/notifications/settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ email: taken }),
+    });
+    expect(saved.status).toBe(200);
+    const link =
+      /https:\/\/api\.example\.com\/api\/auth\/verify-email\?token=[0-9a-f]+&returnTo=\S+/.exec(
+        mailsTo(taken).at(-1)!.text
+      );
+    // Another account has the address by the time the link is opened.
+    await env.DB.prepare(
+      "INSERT INTO users (email, email_verified, auth_provider) VALUES (?, 0, 'password')"
+    )
+      .bind(taken)
+      .run();
+
+    const opened = await fetchSettled(link![0], {
+      redirect: 'manual',
+      headers: { Cookie: cookie },
+    });
+    expect(opened.headers.get('Location')).toContain('everified_error=email_taken');
+    expect(welcomesTo(taken)).toHaveLength(0);
+
+    // The account's first confirmed address, later, still gets the Welcome.
+    const free = address('change-free');
+    await env.DB.prepare('DELETE FROM rate_limits').run();
+    await changeAddress(cookie, free);
+    expect(welcomesTo(free)).toHaveLength(1);
   });
 });
 
