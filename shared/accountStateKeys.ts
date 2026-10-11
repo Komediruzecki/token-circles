@@ -27,6 +27,16 @@ export function isUserStateKey(key: string): key is UserStateKey {
 export const USER_STATE_PATH = '/api/account/state';
 
 /**
+ * True for a request to these routes. A write here records where the person is in the app, not
+ * their data: the app's data invalidation (frontend/src/core/dataVersions.ts) and the badge check
+ * it announces writes to (dataChangedEvent.ts) both skip it, so a wizard step or a finished tour
+ * reloads no page.
+ */
+export function isUserStatePath(path: string): boolean {
+  return /^\/api\/account\/state(?:[/?]|$)/.test(path);
+}
+
+/**
  * The setup wizard's steps, in the order it shows them. Stored by name and counted by the
  * first-week measurement (completion, and the last step reached by those who stop), so a step is
  * never renamed: a new one gets a new name.

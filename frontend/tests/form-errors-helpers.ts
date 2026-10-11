@@ -12,7 +12,6 @@
  * (bill-form-errors.spec.ts and the rest).
  */
 import { expect, test } from '@playwright/test'
-import { onboardingDecided } from './onboarding-decided'
 import {
   E2E_BASE,
   firstProfileId,
@@ -67,16 +66,14 @@ export const MODES: Mode[] = [
     name: 'cloud',
     open: async (page, route, ready, profile) => {
       const id = await newCloudProfile(page, profile)
-      const me = await page.request.get(`${E2E_BASE}/api/auth/me`)
-      // A recorded decision keeps the setup wizard from covering a new profile's page.
-      const decided = onboardingDecided([((await me.json()) as { id: number }).id])
+      // The fixture account's setup wizard is finished on its record (global.setup.ts), so the
+      // wizard does not cover the new profile's page.
       await page.addInitScript(
-        ({ pid, decided }) => {
+        ({ pid }) => {
           localStorage.setItem('currentProfileId', String(pid))
           localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-          for (const [key, value] of decided) localStorage.setItem(key, value)
         },
-        { pid: id, decided }
+        { pid: id }
       )
       await leaveOnboarding(page)
       await login(page)

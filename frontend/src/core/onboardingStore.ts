@@ -1,16 +1,29 @@
 /**
  * Onboarding store — the first-run setup wizard's state and trigger logic.
  *
- * The wizard auto-opens exactly once per account, for a pristine profile: no
- * accounts, no transactions, no bills (a fresh email/Google signup in server
- * mode, or a truly empty serverless workspace). Finishing or skipping stamps a
- * localStorage flag kept under the account it belongs to (setOnboardingOwner,
- * onboardingFlag.ts), so each account signed in on one browser has its own, AND
- * mirrors it into the profile's settings KV, so in server mode, logging in from
- * a new device respects a decision made elsewhere. It can always be relaunched from
- * Settings → About or the tour-selection modal.
+ * Signed in, the wizard belongs to the account. Its record is on the Worker (accountState.ts,
+ * `onboarding` in user_state): the furthest step reached, and how and when it finished. The wizard
+ * opens for an account whose record is not finished, at the step it reached, on whichever device
+ * signs in. Every account in use before the record existed was marked finished by migration 0035.
+ * A decision kept from before, in this browser's flag or the profile's settings, goes to the
+ * account once and the wizard stays closed. When the record cannot be read, nothing opens.
+ *
+ * Local-first, the wizard opens once for a pristine workspace (no accounts, no transactions, no
+ * bills). Finishing or skipping stamps the local account's localStorage flag (onboardingFlag.ts)
+ * and mirrors it into the profile's settings.
+ *
+ * It can always be relaunched from Settings → About or the tour-selection modal.
  */
 import { createRoot, createSignal } from 'solid-js'
+import { furthestStep, onboardingFinished } from '../../../shared/accountState'
+import { ONBOARDING_STEPS } from '../../../shared/accountStateKeys'
+import {
+  accountState,
+  isServerAccount,
+  readAccountState,
+  setAccountStateOwner,
+  writeAccountState,
+} from './accountState'
 import { apiGet, apiPut } from './api'
 import {
   accountOnboardingOwner,
@@ -18,22 +31,20 @@ import {
   LOCAL_ONBOARDING_OWNER,
   onboardingFlagKey,
 } from './onboardingFlag'
+import type { OnboardingDecision, OnboardingStep } from '../../../shared/accountStateKeys'
 
-export type OnboardingStep = 'welcome' | 'space' | 'account' | 'import' | 'subscriptions' | 'done'
+// The step names are stored on the account and counted by the first-week measurement, so they
+// live with the record's other names in shared/.
+export { ONBOARDING_STEPS }
+export type { OnboardingStep }
 
-export const ONBOARDING_STEPS: OnboardingStep[] = [
-  'welcome',
-  'space',
-  'account',
-  'import',
-  'subscriptions',
-  'done',
-]
-
-export type OnboardingStatus = 'completed' | 'skipped' | null
+export type OnboardingStatus = OnboardingDecision | null
 
 /** Whose flag is read and written: an account (`account-<id>`), `local`, or nobody yet. */
 let owner: string | null = null
+
+/** The furthest wizard step this tab has sent for the owner, so each is sent once, answered or not. */
+let furthestSent: OnboardingStep | null = null
 
 const keyOf = onboardingFlagKey
 
@@ -53,12 +64,15 @@ export function onboardingOwnerFor(
 }
 
 /**
- * Read and write the flag of `next` from now on. The browser-wide flag goes to the local account
- * only, unless it has a decision of its own, and is then removed. No server account takes it: the
- * account's settings and whether its profile is pristine decide there, as on a new device.
+ * Read and write the decision of `next` from now on, and keep its account state
+ * (accountState.ts). The browser-wide flag goes to the local account only, unless it has a
+ * decision of its own, and is then removed. No server account takes it: the account's own record
+ * decides there, as on a new device.
  */
 export function setOnboardingOwner(next: string | null): void {
+  if (next !== owner) furthestSent = null
   owner = next
+  setAccountStateOwner(next)
   if (next !== LOCAL_ONBOARDING_OWNER) return
   try {
     const browserWide = localStorage.getItem(BROWSER_WIDE_ONBOARDING_KEY)
@@ -106,11 +120,9 @@ function setOnboardingStatus(
 }
 
 /**
- * Best-effort mirror of the decision into the settings KV (`/api/settings`,
- * per-profile). In server mode this is what makes a fresh device respect a
- * completion/skip made elsewhere; in serverless it lands in IndexedDB, which
- * is device-local anyway. Failures are swallowed — the localStorage flag
- * already protects this device.
+ * Local-first: best-effort mirror of the decision into the profile's settings (`/api/settings`),
+ * which local-first keeps in IndexedDB. Failures are swallowed: the localStorage flag already
+ * keeps the decision. Signed in, the account's record replaces the mirror (recordDecision).
  */
 let mirrorInFlight: Promise<unknown> = Promise.resolve()
 
@@ -118,9 +130,51 @@ function persistRemoteStatus(status: Exclude<OnboardingStatus, null>) {
   mirrorInFlight = apiPut('/api/settings', { onboarding: status }).catch(() => {})
 }
 
-/** Resolves once the most recent KV mirror write has settled (tests await this). */
+/** Resolves once the most recent decision write, mirror or record, has settled (tests await this). */
 export function onboardingMirrorSettled(): Promise<unknown> {
   return mirrorInFlight
+}
+
+/**
+ * Signed in: send `outcome` to the account's record, with the step it was decided on when there
+ * is one. Until the Worker has it, this browser's flag keeps it: a write that fails, or a tab
+ * closed before the answer, leaves the flag, and the next start sends it again (whereToOffer).
+ * Once the record says finished, the flag goes.
+ */
+function recordDecision(
+  of: string,
+  outcome: OnboardingDecision,
+  step: OnboardingStep | null
+): Promise<void> {
+  setOnboardingStatus(outcome, of)
+  const sent = writeAccountState('onboarding', step === null ? { outcome } : { step, outcome })
+    .then((record) => {
+      if (onboardingFinished(record)) forgetOnboardingStatus(of)
+    })
+    .catch(() => {
+      // Kept in this browser's flag; the next start sends it again.
+    })
+  mirrorInFlight = sent
+  return sent
+}
+
+/**
+ * Signed in: record `step` on the account when it is further than any step the record holds or
+ * this tab has sent. Nothing is sent while the record is unknown (its read failed) or finished: a
+ * relaunched wizard walks its steps without touching the record the first week counts.
+ */
+function recordStep(step: OnboardingStep): void {
+  const of = owner
+  if (!isServerAccount(of)) return
+  const state = accountState()
+  if (state === null || onboardingFinished(state.onboarding)) return
+  const reached = furthestStep(state.onboarding?.step ?? null, furthestSent)
+  if (reached !== null && furthestStep(reached, step) === reached) return
+  furthestSent = step
+  void writeAccountState('onboarding', { step }).catch(() => {
+    // Not kept: the next step sends the furthest one again.
+    if (owner === of) furthestSent = null
+  })
 }
 
 const store = createRoot(() => {
@@ -132,39 +186,57 @@ const store = createRoot(() => {
 export const onboardingOpen = store.onboardingOpen
 export const onboardingStep = store.onboardingStep
 
+/** Show `step`, and record it on the account when it is the furthest reached. */
+function showStep(step: OnboardingStep): void {
+  store.setOnboardingStep(step)
+  recordStep(step)
+}
+
 export function startOnboarding(step: OnboardingStep = 'welcome') {
+  // The step first: the wizard seeds the step it opens on, not the one it last showed.
   store.setOnboardingStep(step)
   store.setOnboardingOpen(true)
+  recordStep(step)
 }
 
 export function goToOnboardingStep(step: OnboardingStep) {
-  store.setOnboardingStep(step)
+  showStep(step)
 }
 
 export function nextOnboardingStep() {
   const order = ONBOARDING_STEPS
   const idx = order.indexOf(store.onboardingStep())
-  if (idx >= 0 && idx < order.length - 1) store.setOnboardingStep(order[idx + 1])
+  if (idx >= 0 && idx < order.length - 1) showStep(order[idx + 1])
 }
 
 export function prevOnboardingStep() {
   const order = ONBOARDING_STEPS
   const idx = order.indexOf(store.onboardingStep())
-  if (idx > 0) store.setOnboardingStep(order[idx - 1])
+  if (idx > 0) showStep(order[idx - 1])
 }
 
-/** Finish the wizard: stamp the flag (local + settings KV) and close. */
+/** Keep the decision and close: on the account's record signed in, else the flag and settings. */
+function decide(outcome: OnboardingDecision): void {
+  const of = owner
+  store.setOnboardingOpen(false)
+  if (isServerAccount(of)) {
+    // Relaunched over a finished record: the first decision stands, so there is nothing to send.
+    if (onboardingFinished(accountState()?.onboarding ?? null)) return
+    void recordDecision(of, outcome, store.onboardingStep())
+    return
+  }
+  setOnboardingStatus(outcome, of)
+  persistRemoteStatus(outcome)
+}
+
+/** Finish the wizard. */
 export function completeOnboarding() {
-  setOnboardingStatus('completed')
-  persistRemoteStatus('completed')
-  store.setOnboardingOpen(false)
+  decide('completed')
 }
 
-/** Leave the wizard early: stamp the flag (local + settings KV) and close. */
+/** Leave the wizard early. */
 export function skipOnboarding() {
-  setOnboardingStatus('skipped')
-  persistRemoteStatus('skipped')
-  store.setOnboardingOpen(false)
+  decide('skipped')
 }
 
 /**
@@ -186,16 +258,57 @@ export function collectionIsEmpty(res: unknown): boolean {
 }
 
 /**
- * Whether the wizard should auto-open: the account is known, has never seen it
- * before (on this device OR, per the settings KV, anywhere) AND the current
- * profile is pristine — zero accounts, zero transactions, zero bills. Any fetch
- * error counts as "no" — a broken bootstrap must not trap the user in a wizard.
+ * The step the wizard should auto-open at, or null to leave it closed. Any failed read counts as
+ * "no": a broken bootstrap must not trap the user in a wizard.
  */
-export async function shouldOfferOnboarding(): Promise<boolean> {
-  // The owner as the check starts: a decision found in settings is kept for the account that
+export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
+  // The owner as the check starts: a decision found on the way is kept for the account that
   // asked, even if another signs in before the answer.
   const asking = owner
-  if (asking === null || getOnboardingStatus(asking) !== null) return false
+  if (asking === null) return null
+  if (isServerAccount(asking)) return whereToOfferOnTheAccount(asking)
+  return (await shouldOfferLocally(asking)) ? 'welcome' : null
+}
+
+/**
+ * Signed in: the step the account's record reached, unless the record is finished. A decision
+ * kept from before the record existed, in this browser's flag or the profile's settings (the app
+ * before this one wrote both), goes to the record instead, and the wizard stays closed.
+ */
+async function whereToOfferOnTheAccount(asking: string): Promise<OnboardingStep | null> {
+  const state = await readAccountState()
+  if (owner !== asking || state === null) return null
+  const record = state.onboarding
+  if (onboardingFinished(record)) {
+    forgetOnboardingStatus(asking)
+    return null
+  }
+  let kept = getOnboardingStatus(asking)
+  if (kept === null) {
+    const settings = await apiGet<Record<string, unknown>>('/api/settings').catch(() => null)
+    // Unknown is not "none": with the settings unread, the wizard stays closed this time.
+    if (settings === null || owner !== asking) return null
+    const remote = settings.onboarding
+    kept = remote === 'completed' || remote === 'skipped' ? remote : null
+  }
+  if (kept !== null) {
+    await recordDecision(asking, kept, null)
+    return null
+  }
+  return record?.step ?? 'welcome'
+}
+
+/** Whether the wizard should auto-open, at whichever step (whereToOfferOnboarding). */
+export async function shouldOfferOnboarding(): Promise<boolean> {
+  return (await whereToOfferOnboarding()) !== null
+}
+
+/**
+ * Local-first's check: the workspace has never seen the wizard (no decision on this device or in
+ * its settings) AND the current profile is pristine: zero accounts, zero transactions, zero bills.
+ */
+async function shouldOfferLocally(asking: string): Promise<boolean> {
+  if (getOnboardingStatus(asking) !== null) return false
   try {
     const [accounts, transactions, bills, settings] = await Promise.all([
       apiGet('/api/accounts'),
@@ -220,5 +333,6 @@ export async function shouldOfferOnboarding(): Promise<boolean> {
 
 /** Check-and-open, used from the app bootstrap and post-login hooks. */
 export async function maybeOfferOnboarding(): Promise<void> {
-  if (await shouldOfferOnboarding()) startOnboarding()
+  const step = await whereToOfferOnboarding()
+  if (step !== null) startOnboarding(step)
 }

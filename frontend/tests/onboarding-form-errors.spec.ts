@@ -9,8 +9,8 @@
  * rules both runtimes run (shared/profileSchema.ts, shared/accountSchema.ts) before it sends
  * anything.
  *
- * Signed in, the wizard opens over a new profile of the case's own, which it renames. Local-first,
- * it opens over an empty browser, where it creates the profile.
+ * Signed in, the wizard opens from the tour menu over a new profile of the case's own, which it
+ * renames. Local-first, it opens over an empty browser, where it creates the profile.
  *
  * Every case runs signed in (the Worker) and local-first (the IndexedDB router). Pull requests
  * run the `@smoke` one; main runs them all.
@@ -33,7 +33,12 @@ import { E2E_BASE, gotoServerlessZeroState } from './test-helpers'
 import type { Mode } from './form-errors-helpers'
 import type { Page } from '@playwright/test'
 
-/** Opens the wizard over a profile with nothing in it, or over an empty local-first browser. */
+/**
+ * Opens the wizard over a profile with nothing in it, or over an empty local-first browser.
+ *
+ * Signed in, the fixture account finished the wizard long ago (global.setup.ts), so it opens the
+ * way such an account reaches it again: from the tour menu.
+ */
 async function openWizard(page: Page, mode: Mode, profile: string): Promise<void> {
   if (mode.name === 'local-first') {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
@@ -44,16 +49,11 @@ async function openWizard(page: Page, mode: Mode, profile: string): Promise<void
     localStorage.setItem('finance_storage_mode', 'self-hosted')
     localStorage.setItem('currentProfileId', String(pid))
     localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-    // Once only: a reload must not erase a decision the case made.
-    if (!sessionStorage.getItem('onb_spec_cleared')) {
-      sessionStorage.setItem('onb_spec_cleared', '1')
-      // The flag is kept per account (finance_onboarding:account-<id>), browser-wide before.
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
-      }
-    }
   }, id)
   await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('whats-new-btn').click()
+  await page.getByTestId('tour-open-onboarding').click()
   await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30_000 })
 }
 

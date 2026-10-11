@@ -15,6 +15,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The setup wizard follows your account.** Signed in, a new account meets the setup wizard once, on whichever device it signs in first, and a wizard left part way reopens at the step you reached. Finish or skip it on one device and no other device shows it. An account that already has data, or that finished or skipped the wizard before, does not see it again.
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
 - **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
 - **Account mails share the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Reminders and the failed-payment mail, which show amounts, stay as they were.

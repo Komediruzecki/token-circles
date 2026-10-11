@@ -141,6 +141,19 @@ export function readUserStateValue<K extends UserStateKey>(
   }
 }
 
+/**
+ * What `GET /api/account/state` answered, or null when the answer is not an object of keys. A
+ * missing or unreadable key reads as null, so a newer Worker's extra key is ignored.
+ */
+export function readUserState(raw: unknown): UserState | null {
+  if (!isObject(raw)) return null;
+  return {
+    onboarding: readOnboardingRecord(raw.onboarding),
+    tours: readToursRecord(raw.tours),
+    getting_started: readGettingStartedRecord(raw.getting_started),
+  };
+}
+
 function mergeOnboarding(
   body: Record<string, unknown>,
   current: OnboardingRecord | null,

@@ -29,6 +29,13 @@ All notable changes to Token Circles are documented here. The format is based on
 - `0034_user_state.sql` adds one table, `user_state (user_id, key, value, updated_at)` with primary
   key `(user_id, key)`. Only `/api/account/state` reads or writes it, so it is safe to apply before
   the code that uses it.
+- `0035_onboarding_existing_accounts.sql` is data only: it writes a finished `onboarding` record
+  (`outcome: 'existing'`, `step` and `started_at` null) for every account with an account, a
+  transaction or a bill in any of its profiles, or an `onboarding` row in any profile's settings.
+  An account with none of those keeps meeting the wizard, as it did before. Until the Worker serves
+  `/api/account/state`, the new app's read of it fails and the app opens no wizard; an account that
+  signs up between the migration and the app's deploy and decides the wizard there has the decision
+  in its settings, which the app sends to the record.
 
 ### Loans
 
@@ -393,6 +400,24 @@ All notable changes to Token Circles are documented here. The format is based on
   its rows, and `worker/test/account-deletion.test.ts` now checks that every table with a `user_id`
   column has a delete in `routes/account.ts`. Worker-only in the contract guard: local-first keeps
   the same state in localStorage.
+- **The setup wizard's record is on the account** (`frontend/src/core/onboardingStore.ts`, the
+  account's state in `core/accountState.ts`). Signed in, the app reads `GET /api/account/state`
+  once per account and opens the wizard when `onboarding` is not finished, at its `step`, with no
+  pristine-profile check: a wizard left after the import step reopens there. Each step further than
+  the record's, and Finish or Skip with the step it was decided on, is a
+  `PUT /api/account/state/onboarding`; a relaunch over a finished record sends nothing. A decision
+  kept from before the record (this browser's `finance_onboarding:account-<id>` flag, or the
+  profile's `onboarding` setting) is sent once as `{ outcome }` and the wizard stays closed. The
+  flag is removed once the record is finished, and a decision whose PUT fails is kept in it, so the
+  next start sends it again. A failed read opens nothing and sends nothing. The settings mirror and
+  the pristine-profile check are local-first only now. `/api/account/state` bumps no data-version
+  counter and dispatches no `tc:data-changed` (`isUserStatePath` in `shared/accountStateKeys.ts`,
+  used by `dataVersions.ts` and `dataChangedEvent.ts`), so a wizard step reloads no page and runs
+  no badge check. E2E: `global.setup.ts` finishes the fixture account's record through the route,
+  so the specs that wrote the fixture's flag no longer do; `onboarding-server.spec.ts` covers a new
+  account, resume after a reload, a skip seen from a second browser, a flag sent once and a second
+  account in one browser; the cloud form-errors spec opens the wizard from the tour menu.
+  `onboardingDecided` flags for other accounts still work, through the same one-time send.
 
 ### CRUD contract suite
 
