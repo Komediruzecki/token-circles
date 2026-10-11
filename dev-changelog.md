@@ -417,7 +417,10 @@ All notable changes to Token Circles are documented here. The format is based on
   so the specs that wrote the fixture's flag no longer do; `onboarding-server.spec.ts` covers a new
   account, resume after a reload, a skip seen from a second browser, a flag sent once and a second
   account in one browser; the cloud form-errors spec opens the wizard from the tour menu.
-  `onboardingDecided` flags for other accounts still work, through the same one-time send.
+  `onboardingDecided` flags for other accounts still work, through the same one-time send. A spec
+  that signs a new account in through the page now meets the wizard there, whatever the profile
+  holds: mark the account first (`bootApp(context, boot, email)` once it exists), as
+  `sign-in-form-errors.spec.ts` does before it opens Manage Account.
 - **The tours finished are on the account** (`frontend/src/core/spotlightStore.ts`). Signed in,
   `endSpotlight` adds the tour, or every tour after the full tour, to `tours.seen` with
   `PUT /api/account/state/tours`. The writes go in order, so a tour ended while another's write is
