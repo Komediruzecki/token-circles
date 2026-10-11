@@ -114,8 +114,8 @@ const MAILING: { path: string; logged: string[]; mailedTo: string[] }[] = [
   },
   {
     path: '/api/auth/register',
-    logged: ['account-exists notice email failed to send:', 'Welcome email failed:'],
-    // The owner of the address hears someone tried it; the new account gets its welcome.
+    logged: ['account-exists notice email failed to send:', 'Confirm email failed:'],
+    // The owner of the address hears someone tried it; the new account gets its confirm link.
     mailedTo: [HAS_ACCOUNT, NO_ACCOUNT],
   },
 ];

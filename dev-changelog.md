@@ -22,6 +22,10 @@ All notable changes to Token Circles are documented here. The format is based on
 - The app sends `X-Time-Zone` on every cloud request from #603 on, so GETs that sent no custom
   header now get a CORS preflight; `cors()` sets `maxAge: 7200` so the browser asks once per two
   hours.
+- `0033_welcome_once.sql` is data only: it adds a `reminder_dedup` row `(user_id, 'welcome')` for
+  every account, so no account that exists before it gets the new Welcome. The migration runs
+  before the deploy, so a password account that signs up in between gets the old welcome, with its
+  confirm link, and the new Welcome when it confirms.
 
 ### Loans
 
@@ -256,6 +260,20 @@ All notable changes to Token Circles are documented here. The format is based on
   sending app. `/email/*` is now served `Cache-Control: public, max-age=31536000, immutable`, which
   is safe only because a file there is never overwritten: new art gets a new name. The master and
   its prompt are in `docs/design/mail-art/`.
+- **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,
+  migration `0033_welcome_once.sql`). A password sign-up gets Confirm (`renderConfirmEmail`): the
+  link that opens the account and nothing else. Send the link again, and a sign-up again for an
+  address waiting for its link, get the same body as a fresh link (`renderEmailVerification`). The
+  Welcome (`renderWelcome`) goes to an account once: when its address is first confirmed, by its
+  link (opened with its own session, a password sign-in in the browser that opened it, or
+  `POST /api/auth/email-link/finish`), Google sign-in, an emailed sign-in code or a reset link;
+  and at once for a Google sign-up with a confirmed address. The record is a `reminder_dedup` row
+  `(user_id, 'welcome')`. Each confirming D1 batch claims it before the write that confirms the
+  address, and only while `email_verified = 0` (`claimWelcomeOnConfirm`), so of two confirmations
+  that race only one sends it. The mail goes in `waitUntil`, best effort: a failed send logs
+  `Welcome email failed:` and is not retried. `resolveGoogleUser` returns `welcome`; `spendLink`
+  and `confirmWithOwnLink` take the route's welcomer. Step 3 of the Welcome is the version for
+  before finance prints ship: Progress, and the A year badge.
 
 ### Errors
 

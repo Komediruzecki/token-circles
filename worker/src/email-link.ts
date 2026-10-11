@@ -18,6 +18,7 @@
 import type { Env } from './index';
 import { b64urlDecode, b64urlEncode, hmacKey, readCookies } from './auth';
 import { applyEmailChange } from './email-change';
+import { claimWelcomeOnConfirm, welcomeClaimed, type Welcomer } from './welcome';
 
 export const EMAIL_LINK_COOKIE = 'fm_email_link';
 /** The route that finishes a link after a sign-in other than a password's. */
@@ -60,8 +61,15 @@ export type SpentLink =
  * outcome, so a link that failed for any reason cannot be retried until it happens to succeed.
  * `AND used_at IS NULL` makes spending it the claim, so of two requests carrying the same link
  * only one gets past it.
+ *
+ * A confirm link that confirms an address for the first time claims the account's welcome in the
+ * same batch (welcome.ts), and hands the account to `welcome` to mail it.
  */
-export async function spendLink(db: D1Database, link: EmailLink): Promise<SpentLink> {
+export async function spendLink(
+  db: D1Database,
+  link: EmailLink,
+  welcome?: Welcomer
+): Promise<SpentLink> {
   const claimed = await db
     .prepare(
       "UPDATE email_verifications SET used_at = datetime('now') WHERE id = ? AND used_at IS NULL"
@@ -88,7 +96,11 @@ export async function spendLink(db: D1Database, link: EmailLink): Promise<SpentL
     // The address has to still be the one this link was sent to, or changing the address after
     // asking for a link would confirm the new one on the strength of mail sent to the old.
     if (!user || (user.email ?? '').toLowerCase() !== link.email.toLowerCase()) return 'invalid';
-    await db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(link.user_id).run();
+    const [claim] = await db.batch([
+      claimWelcomeOnConfirm(db, link.user_id),
+      db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(link.user_id),
+    ]);
+    if (welcomeClaimed(claim)) welcome?.(link.user_id);
     return 'confirmed';
   } catch (e) {
     console.error('An email link failed after it was spent:', e);
@@ -105,11 +117,12 @@ export async function spendLink(db: D1Database, link: EmailLink): Promise<SpentL
 export async function confirmWithOwnLink(
   db: D1Database,
   userId: number,
-  link: EmailLink | null
+  link: EmailLink | null,
+  welcome?: Welcomer
 ): Promise<boolean> {
   if (!link || link.user_id !== userId || link.purpose !== 'confirm') return false;
   if (link.used_at !== null || linkExpired(link)) return false;
-  return (await spendLink(db, link)) === 'confirmed';
+  return (await spendLink(db, link, welcome)) === 'confirmed';
 }
 
 // ── The marker ─────────────────────────────────────────────────────────────────────────────────

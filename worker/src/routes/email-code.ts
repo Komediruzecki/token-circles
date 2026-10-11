@@ -35,6 +35,7 @@ import {
 } from '../login-codes';
 import { clearRateLimit, clientIp, enforce } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
+import { claimWelcomeOnConfirm, welcomeAfterAnswer, welcomeClaimed } from '../welcome';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
 import { refusalOf } from '../../../shared/refusal';
 import {
@@ -143,13 +144,17 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   // address was not confirmed yet, every way in that was set up before goes first, in the same
   // batch (clearUnconfirmedAccess), so there is no second factor left to ask for. A confirmed
   // account keeps everything it has.
+  const clearing = clearUnconfirmedAccess(c.env.DB, userId);
   const results = await c.env.DB.batch([
-    ...clearUnconfirmedAccess(c.env.DB, userId),
+    ...clearing,
+    // The account's welcome, claimed while its address is unconfirmed (welcome.ts).
+    claimWelcomeOnConfirm(c.env.DB, userId),
     c.env.DB.prepare('UPDATE users SET email_verified = 1 WHERE id = ?').bind(userId),
     // The version this batch leaves, which the session below is bound to.
     c.env.DB.prepare('SELECT token_version FROM users WHERE id = ?').bind(userId),
   ]);
   const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
+  if (welcomeClaimed(results[clearing.length])) welcomeAfterAnswer(c)(userId);
   const after = results.at(-1)?.results[0] as { token_version: number } | undefined;
   c.header('Set-Cookie', cookie(LOGINCODE_COOKIE, '', 0, c.env), { append: true });
   if (!after) return c.json(CODE_REFUSED, 401);

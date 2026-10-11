@@ -37,17 +37,20 @@ function expectBrandedShell(mail: { subject: string; html: string; text: string 
 }
 
 describe('email templates', () => {
-  it('welcome mail is branded, links the app, and mentions the orbit GIF', () => {
+  it('welcome mail is branded, tops the card with the engraved art, and links the pages its steps name', () => {
     const mail = renderWelcome({ appUrl: 'https://tokencircles.com' });
     expectBrandedShell(mail);
-    expect(mail.html).toContain('email/orbit.gif');
-    expect(mail.html).toContain('Open Token Circles');
-    expect(mail.text).toContain("If you didn't create this account");
+    expect(mail.html).toContain('email/hero-engraved-night-v1.jpg');
+    expect(mail.html).not.toContain('email/orbit.gif');
+    for (const page of ['import', 'bills', 'progress']) {
+      expect(mail.html).toContain(`href="https://tokencircles.com/#${page}"`);
+    }
+    expect(mail.text).toContain("Questions, or a bank file that won't import? Reply to this mail.");
   });
 
   it('mail assets load from the sending environment origin, defaulting to prod', () => {
     const dev = renderWelcome({ appUrl: 'https://dev.tokencircles.com' });
-    expect(dev.html).toContain('https://dev.tokencircles.com/email/orbit.gif');
+    expect(dev.html).toContain('https://dev.tokencircles.com/email/hero-engraved-night-v1.jpg');
     expect(dev.html).toContain('https://dev.tokencircles.com/icon-192.png');
     const fallback = renderTestBasic();
     expect(fallback.html).toContain('https://tokencircles.com/icon-192.png');
