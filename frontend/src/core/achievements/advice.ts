@@ -4,6 +4,7 @@
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
 import { bucketByMonth, sumTypes } from './evaluate'
+import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -132,11 +133,9 @@ function monthsBetween(from: string, to: string): number {
 
 function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const last = addMonths(monthOf(input.today), -1)
-  const list = byMonth.get(last)
-  if (!list || list.length < 3) return []
-  const income = sumTypes(list, ['income'])
-  const out = sumTypes(list, ['expense', 'deduction'])
-  if (out <= income) return []
+  const red = monthInTheRed(byMonth.get(last))
+  if (!red) return []
+  const { income, out } = red
   return [
     {
       id: `in-the-red:${last}`,
@@ -153,8 +152,7 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
 
 function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const list = byMonth.get(month) ?? []
-  const n = list.filter((t) => t.type !== 'transfer' && t.category_id === null).length
+  const n = uncategorisedIn(byMonth.get(month) ?? [])
   if (n === 0) return []
   return [
     {
@@ -177,30 +175,18 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
  */
 function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const budgeted = new Set(input.budgets.map((b) => b.category_id))
-  const billed = new Set(
-    input.bills
-      .map((b) => b.category_id)
-      .filter((id): id is number => id !== null && id !== undefined)
-  )
-  const counts = new Map<number, number>()
-  for (const t of byMonth.get(month) ?? []) {
-    if (t.type !== 'expense' || t.category_id === null) continue
-    if (budgeted.has(t.category_id) || billed.has(t.category_id)) continue
-    counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + Math.abs(t.amount))
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (!top || top[1] <= 0) return []
+  const top = biggestUnbudgeted(byMonth.get(month) ?? [], input.budgets, input.bills)
+  if (!top) return []
   return [
     {
-      id: `unbudgeted-category:${top[0]}:${month}`,
+      id: `unbudgeted-category:${top.categoryId}:${month}`,
       kind: 'unbudgeted-category',
       tone: 'info',
-      title: `${categoryName(input, top[0])} has no budget`,
+      title: `${categoryName(input, top.categoryId)} has no budget`,
       detail: 'It is the biggest thing you spend on with nothing set aside for it.',
-      figure: round(top[1]),
+      figure: round(top.spent),
       link: { page: 'budgets', label: 'Budgets' },
-      weight: top[1],
+      weight: top.spent,
     },
   ]
 }

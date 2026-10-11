@@ -437,6 +437,11 @@ All notable changes to Token Circles are documented here. The format is based on
   (`unbudgeted-category:<category id>:<month>`). `parseDismissed` (`achievements/records.ts`)
   reads a dismissal stored under the old name as the new one, so the card stays hidden, and the
   next save stores the new id. The card's words do not change.
+- **The advice counts are computed in one place** (`frontend/src/core/achievements/monthFacts.ts`):
+  `uncategorisedIn` (entries with no category, transfers aside), `monthInTheRed` (what a month of
+  three or more entries earned and spent, when it spent more) and `biggestUnbudgeted` (the
+  category spent on most with no budget and no bill). advice.ts calls them, and so do the Getting
+  started steps, so the two read the same numbers. What advice says does not change.
 
 ### CRUD contract suite
 
