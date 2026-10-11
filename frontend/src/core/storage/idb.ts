@@ -710,6 +710,23 @@ export class IndexedDBAdapter implements StorageAdapter {
           if (row.profile_id !== profileId || row.category_id !== categoryId) continue
           if (replacementId === null) {
             await store.delete(row.id as number)
+            continue
+          }
+          // A budget for the same period and start as one the kept category has is added to that
+          // one (the first, of two), so the kept category has one budget for it, as on the Worker.
+          const kept = rows
+            .filter(
+              (other) =>
+                other.profile_id === profileId &&
+                other.category_id === replacementId &&
+                other.period === row.period &&
+                other.start_date === row.start_date
+            )
+            .sort((a, b) => Number(a.id) - Number(b.id))[0]
+          if (kept) {
+            kept.amount = Number(kept.amount) + Number(row.amount)
+            await store.put(kept)
+            await store.delete(row.id as number)
           } else {
             row.category_id = replacementId
             await store.put(row)

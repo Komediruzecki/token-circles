@@ -608,7 +608,8 @@ All notable changes to Token Circles are documented here. The format is based on
   carries its kind. The local-first demo files "Grocery shopping" under Groceries and "Dining out"
   under Eating out (it was Entertainment), and budgets both. `DELETE /api/categories` matches a
   category called Food to Groceries (`resetName`, `shared/defaultCategories.ts`), so a reset renames
-  it with its entries and budgets instead of deleting it; the Danger Zone's confirmation says so.
+  it with its entries and budgets instead of deleting it, and folds a Groceries the person made
+  into it (F9 below); the Danger Zone's confirmation says both.
 - **Imports give a new expense category the kind its name suggests**, on the Worker
   (`imports.ts`) and in local-first (`importFlow.ts`). In the cloud, where a new account has no
   categories, that is how most categories get one.
@@ -820,6 +821,18 @@ All notable changes to Token Circles are documented here. The format is based on
   to the step shows them and its save tries them again.
 - **Tests:** `onboardingSpaceAnswersFail.test.tsx` (the failure path, on the real local-first
   router: the profile renamed, the next step shown, the toast, no notice on the form).
+- **Reset merges budgets too** (review F9). When a reset kept Food (renamed Groceries) and folded a
+  Groceries the person made into it, the kept category ended with both budgets for the same month
+  (300 and 200), in both runtimes. A moved budget for the same period and start date as one the
+  kept category has is now added to that one and removed (`budgetMergeStatements` in
+  `worker/src/profileData.ts`, the budgets branch of `resetProfileCategories` in `idb.ts`); of two
+  kept budgets that match, the one with the lower id takes it. A budget with no match moves as
+  before. `budgets_zero_based`, which no route reads, is repointed as before. The Danger Zone says
+  "Food becomes Groceries and keeps its entries and budgets. A Groceries you already have becomes
+  part of it, and budgets for the same period are added together."
+- **Tests:** a contract scenario in both runtimes (Food and an own Groceries, budgeted for March,
+  the own one for April too: one Groceries, its entry moved, March's budgets one of 500, April's
+  moved as it is) and `dangerZoneCategoriesReset.test.tsx` (the confirmation's words).
 
 ### Achievements
 

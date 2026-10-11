@@ -210,6 +210,55 @@ export const categories = [
   ),
 
   scenario(
+    'resetting the categories folds a Groceries of your own into Food, budgets added together',
+    async (api, expect) => {
+      // Food from the old defaults, and a Groceries the person made beside it, each budgeted for
+      // March; their own Groceries for April too.
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+      });
+      const own = await added(api, expect, '/api/categories', {
+        name: 'Groceries',
+        type: 'expense',
+        color: '#225588',
+      });
+      const market = await addTransaction(api, expect, { description: 'Market', category_id: own });
+      const budget = (category_id: number, amount: number, start_date: string) =>
+        added(api, expect, '/api/budgets', { category_id, amount, period: 'monthly', start_date });
+      const march = await budget(food, 300, '2026-03-01');
+      await budget(own, 200, '2026-03-01');
+      const april = await budget(own, 50, '2026-04-01');
+
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+
+      const list = (await api.get('/api/categories')).body as Json[];
+      // Food is the Groceries kept; the person's own is folded into it, entries and all.
+      expect(list.filter((row) => row.name === 'Groceries')).toEqual([
+        expect.objectContaining({ id: food }),
+      ]);
+      expect(list.find((row) => row.id === own)).toBeUndefined();
+      expect((await api.get(`/api/transactions/${market}`)).body).toMatchObject({
+        category_id: food,
+      });
+      // March's two budgets are one, added together; April's moves as it is.
+      const budgets = ((await api.get('/api/budgets')).body as Json[])
+        .map((row) => ({
+          id: row.id,
+          category_id: row.category_id,
+          amount: row.amount,
+          start_date: row.start_date,
+        }))
+        .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+      expect(budgets).toEqual([
+        { id: march, category_id: food, amount: 500, start_date: '2026-03-01' },
+        { id: april, category_id: food, amount: 50, start_date: '2026-04-01' },
+      ]);
+    }
+  ),
+
+  scenario(
     'a category keeps its kind and whether it is needed every month, and changes them on an edit',
     async (api, expect) => {
       const id = await added(api, expect, '/api/categories', {

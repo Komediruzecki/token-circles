@@ -292,6 +292,37 @@ interface CategoryRow {
   name: string;
 }
 
+/**
+ * Before a category's budgets move to the category that replaces it (a reset that keeps Food as
+ * Groceries and folds in a Groceries the person made): a moved budget for the same period and start
+ * as one the kept category already has is added to that one and removed, so the kept category has
+ * one budget for the month, not two. Of two kept budgets that match, the first takes it.
+ */
+function budgetMergeStatements(
+  DB: D1Database,
+  profileId: number,
+  movedId: number,
+  keptId: number
+): D1PreparedStatement[] {
+  const sameSlot = (alias: string, outer: string) =>
+    `${alias}.profile_id = ? AND ${alias}.category_id = ?
+     AND ${alias}.period = ${outer}.period AND ${alias}.start_date = ${outer}.start_date`;
+  return [
+    DB.prepare(
+      `UPDATE budgets
+       SET amount = amount + (SELECT SUM(m.amount) FROM budgets m WHERE ${sameSlot('m', 'budgets')})
+       WHERE profile_id = ? AND category_id = ?
+         AND EXISTS (SELECT 1 FROM budgets m WHERE ${sameSlot('m', 'budgets')})
+         AND id = (SELECT MIN(k.id) FROM budgets k WHERE ${sameSlot('k', 'budgets')})`
+    ).bind(profileId, movedId, profileId, keptId, profileId, movedId, profileId, keptId),
+    DB.prepare(
+      `DELETE FROM budgets
+       WHERE profile_id = ? AND category_id = ?
+         AND EXISTS (SELECT 1 FROM budgets k WHERE ${sameSlot('k', 'budgets')})`
+    ).bind(profileId, movedId, profileId, keptId),
+  ];
+}
+
 function categoryReferenceStatements(
   DB: D1Database,
   profileId: number,
@@ -322,6 +353,7 @@ function categoryReferenceStatements(
       )
     );
   } else {
+    statements.push(...budgetMergeStatements(DB, profileId, categoryId, replacementId));
     for (const table of REQUIRED_CATEGORY_TABLES) {
       statements.push(
         DB.prepare(
