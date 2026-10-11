@@ -69,7 +69,15 @@ describe('markAccessCleared and takeAccessCleared', () => {
   })
 
   it('removes a kept value it does not recognise', () => {
-    for (const kept of ['sign-in:password', 'reset', 'google:', 'google:nothing', '']) {
+    for (const kept of [
+      'sign-in:password',
+      'reset',
+      'google:',
+      'google:nothing',
+      '',
+      'constructor:password',
+      'toString:password',
+    ]) {
       sessionStorage.setItem('tc:access-cleared', kept)
 
       expect(takeAccessCleared('app'), kept).toBeNull()

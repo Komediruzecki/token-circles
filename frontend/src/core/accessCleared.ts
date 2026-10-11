@@ -91,7 +91,7 @@ export function markAccessCleared(by: ClearedBy, reported: ClearedKind[]): void 
   }
 }
 
-const isStep = (raw: string): raw is ClearedBy => raw in SCREEN_OF
+const isStep = (raw: string): raw is ClearedBy => Object.hasOwn(SCREEN_OF, raw)
 
 /**
  * The step and what it removed, once, when a notice is waiting for `screen`; otherwise null. A
