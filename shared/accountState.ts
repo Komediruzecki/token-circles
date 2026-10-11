@@ -24,7 +24,8 @@
  * A stored value is read leniently, because another build may have written it: a newer one that
  * added a step or a tour, or an older one after a rollback. An onboarding step this build does not
  * know reads as no step, and the record keeps its times and outcome, so a finished record stays
- * finished. A tour id that is not well formed is dropped and the others are kept. A row that cannot
+ * finished; an outcome it does not know, on a record with a finish time, reads as no outcome, and
+ * the record is still finished and keeps its step and times. A tour id that is not well formed is dropped and the others are kept. A row that cannot
  * be read even so is never replaced: the write is refused and the row left as it is
  * (applyUserStateWrite). GET answers it as UNREADABLE, which is not the null of no row, and the app
  * treats that key as unknown: no wizard, no write, nothing sent.
@@ -116,24 +117,28 @@ export function furthestStep(
   return ONBOARDING_STEPS.indexOf(b) > ONBOARDING_STEPS.indexOf(a) ? b : a;
 }
 
-/** Whether a record says the wizard is behind the account: completed, skipped or migrated. */
+/**
+ * Whether a record says the wizard is behind the account: it has a finish time. Completed, skipped
+ * or migrated, or finished with an outcome this build does not know.
+ */
 export function onboardingFinished(record: OnboardingRecord | null): boolean {
-  return record !== null && record.outcome !== null;
+  return typeof record?.finished_at === 'string';
 }
 
 /**
  * A stored onboarding record, or null when `raw` is not one. A step this build does not know (one
- * added or renamed by another build) reads as null, and the rest of the record is kept.
+ * added or renamed by another build) reads as null, and the rest of the record is kept. So does an
+ * outcome it does not know on a record with a finish time: the record reads as finished. An
+ * outcome, known or not, with no finish time cannot be read.
  */
 export function readOnboardingRecord(raw: unknown): OnboardingRecord | null {
   if (!isObject(raw)) return null;
-  const { started_at, finished_at, outcome } = raw;
+  const { started_at, finished_at } = raw;
   const step = isStep(raw.step) ? raw.step : null;
+  const outcome = isOutcome(raw.outcome) ? raw.outcome : null;
   if (started_at !== null && !isTime(started_at)) return null;
   if (finished_at !== null && !isTime(finished_at)) return null;
-  if (outcome !== null && !isOutcome(outcome)) return null;
-  // Finished means both, or neither.
-  if ((outcome === null) !== (finished_at === null)) return null;
+  if (finished_at === null && raw.outcome !== null) return null;
   return { step, started_at, finished_at, outcome };
 }
 

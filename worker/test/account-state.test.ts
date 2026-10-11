@@ -305,6 +305,45 @@ describe('a value another build wrote', () => {
     expect(await row('onboarding')).toBe(NEWER_FINISHED);
   });
 
+  it('reads a record finished with an outcome this build does not know as finished, and leaves it', async () => {
+    // A newer build added an outcome.
+    const newer = JSON.stringify({
+      step: 'done',
+      started_at: '2026-10-01 10:00:00',
+      finished_at: '2026-10-01 10:05:00',
+      outcome: 'imported',
+    });
+    await put('onboarding', newer);
+    const state = (await (await read(mine)).json()) as { onboarding: Onboarding | null };
+    expect(state.onboarding).toEqual({
+      step: 'done',
+      started_at: '2026-10-01 10:00:00',
+      finished_at: '2026-10-01 10:05:00',
+      outcome: null,
+    });
+
+    const res = await write(mine, 'onboarding', { step: 'welcome', outcome: 'skipped' });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { onboarding: Onboarding }).onboarding.finished_at).toBe(
+      '2026-10-01 10:05:00'
+    );
+    expect(await row('onboarding')).toBe(newer);
+  });
+
+  it('cannot read an outcome it does not know on a record with no finish time', async () => {
+    const value = JSON.stringify({
+      step: 'import',
+      started_at: '2026-10-01 10:00:00',
+      finished_at: null,
+      outcome: 'imported',
+    });
+    await put('onboarding', value);
+    const state = (await (await read(mine)).json()) as { onboarding: unknown };
+    expect(state.onboarding).toBe('unreadable');
+    expect((await write(mine, 'onboarding', { step: 'subscriptions' })).status).toBe(409);
+    expect(await row('onboarding')).toBe(value);
+  });
+
   it('moves an unfinished record with an unknown step on from the steps it knows', async () => {
     await put(
       'onboarding',

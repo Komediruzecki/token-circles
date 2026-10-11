@@ -69,7 +69,9 @@ export type OnboardingOutcome = OnboardingDecision | 'existing';
  * - `step`: the furthest step reached, where the wizard reopens. Null when no step was ever
  *   recorded: a migrated account, or a decision this browser kept from before the record existed.
  * - `started_at`: server time of the write that created the record. Null on migrated rows.
- * - `finished_at`, `outcome`: set together, once. A finished record never changes again.
+ * - `finished_at`, `outcome`: set together, once. A finished record never changes again. The
+ *   record is finished when it has `finished_at`; read by a build that does not know the outcome
+ *   another build stored, `outcome` is null on a finished record (shared/accountState.ts).
  *
  * Times are UTC `YYYY-MM-DD HH:MM:SS`, the format of every `datetime('now')` column.
  */

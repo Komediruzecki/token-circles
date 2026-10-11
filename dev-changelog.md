@@ -462,6 +462,14 @@ All notable changes to Token Circles are documented here. The format is based on
   menu shows this browser's `finance_spotlight_tours` map instead, where a tour finished now is
   kept and Reset All Tours starts over. Before, GET answered such a row as `null`, so the wizard
   opened once on that device and its writes were refused with 409.
+- **An onboarding outcome this build does not know reads as finished.** `readOnboardingRecord`
+  reads an `outcome` it does not know (one a newer build adds) as `null` when the record has a valid
+  `finished_at`, and keeps `step`, `started_at` and `finished_at`, as an unknown step reads as no
+  step. `onboardingFinished` asks for a finish time, not an outcome, so that record is finished: no
+  wizard opens, this browser's flag goes as it does for any finished record, a write over it answers
+  200 and leaves the row byte for byte. The GET answer that carries it (`outcome: null` with a
+  `finished_at`) reads back as finished in the app. An outcome, known or not, with no `finished_at`
+  still cannot be read.
 
 ### Orientation
 

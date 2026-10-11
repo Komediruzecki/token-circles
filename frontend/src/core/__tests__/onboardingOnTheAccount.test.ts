@@ -12,7 +12,7 @@ import {
   applyUserStateWrite,
   sqliteDateTime,
 } from '../../../../shared/accountState'
-import { __resetAccountStateForTest, readAccountState } from '../accountState'
+import { __resetAccountStateForTest, accountState, readAccountState } from '../accountState'
 import {
   __resetGettingStartedForTest,
   gettingStartedRecord,
@@ -190,6 +190,31 @@ describe('an account whose record is finished', () => {
     expect(onboardingOpen()).toBe(false)
 
     // Relaunched from the tour menu, and finished again: the record stays the newer build's.
+    startOnboarding()
+    nextOnboardingStep()
+    completeOnboarding()
+    await settled()
+    expect(statePuts()).toEqual([])
+    expect(worker.records.get(5)).toEqual(newer)
+  })
+
+  it('is offered nothing when the record finished with an outcome this build does not know', async () => {
+    // A newer build added an outcome; this one is older, or a rollback.
+    const newer = {
+      step: 'done',
+      started_at: '2026-10-01 09:00:00',
+      finished_at: '2026-10-01 09:05:00',
+      outcome: 'imported',
+    }
+    worker.records.set(5, newer as unknown as OnboardingRecord)
+    localStorage.setItem('finance_onboarding:account-5', 'completed')
+    signIn(5)
+
+    expect(await whereToOfferOnboarding()).toBeNull()
+    // Read as finished, the rest of the record kept: the flag it replaces goes, as for any.
+    expect(accountState()?.onboarding).toEqual({ ...newer, outcome: null })
+    expect(getOnboardingStatus('account-5')).toBeNull()
+
     startOnboarding()
     nextOnboardingStep()
     completeOnboarding()
