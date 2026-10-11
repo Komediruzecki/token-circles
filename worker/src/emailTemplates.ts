@@ -6,14 +6,14 @@
  *  - Hand-written, table-based HTML with ALL styles inline — the only layout
  *    dialect every mail client speaks. No email framework, no build step.
  *  - No inline SVG and no emoji: Gmail strips <svg>, many clients mangle
- *    emoji. Branding rides on hosted images (the app's PNG logo + a small
- *    orbit-animation GIF whose first frame stands alone for clients that
- *    freeze GIFs, e.g. some Outlooks).
- *  - Dark-only: <meta name="color-scheme" content="dark"> plus explicit dark
- *    backgrounds everywhere, so "smart" clients don't invert the design.
+ *    emoji. Branding rides on hosted images from the app's origin.
  *  - Every renderer also returns a plain-text twin (deliverability + a11y).
  *  - Renderers are pure (no I/O, no Env) so they can be unit-tested and
- *    previewed; callers pass links/currency in.
+ *    previewed; callers pass links/currency in. This module imports nothing, so
+ *    worker/scripts/ can load it under plain Node as well.
+ *
+ * Two layouts live here: the mail layout of 2026-10-11 (renderMail), with the engraved art, dark
+ * by default and paper in light mode; and the first shell (`shell`), dark only, with the orbit GIF.
  */
 
 // ── Brand constants ───────────────────────────────────────────────────────────
@@ -85,6 +85,268 @@ export function formatMoney(amount: number, currency?: string | null): string {
     return `${value.toFixed(2)} ${currency ?? ''}`.trim();
   }
 }
+
+// ── The mail layout (2026-10-11) ──────────────────────────────────────────────
+//
+// One card per mail, in the shape the design settled (docs/design/mail-art/README.md): the
+// wordmark above the card; the engraved art flush at the top of the card; then an eyebrow, one
+// headline, one or two short paragraphs, a button and at most one list of numbered steps; the
+// footer outside the card. 600 px wide at most, 36 px side padding, and on phones 22 px with a
+// full-width button.
+//
+// Dark by default, which is what Gmail and classic Outlook show; paper in light mode through
+// prefers-color-scheme, which Apple Mail reads. Every dark colour of the page, the card and the
+// button is also a bgcolor attribute, which classic Outlook reads where it ignores CSS. The
+// system font stack, as the app uses: no web fonts, no serif.
+//
+// The art is a real <img> above live text, never a CSS background: Gmail's desktop webmail draws
+// background images badly and classic Outlook needs VML for them. Its files sit in
+// frontend/public/email/ under versioned names and are never overwritten, because a mail already
+// sent points at its image for as long as it is kept: new art gets a new name.
+
+/** The dark palette. Its light counterpart is in MAIL_STYLE. */
+const INK = {
+  page: '#0b1020',
+  card: '#151d31',
+  text: '#eef2ff',
+  soft: '#b4c0dc',
+  muted: '#8f9cbd',
+  rule: '#2a3552',
+  link: '#9db8ff',
+  button: '#6e9bff',
+  buttonText: '#0b1020',
+} as const;
+
+const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+
+/** The engraved art: the hero tops the welcome, the banner every other mail. */
+const ART = {
+  hero: { path: '/email/hero-engraved-night-v1.jpg', width: 600, height: 280 },
+  banner: { path: '/email/banner-engraved-night-v1.jpg', width: 600, height: 180 },
+} as const;
+
+/** The light scheme and the phone width: the only rules that cannot be inline. */
+const MAIL_STYLE = `<style>
+:root { color-scheme: dark light; supported-color-schemes: dark light; }
+@media (prefers-color-scheme: light) {
+  .tc-page { background:#eeeae1 !important; }
+  .tc-card { background:#fbf9f4 !important; }
+  .tc-text { color:#141b30 !important; }
+  .tc-soft { color:#424d6b !important; }
+  .tc-muted { color:#525c79 !important; }
+  .tc-link { color:#2f5cc4 !important; }
+  .tc-rule { border-color:#ddd8cc !important; }
+  .tc-btn-td { background:#2f5cc4 !important; }
+  .tc-btn { color:#ffffff !important; }
+  .tc-btn2-td { border-color:#2f5cc4 !important; }
+  .tc-btn2 { color:#2f5cc4 !important; }
+  .tc-code { background:#eeeae1 !important; border-color:#ddd8cc !important; }
+}
+@media (max-width: 480px) {
+  .tc-pad { padding-left:22px !important; padding-right:22px !important; }
+  .tc-h1 { font-size:24px !important; }
+  .tc-btn-table { width:100% !important; }
+  .tc-btn-table td { display:block !important; width:auto !important; }
+  .tc-btn-gap { height:10px !important; }
+  .tc-btn, .tc-btn2 { display:block !important; text-align:center !important; }
+}
+</style>`;
+
+/** A run of words in a paragraph: plain, or in bold (an address the reader should check). */
+export type MailRun = string | { strong: string };
+
+/** A paragraph: its words, or runs of them. */
+export type MailParagraph = string | MailRun[];
+
+export interface MailLink {
+  label: string;
+  href: string;
+}
+
+export interface MailStep {
+  title: string;
+  text: string;
+  link: MailLink;
+}
+
+/**
+ * What one mail says, in the order the layout shows it. The types hold the layout's limits: one
+ * headline, one or two paragraphs, one button or a button and a quieter second one, and at most
+ * one list of steps. Every string is plain text; renderMail escapes it.
+ */
+export interface MailSpec {
+  subject: string;
+  /** The line inbox lists show beside the subject, hidden in the mail itself. */
+  preheader: string;
+  /** The art at the top of the card. */
+  art: keyof typeof ART;
+  /** Where the art links, if anywhere. */
+  artHref?: string;
+  /** A short line above the headline. */
+  eyebrow?: string;
+  headline: string;
+  /** A one-time code, large and monospaced, right under the headline. */
+  code?: string;
+  paragraphs: [MailParagraph] | [MailParagraph, MailParagraph];
+  buttons?: [MailLink] | [MailLink, MailLink];
+  /** Small print under the button. */
+  notes?: string[];
+  /** The button's link again, as text to paste when the button does not open. */
+  paste?: string;
+  steps?: { title: string; items: MailStep[] };
+  /** A last paragraph at the foot of the card. */
+  signOff?: string;
+  /** Small print under a hairline at the foot of the card. */
+  aside?: string;
+  /** Why this mail came, in the footer. */
+  reason: string;
+  /** The origin that serves the wordmark and the art: the sending environment's app. */
+  assetOrigin?: string;
+}
+
+const paragraphText = (paragraph: MailParagraph): string =>
+  typeof paragraph === 'string'
+    ? paragraph
+    : paragraph.map((run) => (typeof run === 'string' ? run : run.strong)).join('');
+
+const paragraphHtml = (paragraph: MailParagraph): string =>
+  typeof paragraph === 'string'
+    ? escapeHtml(paragraph)
+    : paragraph
+        .map((run) =>
+          typeof run === 'string'
+            ? escapeHtml(run)
+            : `<strong class="tc-text" style="color:${INK.text};font-weight:600">${escapeHtml(run.strong)}</strong>`
+        )
+        .join('');
+
+const mailParagraph = (html: string) =>
+  `<p class="tc-soft" style="margin:14px 0 0;font:16px/1.6 ${FONT};color:${INK.soft}">${html}</p>`;
+
+const mailSmall = (html: string, top = 14) =>
+  `<p class="tc-muted" style="margin:${top}px 0 0;font:14px/1.6 ${FONT};color:${INK.muted}">${html}</p>`;
+
+const mailLink = ({ label, href }: MailLink) =>
+  `<a class="tc-link" href="${escapeHtml(href)}" style="color:${INK.link};text-decoration:none;font-weight:600">${escapeHtml(label)}</a>`;
+
+/** The button, solid in the brand blue; a second one, outlined, sits beside it. */
+function mailButtons([first, second]: [MailLink] | [MailLink, MailLink]): string {
+  const primary = `<td class="tc-btn-td" bgcolor="${INK.button}" style="background:${INK.button};border-radius:10px"><a class="tc-btn" href="${escapeHtml(first.href)}" style="display:inline-block;padding:15px 26px;font:600 16px/1.2 ${FONT};color:${INK.buttonText};text-decoration:none;border-radius:10px">${escapeHtml(first.label)}</a></td>`;
+  const quieter = second
+    ? `<td class="tc-btn-gap" width="12" style="width:12px;font-size:0;line-height:0">&nbsp;</td><td class="tc-btn2-td" style="border:1px solid ${INK.link};border-radius:10px"><a class="tc-btn2" href="${escapeHtml(second.href)}" style="display:inline-block;padding:14px 25px;font:600 16px/1.2 ${FONT};color:${INK.link};text-decoration:none;border-radius:10px">${escapeHtml(second.label)}</a></td>`
+    : '';
+  return `<table role="presentation" class="tc-btn-table" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 4px"><tr>${primary}${quieter}</tr></table>`;
+}
+
+const mailCode = (code: string) =>
+  `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:20px 0 4px"><tr><td class="tc-code" bgcolor="${INK.page}" style="background:${INK.page};border:1px solid ${INK.rule};border-radius:12px;padding:14px 22px"><span class="tc-text" style="font:700 36px/1.2 ${MONO};letter-spacing:6px;color:${INK.text}">${escapeHtml(code)}</span></td></tr></table>`;
+
+function mailSteps({ title, items }: NonNullable<MailSpec['steps']>, bottom: number): string {
+  const rows = items
+    .map(
+      (step, i) =>
+        `<tr><td class="tc-rule" style="border-top:1px solid ${INK.rule};padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34" valign="top" class="tc-muted" style="font:600 14px/1.5 ${FONT};color:${INK.muted}">${i + 1}</td><td valign="top"><div class="tc-text" style="font:600 16px/1.4 ${FONT};color:${INK.text}">${escapeHtml(step.title)}</div><div class="tc-soft" style="margin:4px 0 0;font:14px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(step.text)}</div><div style="margin:8px 0 0;font:14px/1.4 ${FONT}">${mailLink({ label: `${step.link.label} →`, href: step.link.href })}</div></td></tr></table></td></tr>`
+    )
+    .join('');
+  return `<tr><td class="tc-pad" style="padding:26px 36px ${bottom}px"><div class="tc-muted" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.muted};margin:0 0 6px">${escapeHtml(title)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>`;
+}
+
+/** The text twin's last lines, the same for every mail on this layout. */
+const mailTextFooter = (reason: string) =>
+  `Your money, in clear orbit.\n${APP_URL} · ${ABOUT_URL} · ${REPO_URL}\n${reason}`;
+
+/** One mail on the layout: its HTML and its plain-text twin, from the same words. */
+export function renderMail(spec: MailSpec): RenderedEmail {
+  const assets = spec.assetOrigin || APP_URL;
+  const art = ART[spec.art];
+  const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0">`;
+  // The card's last row carries its bottom padding.
+  const after = { steps: !!spec.steps, signOff: !!spec.signOff, aside: !!spec.aside };
+  const rows = [
+    `<tr><td style="padding:0;font-size:0;line-height:0">${spec.artHref ? `<a href="${escapeHtml(spec.artHref)}" style="display:block">${img}</a>` : img}</td></tr>`,
+    `<tr><td class="tc-pad" style="padding:30px 36px ${after.steps || after.signOff || after.aside ? 6 : 30}px">` +
+      (spec.eyebrow
+        ? `<div class="tc-link" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.link};margin:0 0 10px">${escapeHtml(spec.eyebrow)}</div>`
+        : '') +
+      `<h1 class="tc-text tc-h1" style="margin:0;font:600 32px/1.15 ${FONT};letter-spacing:-0.4px;color:${INK.text}">${escapeHtml(spec.headline)}</h1>` +
+      (spec.code ? mailCode(spec.code) : '') +
+      spec.paragraphs.map((paragraph) => mailParagraph(paragraphHtml(paragraph))).join('') +
+      (spec.buttons ? mailButtons(spec.buttons) : '') +
+      (spec.notes ?? []).map((note, i) => mailSmall(escapeHtml(note), i === 0 ? 16 : 14)).join('') +
+      (spec.paste
+        ? mailSmall(
+            `${escapeHtml("If the button doesn't open, paste this into your browser:")}<br><a class="tc-link" href="${escapeHtml(spec.paste)}" style="color:${INK.link};text-decoration:none;word-break:break-all;font:12px/1.6 ${MONO}">${escapeHtml(spec.paste)}</a>`
+          )
+        : '') +
+      '</td></tr>',
+    spec.steps ? mailSteps(spec.steps, after.signOff || after.aside ? 4 : 30) : '',
+    spec.signOff
+      ? `<tr><td class="tc-pad" style="padding:6px 36px ${after.aside ? 6 : 30}px"><p class="tc-soft" style="margin:0;font:16px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(spec.signOff)}</p></td></tr>`
+      : '',
+    spec.aside
+      ? `<tr><td class="tc-pad" style="padding:8px 36px 30px"><div class="tc-rule" style="border-top:1px solid ${INK.rule};padding-top:16px">${mailSmall(escapeHtml(spec.aside), 0)}</div></td></tr>`
+      : '',
+  ].join('');
+  const footerLinks = [
+    { label: 'Open the app', href: APP_URL },
+    { label: 'About', href: ABOUT_URL },
+    { label: 'GitHub', href: REPO_URL },
+    { label: 'Terms', href: TERMS_URL },
+    { label: 'Privacy', href: PRIVACY_URL },
+  ]
+    .map(mailLink)
+    .join(' &nbsp;&middot;&nbsp; ');
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="dark light">
+<meta name="supported-color-schemes" content="dark light">
+<title>${escapeHtml(spec.subject)}</title>
+${MAIL_STYLE}
+</head>
+<body class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+<table role="presentation" class="tc-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK.page}" style="background:${INK.page}"><tr><td align="center" style="padding:22px 12px 30px">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
+<tr><td style="padding:2px 6px 14px"><a href="${APP_URL}" style="text-decoration:none"><img src="${assets}/icon-192.png" width="26" height="26" alt="" style="vertical-align:middle;border:0;border-radius:7px"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
+<tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
+<tr><td class="tc-pad" style="padding:22px 36px 4px">
+<p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
+<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot; <a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
+</td></tr>
+</table>
+</td></tr></table>
+</body>
+</html>
+`;
+  const text = [
+    spec.headline,
+    ...(spec.code ? [spec.code] : []),
+    ...spec.paragraphs.map(paragraphText),
+    ...(spec.buttons
+      ? [spec.buttons.map(({ label, href }) => `${label}: ${href}`).join('\n')]
+      : []),
+    ...(spec.notes ?? []),
+    ...(spec.steps
+      ? [
+          spec.steps.title,
+          ...spec.steps.items.map(
+            (step, i) =>
+              `${i + 1}. ${step.title}\n${step.text}\n${step.link.label}: ${step.link.href}`
+          ),
+        ]
+      : []),
+    ...(spec.signOff ? [spec.signOff] : []),
+    ...(spec.aside ? [spec.aside] : []),
+    mailTextFooter(spec.reason),
+  ].join('\n\n');
+  return { subject: spec.subject, html, text };
+}
+
+// ── The first shell ───────────────────────────────────────────────────────────
 
 const btn = (href: string, label: string, testId?: string) =>
   `<a href="${href}" ${testId ? `data-tid="${testId}"` : ''}style="display:inline-block;background:${C.primaryStrong};color:#ffffff;text-decoration:none;font-family:${FONT};font-size:15px;font-weight:600;padding:12px 26px;border-radius:10px">${escapeHtml(label)}</a>`;

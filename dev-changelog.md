@@ -242,6 +242,21 @@ All notable changes to Token Circles are documented here. The format is based on
   leave out an account waiting for its link. The welcome and confirm mails say the link starts the
   account and where to sign in after opening it. No migration.
 
+### Mails
+
+- **A second mail layout, with engraved art** (`renderMail` in `worker/src/emailTemplates.ts`). The
+  wordmark sits above the card and the art flush at its top; then an eyebrow, one headline, one or
+  two short paragraphs, a button (or a button and a quieter outlined one, which a phone stacks
+  under it, each full width), at most one list of numbered steps, and the footer outside the
+  card. Dark by default; paper in light mode through
+  `prefers-color-scheme`, with the page, card and button colours also set as `bgcolor` attributes
+  for classic Outlook. The system font stack, no Georgia. The art is two cuts of one image,
+  `frontend/public/email/hero-engraved-night-v1.jpg` (1200 x 560, for the welcome) and
+  `banner-engraved-night-v1.jpg` (1199 x 360, for every other mail on the layout), loaded from the
+  sending app. `/email/*` is now served `Cache-Control: public, max-age=31536000, immutable`, which
+  is safe only because a file there is never overwritten: new art gets a new name. The master and
+  its prompt are in `docs/design/mail-art/`.
+
 ### Errors
 
 - **The Worker answers an unexpected error with a fixed sentence** (#601).
