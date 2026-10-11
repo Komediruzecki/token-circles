@@ -287,18 +287,36 @@ describe('the Welcome', () => {
     expect(welcome!.html).toContain(`src="${APP}/email/hero-engraved-night-v1.jpg"`);
   });
 
-  it('is not sent again when it failed to send: the address is confirmed and the claim stays', async () => {
-    welcomeAnswer = () => new Response('unavailable', { status: 503 });
-    const account = await signUp(address('failed'));
+  // Resend refusing the mail (sendMail logs it and returns), and the request to Resend throwing
+  // (mailWelcome logs it).
+  for (const [failure, answer] of [
+    ['Resend refuses it', () => new Response('unavailable', { status: 503 })],
+    [
+      'the request to Resend throws',
+      () => {
+        throw new TypeError('network connection lost');
+      },
+    ],
+  ] as const) {
+    it(`is not sent again when ${failure}: the address is confirmed and the claim stays`, async () => {
+      welcomeAnswer = answer;
+      const account = await signUp(address('failed'));
 
-    await signInWithCode(account.email);
-    expect(await emailVerified(account.id)).toBe(1);
-    expect(welcomesTo(account.email)).toHaveLength(1);
+      await signInWithCode(account.email);
+      expect(await emailVerified(account.id)).toBe(1);
+      expect(welcomesTo(account.email)).toHaveLength(1);
+      const claim = await env.DB.prepare(
+        "SELECT 1 AS kept FROM reminder_dedup WHERE user_id = ? AND dedup_key = 'welcome'"
+      )
+        .bind(account.id)
+        .first<{ kept: number }>();
+      expect(claim, 'the welcome stays claimed').toEqual({ kept: 1 });
 
-    welcomeAnswer = () => Response.json({ id: 're_welcome' });
-    await resetPassword(account.email);
-    expect(welcomesTo(account.email)).toHaveLength(1);
-  });
+      welcomeAnswer = () => Response.json({ id: 're_welcome' });
+      await resetPassword(account.email);
+      expect(welcomesTo(account.email)).toHaveLength(1);
+    });
+  }
 
   it('goes to no account that was confirmed before its welcome was recorded', async () => {
     // An account that signed up and confirmed while the code before this one was running: the
