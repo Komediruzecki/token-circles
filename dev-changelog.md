@@ -256,8 +256,8 @@ All notable changes to Token Circles are documented here. The format is based on
 ### Mails
 
 - **A second mail layout, with engraved art** (`renderMail` in `worker/src/emailTemplates.ts`). The
-  wordmark sits above the card and the art flush at its top; then an eyebrow, one headline, one or
-  two short paragraphs, a button (or a button and a quieter outlined one, which a phone stacks
+  wordmark sits above the card and the art flush at its top; then an eyebrow where it adds
+  something (only the Welcome has one), one headline, one or two short paragraphs, a button (or a button and a quieter outlined one, which a phone stacks
   under it, each full width), at most one list of numbered steps, and the footer outside the
   card. Dark by default; paper in light mode through
   `prefers-color-scheme`, with the page, card and button colours also set as `bgcolor` attributes
@@ -266,7 +266,9 @@ All notable changes to Token Circles are documented here. The format is based on
   `banner-engraved-night-v1.jpg` (1199 x 360, for every other mail on the layout), loaded from the
   sending app. `/email/*` is now served `Cache-Control: public, max-age=31536000, immutable`, which
   is safe only because a file there is never overwritten: new art gets a new name. The master and
-  its prompt are in `docs/design/mail-art/`.
+  its prompt are in `docs/design/mail-art/`. In the HTML a headline keeps its last two words on one
+  line and a number keeps its unit ("10 minutes"), through no-break spaces; the plain-text twin
+  carries every fact of the footer (its line, the links, Terms, Privacy and the contact address).
 - **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,
   migration `0033_welcome_once.sql`). A password sign-up gets Confirm (`renderConfirmEmail`): the
   link that opens the account and nothing else. Send the link again, and a sign-up again for an

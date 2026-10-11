@@ -94,10 +94,10 @@ export function formatMoney(amount: number, currency?: string | null): string {
 // ── The mail layout (2026-10-11) ──────────────────────────────────────────────
 //
 // One card per mail, in the shape the design settled (docs/design/mail-art/README.md): the
-// wordmark above the card; the engraved art flush at the top of the card; then an eyebrow, one
-// headline, one or two short paragraphs, a button and at most one list of numbered steps; the
-// footer outside the card. 600 px wide at most, 36 px side padding, and on phones 22 px with a
-// full-width button.
+// wordmark above the card; the engraved art flush at the top of the card; then an eyebrow where it
+// adds something, one headline, one or two short paragraphs, a button and at most one list of
+// numbered steps; the footer outside the card. 600 px wide at most, 36 px side padding, and on
+// phones 22 px with a full-width button.
 //
 // Dark by default, which is what Gmail and classic Outlook show; paper in light mode through
 // prefers-color-scheme, which Apple Mail reads. Every dark colour of the page, the card and the
@@ -225,11 +225,18 @@ const paragraphHtml = (paragraph: MailParagraph): string =>
         )
         .join('');
 
+/** Holds a number and its unit on one line ("10 minutes"), so a phone never strands the unit. */
+const keepTogether = (html: string) =>
+  html.replace(/(\d) (minutes?|hours?|days?)\b/g, '$1&nbsp;$2');
+
+/** The headline, with its last two words on one line, so none of them sits alone. */
+const headlineHtml = (headline: string) => escapeHtml(headline).replace(/ (\S+)$/, '&nbsp;$1');
+
 const mailParagraph = (html: string) =>
-  `<p class="tc-soft" style="margin:14px 0 0;font:16px/1.6 ${FONT};color:${INK.soft}">${html}</p>`;
+  `<p class="tc-soft" style="margin:14px 0 0;font:16px/1.6 ${FONT};color:${INK.soft}">${keepTogether(html)}</p>`;
 
 const mailSmall = (html: string, top = 14) =>
-  `<p class="tc-muted" style="margin:${top}px 0 0;font:14px/1.6 ${FONT};color:${INK.muted}">${html}</p>`;
+  `<p class="tc-muted" style="margin:${top}px 0 0;font:14px/1.6 ${FONT};color:${INK.muted}">${keepTogether(html)}</p>`;
 
 const mailLink = ({ label, href }: MailLink) =>
   `<a class="tc-link" href="${escapeHtml(href)}" style="color:${INK.link};text-decoration:none;font-weight:600">${escapeHtml(label)}</a>`;
@@ -258,7 +265,17 @@ function mailSteps({ title, items }: NonNullable<MailSpec['steps']>, bottom: num
 
 /** The text twin's last lines, the same for every mail on this layout. */
 const mailTextFooter = (reason: string) =>
-  `Your money, in clear orbit.\n${APP_URL} · ${ABOUT_URL} · ${REPO_URL}\n${reason}`;
+  [
+    'Your money, in clear orbit. Open source and local-first.',
+    `Open the app: ${APP_URL}`,
+    `About: ${ABOUT_URL}`,
+    `GitHub: ${REPO_URL}`,
+    `Terms: ${TERMS_URL}`,
+    `Privacy: ${PRIVACY_URL}`,
+    '',
+    reason,
+    `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0 · ${CONTACT_EMAIL}`,
+  ].join('\n');
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
 export function renderMail(spec: MailSpec): RenderedEmail {
@@ -273,7 +290,7 @@ export function renderMail(spec: MailSpec): RenderedEmail {
       (spec.eyebrow
         ? `<div class="tc-link" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.link};margin:0 0 10px">${escapeHtml(spec.eyebrow)}</div>`
         : '') +
-      `<h1 class="tc-text tc-h1" style="margin:0;font:600 32px/1.15 ${FONT};letter-spacing:-0.4px;color:${INK.text}">${escapeHtml(spec.headline)}</h1>` +
+      `<h1 class="tc-text tc-h1" style="margin:0;font:600 32px/1.15 ${FONT};letter-spacing:-0.4px;color:${INK.text}">${headlineHtml(spec.headline)}</h1>` +
       (spec.code ? mailCode(spec.code) : '') +
       spec.paragraphs.map((paragraph) => mailParagraph(paragraphHtml(paragraph))).join('') +
       (spec.buttons ? mailButtons(spec.buttons) : '') +
@@ -320,7 +337,7 @@ ${MAIL_STYLE}
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
 <tr><td class="tc-pad" style="padding:22px 36px 4px">
 <p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
-<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot; <a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
+<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
 </td></tr>
 </table>
 </td></tr></table>
@@ -328,6 +345,7 @@ ${MAIL_STYLE}
 </html>
 `;
   const text = [
+    ...(spec.eyebrow ? [spec.eyebrow] : []),
     spec.headline,
     ...(spec.code ? [spec.code] : []),
     ...spec.paragraphs.map(paragraphText),

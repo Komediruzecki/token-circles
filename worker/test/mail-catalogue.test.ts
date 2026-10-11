@@ -99,6 +99,59 @@ describe('the mail catalogue', () => {
     }
   });
 
+  it('keeps the last two words of every headline on the layout on one line', () => {
+    // On a phone, "One link, one sign-in, and you're in." left "in." alone on the last line.
+    for (const sample of onTheLayout) {
+      const headline = sample.render().html.match(/<h1 [^>]*>(.*?)<\/h1>/)![1]!;
+      expect(headline, sample.name).toMatch(/&nbsp;\S+$/);
+    }
+  });
+
+  it('never puts a number on one line and its unit on the next, in a mail on the layout', () => {
+    // At 600 px the sign-in code mail read "It works once, for 10" with "minutes." below.
+    for (const sample of onTheLayout) {
+      const card = cardOf(sample.render().html);
+      expect(card, sample.name).not.toMatch(/\d (?:minutes?|hours?|days?)\b/);
+    }
+  });
+
+  it('keeps the contact address on the line of the dot before it, in every footer on the layout', () => {
+    // On a phone the copyright line ended in a stray dot, with the address alone below it.
+    for (const sample of onTheLayout) {
+      expect(sample.render().html, sample.name).toContain(
+        'AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:hello@tokencircles.com"'
+      );
+    }
+  });
+
+  it('gives the text twin every fact of the footer: its line, its links and the address', () => {
+    const line = 'Your money, in clear orbit. Open source and local-first.';
+    for (const sample of onTheLayout) {
+      const { html, text } = sample.render();
+      expect(text, sample.name).toContain(line);
+      const footer = html.slice(html.indexOf(line));
+      const links = [...footer.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) =>
+        m[1]!.replace(/^mailto:/, '')
+      );
+      expect(links.length, sample.name).toBeGreaterThan(5);
+      for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);
+    }
+  });
+
+  it('starts the text twin with the eyebrow, where a mail on the layout has one', () => {
+    const eyebrowOf = (html: string) =>
+      html
+        .match(/<div class="tc-link"[^>]*>([^<]+)<\/div>/)?.[1]
+        ?.replaceAll('&#39;', "'")
+        .replaceAll('&amp;', '&');
+    const withOne = onTheLayout.filter((sample) => eyebrowOf(sample.render().html));
+    expect(withOne.length).toBeGreaterThan(0);
+    for (const sample of withOne) {
+      const { html, text } = sample.render();
+      expect(text.startsWith(`${eyebrowOf(html)}\n`), sample.name).toBe(true);
+    }
+  });
+
   it('words no subject or body of the mails on the layout with an em dash', () => {
     // The mails on the first shell are left out on purpose: they show an amount of money and stay
     // exactly as they are, em dashes included. maff's call of 2026-10-11.

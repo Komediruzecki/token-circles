@@ -86,7 +86,7 @@ describe('email templates', () => {
     expectBrandedShell(mail);
     expect(mail.html).toContain('https://t.co/x?token=abc123');
     expect(mail.text).toContain('Reset password: https://t.co/x?token=abc123');
-    expect(mail.html).toContain('The link works once, for 2 hours.');
+    expect(mail.html).toContain('The link works once, for 2&nbsp;hours.');
     expect(mail.text).toContain(
       "Didn't ask for a reset? Ignore this mail. Your password stays as it is."
     );
@@ -110,7 +110,7 @@ describe('email templates', () => {
     expect(mail.subject).toMatch(/confirm your new/i);
     expect(mail.html).toContain(`href="${link.replaceAll('&', '&amp;')}"`);
     expect(mail.text).toContain(link);
-    expect(mail.html).toContain('The link works once, for 24 hours.');
+    expect(mail.html).toContain('The link works once, for 24&nbsp;hours.');
     expect(mail.text).toContain('nothing changes');
     expect(mail.html).not.toContain('email/orbit.gif');
   });

@@ -442,7 +442,7 @@ describe('the mail itself', () => {
 
   it('gives a password sign-up Confirm: the link as its button, and again as text to paste', () => {
     expect(confirm.subject).toBe('Confirm your email for Token Circles');
-    expect(confirm.html).toContain('One link, one sign-in, and you&#39;re in.');
+    expect(confirm.html).toContain('One link, one sign-in, and you&#39;re&nbsp;in.');
     expect(confirm.html).toContain(
       'Open the link, then sign in where it opens. It works for 24 hours.'
     );
@@ -469,11 +469,12 @@ describe('the mail itself', () => {
   });
 
   it('says in both confirm mails how long the link works, and what to do once it has run out', () => {
-    const lasts =
-      'The link works once, for 24 hours. Run out? Open it anyway and choose Send the link again.';
+    // The HTML holds the number and its unit together with a no-break space.
+    const lasts = (space: string) =>
+      `The link works once, for 24${space}hours. Run out? Open it anyway and choose Send the link again.`;
     for (const mail of [confirm, fresh]) {
-      expect(mail.html).toContain(lasts);
-      expect(mail.text).toContain(lasts);
+      expect(mail.html).toContain(lasts('&nbsp;'));
+      expect(mail.text).toContain(lasts(' '));
     }
     expect(renderConfirmEmail({ link, ttlHours: 1 }).text).toContain(
       'The link works once, for 1 hour.'
@@ -482,7 +483,7 @@ describe('the mail itself', () => {
 
   it('says in the fresh link, html and text, that it replaces the links sent before it', () => {
     expect(fresh.subject).toBe('Your new confirm link for Token Circles');
-    expect(fresh.html).toContain('Here&#39;s a fresh link.');
+    expect(fresh.html).toContain('Here&#39;s a fresh&nbsp;link.');
     expect(fresh.html).toContain('It replaces the links sent before. It works once, for 24 hours.');
     expect(fresh.text).toContain(`Confirm my email: ${link}`);
   });

@@ -79,7 +79,7 @@ describe('the mail layout', () => {
     const { inner } = cardOf(renderMail(SPEC).html);
     const order = [
       '<h1',
-      'One headline.',
+      'One&nbsp;headline.',
       'The first paragraph.',
       'The second paragraph.',
       '>Do the thing</a>',
@@ -151,7 +151,7 @@ describe('the mail layout', () => {
       paragraphs: [['To ', { strong: '<b>new</b>@example.com' }, '.']],
     });
     expect(html).not.toContain('<script>');
-    expect(html).toContain('A &lt;script&gt;headline&lt;/script&gt;');
+    expect(html).toContain('A&nbsp;&lt;script&gt;headline&lt;/script&gt;');
     expect(html).toContain('&lt;b&gt;new&lt;/b&gt;@example.com</strong>');
     expect(html).toContain('href="https://app.example/#thing?a=1&amp;b=2"');
   });
@@ -183,7 +183,7 @@ describe('the mail layout', () => {
     expect(code).not.toBeNull();
     expect(code![1]).toContain('>123456<');
     expect(code![1]).toMatch(/font:700 3\dpx\/1(\.\d+)? ui-monospace,/);
-    expect(html.indexOf('123456')).toBeGreaterThan(html.indexOf('One headline.'));
+    expect(html.indexOf('123456')).toBeGreaterThan(html.indexOf('One&nbsp;headline.'));
     expect(html.indexOf('123456')).toBeLessThan(html.indexOf('The first paragraph.'));
     expect(text).toContain('One headline.\n\n123456\n');
   });
