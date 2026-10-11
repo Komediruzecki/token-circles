@@ -5,6 +5,9 @@ import {
   editDistance,
   matchMerchant,
   normalizeMerchantText,
+  recentForScan,
+  SCAN_WINDOW_DAYS,
+  worthTracking,
 } from '../subscriptionDetection'
 import type { DetectableTransaction } from '../subscriptionDetection'
 
@@ -270,5 +273,47 @@ describe('detectSubscriptions without a today', () => {
     ])
     // Due on 7 October, which is yesterday here.
     expect(netflix?.suggestedDueDate).toBe('2026-11-07')
+  })
+})
+
+describe('what a scan reads, and what it ticks', () => {
+  it('reads the transactions dated inside the 750 days up to now', () => {
+    expect(SCAN_WINDOW_DAYS).toBe(750)
+    const now = Date.parse('2026-07-16T12:00:00Z')
+    const list = [
+      txn('NETFLIX.COM', 13.99, '2024-06-26'),
+      txn('NETFLIX.COM', 13.99, '2024-06-27'),
+      txn('NETFLIX.COM', 13.99, '2026-07-16T08:00:00'),
+      txn('NETFLIX.COM', 13.99, ''),
+      txn('NETFLIX.COM', 13.99, 'yesterday'),
+    ]
+    expect(recentForScan(list, now).map((t) => t.date)).toEqual([
+      '2024-06-27',
+      '2026-07-16T08:00:00',
+    ])
+  })
+
+  it('ticks what is not a bill yet and is more than a guess', () => {
+    const found = detect(
+      [
+        // Three stable monthly charges: high.
+        txn('NETFLIX.COM', 13.99, '2026-04-14'),
+        txn('NETFLIX.COM', 13.99, '2026-05-14'),
+        txn('NETFLIX.COM', 13.99, '2026-06-14'),
+        // One charge at a catalogue price: medium.
+        txn('CLAUDE.AI SUBSCRIPTION ANTHROPIC', 18.0, '2026-07-02'),
+        // One charge at no known price: low.
+        txn('SPOTIFY', 4.21, '2026-07-01'),
+        // Already a bill.
+        txn('DISNEY PLUS', 8.99, '2026-05-03'),
+        txn('DISNEY PLUS', 8.99, '2026-06-03'),
+        txn('DISNEY PLUS', 8.99, '2026-07-03'),
+      ],
+      [{ name: 'Disney+' }]
+    )
+    const byName = Object.fromEntries(found.map((d) => [d.name, d]))
+    expect(byName.Spotify?.confidence).toBe('low')
+    expect(byName['Disney+']?.alreadyTracked).toBe(true)
+    expect(found.filter(worthTracking).map((d) => d.name)).toEqual(['Netflix', 'Claude'])
   })
 })

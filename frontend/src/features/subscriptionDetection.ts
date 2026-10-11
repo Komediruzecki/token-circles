@@ -105,6 +105,29 @@ const CATALOG_ALIASES: Record<string, string[]> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+/**
+ * How far back a scan reads: enough history for a yearly cadence to show up twice, without
+ * chewing through decades of imported data.
+ */
+export const SCAN_WINDOW_DAYS = 750
+
+/** The transactions a scan reads: those dated inside the SCAN_WINDOW_DAYS up to `nowMs`. */
+export function recentForScan<T extends { date: string }>(transactions: T[], nowMs: number): T[] {
+  const cutoff = nowMs - SCAN_WINDOW_DAYS * DAY_MS
+  return transactions.filter((t) => {
+    const ms = new Date(`${(t.date || '').slice(0, 10)}T00:00:00Z`).getTime()
+    return Number.isFinite(ms) && ms >= cutoff
+  })
+}
+
+/**
+ * Whether a proposal is worth adding: not a bill yet, and more than a low-confidence guess. The
+ * scan ticks these, and Getting started counts them.
+ */
+export function worthTracking(found: DetectedSubscription): boolean {
+  return !found.alreadyTracked && found.confidence !== 'low'
+}
+
 export function normalizeMerchantText(text: string): string {
   return text
     .normalize('NFD')

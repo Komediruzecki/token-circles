@@ -3,6 +3,7 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
+import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
 import { bucketByMonth, sumTypes } from './evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
@@ -191,7 +192,6 @@ function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Adv
   ]
 }
 
-const TRACKED_MIN = 3
 const LATE_IN_MONTH_DAYS = 8
 
 function streakAtRisk(
@@ -202,18 +202,18 @@ function streakAtRisk(
   if (streak < 2) return []
   const month = monthOf(input.today)
   const have = (byMonth.get(month) ?? []).length
-  if (have >= TRACKED_MIN) return []
+  if (isTrackedMonth(have)) return []
   const [y, m] = input.today.split('-').map(Number)
   const daysLeft = new Date(Date.UTC(y, m, 0)).getUTCDate() - Number(input.today.slice(8, 10))
   if (daysLeft > LATE_IN_MONTH_DAYS) return []
-  const need = TRACKED_MIN - have
+  const need = TRACKED_MONTH_MIN_TRANSACTIONS - have
   return [
     {
       id: `streak-at-risk:${month}`,
       kind: 'streak-at-risk',
       tone: 'warn',
       title: `Your ${streak}-month streak needs this month`,
-      detail: `A month counts once it holds ${TRACKED_MIN} entries, and this one is nearly over.`,
+      detail: `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries, and this one is nearly over.`,
       figure: plural(need, 'entry to go', 'entries to go'),
       link: { page: 'transactions', label: 'Transactions' },
       weight: streak,

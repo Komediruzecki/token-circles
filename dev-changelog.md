@@ -442,6 +442,25 @@ All notable changes to Token Circles are documented here. The format is based on
   three or more entries earned and spent, when it spent more) and `biggestUnbudgeted` (the
   category spent on most with no budget and no bill). advice.ts calls them, and so do the Getting
   started steps, so the two read the same numbers. What advice says does not change.
+- **One definition of a tracked month, and of a year on file** (`shared/trackedMonths.ts`). A month
+  is tracked with `TRACKED_MONTH_MIN_TRANSACTIONS` (3) entries of any type dated inside it
+  (`isTrackedMonth`, `trackedMonthsOf`). A year on file is `YEAR_ON_FILE_MONTHS` (12) tracked months
+  among the `YEAR_WINDOW_MONTHS` (13) calendar months that end with this one
+  (`trackedMonthsInYearWindow`, `hasYearOnFile`), so a year imported up to last month counts. The
+  badges (`evaluate.ts` calls `trackedMonthsOf`), the year in review, the streak card and Getting
+  started all read it, and `achievements/definitions.ts` no longer exports the constant. The "A
+  year" badge still needs twelve tracked months in a row; a year on file allows one month missing.
+- **Getting started rules** (`shared/orientation.ts`). `orientationSteps(facts)` returns the steps
+  whose rule applies, in rule order (`import-year`, `review-subscriptions`, `sort-uncategorised`,
+  `budget-top-category`, `heavy-month`, `loan-payoff`), and `nextSteps` the first
+  `NEXT_STEPS_SHOWN` (3). Each step has a title, a reason in counts and months (never amounts) and
+  a hash link. A rule added later goes in its place in `RULES` without moving the others.
+  `frontend/src/core/orientation.ts` (`orientationFacts`) builds the facts from the achievements
+  snapshot, which now holds whole transaction and bill rows (`Transaction[]`, `Bill[]`).
+- **The subscription scan's window and tick rule are exported**
+  (`features/subscriptionDetection.ts`: `SCAN_WINDOW_DAYS`, `recentForScan`, `worthTracking`), so
+  `SubscriptionScan.tsx` and the Getting started count read the same rows and tick the same
+  proposals. The scan behaves as before.
 
 ### CRUD contract suite
 

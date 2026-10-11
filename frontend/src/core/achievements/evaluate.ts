@@ -4,7 +4,8 @@
  * holds; cost is one pass per array.
  */
 import { amortize, payoffDate } from '../../../../shared/loanSchedule'
-import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS, VOLUME_STEPS } from './definitions'
+import { trackedMonthsOf } from '../../../../shared/trackedMonths'
+import { ACHIEVEMENTS, VOLUME_STEPS } from './definitions'
 import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
 import type { AchievementId } from './definitions'
@@ -98,10 +99,8 @@ export function sumTypes(list: Tx[], types: string[]): number {
 export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const nowMonth = monthOf(input.today)
   const byMonth = bucketByMonth(input.transactions)
-  const tracked = [...byMonth.entries()]
-    .filter(([, list]) => list.length >= TRACKED_MONTH_MIN_TRANSACTIONS)
-    .map(([m]) => m)
-    .sort()
+  // A tracked month is defined once, in shared/trackedMonths.ts, for everything that counts them.
+  const tracked = trackedMonthsOf(input.transactions.map((t) => t.date))
   const trackedSet = new Set(tracked)
   const inMonth = (m: string): Tx[] => byMonth.get(m) ?? []
 

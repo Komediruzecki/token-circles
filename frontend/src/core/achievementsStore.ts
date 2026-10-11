@@ -24,6 +24,7 @@ import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
+import type { Bill, Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
@@ -50,16 +51,18 @@ export function isSelfHosted(): boolean {
 
 /**
  * Everything the last evaluation ran on. The Progress page builds its advice and its year in
- * review from this instead of fetching the same five arrays a second time.
+ * review from this instead of fetching the same five arrays a second time, and Getting started
+ * reads its facts from it (core/orientation.ts). Transactions and bills are the whole rows: the
+ * subscription count reads their text.
  */
 export interface AchievementsSnapshot {
-  transactions: EvaluateInput['transactions']
+  transactions: Transaction[]
   budgets: EvaluateInput['budgets']
   goals: EvaluateInput['goals']
   importLogs: EvaluateInput['importLogs']
   loans: EvaluateInput['loans']
   categories: Array<{ id: number; name: string }>
-  bills: Array<{ category_id?: number | null; amount?: number; name?: string }>
+  bills: Bill[]
   evaluation: Evaluation
   /** YYYY-MM-DD the evaluation used, so the page and the badges agree on "today". */
   today: string

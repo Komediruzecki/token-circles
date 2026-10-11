@@ -34,7 +34,11 @@ import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
-import { detectSubscriptions } from '../features/subscriptionDetection'
+import {
+  detectSubscriptions,
+  recentForScan,
+  worthTracking,
+} from '../features/subscriptionDetection'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
@@ -58,10 +62,6 @@ interface CategoryRow {
   name: string
   type: string
 }
-
-// Scan the recent past only: enough history for a yearly cadence to show up
-// twice, without chewing through decades of imported data.
-const SCAN_WINDOW_DAYS = 750
 
 export interface SubscriptionScanPanelProps {
   /** Panel scans when this turns true (and on explicit rescan). */
@@ -122,18 +122,13 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       const txns = listRows<DetectableTransaction>(txnsRes)
       const bills = listRows<BillRow>(billsRes)
       setCategories(listRows<CategoryRow>(catsRes))
-      const cutoff = Date.now() - SCAN_WINDOW_DAYS * 24 * 60 * 60 * 1000
-      const recent = txns.filter((t) => {
-        const ms = new Date(`${(t.date || '').slice(0, 10)}T00:00:00Z`).getTime()
-        return Number.isFinite(ms) && ms >= cutoff
-      })
-      const found = detectSubscriptions(recent, bills)
+      const found = detectSubscriptions(recentForScan(txns, Date.now()), bills)
       setDetected(found)
       const next: Record<string, RowState> = {}
       const prices: Record<string, string> = {}
       for (const d of found) {
         next[d.key] = {
-          included: !d.alreadyTracked && d.confidence !== 'low',
+          included: worthTracking(d),
           frequency: d.frequency,
         }
         prices[d.key] = String(d.amount)

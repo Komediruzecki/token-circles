@@ -2,7 +2,7 @@
  * The calendar year in totals: what came in, what went out, the best saving month and the
  * biggest category. One pass over the year's transactions, so it costs nothing to recompute.
  */
-import { TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
+import { isTrackedMonth } from '../../../../shared/trackedMonths'
 import { bucketByMonth, sumTypes } from './evaluate'
 import type { EvaluateInput } from './evaluate'
 
@@ -30,7 +30,7 @@ export function buildYearReview(input: {
   let bestMonth: YearReview['bestMonth'] = null
   let trackedMonths = 0
   for (const [month, list] of byMonth) {
-    if (list.length >= TRACKED_MONTH_MIN_TRANSACTIONS) trackedMonths++
+    if (isTrackedMonth(list.length)) trackedMonths++
     const saved = sumTypes(list, ['income']) - sumTypes(list, ['expense', 'deduction'])
     if (saved > 0 && (bestMonth === null || saved > bestMonth.saved)) bestMonth = { month, saved }
   }

@@ -9,6 +9,8 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BILL_MESSAGES } from '../../../../shared/billSchema'
 import { ApiError } from '../../core/apiError'
+import { orientationFacts } from '../../core/orientation'
+import { localToday } from '../../utils/period'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 
 const apiMocks = vi.hoisted(() => ({
@@ -233,5 +235,66 @@ describe('adding what the scan found', () => {
     expect(price('Netflix').getAttribute('aria-invalid')).toBeNull()
     expect(notice()).toBe('')
     expect(await scan.addSelected()).toBe(1)
+  })
+})
+
+describe('what the scan ticks', () => {
+  it('is what Getting started counts: not a bill yet, more than a guess, inside 750 days', async () => {
+    const rows = [
+      ...[95, 65, 35, 5].map((days) => charge('NETFLIX.COM AMSTERDAM', 13.99, days)),
+      // One charge at no known price: a guess.
+      charge('SPOTIFY', 4.21, 10),
+      // Three months running, but more than 750 days ago.
+      ...[860, 830, 800].map((days) => charge('DISNEY PLUS', 8.99, days)),
+    ]
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? rows : []
+    )
+    let exposed: Exposed | undefined
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <SubscriptionScanPanel
+          active={() => true}
+          expose={(api) => {
+            exposed = api
+          }}
+        />
+      ),
+      host
+    )
+    await vi.waitFor(() => {
+      expect(host.querySelector('[data-name="Spotify"]')).not.toBeNull()
+    })
+    const ticked = (name: string) =>
+      host.querySelector<HTMLInputElement>(
+        `[data-name="${name}"] [data-test-id="sub-scan-row-checkbox"]`
+      )?.checked
+    expect(
+      [...host.querySelectorAll('[data-name]')].map((row) => row.getAttribute('data-name'))
+    ).toEqual(['Netflix', 'Spotify'])
+    expect(ticked('Netflix')).toBe(true)
+    expect(ticked('Spotify')).toBe(false)
+
+    const facts = orientationFacts(
+      {
+        today: localToday(),
+        evaluation: { trackedMonths: [] },
+        transactions: rows.map((r) => ({
+          ...r,
+          type: 'expense' as const,
+          category_id: null,
+          reconciled: false,
+        })),
+        budgets: [],
+        bills: [],
+        categories: [],
+        loans: [],
+      },
+      Date.now()
+    )
+    expect(facts.subscriptionsSpotted).toBe(1)
+    expect(exposed?.chosenCount()).toBe(facts.subscriptionsSpotted)
   })
 })
