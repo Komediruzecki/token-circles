@@ -12,6 +12,7 @@ import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
 import { sourceForm } from './importSources';
 import { fillProfile, NONE, profileList } from './profiles';
+import { ANSWERS, answersKeyOf } from './settings';
 
 /** The ids that own rows of their own, as a profile's lists read now. */
 async function ownedNow(api: ContractApi, expect: Expect): Promise<Owned> {
@@ -172,6 +173,20 @@ export const backup = [
     expect(logs.find((log) => log.import_id === 'contract-backup-formats')).toMatchObject({
       bank_formats: 'dkb,ing',
     });
+  }),
+
+  scenario('a backup keeps the guidance answers as they were sent', async (api, expect) => {
+    expectOk(
+      expect,
+      await api.put('/api/settings', { [answersKeyOf(api)]: ANSWERS }),
+      'PUT the answers'
+    );
+    const back = await restoredAsIs(api, expect);
+    const settings = await back.get('/api/settings');
+    expectOk(expect, settings, 'GET /api/settings');
+    expect(settings.body[answersKeyOf(back)]).toBe(ANSWERS);
+    // Only under the restored profile: the replaced one's key is gone with it.
+    if (api.runtime === 'local') expect(settings.body[answersKeyOf(api)]).toBeUndefined();
   }),
 
   scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {

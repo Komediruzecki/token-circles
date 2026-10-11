@@ -644,9 +644,9 @@ export class IndexedDBAdapter implements StorageAdapter {
       for (const profileId of pidSet) await profileStore.delete(profileId)
     }
 
-    // A deleted profile's settings go with it, as they do on the Worker: its retirement plan and
-    // its badges, the ones kept per profile (shared/profileSettings.ts). Left behind, they stayed
-    // in every backup.
+    // A deleted profile's settings go with it, as they do on the Worker: its retirement plan, its
+    // badges and its guidance answers, the ones kept per profile (shared/profileSettings.ts). Left
+    // behind, they stayed in every backup.
     if (options.deleteProfiles && transactionStores.includes('settings')) {
       const settingsStore = tx.objectStore('settings')
       for (const profileId of pidSet) {
@@ -1753,12 +1753,13 @@ export class IndexedDBAdapter implements StorageAdapter {
           })
         }
       }
-      // A retirement plan and a badge record belong to one profile (shared/profileSettings.ts),
-      // kept here under a key that names it, and the restore gave every profile a new id: each
-      // follows its profile, and one of a profile the file does not carry is left out. A cloud
-      // backup keeps them as rows of their profiles, under the plain key; those are filed the
-      // same way, and the plain keys among the first profile's settings are left out, since a
-      // badge record under the plain key is taken over by the first profile to open.
+      // A retirement plan, a badge record and the guidance answers belong to one profile
+      // (shared/profileSettings.ts), kept here under a key that names it, and the restore gave
+      // every profile a new id: each follows its profile, and one of a profile the file does not
+      // carry is left out. A cloud backup keeps them as rows of their profiles, under the plain
+      // key; those are filed the same way, and the plain keys among the first profile's settings
+      // are left out, since a badge record under the plain key is taken over by the first profile
+      // to open.
       const putProfileSetting = async (key: string, fileProfileId: number, value: unknown) => {
         if (!isProfileSettingKey(key)) return
         const restoredId = profileIdMap.get(fileProfileId)

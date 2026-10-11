@@ -146,6 +146,33 @@ describe("a local-first backup's plans and badges", () => {
     expect(results).toEqual([]);
   });
 
+  it('carry the guidance answers too, each to its profile', async () => {
+    const answersMe = '{"region":"DE","adults":2,"tenure":"own_mortgage"}';
+    const answersPartner = '{"region":"skipped"}';
+    const file = localFile();
+    file.settings = {
+      ...(file.settings as Record<string, unknown>),
+      'guidance:1': answersMe,
+      'guidance:2': answersPartner,
+    };
+    file.settingsRows = [
+      ...(file.settingsRows as unknown[]),
+      row(1, 'guidance:1', answersMe),
+      row(2, 'guidance:2', answersPartner),
+      row(1, 'guidance:9', answersPartner),
+    ];
+    const res = await send('POST', '/api/import', file);
+    expect(res.status).toBe(200);
+    const id = await profileIds();
+    expect((await settingsOf(id.Me!)).guidance).toBe(answersMe);
+    expect((await settingsOf(id.Partner!)).guidance).toBe(answersPartner);
+    const { results } = await env.DB.prepare("SELECT key FROM settings WHERE key LIKE '%:%'").all();
+    expect(results).toEqual([]);
+
+    const read = await send('GET', '/api/settings', undefined, id.Partner);
+    expect(((await read.json()) as Record<string, unknown>).guidance).toBe(answersPartner);
+  });
+
   it("stand in for a profile's plain row in the same file", async () => {
     const file = localFile();
     file.settingsRows = [

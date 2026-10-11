@@ -143,6 +143,10 @@ async function stored(profile: number, owned: Owned = {}): Promise<Record<Stored
     "SELECT COUNT(*) AS n FROM settings WHERE profile_id = ? AND key = 'retirement_settings'",
     profile
   );
+  counts['guidance answers'] = await count(
+    "SELECT COUNT(*) AS n FROM settings WHERE profile_id = ? AND key = 'guidance'",
+    profile
+  );
   counts['loan rate periods'] = await count(
     `SELECT COUNT(*) AS n FROM loan_rate_periods WHERE loan_id IN (${ids(owned.loans)})`
   );

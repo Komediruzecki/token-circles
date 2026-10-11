@@ -675,6 +675,28 @@ All notable changes to Token Circles are documented here. The format is based on
   `achievements/__tests__/deductions.test.ts`, a guard on each place achievements count spending
   (rainy-day, saving months, the year in review, a month in the red) and on the code: a sum listing
   expense and deduction together, anywhere in `frontend/src` or `shared/`, fails it.
+- **The guidance answers** (`shared/guidance/answers.ts`): one record per profile, the JSON text of
+  an object in the settings under `guidance` (local-first: `guidance:<profile id>`), with no route
+  or column of its own. `guidance` joins `PROFILE_SETTING_KEYS`, whose local-first pattern is now
+  built from the list, so the record goes with a deleted profile, survives "Clear profile data" as
+  the retirement plan does ("Clear all data" takes it), and follows its profile through a backup
+  within and between the runtimes. `PUT /api/settings` checks it in both (`readSetting`,
+  `checkAnswers`): the JSON text of one object, at most 4,096 bytes, `region` a short id, `adults`
+  a whole number from 1 to 99 and `children` one from 0 to 99; a field this build does not know is
+  stored as sent. `readAnswers` reads `region` (DE, HR, EU27, UK, US, elsewhere, skipped),
+  `adults` and `children`, and takes a value it cannot read, like a region a later build adds, as
+  unanswered. `mergeAnswers` changes only the fields given (null clears one) and keeps every other,
+  known or not. In the app, `core/guidanceAnswers.ts` saves through one function that re-reads the
+  record just before it writes, with this tab's saves queued, and in cloud mode refuses a save for
+  a profile that is no longer active rather than file it under another.
+- **Tests:** `guidanceAnswers.test.ts` (the reader, the merge, the write rules, the cap counted in
+  bytes), `guidanceAnswersStore.test.ts` (in both modes: a save keeps an answer another tab saved
+  meanwhile, two saves started together keep both, a newer build's fields survive, a failed save
+  does not block the next, the profile check), two contract scenarios in both runtimes (stored as
+  sent, per profile, with a field this build does not know; refused when not well formed, the
+  stored record kept), a backup scenario, `guidance answers` as a stored kind (so the delete,
+  clear and restore scenarios count it in both runtimes), and the restores between runtimes in
+  `exportPerProfileSettings.test.ts` and `worker/test/backup-profile-settings.test.ts`.
 
 ### Achievements
 
