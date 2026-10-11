@@ -33,7 +33,11 @@ const TYPE_META: Record<string, { color: string; label: string }> = {
   investment: { color: '#f0a860', label: 'Investment' },
   cash: { color: '#c9a0ff', label: 'Cash' },
 }
-const typeMeta = (t: string) => TYPE_META[t] ?? { color: '#93b4ff', label: t || 'Account' }
+// A type this build does not have is a plain account (core/accountTypes.ts).
+const typeMeta = (t: string) =>
+  Object.prototype.hasOwnProperty.call(TYPE_META, t)
+    ? TYPE_META[t]
+    : { color: '#93b4ff', label: 'Account' }
 
 const C = 160 // svg center
 const CORE_R = 40

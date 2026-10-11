@@ -302,3 +302,27 @@ describe('editing an account', () => {
     expect(failureToasts()).toEqual([])
   })
 })
+
+describe('an account of a type this build does not know', () => {
+  // A later build, or an API client, can store a type this one does not have. The page shows it as
+  // a plain account, and an edit sends the type back as it is, so a rollback changes nothing.
+  it('shows as a plain account, and an edit keeps its type', async () => {
+    const db = await getDB()
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await mountPage()
+    const card = host.querySelector<HTMLElement>('[data-test-id="account-card"]')!
+    expect(card.querySelector('[data-test-id="account-type"]')?.textContent).toBe('account')
+
+    await openEdit('Everyday')
+    type(field('Account Name'), 'Visa')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await db.get('accounts', EVERYDAY)) as Row).toMatchObject({
+        name: 'Visa',
+        type: 'credit',
+      })
+    })
+    expect(failureToasts()).toEqual([])
+  })
+})

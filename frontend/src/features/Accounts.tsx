@@ -38,6 +38,7 @@ import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { accountActivityPresentation } from '../core/accountActivity'
+import { accountTypeBadge } from '../core/accountTypes'
 import { apiDelete, apiGet, formatCurrency, getLocalCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
@@ -49,7 +50,8 @@ import styles from './AccountsPage.module.css'
 interface Account {
   id: number
   name: string
-  type: 'giro' | 'savings' | 'ib' | 'cash'
+  /** One of the app's types, or one this build does not have: a plain account. */
+  type: string
   balance: number
   currency: string
   bank_name?: string
@@ -354,7 +356,7 @@ export default function Accounts() {
                           <div class={styles.accountActions}>
                             <span data-test-id="account-type" style={{ display: 'contents' }}>
                               <Badge status={getAccountBadgeStatus(account.type)}>
-                                {account.type}
+                                {accountTypeBadge(account.type)}
                               </Badge>
                             </span>
                             <button
