@@ -602,12 +602,14 @@ function markToursFinished(ids: string[]): void {
     return
   }
   toursWrite = toursWrite.then(async () => {
-    // Nothing is sent on a list that could not be read: it would replace the account's.
+    // Nothing is sent on a list that could not be read: the state behind it is unknown.
     const seen = await accountTours()
     if (seen === null) return
-    const next = [...new Set([...seen, ...ids])]
-    if (next.length === seen.length) return
-    await writeAccountState('tours', { seen: next }).catch(() => {
+    const added = ids.filter((id) => !seen.includes(id))
+    if (added.length === 0) return
+    // The Worker adds them to the list it holds, which may have more than this copy: a tour
+    // finished on another device since this one read it stays.
+    await writeAccountState('tours', { seen: added }).catch(() => {
       // Not kept: the tour shows as not done, and can be taken again.
     })
   })
@@ -716,7 +718,9 @@ export function resetAllTours() {
     return
   }
   toursWrite = toursWrite.then(async () => {
-    await writeAccountState('tours', { seen: [] }).catch(() => {
+    // A plain write only adds, so the reset says so. The empty list is stored, not deleted: an
+    // account with no list takes this browser's again at the next load (accountTours).
+    await writeAccountState('tours', { seen: [], reset: true }).catch(() => {
       // Not kept: the tours stay done, and Reset can be pressed again.
     })
   })

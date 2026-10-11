@@ -144,7 +144,10 @@ await ctx.addInitScript(() => {
  * the app's own origin, as the app sends it; resetPage runs it before every load.
  */
 async function clearAccountTours() {
-  const res = await ctx.request.put(`${BASE}/api/account/state/tours`, { data: { seen: [] } })
+  // A plain write only adds to the list; reset replaces it.
+  const res = await ctx.request.put(`${BASE}/api/account/state/tours`, {
+    data: { seen: [], reset: true },
+  })
   if (!res.ok()) throw new Error(`could not clear the account's tours: HTTP ${res.status()}`)
 }
 

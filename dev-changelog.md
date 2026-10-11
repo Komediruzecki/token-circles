@@ -425,12 +425,20 @@ All notable changes to Token Circles are documented here. The format is based on
   `endSpotlight` adds the tour, or every tour after the full tour, to `tours.seen` with
   `PUT /api/account/state/tours`. The writes go in order, so a tour ended while another's write is
   out is kept, and each is made on a list that was read: a list that cannot be read is never
-  replaced. Reset All Tours sends `{ seen: [] }`. The tour menu reads the list as it opens
-  (`loadAccountTours`), and its badges and count follow the list as it arrives. An account with no
-  list yet takes this browser's `finance_spotlight_tours` map once; the map stays, and local-first
+  replaced. Reset All Tours sends `{ seen: [], reset: true }`. The tour menu reads the list as it
+  opens (`loadAccountTours`), and its badges and count follow the list as it arrives. An account
+  with no list yet takes this browser's `finance_spotlight_tours` map once; the map stays, and local-first
   keeps using it. `scripts/walk-tours.mjs` clears the fixture account's list before each load, as
   its init script clears the browser's. No notice keeps a dismissal in localStorage (advice
   dismissals were already in the profile's settings), so tours are the only state that moved.
+- **Tours are added on the Worker; only a reset replaces them.** `PUT /api/account/state/tours`
+  adds the ids sent to the stored list (stored ones first, each once), so a tour finished on one
+  device is kept when another device, holding a copy read before it, finishes a different one.
+  `reset: true` replaces the list with the ids sent (400 `reset` when it is not a boolean). Reset
+  All Tours sends `{ seen: [], reset: true }`, which stores an empty list rather than deleting the
+  row: an account with no row takes this browser's map again at the next load, which would undo
+  the reset. `endSpotlight` sends only the tours its copy does not have yet, and
+  `scripts/walk-tours.mjs` clears the fixture account's list with a reset.
 - **A value another build wrote is read for what it holds, and never replaced unread**
   (`shared/accountState.ts`). An onboarding step this build does not know (one a newer build adds,
   read after a rollback or by an installed older app) reads as `step: null`, and the record keeps

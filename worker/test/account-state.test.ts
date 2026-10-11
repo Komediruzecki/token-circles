@@ -132,6 +132,7 @@ describe('what a write may store', () => {
       ['onboarding', { outcome: 'done' }, 'outcome'],
       ['tours', { seen: 'dashboard' }, 'seen'],
       ['tours', { seen: ['Not A Tour'] }, 'seen'],
+      ['tours', { seen: [], reset: 'yes' }, 'reset'],
       ['getting_started', { hidden: 'yes' }, 'hidden'],
       ['getting_started', {}, 'hidden'],
     ];
@@ -144,10 +145,14 @@ describe('what a write may store', () => {
     expect(await stored(ME)).toEqual([]);
   });
 
-  it('stores tours and the card as sent, each id once', async () => {
+  it('stores tours and the card, each id once, and replaces the list only on a reset', async () => {
     const tours = await write(mine, 'tours', { seen: ['dashboard', 'import', 'dashboard'] });
     expect(await tours.json()).toEqual({ tours: { seen: ['dashboard', 'import'] } });
+    // A plain write adds; an empty one changes nothing.
     expect(await (await write(mine, 'tours', { seen: [] })).json()).toEqual({
+      tours: { seen: ['dashboard', 'import'] },
+    });
+    expect(await (await write(mine, 'tours', { seen: [], reset: true })).json()).toEqual({
       tours: { seen: [] },
     });
     const card = await write(mine, 'getting_started', { hidden: true });
@@ -157,6 +162,30 @@ describe('what a write may store', () => {
       tours: { seen: [] },
       getting_started: { hidden: true },
     });
+  });
+});
+
+describe('the tours finished', () => {
+  const tours = async () =>
+    ((await (await read(mine)).json()) as { tours: { seen: string[] } | null }).tours;
+
+  it('adds what each device sends, so a tour finished elsewhere is kept', async () => {
+    await write(mine, 'tours', { seen: ['dashboard'] });
+    // A device holding a copy read before 'dashboard' finished 'loans'.
+    const res = await write(mine, 'tours', { seen: ['loans'] });
+    expect(await res.json()).toEqual({ tours: { seen: ['dashboard', 'loans'] } });
+    expect(await tours()).toEqual({ seen: ['dashboard', 'loans'] });
+  });
+
+  it('starts over on a reset, and keeps the empty list as a row', async () => {
+    await write(mine, 'tours', { seen: ['dashboard', 'loans'] });
+    await write(mine, 'tours', { seen: [], reset: true });
+    expect(await tours()).toEqual({ seen: [] });
+    expect(await stored(ME)).toEqual([{ key: 'tours', value: '{"seen":[]}' }]);
+
+    // A reset with tours in it stores those.
+    await write(mine, 'tours', { seen: ['import'], reset: true });
+    expect(await tours()).toEqual({ seen: ['import'] });
   });
 });
 

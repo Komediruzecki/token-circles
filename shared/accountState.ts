@@ -12,8 +12,11 @@
  *   `finished_at`. A finished record never changes again, so relaunching the wizard from the tour
  *   menu, or a stale tab, cannot rewrite what the first-week measurement reads. A client cannot
  *   send `existing`: only migration 0035 writes it.
- * - `tours`: the list sent replaces the stored one (Reset All Tours sends an empty list). Each id
- *   is a short lowercase slug, kept once, in the order sent.
+ * - `tours`: the ids sent are added to the stored list, so a tour finished on one device is kept
+ *   when another, holding an older copy, finishes a different one. Only `reset: true` replaces the
+ *   list (Reset All Tours sends it with an empty list, which is stored: a missing row would take
+ *   this browser's own list again at the next load). Each id is a short lowercase slug, kept once,
+ *   stored ones first.
  * - `getting_started`: hidden is for good. `hidden: true` is stored; `hidden: false` over a stored
  *   `true` keeps `true`, so a tab that read the record before another device hid the card (the
  *   wizard it leaves makes the record) cannot bring the card back.
@@ -48,6 +51,7 @@ export const USER_STATE_MESSAGES = {
   step: `Use one of the setup steps: ${ONBOARDING_STEPS.join(', ')}.`,
   outcome: `Use ${ONBOARDING_DECISIONS.join(' or ')}.`,
   seen: 'Send the tours seen as a list of tour ids, like ["dashboard", "import"].',
+  reset: 'Send reset as true to replace the list, or leave it out to add to it.',
   hidden: 'Send hidden as true or false.',
   value: `Keep the value under ${USER_STATE_MAX_BYTES} bytes.`,
   unreadable:
@@ -219,11 +223,18 @@ export function checkUserStateWrite<K extends UserStateKey>(
       break;
     case 'tours': {
       // Strict, unlike reading what is stored: a client sends only ids that are well formed.
-      const tours =
+      const sent =
         Array.isArray(body.seen) && body.seen.every(isTourId) ? readToursRecord(body) : null;
-      checked = tours
-        ? { ok: true, value: tours }
-        : { ok: false, fields: { seen: USER_STATE_MESSAGES.seen } };
+      const reset = body.reset === undefined ? false : body.reset;
+      if (sent === null || typeof reset !== 'boolean') {
+        const fields: Record<string, string> = {};
+        if (sent === null) fields.seen = USER_STATE_MESSAGES.seen;
+        if (typeof reset !== 'boolean') fields.reset = USER_STATE_MESSAGES.reset;
+        checked = { ok: false, fields };
+        break;
+      }
+      const kept = reset ? [] : ((current as ToursRecord | null)?.seen ?? []);
+      checked = { ok: true, value: { seen: [...new Set([...kept, ...sent.seen])] } };
       break;
     }
     case 'getting_started': {

@@ -136,15 +136,24 @@ describe('signed in, the tours finished', () => {
     expect(getCompletedCount()).toBe(SPOTLIGHT_TOURS.length)
   })
 
-  it('are none after Reset All Tours', async () => {
+  it('are none after Reset All Tours, and the browser list is not taken again', async () => {
     worker.tours = { seen: ['dashboard', 'import'] }
+    localStorage.setItem(BROWSER_TOURS, JSON.stringify({ loans: true }))
     await loadAccountTours()
 
     resetAllTours()
     await toursWriteSettled()
 
+    expect(tourPuts()).toEqual(['PUT /api/account/state/tours {"seen":[],"reset":true}'])
     expect(worker.tours).toEqual({ seen: [] })
     expect(getCompletedCount()).toBe(0)
+
+    // The next load: the account has a list, empty, so this browser's is not adopted.
+    signedIn()
+    await loadAccountTours()
+    await toursWriteSettled()
+    expect(tourPuts()).toHaveLength(1)
+    expect(isTourCompleted('loans')).toBe(false)
   })
 
   it('keep a tour finished before the list was read', async () => {
@@ -154,6 +163,20 @@ describe('signed in, the tours finished', () => {
     await toursWriteSettled()
 
     expect(worker.tours).toEqual({ seen: ['import', 'dashboard'] })
+  })
+
+  it('keep a tour another device finished after this one read the list', async () => {
+    worker.tours = { seen: [] }
+    await loadAccountTours()
+    // The phone finishes Dashboard while this laptop holds the list it read at start.
+    worker.tours = { seen: ['dashboard'] }
+
+    finish('loans')
+    await toursWriteSettled()
+
+    expect(tourPuts()).toEqual(['PUT /api/account/state/tours {"seen":["loans"]}'])
+    expect(worker.tours).toEqual({ seen: ['dashboard', 'loans'] })
+    expect(isTourCompleted('dashboard')).toBe(true)
   })
 
   it('update the tour menu as the list arrives', async () => {
