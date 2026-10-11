@@ -13,8 +13,9 @@ import styles from './BadgeRail.module.css'
 import type { JSX } from 'solid-js'
 
 /**
- * The live streak: tracked months in a row up to this month or last. It says "in a row" because
- * other counts on Dashboard (Getting started's year) count tracked months that need not be.
+ * The live streak: tracked months in a row up to this month or last, in the rail and on Progress's
+ * record. It says "in a row" because other counts on Dashboard (Getting started's year) count
+ * tracked months that need not be.
  */
 export const streakLabel = (n: number): string =>
   n === 0 ? 'Start a streak' : n === 1 ? '1 month in a row' : `${n} months in a row`

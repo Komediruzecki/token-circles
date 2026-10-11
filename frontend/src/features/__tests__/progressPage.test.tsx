@@ -43,7 +43,7 @@ vi.mock('../../core/achievementsStore', () => ({
   unlocks: () => [
     { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
   ],
-  streak: () => 2,
+  streak: () => (globalThis as never as { __snap: { streak?: number } }).__snap.streak ?? 2,
   dismissedAdvice: () => [],
   dismissAdvice: vi.fn(async () => undefined),
   restoreAdvice: vi.fn(),
@@ -110,6 +110,19 @@ describe('Progress page', () => {
     expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
+  })
+
+  it('says what the badge rail says when no streak is running', () => {
+    const snap = (globalThis as never as { __snap: { streak?: number } }).__snap
+    snap.streak = 0
+    try {
+      const c = mount(() => <Progress />)
+      expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
+        'Start a streak'
+      )
+    } finally {
+      delete snap.streak
+    }
   })
 
   it('builds advice from the snapshot and can dismiss a card', () => {

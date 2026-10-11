@@ -504,6 +504,10 @@ All notable changes to Token Circles are documented here. The format is based on
   `core/__tests__/monthCountsOnDashboard.test.ts` holds what each surface says for the same entries
   in three cases (eight months with a gap, a whole year in 2024 and nothing since, twelve of the
   last thirteen with a gap).
+- **Progress says what the rail says at a zero streak.** The record on Progress takes its words
+  from `streakLabel` (`components/BadgeRail.tsx`), so with no streak running it reads "Start a
+  streak", as the rail does, where it read "0 months in a row" (on main, "0 months tracked").
+  `features/__tests__/progressPage.test.tsx` checks the zero case.
 - **Getting started rules** (`shared/orientation.ts`). `orientationSteps(facts)` returns the steps
   whose rule applies, in rule order (`import-year`, `review-subscriptions`, `sort-uncategorised`,
   `budget-top-category`, `heavy-month`, `loan-payoff`), and `nextSteps` the first
