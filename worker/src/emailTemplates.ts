@@ -640,9 +640,9 @@ export function renderEmailChangeNotice(opts: {
 }
 
 /**
- * Anti-enumeration notice: someone tried to sign up with an address that has an account. Both
- * buttons open the app's sign-in screen, which has Forgot password: the app has no link that
- * opens the reset form itself.
+ * Anti-enumeration notice: someone tried to sign up with an address that has an account. Sign in
+ * opens the app; Reset password opens its sign-in screen on the form that sends a reset link
+ * (#forgot-password, frontend/src/components/LoginScreen.tsx).
  */
 export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
@@ -653,11 +653,11 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
     headline: 'This address already has an account.',
     paragraphs: [
       `Someone just tried to create a ${BRAND} account with this email address, but one already exists.`,
-      "If that was you, sign in, or choose Forgot password on the sign-in screen to reset it. If it wasn't, there's nothing to do: your account is unchanged.",
+      "If that was you, sign in, or reset your password if you've forgotten it. If it wasn't, there's nothing to do: your account is unchanged.",
     ],
     buttons: [
       { label: 'Sign in', href: app },
-      { label: 'Reset password', href: app },
+      { label: 'Reset password', href: `${app}/#forgot-password` },
     ],
     reason: `You are getting this because someone tried to sign up for ${BRAND} with this address.`,
     assetOrigin: opts.appUrl,

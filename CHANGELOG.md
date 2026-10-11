@@ -16,6 +16,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
+- **Reset password opens the reset form.** In the mail that says your address already has an account, Reset password now opens the form that sends a reset link instead of the sign-in screen.
 - **Account mails share the new design.** A new email address, a password reset, a sign-in code, a test mail and a support reply look like the sign-up mails, with the engraved art at the top. Reminders and billing mails stay as they were.
 - **New accounts confirm their email before using the app.** Create account ends on Check your inbox, and an account whose address is not confirmed yet sees Confirm your email, which can send the link again. A sign-in code, a reset link or Google sign-in also confirm it.
 - **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.

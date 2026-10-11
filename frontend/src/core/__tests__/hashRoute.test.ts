@@ -68,4 +68,10 @@ describe('resolvePageFromHash', () => {
     expect(resolve('#reset-password')).toBeNull()
     expect(resolve('#reset-password?token=abc')).toBeNull()
   })
+
+  it('leaves the active page alone for #forgot-password, which the sign-in screen reads', () => {
+    // The "already has an account" mail links there. Signed in, the app stays where it is
+    // instead of showing the 404 page.
+    expect(resolve('#forgot-password')).toBeNull()
+  })
 })

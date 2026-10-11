@@ -245,6 +245,13 @@ All notable changes to Token Circles are documented here. The format is based on
   the address; a passkey or two-factor does not. `/api/v1` capabilities, reminders and sheet syncs
   leave out an account waiting for its link. The welcome and confirm mails say the link starts the
   account and where to sign in after opening it. No migration.
+- **`#forgot-password` opens the sign-in screen on the reset form**
+  (`frontend/src/components/LoginScreen.tsx`), at load or when the fragment changes to it with the
+  screen open. Leaving the form takes the fragment off with `replaceState`, so neither a reload nor
+  the app after signing in opens it again. It is a route outside the page router, like
+  `#reset-password` (`isNonPageRoute` in `frontend/src/core/hashRoute.ts`): a signed-in app stays
+  on its page instead of showing the 404, and `periodStore` keeps the period off it. The Reset
+  password button of `renderAccountExists` links there.
 
 ### Mails
 
@@ -281,9 +288,8 @@ All notable changes to Token Circles are documented here. The format is based on
   (`worker/src/emailTemplates.ts`). On the layout now, with their facts kept and their em dashes
   gone: the link to a new address (`renderEmailChange`); the notice to the old address
   (`renderEmailChangeNotice`), one sentence of what was asked and the one thing to do, in Settings;
-  "already has an account" (`renderAccountExists`), with Sign in and Reset password, both to the
-  sign-in screen, which has Forgot password, since the app has no link to the reset form; the
-  password reset; the sign-in code, large and monospaced and still first in the subject; the test
+  "already has an account" (`renderAccountExists`), with Sign in, and Reset password to
+  `#forgot-password`, the reset form; the password reset; the sign-in code, large and monospaced and still first in the subject; the test
   mail ("Test mail from Token Circles"), which no longer says the reminders look like it; and the
   support reply ("We got your message (TC-...)"). Left exactly as they were, by maff's call of
   2026-10-11: the budget alert, the spending report, upcoming bills and the failed payment, which

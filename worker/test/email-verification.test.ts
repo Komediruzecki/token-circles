@@ -564,8 +564,8 @@ describe('the mail itself', () => {
       'Someone tried to sign up with your address. Your account is unchanged.'
     );
     expect(exists.text).toContain(
-      "If that was you, sign in, or choose Forgot password on the sign-in screen to reset it. If it wasn't, there's nothing to do: your account is unchanged."
+      "If that was you, sign in, or reset your password if you've forgotten it. If it wasn't, there's nothing to do: your account is unchanged."
     );
-    expect(exists.text).toContain(`Sign in: ${APP}\nReset password: ${APP}`);
+    expect(exists.text).toContain(`Sign in: ${APP}\nReset password: ${APP}/#forgot-password`);
   });
 });

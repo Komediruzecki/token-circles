@@ -69,13 +69,13 @@ describe('email templates', () => {
     expect(mail.html).toMatch(
       /<a class="tc-btn" href="https:\/\/tokencircles\.com"[^>]*>Sign in<\/a>/
     );
+    // Reset password opens the sign-in screen on the form that sends a reset link
+    // (#forgot-password in frontend/src/components/LoginScreen.tsx).
     expect(mail.html).toMatch(
-      /<a class="tc-btn2" href="https:\/\/tokencircles\.com"[^>]*>Reset password<\/a>/
+      /<a class="tc-btn2" href="https:\/\/tokencircles\.com\/#forgot-password"[^>]*>Reset password<\/a>/
     );
-    // Both open the sign-in screen, which is where Forgot password is, and the mail says so.
-    expect(mail.text).toContain('choose Forgot password on the sign-in screen');
     expect(mail.text).toContain(
-      'Sign in: https://tokencircles.com\nReset password: https://tokencircles.com'
+      'Sign in: https://tokencircles.com\nReset password: https://tokencircles.com/#forgot-password'
     );
   });
 
