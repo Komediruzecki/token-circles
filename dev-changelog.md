@@ -308,7 +308,9 @@ All notable changes to Token Circles are documented here. The format is based on
   renders every mail from plainly fake data, and `worker/test/mail-catalogue.test.ts` holds every
   one to the rules (a sample of every renderer, a snapshot of every subject, under 102 KB, a text
   twin with the card's links, no em dash on the new layout) and pins the four unchanged mails to
-  digests taken before the change. The worker's `typecheck` also checks `worker/scripts/`, which
+  digests taken before the change: their samples, and a grid of 584 inputs over every branch
+  (`worker/test/helpers/amount-mail-grid.ts`, one digest per renderer, equal to what the renderers
+  at `9bd2661a` give for the same grid). The worker's `typecheck` also checks `worker/scripts/`, which
   has its own tsconfig.
 - **`worker/scripts/send-sample-mails.ts` mails a sample of every mail to one inbox**, through
   Resend's REST API, from `mail-samples.ts`. It needs `--to`, reads `RESEND_API_KEY` and

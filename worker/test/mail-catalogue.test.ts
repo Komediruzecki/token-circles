@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import * as templates from '../src/emailTemplates';
 import { mailSamples } from '../scripts/mail-samples';
+import { amountMailDigests } from './helpers/amount-mail-grid';
 
 const samples = mailSamples();
 const onTheLayout = samples.filter((sample) => sample.layout === 'mail');
@@ -189,6 +190,35 @@ describe('the mail catalogue', () => {
       'budget-alert': '69888cd8d58f671db940b542e0e0991b276b9e654e02f6b25c1212b0a4a85aaf',
       'spending-report': '1426e75dc8b8cfc4ab22e27acf0c8777aa68c9a0db232c015d798d580c6a8ba6',
       'bills-reminder': '560c2df9b752fd8249f31246b7ef2bb20550dfeb2e85147ce46a4474bfe1fd90',
+    });
+  });
+
+  it('leaves every branch of the four mails that show an amount as it was', async () => {
+    // A grid of inputs over each renderer's branches (test/helpers/amount-mail-grid.ts): the
+    // budget alert over budget, approaching it and both; bills due today, tomorrow, in a few days,
+    // overdue alone and with others, with and without a due date; the spending report with and
+    // without categories, a negative net, and no transactions; the failed payment with and without
+    // an amount and a retry date; each with and without its optional fields. These digests are the
+    // ones the renderers at 9bd2661a give for the same grid: that commit's emailTemplates.ts was
+    // copied out with `git show 9bd2661a:worker/src/emailTemplates.ts` and the grid rendered with
+    // it under plain Node, and the result matched the renderers here byte for byte.
+    expect(await amountMailDigests(templates)).toEqual({
+      renderBudgetAlert: {
+        inputs: 192,
+        digest: 'da31ec826bddbe33fdfba03ef90ec035b2c7ae86f24314fb1a6d833b113f3b83',
+      },
+      renderBillsReminder: {
+        inputs: 120,
+        digest: 'eb49742066c63c06fb8249055679b82b8f87b5a3b37c90c44967b2a9ed6c2547',
+      },
+      renderSpendingReport: {
+        inputs: 144,
+        digest: 'd8a27d4fff6619f1566d70bc587cc25b523ad67610b15804419e46f13f284726',
+      },
+      renderPaymentFailed: {
+        inputs: 128,
+        digest: '9ed93b8c44a0966f520f2790c4b8f11965dafdb78354fb5ea7d4471b0c40c924',
+      },
     });
   });
 });
