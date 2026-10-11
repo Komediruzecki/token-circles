@@ -1,6 +1,6 @@
 /**
  * CommandBar — the Orbit Command Bar. A keyboard-first quick-entry surface:
- * type an entry in plain language ("coffee 4.50 food", "salary 3000 income"),
+ * type an entry in plain language ("coffee 4.50", "salary 3000"),
  * watch it parse into chips you can fix, and land it with Enter. Alt+Enter
  * lands it and keeps the bar open for the next one. It replaces the old
  * bare-bones Quick Add and reads its draft from the pure `parseEntry` core.
@@ -84,7 +84,14 @@ export function CommandBar(props: CommandBarProps) {
       categories: props.categories
         .items()
         .filter((c) => c.type === 'income' || c.type === 'expense')
-        .map((c) => ({ id: c.id, name: c.name, type: c.type as 'income' | 'expense' })),
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          type: c.type as 'income' | 'expense',
+          // The kind (or the parent's) is what "coffee" or "groceries" is matched by first.
+          kind: c.kind ?? null,
+          parent_id: c.parent_id ?? null,
+        })),
       today: todayIso(),
     })
   )
@@ -272,7 +279,7 @@ export function CommandBar(props: CommandBarProps) {
             value={input()}
             autocomplete="off"
             spellcheck={false}
-            placeholder="Type an entry — e.g. “coffee 4.50 food”, “salary 3000 income”"
+            placeholder="Type an entry, like “coffee 4.50”, “groceries 32 yesterday” or “salary 3000”"
             onInput={(e) => setInput(e.currentTarget.value)}
             onKeyDown={onKeyDown}
             aria-label="Quick entry"

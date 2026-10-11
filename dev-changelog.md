@@ -781,6 +781,20 @@ All notable changes to Token Circles are documented here. The format is based on
   the co-pay, a gym and the rent likely and bills every year), `recurringPayments.test.ts` (weekly
   and fortnightly guesses, each bank's cash wording, bill or subscription by kind),
   `orientation.test.ts` and `orientationFacts.test.ts` (the step's words, `billsSpotted`).
+- **Quick entry guesses by kind** (review F3, `frontend/src/core/entry/parseEntry.ts`). Its hints
+  pointed coffee, lunch, groceries and the like at a category whose name holds "food", which the
+  new defaults no longer have, so 11 of 12 such words got no guess and the Command Bar's Save
+  waited for a category. Each hint now names a kind (eating_out: coffee, latte, cafe, lunch,
+  dinner, breakfast, restaurant, snack, meal; groceries: grocery, groceries, food; transport,
+  housing, subscriptions, health, shopping, utilities and leisure for the rest) and a name fragment:
+  a category is matched by its effective kind first (`effectiveKind`, so a child goes by its
+  parent), then by name as before, so a profile that still has Food finds it. The Command Bar
+  passes each category's kind and parent, and its placeholder reads "Type an entry, like "coffee
+  4.50", "groceries 32 yesterday" or "salary 3000"".
+- **Tests:** `parseEntry.test.ts` (the local-first defaults, a kind under another name and from a
+  parent, a profile with Food, Food beside Eating out), `worker/test/quick-entry-defaults.test.ts`
+  (the Worker's defaults) and `components/__tests__/quickEntryGuessByKind.test.tsx` (the Command
+  Bar files by kind, and every example in its placeholder gets a category on the defaults).
 
 ### Achievements
 
