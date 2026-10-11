@@ -431,6 +431,18 @@ All notable changes to Token Circles are documented here. The format is based on
   keeps using it. `scripts/walk-tours.mjs` clears the fixture account's list before each load, as
   its init script clears the browser's. No notice keeps a dismissal in localStorage (advice
   dismissals were already in the profile's settings), so tours are the only state that moved.
+- **A value another build wrote is read for what it holds, and never replaced unread**
+  (`shared/accountState.ts`). An onboarding step this build does not know (one a newer build adds,
+  read after a rollback or by an installed older app) reads as `step: null`, and the record keeps
+  `started_at`, `finished_at` and `outcome`, so a finished record stays finished and no wizard
+  opens. A tours list keeps its well-formed ids and drops only the others (a write still refuses
+  an ill-formed id). The PUT goes through `applyUserStateWrite`, which merges over that lenient
+  read, leaves the row byte for byte when the merge changes nothing, and refuses with 409 a row it
+  cannot read at all (not JSON, a bad time, a list that is not a list), leaving it as it is. The
+  app treats the 409 as any failed write: a decision stays in this browser's flag, a tour is not
+  marked. GET still answers such a row as `null`, so the wizard can open once on that device; see
+  the tests in `onboardingOnTheAccount.test.ts`. The frontend stand-ins of the Worker read and
+  write through the same two functions.
 
 ### Orientation
 

@@ -221,3 +221,90 @@ describe('the onboarding record', () => {
     expect(record!.finished_at).toBe(record!.started_at);
   });
 });
+
+describe('a value another build wrote', () => {
+  const put = (key: string, value: string) =>
+    env.DB.prepare('INSERT INTO user_state (user_id, key, value) VALUES (?, ?, ?)')
+      .bind(ME, key, value)
+      .run();
+  const row = async (key: string) =>
+    (
+      await env.DB.prepare('SELECT value FROM user_state WHERE user_id = ? AND key = ?')
+        .bind(ME, key)
+        .first<{ value: string }>()
+    )?.value;
+
+  // A newer build added a step after this one, or this build is a rollback after it.
+  const NEWER_FINISHED = JSON.stringify({
+    step: 'essentials',
+    started_at: '2026-10-01 10:00:00',
+    finished_at: '2026-10-01 10:05:00',
+    outcome: 'completed',
+  });
+
+  it('reads a finished record with a step this build does not know as finished', async () => {
+    await put('onboarding', NEWER_FINISHED);
+    const state = (await (await read(mine)).json()) as { onboarding: Onboarding | null };
+    expect(state.onboarding).toEqual({
+      step: null,
+      started_at: '2026-10-01 10:00:00',
+      finished_at: '2026-10-01 10:05:00',
+      outcome: 'completed',
+    });
+  });
+
+  it('leaves that record as it is when a step is written over it', async () => {
+    await put('onboarding', NEWER_FINISHED);
+    const res = await write(mine, 'onboarding', { step: 'welcome' });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { onboarding: Onboarding }).onboarding.outcome).toBe('completed');
+    expect(await row('onboarding')).toBe(NEWER_FINISHED);
+  });
+
+  it('moves an unfinished record with an unknown step on from the steps it knows', async () => {
+    await put(
+      'onboarding',
+      JSON.stringify({
+        step: 'essentials',
+        started_at: '2026-10-01 10:00:00',
+        finished_at: null,
+        outcome: null,
+      })
+    );
+    const res = await write(mine, 'onboarding', { step: 'import' });
+    expect(res.status).toBe(200);
+    expect(JSON.parse((await row('onboarding'))!)).toEqual({
+      step: 'import',
+      started_at: '2026-10-01 10:00:00',
+      finished_at: null,
+      outcome: null,
+    });
+  });
+
+  it('keeps the tours it can read when one id is not well formed', async () => {
+    const stored = JSON.stringify({
+      seen: ['dashboard', 'a-tour-id-that-is-longer-than-forty-characters', 'import'],
+    });
+    await put('tours', stored);
+    const state = (await (await read(mine)).json()) as { tours: { seen: string[] } | null };
+    expect(state.tours).toEqual({ seen: ['dashboard', 'import'] });
+  });
+
+  it('never replaces a row it cannot read: the write is refused and the row left', async () => {
+    const unreadable: Array<[string, string, unknown]> = [
+      ['onboarding', '{"step":"welcome","started_at":"yesterday"}', { step: 'space' }],
+      ['onboarding', 'not json', { outcome: 'completed' }],
+      ['tours', '{"seen":"dashboard"}', { seen: ['loans'] }],
+      ['getting_started', '{"hidden":"no"}', { hidden: true }],
+    ];
+    for (const [key, value, body] of unreadable) {
+      await env.DB.prepare('DELETE FROM user_state WHERE user_id = ?').bind(ME).run();
+      await put(key, value);
+      const res = await write(mine, key, body);
+      expect(res.status, `${key} ${value}`).toBe(409);
+      expect(await row(key), `${key} ${value}`).toBe(value);
+      const state = (await (await read(mine)).json()) as Record<string, unknown>;
+      expect(state[key], `${key} ${value}`).toBeNull();
+    }
+  });
+});

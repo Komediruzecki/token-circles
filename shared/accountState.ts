@@ -16,6 +16,13 @@
  *   is a short lowercase slug, kept once, in the order sent.
  * - `getting_started`: `hidden` sent replaces the stored one.
  *
+ * A stored value is read leniently, because another build may have written it: a newer one that
+ * added a step or a tour, or an older one after a rollback. An onboarding step this build does not
+ * know reads as no step, and the record keeps its times and outcome, so a finished record stays
+ * finished. A tour id that is not well formed is dropped and the others are kept. A row that cannot
+ * be read even so is never replaced: the write is refused and the row left as it is
+ * (applyUserStateWrite).
+ *
  * The names are in shared/accountStateKeys.ts, which has no imports.
  */
 import {
@@ -41,6 +48,8 @@ export const USER_STATE_MESSAGES = {
   seen: 'Send the tours seen as a list of tour ids, like ["dashboard", "import"].',
   hidden: 'Send hidden as true or false.',
   value: `Keep the value under ${USER_STATE_MAX_BYTES} bytes.`,
+  unreadable:
+    'What is stored here was written by another version of the app and cannot be read by this one, so it is left as it is.',
 } as const;
 
 /** The value stored under each key. */
@@ -92,11 +101,14 @@ export function onboardingFinished(record: OnboardingRecord | null): boolean {
   return record !== null && record.outcome !== null;
 }
 
-/** A stored onboarding record, or null when `raw` is not one. */
+/**
+ * A stored onboarding record, or null when `raw` is not one. A step this build does not know (one
+ * added or renamed by another build) reads as null, and the rest of the record is kept.
+ */
 export function readOnboardingRecord(raw: unknown): OnboardingRecord | null {
   if (!isObject(raw)) return null;
-  const { step, started_at, finished_at, outcome } = raw;
-  if (step !== null && !isStep(step)) return null;
+  const { started_at, finished_at, outcome } = raw;
+  const step = isStep(raw.step) ? raw.step : null;
   if (started_at !== null && !isTime(started_at)) return null;
   if (finished_at !== null && !isTime(finished_at)) return null;
   if (outcome !== null && !isOutcome(outcome)) return null;
@@ -105,10 +117,13 @@ export function readOnboardingRecord(raw: unknown): OnboardingRecord | null {
   return { step, started_at, finished_at, outcome };
 }
 
-/** A stored tours record, or null when `raw` is not one. */
+/**
+ * A stored tours record, or null when `raw` is not one. An id that is not well formed is dropped
+ * and the others are kept, each once.
+ */
 export function readToursRecord(raw: unknown): ToursRecord | null {
-  if (!isObject(raw) || !Array.isArray(raw.seen) || !raw.seen.every(isTourId)) return null;
-  return { seen: [...new Set(raw.seen)] };
+  if (!isObject(raw) || !Array.isArray(raw.seen)) return null;
+  return { seen: [...new Set(raw.seen.filter(isTourId))] };
 }
 
 /** A stored Getting started record, or null when `raw` is not one. */
@@ -201,7 +216,9 @@ export function checkUserStateWrite<K extends UserStateKey>(
       checked = mergeOnboarding(body, current as OnboardingRecord | null, now);
       break;
     case 'tours': {
-      const tours = readToursRecord(body);
+      // Strict, unlike reading what is stored: a client sends only ids that are well formed.
+      const tours =
+        Array.isArray(body.seen) && body.seen.every(isTourId) ? readToursRecord(body) : null;
       checked = tours
         ? { ok: true, value: tours }
         : { ok: false, fields: { seen: USER_STATE_MESSAGES.seen } };
@@ -222,4 +239,33 @@ export function checkUserStateWrite<K extends UserStateKey>(
     return { ok: false, fields: { value: USER_STATE_MESSAGES.value } };
   }
   return checked as Checked<UserStateValues[K]>;
+}
+
+/** What a write does to the row stored under its key (applyUserStateWrite). */
+export type UserStateWrite<K extends UserStateKey> =
+  /** Store `value`, or, when `changed` is false, leave the row as it is and answer `value`. */
+  | { ok: true; value: UserStateValues[K]; changed: boolean }
+  /** The body is refused: 400, a message for each field. */
+  | { ok: false; fields: Record<string, string> }
+  /** The stored row cannot be read by this build: it is left as it is, and the write refused. */
+  | { ok: false; unreadable: true };
+
+/**
+ * What writing `body` to `key` does, given the row's stored text (null when there is none). The
+ * write is merged over the stored value as read leniently; a row that cannot be read at all is
+ * never replaced. When the merge changes nothing the row is left byte for byte, so a value this
+ * build reads only in part (a newer step, an id it drops) is not rewritten on that account.
+ */
+export function applyUserStateWrite<K extends UserStateKey>(
+  key: K,
+  body: unknown,
+  stored: string | null,
+  now: string
+): UserStateWrite<K> {
+  const current = readUserStateValue(key, stored);
+  if (stored !== null && current === null) return { ok: false, unreadable: true };
+  const checked = checkUserStateWrite(key, body, current, now);
+  if (!checked.ok) return checked;
+  const changed = current === null || JSON.stringify(checked.value) !== JSON.stringify(current);
+  return { ok: true, value: checked.value, changed };
 }

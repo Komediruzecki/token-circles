@@ -2,11 +2,16 @@
  * Signed in, the setup wizard belongs to the account: its record is on the Worker
  * (`/api/account/state`, user_state), so every device the account signs in on reads the same one.
  *
- * Against a stand-in for the Worker that keeps each account's record with the Worker's own rule
- * (shared/accountState.ts, checkUserStateWrite), because that is the network.
+ * Against a stand-in for the Worker that reads and keeps each account's record with the Worker's
+ * own rules (shared/accountState.ts, readUserStateValue and applyUserStateWrite), because that is
+ * the network.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkUserStateWrite, sqliteDateTime } from '../../../../shared/accountState'
+import {
+  applyUserStateWrite,
+  readUserStateValue,
+  sqliteDateTime,
+} from '../../../../shared/accountState'
 import { __resetAccountStateForTest, readAccountState } from '../accountState'
 import {
   __resetGettingStartedForTest,
@@ -45,6 +50,10 @@ const worker = {
   sent: [] as string[],
 }
 
+/** A stored value as the row's text, as the Worker reads it. */
+const stored = (value: unknown): string | null =>
+  value === undefined ? null : JSON.stringify(value)
+
 function workerStandIn() {
   return async (url: string, init: RequestInit = {}) => {
     const path = new URL(url, 'http://localhost').pathname
@@ -55,33 +64,38 @@ function workerStandIn() {
     if (path === '/api/account/state' && method === 'GET') {
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
       return json({
-        onboarding: worker.records.get(id) ?? null,
+        onboarding: readUserStateValue('onboarding', stored(worker.records.get(id))),
         tours: null,
-        getting_started: worker.gettingStarted.get(id) ?? null,
+        getting_started: readUserStateValue(
+          'getting_started',
+          stored(worker.gettingStarted.get(id))
+        ),
       })
     }
     if (path === '/api/account/state/getting_started' && method === 'PUT') {
-      const checked = checkUserStateWrite(
+      const write = applyUserStateWrite(
         'getting_started',
         JSON.parse(body) as unknown,
-        worker.gettingStarted.get(id) ?? null,
+        stored(worker.gettingStarted.get(id)),
         sqliteDateTime(new Date())
       )
-      if (!checked.ok) return json({ error: 'Check the fields.', fields: checked.fields }, 400)
-      worker.gettingStarted.set(id, checked.value)
-      return json({ getting_started: checked.value })
+      if (!write.ok && 'unreadable' in write) return json({ error: 'Left as it is.' }, 409)
+      if (!write.ok) return json({ error: 'Check the fields.', fields: write.fields }, 400)
+      if (write.changed) worker.gettingStarted.set(id, write.value)
+      return json({ getting_started: write.value })
     }
     if (path === '/api/account/state/onboarding' && method === 'PUT') {
       if (worker.failWrite) return json({ error: 'Something went wrong on our side.' }, 500)
-      const checked = checkUserStateWrite(
+      const write = applyUserStateWrite(
         'onboarding',
         JSON.parse(body) as unknown,
-        worker.records.get(id) ?? null,
+        stored(worker.records.get(id)),
         sqliteDateTime(new Date())
       )
-      if (!checked.ok) return json({ error: 'Check the fields.', fields: checked.fields }, 400)
-      worker.records.set(id, checked.value)
-      return json({ onboarding: checked.value })
+      if (!write.ok && 'unreadable' in write) return json({ error: 'Left as it is.' }, 409)
+      if (!write.ok) return json({ error: 'Check the fields.', fields: write.fields }, 400)
+      if (write.changed) worker.records.set(id, write.value)
+      return json({ onboarding: write.value })
     }
     if (path === '/api/settings' && method === 'GET') {
       worker.whileSettingsRead?.()
@@ -158,6 +172,29 @@ describe('an account whose record is finished', () => {
 
     expect(onboardingOpen()).toBe(false)
     expect(worker.sent).toEqual(['GET /api/account/state'])
+  })
+
+  it('is offered nothing when the record has a step this build does not know', async () => {
+    // A newer build added a step; this one is older, or a rollback.
+    const newer = {
+      step: 'essentials',
+      started_at: '2026-10-01 09:00:00',
+      finished_at: '2026-10-01 09:05:00',
+      outcome: 'completed',
+    }
+    worker.records.set(5, newer as unknown as OnboardingRecord)
+    signIn(5)
+
+    await maybeOfferOnboarding()
+    expect(onboardingOpen()).toBe(false)
+
+    // Relaunched from the tour menu, and finished again: the record stays the newer build's.
+    startOnboarding()
+    nextOnboardingStep()
+    completeOnboarding()
+    await settled()
+    expect(statePuts()).toEqual([])
+    expect(worker.records.get(5)).toEqual(newer)
   })
 
   it('walks a relaunched wizard without touching the record', async () => {
@@ -509,5 +546,34 @@ describe('whose record it is', () => {
 
     expect(worker.sent.filter((r) => r.includes('/api/account/state'))).toEqual([])
     expect(getOnboardingStatus('local')).toBe('completed')
+  })
+})
+
+describe('a record this build cannot read at all', () => {
+  it('is never replaced: each write is refused, and the decision stays in this browser', async () => {
+    const unreadable = {
+      step: 'welcome',
+      started_at: 'yesterday',
+      finished_at: null,
+      outcome: null,
+    }
+    worker.records.set(5, unreadable as unknown as OnboardingRecord)
+    signIn(5)
+
+    // It reads as no record, so the wizard opens here; nothing it sends is stored.
+    await maybeOfferOnboarding()
+    expect(onboardingOpen()).toBe(true)
+    nextOnboardingStep()
+    skipOnboarding()
+    await settled()
+    expect(worker.records.get(5)).toEqual(unreadable)
+    expect(getOnboardingStatus('account-5')).toBe('skipped')
+
+    // The next start sends the decision again, is refused again, and opens nothing.
+    signIn(5)
+    await maybeOfferOnboarding()
+    await settled()
+    expect(onboardingOpen()).toBe(false)
+    expect(worker.records.get(5)).toEqual(unreadable)
   })
 })

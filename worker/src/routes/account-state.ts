@@ -5,9 +5,10 @@ import { accept, HttpError } from '../http';
 import * as db from '../db';
 import { isUserStateKey, USER_STATE_KEYS } from '../../../shared/accountStateKeys';
 import {
-  checkUserStateWrite,
+  applyUserStateWrite,
   readUserStateValue,
   sqliteDateTime,
+  USER_STATE_MESSAGES,
   type UserState,
 } from '../../../shared/accountState';
 
@@ -45,6 +46,9 @@ const WRITE_ATTEMPTS = 3;
 // A write reads the row, merges the body into it by the key's rule, and stores the result only
 // while the row still holds what was read. If another write landed in between, it reads again
 // and merges again, so a step recorded by one tab can never undo a finish recorded by another.
+// A row this build reads only in part (another build's step or tour) is merged over what it can
+// read, and left byte for byte when the merge changes nothing. A row it cannot read at all was
+// written by another build: it is never replaced, and the write is refused (409).
 accountStateRoutes.put('/api/account/state/:key', requireAuth, async (c) => {
   const key = c.req.param('key');
   if (!isUserStateKey(key)) throw new HttpError(404, 'Not found');
@@ -57,10 +61,14 @@ accountStateRoutes.put('/api/account/state/:key', requireAuth, async (c) => {
       userId,
       key
     );
-    const current = row ? readUserStateValue(key, row.value) : null;
-    const next = accept(checkUserStateWrite(key, body, current, sqliteDateTime(new Date())));
+    const write = applyUserStateWrite(key, body, row?.value ?? null, sqliteDateTime(new Date()));
+    if (!write.ok) {
+      if ('unreadable' in write) throw new HttpError(409, USER_STATE_MESSAGES.unreadable);
+      return accept(write);
+    }
+    const next = write.value;
+    if (!write.changed) return c.json({ [key]: next });
     const text = JSON.stringify(next);
-    if (row && row.value === text) return c.json({ [key]: next });
     const written = row
       ? await db.run(
           c.env.DB,

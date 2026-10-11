@@ -3,12 +3,16 @@
  * `/api/account/state`), so the tour menu shows them as done on every device. Local-first keeps
  * them in this browser, as before.
  *
- * Against a stand-in for the Worker that stores the list with the Worker's own rule
- * (shared/accountState.ts, checkUserStateWrite), because that is the network.
+ * Against a stand-in for the Worker that reads and stores the list with the Worker's own rules
+ * (shared/accountState.ts, readUserStateValue and applyUserStateWrite), because that is the network.
  */
 import { createMemo, createRoot } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkUserStateWrite, sqliteDateTime } from '../../../../shared/accountState'
+import {
+  applyUserStateWrite,
+  readUserStateValue,
+  sqliteDateTime,
+} from '../../../../shared/accountState'
 import { __resetAccountStateForTest, setAccountStateOwner } from '../accountState'
 import {
   endSpotlight,
@@ -27,12 +31,19 @@ const BROWSER_TOURS = 'finance_spotlight_tours'
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-/** The Worker: the signed-in account's stored list, and every request it was sent. */
+/**
+ * The Worker: the signed-in account's stored list, and every request it was sent. The list is
+ * what the row holds, which another build may have written in a shape this one reads in part or
+ * not at all.
+ */
 const worker = {
-  tours: null as { seen: string[] } | null,
+  tours: null as { seen: unknown } | null,
   failRead: false,
   sent: [] as string[],
 }
+
+/** The row's text, as the Worker reads it. */
+const stored = (): string | null => (worker.tours === null ? null : JSON.stringify(worker.tours))
 
 function workerStandIn() {
   return async (url: string, init: RequestInit = {}) => {
@@ -42,18 +53,23 @@ function workerStandIn() {
     worker.sent.push(`${method} ${path}${body ? ` ${body}` : ''}`)
     if (path === '/api/account/state' && method === 'GET') {
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
-      return json({ onboarding: null, tours: worker.tours, getting_started: null })
+      return json({
+        onboarding: null,
+        tours: readUserStateValue('tours', stored()),
+        getting_started: null,
+      })
     }
     if (path === '/api/account/state/tours' && method === 'PUT') {
-      const checked = checkUserStateWrite(
+      const write = applyUserStateWrite(
         'tours',
         JSON.parse(body) as unknown,
-        worker.tours,
+        stored(),
         sqliteDateTime(new Date())
       )
-      if (!checked.ok) return json({ error: 'Check the fields.', fields: checked.fields }, 400)
-      worker.tours = checked.value
-      return json({ tours: checked.value })
+      if (!write.ok && 'unreadable' in write) return json({ error: 'Left as it is.' }, 409)
+      if (!write.ok) return json({ error: 'Check the fields.', fields: write.fields }, 400)
+      if (write.changed) worker.tours = write.value
+      return json({ tours: write.value })
     }
     return json([])
   }
@@ -194,6 +210,32 @@ describe('when the list cannot be read', () => {
 
     expect(tourPuts()).toEqual([])
     expect(isTourCompleted('dashboard')).toBe(false)
+  })
+})
+
+describe('a list another build wrote', () => {
+  it('keeps the tours it can read when one id is not well formed', async () => {
+    // One id longer than this build's rule allows.
+    worker.tours = { seen: ['dashboard', 'a-tour-id-that-is-longer-than-forty-characters'] }
+    await loadAccountTours()
+    expect(isTourCompleted('dashboard')).toBe(true)
+
+    finish('loans')
+    await toursWriteSettled()
+    expect(worker.tours).toEqual({ seen: ['dashboard', 'loans'] })
+  })
+
+  it('is never replaced when it cannot be read: the writes are refused, and nothing shows as done', async () => {
+    worker.tours = { seen: 'dashboard' }
+    localStorage.setItem(BROWSER_TOURS, JSON.stringify({ import: true }))
+
+    await loadAccountTours()
+    finish('loans')
+    await toursWriteSettled()
+
+    expect(worker.tours).toEqual({ seen: 'dashboard' })
+    expect(isTourCompleted('loans')).toBe(false)
+    expect(isTourCompleted('import')).toBe(false)
   })
 })
 
