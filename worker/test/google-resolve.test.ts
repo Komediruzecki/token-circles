@@ -53,7 +53,7 @@ describe('resolveGoogleUser', () => {
     expect(res.userId).toBe(900);
     expect(res.created).toBe(false);
     // Its address was never confirmed, so its password went, and the caller is told.
-    expect(res.cleared).toBe(true);
+    expect(res.cleared).toEqual(['password']);
     const user = await env.DB.prepare(
       'SELECT auth_provider, provider_id FROM users WHERE id = 900'
     ).first<{ auth_provider: string; provider_id: string }>();
@@ -83,7 +83,7 @@ describe('resolveGoogleUser', () => {
       userId: 901,
       created: false,
       email: null,
-      cleared: false,
+      cleared: [],
       tokenVersion: 1,
     });
     const user = await env.DB.prepare(
@@ -112,7 +112,7 @@ describe('resolveGoogleUser', () => {
       userId: 902,
       created: false,
       email: null,
-      cleared: false,
+      cleared: [],
       tokenVersion: 1,
     });
     const { results } = await env.DB.prepare(

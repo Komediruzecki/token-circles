@@ -13,6 +13,7 @@
  */
 import { expect } from '@playwright/test'
 import { sqlRows } from './db'
+import { onboardingDecided } from './onboarding-decided'
 import type { BrowserContext, Page } from '@playwright/test'
 
 export type Boot = 'server' | 'prod'
@@ -28,17 +29,28 @@ export function profileIdOf(email: string): number {
   return profile.id
 }
 
-/** Boot every page of `context` this way. `email` picks the profile a 'server' boot opens on. */
+/** The id of the account at `email`, or null when there is none yet. */
+function accountIdOf(email: string): number | null {
+  const [account] = sqlRows<{ id: number }>(`SELECT id FROM users WHERE email = '${email}'`)
+  return account?.id ?? null
+}
+
+/**
+ * Boot every page of `context` this way. `email` picks the profile a 'server' boot opens on, and
+ * the account whose setup wizard is marked decided besides local-first's.
+ */
 export async function bootApp(context: BrowserContext, boot: Boot, email?: string): Promise<void> {
   const pid = boot === 'server' && email ? String(profileIdOf(email)) : ''
+  const account = email ? accountIdOf(email) : null
+  const decided = onboardingDecided(account === null ? ['local'] : ['local', account])
   await context.addInitScript(
-    ({ server, profile }) => {
+    ({ server, profile, decided }) => {
       if (server) localStorage.setItem('finance_storage_mode', 'self-hosted')
       if (profile) localStorage.setItem('currentProfileId', profile)
       localStorage.setItem('darkMode', 'false')
-      localStorage.setItem('finance_onboarding', 'skipped')
+      for (const [key, value] of decided) localStorage.setItem(key, value)
     },
-    { server: boot === 'server', profile: pid }
+    { server: boot === 'server', profile: pid, decided }
   )
 }
 

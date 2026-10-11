@@ -168,7 +168,7 @@ emailCodeRoutes.post('/api/auth/email-code/verify', async (c) => {
   if (!session) return c.json({ error: TRY_AGAIN }, 409);
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId, email });
   c.header('Set-Cookie', session, { append: true });
-  // `cleared` lets the app say what went. Clearing removes the TOTP too, so it never needs the
-  // challenge branch above.
-  return c.json(cleared ? { id: userId, email, cleared: true } : { id: userId, email });
+  // `cleared` names what went, so the app can say what. Clearing removes the TOTP too, so it
+  // never needs the challenge branch above.
+  return c.json(cleared.length > 0 ? { id: userId, email, cleared } : { id: userId, email });
 });

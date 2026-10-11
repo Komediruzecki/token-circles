@@ -58,8 +58,8 @@ export default function EmailCodeLogin(props: {
       const answer = await api.verifyEmailCode(request.values.email.trim(), values.code.trim())
       // Inbox proven, but the account wants the authenticator too: hand over.
       if (answer.twofaRequired) return 'second-factor'
-      // Confirming the address cleared the account: the app says what, after the reload.
-      if (answer.cleared) markAccessCleared('sign-in')
+      // What confirming the address removed, if anything: the app names it after the reload.
+      markAccessCleared('email-code', answer.cleared)
       return reloadIntoTheApp()
     },
     saved: () => {

@@ -45,8 +45,8 @@ void Promise.resolve(window.__SW_CLEANUP__).then(() => {
 // it is not a page, so the hash router would resolve it to a 404, and a fragment left in the
 // address bar re-announces the outcome on every reload.
 consumeEmailVerifyRedirect()
-// Google sign-in adds ?cleared=1 when joining an account cleared what it had set up before its
-// address was confirmed. Same treatment: read once, stripped, shown by the app.
+// Google sign-in adds ?cleared= when joining an account removed what it had set up before its
+// address was confirmed, naming what. Same treatment: read once, stripped, shown by the app.
 consumeAccessClearedRedirect()
 
 const root = document.getElementById('root')

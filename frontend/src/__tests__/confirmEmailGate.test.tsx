@@ -10,6 +10,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { onboardingDecided } from '../../tests/onboarding-decided'
 import {
   setCurrentProfile,
   setIsAuthenticated,
@@ -105,7 +106,8 @@ afterEach(() => {
 
 async function mountApp(mode: StorageMode = 'self-hosted') {
   localStorage.setItem('finance_storage_mode', mode)
-  localStorage.setItem('finance_onboarding', 'skipped')
+  // The stand-in Worker's account is id 1; local-first has its one local account.
+  for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
   if (mode === 'self-hosted') vi.stubGlobal('fetch', workerStandIn())
   const { App } = await import('../App')
   dispose = render(() => <App />, host)
@@ -207,5 +209,26 @@ describe('local-first', () => {
       expect(appShown()).toBe(true)
     }, waitLong)
     expect(gateShown()).toBe(false)
+  })
+})
+
+describe('whose setup decision the app reads', () => {
+  it("reads the signed-in account's from start, and nobody's after signing out", async () => {
+    const { getOnboardingStatus } = await import('../core/onboardingStore')
+    worker.me = CONFIRMED
+    await mountApp()
+    await vi.waitFor(() => {
+      expect(appShown()).toBe(true)
+    }, waitLong)
+    // mountApp marked account 1's decision; local-first's is not read in account mode.
+    localStorage.setItem('finance_onboarding:local', 'completed')
+    expect(getOnboardingStatus()).toBe('skipped')
+
+    document.querySelector<HTMLButtonElement>('button[title="Logout"]')!.click()
+
+    await vi.waitFor(() => {
+      expect(signInShown()).toBe(true)
+    }, waitLong)
+    expect(getOnboardingStatus()).toBeNull()
   })
 })

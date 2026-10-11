@@ -56,7 +56,7 @@ test.describe('onboarding wizard', () => {
     })
     await expect(page.getByTestId('accounts-header')).toBeVisible()
     await expect(page.getByTestId('account-card').first()).toContainText('Main Checking')
-    const flag = await page.evaluate(() => localStorage.getItem('finance_onboarding'))
+    const flag = await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))
     expect(flag).toBe('completed')
   })
 
@@ -81,7 +81,9 @@ test.describe('onboarding wizard', () => {
     await page.getByTestId('onboarding-skip').click()
     await page.getByTestId('confirm-accept').click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding'))).toBe('skipped')
+    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))).toBe(
+      'skipped'
+    )
 
     // A reload must NOT re-open it
     await page.reload({ waitUntil: 'domcontentloaded' })
@@ -141,13 +143,15 @@ test.describe('onboarding wizard', () => {
 
     // Even with the local flag wiped (fresh browser / new device against the
     // same data) the wizard stays closed once the pristine check consults settings.
-    await page.evaluate(() => localStorage.removeItem('finance_onboarding'))
+    await page.evaluate(() => localStorage.removeItem('finance_onboarding:local'))
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
     await page.waitForTimeout(1500)
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     // ...and the remote decision has been re-cached locally.
-    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding'))).toBe('skipped')
+    expect(await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))).toBe(
+      'skipped'
+    )
 
     // Settings → About → Run setup wizard relaunches on demand
     await page.evaluate(() => {

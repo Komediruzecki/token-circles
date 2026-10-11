@@ -6,6 +6,7 @@
  * First budget badge), and 5.2 to 5.4 (resume, reconnect, one request per endpoint). The case
  * numbers are the 09-25 scope's.
  */
+import { onboardingDecided } from '../onboarding-decided'
 import {
   accountsOf,
   arrangeAccountOf,
@@ -192,9 +193,12 @@ for (const [pass, test] of both) {
       const profile = `zz-badges${m.suffix}`
       const category = `zz-budgeted${m.suffix}`
       // This device has seen the setup wizard, so it does not open over the empty profile.
-      await page.evaluate(() => {
-        localStorage.setItem('finance_onboarding', 'skipped')
-      })
+      const decided = onboardingDecided([
+        m.kind === 'cloud' ? (await m.api<{ id: number }>('/api/auth/me')).id : 'local',
+      ])
+      await page.evaluate((entries) => {
+        for (const [key, value] of entries) localStorage.setItem(key, value)
+      }, decided)
       await createProfileFromSidebar(page, profile)
       await expect(page.getByTestId('profile-dropdown-btn')).toContainText(profile)
       await arrangeCategory(m, category)

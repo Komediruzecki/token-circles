@@ -18,6 +18,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clashingProfileName, profileNameTaken } from '../../../shared/profileSchema'
 import { refusalOf } from '../../../shared/refusal'
+import { onboardingDecided } from '../../tests/onboarding-decided'
 import {
   bumpProfileVersion,
   setCurrentProfile,
@@ -164,7 +165,8 @@ afterEach(() => {
 /** Mount the app signed in, in profile 1 with only profile 1 selected. */
 async function mountApp(mode: StorageMode) {
   localStorage.setItem('finance_storage_mode', mode)
-  localStorage.setItem('finance_onboarding', 'skipped')
+  // The stand-in Worker's account is id 1; local-first has its one local account.
+  for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
   localStorage.setItem('currentProfileId', '1')
   localStorage.setItem('selectedProfileIds', JSON.stringify([1]))
   if (mode === 'serverless') await seedLocalProfiles()
@@ -180,7 +182,8 @@ async function mountApp(mode: StorageMode) {
 /** Mount the app signed in, to a workspace with no profile at all: a new account's first run. */
 async function mountEmptyApp(mode: StorageMode) {
   localStorage.setItem('finance_storage_mode', mode)
-  localStorage.setItem('finance_onboarding', 'skipped')
+  // The stand-in Worker's account is id 1; local-first has its one local account.
+  for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
   // Local-first seeds demo profiles into an empty store only on a device's first run.
   localStorage.setItem('finance_had_profiles', '1')
   if (mode === 'serverless') await seedLocalProfiles([])

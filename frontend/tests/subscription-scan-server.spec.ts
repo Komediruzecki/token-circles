@@ -12,6 +12,7 @@
  * transactions, and expect detections from the envelope-shaped response.
  */
 import { expect, test } from '@playwright/test'
+import { onboardingDecided } from './onboarding-decided'
 import { E2E_BASE, firstProfileId } from './test-helpers'
 
 const day = 24 * 60 * 60 * 1000
@@ -64,14 +65,19 @@ test.describe('subscription scan — server mode @smoke', () => {
     expect(Array.isArray(txnsBody)).toBe(false)
     expect(Array.isArray(txnsBody.rows)).toBe(true)
 
-    await ctx.addInitScript((pid: number) => {
-      localStorage.setItem('finance_storage_mode', 'self-hosted')
-      localStorage.setItem('darkMode', 'false')
-      localStorage.setItem('currentProfileId', String(pid))
-      localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-      // A recorded decision keeps the onboarding wizard from covering the page.
-      localStorage.setItem('finance_onboarding', 'skipped')
-    }, profile.id)
+    // A recorded decision keeps the onboarding wizard from covering the page.
+    const me = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
+    const decided = onboardingDecided([((await me.json()) as { id: number }).id])
+    await ctx.addInitScript(
+      ({ pid, decided }) => {
+        localStorage.setItem('finance_storage_mode', 'self-hosted')
+        localStorage.setItem('darkMode', 'false')
+        localStorage.setItem('currentProfileId', String(pid))
+        localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
+        for (const [key, value] of decided) localStorage.setItem(key, value)
+      },
+      { pid: profile.id, decided }
+    )
     await page.goto(`${E2E_BASE}/#bills`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 
     await page.getByTestId('bills-tab-subscriptions').click()

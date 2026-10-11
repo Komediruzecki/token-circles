@@ -208,6 +208,18 @@ All notable changes to Token Circles are documented here. The format is based on
   to that account or through `POST /api/auth/email-link/finish` after any other sign-in. A browser
   that starts local-first opens the sign-in for these links, and the reset page works there. Google
   sign-in stores and matches addresses in lower case. Account deletion deletes its sessions.
+- **The notice after confirming an address names only what went.** `clearedWorthSaying`
+  (`worker/src/auth.ts`) returns the kinds that went, under the names in `shared/accessCleared.ts`
+  (`password`, `passkeys`, `two-factor`, `api-tokens`). Google sign-in puts them on its redirect as
+  `?cleared=password,passkeys`; the emailed-code sign-in and the reset answer carry them as
+  `cleared: ['password']`, and leave `cleared` out when nothing went. Sessions are never named, and
+  a reset never names the password it set. `accessClearedNotice`
+  (`frontend/src/core/accessCleared.ts`) writes one sentence that names the step (Google sign-in,
+  an emailed code or a reset) and only those kinds, then one next step: sign out and choose Forgot
+  password when the password went, set them up again in Settings otherwise, and after a reset, sign
+  in first. Nothing named, no notice. A `?cleared=` value that names no known kind is stripped
+  without one, and a kept notice the app does not recognise is removed. What is cleared, and the
+  batch that clears it, are unchanged.
 - **Sign-in history is kept 90 days, and goes with the account** (#613). Account deletion deletes
   its `auth_logs` rows in the same D1 batch: rows with its user id, and attempts at its address that
   carry none. The scheduled run deletes rows older than `AUTH_LOG_RETENTION_DAYS` (90,
@@ -265,6 +277,20 @@ All notable changes to Token Circles are documented here. The format is based on
   active profile only. The Worker's `GET /api/tags` lists each tag's `profile_id`. In cloud, a blank
   icon stores the default `tag` on create and edit, and an edit keeps every stored category field it
   does not send (parent, `tax_deductible`).
+
+### Onboarding
+
+- **Onboarding is decided per account.** The completed-or-skipped flag in localStorage is kept
+  under the account it belongs to, `finance_onboarding:account-<id>`, or `finance_onboarding:local`
+  in local-first (`frontend/src/core/onboardingStore.ts`: `setOnboardingOwner`,
+  `onboardingOwnerFor`; the key format is `core/onboardingFlag.ts`). The app sets the owner at
+  start, after an in-app sign-in and at sign-out, from the id `GET /api/auth/me` answers
+  (`SignedInAccount.id`); with no owner, nothing is offered. The browser-wide `finance_onboarding`
+  flag moves to the local account only, unless it has a flag of its own, and is then removed; a
+  server account never takes it, and its profile's settings (`onboarding`) and the pristine-profile
+  check decide, so an account with data is still never offered the wizard. Specs and the marketing
+  shots mark the wizard decided per owner with `onboardingDecided` (`tests/onboarding-decided.ts`).
+  No migration.
 
 ### CRUD contract suite
 

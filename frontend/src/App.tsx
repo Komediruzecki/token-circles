@@ -58,7 +58,12 @@ import { DEMO_PROFILE_NAME, getDemoTier } from './core/demoMode'
 import { isEditableTarget } from './core/domFocus'
 import { resolvePageFromHash } from './core/hashRoute.js'
 import { logger } from './core/logger.js'
-import { maybeOfferOnboarding, onboardingOpen } from './core/onboardingStore'
+import {
+  maybeOfferOnboarding,
+  onboardingOpen,
+  onboardingOwnerFor,
+  setOnboardingOwner,
+} from './core/onboardingStore'
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { clearPlanIntent, setHighlightedPlan, storedPlanIntent } from './core/planIntent'
 import { createQuickEntryList } from './core/quickEntryLists'
@@ -329,6 +334,12 @@ export function App() {
   const handleLoginSuccess = async () => {
     setIsLoginModalOpen(false)
     setIsAuthenticated(true)
+    // Onboarding is decided per account: the one that just signed in. Every sign-in in
+    // LoginModal (password, emailed code, Google, passkey) reloads the page, so the owner set at
+    // start (onMount) is the one that counts; confirmEmailGate.test.tsx covers it and sign-out.
+    // This keeps a sign-in that lands here without a reload on the right account too.
+    const account = await api.signedInAccount()
+    setOnboardingOwner(onboardingOwnerFor(serverMode, account?.id))
     void loadBillingPlan()
     await loadProfiles()
     if (profiles().length > 0) {
@@ -356,6 +367,7 @@ export function App() {
     localStorage.removeItem('currentProfileId')
     setConfirmGate(null)
     setIsAuthenticated(false)
+    setOnboardingOwner(onboardingOwnerFor(serverMode, null))
     setCurrentProfile(null)
     // The list is the signed-out account's. A failed read no longer clears it (loadProfiles), so
     // sign-out does, before another account signs in on this tab.
@@ -422,6 +434,8 @@ export function App() {
     if (waiting) setConfirmGate(account)
     const loggedIn = account !== null && !waiting
     setIsAuthenticated(loggedIn)
+    // Onboarding is decided per account: the signed-in one, or local-first's one local account.
+    setOnboardingOwner(onboardingOwnerFor(serverMode, loggedIn ? account.id : null))
     // A `?plan=` link from the marketing site, parked in localStorage by planIntent because
     // both the mode switch and sign-in itself reload the page. Now that there is an account,
     // land on the tier the visitor picked. Not logged in yet: leave it stored — the gate is

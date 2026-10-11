@@ -47,7 +47,10 @@ async function openWizard(page: Page, mode: Mode, profile: string): Promise<void
     // Once only: a reload must not erase a decision the case made.
     if (!sessionStorage.getItem('onb_spec_cleared')) {
       sessionStorage.setItem('onb_spec_cleared', '1')
-      localStorage.removeItem('finance_onboarding')
+      // The flag is kept per account (finance_onboarding:account-<id>), browser-wide before.
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
+      }
     }
   }, id)
   await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })

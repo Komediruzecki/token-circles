@@ -55,6 +55,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
+import { onboardingDecided } from '../tests/onboarding-decided.ts'
 
 const BASE = process.env.BASE_URL || 'http://127.0.0.1:3900'
 // Defaults inside this repo, into a `local/` directory git already ignores. Publishing
@@ -216,8 +217,12 @@ if (!PROFILE) {
   }
 }
 
+// A first-run overlay would sit on top of every shot: the fixture account has decided its setup.
+const meRes = await ctx.request.get(`${BASE}/api/auth/me`)
+const decided = onboardingDecided(meRes.ok() ? [(await meRes.json()).id] : [], 'completed')
+
 await ctx.addInitScript(
-  ({ dark, profile }) => {
+  ({ dark, profile, decided }) => {
     // Init scripts run on EVERY document, including the about:blank between shots, whose
     // opaque origin throws SecurityError on any storage access. Nothing to seed there.
     try {
@@ -234,14 +239,13 @@ await ctx.addInitScript(
     // preference. The older 'darkMode' key does nothing.
     localStorage.setItem('finance-theme', dark ? 'dark' : 'light')
     localStorage.setItem('finance_storage_mode', 'self-hosted')
-    // A first-run overlay or an auto-launched tour would sit on top of every shot.
-    localStorage.setItem('finance_onboarding', 'completed')
+    for (const [key, value] of decided) localStorage.setItem(key, value)
     // The fixture account never verifies its email, so VerifyEmailBanner would sit
     // above every page. Dismissing it is what a real user does; the key is per tab
     // (sessionStorage, src/components/VerifyEmailBanner.tsx), hence set on every document.
     sessionStorage.setItem('tc:verifyEmailDismissed', '1')
   },
-  { dark: DARK, profile: PROFILE }
+  { dark: DARK, profile: PROFILE, decided }
 )
 
 await ctx.addInitScript(() => {

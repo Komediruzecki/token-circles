@@ -167,8 +167,9 @@ for (const boot of BOOTS) {
 
         const opened = await setNewPassword(browser, boot, await plantResetLink(email))
 
+        // It names the API token, the one thing the account had besides its password.
         await expect(opened.page.getByTestId('auth-notice')).toHaveText(
-          'Your new password is set. Confirming your email removed what was set up before it: passkeys, two-factor authentication, API tokens and sign-ins on other devices. Sign in, then add what you need again in Settings.'
+          'Resetting your password confirmed your email, so your API tokens no longer work. Sign in, then set them up again in Settings.'
         )
         expect(apiTokensOf(email)).toBe(0)
         expect(await signInStatus(request, email, OLD_PASSWORD)).toBe(401)

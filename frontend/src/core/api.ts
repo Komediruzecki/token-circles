@@ -3,12 +3,14 @@
  */
 
 import { z } from 'zod'
+import { readClearedKinds } from '../../../shared/accessCleared'
 import * as Schemas from '../schemas/models.js'
 import { apiErrorFrom } from './apiError'
 import { apiFetch } from './apiFetch'
 import { profileRequestHeaders } from './apiProfileScope'
 import { normalizeCurrencyCode } from './currencies'
 import { logger } from './logger.js'
+import type { ClearedKind } from '../../../shared/accessCleared'
 import type * as ApiTypes from '../types/api.js'
 import type * as Models from '../types/models.js'
 import type { ApiProfileScope } from './apiProfileScope'
@@ -29,6 +31,8 @@ function rangeQuery(range?: { startDate?: string; endDate?: string }): string {
 
 /** Who is signed in, as GET /api/auth/me says. */
 export interface SignedInAccount {
+  /** The account's id, or null when the answer carried none. */
+  id: number | null
   email: string
   emailVerified: boolean
   /** How the account signs in: 'password' or 'google'. */
@@ -170,12 +174,14 @@ export class ApiClient {
   async signedInAccount(): Promise<SignedInAccount | null> {
     try {
       const me = await this.request<{
+        id?: unknown
         email?: unknown
         email_verified?: unknown
         auth_provider?: unknown
         billing_account?: unknown
       }>('/auth/me', undefined)
       return {
+        id: typeof me?.id === 'number' ? me.id : null,
         email: typeof me?.email === 'string' ? me.email : '',
         // Absent is a server with no opinion, which is no reason to stop anyone.
         emailVerified:
@@ -272,13 +278,13 @@ export class ApiClient {
    * Set a new password from a reset token (worker: POST /api/auth/reset-password). The worker
    * deliberately does NOT set a session cookie — the caller sends the user to sign in.
    */
-  async resetPassword(token: string, password: string): Promise<{ cleared: boolean }> {
-    const answer = await this.request<{ cleared?: boolean }>('/auth/reset-password', undefined, {
+  async resetPassword(token: string, password: string): Promise<{ cleared: ClearedKind[] }> {
+    const answer = await this.request<{ cleared?: unknown }>('/auth/reset-password', undefined, {
       method: 'POST',
       body: { token, password },
     })
-    // True when the reset also confirmed the address and cleared what the account had set up.
-    return { cleared: answer?.cleared === true }
+    // What else the reset removed when it also confirmed the address, by kind; empty for nothing.
+    return { cleared: readClearedKinds(answer?.cleared) }
   }
 
   /**
@@ -295,19 +301,22 @@ export class ApiClient {
 
   /**
    * Trade a sign-in code for the session (worker: POST /api/auth/email-code/verify), or for the
-   * second-factor step when the account has one. `cleared` is true when confirming the address
-   * this way also cleared what the account had set up.
+   * second-factor step when the account has one. `cleared` names what confirming the address
+   * this way also removed from the account, by kind; empty for nothing.
    */
   async verifyEmailCode(
     email: string,
     code: string
-  ): Promise<{ twofaRequired: boolean; cleared: boolean }> {
-    const answer = await this.request<{ twofaRequired?: boolean; cleared?: boolean }>(
+  ): Promise<{ twofaRequired: boolean; cleared: ClearedKind[] }> {
+    const answer = await this.request<{ twofaRequired?: boolean; cleared?: unknown }>(
       '/auth/email-code/verify',
       undefined,
       { method: 'POST', body: { email, code } }
     )
-    return { twofaRequired: answer?.twofaRequired === true, cleared: answer?.cleared === true }
+    return {
+      twofaRequired: answer?.twofaRequired === true,
+      cleared: readClearedKinds(answer?.cleared),
+    }
   }
 
   /**
