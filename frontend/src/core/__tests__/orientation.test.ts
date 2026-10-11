@@ -17,6 +17,7 @@ const settled: OrientationFacts = {
   today: '2026-10-11',
   trackedMonthsInYear: 12,
   subscriptionsSpotted: 0,
+  billsSpotted: 0,
   entries: 100,
   uncategorised: 0,
   topUnbudgeted: null,
@@ -85,6 +86,17 @@ describe('review-subscriptions', () => {
     })
     expect(only({ subscriptionsSpotted: 1 })).toMatchObject({
       title: 'Review the subscription we spotted',
+      reason: "It's in your statements but not on Bills yet.",
+    })
+  })
+
+  it('says regular payments when one of them would be a bill', () => {
+    expect(only({ subscriptionsSpotted: 3, billsSpotted: 1 })).toMatchObject({
+      title: 'Review the 3 regular payments we spotted',
+      reason: "They're in your statements but not on Bills yet.",
+    })
+    expect(only({ subscriptionsSpotted: 1, billsSpotted: 1 })).toMatchObject({
+      title: 'Review the regular payment we spotted',
       reason: "It's in your statements but not on Bills yet.",
     })
   })

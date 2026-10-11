@@ -128,6 +128,8 @@ describe('the facts', () => {
 
   it("count the subscriptions the scan would tick, inside the scan's window", () => {
     expect(facts.subscriptionsSpotted).toBe(1)
+    // Netflix is a subscription, not a bill.
+    expect(facts.billsSpotted).toBe(0)
   })
 
   it('count every entry but transfers, and those without a category', () => {
@@ -160,7 +162,11 @@ describe('a regular payment the scan proposed', () => {
   it('is counted until it is added as a bill under the name it was proposed under', () => {
     const before = orientationFacts(source(gym), NOW)
     expect(before.subscriptionsSpotted).toBe(1)
-    expect(nextSteps(before).map((s) => s.id)).toContain('review-subscriptions')
+    // With no category to say it is a subscription, it is a bill, and the step says so.
+    expect(before.billsSpotted).toBe(1)
+    expect(nextSteps(before).find((s) => s.id === 'review-subscriptions')?.title).toBe(
+      'Review the regular payment we spotted'
+    )
 
     const [proposed] = detectSubscriptions(gym, [], { today: TODAY })
     const after = orientationFacts(source(gym, { bills: [{ name: proposed.name }] }), NOW)

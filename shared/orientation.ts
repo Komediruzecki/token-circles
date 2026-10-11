@@ -32,6 +32,11 @@ export interface OrientationFacts {
   trackedMonthsInYear: number;
   /** Subscriptions the scan proposes that are not bills yet, low-confidence guesses aside. */
   subscriptionsSpotted: number;
+  /**
+   * Of those, the ones the scan would add as bills, not subscriptions: regular payments like the
+   * rent. The step says "regular payments" while there is one.
+   */
+  billsSpotted: number;
   /** Entries on file that take a category: everything but transfers. */
   entries: number;
   /** Of those, how many have none. */
@@ -119,13 +124,15 @@ const RULES: Rule[] = [
   },
   {
     id: 'review-subscriptions',
-    step: ({ subscriptionsSpotted: n }) => {
+    step: ({ subscriptionsSpotted: n, billsSpotted }) => {
       if (n <= 0) return null;
+      // "Subscriptions" only when every find is one; a rent or a co-pay is a regular payment.
+      const [one, many] =
+        billsSpotted > 0
+          ? ['regular payment', 'regular payments']
+          : ['subscription', 'subscriptions'];
       return {
-        title:
-          n === 1
-            ? 'Review the subscription we spotted'
-            : `Review the ${n} subscriptions we spotted`,
+        title: n === 1 ? `Review the ${one} we spotted` : `Review the ${n} ${many} we spotted`,
         reason:
           n === 1
             ? "It's in your statements but not on Bills yet."

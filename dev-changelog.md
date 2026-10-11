@@ -725,18 +725,20 @@ All notable changes to Token Circles are documented here. The format is based on
 - **The recurring-payment finder** (`frontend/src/features/recurringPayments.ts`):
   `detectSubscriptions` hands it the expenses no catalogue or brand name matched, so a payment is
   proposed once at most. It skips an entry filed under a transfer or account category, or under
-  Transfers (where the bank import files a transfer it could not match), and groups the rest by
+  Transfers (where the bank import files a transfer it could not match), and a cash withdrawal (F2
+  below), and groups the rest by
   payee: the beneficiary, else the description, else the payor, normalised and without digits. A
   payee is proposed when three or more of its charges keep to one amount (`pickAmountCluster`),
   the median gap has a cadence, at least three gaps in four have that cadence, and the last charge
   is at most one and a half periods old. The gaps rule keeps everyday shopping out: a cafe paid one
-  price on random days has a median gap of about a week. Four charges or more are `medium`, three
-  `low`, which the scan leaves unticked and Getting started does not count. A result has
+  price on random days has a median gap of about a week. Four charges or more at a monthly or yearly
+  cadence are `medium`; three, or a weekly or fortnightly cadence, `low`, which the scan leaves
+  unticked and Getting started does not count. A result has
   `matchedVia: 'recurring'`, the payee's name without the words that are numbers, the key
   `recurring:<payee key>`, `alreadyTracked` when a bill's name has that key or the key of the
-  name proposed, and `billType`: `bill`
-  when the category most of its charges are filed under goes by housing, utilities, insurance, debt
-  or childcare (`effectiveKind`), else `subscription`, with that `categoryId`. Named finds are
+  name proposed, and `billType`: `subscription`
+  when the category most of its charges are filed under goes by subscriptions or leisure
+  (`effectiveKind`), else `bill`, with that `categoryId`. Named finds are
   `subscription`, as before. The scan shows a finder row as "Regular payment to {payee}" with no
   brand's look, and adds it as its bill type in its category; the scan and Getting started pass
   the categories to `detectSubscriptions`. What both scans share moved to
@@ -759,6 +761,26 @@ All notable changes to Token Circles are documented here. The format is based on
   a proposal added as a bill and scanned again, for a payee holding digits, one over 60 characters
   and one with an account number) and `orientationFacts.test.ts` (Getting started's step goes once
   the proposal is a bill).
+- **The finder proposes regular bills, not habits** (review F2). On the review's invented years it
+  ticked cash taken out every week or so (41 years in 50), the Saturday bakery (47 in 50), and a
+  monthly payment to a person and a pharmacy co-pay as subscriptions (50 in 50). Now:
+  - a find is `medium` only at a monthly or yearly cadence; weekly and fortnightly finds are `low`,
+    listed and unticked;
+  - an entry whose beneficiary, description or payor says it is a cash withdrawal is skipped
+    (`isCashWithdrawal`: ATM, cash withdrawal, Revolut's "Cash at", Geldautomat, Bargeld..., the
+    "GA NR" of a Sparkasse or DKB withdrawal, Dutch geldautomaat, Bankomat..., isplata gotovine).
+    No adapter fixture holds a withdrawal, so the words come from the banks' own statement texts.
+    The import's categorisation does not change;
+  - a find is a `bill` unless its category's effective kind is subscriptions or leisure, so a
+    payment to a person, a co-pay and a find with no category are bills (`SUBSCRIPTION_KINDS`
+    replaces `BILL_KINDS`);
+  - Getting started's facts gain `billsSpotted`, the counted finds that are bills, and the step
+    says "Review the 3 regular payments we spotted" while there is one, "subscriptions" otherwise.
+- **Tests:** `recurringPaymentsHistories.test.ts` (the review's histories as tests, seeds 1 to 50:
+  shopping, the bakery and the salary never ticked, cash never proposed, the payment to a person,
+  the co-pay, a gym and the rent likely and bills every year), `recurringPayments.test.ts` (weekly
+  and fortnightly guesses, each bank's cash wording, bill or subscription by kind),
+  `orientation.test.ts` and `orientationFacts.test.ts` (the step's words, `billsSpotted`).
 
 ### Achievements
 

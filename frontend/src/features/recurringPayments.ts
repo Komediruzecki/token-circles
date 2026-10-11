@@ -5,15 +5,18 @@
  * `detectSubscriptions` runs it after the named match, on the expenses that match left over, so a
  * payment is found by one of the two at most. Transfers are not payments: an entry filed under a
  * transfer or account category, or under Transfers (where the bank import files a transfer whose
- * other account it could not tell), is skipped.
+ * other account it could not tell), is skipped. So is a cash withdrawal (`isCashWithdrawal`): cash
+ * taken out on a regular day is not a payment to anyone.
  *
  * The rest are grouped by payee: the beneficiary, else the description, normalised and without
  * digits, so reference and card numbers do not split one payee in many. A group is a regular
  * payment when three or more of its charges keep to one amount (`pickAmountCluster`), the median
  * gap between them has a cadence (`cadenceFromGapDays`), at least three gaps in four have that
  * cadence too, and the last charge is at most one and a half periods old. Four or more charges
- * make it likely; three make it a guess, which `worthTracking` leaves unticked and Getting started
- * does not count.
+ * at a monthly or longer cadence make it likely. Three charges, or a weekly or fortnightly cadence,
+ * make it a guess, which `worthTracking` leaves unticked and Getting started does not count: what
+ * is paid every week or two is a habit (the Saturday bakery, the gym class paid at the door) far
+ * more often than a bill.
  *
  * Why the gaps rule: the median alone takes everyday shopping for a regular payment. A cafe paid
  * one price on random days has a median gap of about a week. On 200 invented years of shopping (a
@@ -21,8 +24,9 @@
  * beside a gym and the rent), the median alone proposed 413 such payments as likely; with the
  * rule, 1. It kept every gym and rent the median found, a paused month included.
  *
- * It is a bill when its charges are filed under housing, utilities, insurance, debt or childcare,
- * and a subscription otherwise. Pure, no signals and no fetching.
+ * It is a subscription when its charges are filed under subscriptions or leisure, and a bill
+ * otherwise: a monthly payment to a person, a pharmacy co-pay, the rent. Pure, no signals and no
+ * fetching.
  */
 import { categoryLookup, effectiveKind } from '../../../shared/guidance/kinds'
 import {
@@ -45,13 +49,13 @@ import type {
   ExistingBillLike,
 } from './subscriptionDetection'
 
-/** The kinds whose regular payments are bills: what a home, a loan or a child costs. */
-export const BILL_KINDS: ReadonlySet<Kind> = new Set<Kind>([
-  'housing',
-  'utilities',
-  'insurance',
-  'debt',
-  'childcare',
+/** The kinds whose regular payments are subscriptions. Any other kind, or none, makes a bill. */
+export const SUBSCRIPTION_KINDS: ReadonlySet<Kind> = new Set<Kind>(['subscriptions', 'leisure'])
+
+/** The cadences a likely regular payment can have: a bill comes monthly or less often. */
+const LIKELY_CADENCES: ReadonlySet<DetectedFrequency> = new Set<DetectedFrequency>([
+  'monthly',
+  'yearly',
 ])
 
 /** The fewest charges that make a regular payment, and the fewest that make it likely. */
@@ -130,6 +134,27 @@ export function payeeName(text: string): string {
   return name === '' ? text.trim().slice(0, NAME_MOST) : name
 }
 
+/**
+ * Words that say an entry took cash out, as the banks the import reads write it in a statement's
+ * text: "ATM", "cash withdrawal" and Revolut's "Cash at ...", German "Geldautomat",
+ * "Bargeldauszahlung" and the "GA NR..." of a Sparkasse or DKB withdrawal, Dutch "geldautomaat",
+ * Croatian "bankomat" and "isplata gotovine". Matched on the normalised text, as whole words.
+ */
+const CASH_WITHDRAWAL: readonly RegExp[] = [
+  /\b(atms?|cash withdrawals?|cash at)\b/,
+  /\b(geldautomat(en)?|geldautomaat|bargeld\w*|ga nr\w*)\b/,
+  /\b(bankomat\w*|isplata gotovine|gotovinska isplata)\b/,
+]
+
+/** Whether an entry's text says it is a cash withdrawal: its beneficiary, description or payor. */
+export function isCashWithdrawal(txn: DetectableTransaction): boolean {
+  return [txn.beneficiary, txn.description, txn.payor].some(
+    (text) =>
+      typeof text === 'string' &&
+      CASH_WITHDRAWAL.some((words) => words.test(normalizeMerchantText(text)))
+  )
+}
+
 /** Whether entries filed under `category` move money between accounts instead of paying anyone. */
 function isTransferCategory(category: KindedCategory | undefined): boolean {
   if (category === undefined) return false
@@ -154,7 +179,7 @@ function commonCategory(charges: readonly PayeeCharge[]): number | null {
 function billTypeOf(categoryId: number | null, lookup: CategoryLookup): BillType {
   const category = categoryId === null ? undefined : lookup(categoryId)
   const kind = category === undefined ? null : effectiveKind(category, lookup)
-  return kind !== null && BILL_KINDS.has(kind) ? 'bill' : 'subscription'
+  return kind !== null && SUBSCRIPTION_KINDS.has(kind) ? 'subscription' : 'bill'
 }
 
 /**
@@ -173,6 +198,7 @@ export function findRecurringPayments(
   for (const txn of expenses) {
     const categoryId = Number.isInteger(txn.category_id) ? Number(txn.category_id) : null
     if (categoryId !== null && isTransferCategory(lookup(categoryId))) continue
+    if (isCashWithdrawal(txn)) continue
     const payee = payeeText(txn)
     const key = payeeKey(payee)
     if (key === '') continue
@@ -214,7 +240,7 @@ export function findRecurringPayments(
       amount: Math.round(latest.amount * 100) / 100,
       currency: commonCurrency(run),
       frequency: cadence,
-      confidence: run.length >= RECURRING_LIKELY ? 'medium' : 'low',
+      confidence: run.length >= RECURRING_LIKELY && LIKELY_CADENCES.has(cadence) ? 'medium' : 'low',
       occurrences: run.length,
       firstDate: run[0].date,
       lastDate: latest.date,

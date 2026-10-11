@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { parseDay } from '../chargePatterns'
-import { findRecurringPayments, payeeKey, payeeName } from '../recurringPayments'
+import { findRecurringPayments, isCashWithdrawal, payeeKey, payeeName } from '../recurringPayments'
 import { detectSubscriptions, matchMerchant, worthTracking } from '../subscriptionDetection'
 import type { KindedCategory } from '../../../../shared/guidance/kinds'
 import type { DetectableTransaction } from '../subscriptionDetection'
@@ -26,6 +26,8 @@ const CATEGORIES: KindedCategory[] = [
   { id: 3, name: 'Strom', type: 'expense', kind: null, parent_id: 2 },
   { id: 4, name: 'Sport', type: 'expense', kind: null, parent_id: null },
   { id: 5, name: 'Sonstiges', type: 'expense', kind: null, parent_id: null },
+  { id: 6, name: 'Abos', type: 'expense', kind: 'subscriptions', parent_id: null },
+  { id: 7, name: 'Apotheke', type: 'expense', kind: 'health', parent_id: null },
   // Where the bank import files a transfer whose other account it could not tell.
   { id: 8, name: 'Transfers', type: 'expense', kind: null, parent_id: null },
   { id: 9, name: 'Savings', type: 'account', kind: null, parent_id: null },
@@ -67,7 +69,7 @@ describe('the payees here', () => {
 })
 
 describe('a gym it has no name for', () => {
-  it('at four monthly charges, is a likely regular payment, ticked', () => {
+  it('at four monthly charges, is a likely regular payment, ticked, and filed nowhere a bill', () => {
     const found = detect(
       ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01'].map((day) => paid(GYM, 29.9, day))
     )
@@ -87,7 +89,7 @@ describe('a gym it has no name for', () => {
       categoryHints: [],
       alreadyTracked: false,
       matchedVia: 'recurring',
-      billType: 'subscription',
+      billType: 'bill',
     })
     expect(gym.sampleDescriptions).toEqual([
       'SEPA-LASTSCHRIFT REF 20260501',
@@ -108,11 +110,15 @@ describe('a gym it has no name for', () => {
     expect(detect(['2026-06-01', '2026-07-01'].map((d) => paid(GYM, 29.9, d)))).toEqual([])
   })
 
-  it('is found weekly too', () => {
-    const found = detect([2, 9, 16, 23].map((days) => paid(GYM, 12, daysAgo(days))))
-    expect(found.map((f) => [f.name, f.frequency, f.confidence])).toEqual([
-      [GYM, 'weekly', 'medium'],
+  it('is found weekly or fortnightly too, but only as a guess, left unticked', () => {
+    // Paid every week or two is a habit far more often than a bill: listed, not ticked.
+    const weekly = detect([2, 9, 16, 23, 30, 37].map((days) => paid(GYM, 12, daysAgo(days))))
+    expect(weekly.map((f) => [f.name, f.frequency, f.occurrences, f.confidence])).toEqual([
+      [GYM, 'weekly', 6, 'low'],
     ])
+    expect(worthTracking(weekly[0])).toBe(false)
+    const fortnightly = detect([3, 17, 31, 45, 59].map((days) => paid(GYM, 24, daysAgo(days))))
+    expect(fortnightly.map((f) => [f.frequency, f.confidence])).toEqual([['biweekly', 'low']])
   })
 
   it('keeps going through a paused month', () => {
@@ -168,6 +174,37 @@ describe('amounts', () => {
     // A coffee at one price: the median gap is a week, but most gaps are not.
     const days = [2, 6, 13, 23, 26, 32, 40, 45, 57, 61, 70, 73]
     expect(detect(days.map((d) => paid(CAFE, 3.6, daysAgo(d))))).toEqual([])
+  })
+})
+
+describe('cash withdrawals', () => {
+  const monthly = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01']
+
+  it('are never proposed, however the bank writes them', () => {
+    // How the banks the import reads write a withdrawal: invented terminals and places.
+    const wordings: Partial<DetectableTransaction>[] = [
+      { beneficiary: '', description: 'ATM WITHDRAWAL 4711 BEISPIELSTADT' },
+      { beneficiary: '', description: 'Cash withdrawal at Beispielbank' },
+      { beneficiary: '', description: 'Cash at Beispielbank Mitte' },
+      { beneficiary: 'Sparkasse Beispielstadt', description: 'GA NR00004711 BLZ00000000 0' },
+      { beneficiary: '', description: 'BARGELDAUSZAHLUNG Beispielstadt' },
+      { beneficiary: '', description: 'GELDAUTOMAT Beispielstadt' },
+      { beneficiary: '', description: 'Geldautomaat Voorbeeldstad' },
+      { beneficiary: '', description: 'ISPLATA GOTOVINE NA BANKOMATU PRIMJER' },
+      { beneficiary: 'Bankomat Primjer', description: '' },
+      { beneficiary: 'Beispielbank', description: 'Kartenzahlung', payor: 'ATM Beispielbank' },
+    ]
+    for (const wording of wordings) {
+      const found = detect(monthly.map((d) => paid('', 200, d, wording)))
+      expect(found, JSON.stringify(wording)).toEqual([])
+    }
+  })
+
+  it('are told by the word, not by the amount or the day', () => {
+    // The same 200 on the same day each month, to a payee the text does not call cash.
+    const found = detect(monthly.map((d) => paid('Beispielbank Mitte', 200, d)))
+    expect(found.map((f) => [f.name, f.confidence])).toEqual([['Beispielbank Mitte', 'medium']])
+    expect(isCashWithdrawal(paid('Patmos Reisen', 200, '2026-07-01'))).toBe(false)
   })
 })
 
@@ -228,11 +265,19 @@ describe('a bill or a subscription', () => {
     expect(power).toMatchObject({ billType: 'bill', categoryId: 3 })
   })
 
-  it('is a subscription for any other kind, and for no category at all', () => {
+  it('is a subscription filed under leisure or subscriptions, and a bill under anything else', () => {
+    // Sport goes by leisure, the kind its name gives; Abos is filed under Subscriptions.
     const [gym] = detect(monthly.map((d) => paid(GYM, 29.9, d, { category_id: 4 })))
     expect(gym).toMatchObject({ billType: 'subscription', categoryId: 4 })
+    const [abo] = detect(monthly.map((d) => paid(GYM, 29.9, d, { category_id: 6 })))
+    expect(abo).toMatchObject({ billType: 'subscription', categoryId: 6 })
+    // Health, a kind with no name for it, and no category at all: a bill.
+    const [copay] = detect(monthly.map((d) => paid(GYM, 10, d, { category_id: 7 })))
+    expect(copay).toMatchObject({ billType: 'bill', categoryId: 7 })
+    const [other] = detect(monthly.map((d) => paid(GYM, 29.9, d, { category_id: 5 })))
+    expect(other).toMatchObject({ billType: 'bill', categoryId: 5 })
     const [loose] = detect(monthly.map((d) => paid(GYM, 29.9, d)))
-    expect(loose.billType).toBe('subscription')
+    expect(loose.billType).toBe('bill')
     expect(loose).not.toHaveProperty('categoryId')
   })
 
@@ -243,9 +288,9 @@ describe('a bill or a subscription', () => {
   })
 
   it('of two categories as common, takes the later charges', () => {
-    const ids = [1, 1, 5, 5]
+    const ids = [1, 1, 4, 4]
     const [rent] = detect(monthly.map((d, i) => paid(LANDLORD, 850, d, { category_id: ids[i] })))
-    expect(rent).toMatchObject({ billType: 'subscription', categoryId: 5 })
+    expect(rent).toMatchObject({ billType: 'subscription', categoryId: 4 })
   })
 })
 

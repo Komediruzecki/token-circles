@@ -48,11 +48,12 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
   const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, {
     today,
     categories: source.categories,
-  })
+  }).filter(worthTracking)
   return {
     today,
     trackedMonthsInYear: trackedMonthsInYearWindow(source.evaluation.trackedMonths, today),
-    subscriptionsSpotted: spotted.filter(worthTracking).length,
+    subscriptionsSpotted: spotted.length,
+    billsSpotted: spotted.filter((found) => found.billType === 'bill').length,
     entries: transactions.filter((t) => t.type !== 'transfer').length,
     uncategorised: uncategorisedIn(transactions),
     topUnbudgeted: top !== null && name !== undefined ? { categoryId: top.categoryId, name } : null,
