@@ -10,7 +10,11 @@
  * categories exist, and a first print at the end.
  */
 import { addCalendarMonths } from './calendarMonths';
-import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_ON_FILE_MONTHS } from './trackedMonths';
+import {
+  TRACKED_MONTH_MIN_TRANSACTIONS,
+  YEAR_ON_FILE_MONTHS,
+  YEAR_WINDOW_MONTHS,
+} from './trackedMonths';
 
 export type OrientationStepId =
   | 'import-year'
@@ -77,8 +81,6 @@ export function lastFullMonth(today: string): string {
   return addCalendarMonths(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
 }
 
-const count = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
-
 /** More than one entry in ten without a category. */
 const mostlyUnsorted = (uncategorised: number, entries: number): boolean =>
   entries > 0 && uncategorised * 10 > entries;
@@ -92,18 +94,21 @@ interface Rule {
 const RULES: Rule[] = [
   {
     id: 'import-year',
+    // A year on file (shared/trackedMonths.ts), and the reason names its window: the badges and
+    // the streak count months in a row, so "tracked months" alone would read as their number.
     step: ({ trackedMonthsInYear: n }) => {
       if (n >= YEAR_ON_FILE_MONTHS) return null;
       const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
+      const window = `the last ${YEAR_WINDOW_MONTHS} months`;
       return n === 0
         ? {
             title: 'Import a year of statements',
-            reason: `No month from the past year is tracked yet. ${counts}`,
+            reason: `None of ${window} is tracked yet. ${counts}`,
             link: { hash: '#import', label: 'Import' },
           }
         : {
             title: 'Import the rest of your year',
-            reason: `You have ${count(n, 'tracked month', 'tracked months')} from the past year. ${counts}`,
+            reason: `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
             link: { hash: '#import', label: 'Import' },
           };
     },

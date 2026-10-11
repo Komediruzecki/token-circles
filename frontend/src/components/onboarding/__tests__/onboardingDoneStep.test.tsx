@@ -116,8 +116,7 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
   expect(steps()).toEqual([
     {
       id: 'import-year',
-      reason:
-        'You have 4 tracked months from the past year. A month counts once it holds 3 entries.',
+      reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
     },
     { id: 'review-subscriptions', reason: "It's in your statements but not on Bills yet." },
     {

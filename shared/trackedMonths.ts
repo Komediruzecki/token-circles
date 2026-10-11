@@ -31,9 +31,11 @@ export function trackedMonthsOf(dates: Iterable<string>): string[] {
 }
 
 /**
- * A year on file: this many tracked months among the last YEAR_WINDOW_MONTHS calendar months.
- * The window is this month and the twelve before it, because this month is still under way: a
- * year of statements imported up to last month is a year on file.
+ * A year on file: this many tracked months among the last YEAR_WINDOW_MONTHS calendar months
+ * (trackedMonthsInYearWindow). The window is this month and the twelve before it, because this
+ * month is still under way: a year of statements imported up to last month is a year on file.
+ * Getting started's import-year step reads it. The "A year" badge is a different rule, twelve
+ * tracked months in a row (achievements/evaluate.ts), and each surface names the one it counts.
  */
 export const YEAR_ON_FILE_MONTHS = 12;
 export const YEAR_WINDOW_MONTHS = 13;
@@ -45,9 +47,4 @@ export function trackedMonthsInYearWindow(trackedMonths: Iterable<string>, today
   let n = 0;
   for (const month of new Set(trackedMonths)) if (month >= first && month <= last) n++;
   return n;
-}
-
-/** Whether a year is on file: YEAR_ON_FILE_MONTHS tracked months in the year window. */
-export function hasYearOnFile(trackedMonths: Iterable<string>, today: string): boolean {
-  return trackedMonthsInYearWindow(trackedMonths, today) >= YEAR_ON_FILE_MONTHS;
 }

@@ -44,7 +44,7 @@ describe('BadgeRail', () => {
     expect(items).toHaveLength(2)
     expect(items[0].textContent).toContain('One month')
     expect(items[1].textContent).toContain('First entry')
-    expect(c.textContent).toContain('2 months tracked')
+    expect(c.textContent).toContain('2 months in a row')
     const list = c.querySelector('ul[aria-label]') as HTMLElement
     expect(list.getAttribute('tabindex')).toBe('0')
     ;(c.querySelector('[data-test-id="badges-see-all"]') as HTMLButtonElement).click()
@@ -86,7 +86,7 @@ describe('BadgeRail', () => {
 
   it('pluralises the streak', () => {
     expect(streakLabel(0)).toBe('Start a streak')
-    expect(streakLabel(1)).toBe('1 month tracked')
-    expect(streakLabel(9)).toBe('9 months tracked')
+    expect(streakLabel(1)).toBe('1 month in a row')
+    expect(streakLabel(9)).toBe('9 months in a row')
   })
 })

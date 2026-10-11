@@ -157,7 +157,7 @@ export default function Progress(): JSX.Element {
         <div class={styles.recordHead}>
           <div>
             <h2 id="record-title" class={styles.streak} data-test-id="progress-streak">
-              {streak() === 1 ? '1 month tracked' : `${streak()} months tracked`}
+              {streak() === 1 ? '1 month in a row' : `${streak()} months in a row`}
             </h2>
             <p class={styles.hint}>
               A month counts once it holds three entries. The current one may still be in progress.

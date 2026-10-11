@@ -94,7 +94,7 @@ describe('Progress page', () => {
   it('shows the record over twelve months, the badges and the year in review', () => {
     const c = mount(() => <Progress />)
     expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
-      '2 months tracked'
+      '2 months in a row'
     )
     expect(c.querySelectorAll('[data-month-cell]')).toHaveLength(12)
     expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(1)

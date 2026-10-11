@@ -37,7 +37,7 @@ const STATEMENT = [
 const AFTER_IMPORT = [
   {
     title: 'Import the rest of your year',
-    reason: 'You have 4 tracked months from the past year. A month counts once it holds 3 entries.',
+    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
     href: '#import',
   },
   {
@@ -54,7 +54,7 @@ const AFTER_IMPORT = [
 
 const NOTHING_YET = {
   title: 'Import a year of statements',
-  reason: 'No month from the past year is tracked yet. A month counts once it holds 3 entries.',
+  reason: 'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.',
   href: '#import',
 }
 
@@ -147,7 +147,7 @@ test.describe('Getting started @smoke', () => {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
     // The badges have been worked out from the import, so the card would be showing by now.
-    await expect(page.getByTestId('badge-rail')).toContainText('4 months tracked', {
+    await expect(page.getByTestId('badge-rail')).toContainText('4 months in a row', {
       timeout: 30_000,
     })
     await expect(page.getByTestId('getting-started')).toHaveCount(0)
@@ -241,7 +241,7 @@ test.describe('Getting started @smoke', () => {
           timeout: 30_000,
         })
         await expect(other.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
-        await expect(other.getByTestId('badge-rail')).toContainText('4 months tracked', {
+        await expect(other.getByTestId('badge-rail')).toContainText('4 months in a row', {
           timeout: 30_000,
         })
         await expect(other.getByTestId('getting-started')).toHaveCount(0)

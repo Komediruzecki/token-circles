@@ -469,10 +469,22 @@ All notable changes to Token Circles are documented here. The format is based on
   is tracked with `TRACKED_MONTH_MIN_TRANSACTIONS` (3) entries of any type dated inside it
   (`isTrackedMonth`, `trackedMonthsOf`). A year on file is `YEAR_ON_FILE_MONTHS` (12) tracked months
   among the `YEAR_WINDOW_MONTHS` (13) calendar months that end with this one
-  (`trackedMonthsInYearWindow`, `hasYearOnFile`), so a year imported up to last month counts. The
+  (`trackedMonthsInYearWindow`), so a year imported up to last month counts. The
   badges (`evaluate.ts` calls `trackedMonthsOf`), the year in review, the streak card and Getting
   started all read it, and `achievements/definitions.ts` no longer exports the constant. The "A
   year" badge still needs twelve tracked months in a row; a year on file allows one month missing.
+- **Each count of months names what it counts.** Dashboard had three numbers for the same months:
+  the badge rail's streak (tracked months in a row, up to this month or last), the "A year" badge
+  (twelve in a row, at any time) and Getting started's import-year step (tracked months among the
+  last 13, gaps allowed). The rule for a tracked month stays one (3 or more entries). The step's
+  reason now names its window, "8 of the last 13 months are tracked." or "None of the last 13
+  months is tracked yet.", where it said "You have 8 tracked months from the past year." The rail
+  (`streakLabel` in `components/BadgeRail.tsx`) and the Progress record say "4 months in a row"
+  (one: "1 month in a row") where they said "4 months tracked"; the badge's rule already reads
+  "Twelve tracked months in a row." `hasYearOnFile` had no caller and is gone.
+  `core/__tests__/monthCountsOnDashboard.test.ts` holds what each surface says for the same entries
+  in three cases (eight months with a gap, a whole year in 2024 and nothing since, twelve of the
+  last thirteen with a gap).
 - **Getting started rules** (`shared/orientation.ts`). `orientationSteps(facts)` returns the steps
   whose rule applies, in rule order (`import-year`, `review-subscriptions`, `sort-uncategorised`,
   `budget-top-category`, `heavy-month`, `loan-payoff`), and `nextSteps` the first

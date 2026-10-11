@@ -5,7 +5,6 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  hasYearOnFile,
   isTrackedMonth,
   TRACKED_MONTH_MIN_TRANSACTIONS,
   trackedMonthsInYearWindow,
@@ -71,24 +70,20 @@ describe('a year on file', () => {
     // October 2025 to September 2026: a year imported up to last month.
     const lastYear = monthsFrom('2025-10', '2026-09')
     expect(trackedMonthsInYearWindow(lastYear, '2026-10-01')).toBe(12)
-    expect(hasYearOnFile(lastYear, '2026-10-01')).toBe(true)
     // A month later, October 2025 has left the window.
     expect(trackedMonthsInYearWindow(lastYear, '2026-11-30')).toBe(11)
-    expect(hasYearOnFile(lastYear, '2026-11-30')).toBe(false)
   })
 
   it('counts this month once it is tracked, and allows one month missing', () => {
     // November 2025 to October 2026, with March missing: twelve of the thirteen.
     const withGap = monthsFrom('2025-10', '2026-10').filter((m) => m !== '2026-03')
     expect(trackedMonthsInYearWindow(withGap, '2026-10-11')).toBe(12)
-    expect(hasYearOnFile(withGap, '2026-10-11')).toBe(true)
-    expect(hasYearOnFile(withGap.slice(1), '2026-10-11')).toBe(false)
+    expect(trackedMonthsInYearWindow(withGap.slice(1), '2026-10-11')).toBe(11)
   })
 
   it('counts nothing outside the window, and a month once', () => {
     const old = monthsFrom('2023-01', '2024-12')
     expect(trackedMonthsInYearWindow(old, '2026-10-11')).toBe(0)
-    expect(hasYearOnFile(old, '2026-10-11')).toBe(false)
     expect(
       trackedMonthsInYearWindow(['2025-09', '2026-11', '2026-10', '2026-10'], '2026-10-11')
     ).toBe(1)

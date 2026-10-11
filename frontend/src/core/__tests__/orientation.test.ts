@@ -50,18 +50,19 @@ describe('with nothing to do', () => {
 })
 
 describe('import-year', () => {
-  it('applies until twelve months of the past year are tracked, and says how many are', () => {
+  it('applies until twelve of the last thirteen months are tracked, and names that window', () => {
     expect(only({ trackedMonthsInYear: 4 })).toEqual({
       id: 'import-year',
       title: 'Import the rest of your year',
-      reason:
-        'You have 4 tracked months from the past year. A month counts once it holds 3 entries.',
+      reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
       link: { hash: '#import', label: 'Import' },
     })
     expect(only({ trackedMonthsInYear: 1 }).reason).toBe(
-      'You have 1 tracked month from the past year. A month counts once it holds 3 entries.'
+      '1 of the last 13 months is tracked. A month counts once it holds 3 entries.'
     )
-    expect(only({ trackedMonthsInYear: 11 }).reason).toMatch(/^You have 11 tracked months/)
+    expect(only({ trackedMonthsInYear: 11 }).reason).toMatch(
+      /^11 of the last 13 months are tracked\./
+    )
     expect(orientationSteps(facts({ trackedMonthsInYear: 12 }))).toEqual([])
   })
 
@@ -69,7 +70,7 @@ describe('import-year', () => {
     const step = only({ trackedMonthsInYear: 0 })
     expect(step.title).toBe('Import a year of statements')
     expect(step.reason).toBe(
-      'No month from the past year is tracked yet. A month counts once it holds 3 entries.'
+      'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.'
     )
   })
 })
