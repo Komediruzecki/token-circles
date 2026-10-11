@@ -160,6 +160,21 @@ describe('what a write may store', () => {
   });
 });
 
+describe('the Getting started card', () => {
+  it('stays hidden: a later write of hidden false keeps it hidden', async () => {
+    expect(await (await write(mine, 'getting_started', { hidden: false })).json()).toEqual({
+      getting_started: { hidden: false },
+    });
+    await write(mine, 'getting_started', { hidden: true });
+
+    // A tab that read the account before the card was hidden makes the record as its wizard ends.
+    const late = await write(mine, 'getting_started', { hidden: false });
+    expect(late.status).toBe(200);
+    expect(await late.json()).toEqual({ getting_started: { hidden: true } });
+    expect(await stored(ME)).toEqual([{ key: 'getting_started', value: '{"hidden":true}' }]);
+  });
+});
+
 describe('the onboarding record', () => {
   const onboarding = async (cookie: string) =>
     ((await (await read(cookie)).json()) as { onboarding: Onboarding | null }).onboarding;

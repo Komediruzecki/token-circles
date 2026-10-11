@@ -404,6 +404,36 @@ describe('the Getting started card', () => {
     expect(cardPuts()).toEqual([])
   })
 
+  it('stays hidden when a tab that read the account before it was hidden leaves its wizard', async () => {
+    // A new account: the wizard opens on the laptop, which read the state as it started.
+    worker.records.set(5, {
+      step: 'welcome',
+      started_at: '2026-10-11 10:00:00',
+      finished_at: null,
+      outcome: null,
+    })
+    signIn(5)
+    await maybeOfferOnboarding()
+    expect(onboardingOpen()).toBe(true)
+
+    // Meanwhile on the phone: the wizard finished, and the Getting started card hidden.
+    worker.records.set(5, {
+      step: 'done',
+      started_at: '2026-10-11 10:00:00',
+      finished_at: '2026-10-11 10:03:00',
+      outcome: 'completed',
+    })
+    worker.gettingStarted.set(5, { hidden: true })
+
+    // Back on the laptop: Skip. Its copy says there is no card, so it asks for one.
+    skipOnboarding()
+    await settled()
+
+    expect(cardPuts()).toEqual(['PUT /api/account/state/getting_started {"hidden":false}'])
+    expect(worker.gettingStarted.get(5)).toEqual({ hidden: true })
+    expect(gettingStartedRecord()).toEqual({ hidden: true })
+  })
+
   it('is not shown again by a wizard relaunched over a finished record', async () => {
     worker.records.set(5, {
       step: 'done',

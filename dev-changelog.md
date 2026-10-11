@@ -485,7 +485,10 @@ All notable changes to Token Circles are documented here. The format is based on
   in, `finance_getting_started:local` in local-first. `onboardingStore`'s `decide` makes it
   `{ hidden: false }` on the first finish or skip only: adopting an older decision, a wizard
   relaunched over a finished record, and (signed in) an account whose state could not be read make
-  none, and an existing record is left as it is. Hide writes `{ hidden: true }`.
+  none. Hide writes `{ hidden: true }`, and hidden is for good: the Worker stores `{ hidden: false }`
+  over a stored `true` as `true` (`checkUserStateWrite`), so a tab that read the account before
+  another device hid the card cannot bring it back when its wizard ends. Local-first writes
+  `{ hidden: false }` only when this browser holds no record, read in the same call.
 - **Links that open something on a page.** `takeHashFlag(page, flag)` (`core/hashRoute.ts`) answers
   `?flag=1` once and takes it off the address with `history.replaceState`. `#bills?scan=1` opens the
   subscription scan on the Subscriptions tab. `#transactions?uncategorised=1` lists the active

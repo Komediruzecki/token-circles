@@ -14,7 +14,9 @@
  *   send `existing`: only migration 0035 writes it.
  * - `tours`: the list sent replaces the stored one (Reset All Tours sends an empty list). Each id
  *   is a short lowercase slug, kept once, in the order sent.
- * - `getting_started`: `hidden` sent replaces the stored one.
+ * - `getting_started`: hidden is for good. `hidden: true` is stored; `hidden: false` over a stored
+ *   `true` keeps `true`, so a tab that read the record before another device hid the card (the
+ *   wizard it leaves makes the record) cannot bring the card back.
  *
  * A stored value is read leniently, because another build may have written it: a newer one that
  * added a step or a tour, or an older one after a rollback. An onboarding step this build does not
@@ -226,8 +228,10 @@ export function checkUserStateWrite<K extends UserStateKey>(
     }
     case 'getting_started': {
       const card = readGettingStartedRecord(body);
+      const hidden =
+        card !== null && (card.hidden || (current as GettingStartedRecord | null)?.hidden === true);
       checked = card
-        ? { ok: true, value: card }
+        ? { ok: true, value: { hidden } }
         : { ok: false, fields: { hidden: USER_STATE_MESSAGES.hidden } };
       break;
     }

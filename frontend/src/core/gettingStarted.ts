@@ -71,7 +71,8 @@ export function gettingStartedSettled(): Promise<unknown> {
 /**
  * Make the record, with the card shown, for `of` when it has none: on the wizard's first finish or
  * skip. Signed in, only when the account's state is known, so a card hidden on another device is
- * never shown again on the strength of a read that failed.
+ * never shown again on the strength of a read that failed; and the Worker keeps a hidden card
+ * hidden, for a copy read before another device hid it (shared/accountState.ts).
  */
 export function beginGettingStarted(of: string | null): void {
   if (isServerAccount(of)) {
