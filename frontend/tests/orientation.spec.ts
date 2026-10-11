@@ -138,7 +138,10 @@ test.describe('Getting started @smoke', () => {
     await scan.getByRole('button', { name: 'Close' }).click()
 
     await openDashboard(page)
-    await page.getByTestId('getting-started-hide').click()
+    // Hide is for good: a full touch target, not a chip.
+    const hide = page.getByTestId('getting-started-hide')
+    expect((await hide.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44)
+    await hide.click()
     await expect(page.getByTestId('getting-started')).toHaveCount(0)
     expect(await page.evaluate(() => localStorage.getItem('finance_getting_started:local'))).toBe(
       '{"hidden":true}'

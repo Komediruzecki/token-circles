@@ -81,9 +81,13 @@ export function lastFullMonth(today: string): string {
   return addCalendarMonths(`${today.slice(0, 7)}-01`, -1).slice(0, 7);
 }
 
-/** More than one entry in ten without a category. */
-const mostlyUnsorted = (uncategorised: number, entries: number): boolean =>
-  entries > 0 && uncategorised * 10 > entries;
+/**
+ * The share of entries without a category, as the whole percent the step shows. The step applies
+ * above 10, read from this same number, so its reason never says "10%" for a share that counts as
+ * more than one in ten.
+ */
+const unsortedPercent = (uncategorised: number, entries: number): number =>
+  entries > 0 ? Math.round((uncategorised * 100) / entries) : 0;
 
 interface Rule {
   id: OrientationStepId;
@@ -133,8 +137,8 @@ const RULES: Rule[] = [
   {
     id: 'sort-uncategorised',
     step: ({ uncategorised: n, entries }) => {
-      if (!mostlyUnsorted(n, entries)) return null;
-      const share = Math.round((n * 100) / entries);
+      const share = unsortedPercent(n, entries);
+      if (share <= 10) return null;
       return {
         title:
           n === 1

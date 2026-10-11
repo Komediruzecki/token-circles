@@ -520,6 +520,13 @@ All notable changes to Token Circles are documented here. The format is based on
   tag filters, shows reconciled entries, and sets period All and page 1, so the list holds the
   entries the step counted. A filter left from earlier used to narrow it, and a category filter
   emptied it.
+- **Hide is a full touch target, and the unsorted share is one number.** The card's Hide is styled
+  as the app's secondary card actions (Progress's advice links: a pill with the border colour and
+  body text) and is at least 44 px tall; `orientation.spec.ts` measures it. `sort-uncategorised`
+  rounds the share once (`unsortedPercent`) and applies above 10 of that number, so 10.3% (shown
+  as 10%) no longer counts as more than one in ten. The comments that still described the
+  wizard's pristine-profile check for signed-in accounts (`App.tsx`, `OnboardingWizard.tsx`) say
+  what decides it now.
 - **E2E:** `tests/orientation.spec.ts` (three `@smoke` cases in both modes) pastes a generated
   statement on Import and checks the steps and reasons on the card and the done step. The
   own-account helpers of `onboarding-server.spec.ts` moved to `tests/own-account.ts`.

@@ -111,6 +111,12 @@ describe('sort-uncategorised', () => {
     // Counts that cannot both be true still give no share of nothing.
     expect(orientationSteps(facts({ uncategorised: 3, entries: 0 }))).toEqual([])
   })
+
+  it('decides on the percent it shows', () => {
+    // 10.3% shows as 10%, so it is not more than one in ten; 10.6% shows as 11%, and is.
+    expect(orientationSteps(facts({ uncategorised: 103, entries: 1000 }))).toEqual([])
+    expect(only({ uncategorised: 106, entries: 1000 }).reason).toMatch(/^That's 11% of/)
+  })
 })
 
 describe('budget-top-category', () => {

@@ -6,8 +6,9 @@
  * data (the real import flow, embedded) → detected subscriptions → orbit
  * complete. Every step can be skipped (with a confirm where data would be
  * lost), so nobody is ever stuck — and the whole thing can be relaunched from
- * the tour menu. Auto-opens via `maybeOfferOnboarding()` for pristine
- * profiles only.
+ * the tour menu. Auto-opens via `maybeOfferOnboarding()`: signed in, for an
+ * account whose setup record is not finished, at the step it reached;
+ * local-first, for a pristine workspace (core/onboardingStore.ts).
  */
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js'
 import { refreshAchievements } from '../../core/achievementsStore'

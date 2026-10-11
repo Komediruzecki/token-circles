@@ -28,16 +28,19 @@
   color: var(--text-secondary);
 }
 
+/* Styled as the app's secondary card actions (Progress's advice links), and at least 44 px tall:
+   Hide is for good, so it is a full touch target rather than a small chip beside the heading. */
 .hide {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex: none;
-  padding: 4px 10px;
+  min-height: 44px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text);
   font-size: 12px;
   cursor: pointer;
 }
