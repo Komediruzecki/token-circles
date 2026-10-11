@@ -31,6 +31,7 @@
  * Handles transaction listing, creation, and management with filtering, sorting, and pagination
  */
 import {
+  batch,
   createEffect,
   createMemo,
   createSignal,
@@ -1198,14 +1199,24 @@ export default function Transactions() {
   /**
    * Getting started's step for entries with no category links here as
    * `#transactions?uncategorised=1`. The list then shows what the step counted, from all time,
-   * until "Show every entry" in the note above it. Pages stay mounted once visited, so a later
-   * link arrives as a hashchange.
+   * until "Show every entry" in the note above it: every other filter is cleared (type, search,
+   * category, account, tag, and reconciled entries hidden), or a filter left from earlier would
+   * narrow the list below the step's count, a category filter down to nothing. Pages stay mounted
+   * once visited, so a later link arrives as a hashchange.
    */
   const showUncategorisedFromLink = () => {
     if (!takeHashFlag('transactions', 'uncategorised')) return
-    setUncategorisedOnly(true)
-    setPeriod(fromPill('all'))
-    setCurrentPage(1)
+    batch(() => {
+      setFilterType('all')
+      setSearchTerm('')
+      setSelectedCategories([])
+      setSelectedAccountIds([])
+      setSelectedTags([])
+      setShowReconciled(true)
+      setUncategorisedOnly(true)
+      setPeriod(fromPill('all'))
+      setCurrentPage(1)
+    })
   }
   onMount(showUncategorisedFromLink)
   window.addEventListener('hashchange', showUncategorisedFromLink)

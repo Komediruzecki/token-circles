@@ -1,7 +1,8 @@
 /**
  * Getting started's step for entries with no category links to `#transactions?uncategorised=1`.
  * The page then lists what the step counted: the active profile's entries with no category,
- * transfers aside, from all time. A note above the list says so, with the way back to every entry.
+ * transfers aside, from all time, whatever filters the list had before. A note above the list
+ * says so, with the way back to every entry.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -35,9 +36,14 @@ const tx = (id: number, description: string, over: Partial<Transaction> = {}): T
 
 const serverTransactions: Transaction[] = [
   // Two years back: outside any month the period bar was on.
-  tx(1, 'Old market', { date: '2024-03-04' }),
+  tx(1, 'Old market', { date: '2024-03-04', reconciled: true }),
   tx(2, 'Refund', { type: 'income' }),
-  tx(3, 'Groceries', { category_id: 7 as never, category_name: 'Food' }),
+  tx(3, 'Groceries', {
+    category_id: 7 as never,
+    category_name: 'Food',
+    account_id: 3 as never,
+    tags: [{ id: 9, name: 'Trip', color: '#336699' }] as never,
+  }),
   tx(4, 'To savings', { type: 'transfer' }),
   // Another profile's, shown with both ticked: not what the step counted.
   tx(5, 'Their lunch', { profile_id: 2 as never }),
@@ -47,9 +53,9 @@ vi.mock('../../core/api', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   api: {
     getTransactions: vi.fn(async () => serverTransactions),
-    getCategories: vi.fn(async () => []),
-    getTags: vi.fn(async () => []),
-    getAccounts: vi.fn(async () => []),
+    getCategories: vi.fn(async () => [{ id: 7, name: 'Food', type: 'expense', profile_id: 1 }]),
+    getTags: vi.fn(async () => [{ id: 9, name: 'Trip', color: '#336699', profile_id: 1 }]),
+    getAccounts: vi.fn(async () => [{ id: 3, name: 'Main', profile_id: 1 }]),
   },
 }))
 
@@ -93,10 +99,13 @@ async function mountTransactions() {
   return host
 }
 
+/** The description of each row on screen, without the tags shown beside it. */
 const shown = () =>
   Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="transactions-row"]')).map(
     (row) =>
-      row.querySelector('[data-test-id="transactions-cell-description"]')?.textContent?.trim() ?? ''
+      row
+        .querySelector('[data-test-id="transactions-cell-description"] > div')
+        ?.firstChild?.textContent?.trim() ?? ''
   )
 
 const note = () => host.querySelector('[data-test-id="uncategorised-note"]')
@@ -134,5 +143,30 @@ describe('arriving from Getting started', () => {
     await flush()
 
     expect(shown().sort()).toEqual(['Old market', 'Refund'])
+  })
+
+  it('clears the filters the list had, so it shows the entries the step counted', async () => {
+    // Filters from an earlier visit: a category, an account and a tag from a link, a type, a
+    // search, and reconciled entries hidden.
+    history.replaceState(null, '', '#transactions?category=Food&account=3&tag=9')
+    await mountTransactions()
+    host.querySelector<HTMLButtonElement>('[data-test-id="transactions-type-expense"]')!.click()
+    const search = host.querySelector<HTMLInputElement>('[data-test-id="transactions-search"]')!
+    search.value = 'Gro'
+    search.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    host.querySelector<HTMLButtonElement>('button[title="Hide reconciled"]')!.click()
+    await flush()
+    expect(shown()).toEqual(['Groceries'])
+
+    history.replaceState(null, '', '#transactions?uncategorised=1')
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    await flush()
+
+    expect(shown().sort()).toEqual(['Old market', 'Refund'])
+    expect(note()?.textContent).toContain('Showing the 2 entries without a category.')
+    expect(search.value).toBe('')
+    expect(host.querySelector('[data-test-id="transactions-type-all"]')?.className ?? '').toMatch(
+      /typeBtnActive/i
+    )
   })
 })

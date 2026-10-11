@@ -515,6 +515,11 @@ All notable changes to Token Circles are documented here. The format is based on
   profile's entries with no category, transfers aside, from all time (the rows Auto Categorize
   offers), under a note with "Show every entry". The heavy-month step links to
   `#transactions?period=YYYY-MM`, because Analytics shows a year at a time.
+- **The uncategorised link clears the list's other filters.** Following
+  `#transactions?uncategorised=1` sets type All, clears the search and the category, account and
+  tag filters, shows reconciled entries, and sets period All and page 1, so the list holds the
+  entries the step counted. A filter left from earlier used to narrow it, and a category filter
+  emptied it.
 - **E2E:** `tests/orientation.spec.ts` (three `@smoke` cases in both modes) pastes a generated
   statement on Import and checks the steps and reasons on the card and the done step. The
   own-account helpers of `onboarding-server.spec.ts` moved to `tests/own-account.ts`.
