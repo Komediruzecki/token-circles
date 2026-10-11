@@ -155,13 +155,67 @@ export function editDistance(a: string, b: string): number {
   return prev[n]
 }
 
+/** Two rows of the distance table, reused by every call (grown when a longer word arrives). */
+let rowA = new Int32Array(64)
+let rowB = new Int32Array(64)
+
+/**
+ * Whether `a` and `b` are at most `max` edits apart: editDistance(a, b) <= max, without finishing
+ * the table once every cell in a row is already over `max` (a row's minimum never falls later),
+ * and without allocating a row per call.
+ */
+export function withinEditDistance(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false
+  if (a === b) return true
+  const n = b.length
+  if (rowA.length <= n) {
+    rowA = new Int32Array(n + 1)
+    rowB = new Int32Array(n + 1)
+  }
+  let prev = rowA
+  let cur = rowB
+  for (let j = 0; j <= n; j++) prev[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i
+    let rowMin = i
+    const ca = a.charCodeAt(i - 1)
+    for (let j = 1; j <= n; j++) {
+      const cost = ca === b.charCodeAt(j - 1) ? 0 : 1
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+      cur[j] = v
+      if (v < rowMin) rowMin = v
+    }
+    if (rowMin > max) return false
+    const swap = prev
+    prev = cur
+    cur = swap
+  }
+  return prev[n] <= max
+}
+
 /** Whole-token match with a typo budget scaled to the keyword length. */
 function tokenMatches(token: string, keyword: string): boolean {
   // eslint-disable-next-line security/detect-possible-timing-attacks -- merchant text vs catalog keyword; nothing secret
   if (token === keyword) return true
-  if (keyword.length >= 8) return editDistance(token, keyword) <= 2
-  if (keyword.length >= 5) return editDistance(token, keyword) <= 1
-  return false
+  const budget = keyword.length >= 8 ? 2 : keyword.length >= 5 ? 1 : 0
+  return budget > 0 && withinEditDistance(token, keyword, budget)
+}
+
+/**
+ * A keyword as matching reads it: normalised, and split into tokens. Every catalogue name, alias
+ * and brand keyword is prepared once, when the module loads (MERCHANT_KEYS), not once per
+ * transaction: a scan of a few thousand entries used to normalise the whole catalogue for each one.
+ */
+export interface PreparedKeyword {
+  /** The keyword normalised (normalizeMerchantText); empty never matches. */
+  norm: string
+  /** `norm` split on spaces. */
+  tokens: string[]
+}
+
+export function prepareKeyword(keyword: string): PreparedKeyword {
+  const norm = normalizeMerchantText(keyword)
+  return { norm, tokens: norm.split(' ') }
 }
 
 /**
@@ -169,10 +223,9 @@ function tokenMatches(token: string, keyword: string): boolean {
  * phrase (or all tokens present); single-word keywords must match a whole
  * token — never a substring, so "max" can't hit "MAXIMA MARKET".
  */
-function textMatchesKeyword(normText: string, tokens: string[], keyword: string): boolean {
-  const normKey = normalizeMerchantText(keyword)
+function textMatchesKeyword(normText: string, tokens: string[], key: PreparedKeyword): boolean {
+  const { norm: normKey, tokens: keyTokens } = key
   if (!normKey) return false
-  const keyTokens = normKey.split(' ')
   if (keyTokens.length > 1) {
     if (` ${normText} `.includes(` ${normKey} `)) return true
     return keyTokens.every((kt) => tokens.some((t) => tokenMatches(t, kt)))
@@ -197,6 +250,23 @@ function catalogItemFor(name: string): CatalogItem | undefined {
 }
 
 /**
+ * Every key matchMerchant tries, prepared once (prepareKeyword), in the order it tries them:
+ * each catalogue entry's name then its aliases, and each brand's keywords longest first, in
+ * registry order. A test holds this to preparing the catalogue and the registry on the spot.
+ */
+export const MERCHANT_KEYS = {
+  catalog: CATALOG_ITEMS.map((item) => ({
+    item,
+    keys: [item.name, ...(CATALOG_ALIASES[item.name] ?? [])].map(prepareKeyword),
+  })),
+  brands: BRANDS.map((brand) => ({
+    brand,
+    keys: [...brand.keywords].sort((a, b) => b.length - a.length).map(prepareKeyword),
+    catalogItem: catalogItemFor(brand.displayName),
+  })),
+}
+
+/**
  * Resolve a transaction's merchant text to a catalogue/brand identity.
  * Catalogue names win over brand keywords (a "GOOGLE ONE" charge should
  * surface as "Google One", not "Google"); within each source, more specific
@@ -210,11 +280,10 @@ export function matchMerchant(text: string): MerchantMatch | null {
   // 1) Catalogue names + aliases, longest name first so "YouTube Premium"
   //    beats "YouTube Music"'s shared prefix and multiword names beat tokens.
   const catalogCandidates: { key: string; item: CatalogItem }[] = []
-  for (const item of CATALOG_ITEMS) {
-    const keys = [item.name, ...(CATALOG_ALIASES[item.name] ?? [])]
+  for (const { item, keys } of MERCHANT_KEYS.catalog) {
     for (const key of keys) {
       if (textMatchesKeyword(normText, tokens, key)) {
-        catalogCandidates.push({ key: normalizeMerchantText(key), item })
+        catalogCandidates.push({ key: key.norm, item })
         break
       }
     }
@@ -233,16 +302,15 @@ export function matchMerchant(text: string): MerchantMatch | null {
 
   // 2) Brand registry keywords (registry order = specificity contract, e.g.
   //    OneDrive before Microsoft), longest keyword within a brand first.
-  for (const brand of BRANDS) {
-    const sorted = [...brand.keywords].sort((a, b) => b.length - a.length)
-    for (const keyword of sorted) {
-      if (textMatchesKeyword(normText, tokens, keyword)) {
+  for (const { brand, keys, catalogItem } of MERCHANT_KEYS.brands) {
+    for (const key of keys) {
+      if (textMatchesKeyword(normText, tokens, key)) {
         return {
           name: brand.displayName,
           matchedVia: 'brand',
-          keyword: normalizeMerchantText(keyword),
+          keyword: key.norm,
           categoryHints: [brand.defaultCategory],
-          catalogItem: catalogItemFor(brand.displayName),
+          catalogItem,
         }
       }
     }

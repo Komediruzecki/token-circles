@@ -483,6 +483,22 @@ All notable changes to Token Circles are documented here. The format is based on
 - **E2E:** `tests/orientation.spec.ts` (three `@smoke` cases in both modes) pastes a generated
   statement on Import and checks the steps and reasons on the card and the done step. The
   own-account helpers of `onboarding-server.spec.ts` moved to `tests/own-account.ts`.
+- **Getting started costs nothing unless it can be seen.** `GettingStartedCard` works the steps
+  out only while its record is shown (`hidden === false`) and Dashboard is the page on screen
+  (`getPage()`): pages stay mounted, and the badges are evaluated again after every write, so the
+  card used to scan the whole history for an account with no record, a hidden card, or a Dashboard
+  nobody was looking at. It works them out once per snapshot, a frame and a task after the change
+  (not inside the render), and once on coming back to Dashboard when the snapshot changed
+  meanwhile. The wizard's done step still works them out on the spot (`currentNextSteps`). The
+  scan itself is quicker for everyone, the Bills scan included, with the same results:
+  `MERCHANT_KEYS` holds every catalogue name, alias and brand keyword normalised once when the
+  module loads (it used to be done for each transaction), and `withinEditDistance` answers "at
+  most n edits" with a length check, an early stop and two reused rows instead of a full table per
+  token pair. Node, ms per Getting started computation on statement-like rows, before and after:
+  1,000 rows 582 / 35, 3,000 1,797 / 83, 5,000 2,925 / 143, 10,000 5,981 / 279. Chromium at 3,000
+  entries: Dashboard's load held the main thread 1,465 ms with no record and 1,463 ms with the card
+  shown; now nothing over 50 ms with no record, and one 89 ms task with the card shown. A category
+  saved on another page cost 1,452 to 1,456 ms; now nothing.
 
 ### CRUD contract suite
 

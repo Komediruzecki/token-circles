@@ -1,18 +1,26 @@
 /**
  * Dashboard's Getting started card: the first three next steps from the profile's own data, each
  * with its reason and a link to its page. It shows while the account has a Getting started record
- * that is not hidden and a step applies; Hide hides it.
+ * that is not hidden and a step applies; Hide hides it. It works the steps out only while it can
+ * show and Dashboard is on screen, once per evaluation, after the page has painted.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __resetAccountStateForTest } from '../../core/accountState'
 import { evaluateAchievements } from '../../core/achievements/evaluate'
-import { __resetGettingStartedForTest, LOCAL_GETTING_STARTED_KEY } from '../../core/gettingStarted'
+import { setPage } from '../../core/appStore'
+import {
+  __resetGettingStartedForTest,
+  hideGettingStarted,
+  LOCAL_GETTING_STARTED_KEY,
+} from '../../core/gettingStarted'
 import { setOnboardingOwner } from '../../core/onboardingStore'
 import { GettingStartedCard } from '../GettingStarted'
 import type { AchievementsSnapshot } from '../../core/achievementsStore'
+import type { orientationFacts as OrientationFacts } from '../../core/orientation'
 
 const store = vi.hoisted(() => ({ set: null as ((s: unknown) => void) | null }))
+const workedOut = vi.hoisted(() => ({ calls: 0 }))
 
 vi.mock('../../core/achievementsStore', async () => {
   const { createRoot, createSignal } = await import('solid-js')
@@ -21,6 +29,18 @@ vi.mock('../../core/achievementsStore', async () => {
     store.set = (s) => setSnapshot(() => s)
     return { snapshot }
   })
+})
+
+// Counts how often the steps are worked out: each time reads every entry.
+vi.mock('../../core/orientation', async (importOriginal) => {
+  const real = await importOriginal<{ orientationFacts: typeof OrientationFacts }>()
+  return {
+    ...real,
+    orientationFacts: (...args: Parameters<typeof OrientationFacts>) => {
+      workedOut.calls++
+      return real.orientationFacts(...args)
+    },
+  }
 })
 
 /** 'YYYY-MM' `n` months before this one. */
@@ -97,7 +117,9 @@ beforeEach(() => {
   __resetAccountStateForTest()
   __resetGettingStartedForTest()
   setOnboardingOwner('local')
+  setPage('dashboard')
   store.set!(null)
+  workedOut.calls = 0
   host = document.createElement('div')
   document.body.appendChild(host)
 })
@@ -107,6 +129,7 @@ afterEach(() => {
   dispose = undefined
   host.remove()
   setOnboardingOwner(null)
+  setPage('dashboard')
   vi.unstubAllGlobals()
   localStorage.clear()
 })
@@ -124,6 +147,10 @@ const mount = () => {
   dispose = render(() => <GettingStartedCard />, host)
 }
 
+/** Once the card's pending work has run: it waits for a frame and a task, as this does after it. */
+const painted = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)))
+
 const monthName = (ym: string) =>
   new Date(`${ym}-15T00:00:00Z`).toLocaleDateString('en-GB', { month: 'long', timeZone: 'UTC' })
 
@@ -132,9 +159,10 @@ describe('with the card on the account', () => {
     localStorage.setItem(LOCAL_GETTING_STARTED_KEY, JSON.stringify({ hidden: false }))
   })
 
-  it('shows the first three steps, each with its reason and its page', () => {
+  it('shows the first three steps, each with its reason and its page', async () => {
     store.set!(fourMonths())
     mount()
+    await painted()
 
     const last = monthsAgo(1)
     expect(steps()).toEqual([
@@ -160,9 +188,10 @@ describe('with the card on the account', () => {
     ])
   })
 
-  it('follows the data: a step that is done makes way for the next', () => {
+  it('follows the data: a step that is done makes way for the next', async () => {
     store.set!(fourMonths())
     mount()
+    await painted()
     expect(steps().map((s) => s.id)).not.toContain('loan-payoff')
 
     // A budget for Groceries, and a loan on file.
@@ -190,12 +219,14 @@ describe('with the card on the account', () => {
         ],
       })
     )
+    await painted()
     expect(steps().map((s) => s.id)).toEqual(['import-year', 'heavy-month', 'loan-payoff'])
   })
 
-  it('hides for good', () => {
+  it('hides for good', async () => {
     store.set!(fourMonths())
     mount()
+    await painted()
 
     host.querySelector<HTMLButtonElement>('[data-test-id="getting-started-hide"]')!.click()
 
@@ -203,8 +234,9 @@ describe('with the card on the account', () => {
     expect(JSON.parse(localStorage.getItem(LOCAL_GETTING_STARTED_KEY)!)).toEqual({ hidden: true })
   })
 
-  it('shows nothing before the first evaluation, or with nothing left to do', () => {
+  it('shows nothing before the first evaluation, or with nothing left to do', async () => {
     mount()
+    await painted()
     expect(card()).toBeNull()
 
     // A year on file, every entry sorted and budgeted, and a month that earned more than it spent.
@@ -237,20 +269,106 @@ describe('with the card on the account', () => {
         }),
       })
     )
+    await painted()
+    expect(workedOut.calls).toBe(1)
     expect(card()).toBeNull()
+  })
+
+  it('works the steps out once per evaluation, after the page has painted', async () => {
+    store.set!(fourMonths())
+    mount()
+    // Not inside the render: nothing is worked out until the page has painted.
+    expect(workedOut.calls).toBe(0)
+    await painted()
+    expect(workedOut.calls).toBe(1)
+
+    // Two evaluations before the next paint: only the last is worked out.
+    store.set!(fourMonths())
+    store.set!(fourMonths())
+    await painted()
+    expect(workedOut.calls).toBe(2)
+    expect(steps()).toHaveLength(3)
+  })
+
+  it('works nothing out while Dashboard is not the page on screen, and catches up once back', async () => {
+    store.set!(fourMonths())
+    mount()
+    await painted()
+    expect(workedOut.calls).toBe(1)
+
+    // Pages stay mounted: a write on Transactions evaluates the badges again, twice here.
+    setPage('transactions')
+    store.set!(fourMonths())
+    store.set!(fourMonths())
+    await painted()
+    expect(workedOut.calls).toBe(1)
+
+    // Back on Dashboard: once, for the evaluation that is current.
+    setPage('dashboard')
+    await painted()
+    expect(workedOut.calls).toBe(2)
+
+    // An evaluation, and a move to another page before the paint: nothing is worked out.
+    store.set!(fourMonths())
+    setPage('transactions')
+    await painted()
+    expect(workedOut.calls).toBe(2)
+    setPage('dashboard')
+    await painted()
+    expect(workedOut.calls).toBe(3)
+
+    // Away and back with nothing new: nothing to work out.
+    setPage('budgets')
+    setPage('dashboard')
+    await painted()
+    expect(workedOut.calls).toBe(3)
+    expect(card()).not.toBeNull()
   })
 })
 
 describe('without the card', () => {
-  it('shows nothing for an account that never got one, or hid it', () => {
+  it('shows nothing for an account that never got one, or hid it', async () => {
     store.set!(fourMonths())
     mount()
+    await painted()
     expect(card()).toBeNull()
 
     dispose?.()
     localStorage.setItem(LOCAL_GETTING_STARTED_KEY, JSON.stringify({ hidden: true }))
     __resetGettingStartedForTest()
     mount()
+    await painted()
     expect(card()).toBeNull()
+  })
+
+  // Every account from before the card, and every one that hid it: nobody sees the steps, so
+  // nobody pays for them, however often the badges are evaluated.
+  it('works nothing out for an account with no card', async () => {
+    mount()
+    store.set!(fourMonths())
+    store.set!(fourMonths())
+    await painted()
+    expect(card()).toBeNull()
+    expect(workedOut.calls).toBe(0)
+  })
+
+  it('works nothing out once the card is hidden while it waited for the paint', async () => {
+    localStorage.setItem(LOCAL_GETTING_STARTED_KEY, JSON.stringify({ hidden: false }))
+    store.set!(fourMonths())
+    mount()
+    hideGettingStarted()
+    await painted()
+    expect(card()).toBeNull()
+    expect(workedOut.calls).toBe(0)
+  })
+
+  it('works nothing out for a hidden card', async () => {
+    localStorage.setItem(LOCAL_GETTING_STARTED_KEY, JSON.stringify({ hidden: true }))
+    mount()
+    store.set!(fourMonths())
+    store.set!(fourMonths())
+    await painted()
+    expect(card()).toBeNull()
+    expect(workedOut.calls).toBe(0)
   })
 })

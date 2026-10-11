@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { BRANDS } from '../subscriptionBrands'
+import { CATALOG_ITEMS } from '../subscriptionCatalog'
 import {
   cadenceFromGapDays,
   detectSubscriptions,
   editDistance,
   matchMerchant,
+  MERCHANT_KEYS,
   normalizeMerchantText,
   recentForScan,
   SCAN_WINDOW_DAYS,
+  withinEditDistance,
   worthTracking,
 } from '../subscriptionDetection'
 import type { DetectableTransaction } from '../subscriptionDetection'
@@ -41,6 +45,55 @@ describe('editDistance', () => {
     expect(editDistance('netflx', 'netflix')).toBe(1)
     expect(editDistance('spotefy', 'spotify')).toBe(1)
     expect(editDistance('amazon', 'amzn')).toBe(2)
+  })
+})
+
+describe('withinEditDistance', () => {
+  // The scan asks only "at most this many edits", and stops early; the answer must be editDistance's.
+  it('agrees with editDistance on every pair of short words, at every budget', () => {
+    const words = ['', 'a', 'ab', 'ba', 'abc', 'netflix', 'netflx', 'nteflix', 'spotify', 'spotefy']
+    words.push('amazon', 'amzn', 'amazonprime', 'google', 'goolge', 'youtube', 'yotube', 'xbox')
+    for (const a of words) {
+      for (const b of words) {
+        for (const max of [0, 1, 2, 3]) {
+          expect(withinEditDistance(a, b, max), `${a} ${b} ${max}`).toBe(editDistance(a, b) <= max)
+        }
+      }
+    }
+  })
+
+  it('reads a word longer than any before it whole', () => {
+    const long = 'a'.repeat(90)
+    expect(withinEditDistance(long, `${long}b`, 1)).toBe(true)
+    expect(withinEditDistance(long, `${long}bc`, 1)).toBe(false)
+  })
+})
+
+describe('MERCHANT_KEYS', () => {
+  // Prepared once when the module loads. It must hold exactly what normalising the catalogue and
+  // the brand registry on the spot gives, in the order matchMerchant used to try them.
+  it('is the catalogue and the brand registry, normalised, in the order they are tried', () => {
+    const aliases: Record<string, string[]> = {
+      'Gym membership': ['gym', 'fitness'],
+      Internet: ['internet'],
+      'Mobile plan': ['mobile'],
+    }
+    const prepared = (key: string) => {
+      const norm = normalizeMerchantText(key)
+      return { norm, tokens: norm.split(' ') }
+    }
+    expect(MERCHANT_KEYS.catalog.map(({ item, keys }) => ({ item, keys }))).toEqual(
+      CATALOG_ITEMS.map((item) => ({
+        item,
+        keys: [item.name, ...(aliases[item.name] ?? [])].map(prepared),
+      }))
+    )
+    expect(MERCHANT_KEYS.brands.map(({ brand, keys }) => ({ brand, keys }))).toEqual(
+      BRANDS.map((brand) => ({
+        brand,
+        keys: [...brand.keywords].sort((a, b) => b.length - a.length).map(prepared),
+      }))
+    )
   })
 })
 
