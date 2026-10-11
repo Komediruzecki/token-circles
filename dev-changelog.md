@@ -291,6 +291,12 @@ All notable changes to Token Circles are documented here. The format is based on
   twin with the card's links, no em dash on the new layout) and pins the six unchanged mails to
   digests taken before the change. The worker's `typecheck` also checks `worker/scripts/`, which
   has its own tsconfig.
+- **`worker/scripts/send-sample-mails.ts` mails a sample of every mail to one inbox**, through
+  Resend's REST API, from `mail-samples.ts`. It needs `--to`, reads `RESEND_API_KEY` and
+  `EMAIL_FROM` from the environment under the Worker's names, and prints one line per sample: its
+  name and Resend's message id, or the error. `--dry-run <folder>` writes each mail as `.html` and
+  `.txt` instead of sending, and needs no key; `--only`, `--app-url` and `--asset-origin` pick the
+  samples and the origins. It runs on a Node that strips types by default, with no build step.
 
 ### Errors
 
