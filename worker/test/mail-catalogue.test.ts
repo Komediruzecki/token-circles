@@ -2,10 +2,10 @@
  * Every mail Token Circles sends, held to the same rules through the sample catalogue
  * (worker/scripts/mail-samples.ts), which has a sample of every renderer in emailTemplates.ts.
  *
- * Two layouts: the mail layout of 2026-10-11, which the sign-up and account mails are on, and the
- * first shell, which the mails that show an amount of money keep word for word (maff's call of
- * 2026-10-11), with the two billing mails that show none. The rules for wording are for the first
- * kind; the second kind is pinned as it is.
+ * Two layouts: the mail layout of 2026-10-11, which the sign-up, account and billing mails are on,
+ * and the first shell, which the four mails that show an amount of money keep word for word
+ * (maff's call of 2026-10-11). The rules for wording are for the first kind; the second kind is
+ * pinned as it is.
  */
 import { describe, expect, it } from 'vitest';
 import * as templates from '../src/emailTemplates';
@@ -100,9 +100,8 @@ describe('the mail catalogue', () => {
   });
 
   it('words no subject or body of the mails on the layout with an em dash', () => {
-    // The mails on the first shell are left out on purpose. The ones that show an amount of money
-    // stay exactly as they are, em dashes included: maff's call of 2026-10-11. The two billing
-    // mails without an amount are left with them until that call is made for them.
+    // The mails on the first shell are left out on purpose: they show an amount of money and stay
+    // exactly as they are, em dashes included. maff's call of 2026-10-11.
     expect(onTheLayout.length).toBeGreaterThan(0);
     for (const sample of onTheLayout) {
       const { subject, html, text } = sample.render();
@@ -134,8 +133,6 @@ describe('the mail catalogue', () => {
     }
     expect(digests).toEqual({
       'payment-failed': '64cc883dff74be0f7fedbe8bde3cddf908612d2c190a0319be218d4d4606fa06',
-      'payment-action-required': '5d82d48db8bfc771e0f23b22515613f848e3181cc53b1f4e7f3d190644714a5f',
-      'subscription-ended': '204d723bf61126040cd3a77f6eae63a04c4e0ac77bf4cb082f79c0492a448046',
       'budget-alert': '69888cd8d58f671db940b542e0e0991b276b9e654e02f6b25c1212b0a4a85aaf',
       'spending-report': '1426e75dc8b8cfc4ab22e27acf0c8777aa68c9a0db232c015d798d580c6a8ba6',
       'bills-reminder': '560c2df9b752fd8249f31246b7ef2bb20550dfeb2e85147ce46a4474bfe1fd90',

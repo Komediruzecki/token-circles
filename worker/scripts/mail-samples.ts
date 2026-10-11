@@ -36,7 +36,7 @@ export interface MailSample {
   template: string;
   /**
    * `mail` is the layout of 2026-10-11. `first` is the first shell, which the mails that show an
-   * amount of money keep (maff's call of 2026-10-11), and the two billing mails with them.
+   * amount of money keep (maff's call of 2026-10-11).
    */
   layout: 'mail' | 'first';
   render: () => RenderedEmail;
@@ -165,13 +165,13 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'payment-action-required',
       template: 'renderPaymentActionRequired',
-      layout: 'first',
+      layout: 'mail',
       render: () => renderPaymentActionRequired({ planName: 'Basic', appUrl }),
     },
     {
       name: 'subscription-ended',
       template: 'renderSubscriptionEnded',
-      layout: 'first',
+      layout: 'mail',
       render: () => renderSubscriptionEnded({ planName: 'Basic', appUrl }),
     },
     {

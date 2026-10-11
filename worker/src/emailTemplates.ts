@@ -15,10 +15,10 @@
  * Two layouts live here: the mail layout of 2026-10-11 (renderMail), with the engraved art, dark
  * by default and paper in light mode; and the first shell (`shell`), dark only, with the orbit GIF.
  *
- * The sign-up and account mails are on the new layout. The mails that show an amount of money
- * (the budget alert, the spending report, upcoming bills and the failed payment) stay on the first
- * shell, word for word: maff's call of 2026-10-11. The two billing mails that show no amount stay
- * there too until that call is made for them. worker/test/mail-catalogue.test.ts pins all six.
+ * The sign-up, account and billing mails are on the new layout. The four mails that show an
+ * amount of money (the budget alert, the spending report, upcoming bills and the failed payment)
+ * stay on the first shell, word for word: maff's call of 2026-10-11.
+ * worker/test/mail-catalogue.test.ts pins those four.
  */
 
 // ── Brand constants ───────────────────────────────────────────────────────────
@@ -355,15 +355,6 @@ ${MAIL_STYLE}
 
 const btn = (href: string, label: string, testId?: string) =>
   `<a href="${href}" ${testId ? `data-tid="${testId}"` : ''}style="display:inline-block;background:${C.primaryStrong};color:#ffffff;text-decoration:none;font-family:${FONT};font-size:15px;font-weight:600;padding:12px 26px;border-radius:10px">${escapeHtml(label)}</a>`;
-
-/** Left-accented feature/info card (welcome mail, notices). */
-const card = (title: string, body: string, accent: string = C.primary) =>
-  `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 10px"><tr>
-    <td style="background:${C.panel};border:1px solid ${C.border};border-left:3px solid ${accent};border-radius:10px;padding:14px 16px">
-      <div style="font-family:${FONT};font-size:14px;font-weight:600;color:${C.text};margin:0 0 4px">${title}</div>
-      <div style="font-family:${FONT};font-size:13px;line-height:1.55;color:${C.muted}">${body}</div>
-    </td>
-  </tr></table>`;
 
 /**
  * The shared shell: dark page, centered 600px card, orbit-GIF masthead with
@@ -766,8 +757,9 @@ export function renderPaymentFailed(opts: {
 
 /**
  * The bank wants the cardholder to confirm (3-D Secure / SCA). Deliberately not the same mail as a
- * decline: nothing is wrong, and the only thing that fixes it is the user opening a page — which a
- * "your payment failed" subject line makes them less likely to do, not more.
+ * decline: nothing is wrong, and the only thing that fixes it is the user opening a page, which a
+ * "your payment failed" subject line makes them less likely to do, not more. It shows no amount,
+ * so it is on the mail layout.
  */
 export function renderPaymentActionRequired(opts: {
   planName: string;
@@ -775,54 +767,48 @@ export function renderPaymentActionRequired(opts: {
   appUrl?: string;
 }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const confirm = opts.payUrl || `${app}/#settings`;
-  const subject = `Your bank needs you to confirm a ${BRAND} payment`;
-  const body = `
-    ${h1('One step from your bank')}
-    ${p(`Your bank wants you to confirm the payment for ${BRAND} ${escapeHtml(opts.planName)} before it goes through — the usual card-verification step, not a problem with your card.`)}
-    <div style="padding:8px 0 12px">${btn(confirm, 'Confirm the payment')}</div>
-    ${p(`Your plan stays active while this is outstanding. If it is not confirmed, the payment is treated as failed and we retry it.`, `font-size:12.5px;color:${C.faint}`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: 'A quick confirmation with your bank, then the payment goes through.',
-      body,
-      footerReason: 'Sent because your bank asked for confirmation of a subscription payment.',
-      orbit: false,
-      assetOrigin: opts.appUrl,
-    }),
-    text: `Your bank needs you to confirm a ${BRAND} payment\n\nYour bank wants you to confirm the payment for ${BRAND} ${opts.planName} before it goes through. This is the usual card-verification step, not a problem with your card.\n\nConfirm it here: ${confirm}\n\nYour plan stays active while this is outstanding.${textFooter('Sent because your bank asked for confirmation of a subscription payment.')}`,
-  };
+  return renderMail({
+    subject: `Your bank needs you to confirm a ${BRAND} payment`,
+    preheader: 'A quick confirmation with your bank, then the payment goes through.',
+    art: 'banner',
+    headline: 'Your bank wants one more step.',
+    paragraphs: [
+      `Your bank wants you to confirm the payment for ${BRAND} ${opts.planName} before it goes through. It's the usual card verification, not a problem with your card.`,
+    ],
+    buttons: [{ label: 'Confirm the payment', href: opts.payUrl || `${app}/#settings` }],
+    notes: [
+      "Your plan stays active while this is outstanding. If it isn't confirmed, the payment is treated as failed and we retry it.",
+    ],
+    reason: `You are getting this because your bank asked you to confirm a ${BRAND} subscription payment.`,
+    assetOrigin: opts.appUrl,
+  });
 }
 
-/** The subscription is over — cancelled, or dunning ran out. Says what happens to the data. */
+/**
+ * The subscription is over: cancelled, or dunning ran out. Says what happens to the data. It
+ * shows no amount, so it is on the mail layout.
+ */
 export function renderSubscriptionEnded(opts: {
   planName: string;
   appUrl?: string;
 }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const subject = `Your ${BRAND} ${opts.planName} plan has ended`;
-  const body = `
-    ${h1('Your plan has ended')}
-    ${p(`Your ${BRAND} ${escapeHtml(opts.planName)} plan has ended and the account is now on Free.`)}
-    ${card('Your data is still here', 'Nothing has been deleted. You can open everything, and export all of it from Settings at any time.')}
-    ${card('Picking it back up', 'Choosing a plan again restores the paid features immediately — there is nothing to restore or re-import.', C.warm)}
-    <div style="padding:8px 0 4px">${btn(`${app}/#settings`, 'Open Settings')}</div>
-    ${p(`If this was not deliberate — a card that expired, say — choosing the plan again is all it takes.`, `font-size:12.5px;color:${C.faint};margin:16px 0 0`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: 'The account is on Free now. Nothing has been deleted.',
-      body,
-      footerReason: 'Sent because your subscription ended.',
-      assetOrigin: opts.appUrl,
-    }),
-    text: `Your ${BRAND} ${opts.planName} plan has ended\n\nThe account is now on Free. Nothing has been deleted — you can open everything, and export all of it from Settings at any time.\n\nChoosing a plan again restores the paid features immediately.\n\nOpen Settings: ${app}/#settings${textFooter('Sent because your subscription ended.')}`,
-  };
+  return renderMail({
+    subject: `Your ${BRAND} ${opts.planName} plan has ended`,
+    preheader: 'Your account is on Free now. Nothing has been deleted.',
+    art: 'banner',
+    headline: 'Your plan has ended.',
+    paragraphs: [
+      `Your ${BRAND} ${opts.planName} plan has ended, and your account is on Free now. Nothing has been deleted: you can open everything, and export all of it from Settings at any time.`,
+      'Choosing a plan again brings the paid features back straight away, with nothing to restore or re-import.',
+    ],
+    buttons: [{ label: 'Open Settings', href: `${app}/#settings` }],
+    notes: [
+      "If you didn't mean to end it (a card that expired, say), choosing the plan again is all it takes.",
+    ],
+    reason: `You are getting this because your ${BRAND} subscription ended.`,
+    assetOrigin: opts.appUrl,
+  });
 }
 
 // ── Reminder mails (paid feature) ────────────────────────────────────────────

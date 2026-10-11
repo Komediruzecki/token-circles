@@ -9,7 +9,9 @@ import {
   renderEmailChangeNotice,
   renderLoginCode,
   renderPasswordReset,
+  renderPaymentActionRequired,
   renderSpendingReport,
+  renderSubscriptionEnded,
   renderSupportAck,
   renderTestBasic,
   renderWelcome,
@@ -276,5 +278,54 @@ describe('email templates', () => {
     expect(formatMoney(10, 'EUR')).toBe('€10.00');
     expect(formatMoney(10, 'NOPE!')).toContain('10.00');
     expect(escapeHtml(`<a "b" 'c'>`)).toBe('&lt;a &quot;b&quot; &#39;c&#39;&gt;');
+  });
+});
+
+describe('the billing mails that show no amount', () => {
+  // On the mail layout since 2026-10-11, with every fact of their first-shell version kept. The
+  // failed payment shows the amount due, so it stays on the first shell word for word, with the
+  // reminders (mail-catalogue.test.ts).
+  const APP = 'https://tokencircles.com';
+
+  it("asks for the bank's confirmation on the layout, as a step to take and not a failure", () => {
+    const mail = renderPaymentActionRequired({
+      planName: 'Basic',
+      payUrl: 'https://invoice.stripe.com/i/EXAMPLE',
+      appUrl: APP,
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe('Your bank needs you to confirm a Token Circles payment');
+    for (const words of [
+      'Your bank wants you to confirm the payment for Token Circles Basic before it goes through.',
+      "It's the usual card verification, not a problem with your card.",
+      'Confirm the payment: https://invoice.stripe.com/i/EXAMPLE',
+      "Your plan stays active while this is outstanding. If it isn't confirmed, the payment is treated as failed and we retry it.",
+    ]) {
+      expect(mail.text).toContain(words);
+    }
+    expect(mail.html).toMatch(
+      /<a class="tc-btn" href="https:\/\/invoice\.stripe\.com\/i\/EXAMPLE"[^>]*>Confirm the payment<\/a>/
+    );
+    // Without Stripe's page, the button opens Settings.
+    expect(renderPaymentActionRequired({ planName: 'Basic', appUrl: APP }).text).toContain(
+      `Confirm the payment: ${APP}/#settings`
+    );
+  });
+
+  it('says on the layout that a plan ended: on Free, nothing deleted, and how to pick it back up', () => {
+    const mail = renderSubscriptionEnded({ planName: 'Basic', appUrl: APP });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe('Your Token Circles Basic plan has ended');
+    for (const words of [
+      'Your Token Circles Basic plan has ended, and your account is on Free now.',
+      'Nothing has been deleted: you can open everything, and export all of it from Settings at any time.',
+      'Choosing a plan again brings the paid features back straight away, with nothing to restore or re-import.',
+      "If you didn't mean to end it (a card that expired, say), choosing the plan again is all it takes.",
+      `Open Settings: ${APP}/#settings`,
+    ]) {
+      expect(mail.text).toContain(words);
+    }
   });
 });
