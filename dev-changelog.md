@@ -310,7 +310,9 @@ All notable changes to Token Circles are documented here. The format is based on
 - **`worker/scripts/send-sample-mails.ts` mails a sample of every mail to one inbox**, through
   Resend's REST API, from `mail-samples.ts`. It needs `--to`, reads `RESEND_API_KEY` and
   `EMAIL_FROM` from the environment under the Worker's names, and prints one line per sample: its
-  name and Resend's message id, or the error. `--dry-run <folder>` writes each mail as `.html` and
+  name and Resend's message id, or the error. Before sending anything it trims the key and refuses
+  one that is not `^re_[A-Za-z0-9_-]+$` (exit 2, nothing sent, nothing of the value printed), and
+  an error it prints has `[key]` wherever it quoted the key. `--dry-run <folder>` writes each mail as `.html` and
   `.txt` instead of sending, and needs no key; `--only`, `--app-url` and `--asset-origin` pick the
   samples and the origins. It runs on a Node that strips types by default, with no build step.
 

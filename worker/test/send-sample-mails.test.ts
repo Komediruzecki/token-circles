@@ -1,10 +1,10 @@
 /**
  * worker/scripts/send-sample-mails.ts, the command that mails a sample of every mail to one inbox:
- * what it accepts. Only its argument parsing is imported here. The command itself never runs in a
- * test, so nothing here can send a mail.
+ * what it accepts, and what it does with the key. The command runs here with a stub fetch and its
+ * output kept (main's Io), so nothing here can send a mail. The keys are fake.
  */
 import { describe, expect, it } from 'vitest';
-import { parseArgs } from '../scripts/send-sample-mails';
+import { main, parseArgs } from '../scripts/send-sample-mails';
 
 const refused = (reason: string) => ({ error: expect.stringContaining(reason) });
 
@@ -59,5 +59,75 @@ describe('send-sample-mails', () => {
       appUrl: 'https://tokencircles.com',
       assetOrigin: undefined,
     });
+  });
+});
+
+/** Run the command with a stub fetch and the output kept, so nothing reaches the network. */
+async function run(key: string | undefined, fetchImpl?: typeof fetch) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const calls: string[] = [];
+  const code = await main({
+    argv: ['--to', 'sample@example.com', '--only', 'welcome'],
+    env: { RESEND_API_KEY: key },
+    out: (line) => out.push(line),
+    err: (line) => err.push(line),
+    fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(String(input));
+      if (fetchImpl) return fetchImpl(input, init);
+      return Response.json({ id: 'msg_1' });
+    }) as typeof fetch,
+  });
+  return { code, out: out.join(''), err: err.join(''), calls };
+}
+
+describe('send-sample-mails, the key', () => {
+  for (const [name, key] of [
+    ['a line break', 're_FAKE_first\nsecondline'],
+    ['a carriage return', 're_FAKE_first\rsecondline'],
+    ['a NUL', 're_FAKE_first\0secondline'],
+    ['a space inside', 're_FAKE_first secondline'],
+  ] as const) {
+    it(`refuses a key with ${name}, sends nothing and prints none of it`, async () => {
+      const { code, out, err, calls } = await run(key);
+
+      expect(code).toBe(2);
+      expect(calls).toEqual([]);
+      expect(err).toContain(
+        'RESEND_API_KEY is not one line of letters, digits, _ or -, so nothing was sent.'
+      );
+      for (const part of ['FAKE', 'first', 'secondline', 're_']) {
+        expect(out + err).not.toContain(part);
+      }
+    });
+  }
+
+  it('takes a key with a line break at the end, as a secret manager may hand it over', async () => {
+    const { code, out, calls } = await run('re_FAKE_trailing\n');
+
+    expect(code).toBe(0);
+    expect(calls).toEqual(['https://api.resend.com/emails']);
+    expect(out).toBe('welcome msg_1\n');
+  });
+
+  it('prints [key] in place of the key when an error quotes it', async () => {
+    const key = 're_FAKE_quoted_in_the_error';
+    const { code, out, err } = await run(key, () =>
+      Promise.reject(new Error(`Headers.append: "Bearer ${key}" is not accepted, ${key}`))
+    );
+
+    expect(code).toBe(1);
+    expect(out).toBe('welcome error: Headers.append: "Bearer [key]" is not accepted, [key]\n');
+    expect(out + err).not.toContain('FAKE');
+  });
+
+  it("prints [key] in place of the key when Resend's answer quotes it", async () => {
+    const key = 're_FAKE_quoted_by_resend';
+    const { code, out } = await run(key, () =>
+      Promise.resolve(Response.json({ message: `API key ${key} is invalid` }, { status: 401 }))
+    );
+
+    expect(code).toBe(1);
+    expect(out).toBe('welcome error: Resend 401: API key [key] is invalid\n');
   });
 });
