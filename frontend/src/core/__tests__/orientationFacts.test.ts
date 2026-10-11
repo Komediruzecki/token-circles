@@ -5,7 +5,9 @@
  * category from the Progress page's advice. These tests pin that they agree.
  */
 import { describe, expect, it } from 'vitest'
+import { nextSteps } from '../../../../shared/orientation'
 import { trackedMonthsInYearWindow } from '../../../../shared/trackedMonths'
+import { detectSubscriptions } from '../../features/subscriptionDetection'
 import { buildAdvice } from '../achievements/advice'
 import { evaluateAchievements } from '../achievements/evaluate'
 import { orientationFacts } from '../orientation'
@@ -146,6 +148,24 @@ describe('the facts', () => {
   it('count the loans', () => {
     expect(facts.loans).toBe(1)
     expect(facts.today).toBe(TODAY)
+  })
+})
+
+describe('a regular payment the scan proposed', () => {
+  // A gym the scan has no name for, monthly, its payee holding digits.
+  const gym = ['2026-06-05', '2026-07-05', '2026-08-05', '2026-09-05'].map((date) =>
+    row(date, { amount: -29.9, description: 'FIT24 STUDIO', category_id: null })
+  )
+
+  it('is counted until it is added as a bill under the name it was proposed under', () => {
+    const before = orientationFacts(source(gym), NOW)
+    expect(before.subscriptionsSpotted).toBe(1)
+    expect(nextSteps(before).map((s) => s.id)).toContain('review-subscriptions')
+
+    const [proposed] = detectSubscriptions(gym, [], { today: TODAY })
+    const after = orientationFacts(source(gym, { bills: [{ name: proposed.name }] }), NOW)
+    expect(after.subscriptionsSpotted).toBe(0)
+    expect(nextSteps(after).map((s) => s.id)).not.toContain('review-subscriptions')
   })
 })
 

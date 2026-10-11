@@ -274,6 +274,18 @@ describe('the payee', () => {
     expect(payeeName('123 456')).toBe('123 456')
   })
 
+  it('names keep the words that mix letters and a few digits, and drop the numbers', () => {
+    expect(payeeName('FIT24 STUDIO')).toBe('FIT24 STUDIO')
+    expect(payeeName('O2 Germany')).toBe('O2 Germany')
+    expect(payeeName('STAN 4B NAJAM')).toBe('STAN 4B NAJAM')
+    // A reference, a date, an account number (invented, and no valid IBAN) and a lone dash go.
+    expect(payeeName('KRAFTRAUM REF 20260701 - DE00123456781234567890 KD4711')).toBe(
+      'KRAFTRAUM REF'
+    )
+    // Four digits, but not more digits than letters: a word, kept.
+    expect(payeeName('Studio ABCD1234 Mitte')).toBe('Studio ABCD1234 Mitte')
+  })
+
   it('with nothing to key by, is skipped', () => {
     const found = findRecurringPayments(
       ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01'].map((d) =>
@@ -283,5 +295,42 @@ describe('the payee', () => {
       { todayMs: parseDay(TODAY) }
     )
     expect(found).toEqual([])
+  })
+})
+
+describe('a regular payment added as a bill under the name it was proposed under', () => {
+  const monthly = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01']
+
+  /** Proposes `payee`'s monthly charges, adds the proposal as a bill, and scans again. */
+  function addThenScan(payee: string, description?: string) {
+    const charges = monthly.map((d) =>
+      paid(payee, 29.9, d, description === undefined ? {} : { description })
+    )
+    const [proposed] = detect(charges)
+    expect(proposed.matchedVia).toBe('recurring')
+    expect(worthTracking(proposed)).toBe(true)
+    const [again] = detect(charges, [{ name: proposed.name }])
+    return { proposed, again }
+  }
+
+  it('is tracked on the next scan when the payee holds digits', () => {
+    const { proposed, again } = addThenScan('FIT24 STUDIO')
+    expect(proposed.name).toBe('FIT24 STUDIO')
+    expect(again).toMatchObject({ alreadyTracked: true })
+    expect(worthTracking(again)).toBe(false)
+  })
+
+  it('is tracked on the next scan when its name was cut short of the payee', () => {
+    const long = 'Wohnungsbaugenossenschaft Beispielstadt Mitte eingetragene Genossenschaft'
+    const { proposed, again } = addThenScan(long)
+    expect(proposed.name).toBe('Wohnungsbaugenossenschaft Beispielstadt Mitte eingetragene')
+    expect(again.alreadyTracked).toBe(true)
+    expect(worthTracking(again)).toBe(false)
+  })
+
+  it('is tracked on the next scan when its name left an account number out', () => {
+    const { proposed, again } = addThenScan('', 'Kraftraum Mitte DE00123456781234567890')
+    expect(proposed.name).toBe('Kraftraum Mitte')
+    expect(again.alreadyTracked).toBe(true)
   })
 })

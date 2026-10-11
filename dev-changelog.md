@@ -732,8 +732,9 @@ All notable changes to Token Circles are documented here. The format is based on
   is at most one and a half periods old. The gaps rule keeps everyday shopping out: a cafe paid one
   price on random days has a median gap of about a week. Four charges or more are `medium`, three
   `low`, which the scan leaves unticked and Getting started does not count. A result has
-  `matchedVia: 'recurring'`, the payee's name without the words that carry digits, the key
-  `recurring:<payee key>`, `alreadyTracked` when a bill's name has that key, and `billType`: `bill`
+  `matchedVia: 'recurring'`, the payee's name without the words that are numbers, the key
+  `recurring:<payee key>`, `alreadyTracked` when a bill's name has that key or the key of the
+  name proposed, and `billType`: `bill`
   when the category most of its charges are filed under goes by housing, utilities, insurance, debt
   or childcare (`effectiveKind`), else `subscription`, with that `categoryId`. Named finds are
   `subscription`, as before. The scan shows a finder row as "Regular payment to {payee}" with no
@@ -747,6 +748,17 @@ All notable changes to Token Circles are documented here. The format is based on
   kind and by the most common category; the payee's key and name) and `SubscriptionScan.test.tsx`
   (the rows and the bills they add, a payment under Transfers left out, the count Getting started
   shows).
+- **A regular payment added as a bill is not proposed again** (review F1). The finder named a
+  payee without every word holding a digit and cut the name at 60 characters, but checked a bill
+  by the payee's whole key, so "FIT24 STUDIO" was proposed as "STUDIO", proposed again once added,
+  and Getting started's review step never cleared; the same for "O2 Germany", "STAN 4B NAJAM" and
+  any payee over 60 characters. `payeeName` now drops only a word with no letters, or one with at
+  least four digits and more digits than letters (a reference or an account number), and
+  `alreadyTracked` also holds when a bill's key is the key of the name proposed.
+- **Tests:** `recurringPayments.test.ts` (names that keep "FIT24", "O2" and "4B" and drop numbers;
+  a proposal added as a bill and scanned again, for a payee holding digits, one over 60 characters
+  and one with an account number) and `orientationFacts.test.ts` (Getting started's step goes once
+  the proposal is a bill).
 
 ### Achievements
 

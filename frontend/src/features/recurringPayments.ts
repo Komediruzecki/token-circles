@@ -102,12 +102,25 @@ export function payeeKey(text: string): string {
 }
 
 /**
- * The name a payee is proposed under: its text as the entry writes it, without the words that
- * carry digits (reference numbers, dates, card numbers), cut to NAME_MOST characters at a word.
+ * Whether a word of a payee's text is a number rather than a name: it has no letters, or it has
+ * at least four digits and more digits than letters, like a reference or an account number.
+ * "FIT24", "O2" and "4B" are names.
+ */
+function isNumberWord(word: string): boolean {
+  const letters = (word.match(/\p{L}/gu) ?? []).length
+  if (letters === 0) return true
+  const digits = (word.match(/\d/g) ?? []).length
+  return digits >= 4 && digits > letters
+}
+
+/**
+ * The name a payee is proposed under: its text as the entry writes it, without the words that are
+ * numbers (`isNumberWord`: reference numbers, dates, card and account numbers), cut to NAME_MOST
+ * characters at a word.
  */
 export function payeeName(text: string): string {
   const words = text.trim().split(/\s+/)
-  const plain = words.filter((word) => !/\d/.test(word))
+  const plain = words.filter((word) => !isNumberWord(word))
   let name = ''
   for (const word of plain.length > 0 ? plain : words) {
     const longer = name === '' ? word : `${name} ${word}`
@@ -193,9 +206,11 @@ export function findRecurringPayments(
     if (opts.todayMs - latest.dateMs > RUNNING_PERIODS * PERIOD_DAYS[cadence] * DAY_MS) continue
 
     const categoryId = commonCategory(run)
+    const name = payeeName(latest.payee)
+    const nameKey = payeeKey(name)
     found.push({
       key: `recurring:${key}`,
-      name: payeeName(latest.payee),
+      name,
       amount: Math.round(latest.amount * 100) / 100,
       currency: commonCurrency(run),
       frequency: cadence,
@@ -205,7 +220,9 @@ export function findRecurringPayments(
       lastDate: latest.date,
       suggestedDueDate: nextDueDate(latest.dateMs, cadence, opts.todayMs),
       categoryHints: [],
-      alreadyTracked: tracked.has(key),
+      // A bill made from this proposal has the name it was proposed under, which can be shorter
+      // than the payee's text (cut at NAME_MOST, numbers left out), so its key is checked too.
+      alreadyTracked: tracked.has(key) || (nameKey !== '' && tracked.has(nameKey)),
       matchedVia: 'recurring',
       billType: billTypeOf(categoryId, lookup),
       ...(categoryId === null ? {} : { categoryId }),
