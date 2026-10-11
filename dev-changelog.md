@@ -812,6 +812,14 @@ All notable changes to Token Circles are documented here. The format is based on
   shown; a ticked box with no kind; an edit whose box is back to how it opened but differs from the
   new kind; a later build's kind kept on a change of colour, in the real local-first router) and
   `categoryFormBody.test.ts` (the bodies: a colour edit sends neither key).
+- **A failed answers save never stops the wizard** (review F8). "Name your space" saved the answers
+  after the rename or the new profile in the same `save`, so a failure there showed "Couldn't save
+  your space. Try again." about a space that was saved. The answers' save is now caught on its own:
+  the step moves on and a warning toast says "Your space is saved, but your answers didn't save.
+  You can give them in Settings, under About this space." The answers stay chosen, so going back
+  to the step shows them and its save tries them again.
+- **Tests:** `onboardingSpaceAnswersFail.test.tsx` (the failure path, on the real local-first
+  router: the profile renamed, the next step shown, the toast, no notice on the form).
 
 ### Achievements
 

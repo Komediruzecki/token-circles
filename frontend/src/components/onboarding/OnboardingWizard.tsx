@@ -174,6 +174,10 @@ const icons = {
   ),
 }
 
+/** What the space step says when the space is saved and its answers are not. */
+export const SPACE_ANSWERS_NOT_SAVED =
+  "Your space is saved, but your answers didn't save. You can give them in Settings, under About this space."
+
 export interface OnboardingWizardProps {
   /**
    * App's one way of choosing profiles: the first id becomes where writes land, the list is the
@@ -227,9 +231,16 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         setProfiles([...getProfiles(), created])
         props.selectProfiles([created.id])
       }
-      // Saved for the profile the app now writes to, as every other write of the step is.
-      setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
-      setChosenAnswers({})
+      // Saved for the profile the app now writes to, as every other write of the step is. The
+      // space is saved by now, so a failure here does not hold the step: it says so and moves on,
+      // and the answers can be given in Settings. Kept as chosen, they show if the person comes
+      // back to the step, whose save tries them again.
+      try {
+        setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
+        setChosenAnswers({})
+      } catch {
+        showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
+      }
     },
     onSaved: () => {
       nextOnboardingStep()
