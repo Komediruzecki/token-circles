@@ -289,8 +289,9 @@ All notable changes to Token Circles are documented here. The format is based on
   and at once for a Google sign-up with a confirmed address. The record is a `reminder_dedup` row
   `(user_id, 'welcome')`. Each confirming D1 batch claims it before the write that confirms the
   address, and only while `email_verified = 0` (`claimWelcomeOnConfirm`), so of two confirmations
-  that race only one sends it. The mail goes in `waitUntil`, best effort: a failed send logs
-  `Welcome email failed:` and is not retried. `resolveGoogleUser` returns `welcome`; `spendLink`
+  that race only one sends it. The mail goes in `waitUntil`, best effort: a failed send is logged
+  (`[email] Resend <status>` by `sendMail` when Resend refuses it, `Welcome email failed:` when the
+  send throws) and is not retried; the claim stays. `resolveGoogleUser` returns `welcome`; `spendLink`
   and `confirmWithOwnLink` take the route's welcomer. Step 3 of the Welcome is the version for
   before finance prints ship: Progress, and the A year badge.
 - **The account mails moved to the new layout; the mails that show money did not**
