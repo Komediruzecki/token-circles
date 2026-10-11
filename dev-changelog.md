@@ -26,6 +26,9 @@ All notable changes to Token Circles are documented here. The format is based on
   every account, so no account that exists before it gets the new Welcome. The migration runs
   before the deploy, so a password account that signs up in between gets the old welcome, with its
   confirm link, and the new Welcome when it confirms.
+- `0034_user_state.sql` adds one table, `user_state (user_id, key, value, updated_at)` with primary
+  key `(user_id, key)`. Only `/api/account/state` reads or writes it, so it is safe to apply before
+  the code that uses it.
 
 ### Loans
 
@@ -372,6 +375,24 @@ All notable changes to Token Circles are documented here. The format is based on
   check decide, so an account with data is still never offered the wizard. Specs and the marketing
   shots mark the wizard decided per owner with `onboardingDecided` (`tests/onboarding-decided.ts`).
   No migration.
+
+### State that follows the account
+
+- **`user_state` and `/api/account/state`.** `GET /api/account/state` answers every key
+  (`onboarding`, `tours`, `getting_started`), null where nothing is stored, with
+  `Cache-Control: no-store`; `PUT /api/account/state/:key` writes one key. Both take a session only
+  (`requireAuth`, so an account waiting for its confirm link gets 403 `EMAIL_UNCONFIRMED`) and serve
+  the session's own account. The keys are an allowlist (`shared/accountStateKeys.ts`; any other key
+  answers 404 and stores nothing). The stored value is rebuilt from the checked fields
+  (`checkUserStateWrite` in `shared/accountState.ts`; a refusal is 400 `{ error, fields }`) and is
+  capped at 1 KB of JSON. The onboarding record only moves forward: the furthest step is kept, the
+  first write stamps `started_at` with server time, `completed` or `skipped` stamps `finished_at`,
+  and a finished record never changes again. A client cannot send `existing`. A write stores its
+  result only while the row still holds the value it read (compare-and-swap, three attempts, then
+  503), so a step from a stale tab cannot undo a finish from another. Deleting the account deletes
+  its rows, and `worker/test/account-deletion.test.ts` now checks that every table with a `user_id`
+  column has a delete in `routes/account.ts`. Worker-only in the contract guard: local-first keeps
+  the same state in localStorage.
 
 ### CRUD contract suite
 
