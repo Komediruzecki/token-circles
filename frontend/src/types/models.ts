@@ -2,6 +2,7 @@
  * Finance Manager TypeScript Type Definitions
  * Based on database schema and API responses
  */
+import type { AccountType as SharedAccountType } from '../../../shared/accountSchema'
 
 // ============ BASIC TYPES ============
 export type ProfileId = number
@@ -17,7 +18,8 @@ export type BillId = number
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY' | (string & {})
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'deduction'
 export type BudgetPeriod = 'monthly' | 'weekly' | 'yearly'
-export type AccountType = 'giro' | 'savings' | 'ib' | 'cash'
+/** The types the app has: `ACCOUNT_TYPES` in shared/accountSchema.ts. */
+export type AccountType = SharedAccountType
 
 export type PageName =
   | 'dashboard'
@@ -200,7 +202,11 @@ export interface Account {
   id: AccountId
   name: string
   bank_name?: string | null
-  type: AccountType
+  /**
+   * One of the types the app has, or a type this build does not have (a later build's), kept as
+   * it is and shown as a plain account (core/accountTypes.ts).
+   */
+  type: AccountType | (string & {})
   /** Profile base currency. Account balances never mix native currency units. */
   currency: Currency
   /** Current balance in the profile base currency. */

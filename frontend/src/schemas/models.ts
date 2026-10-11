@@ -4,6 +4,7 @@
 // always evaluate before its body, making this chunk-order-independent.
 import '../core/zodConfig'
 import { z } from 'zod'
+import { storedAccountType } from '../../../shared/accountSchema'
 
 export const ProfileSchema = z.object({
   id: z.number(),
@@ -40,7 +41,10 @@ export const AccountSchema = z.object({
   id: z.number(),
   name: z.string(),
   bank_name: z.string().optional().nullable(),
-  type: z.enum(['giro', 'savings', 'ib', 'cash']),
+  // Any string: one type this build does not have (a later build's, or one an API client stored)
+  // failed the whole list. It is kept as it is and shows as a plain account (core/accountTypes.ts);
+  // a type v4 renamed reads as the one that replaced it.
+  type: z.string().transform(storedAccountType),
   currency: z.string(),
   balance: z.number(),
   notes: z.string().optional().nullable(),

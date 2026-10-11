@@ -662,6 +662,30 @@ All notable changes to Token Circles are documented here. The format is based on
   with a second registration of `POST /api/calculator/compound-interest`. Achievements leave out a
   loan deleted while they count. The `formButtonType` guard reads the whole tag.
 
+- **Account types: one list, checked by every writer, and a reader that keeps the rest.**
+  `ACCOUNT_TYPES` in `shared/accountSchema.ts` is the list. MCP `create_account` stored any string
+  (`z.string().max(50)`, described as "e.g. giro, savings, credit, cash"); its `type` is now
+  `z.enum(ACCOUNT_TYPES)`, and the tool and field descriptions are built from the list and
+  `ACCOUNT_TYPE_WORDS`. `POST /api/import/execute` in both runtimes reads each `accountTypes` value
+  with `readAccountType` (the Accounts form's reading: blank is giro, `checking`, `investment` and
+  `retirement` are their v4 replacements, case and spaces ignored) and answers 422 before any write
+  for a type the app does not have: `validation_errors` holds `accountTypes.<name>` with
+  `ACCOUNT_MESSAGES.type`, and `error` is `importedAccountTypeError(name)`, the same words in both.
+  A dry run refuses it too. The Worker stored the value raw and local-first cast it. Where no client
+  chose a type (the sheet sync, email-in, `/api/v1/import`, MCP `create_transactions`), an account
+  is still giro, and local-first's IB detection still gives `ib`. The accounts routes and handlers
+  already ran `checkAccountCreate` and `checkAccountEdit`; restore copies rows as stored. On the
+  client, `AccountSchema.type` was `z.enum`, so one account of another type failed
+  `api.getAccounts()` (Transactions, quick entry, Tags) for every account; it is now
+  `z.string().transform(storedAccountType)`, which keeps an unknown type and reads a v4 name as its
+  replacement, as local-first's `normalizeAccount` now does through the same function.
+  `Account.type` is `AccountType | (string & {})`. `core/accountTypes.ts` shows such an account as
+  a plain one: the badge on Accounts and the Transactions account select say "account", the
+  constellation says "Account", with the default icon and colour. An edit sends the stored type
+  back unchanged, so this is what keeps a rollback safe once a build writes a new type. Tests: two
+  contract scenarios (`imports.ts`, both runtimes), `mcp-tools-write.test.ts`,
+  `api.getAccounts.test.ts`, and the Accounts page in `accountForm.test.tsx`.
+
 ### Tests and tooling
 
 - **The release suite** (#593). `frontend/tests/release/` runs the 5.16 dev test scope in both

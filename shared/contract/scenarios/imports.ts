@@ -1,3 +1,4 @@
+import { ACCOUNT_MESSAGES, importedAccountTypeError } from '../../accountSchema';
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
 import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
 import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
@@ -165,6 +166,50 @@ export const imports = [
         'Bank Fees': ['taxes', null],
         Pets: [null, null],
       });
+    }
+  ),
+
+  scenario(
+    'an import refuses an account type the app does not have, and writes nothing',
+    async (api, expect) => {
+      // The Import page offers four types; a client that sends another one is told which, at the
+      // account, before anything is written. Stored, one unknown type used to fail the app's
+      // whole account list.
+      await account(api, expect, 'Everyday', 1000);
+      for (const dry_run of [true, false]) {
+        const reply = await api.post(
+          '/api/import/execute',
+          executeBody({ accountTypes: { Savings: 'credit' }, dry_run })
+        );
+        expect(reply.status, `dry_run ${dry_run}`).toBe(422);
+        expect(reply.body.error).toBe(importedAccountTypeError('Savings'));
+        expect(reply.body.validation_errors).toContainEqual({
+          field: 'accountTypes.Savings',
+          reason: ACCOUNT_MESSAGES.type,
+        });
+      }
+      expect(await listTransactions(api, expect)).toEqual([]);
+      expect(await accountNamed(api, expect, 'Savings')).toBeUndefined();
+    }
+  ),
+
+  scenario(
+    'an import reads an account type as the Accounts form does, and makes no type a giro',
+    async (api, expect) => {
+      await account(api, expect, 'Everyday', 1000);
+      // A type v4 renamed is the type that replaced it, whatever its case.
+      await execute(api, expect, { accountTypes: { Savings: ' Checking ' } });
+      expect(await accountNamed(api, expect, 'Savings')).toMatchObject({ type: 'giro' });
+
+      // No type for the account at all: the import makes it a giro account.
+      await execute(api, expect, {
+        rows: [['2026-03-05', 'To pocket', '20', 'Pocket', 'Everyday', 'transfer']],
+        categoryTypes: { Pocket: 'account' },
+        accountTypes: {},
+        accountBalances: {},
+        accountBalanceDates: {},
+      });
+      expect(await accountNamed(api, expect, 'Pocket')).toMatchObject({ type: 'giro' });
     }
   ),
 

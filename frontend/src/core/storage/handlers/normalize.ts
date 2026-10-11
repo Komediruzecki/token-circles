@@ -11,13 +11,13 @@
  * writes complete rows for new ones.
  */
 
-import { LEGACY_ACCOUNT_TYPES } from '../../../../../shared/accountSchema'
+import { storedAccountType } from '../../../../../shared/accountSchema'
 
 type Row = Record<string, unknown>
 
 // v4 renamed account types (checking→giro, investment/retirement→ib); existing IndexedDB rows
-// seeded by older builds may still hold the legacy values (LEGACY_ACCOUNT_TYPES, which the
-// account rules read the same way).
+// seeded by older builds may still hold the legacy values (LEGACY_ACCOUNT_TYPES, which
+// storedAccountType and the account rules read the same way).
 
 /**
  * Categories made through the local `POST /api/categories` before it wrote complete rows hold the
@@ -42,8 +42,9 @@ export function normalizeCategory<T>(cat: T): T {
 
 export function normalizeAccount<T>(acct: T): T {
   const a: Row = { notes: '', ...(acct as Row) }
-  const type = String(a.type)
-  if (type in LEGACY_ACCOUNT_TYPES) a.type = LEGACY_ACCOUNT_TYPES[type]
+  // A type v4 renamed reads as the one that replaced it; any other is kept as it is, one this
+  // build does not have included (the pages show it as a plain account).
+  a.type = storedAccountType(a.type)
   return a as T
 }
 
