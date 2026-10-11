@@ -51,6 +51,10 @@ export const AccountSchema = z.object({
   profile_id: z.number(),
   starting_balance: z.number().optional().nullable(),
   starting_date: z.string().optional().nullable(),
+  // A credit card's limit or a Giro account's overdraft, and the yearly rate on money owed
+  // (migration 0037). Null for none given; a local row from before them has neither key.
+  credit_limit: z.number().optional().nullable(),
+  credit_rate: z.number().optional().nullable(),
 })
 
 export const TransactionSchema = z.object({

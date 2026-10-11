@@ -172,14 +172,14 @@ export const imports = [
   scenario(
     'an import refuses an account type the app does not have, and writes nothing',
     async (api, expect) => {
-      // The Import page offers four types; a client that sends another one is told which, at the
-      // account, before anything is written. Stored, one unknown type used to fail the app's
+      // The Import page offers the app's types; a client that sends another one is told which, at
+      // the account, before anything is written. Stored, one unknown type used to fail the app's
       // whole account list.
       await account(api, expect, 'Everyday', 1000);
       for (const dry_run of [true, false]) {
         const reply = await api.post(
           '/api/import/execute',
-          executeBody({ accountTypes: { Savings: 'credit' }, dry_run })
+          executeBody({ accountTypes: { Savings: 'loan' }, dry_run })
         );
         expect(reply.status, `dry_run ${dry_run}`).toBe(422);
         expect(reply.body.error).toBe(importedAccountTypeError('Savings'));

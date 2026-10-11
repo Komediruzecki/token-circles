@@ -42,11 +42,11 @@ function answer(rows: unknown[]): void {
 
 describe('api.getAccounts', () => {
   it('loads a list holding a type this build does not know, and keeps the type', async () => {
-    answer([row(1, 'Everyday', 'giro'), row(2, 'Visa', 'credit'), row(3, 'Pot', 'savings')])
+    answer([row(1, 'Everyday', 'giro'), row(2, 'Car loan', 'loan'), row(3, 'Pot', 'savings')])
     const accounts = await api.getAccounts()
     expect(accounts.map((a) => [a.name, a.type])).toEqual([
       ['Everyday', 'giro'],
-      ['Visa', 'credit'],
+      ['Car loan', 'loan'],
       ['Pot', 'savings'],
     ])
   })
@@ -55,5 +55,21 @@ describe('api.getAccounts', () => {
     answer([row(1, 'Old', 'checking'), row(2, 'Broker', 'investment')])
     const accounts = await api.getAccounts()
     expect(accounts.map((a) => a.type)).toEqual(['giro', 'ib'])
+  })
+})
+
+describe("a credit card's limit and rate", () => {
+  it('are kept by the reader, and read as none when a row has neither', async () => {
+    answer([
+      { ...row(1, 'Visa', 'credit'), balance: -350, credit_limit: 2000, credit_rate: 15.9 },
+      { ...row(2, 'Everyday', 'giro'), credit_limit: null, credit_rate: null },
+      row(3, 'Pot', 'savings'),
+    ])
+    const accounts = await api.getAccounts()
+    expect(accounts.map((a) => [a.name, a.type, a.credit_limit, a.credit_rate])).toEqual([
+      ['Visa', 'credit', 2000, 15.9],
+      ['Everyday', 'giro', null, null],
+      ['Pot', 'savings', undefined, undefined],
+    ])
   })
 })

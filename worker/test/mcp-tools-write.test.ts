@@ -107,10 +107,10 @@ describe('write tools', () => {
     expect(count?.n).toBe(2);
   });
 
-  // The tool stored any string as the type, and its description suggested "credit", a type the
-  // app does not have: the app's account list then failed to load, every account with it.
+  // The tool stored any string as the type: one the app does not have failed the app's account
+  // list, every account with it.
   it('create_account refuses a type the app does not have, and stores nothing', async () => {
-    for (const type of ['credit', 'loan']) {
+    for (const type of ['loan', 'mortgage']) {
       const result = await call('create_account', { name: `Card ${type}`, type, currency: 'EUR' });
       expect(result.isError, `type "${type}"`).toBe(true);
       expect(result.content[0].text).toContain('type');
@@ -139,9 +139,9 @@ describe('write tools', () => {
     const tool = tools.find((t) => t.name === 'create_account');
     const type = tool.inputSchema.properties.type;
     expect(type.enum).toEqual([...ACCOUNT_TYPES]);
-    for (const said of [tool.description, type.description]) {
-      for (const name of ACCOUNT_TYPES) expect(said).toContain(`${name} (`);
-      expect(said).not.toMatch(/credit|card/);
+    // Each says what every type is, "giro (a current account)", and names no other.
+    for (const said of [tool.description, type.description] as string[]) {
+      expect([...said.matchAll(/(\w+) \(/g)].map((match) => match[1])).toEqual([...ACCOUNT_TYPES]);
     }
   });
 

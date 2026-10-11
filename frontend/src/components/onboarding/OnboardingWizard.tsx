@@ -56,6 +56,7 @@ const ACCOUNT_TYPE_LABELS: { value: AccountType; label: string }[] = [
   { value: 'savings', label: 'Savings' },
   { value: 'ib', label: 'Investment' },
   { value: 'cash', label: 'Cash' },
+  { value: 'credit', label: 'Credit Card' },
 ]
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'JPY', 'CAD']

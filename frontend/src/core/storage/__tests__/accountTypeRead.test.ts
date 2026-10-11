@@ -41,7 +41,7 @@ beforeEach(async () => {
       notes: '',
     } as never)
   await account(1, 'A everyday', 'giro')
-  await account(2, 'B visa', 'credit')
+  await account(2, 'B car loan', 'loan')
   await account(3, 'C old', 'checking')
   await account(4, 'D bare')
 })
@@ -53,7 +53,7 @@ describe('a stored account type, read back in local-first', () => {
   it('is kept when this build does not have it, and the list loads', async () => {
     const expected = [
       ['A everyday', 'giro'],
-      ['B visa', 'credit'],
+      ['B car loan', 'loan'],
       ['C old', 'giro'],
       ['D bare', 'giro'],
     ]
@@ -61,5 +61,18 @@ describe('a stored account type, read back in local-first', () => {
     expect(res.status).toBe(200)
     expect(typesOf(await res.json())).toEqual(expected)
     expect(typesOf(await api.getAccounts('active'))).toEqual(expected)
+  })
+})
+
+describe('an account stored before limits and rates', () => {
+  // Migration 0037's columns read NULL on the Worker for a row from before them. A local row from
+  // before them has neither key, and reads the same.
+  it('reads none for both, as the Worker answers', async () => {
+    const res = await routeApiRequest('/api/accounts')
+    const rows = (await res.json()) as Array<Record<string, unknown>>
+    expect(rows).toHaveLength(4)
+    for (const row of rows) {
+      expect(row, String(row.name)).toMatchObject({ credit_limit: null, credit_rate: null })
+    }
   })
 })

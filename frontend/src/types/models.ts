@@ -216,6 +216,13 @@ export interface Account {
   /** Opening balance in the profile base currency. */
   starting_balance?: number | null
   starting_date?: string | null
+  /**
+   * How much a credit card lets you owe, or how far below zero a Giro account's overdraft goes, in
+   * the profile base currency. Null for none given.
+   */
+  credit_limit?: number | null
+  /** The yearly percentage charged on money owed on the account. Null for none given. */
+  credit_rate?: number | null
 }
 
 // ============ BUDGETS ============

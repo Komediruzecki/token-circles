@@ -32,6 +32,7 @@ const TYPE_META: Record<string, { color: string; label: string }> = {
   ib: { color: '#f0a860', label: 'Investment' },
   investment: { color: '#f0a860', label: 'Investment' },
   cash: { color: '#c9a0ff', label: 'Cash' },
+  credit: { color: '#f48fa0', label: 'Credit card' },
 }
 // A type this build does not have is a plain account (core/accountTypes.ts).
 const typeMeta = (t: string) =>

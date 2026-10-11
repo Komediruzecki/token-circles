@@ -40,6 +40,12 @@ All notable changes to Token Circles are documented here. The format is based on
   `essential INTEGER`, with no default and no rewrite: every existing category reads NULL for both,
   which the app reads as "go by the name". Safe to apply before the code: the Worker before it
   names its columns on every insert, and the client before it drops keys its schema lacks.
+- `0037_account_credit.sql` adds two nullable columns to `accounts`, `credit_limit REAL` and
+  `credit_rate REAL`, with no default and no rewrite. Safe to apply before the code, for the same
+  reasons. The code also writes a new `accounts.type`, `credit`: a client from before the tolerant
+  account reader (`fix(accounts)`, the reader keeps a type it lacks) fails to load a list holding
+  one, so that fix ships in an earlier release, and no rollback goes past it once a credit account
+  exists.
 
 ### Loans
 
@@ -617,6 +623,25 @@ All notable changes to Token Circles are documented here. The format is based on
   both columns, which the Worker's restore copies by `PRAGMA table_info` and local-first's as whole
   rows), `api.getCategories.kinds.test.ts`, `categoryKindField.test.tsx`, `demoFoodSplit.test.ts`
   and `dangerZoneCategoriesReset.test.tsx`.
+- **Credit cards and overdrafts** (`shared/accountSchema.ts`, migration 0037). `credit` joins
+  `ACCOUNT_TYPES` (MCP `create_account` describes it as "a credit card"), and every place that
+  offers a type offers it: the Accounts dialog, the transaction form's new-account row, the import's
+  mapping step and the wizard. `credit_limit` (0 or more) and `credit_rate` (a yearly percentage
+  from 0 to 100) are read by `takesCreditLine` types only, a credit card and a Giro account: a create
+  of another type that sends either is refused at that field, and an edit that gives the account
+  another type clears both. The balance stays signed, so money owed is below zero and balance,
+  import and transfer code is unchanged. Both runtimes store both columns; `normalizeAccount` reads
+  a local row from before them as null for both, and the client's `AccountSchema` takes both as
+  optional numbers. The Accounts dialog shows Credit Limit or Overdraft Limit and Interest Rate for
+  those two types, and cash accounts get a banknote icon so the card icon is a credit card's.
+- **Tests:** `worker/test/account-credit.test.ts` (the migration's columns), a contract scenario in
+  both runtimes (stored, read, refused on another type and out of range, cleared on a type change
+  or a blank), a backup scenario (both columns survive a restore), the rules in
+  `accountSchema.test.ts`, the dialog, the badge and the icons in `accountForm.test.tsx`, both
+  readers (`api.getAccounts.test.ts`, `accountTypeRead.test.ts`), and
+  `src/__tests__/accountTypeChoices.test.ts`, which fails when a place that offers account types
+  and `ACCOUNT_TYPES` disagree. The tests that used `credit` as the type a build does not have use
+  `loan` now.
 
 ### CRUD contract suite
 

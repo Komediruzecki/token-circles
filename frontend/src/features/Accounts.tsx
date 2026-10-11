@@ -32,6 +32,7 @@
  */
 
 import { createEffect, createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { takesCreditLine } from '../../../shared/accountSchema'
 import AccountConstellation from '../components/AccountConstellation'
 import Badge from '../components/Badge'
 import ConfirmButton from '../components/ConfirmButton'
@@ -57,6 +58,9 @@ interface Account {
   bank_name?: string
   starting_balance?: number
   starting_date?: string | null
+  /** A credit card's limit or a Giro account's overdraft, and the yearly rate on money owed. */
+  credit_limit?: number | null
+  credit_rate?: number | null
   last_activity?: string
   profile_id: number
 }
@@ -162,12 +166,16 @@ export default function Accounts() {
   // Get account type badge status
   const getAccountBadgeStatus = (
     type: string
-  ): 'primary' | 'success' | 'warning' | 'info' | 'default' => {
-    const statusMap: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'default'> = {
+  ): 'primary' | 'success' | 'warning' | 'info' | 'expense' | 'default' => {
+    const statusMap: Record<
+      string,
+      'primary' | 'success' | 'warning' | 'info' | 'expense' | 'default'
+    > = {
       giro: 'primary',
       savings: 'success',
       ib: 'info',
       cash: 'warning',
+      credit: 'expense',
     }
     return statusMap[type] || 'default'
   }
@@ -179,7 +187,10 @@ export default function Accounts() {
       savings:
         'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
       ib: 'M13 17V9m-4 8v-4m8 4v-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-      cash: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
+      // Banknotes. The card below was cash's icon until cards became a type of their own.
+      cash: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
+      credit:
+        'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
     }
     const d =
       paths[type] ||
@@ -520,9 +531,64 @@ export default function Accounts() {
                     <option value="savings">Savings</option>
                     <option value="ib">Investment / Brokerage</option>
                     <option value="cash">Cash</option>
+                    <option value="credit">Credit Card</option>
                   </select>
                 )}
               </Field>
+              <Show when={takesCreditLine(accountForm.values.type)}>
+                <Field
+                  form={accountForm}
+                  name="credit_limit"
+                  label={`${accountForm.values.type === 'credit' ? 'Credit Limit' : 'Overdraft Limit'} (${getLocalCurrency()})`}
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.formHint}
+                  hint={
+                    accountForm.values.type === 'credit'
+                      ? 'The most the card lets you owe.'
+                      : "How far below zero the bank lets this account go. Leave it blank if there's no overdraft."
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="0.00"
+                      data-test-id="account-credit-limit"
+                      value={accountForm.values.credit_limit}
+                      onInput={(e) => accountForm.set('credit_limit', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+                <Field
+                  form={accountForm}
+                  name="credit_rate"
+                  label="Interest Rate (%)"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.formHint}
+                  hint={
+                    accountForm.values.type === 'credit'
+                      ? 'The yearly rate the card charges on money you owe.'
+                      : 'The yearly rate the bank charges while the account is below zero.'
+                  }
+                >
+                  {(control) => (
+                    <input
+                      {...control}
+                      type="text"
+                      inputmode="decimal"
+                      class={styles.formControl}
+                      placeholder="e.g., 15.9"
+                      data-test-id="account-credit-rate"
+                      value={accountForm.values.credit_rate}
+                      onInput={(e) => accountForm.set('credit_rate', e.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              </Show>
               <Field
                 form={accountForm}
                 name="bank_name"
@@ -587,9 +653,16 @@ export default function Accounts() {
                 labelClass={styles.formLabel}
                 hintClass={styles.formHint}
                 hint={
-                  modalMode() === 'edit'
-                    ? 'Correcting this adjusts the starting balance so your transaction history stays intact.'
-                    : undefined
+                  [
+                    accountForm.values.type === 'credit'
+                      ? 'Money you owe on the card is a balance below zero, like -350.'
+                      : '',
+                    modalMode() === 'edit'
+                      ? 'Correcting this adjusts the starting balance so your transaction history stays intact.'
+                      : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ') || undefined
                 }
               >
                 {(control) => (

@@ -14,6 +14,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Forms say what is wrong, under the field.** A refused save marks the field and says why, in the same words signed in or without an account. That covers the forms from transactions, budgets and loans to Settings, import, sign-in and support.
 - **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one, see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
 - **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
+- **Credit cards, and overdrafts with a rate.** A credit card is its own account type, with a limit and an interest rate, and a Giro account can carry its overdraft's. Cash accounts show banknotes now, so the card icon means a card.
 
 ### Changed
 

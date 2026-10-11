@@ -41,7 +41,8 @@ export function normalizeCategory<T>(cat: T): T {
 }
 
 export function normalizeAccount<T>(acct: T): T {
-  const a: Row = { notes: '', ...(acct as Row) }
+  // A row stored before migration 0037 has no limit or rate: none, as the Worker answers.
+  const a: Row = { notes: '', credit_limit: null, credit_rate: null, ...(acct as Row) }
   // A type v4 renamed reads as the one that replaced it; any other is kept as it is, one this
   // build does not have included (the pages show it as a plain account).
   a.type = storedAccountType(a.type)

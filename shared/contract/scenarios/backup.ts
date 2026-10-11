@@ -76,6 +76,18 @@ async function backUpAndRestore(api: ContractApi, expect: Expect) {
   return { before, mine, theirs, me, partner };
 }
 
+/**
+ * Takes the whole-account backup as it stands and restores it, as Settings does, and answers the
+ * restored "Me" profile to read it back from.
+ */
+async function restoredAsIs(api: ContractApi, expect: Expect): Promise<ContractApi> {
+  const taken = await api.unscoped.get('/api/export');
+  expectOk(expect, taken, 'GET /api/export');
+  expectOk(expect, await api.unscoped.post('/api/import', taken.body), 'POST /api/import');
+  const me = (await profileList(api.unscoped, expect)).find((p) => p.name === 'Me')!;
+  return api.as(me.id as number);
+}
+
 export const backup = [
   scenario(
     'a backup is taken and restored, and everything in it comes back',
@@ -115,18 +127,33 @@ export const backup = [
       });
       await added(api, expect, '/api/categories', { name: 'Pets', type: 'expense' });
 
-      const taken = await api.unscoped.get('/api/export');
-      expectOk(expect, taken, 'GET /api/export');
-      expectOk(expect, await api.unscoped.post('/api/import', taken.body), 'POST /api/import');
-
-      const me = (await profileList(api.unscoped, expect)).find((p) => p.name === 'Me')!;
-      const categories = (await api.as(me.id as number).get('/api/categories')).body as Json[];
+      const back = await restoredAsIs(api, expect);
+      const categories = (await back.get('/api/categories')).body as Json[];
       const named = (name: string) => categories.find((c) => c.name === name);
       expect(named('Market')).toMatchObject({ kind: 'groceries', essential: 0 });
       // A category whose kind is still a guess from its name has none stored, and gets none.
       expect(named('Pets')).toMatchObject({ kind: null, essential: null });
     }
   ),
+
+  scenario("a backup keeps a credit card's limit and rate", async (api, expect) => {
+    await added(api, expect, '/api/accounts', {
+      name: 'Visa',
+      type: 'credit',
+      currency: 'EUR',
+      balance: -350,
+      credit_limit: 2000,
+      credit_rate: 15.9,
+    });
+
+    const back = await restoredAsIs(api, expect);
+    const accounts = (await back.get('/api/accounts')).body as Json[];
+    expect(accounts.find((a) => a.name === 'Visa')).toMatchObject({
+      type: 'credit',
+      credit_limit: 2000,
+      credit_rate: 15.9,
+    });
+  }),
 
   scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {
     const { mine, theirs } = await backUpAndRestore(api, expect);
