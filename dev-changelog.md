@@ -660,6 +660,21 @@ All notable changes to Token Circles are documented here. The format is based on
   `importLogFormatsRead.test.ts` (a local log from before reads null), two scenarios in both
   runtimes (stored and dropped; kept by a backup and restore), and `tests/import.spec.ts`, where a
   Revolut statement imported through the Bank Imports tab is logged as `revolut`.
+- **A deduction lowers income; it is never spending** (`shared/guidance/flows.ts`). A deduction is
+  pay that never reaches an account (tax, a pension contribution at source): `flowsOf` answers
+  `income` (income less deductions), `deductions` and `spending` (expenses only) for a set of
+  entries at the amounts the caller gives, `flowsByMonth` the same per month, and `savedOf` income
+  less spending. Achievements read through it: saving months (the same months as before, since
+  income beat expenses plus deductions exactly when income less deductions beat expenses), the
+  average monthly spend behind rainy-day (deductions out), the year in review (income net of
+  deductions, expenses without them, the same saved) and `monthInTheRed` (the same months, its
+  figures net). Balances and the emergency fund calculator already read a deduction this way.
+  Earned badges stay earned. No form creates a deduction; the API, the MCP and older data hold
+  them.
+- **Tests:** `guidanceFlows.test.ts` (a table of entry sets) and
+  `achievements/__tests__/deductions.test.ts`, a guard on each place achievements count spending
+  (rainy-day, saving months, the year in review, a month in the red) and on the code: a sum listing
+  expense and deduction together, anywhere in `frontend/src` or `shared/`, fails it.
 
 ### Achievements
 

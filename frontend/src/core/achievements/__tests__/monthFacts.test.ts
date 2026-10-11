@@ -30,12 +30,13 @@ describe('uncategorisedIn', () => {
 
 describe('monthInTheRed', () => {
   it('says how much a month spent and earned when spending was more', () => {
+    // A deduction lowers what came in; it is not spending (shared/guidance/flows.ts).
     const list = [
       tx('2026-08-01', { type: 'income', amount: 100 }),
       tx('2026-08-02', { amount: -80 }),
       tx('2026-08-03', { type: 'deduction', amount: 30 }),
     ]
-    expect(monthInTheRed(list)).toEqual({ income: 100, out: 110 })
+    expect(monthInTheRed(list)).toEqual({ income: 70, out: 80 })
   })
 
   it('says nothing for a month that earned as much as it spent, or more', () => {

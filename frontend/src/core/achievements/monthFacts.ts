@@ -3,7 +3,8 @@
  * Progress page's advice (advice.ts) and for any other place that tells a person what to look at
  * next, so the two can never disagree about a number.
  */
-import { baseAmount, sumTypes } from './evaluate'
+import { flowsOf } from '../../../../shared/guidance/flows'
+import { baseAmount } from './evaluate'
 import type { EvaluateInput, Tx } from './evaluate'
 
 /** Entries with no category. A transfer needs none, so transfers are left out. */
@@ -15,14 +16,14 @@ export function uncategorisedIn(list: Tx[]): number {
 const IN_THE_RED_MIN_ENTRIES = 3
 
 /**
- * A month that spent more than it earned: what came in and what went out, or null. Deductions
- * count as outflow, and a month of fewer than three entries says too little to judge.
+ * A month that spent more than it earned: what came in and what went out, or null. What came in
+ * is income less deductions, and what went out is expenses (shared/guidance/flows.ts). A month of
+ * fewer than three entries says too little to judge.
  */
 export function monthInTheRed(list: Tx[] | undefined): { income: number; out: number } | null {
   if (!list || list.length < IN_THE_RED_MIN_ENTRIES) return null
-  const income = sumTypes(list, ['income'])
-  const out = sumTypes(list, ['expense', 'deduction'])
-  return out > income ? { income, out } : null
+  const { income, spending } = flowsOf(list, baseAmount)
+  return spending > income ? { income, out: spending } : null
 }
 
 /**

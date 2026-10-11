@@ -28,6 +28,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.
 - **Email links finish where you sign in.** A confirm or change-of-address link opened in another browser completes once you sign in to that account there.
 - **Sign-in history is kept for 90 days**, and deleting your account deletes it with everything else.
+- **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 
 ### Fixed
 

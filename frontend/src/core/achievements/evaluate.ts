@@ -3,6 +3,7 @@
  * an input, so a fixture profile always evaluates the same way. Runs over arrays the app already
  * holds; cost is one pass per array.
  */
+import { flowsOf, savedOf } from '../../../../shared/guidance/flows'
 import { amortize, payoffDate } from '../../../../shared/loanSchedule'
 import { trackedMonthsOf } from '../../../../shared/trackedMonths'
 import { normalizedTransactionAmount } from '../transactionAmount'
@@ -121,10 +122,9 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const trackedSet = new Set(tracked)
   const inMonth = (m: string): Tx[] => byMonth.get(m) ?? []
 
-  // Deductions count as outflow: what leaves the profile in the month.
-  const savingMonths = tracked.filter(
-    (m) => sum(inMonth(m), ['income']) > sum(inMonth(m), ['expense', 'deduction'])
-  )
+  // A month saved when what reached an account beat what was spent. A deduction lowers income
+  // and is never spending (shared/guidance/flows.ts).
+  const savingMonths = tracked.filter((m) => savedOf(flowsOf(inMonth(m), baseAmount)) > 0)
   const namedMonths = tracked.filter((m) =>
     inMonth(m).every((t) => t.type === 'transfer' || t.category_id !== null)
   )
@@ -185,11 +185,14 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
     return year === undefined ? null : `${year}-12`
   })()
 
-  /** Average monthly spend across tracked months: what "three months of spending" means here. */
+  /**
+   * Average monthly spend across tracked months: what "three months of spending" means here.
+   * Expenses only: a deduction is pay that never arrived, which no cushion pays.
+   */
   const avgMonthlySpend =
     tracked.length === 0
       ? 0
-      : tracked.reduce((acc, m) => acc + sum(inMonth(m), ['expense', 'deduction']), 0) /
+      : tracked.reduce((acc, m) => acc + flowsOf(inMonth(m), baseAmount).spending, 0) /
         tracked.length
 
   const reachedGoals = input.goals.filter(
