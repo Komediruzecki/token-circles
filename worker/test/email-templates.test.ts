@@ -7,6 +7,7 @@ import {
   renderBudgetAlert,
   renderEmailChange,
   renderEmailChangeNotice,
+  renderLoginCode,
   renderPasswordReset,
   renderSpendingReport,
   renderSupportAck,
@@ -25,7 +26,8 @@ const FOOTER_LINKS = [
 
 /** Every mail must carry the branded shell: dark scheme, logo, footer links, text twin. */
 function expectBrandedShell(mail: { subject: string; html: string; text: string }) {
-  expect(mail.subject).toContain('Token Circles');
+  // The wordmark. A subject need not say Token Circles: the From name does.
+  expect(mail.html).toContain('Token Circles');
   expect(mail.html).toContain('color-scheme');
   expect(mail.html).toContain('icon-192.png');
   for (const link of FOOTER_LINKS) expect(mail.html).toContain(link);
@@ -62,12 +64,41 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
+  it('account-exists notice offers Sign in, and Reset password as the quieter second button', () => {
+    const mail = renderAccountExists({ appUrl: 'https://tokencircles.com' });
+    expect(mail.html).toMatch(
+      /<a class="tc-btn" href="https:\/\/tokencircles\.com"[^>]*>Sign in<\/a>/
+    );
+    expect(mail.html).toMatch(
+      /<a class="tc-btn2" href="https:\/\/tokencircles\.com"[^>]*>Reset password<\/a>/
+    );
+    // Both open the sign-in screen, which is where Forgot password is, and the mail says so.
+    expect(mail.text).toContain('choose Forgot password on the sign-in screen');
+    expect(mail.text).toContain(
+      'Sign in: https://tokencircles.com\nReset password: https://tokencircles.com'
+    );
+  });
+
   it('password reset carries the link in html AND text, with ttl wording', () => {
     const mail = renderPasswordReset({ link: 'https://t.co/x?token=abc123', ttlHours: 2 });
     expectBrandedShell(mail);
     expect(mail.html).toContain('https://t.co/x?token=abc123');
-    expect(mail.text).toContain('https://t.co/x?token=abc123');
-    expect(mail.html).toContain('2 hours');
+    expect(mail.text).toContain('Reset password: https://t.co/x?token=abc123');
+    expect(mail.html).toContain('The link works once, for 2 hours.');
+    expect(mail.text).toContain(
+      "Didn't ask for a reset? Ignore this mail. Your password stays as it is."
+    );
+  });
+
+  it('sign-in code puts the code first in the subject, and large and monospaced in the mail', () => {
+    const mail = renderLoginCode({ code: '482913', ttlMinutes: 10 });
+    expectBrandedShell(mail);
+    expect(mail.subject).toBe('482913 is your Token Circles sign-in code');
+    expect(mail.html).toMatch(
+      /<td class="tc-code"[^>]*><span class="tc-text" style="font:700 36px\/1\.2 ui-monospace,[^"]*">482913<\/span>/
+    );
+    expect(mail.text).toContain('482913');
+    expect(mail.text).toContain('It works once, for 10 minutes.');
   });
 
   it('email change carries its link in html AND text, says when it expires and that nothing changes until then', () => {
@@ -75,9 +106,9 @@ describe('email templates', () => {
     const mail = renderEmailChange({ link, ttlHours: 24 });
     expectBrandedShell(mail);
     expect(mail.subject).toMatch(/confirm your new/i);
-    expect(mail.html).toContain(`href="${link}"`);
+    expect(mail.html).toContain(`href="${link.replaceAll('&', '&amp;')}"`);
     expect(mail.text).toContain(link);
-    expect(mail.html).toContain('24 hours');
+    expect(mail.html).toContain('The link works once, for 24 hours.');
     expect(mail.text).toContain('nothing changes');
     expect(mail.html).not.toContain('email/orbit.gif');
   });
@@ -85,12 +116,10 @@ describe('email templates', () => {
   it('email change says a sign-in finishes it, with the address the account signs in with now', () => {
     const link = 'https://api.example.com/verify';
     const mail = renderEmailChange({ link, ttlHours: 24 });
-    expect(mail.html).toContain(
-      "The link works once and expires in 24 hours. If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes."
-    );
-    expect(mail.text).toContain(
-      `(it expires in 24 hours). If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do:\n${link}`
-    );
+    const signIn =
+      "If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes.";
+    expect(mail.html).toContain(signIn.replaceAll("'", '&#39;'));
+    expect(mail.text).toContain(`${signIn}\n\nConfirm my new email: ${link}`);
   });
 
   it('email change link says only what is true for every account, Google ones included', () => {
@@ -117,7 +146,9 @@ describe('email templates', () => {
   it('email change notice can leave the new address out', () => {
     const mail = renderEmailChangeNotice({ newEmail: null, appUrl: 'https://tokencircles.com' });
     expectBrandedShell(mail);
-    expect(mail.text).toMatch(/asked to change its email address\./i);
+    expect(mail.text).toContain(
+      'asked to change its email address, and nothing changes unless the new address confirms it'
+    );
     expect(mail.html).not.toContain('@example.com');
     expect(mail.text).not.toContain('@example.com');
     expect(mail.html).not.toContain('null');
@@ -190,12 +221,36 @@ describe('email templates', () => {
     expect(renderBillsReminder({ bills: [] })).toBeNull();
   });
 
+  it('email change notice says what was asked in one sentence, and the one thing to do', () => {
+    const mail = renderEmailChangeNotice({
+      newEmail: 'new@example.com',
+      appUrl: 'https://tokencircles.com',
+    });
+    const paragraphs = [...mail.html.matchAll(/<p class="tc-soft"[^>]*>(.*?)<\/p>/g)].map(
+      (m) => m[1]
+    );
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]).toContain('asked to change its email to');
+    expect(paragraphs[0]).toContain('new@example.com</strong>');
+    expect(paragraphs[0]!.match(/\. |\.$/g)).toHaveLength(1);
+    expect(paragraphs[1]).toContain('open Settings, cancel the change');
+    expect([...mail.html.matchAll(/class="tc-btn2?"/g)]).toHaveLength(1);
+  });
+
   it('test-basic and support-ack render branded', () => {
     expectBrandedShell(renderTestBasic());
     const ack = renderSupportAck({ ticketId: 'TC-1A2B3C' });
     expectBrandedShell(ack);
     expect(ack.html).toContain('TC-1A2B3C');
-    expect(ack.subject).toContain('TC-1A2B3C');
+    expect(ack.subject).toBe('We got your message (TC-1A2B3C)');
+  });
+
+  it('test mail says delivery works, and never that the reminders look like it', () => {
+    // The reminders keep the first shell (maff's call of 2026-10-11), so they do not.
+    const mail = renderTestBasic();
+    expect(mail.subject).toBe('Test mail from Token Circles');
+    for (const part of [mail.html, mail.text]) expect(part).not.toMatch(/look like this/i);
+    expect(mail.text).toContain('mail from Token Circles reaches this address');
   });
 
   it('subjects mark test previews', () => {

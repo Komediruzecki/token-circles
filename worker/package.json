@@ -18,7 +18,7 @@
     "r2:create:prod": "wrangler r2 bucket create finance-manager-receipts",
     "secret:dev": "wrangler secret put JWT_SECRET --env dev && wrangler secret put GOOGLE_CLIENT_SECRET --env dev && wrangler secret put TURNSTILE_SECRET --env dev",
     "secret:prod": "wrangler secret put JWT_SECRET --env prod && wrangler secret put GOOGLE_CLIENT_SECRET --env prod && wrangler secret put TURNSTILE_SECRET --env prod",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "cf-typegen": "wrangler types",
     "test": "vitest run",
     "test:watch": "vitest"

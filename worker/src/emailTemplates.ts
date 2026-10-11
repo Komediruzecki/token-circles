@@ -14,6 +14,11 @@
  *
  * Two layouts live here: the mail layout of 2026-10-11 (renderMail), with the engraved art, dark
  * by default and paper in light mode; and the first shell (`shell`), dark only, with the orbit GIF.
+ *
+ * The sign-up and account mails are on the new layout. The mails that show an amount of money
+ * (the budget alert, the spending report, upcoming bills and the failed payment) stay on the first
+ * shell, word for word: maff's call of 2026-10-11. The two billing mails that show no amount stay
+ * there too until that call is made for them. worker/test/mail-catalogue.test.ts pins all six.
  */
 
 // ── Brand constants ───────────────────────────────────────────────────────────
@@ -569,159 +574,132 @@ export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = 
 
 /**
  * The link that moves an account to a new address, sent to that address. Opening it is the
- * change: until then the account keeps the address it has.
+ * change: until then the account keeps the address it has. It says only what is true for every
+ * account, Google ones included: the sign-in it may ask for is with the address in use now.
  */
 export function renderEmailChange(opts: {
   link: string;
   ttlHours: number;
   assetOrigin?: string;
 }): RenderedEmail {
-  const ttl = opts.ttlHours === 1 ? '1 hour' : `${opts.ttlHours} hours`;
-  const subject = `Confirm your new ${BRAND} email address`;
-  const footerReason = `Sent because this address was entered as the new email for a ${BRAND} account.`;
-  const body = `
-    ${h1('Confirm your new email')}
-    ${p(`Open the link below to make this the email address of your ${BRAND} account. From then on, mail about your account comes here.`)}
-    <div style="padding:8px 0 12px">${btn(opts.link, 'Confirm new email')}</div>
-    ${p(`The link works once and expires in ${ttl}. If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes.`, `font-size:12.5px;color:${C.faint}`)}
-    ${p(`If you didn't ask for this, ignore this email.`, `font-size:12.5px;color:${C.faint}`)}
-    ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Open the link to use this address for your account. It expires in ${ttl}.`,
-      body,
-      footerReason,
-      orbit: false,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text: `Confirm your new ${BRAND} email address\n\nOpen this link to make this the email address of your ${BRAND} account (it expires in ${ttl}). If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do:\n${opts.link}\n\nFrom then on, mail about your account comes here. Until you open the link, nothing changes. If you didn't ask for this, ignore this email.${textFooter(footerReason)}`,
-  };
+  return renderMail({
+    subject: `Confirm your new email for ${BRAND}`,
+    preheader: `Open the link and your account uses this address. It works for ${lasts(opts.ttlHours)}.`,
+    art: 'banner',
+    headline: 'Make this your new address.',
+    paragraphs: [
+      `Open the link to make this the email address of your ${BRAND} account. From then on, mail about your account comes here.`,
+      "If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes.",
+    ],
+    buttons: [{ label: 'Confirm my new email', href: opts.link }],
+    notes: [`The link works once, for ${lasts(opts.ttlHours)}.`],
+    paste: opts.link,
+    aside: "Didn't ask for this? Ignore this mail. Without the link, nothing changes.",
+    reason: `You are getting this because this address was entered as the new email for a ${BRAND} account.`,
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
 /**
  * Sent to an account's current address when a change to `newEmail` is asked for. It carries no
- * link that makes the change: it tells the owner, who can cancel the change from Settings.
- * `newEmail` is null when the notice should not name it (the current address is unconfirmed).
+ * link that makes the change: it says what was asked, in one sentence, and the one thing to do
+ * when it was not the owner, which is Settings, where the change can be cancelled. `newEmail` is
+ * null when the notice should not name it (the current address is unconfirmed).
  */
 export function renderEmailChangeNotice(opts: {
   newEmail: string | null;
   appUrl?: string;
 }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const subject = `A new email address was requested for your ${BRAND} account`;
-  const footerReason = 'Sent because a new email address was requested for your account.';
-  const ifNotYou = `If this was you, there's nothing more to do. If it wasn't, sign in, cancel the change in Settings, and choose Sign out on all devices under Settings, About.`;
   const named = opts.newEmail;
-  const asked = named
-    ? `asked to change its email address to <strong style="color:${C.text}">${escapeHtml(named)}</strong>.`
-    : 'asked to change its email address.';
-  const askedText = named
-    ? `asked to change its email address to ${named}.`
-    : 'asked to change its email address.';
-  const until = `Nothing changes unless ${named ? 'that' : 'the new'} address confirms it, with the link we sent there. Until then, you keep signing in with this one.`;
-  const body = `
-    ${h1('Email change requested')}
-    ${p(`Someone signed in to your ${BRAND} account ${asked}`)}
-    ${p(until)}
-    <div style="padding:8px 0 12px">${btn(`${app}/#settings`, 'Open Settings')}</div>
-    ${p(ifNotYou, `font-size:12.5px;color:${C.faint}`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Nothing changes unless ${named ?? 'the new address'} confirms it.`,
-      body,
-      footerReason,
-      orbit: false,
-      assetOrigin: opts.appUrl,
-    }),
-    text: `${subject}\n\nSomeone signed in to your ${BRAND} account ${askedText}\n\n${until}\n\n${ifNotYou}\nOpen Settings: ${app}/#settings${textFooter(footerReason)}`,
-  };
+  return renderMail({
+    subject: `Someone asked to change your ${BRAND} email`,
+    preheader: `Nothing changes unless ${named ?? 'the new address'} confirms it.`,
+    art: 'banner',
+    headline: 'A new email address is waiting.',
+    paragraphs: [
+      named
+        ? [
+            `Someone signed in to your ${BRAND} account asked to change its email to `,
+            { strong: named },
+            ', and nothing changes unless that address confirms it with the link we sent there.',
+          ]
+        : `Someone signed in to your ${BRAND} account asked to change its email address, and nothing changes unless the new address confirms it with the link we sent there.`,
+      "If that was you, there's nothing to do. If it wasn't, open Settings, cancel the change, and choose Sign out on all devices under About.",
+    ],
+    buttons: [{ label: 'Open Settings', href: `${app}/#settings` }],
+    reason: `You are getting this because a new email address was asked for on your ${BRAND} account.`,
+    assetOrigin: opts.appUrl,
+  });
 }
 
-/** Anti-enumeration notice: someone tried to register an existing address. */
+/**
+ * Anti-enumeration notice: someone tried to sign up with an address that has an account. Both
+ * buttons open the app's sign-in screen, which has Forgot password: the app has no link that
+ * opens the reset form itself.
+ */
 export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const subject = `You already have a ${BRAND} account`;
-  const body = `
-    ${h1('You already have an account')}
-    ${p(`Someone just tried to create a ${BRAND} account with this email address, but one already exists.`)}
-    ${p(`If that was you, simply sign in, or reset your password if you've forgotten it. If it wasn't you, no action is needed; your account is unchanged.`)}
-    <div style="padding:8px 0 4px">${btn(app, 'Sign in')}</div>
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: 'Someone tried to sign up with your address. Your account is unchanged.',
-      body,
-      footerReason: 'Security notice for your existing account.',
-      orbit: false,
-      assetOrigin: opts.appUrl,
-    }),
-    text: `You already have a ${BRAND} account\n\nSomeone tried to register with this email address, but an account already exists. If that was you, sign in or reset your password at ${app}\n\nIf it wasn't you, no action is needed.${textFooter('Security notice for your existing account.')}`,
-  };
+  return renderMail({
+    subject: `You already have a ${BRAND} account`,
+    preheader: 'Someone tried to sign up with your address. Your account is unchanged.',
+    art: 'banner',
+    headline: 'This address already has an account.',
+    paragraphs: [
+      `Someone just tried to create a ${BRAND} account with this email address, but one already exists.`,
+      "If that was you, sign in, or choose Forgot password on the sign-in screen to reset it. If it wasn't, there's nothing to do: your account is unchanged.",
+    ],
+    buttons: [
+      { label: 'Sign in', href: app },
+      { label: 'Reset password', href: app },
+    ],
+    reason: `You are getting this because someone tried to sign up for ${BRAND} with this address.`,
+    assetOrigin: opts.appUrl,
+  });
 }
 
-/** Password reset magic link. */
+/** The password reset link. */
 export function renderPasswordReset(opts: {
   link: string;
   ttlHours: number;
   assetOrigin?: string;
 }): RenderedEmail {
-  const ttl = opts.ttlHours === 1 ? '1 hour' : `${opts.ttlHours} hours`;
-  const subject = `Reset your ${BRAND} password`;
-  const body = `
-    ${h1('Reset your password')}
-    ${p(`We received a request to reset the password for your ${BRAND} account. Click the button below to choose a new one.`)}
-    <div style="padding:8px 0 12px">${btn(opts.link, 'Reset password')}</div>
-    ${p(`This link expires in ${ttl}. If you didn't request a reset, ignore this email — your password won't change.`, `font-size:12.5px;color:${C.faint}`)}
-    ${p(`If the button doesn't work, copy this link:<br /><span style="word-break:break-all;color:${C.muted}">${escapeHtml(opts.link)}</span>`, `font-size:12px;color:${C.faint};margin:0`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Choose a new password — the link expires in ${ttl}.`,
-      body,
-      footerReason: 'Sent because a password reset was requested for this address.',
-      orbit: false,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text: `Reset your ${BRAND} password\n\nOpen this link to choose a new password (expires in ${ttl}):\n${opts.link}\n\nIf you didn't request a reset, ignore this email — your password won't change.${textFooter('Sent because a password reset was requested for this address.')}`,
-  };
+  return renderMail({
+    subject: `Reset your ${BRAND} password`,
+    preheader: `Choose a new password. The link works for ${lasts(opts.ttlHours)}.`,
+    art: 'banner',
+    headline: 'Choose a new password.',
+    paragraphs: [
+      `Someone asked to reset the password of your ${BRAND} account. Open the link to choose a new one.`,
+    ],
+    buttons: [{ label: 'Reset password', href: opts.link }],
+    notes: [`The link works once, for ${lasts(opts.ttlHours)}.`],
+    paste: opts.link,
+    aside: "Didn't ask for a reset? Ignore this mail. Your password stays as it is.",
+    reason: 'You are getting this because a password reset was asked for on this address.',
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
+/** A one-time sign-in code. The subject starts with the code, so an inbox list shows it. */
 export function renderLoginCode(opts: {
   code: string;
   ttlMinutes: number;
   assetOrigin?: string;
 }): RenderedEmail {
-  const subject = `${opts.code} is your ${BRAND} sign-in code`;
-  const body = `
-    ${h1('Your sign-in code')}
-    ${p(`Enter this code on the ${BRAND} sign-in screen. It expires in ${opts.ttlMinutes} minutes and works once.`)}
-    <div style="padding:8px 0 12px;text-align:center">
-      <span style="display:inline-block;padding:12px 22px;border-radius:12px;background:${C.panel};border:1px solid ${C.border};font-family:'Courier New',monospace;font-size:30px;font-weight:700;letter-spacing:8px;color:${C.text}">${escapeHtml(opts.code)}</span>
-    </div>
-    ${p(`If you didn't try to sign in, ignore this email — nobody gets in without it.`, `font-size:12.5px;color:${C.faint}`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Your code expires in ${opts.ttlMinutes} minutes.`,
-      body,
-      footerReason: 'Sent because a sign-in code was requested for this address.',
-      orbit: false,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text: `Your ${BRAND} sign-in code: ${opts.code}\n\nEnter it on the sign-in screen. It expires in ${opts.ttlMinutes} minutes and works once.\n\nIf you didn't try to sign in, ignore this email — nobody gets in without it.${textFooter('Sent because a sign-in code was requested for this address.')}`,
-  };
+  return renderMail({
+    subject: `${opts.code} is your ${BRAND} sign-in code`,
+    preheader: `It works once, for ${opts.ttlMinutes} minutes.`,
+    art: 'banner',
+    headline: "Here's your sign-in code.",
+    code: opts.code,
+    paragraphs: [
+      `Enter it on the ${BRAND} sign-in screen. It works once, for ${opts.ttlMinutes} minutes.`,
+    ],
+    aside: "Didn't try to sign in? Ignore this mail. Nobody gets in without the code.",
+    reason: 'You are getting this because a sign-in code was asked for on this address.',
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
 // ── Billing mails (Stripe webhooks) ──────────────────────────────────────────
@@ -1057,46 +1035,39 @@ export function renderBillsReminder(opts: {
 
 // ── Small utility mails ───────────────────────────────────────────────────────
 
-/** Settings → "Send a test email" (basic connectivity check). */
+/**
+ * Settings, Email reminders, Test: checks that mail reaches the account's address. It does not
+ * say the reminders look like it: they keep the first shell (see the reminder mails above).
+ */
 export function renderTestBasic(opts: { assetOrigin?: string } = {}): RenderedEmail {
-  const subject = `Test email — ${BRAND}`;
-  const body = `
-    ${h1('Notifications are working')}
-    ${p('This is a test email from Token Circles — delivery to this address works. Reminder emails (budget alerts, spending reports, bill reminders) will look like this.')}
-    <div style="padding:2px 0 4px">${btn(`${APP_URL}/#settings`, 'Notification settings')}</div>
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: 'Delivery works — reminders will arrive like this.',
-      body,
-      footerReason: 'Sent on demand from Settings → Notifications.',
-      assetOrigin: opts.assetOrigin,
-    }),
-    text: `Notifications are working\n\nThis is a test email from ${BRAND} — delivery to this address works.\n\nNotification settings: ${APP_URL}/#settings${textFooter('Sent on demand from Settings → Notifications.')}`,
-  };
+  return renderMail({
+    subject: `Test mail from ${BRAND}`,
+    preheader: `Mail from ${BRAND} reaches this address.`,
+    art: 'banner',
+    headline: 'It got through.',
+    paragraphs: [
+      `This is the test you sent from Email reminders in Settings. It arrived, so mail from ${BRAND} reaches this address.`,
+      'Budget alerts, spending reports and bill reminders come here too, once you turn them on.',
+    ],
+    buttons: [{ label: 'Open Settings', href: `${APP_URL}/#settings` }],
+    reason: 'You are getting this because you chose Test under Email reminders in Settings.',
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
-/** Support-request acknowledgement (no user-controlled content — see support.ts). */
+/** Support-request acknowledgement. It repeats nothing the sender wrote: see support.ts. */
 export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string }): RenderedEmail {
-  const subject = `We received your message (${opts.ticketId}) — ${BRAND}`;
-  const body = `
-    ${h1('We got your message')}
-    ${p(`Thanks for reaching out. We've received your message and will get back to you as soon as we can.`)}
-    ${card('Your reference', `<span style="font-family:${FONT};font-weight:700;color:${C.text}">${escapeHtml(opts.ticketId)}</span> — please mention it if you follow up.`, C.warm)}
-    ${p(`If you didn't contact us, you can safely ignore this email.`, `font-size:12.5px;color:${C.faint};margin:14px 0 0`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Reference ${opts.ticketId} — we'll get back to you soon.`,
-      body,
-      footerReason: 'Confirmation for a message sent to our support inbox.',
-      orbit: false,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text: `We got your message\n\nThanks for reaching out to ${BRAND}. We've received your message and will reply as soon as we can.\nYour reference: ${opts.ticketId}\n\nIf you didn't contact us, you can safely ignore this email.${textFooter('Confirmation for a message sent to our support inbox.')}`,
-  };
+  return renderMail({
+    subject: `We got your message (${opts.ticketId})`,
+    preheader: `Your reference is ${opts.ticketId}. We'll reply as soon as we can.`,
+    art: 'banner',
+    headline: 'We got your message.',
+    paragraphs: [
+      `Thanks for writing to ${BRAND}. We'll get back to you as soon as we can.`,
+      ['Your reference is ', { strong: opts.ticketId }, '. Mention it if you write again.'],
+    ],
+    aside: "Didn't write to us? Ignore this mail.",
+    reason: `You are getting this because this address was given with a message to ${BRAND} support.`,
+    assetOrigin: opts.assetOrigin,
+  });
 }

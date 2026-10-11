@@ -274,6 +274,23 @@ All notable changes to Token Circles are documented here. The format is based on
   `Welcome email failed:` and is not retried. `resolveGoogleUser` returns `welcome`; `spendLink`
   and `confirmWithOwnLink` take the route's welcomer. Step 3 of the Welcome is the version for
   before finance prints ship: Progress, and the A year badge.
+- **The account mails moved to the new layout; the mails that show money did not**
+  (`worker/src/emailTemplates.ts`). On the layout now, with their facts kept and their em dashes
+  gone: the link to a new address (`renderEmailChange`); the notice to the old address
+  (`renderEmailChangeNotice`), one sentence of what was asked and the one thing to do, in Settings;
+  "already has an account" (`renderAccountExists`), with Sign in and Reset password, both to the
+  sign-in screen, which has Forgot password, since the app has no link to the reset form; the
+  password reset; the sign-in code, large and monospaced and still first in the subject; the test
+  mail ("Test mail from Token Circles"), which no longer says the reminders look like it; and the
+  support reply ("We got your message (TC-...)"). Left exactly as they were, by maff's call of
+  2026-10-11: the budget alert, the spending report, upcoming bills and the failed payment, which
+  show an amount; and with them the two billing mails that show none (the bank asking to confirm a
+  payment, a plan that ended), which that call did not name. `worker/scripts/mail-samples.ts`
+  renders every mail from plainly fake data, and `worker/test/mail-catalogue.test.ts` holds every
+  one to the rules (a sample of every renderer, a snapshot of every subject, under 102 KB, a text
+  twin with the card's links, no em dash on the new layout) and pins the six unchanged mails to
+  digests taken before the change. The worker's `typecheck` also checks `worker/scripts/`, which
+  has its own tsconfig.
 
 ### Errors
 

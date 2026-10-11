@@ -529,12 +529,9 @@ describe('the mail itself', () => {
     }
   });
 
-  it('words the account-exists notice without an em dash, up to the shared text footer', () => {
-    const upToFooter = (text: string) => text.slice(0, text.indexOf('\n—\n'));
+  it('words the account-exists notice without an em dash, and says the account is unchanged', () => {
     const exists = renderAccountExists({ appUrl: APP });
-    expect(exists.subject).not.toContain('—');
-    expect(exists.html).not.toContain('—');
-    expect(upToFooter(exists.text)).not.toContain('—');
+    for (const part of [exists.subject, exists.html, exists.text]) expect(part).not.toContain('—');
     expect(exists.html).toContain(
       'Someone just tried to create a Token Circles account with this email address, but one already exists.'
     );
@@ -542,7 +539,8 @@ describe('the mail itself', () => {
       'Someone tried to sign up with your address. Your account is unchanged.'
     );
     expect(exists.text).toContain(
-      `If that was you, sign in or reset your password at ${APP}\n\nIf it wasn't you, no action is needed.`
+      "If that was you, sign in, or choose Forgot password on the sign-in screen to reset it. If it wasn't, there's nothing to do: your account is unchanged."
     );
+    expect(exists.text).toContain(`Sign in: ${APP}\nReset password: ${APP}`);
   });
 });
