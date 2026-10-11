@@ -75,6 +75,31 @@ describe('the mail layout', () => {
     expect(card.inner).not.toContain('Your money, in clear orbit.');
   });
 
+  it('holds the card at 600 px in classic Outlook, in a table only Outlook for Windows reads', () => {
+    // Outlook for Windows ignores max-width, so the card would run the width of the window: a
+    // conditional comment that only its Word engine reads wraps the column in a fixed 600 px table.
+    const { html } = renderMail(SPEC);
+    const card = cardOf(html);
+    const blocks = [...html.matchAll(/<!--\[if mso\]>([\s\S]*?)<!\[endif\]-->/g)];
+    expect(blocks.map((block) => block[1])).toEqual([
+      '<table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px"><tr><td>',
+      '</td></tr></table>',
+    ]);
+    const [open, close] = blocks;
+    // Around the whole column: the wordmark, the card and the footer.
+    expect(open!.index).toBeLessThan(html.indexOf('https://dev.example/icon-192.png'));
+    expect(open!.index).toBeLessThan(card.start);
+    expect(close!.index).toBeGreaterThan(card.end);
+    expect(close!.index).toBeGreaterThan(html.indexOf(SPEC.reason));
+    // Inside the page's centring cell, and nothing but the column between the two.
+    expect(html.slice(0, open!.index)).toMatch(
+      /<td align="center" style="padding:22px 12px 30px">\n$/
+    );
+    expect(html.slice(close!.index + close![0].length)).toMatch(
+      /^\n<\/td><\/tr><\/table>\n<\/body>/
+    );
+  });
+
   it('holds the headline, the paragraphs, the button, its notes and the aside inside the card, in that order', () => {
     const { inner } = cardOf(renderMail(SPEC).html);
     const order = [

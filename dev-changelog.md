@@ -265,7 +265,8 @@ All notable changes to Token Circles are documented here. The format is based on
   under it, each full width), at most one list of numbered steps, and the footer outside the
   card. Dark by default; paper in light mode through
   `prefers-color-scheme`, with the page, card and button colours also set as `bgcolor` attributes
-  for classic Outlook. The system font stack, no Georgia. The art is two cuts of one image,
+  for classic Outlook, which also ignores `max-width`: an `<!--[if mso]>` table holds the column
+  (wordmark, card and footer) at 600 px there. The system font stack, no Georgia. The art is two cuts of one image,
   `frontend/public/email/hero-engraved-night-v1.jpg` (1200 x 560, for the welcome) and
   `banner-engraved-night-v1.jpg` (1199 x 360, for every other mail on the layout), loaded from the
   sending app. `/email/*` is now served `Cache-Control: public, max-age=31536000, immutable`, which
