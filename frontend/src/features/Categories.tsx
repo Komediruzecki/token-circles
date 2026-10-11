@@ -31,7 +31,13 @@
  * Manages expense and income categories with CRUD operations
  */
 import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
-import { categoryLookup, effectiveKind, KIND_LABELS, KINDS } from '../../../shared/guidance/kinds'
+import {
+  categoryLookup,
+  effectiveKind,
+  KIND_LABELS,
+  kindForName,
+  KINDS,
+} from '../../../shared/guidance/kinds'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -134,6 +140,13 @@ export default function Categories() {
     guessKind: (category) =>
       effectiveKind({ ...category, type: 'expense' }, categoryLookup(categories())),
   })
+  // The Kind field's empty choice: no kind stored, so the app goes by the guess. It says which.
+  const guessedKindLabel = () => {
+    const kind = categoryForm.guessed()
+    if (kind === null) return 'None yet: counts as needed every month'
+    const from = kindForName(categoryForm.values.name) === kind ? 'the name' : 'the parent'
+    return `From ${from}: ${KIND_LABELS[kind]}`
+  }
   const openCategoryModal = (category: Category | null) => {
     setEditingCategory(category)
     categoryForm.open(category)
@@ -527,7 +540,7 @@ export default function Categories() {
                       {/* `selected` on each option as well: the select's value is set before
                           its options exist when the dialog opens on a category. */}
                       <option value="" selected={categoryForm.values.kind === ''}>
-                        No kind
+                        {guessedKindLabel()}
                       </option>
                       <For each={KINDS}>
                         {(kind) => (

@@ -613,12 +613,14 @@ All notable changes to Token Circles are documented here. The format is based on
   (`imports.ts`) and in local-first (`importFlow.ts`). In the cloud, where a new account has no
   categories, that is how most categories get one.
 - **The Categories dialog** shows Kind and "Needed every month" for an expense category
-  (`categoryForm.ts`, `kinds: true`). Both start from the guess (`effectiveKind` over the page's
-  categories, so a child goes by its parent), the kind follows the name until one is picked, and the
-  box follows the kind until it is ticked. A save sends only what the person chose: a guess left
-  alone goes as null, so the app keeps going by the name, and a stored choice stays. The Budgets,
-  Bills and Goals dialogs send neither. `tests/quick-entry-phone.spec.ts` makes Groceries, not
-  Food.
+  (`categoryForm.ts`, `kinds: true`). Kind shows the stored kind; its empty choice is no kind
+  stored, labelled with the guess the app then goes by (`effectiveKind` over the page's
+  categories, so a child goes by its parent): "From the name: Eating out", "From the parent:
+  Groceries", or "None yet: counts as needed every month". The box follows the kind shown, or that
+  guess, until it is changed. A new category sends the kind shown (null for the empty choice) and
+  the box once changed; an edit sends either only when the person changed it (review F4 and F5
+  below). The Budgets, Bills and Goals dialogs send neither. `tests/quick-entry-phone.spec.ts` makes
+  Groceries, not Food.
 - **Tests:** `frontend/src/core/__tests__/guidanceKinds.test.ts` (the guess, the order of
   `effectiveKind`, `essentialOf`, the local defaults), `worker/test/category-kinds.test.ts` (the
   migration's columns, the Worker defaults), four contract scenarios in both runtimes (kinds
@@ -795,6 +797,21 @@ All notable changes to Token Circles are documented here. The format is based on
   parent, a profile with Food, Food beside Eating out), `worker/test/quick-entry-defaults.test.ts`
   (the Worker's defaults) and `components/__tests__/quickEntryGuessByKind.test.tsx` (the Command
   Bar files by kind, and every example in its placeholder gets a category on the defaults).
+- **The category dialog stores what it shows** (review F4). Its "No kind" choice ticked "Needed
+  every month" (no kind counts as essential) but saved kind and choice as null, which the app reads
+  as the name's guess: "Coffee beans" saved that way counted as eating out, not needed. The empty
+  choice now says which guess it stands for, the box follows that guess, a box the person changed is
+  sent as chosen even with no kind, and reopening shows what was saved. `categoryForm` gains
+  `guessed()`, which the page's label reads.
+- **An edit never clears what this build cannot read** (review F5). An edit sent `kind: null` for a
+  kind only a later build knows (this build shows it as the guess), clearing it on a change of
+  colour. An edit now sends `kind` only when the field changed, and `essential` only when the
+  person changed the box and it differs from what the dialog opened with or from what the stored
+  choice or the kind makes of it after the save.
+- **Tests:** `categoryKindField.test.tsx` (the labels; a guess saved as no kind and reopened as
+  shown; a ticked box with no kind; an edit whose box is back to how it opened but differs from the
+  new kind; a later build's kind kept on a change of colour, in the real local-first router) and
+  `categoryFormBody.test.ts` (the bodies: a colour edit sends neither key).
 
 ### Achievements
 

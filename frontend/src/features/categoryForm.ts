@@ -17,11 +17,16 @@
  * being refused.
  *
  * The Categories page also shows what an expense category holds: its kind, and whether it is
- * needed every month (`kinds`, shared/guidance/kinds.ts). Both start from the guess the app goes by
- * when nothing is stored (the kind the name suggests, and whether that kind is essential), and the
- * kind follows the name as it is typed until the person picks one. A save stores only what the
- * person chose: a guess left as it was goes back as nothing chosen, so the app keeps going by the
- * name, and a stored choice stays until it is changed.
+ * needed every month (`kinds`, shared/guidance/kinds.ts). The form shows what is stored, and what
+ * the app makes of it. The Kind field's empty choice is "no kind stored", which the app reads as
+ * the kind the name (or the parent) suggests: the page labels it with that guess (`guessed`), and
+ * the guess follows the name as it is typed. "Needed every month" shows what the kind shown, or
+ * the guess, makes of it until the person changes the box; from then on it is their choice, and is
+ * sent as one, even with no kind.
+ *
+ * An edit sends a kind or a choice only when the person changed it. What it leaves out the server
+ * keeps, so a kind only a later build knows (which this build shows as the guess) survives a change
+ * of colour.
  */
 import { checkCategoryCreate, checkCategoryEdit } from '../../../shared/categorySchema'
 import {
@@ -84,6 +89,8 @@ export type CategoryForm = Form<CategoryFormValues> & {
   chooseKind: (kind: string) => void
   /** Ticks or clears "Needed every month". */
   chooseEssential: (essential: boolean) => void
+  /** The kind the app goes by while none is stored: the empty choice of the Kind field. */
+  guessed: () => Kind | null
 }
 
 /** The kind and the choice stored for the category being edited: null where nothing is chosen. */
@@ -107,12 +114,15 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
   let stored: Stored = { kind: null, essential: null }
   /** The parent of the category being edited, which the kind's guess can go by. */
   let parentId: number | null = null
-  /** Whether the person picked a kind, or ticked "Needed every month", in this dialog. */
-  let kindPicked = false
+  /** Whether the person changed "Needed every month" in this dialog. */
   let essentialPicked = false
 
   const guess = (name: string): Kind | null =>
     options.guessKind ? options.guessKind({ name, parent_id: parentId }) : kindForName(name)
+
+  /** Whether "Needed every month" counts the category as essential with no choice stored. */
+  const essentialByKind = (values: CategoryFormValues): boolean =>
+    kindIsEssential(readKind(values.kind) ?? guess(values.name))
 
   /**
    * The body a save sends. Only the fields this form shows: an edit must not clear a parent or a
@@ -126,19 +136,28 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
       icon: values.icon.trim() || null,
     }
     if (!options.kinds) return body
-    if (values.type !== 'expense') return { ...body, kind: null, essential: null }
-    const shownKind = readKind(values.kind)
-    // A kind is sent when the person picked it here or one is stored; a guess left alone is not.
-    const kind = kindPicked || stored.kind !== null ? shownKind : null
-    // "Needed every month" likewise: a choice stored or made here is sent; a box still showing
-    // what the kind says is not.
-    const chosen =
-      essentialPicked || stored.essential !== null
-        ? values.essential
-        : values.essential === kindIsEssential(shownKind)
-          ? null
-          : values.essential
-    return { ...body, kind, essential: chosen === null ? null : chosen ? 1 : 0 }
+    // Another type takes neither, and an edit that changes the type clears both on the server.
+    if (values.type !== 'expense') return opened ? body : { ...body, kind: null, essential: null }
+    const kind = readKind(values.kind)
+    const essential = values.essential ? 1 : 0
+    if (!opened) {
+      // A new category stores the kind shown (none: the app goes by the guess), and the box only
+      // once the person changed it.
+      return { ...body, kind, essential: essentialPicked ? essential : null }
+    }
+    const edit: Record<string, unknown> = { ...body }
+    if (values.kind !== opened.kind) edit.kind = kind
+    // The box is sent when the person changed it, unless leaving it out keeps it as shown: when
+    // it differs from what the dialog opened with, or from what the stored choice or the kind
+    // makes of it after this save.
+    const afterSave = stored.essential ?? essentialByKind(values)
+    if (
+      essentialPicked &&
+      (values.essential !== opened.essential || values.essential !== afterSave)
+    ) {
+      edit.essential = essential
+    }
+    return edit
   }
 
   /** The category being edited as stored, for the check: a field still the same is not checked. */
@@ -186,31 +205,28 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
     failure: "Couldn't save the category. Try again.",
   })
 
-  /** The kind shown while nothing is picked, and the box that goes with it. */
-  const follow = (name: string) => {
-    if (!kindPicked && stored.kind === null) form.set('kind', guess(name) ?? '')
+  /** The box, while neither the person nor a stored choice says: what the kind or guess makes. */
+  const follow = () => {
     if (!essentialPicked && stored.essential === null) {
-      form.set('essential', kindIsEssential(readKind(form.values.kind)))
+      form.set('essential', essentialByKind(form.values))
     }
   }
 
   const open = (category?: EditableCategory | null) => {
-    kindPicked = false
     essentialPicked = false
     parentId = category?.parent_id ?? null
     stored = {
       kind: category && category.type === 'expense' ? readKind(category.kind) : null,
       essential: category && category.type === 'expense' ? readEssential(category.essential) : null,
     }
-    const kind = stored.kind ?? (category ? guess(category.name) : null)
     opened = category
       ? {
           name: category.name,
           type: category.type as CategoryFormValues['type'],
           color: category.color,
           icon: category.icon ?? '',
-          kind: kind ?? '',
-          essential: stored.essential ?? kindIsEssential(kind),
+          kind: stored.kind ?? '',
+          essential: stored.essential ?? kindIsEssential(stored.kind ?? guess(category.name)),
         }
       : null
     form.reset(opened ?? blank)
@@ -218,13 +234,12 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
 
   const setName = (name: string) => {
     form.set('name', name)
-    follow(name)
+    follow()
   }
 
   const chooseKind = (kind: string) => {
-    kindPicked = true
     form.set('kind', kind)
-    follow(form.values.name)
+    follow()
   }
 
   const chooseEssential = (essential: boolean) => {
@@ -232,5 +247,7 @@ export function createCategoryForm(options: CategoryFormOptions): CategoryForm {
     form.set('essential', essential)
   }
 
-  return Object.assign(form, { open, setName, chooseKind, chooseEssential })
+  const guessed = () => guess(form.values.name)
+
+  return Object.assign(form, { open, setName, chooseKind, chooseEssential, guessed })
 }

@@ -2,13 +2,15 @@
  * Kind and "Needed every month" in the Categories dialog, run against the real local-first router
  * on fake-indexeddb.
  *
- * Both start from the guess the app goes by when nothing is stored: the kind the name suggests (or
- * the parent's), and whether that kind is needed every month. The kind follows the name as it is
- * typed until the person picks one. A save stores what the person chose and nothing else: a guess
- * left alone is stored as no choice, so the app keeps going by the name.
+ * The dialog shows what is stored and what the app makes of it. Kind's empty choice is "no kind
+ * stored", labelled with the kind the app then goes by (the name's guess, or the parent's), and
+ * "Needed every month" follows the kind shown, or that guess, until the person changes it. A save
+ * stores what the person chose and nothing else, and reopening shows what was saved. An edit sends
+ * a kind or a choice only when the person changed it.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { essentialOf } from '../../../../shared/guidance/kinds'
 import { setPage } from '../../core/appStore'
 import { getDB } from '../../core/storage/idb'
 import { removeToast, toasts } from '../../core/toastStore'
@@ -110,6 +112,8 @@ function labelled(text: string): HTMLInputElement | HTMLSelectElement {
 }
 
 const kindField = () => host.querySelector<HTMLSelectElement>('[data-test-id="category-kind"]')
+/** The words of the Kind field's chosen option. */
+const kindShown = () => kindField()!.selectedOptions[0]?.textContent?.trim()
 const neededBox = () => host.querySelector<HTMLInputElement>('[data-test-id="category-essential"]')
 
 function type(el: HTMLInputElement | HTMLSelectElement, value: string): void {
@@ -143,16 +147,22 @@ async function choice(name: string): Promise<{ kind: unknown; essential: unknown
 }
 
 describe('the Categories dialog', () => {
-  it('guesses the kind from the name as it is typed, and ticks what that kind needs', async () => {
+  it('says the kind the name gives as it is typed, and ticks what that kind needs', async () => {
     await mount('categories', '../Categories')
     await addCategory()
 
     type(labelled('Category Name') as HTMLInputElement, 'Restaurant')
-    expect(kindField()!.value).toBe('eating_out')
+    expect(kindField()!.value).toBe('')
+    expect(kindShown()).toBe('From the name: Eating out')
     expect(neededBox()!.checked).toBe(false)
 
     type(labelled('Category Name') as HTMLInputElement, 'Rent')
-    expect(kindField()!.value).toBe('housing')
+    expect(kindShown()).toBe('From the name: Housing')
+    expect(neededBox()!.checked).toBe(true)
+
+    // A name that gives no kind counts as needed every month, and says so.
+    type(labelled('Category Name') as HTMLInputElement, 'Market')
+    expect(kindShown()).toBe('None yet: counts as needed every month')
     expect(neededBox()!.checked).toBe(true)
   })
 
@@ -193,7 +203,8 @@ describe('the Categories dialog', () => {
   it("opens a category with no kind at the one it goes by, its parent's if its name says none", async () => {
     await mount('categories', '../Categories')
     await editCategory('Food')
-    expect(kindField()!.value).toBe('groceries')
+    expect(kindField()!.value).toBe('')
+    expect(kindShown()).toBe('From the name: Groceries')
     expect(neededBox()!.checked).toBe(true)
     // An edit that leaves both alone stores no choice.
     type(labelled('Category Name') as HTMLInputElement, 'Food and drink')
@@ -206,7 +217,8 @@ describe('the Categories dialog', () => {
   it("guesses a child's kind from its parent", async () => {
     await mount('categories', '../Categories')
     await editCategory('Bakery')
-    expect(kindField()!.value).toBe('groceries')
+    expect(kindField()!.value).toBe('')
+    expect(kindShown()).toBe('From the parent: Groceries')
   })
 
   it('opens a stored kind and choice as they are, and keeps them on an edit', async () => {
@@ -236,6 +248,94 @@ describe('the Categories dialog', () => {
     save()
     await vi.waitFor(async () => {
       expect(await stored('Food')).toMatchObject({ type: 'income', kind: null, essential: null })
+    })
+  })
+})
+
+describe('what the Categories dialog shows is what it stores', () => {
+  /** What the app makes of `name` as stored: the kind it goes by and the box (essentialOf). */
+  async function readBack(name: string) {
+    const row = await stored(name)
+    expect(row, `no category called ${name}`).toBeDefined()
+    return essentialOf({ ...row, type: 'expense' })
+  }
+
+  it('saves a name the guess goes by as no kind, and reopens it as it was shown', async () => {
+    await mount('categories', '../Categories')
+    await addCategory()
+    type(labelled('Category Name') as HTMLInputElement, 'Coffee beans')
+    // Picking a kind and then the guess again: the box follows each.
+    type(kindField()!, 'housing')
+    expect(neededBox()!.checked).toBe(true)
+    type(kindField()!, '')
+    expect(kindShown()).toBe('From the name: Eating out')
+    expect(neededBox()!.checked).toBe(false)
+    save()
+    await vi.waitFor(async () => {
+      expect(await choice('Coffee beans')).toEqual({ kind: null, essential: null })
+    })
+    expect(await readBack('Coffee beans')).toMatchObject({ kind: 'eating_out', essential: false })
+
+    await editCategory('Coffee beans')
+    expect(kindShown()).toBe('From the name: Eating out')
+    expect(neededBox()!.checked).toBe(false)
+  })
+
+  it('stores a box the person ticked with no kind, and reopens it ticked', async () => {
+    await mount('categories', '../Categories')
+    await addCategory()
+    type(labelled('Category Name') as HTMLInputElement, 'Coffee beans')
+    tick(neededBox()!, true)
+    save()
+    await vi.waitFor(async () => {
+      expect(await choice('Coffee beans')).toEqual({ kind: null, essential: 1 })
+    })
+    expect(await readBack('Coffee beans')).toMatchObject({ essential: true, via: 'chosen' })
+    await editCategory('Coffee beans')
+    expect(kindField()!.value).toBe('')
+    expect(neededBox()!.checked).toBe(true)
+  })
+
+  it('on an edit, stores a box changed back to how it opened when the new kind says otherwise', async () => {
+    const db = await getDB()
+    await db.put('categories', { ...FOOD, name: 'Coffee' })
+    await mount('categories', '../Categories')
+    await editCategory('Coffee')
+    expect(neededBox()!.checked).toBe(false)
+    // Housing ticks the box; unticked, it is as it opened, but Housing alone would read ticked.
+    type(kindField()!, 'housing')
+    expect(neededBox()!.checked).toBe(true)
+    tick(neededBox()!, false)
+    save()
+    await vi.waitFor(async () => {
+      expect(await choice('Coffee')).toEqual({ kind: 'housing', essential: 0 })
+    })
+    await editCategory('Coffee')
+    expect(kindField()!.value).toBe('housing')
+    expect(neededBox()!.checked).toBe(false)
+  })
+})
+
+describe('an edit', () => {
+  it('keeps a kind only a later build knows, and the choice, when it changes the colour', async () => {
+    const db = await getDB()
+    await db.put('categories', { ...FOOD, kind: 'pets', essential: 1 })
+    await mount('categories', '../Categories')
+    await editCategory('Food')
+    // This build goes by the name's guess for a kind it does not know.
+    expect(kindField()!.value).toBe('')
+    expect(neededBox()!.checked).toBe(true)
+    const swatch = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('[data-test-id="category-color-swatch"]')
+    ).find((b) => b.title !== FOOD.color)!
+    swatch.click()
+    save()
+    await vi.waitFor(async () => {
+      expect(await stored('Food')).toMatchObject({
+        color: swatch.title,
+        kind: 'pets',
+        essential: 1,
+      })
     })
   })
 })
