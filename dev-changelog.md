@@ -429,6 +429,15 @@ All notable changes to Token Circles are documented here. The format is based on
   its init script clears the browser's. No notice keeps a dismissal in localStorage (advice
   dismissals were already in the profile's settings), so tours are the only state that moved.
 
+### Orientation
+
+- **The advice kind `unbudgeted-subscription` is `unbudgeted-category`**
+  (`frontend/src/core/achievements/advice.ts`): it flags the biggest category spent on this month
+  with no budget and no bill behind it, which is not always a subscription. Card ids follow
+  (`unbudgeted-category:<category id>:<month>`). `parseDismissed` (`achievements/records.ts`)
+  reads a dismissal stored under the old name as the new one, so the card stays hidden, and the
+  next save stores the new id. The card's words do not change.
+
 ### CRUD contract suite
 
 - **One CRUD suite for cloud and local-first** (#606). `shared/contract/scenarios/` holds 120

@@ -12,7 +12,7 @@ export type AdviceKind =
   | 'goal-pace'
   | 'in-the-red'
   | 'uncategorised'
-  | 'unbudgeted-subscription'
+  | 'unbudgeted-category'
   | 'streak-at-risk'
 
 export interface AdviceCard {
@@ -170,7 +170,12 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
   ]
 }
 
-function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+/**
+ * The biggest category spent on this month with no budget and no bill behind it. Named
+ * `unbudgeted-category` for what it flags; it was `unbudgeted-subscription`, and a dismissal
+ * stored under that name still applies (parseDismissed in records.ts).
+ */
+function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
   const budgeted = new Set(input.budgets.map((b) => b.category_id))
   const billed = new Set(
@@ -188,8 +193,8 @@ function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>)
   if (!top || top[1] <= 0) return []
   return [
     {
-      id: `unbudgeted-subscription:${top[0]}:${month}`,
-      kind: 'unbudgeted-subscription',
+      id: `unbudgeted-category:${top[0]}:${month}`,
+      kind: 'unbudgeted-category',
       tone: 'info',
       title: `${categoryName(input, top[0])} has no budget`,
       detail: 'It is the biggest thing you spend on with nothing set aside for it.',
@@ -242,7 +247,7 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
     ...inTheRed(input, byMonth),
     ...streakAtRisk(input, byMonth, streak),
     ...uncategorised(input, byMonth),
-    ...unbudgetedSubscriptions(input, byMonth),
+    ...unbudgetedCategory(input, byMonth),
   ]
     .filter((c) => !dismissed.has(c.id))
     .sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone] || b.weight - a.weight)
