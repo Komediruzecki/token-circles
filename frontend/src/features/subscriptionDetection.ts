@@ -14,9 +14,27 @@
  */
 
 import { localToday } from '../utils/period'
+import {
+  cadenceFromGapDays,
+  commonCurrency,
+  DAY_MS,
+  gapDays,
+  median,
+  nextDueDate,
+  normalizeMerchantText,
+  parseDay,
+  pickAmountCluster,
+} from './chargePatterns'
+import { findRecurringPayments } from './recurringPayments'
 import { BRANDS } from './subscriptionBrands'
 import { CATALOG_ITEMS } from './subscriptionCatalog'
+import type { BillType } from '../../../shared/billSchema'
+import type { KindedCategory } from '../../../shared/guidance/kinds'
+import type { DetectedFrequency, GroupTxn } from './chargePatterns'
 import type { CatalogItem, CatalogPlan } from './subscriptionCatalog'
+
+export { cadenceFromGapDays, normalizeMerchantText }
+export type { DetectedFrequency }
 
 export interface DetectableTransaction {
   description?: string | null
@@ -28,6 +46,8 @@ export interface DetectableTransaction {
   date: string
   type?: string | null
   currency?: string | null
+  /** The category the entry is filed under: the finder reads its kind, and skips transfers. */
+  category_id?: number | null
 }
 
 export interface ExistingBillLike {
@@ -35,7 +55,6 @@ export interface ExistingBillLike {
   type?: string | null
 }
 
-export type DetectedFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 export type DetectionConfidence = 'high' | 'medium' | 'low'
 
 export interface DetectedSubscription {
@@ -57,7 +76,18 @@ export interface DetectedSubscription {
   categoryHints: string[]
   /** A subscription/bill with this brand already exists. */
   alreadyTracked: boolean
-  matchedVia: 'catalog' | 'brand'
+  /**
+   * What found it: the catalogue or the brand registry by name, or the recurring-payment finder
+   * (recurringPayments.ts), for a payee neither has a name for.
+   */
+  matchedVia: 'catalog' | 'brand' | 'recurring'
+  /**
+   * The bill it adds: a subscription, or a bill for a regular payment the finder files under
+   * housing, utilities, insurance, debt or childcare.
+   */
+  billType: BillType
+  /** The category the finder's charges are filed under; the named finds go by `categoryHints`. */
+  categoryId?: number
   /** Up to 3 raw transaction descriptions behind the proposal. */
   sampleDescriptions: string[]
   /** The catalogue entry backing this proposal, when one exists. */
@@ -69,6 +99,8 @@ export interface DetectedSubscription {
 export interface DetectSubscriptionsOptions {
   /** "Today" for due-date rolling — injectable for tests. Defaults to now. */
   today?: string
+  /** The profile's categories: the finder reads the type and the kind of a charge's category. */
+  categories?: readonly KindedCategory[]
 }
 
 // Bare tokens that overwhelmingly mean one-off purchases (or common words), not
@@ -103,8 +135,6 @@ const CATALOG_ALIASES: Record<string, string[]> = {
   'Mobile plan': ['mobile'],
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
 /**
  * How far back a scan reads: enough history for a yearly cadence to show up twice, without
  * chewing through decades of imported data.
@@ -126,15 +156,6 @@ export function recentForScan<T extends { date: string }>(transactions: T[], now
  */
 export function worthTracking(found: DetectedSubscription): boolean {
   return !found.alreadyTracked && found.confidence !== 'low'
-}
-
-export function normalizeMerchantText(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
 }
 
 /** Bounded Levenshtein distance (small inputs only). */
@@ -327,79 +348,6 @@ function merchantText(txn: DetectableTransaction): string {
   return [txn.description, txn.beneficiary, txn.payor, txn.notes].filter(Boolean).join(' ')
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-}
-
-/** Bucket a median day-gap into a bill frequency; null = no clear cadence. */
-export function cadenceFromGapDays(gap: number): DetectedFrequency | null {
-  if (gap >= 5 && gap <= 9) return 'weekly'
-  if (gap >= 11 && gap <= 17) return 'biweekly'
-  if (gap >= 24 && gap <= 38) return 'monthly'
-  if (gap >= 330 && gap <= 400) return 'yearly'
-  return null
-}
-
-function parseDay(date: string): number {
-  return new Date(`${date.slice(0, 10)}T00:00:00Z`).getTime()
-}
-
-function toIsoDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10)
-}
-
-function addPeriod(dateMs: number, frequency: DetectedFrequency): number {
-  if (frequency === 'weekly') return dateMs + 7 * DAY_MS
-  if (frequency === 'biweekly') return dateMs + 14 * DAY_MS
-  const d = new Date(dateMs)
-  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1)
-  else d.setUTCFullYear(d.getUTCFullYear() + 1)
-  return d.getTime()
-}
-
-interface GroupTxn {
-  amount: number
-  dateMs: number
-  date: string
-  currency: string | null
-  raw: string
-}
-
-const sameAmount = (a: number, ref: number) => Math.abs(a - ref) <= Math.max(0.5, ref * 0.05)
-
-/**
- * The recurring-amount evidence within a group: cluster charges by amount and
- * pick the cluster that looks like the plan — the one holding the most recent
- * charge when it repeats, else the largest repeating cluster. Returns null when
- * no amount repeats (one-off shopping, or a single charge). This keeps a real
- * "AMAZON PRIME 8.99" cadence detectable amid unrelated "AMAZON.DE" orders that
- * share the group, and follows price changes once the new price has recurred.
- */
-function pickAmountCluster(txns: GroupTxn[]): GroupTxn[] | null {
-  if (txns.length < 2) return null
-  const byAmount = [...txns].sort((a, b) => a.amount - b.amount)
-  const clusters: GroupTxn[][] = []
-  for (const txn of byAmount) {
-    const last = clusters[clusters.length - 1]
-    if (last && sameAmount(txn.amount, median(last.map((t) => t.amount)))) last.push(txn)
-    else clusters.push([txn])
-  }
-  const repeating = clusters.filter((c) => c.length >= 2)
-  if (repeating.length === 0) return null
-  const latestMs = Math.max(...txns.map((t) => t.dateMs))
-  const withLatest = repeating.find((c) => c.some((t) => t.dateMs === latestMs))
-  const best =
-    withLatest ??
-    repeating.sort(
-      (a, b) =>
-        b.length - a.length ||
-        Math.max(...b.map((t) => t.dateMs)) - Math.max(...a.map((t) => t.dateMs))
-    )[0]
-  return [...best].sort((a, b) => a.dateMs - b.dateMs)
-}
-
 /** The plan (or base price) whose price matches the amount, within tolerance. */
 function planForAmount(item: CatalogItem | undefined, amount: number): CatalogPlan | undefined {
   if (!item) return undefined
@@ -418,6 +366,10 @@ function planForAmount(item: CatalogItem | undefined, amount: number): CatalogPl
  * there's only one charge), and confidence reflects how recurring/stable the
  * evidence is. Groups whose only evidence is an ambiguous bare token (e.g. one
  * "AMAZON.DE" charge) are dropped rather than proposed as noise.
+ *
+ * The expenses no name matches go on to the recurring-payment finder (recurringPayments.ts), which
+ * proposes the regular ones by payee. Each expense is read by one of the two, so a payment is
+ * never proposed twice.
  */
 export function detectSubscriptions(
   transactions: DetectableTransaction[],
@@ -442,6 +394,8 @@ export function detectSubscriptions(
     txns: GroupTxn[]
   }
   const groups = new Map<string, Group>()
+  // The expenses no name matched: the finder's to read.
+  const leftovers: DetectableTransaction[] = []
 
   for (const txn of transactions) {
     if (!txn.date || !Number.isFinite(txn.amount) || txn.amount === 0) continue
@@ -449,7 +403,10 @@ export function detectSubscriptions(
     const text = merchantText(txn)
     if (!text.trim()) continue
     const match = matchMerchant(text)
-    if (!match) continue
+    if (!match) {
+      leftovers.push(txn)
+      continue
+    }
     const key = normalizeMerchantText(match.name)
     let group = groups.get(key)
     if (!group) {
@@ -485,11 +442,7 @@ export function detectSubscriptions(
     const stable = cluster !== null
 
     // Cadence from the median gap between distinct charge days.
-    const gaps: number[] = []
-    for (let i = 1; i < txns.length; i++) {
-      const gap = (txns[i].dateMs - txns[i - 1].dateMs) / DAY_MS
-      if (gap >= 2) gaps.push(gap)
-    }
+    const gaps = gapDays(txns)
     const cadence = gaps.length > 0 ? cadenceFromGapDays(median(gaps)) : null
 
     const latest = txns[txns.length - 1]
@@ -509,35 +462,31 @@ export function detectSubscriptions(
 
     const frequency: DetectedFrequency = cadence ?? 'monthly'
 
-    // Next expected charge, rolled forward so it's never in the past.
-    let dueMs = addPeriod(latest.dateMs, frequency)
-    while (dueMs < todayMs) dueMs = addPeriod(dueMs, frequency)
-
-    const currencyCounts = new Map<string, number>()
-    for (const t of txns) {
-      if (t.currency) currencyCounts.set(t.currency, (currencyCounts.get(t.currency) ?? 0) + 1)
-    }
-    const currency = [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
-
     results.push({
       key,
       name: group.match.name,
       amount,
-      currency,
+      currency: commonCurrency(txns),
       frequency,
       confidence,
       occurrences: txns.length,
       firstDate: txns[0].date,
       lastDate: latest.date,
-      suggestedDueDate: toIsoDate(dueMs),
+      // Next expected charge, rolled forward so it's never in the past.
+      suggestedDueDate: nextDueDate(latest.dateMs, frequency, todayMs),
       categoryHints: group.match.categoryHints,
       alreadyTracked: trackedKeys.has(key),
       matchedVia: group.match.matchedVia,
+      billType: 'subscription',
       sampleDescriptions: [...new Set(txns.map((t) => t.raw))].slice(-3),
       catalogItem: group.match.catalogItem,
       matchedPlan,
     })
   }
+
+  results.push(
+    ...findRecurringPayments(leftovers, existingBills, { todayMs, categories: opts.categories })
+  )
 
   const confidenceRank: Record<DetectionConfidence, number> = { high: 0, medium: 1, low: 2 }
   return results.sort(

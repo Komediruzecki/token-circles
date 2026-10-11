@@ -74,12 +74,16 @@ function row(date: string, over: Partial<Row> = {}): Row {
   } as Row
 }
 
-/** Four months of entries, the last of them spent more than it earned, and a loan. */
+/**
+ * Four months of entries, the last of them spent more than it earned, and a loan. The shopping
+ * comes to a different amount each month: one amount on one day every month is a regular payment,
+ * which the subscription scan proposes.
+ */
 function fourMonths(over: Partial<AchievementsSnapshot> = {}): AchievementsSnapshot {
   const transactions = [4, 3, 2, 1].flatMap((n) => [
     row(`${monthsAgo(n)}-03`, { type: 'income', amount: 100, category_id: 2 }),
-    row(`${monthsAgo(n)}-05`, { amount: -80, category_id: 1 }),
-    row(`${monthsAgo(n)}-09`, { amount: -60, category_id: 1 }),
+    row(`${monthsAgo(n)}-05`, { amount: -(80 + 9 * n), category_id: 1 }),
+    row(`${monthsAgo(n)}-09`, { amount: -(60 + 9 * n), category_id: 1 }),
   ])
   return {
     transactions,
@@ -241,8 +245,8 @@ describe('with the card on the account', () => {
     // A year on file, every entry sorted and budgeted, and a month that earned more than it spent.
     const transactions = Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) => [
       row(`${monthsAgo(n)}-03`, { type: 'income', amount: 500, category_id: 2 }),
-      row(`${monthsAgo(n)}-05`, { amount: -80, category_id: 1 }),
-      row(`${monthsAgo(n)}-09`, { amount: -60, category_id: 1 }),
+      row(`${monthsAgo(n)}-05`, { amount: -(80 + 9 * n), category_id: 1 }),
+      row(`${monthsAgo(n)}-09`, { amount: -(60 + 9 * n), category_id: 1 }),
     ])
     store.set!(
       fourMonths({

@@ -16,6 +16,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
 - **Credit cards, and overdrafts with a rate.** A credit card is its own account type, with a limit and an interest rate, and a Giro account can carry its overdraft's. Cash accounts show banknotes now, so the card icon means a card.
 - **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **The subscription scan finds regular payments it has no name for**, like a local gym.
 
 ### Changed
 

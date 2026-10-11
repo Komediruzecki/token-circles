@@ -18,6 +18,7 @@ import {
 } from '../features/subscriptionDetection'
 import { bucketByMonth } from './achievements/evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './achievements/monthFacts'
+import type { KindedCategory } from '../../../shared/guidance/kinds'
 import type { OrientationFacts } from '../../../shared/orientation'
 import type { DetectableTransaction, ExistingBillLike } from '../features/subscriptionDetection'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
@@ -31,7 +32,8 @@ export interface OrientationSource {
   transactions: Array<EvaluateInput['transactions'][number] & DetectableTransaction>
   budgets: Array<Pick<EvaluateInput['budgets'][number], 'category_id'>>
   bills: Array<ExistingBillLike & { category_id?: number | null }>
-  categories: Array<{ id: number; name: string }>
+  /** Whole rows: the scan reads the type and the kind of what charges are filed under. */
+  categories: Array<{ id: number; name: string } & KindedCategory>
   loans: unknown[]
 }
 
@@ -43,7 +45,10 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
   const top = biggestUnbudgeted(lastMonth, source.budgets, source.bills)
   const name =
     top === null ? undefined : source.categories.find((c) => c.id === top.categoryId)?.name
-  const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, { today })
+  const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, {
+    today,
+    categories: source.categories,
+  })
   return {
     today,
     trackedMonthsInYear: trackedMonthsInYearWindow(source.evaluation.trackedMonths, today),

@@ -55,7 +55,9 @@ beforeEach(async () => {
     type: 'expense',
     color: '#F97316',
   } as never)
-  // Four months imported: Netflix every month with no category, and two grocery runs.
+  // Four months imported: Netflix every month with no category, and two grocery runs. The runs
+  // come to a different amount each month: one amount on one day every month is a regular payment,
+  // which the subscription scan proposes.
   let id = 1
   const entry = (date: string, description: string, amount: number, category: number | null) =>
     db.add('transactions', {
@@ -77,8 +79,8 @@ beforeEach(async () => {
     } as never)
   for (const n of [4, 3, 2, 1]) {
     await entry(`${monthsAgo(n)}-14`, 'NETFLIX.COM', 15.99, null)
-    await entry(`${monthsAgo(n)}-05`, 'Market', 60, 7)
-    await entry(`${monthsAgo(n)}-19`, 'Market', 70, 7)
+    await entry(`${monthsAgo(n)}-05`, 'Market', 60 + 9 * n, 7)
+    await entry(`${monthsAgo(n)}-19`, 'Market', 70 + 9 * n, 7)
   }
   setProfiles([{ id: 1, name: 'Personal' }] as never)
   setCurrentProfile({ id: 1, name: 'Personal' } as never)

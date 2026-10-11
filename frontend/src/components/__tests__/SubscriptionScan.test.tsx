@@ -298,3 +298,80 @@ describe('what the scan ticks', () => {
     expect(exposed?.chosenCount()).toBe(facts.subscriptionsSpotted)
   })
 })
+
+describe('regular payments it has no name for', () => {
+  const GYM = 'Kraftraum Beispielstadt'
+  const LANDLORD = 'Hausverwaltung Muster GmbH'
+  const categories = [
+    { id: 1, name: 'Housing', type: 'expense', kind: 'housing', parent_id: null },
+    { id: 4, name: 'Sport', type: 'expense', kind: null, parent_id: null },
+    { id: 8, name: 'Transfers', type: 'expense', kind: null, parent_id: null },
+  ]
+  const rows = [
+    ...[95, 65, 35, 5].map((days) => ({
+      ...charge('MITGLIEDSBEITRAG', 29.9, days),
+      beneficiary: GYM,
+      category_id: 4,
+    })),
+    ...[95, 65, 35, 5].map((days) => ({
+      ...charge('MIETE', 850, days),
+      beneficiary: LANDLORD,
+      category_id: 1,
+    })),
+    // Filed under Transfers, where the import puts a transfer it could not match: not a payment.
+    ...[95, 65, 35, 5].map((days) => ({
+      ...charge('DAUERAUFTRAG', 200, days),
+      beneficiary: 'Tagesgeld Beispielbank',
+      category_id: 8,
+    })),
+  ]
+
+  it('proposes them by payee, and adds each in its category, a home as a bill', async () => {
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? rows : url === '/api/categories' ? categories : []
+    )
+    apiMocks.apiPost.mockResolvedValue({ id: 1 })
+    const scan = await mountScan()
+
+    const label = (name: string) =>
+      host.querySelector(`[data-name="${name}"] [data-test-id="sub-scan-row-checkbox"]`)
+        ?.parentElement?.textContent ?? ''
+    expect(label(GYM)).toContain(`Regular payment to ${GYM}`)
+    expect(label(LANDLORD)).toContain(`Regular payment to ${LANDLORD}`)
+    expect(
+      [...host.querySelectorAll('[data-name]')].map((row) => row.getAttribute('data-name'))
+    ).toEqual([LANDLORD, GYM])
+
+    expect(await scan.addSelected()).toBe(2)
+
+    expect(apiMocks.apiPost).toHaveBeenCalledWith(
+      '/api/bills',
+      expect.objectContaining({ name: GYM, amount: 29.9, type: 'subscription', category_id: 4 })
+    )
+    expect(apiMocks.apiPost).toHaveBeenCalledWith(
+      '/api/bills',
+      expect.objectContaining({ name: LANDLORD, amount: 850, type: 'bill', category_id: 1 })
+    )
+  })
+
+  it('is what Getting started counts', async () => {
+    apiMocks.apiGet.mockImplementation(async (url: string) =>
+      url === '/api/transactions' ? rows : url === '/api/categories' ? categories : []
+    )
+    const scan = await mountScan()
+    const facts = orientationFacts(
+      {
+        today: localToday(),
+        evaluation: { trackedMonths: [] },
+        transactions: rows.map((r) => ({ ...r, type: 'expense' as const, reconciled: false })),
+        budgets: [],
+        bills: [],
+        categories,
+        loans: [],
+      },
+      Date.now()
+    )
+    expect(facts.subscriptionsSpotted).toBe(2)
+    expect(scan.chosenCount()).toBe(facts.subscriptionsSpotted)
+  })
+})

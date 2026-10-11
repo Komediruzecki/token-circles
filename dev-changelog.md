@@ -722,6 +722,31 @@ All notable changes to Token Circles are documented here. The format is based on
   change saved on the freshest record; Ask again; a failed save; another profile), and E2E in both
   modes: `onboarding.spec.ts` (answer, see and change in Settings, survive a reload; a region left
   unanswered) and `onboarding-server.spec.ts` (the record on the Worker, Settings, Ask again).
+- **The recurring-payment finder** (`frontend/src/features/recurringPayments.ts`):
+  `detectSubscriptions` hands it the expenses no catalogue or brand name matched, so a payment is
+  proposed once at most. It skips an entry filed under a transfer or account category, or under
+  Transfers (where the bank import files a transfer it could not match), and groups the rest by
+  payee: the beneficiary, else the description, else the payor, normalised and without digits. A
+  payee is proposed when three or more of its charges keep to one amount (`pickAmountCluster`),
+  the median gap has a cadence, at least three gaps in four have that cadence, and the last charge
+  is at most one and a half periods old. The gaps rule keeps everyday shopping out: a cafe paid one
+  price on random days has a median gap of about a week. Four charges or more are `medium`, three
+  `low`, which the scan leaves unticked and Getting started does not count. A result has
+  `matchedVia: 'recurring'`, the payee's name without the words that carry digits, the key
+  `recurring:<payee key>`, `alreadyTracked` when a bill's name has that key, and `billType`: `bill`
+  when the category most of its charges are filed under goes by housing, utilities, insurance, debt
+  or childcare (`effectiveKind`), else `subscription`, with that `categoryId`. Named finds are
+  `subscription`, as before. The scan shows a finder row as "Regular payment to {payee}" with no
+  brand's look, and adds it as its bill type in its category; the scan and Getting started pass
+  the categories to `detectSubscriptions`. What both scans share moved to
+  `features/chargePatterns.ts`. In the 750-day window a yearly payment has three charges at most,
+  so the finder only ever guesses one.
+- **Tests:** `recurringPayments.test.ts` (a gym at four, three and two charges, weekly, through a
+  paused month, stopped, already tracked; amounts that drift, that wander, and a cafe at one price
+  on random days; transfers; no payment found twice; bill or subscription by kind, by a parent's
+  kind and by the most common category; the payee's key and name) and `SubscriptionScan.test.tsx`
+  (the rows and the bills they add, a payment under Transfers left out, the count Getting started
+  shows).
 
 ### Achievements
 

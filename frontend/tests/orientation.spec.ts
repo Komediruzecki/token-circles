@@ -6,7 +6,9 @@
  * Netflix and a Spotify charge left without a category and two grocery runs. So four months are
  * tracked, the scan spots two subscriptions, and half the entries have no category. The rules
  * after those three apply too (Groceries has no budget, and every month spent more than it
- * earned), and the card shows three steps all the same.
+ * earned), and the card shows three steps all the same. The grocery runs come to a different
+ * amount each month: one amount on one day every month is a regular payment, which the scan
+ * proposes too.
  */
 import { expect, test } from '@playwright/test'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
@@ -28,8 +30,8 @@ const STATEMENT = [
     return [
       `${m}-03,NETFLIX.COM,-15.99,,expense`,
       `${m}-07,SPOTIFY,-10.99,,expense`,
-      `${m}-10,Corner market,-64.20,Groceries,expense`,
-      `${m}-21,Corner market,-58.40,Groceries,expense`,
+      `${m}-10,Corner market,-${(64.2 + 7 * n).toFixed(2)},Groceries,expense`,
+      `${m}-21,Corner market,-${(58.4 + 9 * n).toFixed(2)},Groceries,expense`,
     ]
   }),
 ].join('\n')
