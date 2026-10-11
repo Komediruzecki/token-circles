@@ -5,13 +5,21 @@
  */
 import { amortize, payoffDate } from '../../../../shared/loanSchedule'
 import { trackedMonthsOf } from '../../../../shared/trackedMonths'
+import { normalizedTransactionAmount } from '../transactionAmount'
 import { ACHIEVEMENTS, VOLUME_STEPS } from './definitions'
 import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
 import type { AchievementId } from './definitions'
 
 export interface EvaluateInput {
-  transactions: Array<Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'>>
+  /**
+   * `amount_local` is the amount converted to the base currency, which every sum of money here
+   * reads (`baseAmount`). A row without one is in the base currency already.
+   */
+  transactions: Array<
+    Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'> &
+      Partial<Pick<Transaction, 'amount_local'>>
+  >
   budgets: Array<
     Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'>
   >
@@ -91,9 +99,18 @@ export function bucketByMonth(transactions: EvaluateInput['transactions']): Map<
   return byMonth
 }
 
-/** Total of the given transaction types, absolute amounts. */
+/**
+ * A transaction's size in the base currency: its converted amount when it has one, else its
+ * amount, as Budgets, Dashboard and Analytics count it in both runtimes. Every sum of money in
+ * achievements, advice and the year in review goes through this. `amount` alone is in the
+ * transaction's own currency, so a month with an entry in another currency added two currencies.
+ */
+export const baseAmount = (t: Pick<Tx, 'amount' | 'amount_local'>): number =>
+  Math.abs(normalizedTransactionAmount(t))
+
+/** Total of the given transaction types, in the base currency. */
 export function sumTypes(list: Tx[], types: string[]): number {
-  return list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + Math.abs(t.amount), 0)
+  return list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + baseAmount(t), 0)
 }
 
 export function evaluateAchievements(input: EvaluateInput): Evaluation {

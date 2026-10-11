@@ -3,7 +3,7 @@
  * Progress page's advice (advice.ts) and for any other place that tells a person what to look at
  * next, so the two can never disagree about a number.
  */
-import { sumTypes } from './evaluate'
+import { baseAmount, sumTypes } from './evaluate'
 import type { EvaluateInput, Tx } from './evaluate'
 
 /** Entries with no category. A transfer needs none, so transfers are left out. */
@@ -42,7 +42,7 @@ export function biggestUnbudgeted(
   for (const t of list) {
     if (t.type !== 'expense' || t.category_id === null) continue
     if (budgeted.has(t.category_id) || billed.has(t.category_id)) continue
-    spent.set(t.category_id, (spent.get(t.category_id) ?? 0) + Math.abs(t.amount))
+    spent.set(t.category_id, (spent.get(t.category_id) ?? 0) + baseAmount(t))
   }
   const top = [...spent.entries()].sort((a, b) => b[1] - a[1])[0]
   if (!top || top[1] <= 0) return null

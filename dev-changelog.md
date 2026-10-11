@@ -661,6 +661,25 @@ All notable changes to Token Circles are documented here. The format is based on
   runtimes (stored and dropped; kept by a backup and restore), and `tests/import.spec.ts`, where a
   Revolut statement imported through the Bank Imports tab is logged as `revolut`.
 
+### Achievements
+
+- **Achievements count money in the base currency.** `sumTypes` in
+  `frontend/src/core/achievements/evaluate.ts` added `Math.abs(t.amount)`, the figure in the
+  transaction's own currency, so a month with an entry in another currency was summed in two
+  currencies. Every sum of money in achievements now goes through `baseAmount`, which is
+  `Math.abs(normalizedTransactionAmount(t))` (`amount_local`, else `amount`), as the Worker's
+  `COALESCE(amount_local, amount)` and the local-first handlers count it: `sumTypes` (saving
+  months, budgets held, the average monthly spend behind rainy-day, the year in review's totals,
+  and the in-the-red and budget-drift advice), the year in review's biggest category and the
+  biggest unbudgeted category in advice.
+  `EvaluateInput.transactions` takes an optional `amount_local`; the store already passes whole
+  rows. `txBaseValue` (`core/currency.ts`) also estimates a foreign row without `amount_local` from
+  the browser's base currency, which would make the evaluator read localStorage; no report does
+  that estimate. Earned badges stay earned (`diffUnlocks` only adds). For a profile with converted
+  entries, saver-x3, saver-x6, perfect-year, held-the-line, under-budget-six, clean-sweep and
+  rainy-day can now be earned where they were not, or not be earned where they would have been;
+  no other badge sums transactions. Tests: `achievements/__tests__/baseCurrency.test.ts`.
+
 ### CRUD contract suite
 
 - **One CRUD suite for cloud and local-first** (#606). `shared/contract/scenarios/` holds 120
