@@ -36,6 +36,10 @@ All notable changes to Token Circles are documented here. The format is based on
   `/api/account/state`, the new app's read of it fails and the app opens no wizard; an account that
   signs up between the migration and the app's deploy and decides the wizard there has the decision
   in its settings, which the app sends to the record.
+- `0036_category_kinds.sql` adds two nullable columns to `categories`, `kind TEXT` and
+  `essential INTEGER`, with no default and no rewrite: every existing category reads NULL for both,
+  which the app reads as "go by the name". Safe to apply before the code: the Worker before it
+  names its columns on every insert, and the client before it drops keys its schema lacks.
 
 ### Loans
 
@@ -569,6 +573,50 @@ All notable changes to Token Circles are documented here. The format is based on
   entries: Dashboard's load held the main thread 1,465 ms with no record and 1,463 ms with the card
   shown; now nothing over 50 ms with no record, and one 89 ms task with the card shown. A category
   saved on another page cost 1,452 to 1,456 ms; now nothing.
+
+### Guidance
+
+- **Category kinds** (`shared/guidance/kinds.ts`, migration 0036). `KINDS` are the fifteen ids of
+  the guidance research (housing, utilities, groceries, eating_out, transport, health, insurance,
+  childcare, debt, subscriptions, shopping, leisure, gifts, taxes, other), `ESSENTIAL_KINDS` the
+  eight a month costs whatever happens. `kindForName` guesses from English names: the defaults, the
+  old Food (groceries), the bank import's rule names (Restaurant and Dining eating_out, Fuel and
+  Car (Gas) transport, Travel leisure, Apartment (Bills) utilities, Bank Fees taxes, Transfers
+  none), then whole words in the name, accents stripped. `effectiveKind` is a category's own
+  kind, else its parent's stored kind, else its name's guess, else its parent's name's guess, and
+  none for a category that is not an expense. `essentialOf` says whether a category is needed every
+  month and why (`chosen`, `kind`, or `no-kind`: a category with no effective kind counts as
+  essential, per category).
+- **Categories store `kind` and `essential`** in both runtimes. `shared/categorySchema.ts` reads a
+  kind in any case (one of `KINDS`, blank is none) and `essential` as 1, 0 or null (true and false
+  too); both are refused on a category that is not an expense, and an edit that makes a category
+  another type clears both. `GET /api/categories` lists them on the Worker, and local-first's
+  `normalizeCategory` reads a row from before as null for both. The client's `CategorySchema` takes
+  `kind` as any string, so a kind a later build adds cannot fail the list (`effectiveKind` ignores
+  it), and `essential` as a boolean or 1/0.
+- **The defaults split Food** (`worker/src/profileData.ts`, `frontend/src/core/storage/idb.ts`):
+  Groceries (shopping-cart on the Worker) and Eating out (utensils), and every expense default
+  carries its kind. The local-first demo files "Grocery shopping" under Groceries and "Dining out"
+  under Eating out (it was Entertainment), and budgets both. `DELETE /api/categories` matches a
+  category called Food to Groceries (`resetName`, `shared/defaultCategories.ts`), so a reset renames
+  it with its entries and budgets instead of deleting it; the Danger Zone's confirmation says so.
+- **Imports give a new expense category the kind its name suggests**, on the Worker
+  (`imports.ts`) and in local-first (`importFlow.ts`). In the cloud, where a new account has no
+  categories, that is how most categories get one.
+- **The Categories dialog** shows Kind and "Needed every month" for an expense category
+  (`categoryForm.ts`, `kinds: true`). Both start from the guess (`effectiveKind` over the page's
+  categories, so a child goes by its parent), the kind follows the name until one is picked, and the
+  box follows the kind until it is ticked. A save sends only what the person chose: a guess left
+  alone goes as null, so the app keeps going by the name, and a stored choice stays. The Budgets,
+  Bills and Goals dialogs send neither. `tests/quick-entry-phone.spec.ts` makes Groceries, not
+  Food.
+- **Tests:** `frontend/src/core/__tests__/guidanceKinds.test.ts` (the guess, the order of
+  `effectiveKind`, `essentialOf`, the local defaults), `worker/test/category-kinds.test.ts` (the
+  migration's columns, the Worker defaults), four contract scenarios in both runtimes (kinds
+  stored, edited and refused; the reset's rename; an import's kinds; a backup and restore keeping
+  both columns, which the Worker's restore copies by `PRAGMA table_info` and local-first's as whole
+  rows), `api.getCategories.kinds.test.ts`, `categoryKindField.test.tsx`, `demoFoodSplit.test.ts`
+  and `dangerZoneCategoriesReset.test.tsx`.
 
 ### CRUD contract suite
 

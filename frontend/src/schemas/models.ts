@@ -21,6 +21,16 @@ export const CategorySchema = z.object({
   type: z.enum(['income', 'expense', 'transfer', 'account']),
   parent_id: z.number().nullable(),
   tax_deductible: z.boolean().or(z.number().transform((n) => !!n)),
+  // What the category holds (shared/guidance/kinds.ts). A plain string, not an enum of the kinds:
+  // a kind a later build adds must not fail the whole list here, as an account type once did.
+  // Code that goes by kinds reads them through `effectiveKind`, which ignores one it lacks.
+  kind: z.string().nullable().optional(),
+  // 1 or 0 in D1 once the person says whether it is needed every month; null while the kind decides.
+  essential: z
+    .boolean()
+    .or(z.number().transform((n) => !!n))
+    .nullable()
+    .optional(),
   created_at: z.string(),
   profile_id: z.number(),
   parent_name: z.string().nullable().optional(),

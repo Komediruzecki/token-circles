@@ -3,6 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
+import { resetName } from '../../../../shared/defaultCategories'
 import {
   isImportSourceKind,
   isImportSourceSchedule,
@@ -36,6 +37,7 @@ import {
 } from './connectionNotices'
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
 import type { IDBPDatabase } from 'idb'
+import type { Kind } from '../../../../shared/guidance/kinds'
 import type {
   Account,
   BalanceEntry,
@@ -375,21 +377,76 @@ export function getDB() {
 
 // ---- Seed Data ----
 
-export const DEFAULT_CATEGORIES = [
-  { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false },
-  { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false },
-  { type: 'income', name: 'Investments', color: '#15803D', tax_deductible: false },
-  { type: 'income', name: 'Gifts', color: '#86EFAC', tax_deductible: false },
-  { type: 'expense', name: 'Housing', color: '#EF4444', tax_deductible: false },
-  { type: 'expense', name: 'Food', color: '#F97316', tax_deductible: false },
-  { type: 'expense', name: 'Transportation', color: '#EAB308', tax_deductible: false },
-  { type: 'expense', name: 'Utilities', color: '#8B5CF6', tax_deductible: false },
-  { type: 'expense', name: 'Healthcare', color: '#EC4899', tax_deductible: true },
-  { type: 'expense', name: 'Entertainment', color: '#06B6D4', tax_deductible: false },
-  { type: 'expense', name: 'Insurance', color: '#3B82F6', tax_deductible: false },
-  { type: 'expense', name: 'Shopping', color: '#D946EF', tax_deductible: false },
-  { type: 'expense', name: 'Education', color: '#14B8A6', tax_deductible: true },
-  { type: 'expense', name: 'Subscriptions', color: '#F43F5E', tax_deductible: false },
+/**
+ * The categories a local-first profile starts from, and what "Reset to defaults" sets it back to:
+ * the Worker's list (worker/src/profileData.ts), without its icons. Each expense category carries
+ * its kind (shared/guidance/kinds.ts); income categories take none. Groceries and Eating out
+ * replaced Food, which a reset renames to Groceries (shared/defaultCategories.ts).
+ */
+export const DEFAULT_CATEGORIES: ReadonlyArray<{
+  type: 'income' | 'expense'
+  name: string
+  color: string
+  tax_deductible: boolean
+  kind: Kind | null
+}> = [
+  { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Investments', color: '#15803D', tax_deductible: false, kind: null },
+  { type: 'income', name: 'Gifts', color: '#86EFAC', tax_deductible: false, kind: null },
+  { type: 'expense', name: 'Housing', color: '#EF4444', tax_deductible: false, kind: 'housing' },
+  {
+    type: 'expense',
+    name: 'Groceries',
+    color: '#F97316',
+    tax_deductible: false,
+    kind: 'groceries',
+  },
+  {
+    type: 'expense',
+    name: 'Eating out',
+    color: '#84CC16',
+    tax_deductible: false,
+    kind: 'eating_out',
+  },
+  {
+    type: 'expense',
+    name: 'Transportation',
+    color: '#EAB308',
+    tax_deductible: false,
+    kind: 'transport',
+  },
+  {
+    type: 'expense',
+    name: 'Utilities',
+    color: '#8B5CF6',
+    tax_deductible: false,
+    kind: 'utilities',
+  },
+  { type: 'expense', name: 'Healthcare', color: '#EC4899', tax_deductible: true, kind: 'health' },
+  {
+    type: 'expense',
+    name: 'Entertainment',
+    color: '#06B6D4',
+    tax_deductible: false,
+    kind: 'leisure',
+  },
+  {
+    type: 'expense',
+    name: 'Insurance',
+    color: '#3B82F6',
+    tax_deductible: false,
+    kind: 'insurance',
+  },
+  { type: 'expense', name: 'Shopping', color: '#D946EF', tax_deductible: false, kind: 'shopping' },
+  { type: 'expense', name: 'Education', color: '#14B8A6', tax_deductible: true, kind: 'childcare' },
+  {
+    type: 'expense',
+    name: 'Subscriptions',
+    color: '#F43F5E',
+    tax_deductible: false,
+    kind: 'subscriptions',
+  },
 ]
 
 interface BalanceAdjustment {
@@ -676,7 +733,9 @@ export class IndexedDBAdapter implements StorageAdapter {
     }
 
     for (const category of profileCategories) {
-      const name = typeof category.name === 'string' ? category.name.trim().toLocaleLowerCase() : ''
+      // A replaced default (Food) is matched to the default that replaced it (Groceries), and so
+      // is renamed to it with its entries instead of being deleted (shared/defaultCategories.ts).
+      const name = typeof category.name === 'string' ? resetName(category.name) : ''
       const defaultCategory = defaultsByName.get(name)
       const canonicalId = canonicalIds.get(name)
 
@@ -685,6 +744,7 @@ export class IndexedDBAdapter implements StorageAdapter {
         await categoryStore.put({
           ...category,
           ...defaultCategory,
+          essential: null,
           parent_id: null,
           profile_id: profileId,
         })
@@ -1901,10 +1961,10 @@ export const DEMO_SUBSCRIPTIONS: Record<
 // Monthly expense templates — fractions of total monthly spending
 const MONTHLY_EXPENSES = [
   { name: 'Housing', description: 'Monthly rent', pct: 0.37 },
-  { name: 'Food', description: 'Grocery shopping', pct: 0.21 },
+  { name: 'Groceries', description: 'Grocery shopping', pct: 0.21 },
   { name: 'Transportation', description: 'Transport pass', pct: 0.11 },
   { name: 'Utilities', description: 'Electric and water bill', pct: 0.08 },
-  { name: 'Entertainment', description: 'Dining out', pct: 0.07 },
+  { name: 'Eating out', description: 'Dining out', pct: 0.07 },
   { name: 'Shopping', description: 'Clothes and supplies', pct: 0.06 },
   { name: 'Insurance', description: 'Auto insurance', pct: 0.05 },
   { name: 'Subscriptions', description: 'Streaming services', pct: 0.05 },
@@ -2432,9 +2492,9 @@ export async function seedDemoProfiles(): Promise<void> {
     // ── Budgets ──
     const budgetCategories = [
       { name: 'Housing', pct: 0.37 },
-      { name: 'Food', pct: 0.21 },
+      { name: 'Groceries', pct: 0.21 },
       { name: 'Transportation', pct: 0.11 },
-      { name: 'Entertainment', pct: 0.07 },
+      { name: 'Eating out', pct: 0.07 },
       { name: 'Shopping', pct: 0.06 },
       { name: 'Subscriptions', pct: 0.05 },
     ]

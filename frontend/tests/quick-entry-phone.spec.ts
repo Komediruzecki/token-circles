@@ -168,7 +168,7 @@ test('the orb offers the active profile’s categories after a create and after 
   await goTo(page, 'budgets')
   await page.getByRole('button', { name: 'Add Category' }).first().click()
   const modal = page.getByTestId('budgets-category-modal')
-  await modal.getByPlaceholder('e.g., Food, Rent').fill('Food')
+  await modal.getByPlaceholder('e.g., Food, Rent').fill('Groceries')
   await modal.getByPlaceholder('e.g., food, home, car').fill('food')
   await modal.locator('button[type="submit"]').click()
   await expect(modal).toBeHidden()
@@ -176,7 +176,7 @@ test('the orb offers the active profile’s categories after a create and after 
   // Transactions, then the floating +: 50, Expense, Next.
   await goTo(page, 'transactions')
   let orb = await orbAtCategories(page, '50')
-  await expect(chip(orb, 'Food')).toBeVisible()
+  await expect(chip(orb, 'Groceries')).toBeVisible()
   await closeOrb(orb)
 
   // 2. Reload, open the orb on another profile, then come back to this one.
@@ -189,16 +189,16 @@ test('the orb offers the active profile’s categories after a create and after 
 
   await switchProfile(page, 'Test')
   await goTo(page, 'categories')
-  await expect(page.getByTestId('category-name')).toHaveText(['Food'])
+  await expect(page.getByTestId('category-name')).toHaveText(['Groceries'])
 
-  // Only this profile's one category. The demo profile has a "Food" of its own, so the other
-  // profile's list would show "Food" too: its "Housing" is what tells them apart.
+  // Only this profile's one category. The demo profile has a "Groceries" of its own, so the other
+  // profile's list would show "Groceries" too: its "Housing" is what tells them apart.
   orb = await orbAtCategories(page, '50')
-  await expect(chip(orb, 'Food')).toBeVisible()
+  await expect(chip(orb, 'Groceries')).toBeVisible()
   await expect(chip(orb, 'Housing')).toHaveCount(0)
 
   // And it lands: the category is this profile's, so the save takes it.
-  await chip(orb, 'Food').tap()
+  await chip(orb, 'Groceries').tap()
   await orb.getByRole('button', { name: /^Add / }).tap()
   await expect(
     page.getByRole('region', { name: 'Notifications' }).getByText('Entry added')

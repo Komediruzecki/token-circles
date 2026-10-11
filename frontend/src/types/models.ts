@@ -175,6 +175,10 @@ export interface Category {
   type: TransactionType | 'account'
   parent_id: CategoryId | null
   tax_deductible: boolean
+  /** What an expense category holds (shared/guidance/kinds.ts), or null: the name decides. */
+  kind?: string | null
+  /** Whether it is needed every month, once the person says; null while the kind decides. */
+  essential?: boolean | null
   created_at: string
   profile_id: ProfileId
   parent_name?: string | null

@@ -30,7 +30,8 @@
  * Categories Component
  * Manages expense and income categories with CRUD operations
  */
-import { createMemo, createResource, createSignal, For } from 'solid-js'
+import { createMemo, createResource, createSignal, For, Show } from 'solid-js'
+import { categoryLookup, effectiveKind, KIND_LABELS, KINDS } from '../../../shared/guidance/kinds'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
@@ -59,6 +60,11 @@ interface Category {
   color: string
   icon: string | null
   profile_id: number
+  parent_id?: number | null
+  /** What it holds (shared/guidance/kinds.ts), or null while the name decides. */
+  kind?: string | null
+  /** 1 or 0 once the person says whether it is needed every month; null while the kind decides. */
+  essential?: number | boolean | null
   budget?: number
 }
 
@@ -122,6 +128,11 @@ export default function Categories() {
     color: DEFAULT_COLOR,
     editing: editingCategory,
     onSaved: closeCategoryModal,
+    // Kind and "Needed every month" start from the kind the app goes by: the parent's, or the
+    // one the name suggests.
+    kinds: true,
+    guessKind: (category) =>
+      effectiveKind({ ...category, type: 'expense' }, categoryLookup(categories())),
   })
   const openCategoryModal = (category: Category | null) => {
     setEditingCategory(category)
@@ -464,7 +475,9 @@ export default function Categories() {
                     class={styles.formControl}
                     placeholder="e.g., Food, Rent"
                     value={categoryForm.values.name}
-                    onInput={(e) => categoryForm.set('name', e.currentTarget.value)}
+                    onInput={(e) => {
+                      categoryForm.setName(e.currentTarget.value)
+                    }}
                     required
                   />
                 )}
@@ -490,6 +503,60 @@ export default function Categories() {
                   </select>
                 )}
               </Field>
+              {/* What an expense category holds. Both start from a guess the name gives. */}
+              <Show when={categoryForm.values.type === 'expense'}>
+                <Field
+                  form={categoryForm}
+                  name="kind"
+                  label="Kind"
+                  class={styles.formGroup}
+                  labelClass={styles.formLabel}
+                  hintClass={styles.fieldHint}
+                  hint="What this category holds. Until you pick one, it's guessed from the name."
+                >
+                  {(control) => (
+                    <select
+                      {...control}
+                      class={styles.formControl}
+                      data-test-id="category-kind"
+                      value={categoryForm.values.kind}
+                      onInput={(e) => {
+                        categoryForm.chooseKind(e.currentTarget.value)
+                      }}
+                    >
+                      {/* `selected` on each option as well: the select's value is set before
+                          its options exist when the dialog opens on a category. */}
+                      <option value="" selected={categoryForm.values.kind === ''}>
+                        No kind
+                      </option>
+                      <For each={KINDS}>
+                        {(kind) => (
+                          <option value={kind} selected={categoryForm.values.kind === kind}>
+                            {KIND_LABELS[kind]}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  )}
+                </Field>
+                <div class={styles.formGroup}>
+                  <label class={styles.checkRow}>
+                    <input
+                      type="checkbox"
+                      data-test-id="category-essential"
+                      aria-describedby="category-essential-hint"
+                      checked={categoryForm.values.essential}
+                      onChange={(e) => {
+                        categoryForm.chooseEssential(e.currentTarget.checked)
+                      }}
+                    />
+                    <span>Needed every month</span>
+                  </label>
+                  <span id="category-essential-hint" class={styles.fieldHint}>
+                    Spending you'd have whatever happens, like rent or groceries.
+                  </span>
+                </div>
+              </Show>
               <Field
                 form={categoryForm}
                 name="icon"

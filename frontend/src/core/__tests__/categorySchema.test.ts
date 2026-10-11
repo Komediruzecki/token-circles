@@ -31,6 +31,8 @@ describe('a new category', () => {
         color: '#6b7280',
         parent_id: null,
         tax_deductible: false,
+        kind: null,
+        essential: null,
       },
     })
   })
@@ -67,6 +69,8 @@ describe('a new category', () => {
         color: '#22C55E',
         parent_id: 7,
         tax_deductible: true,
+        kind: null,
+        essential: null,
       },
     })
   })
@@ -291,5 +295,48 @@ describe('the refusal answer', () => {
       expect(message).not.toContain('—')
       expect(message).toMatch(/\.$/)
     }
+  })
+})
+
+describe("a category's kind, and whether it is needed every month", () => {
+  it('reads a kind in any case and a choice as 1 or 0, and blank as none', () => {
+    const checked = checkCategoryCreate({ name: 'Market', kind: ' Groceries ', essential: 'false' })
+    expect(checked).toMatchObject({ ok: true, value: { kind: 'groceries', essential: 0 } })
+    expect(checkCategoryCreate({ name: 'Market', kind: '', essential: true })).toMatchObject({
+      ok: true,
+      value: { kind: null, essential: 1 },
+    })
+  })
+
+  it('refuses a kind the app does not have, and a choice that is not yes or no', () => {
+    expect(checkCategoryCreate({ name: 'Pets', kind: 'pets', essential: 'often' })).toEqual({
+      ok: false,
+      fields: { kind: CATEGORY_MESSAGES.kind, essential: CATEGORY_MESSAGES.essential },
+    })
+  })
+
+  it('refuses either on a category that is not an expense', () => {
+    expect(checkCategoryCreate({ name: 'Bonus', type: 'income', kind: 'other' })).toEqual({
+      ok: false,
+      fields: { kind: CATEGORY_MESSAGES.kindOnExpense },
+    })
+    const stored = { name: 'Bonus', type: 'income', kind: null, essential: null }
+    expect(checkCategoryEdit({ essential: 1 }, stored)).toEqual({
+      ok: false,
+      fields: { essential: CATEGORY_MESSAGES.essentialOnExpense },
+    })
+  })
+
+  it('clears both on an edit that makes the category another type', () => {
+    const stored = { name: 'Market', type: 'expense', kind: 'groceries', essential: 0 }
+    expect(checkCategoryEdit({ type: 'income' }, stored)).toEqual({
+      ok: true,
+      value: { type: 'income', kind: null, essential: null },
+    })
+    // An edit that keeps the type keeps them.
+    expect(checkCategoryEdit({ type: 'expense', name: 'Market' }, stored)).toEqual({
+      ok: true,
+      value: {},
+    })
   })
 })

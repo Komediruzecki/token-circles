@@ -7,7 +7,7 @@ import {
   listTransactions,
 } from '../helpers';
 import { EXPORT_MESSAGES } from '../../exportColumns';
-import { expectOk, scenario } from '../types';
+import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
 import { sourceForm } from './importSources';
@@ -100,6 +100,31 @@ export const backup = [
       const everyday = accounts.find((a) => a.name === 'Everyday');
       expectMoney(expect, await balanceOf(back, expect, everyday.id), 954.5, 'Everyday');
       expect((await api.stored(partner)).accounts).toBe(1);
+    }
+  ),
+
+  scenario(
+    "a backup keeps each category's kind and whether it is needed every month",
+    async (api, expect) => {
+      await added(api, expect, '/api/categories', {
+        name: 'Market',
+        type: 'expense',
+        color: '#aa5500',
+        kind: 'groceries',
+        essential: false,
+      });
+      await added(api, expect, '/api/categories', { name: 'Pets', type: 'expense' });
+
+      const taken = await api.unscoped.get('/api/export');
+      expectOk(expect, taken, 'GET /api/export');
+      expectOk(expect, await api.unscoped.post('/api/import', taken.body), 'POST /api/import');
+
+      const me = (await profileList(api.unscoped, expect)).find((p) => p.name === 'Me')!;
+      const categories = (await api.as(me.id as number).get('/api/categories')).body as Json[];
+      const named = (name: string) => categories.find((c) => c.name === name);
+      expect(named('Market')).toMatchObject({ kind: 'groceries', essential: 0 });
+      // A category whose kind is still a guess from its name has none stored, and gets none.
+      expect(named('Pets')).toMatchObject({ kind: null, essential: null });
     }
   ),
 

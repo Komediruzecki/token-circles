@@ -23,6 +23,9 @@ type Row = Record<string, unknown>
  * Categories made through the local `POST /api/categories` before it wrote complete rows hold the
  * form's body as sent: no `tax_deductible`, and `icon: null` when the icon was left blank. Either
  * one failed CategorySchema, and one such row failed every `api.getCategories()` over its profile.
+ *
+ * A row from before categories had a kind has neither `kind` nor `essential`; it reads as the
+ * Worker's NULLs do, so the app goes by its name (shared/guidance/kinds.ts).
  */
 export function normalizeCategory<T>(cat: T): T {
   const row = cat as Row
@@ -32,6 +35,8 @@ export function normalizeCategory<T>(cat: T): T {
     parent_id: row.parent_id ?? null,
     created_at: row.created_at ?? '',
     tax_deductible: row.tax_deductible ?? false,
+    kind: row.kind ?? null,
+    essential: row.essential ?? null,
   } as T
 }
 

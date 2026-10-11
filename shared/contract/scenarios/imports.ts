@@ -132,6 +132,43 @@ export const imports = [
   ),
 
   scenario(
+    'a category an import creates takes the kind its name suggests, when it is an expense',
+    async (api, expect) => {
+      await account(api, expect, 'Everyday', 1000);
+      await execute(api, expect, {
+        importId: 'contract-import-kinds',
+        rows: [
+          ['2026-03-01', 'Pay', '2500', 'Salary', 'Everyday', 'income'],
+          ['2026-03-02', 'Pizza', '-18', 'Restaurant', 'Everyday', 'expense'],
+          ['2026-03-03', 'Card fee', '-2', 'Bank Fees', 'Everyday', 'expense'],
+          ['2026-03-04', 'Vet', '-60', 'Pets', 'Everyday', 'expense'],
+        ],
+        categoryTypes: {
+          Salary: 'income',
+          Restaurant: 'expense',
+          'Bank Fees': 'expense',
+          Pets: 'expense',
+        },
+        accountTypes: {},
+        accountBalances: {},
+        accountBalanceDates: {},
+        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets'],
+      });
+      const reply = await api.get('/api/categories');
+      expectOk(expect, reply, 'GET /api/categories');
+      const kinds = Object.fromEntries(
+        (reply.body as Json[]).map((row) => [row.name, [row.kind, row.essential]])
+      );
+      expect(kinds).toEqual({
+        Salary: [null, null],
+        Restaurant: ['eating_out', null],
+        'Bank Fees': ['taxes', null],
+        Pets: [null, null],
+      });
+    }
+  ),
+
+  scenario(
     'a statement imported twice is imported once, and undoing its log takes it back out',
     async (api, expect) => {
       const everyday = await account(api, expect, 'Everyday', 1000);

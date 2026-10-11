@@ -1,33 +1,86 @@
 import type { AppEnv } from './index';
 import * as db from './db';
+import { resetName } from '../../shared/defaultCategories';
+import type { Kind } from '../../shared/guidance/kinds';
 
+/**
+ * The categories a profile starts from, and what "Reset to defaults" sets it back to. Each expense
+ * category carries its kind (shared/guidance/kinds.ts); income categories take none. Groceries and
+ * Eating out replaced Food, which a reset renames to Groceries (shared/defaultCategories.ts).
+ */
 export const DEFAULT_CATEGORIES = [
-  { type: 'income', name: 'Salary', color: '#22C55E', icon: 'briefcase', taxDeductible: 0 },
-  { type: 'income', name: 'Freelance', color: '#16A34A', icon: 'laptop', taxDeductible: 0 },
+  {
+    type: 'income',
+    name: 'Salary',
+    color: '#22C55E',
+    icon: 'briefcase',
+    taxDeductible: 0,
+    kind: null,
+  },
+  {
+    type: 'income',
+    name: 'Freelance',
+    color: '#16A34A',
+    icon: 'laptop',
+    taxDeductible: 0,
+    kind: null,
+  },
   {
     type: 'income',
     name: 'Investments',
     color: '#15803D',
     icon: 'trending-up',
     taxDeductible: 0,
+    kind: null,
   },
-  { type: 'income', name: 'Gifts', color: '#86EFAC', icon: 'gift', taxDeductible: 0 },
-  { type: 'expense', name: 'Housing', color: '#EF4444', icon: 'home', taxDeductible: 0 },
-  { type: 'expense', name: 'Food', color: '#F97316', icon: 'utensils', taxDeductible: 0 },
+  { type: 'income', name: 'Gifts', color: '#86EFAC', icon: 'gift', taxDeductible: 0, kind: null },
+  {
+    type: 'expense',
+    name: 'Housing',
+    color: '#EF4444',
+    icon: 'home',
+    taxDeductible: 0,
+    kind: 'housing',
+  },
+  {
+    type: 'expense',
+    name: 'Groceries',
+    color: '#F97316',
+    icon: 'shopping-cart',
+    taxDeductible: 0,
+    kind: 'groceries',
+  },
+  {
+    type: 'expense',
+    name: 'Eating out',
+    color: '#84CC16',
+    icon: 'utensils',
+    taxDeductible: 0,
+    kind: 'eating_out',
+  },
   {
     type: 'expense',
     name: 'Transportation',
     color: '#EAB308',
     icon: 'car',
     taxDeductible: 0,
+    kind: 'transport',
   },
-  { type: 'expense', name: 'Utilities', color: '#8B5CF6', icon: 'zap', taxDeductible: 0 },
+  {
+    type: 'expense',
+    name: 'Utilities',
+    color: '#8B5CF6',
+    icon: 'zap',
+    taxDeductible: 0,
+    kind: 'utilities',
+  },
   {
     type: 'expense',
     name: 'Healthcare',
     color: '#EC4899',
     icon: 'heart',
     taxDeductible: 1,
+    kind: 'health',
   },
   {
     type: 'expense',
@@ -35,6 +88,7 @@ export const DEFAULT_CATEGORIES = [
     color: '#06B6D4',
     icon: 'film',
     taxDeductible: 0,
+    kind: 'leisure',
   },
   {
     type: 'expense',
@@ -42,6 +96,7 @@ export const DEFAULT_CATEGORIES = [
     color: '#3B82F6',
     icon: 'shield',
     taxDeductible: 0,
+    kind: 'insurance',
   },
   {
     type: 'expense',
@@ -49,6 +104,7 @@ export const DEFAULT_CATEGORIES = [
     color: '#D946EF',
     icon: 'shopping-bag',
     taxDeductible: 0,
+    kind: 'shopping',
   },
   {
     type: 'expense',
@@ -56,6 +112,7 @@ export const DEFAULT_CATEGORIES = [
     color: '#14B8A6',
     icon: 'book',
     taxDeductible: 1,
+    kind: 'childcare',
   },
   {
     type: 'expense',
@@ -63,8 +120,16 @@ export const DEFAULT_CATEGORIES = [
     color: '#F43F5E',
     icon: 'repeat',
     taxDeductible: 0,
+    kind: 'subscriptions',
   },
-] as const;
+] as const satisfies readonly {
+  type: string;
+  name: string;
+  color: string;
+  icon: string;
+  taxDeductible: 0 | 1;
+  kind: Kind | null;
+}[];
 
 // Every table a profile's rows live in, besides settings and the child tables below. Clearing a
 // profile and deleting an account both delete from each one, through profileRowDeletes.
@@ -188,13 +253,14 @@ export async function clearProfileData(
       for (const category of DEFAULT_CATEGORIES) {
         add(
           `INSERT INTO categories
-             (name, color, icon, type, tax_deductible, profile_id)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+             (name, color, icon, type, tax_deductible, kind, profile_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           category.name,
           category.color,
           category.icon,
           category.type,
           category.taxDeductible,
+          category.kind,
           pid
         );
       }
@@ -311,7 +377,9 @@ export async function resetProfileCategories(DB: D1Database, profileId: number):
   const statements: D1PreparedStatement[] = [];
 
   for (const category of existing) {
-    const normalizedName = category.name.trim().toLocaleLowerCase();
+    // A replaced default (Food) is matched to the default that replaced it (Groceries), and so is
+    // renamed to it with its entries instead of being deleted (shared/defaultCategories.ts).
+    const normalizedName = resetName(category.name);
     const defaultCategory = defaultsByName.get(normalizedName);
     const canonicalId = canonicalIds.get(normalizedName);
 
@@ -320,7 +388,8 @@ export async function resetProfileCategories(DB: D1Database, profileId: number):
       statements.push(
         DB.prepare(
           `UPDATE categories
-           SET name = ?, color = ?, icon = ?, type = ?, tax_deductible = ?, parent_id = NULL
+           SET name = ?, color = ?, icon = ?, type = ?, tax_deductible = ?, kind = ?,
+               essential = NULL, parent_id = NULL
            WHERE id = ? AND profile_id = ?`
         ).bind(
           defaultCategory.name,
@@ -328,6 +397,7 @@ export async function resetProfileCategories(DB: D1Database, profileId: number):
           defaultCategory.icon,
           defaultCategory.type,
           defaultCategory.taxDeductible,
+          defaultCategory.kind,
           category.id,
           profileId
         )
@@ -351,14 +421,15 @@ export async function resetProfileCategories(DB: D1Database, profileId: number):
     statements.push(
       DB.prepare(
         `INSERT INTO categories
-           (name, color, icon, type, tax_deductible, profile_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
+           (name, color, icon, type, tax_deductible, kind, profile_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).bind(
         category.name,
         category.color,
         category.icon,
         category.type,
         category.taxDeductible,
+        category.kind,
         profileId
       )
     );

@@ -162,6 +162,7 @@ export default function DangerZone(props: DangerZoneProps) {
                   </div>
                   <div class={styles['danger-confirm-desc']}>
                     This will replace all categories with defaults. Custom categories will be lost.
+                    Food becomes Groceries and keeps its entries.
                   </div>
                 </div>
                 <div class={styles['danger-confirm-actions']}>

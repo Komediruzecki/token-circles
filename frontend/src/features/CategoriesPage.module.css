@@ -825,3 +825,20 @@ select.form-control {
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* "Needed every month": a checkbox with its words beside it, not above. */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
+}
