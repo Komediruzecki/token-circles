@@ -34,7 +34,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Failures say what happened.** An unexpected server error reads "Something went wrong on our side. Try again in a moment.", deleting something another tab already deleted says so, and renaming a tag or profile to a name in use tells you it is taken.
 - **Backups keep each profile's connected sources and settings.** A restore puts each retirement plan back under its own profile, and any profile but your last can be deleted.
 - **Local-first mode: bills keep their account, and uploaded files import.** Paying a bill moves its account's balance, and a statement file uploaded on Import is read and imported.
-- **An account of a type Token Circles doesn't have no longer empties your account list.** One an AI assistant added through the MCP server as "credit" shows as a plain account, and Transactions and quick add list every account again. The MCP server and the import now refuse any type but Giro, Savings, Investment or Cash.
+- **An account of a type Token Circles doesn't have no longer hides your accounts from Transactions, quick add and Tags.** One an AI assistant added through the MCP server as "credit" shows as a plain account, its edit dialog says "Other account" and keeps the type, and Transactions, quick add and Tags list every account again. The MCP server and the import now refuse any type but Giro, Savings, Investment or Cash. An account an older version saved as Checking or Retirement gets its type's icon and colour on Accounts and the Net Worth Map.
 
 ## [5.16.1] — 2026-09-27
 

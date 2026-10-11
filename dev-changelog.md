@@ -353,12 +353,22 @@ All notable changes to Token Circles are documented here. The format is based on
   `api.getAccounts()` (Transactions, quick entry, Tags) for every account; it is now
   `z.string().transform(storedAccountType)`, which keeps an unknown type and reads a v4 name as its
   replacement, as local-first's `normalizeAccount` now does through the same function.
-  `Account.type` is `AccountType | (string & {})`. `core/accountTypes.ts` shows such an account as
-  a plain one: the badge on Accounts and the Transactions account select say "account", the
-  constellation says "Account", with the default icon and colour. An edit sends the stored type
-  back unchanged, so this is what keeps a rollback safe once a build writes a new type. Tests: two
-  contract scenarios (`imports.ts`, both runtimes), `mcp-tools-write.test.ts`,
-  `api.getAccounts.test.ts`, and the Accounts page in `accountForm.test.tsx`.
+  `Account.type` is `AccountType | (string & {})`. Every display reads the type through
+  `knownAccountType` (`core/accountTypes.ts`): the badge's word (`accountTypeBadge`), its colour
+  (`accountTypeTone`), the card's icon (`accountTypeIcon`), the Transactions account select and the
+  constellation's label and colour. A v4 name shows as its replacement everywhere, which matters
+  in cloud mode, where the Accounts page gets the stored type raw: a `retirement` account had the
+  "ib" word but the plain colour and icon, and "Account" in the constellation. A type the app does
+  not have is a plain account everywhere: "account" on the badge and in the select, "Account" in
+  the constellation, the plain colour and icon. The edit dialog opens a v4 name as its replacement
+  (`storedAccountType` in `accountForm.open`, which `checkAccountEdit` reads as the same type) and
+  shows an unknown type as a disabled, selected "Other account" option instead of a blank select.
+  An untouched save sends the type back unchanged and writes nothing, so this is what keeps a
+  rollback safe once a build writes a new type. Tests: two contract scenarios (`imports.ts`, both
+  runtimes), `mcp-tools-write.test.ts`, `api.getAccounts.test.ts`, the Accounts page in
+  `accountForm.test.tsx` (local-first) and `accountsPageTypes.test.tsx` (cloud),
+  `accountTypes.test.ts`, `accountConstellation.test.tsx` and
+  `transactionsAccountTypeWord.test.tsx`.
 
 ### Tests and tooling
 
