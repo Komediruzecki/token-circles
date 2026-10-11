@@ -21,6 +21,7 @@ import {
   useAppState,
 } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
+import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
@@ -39,11 +40,13 @@ import { ImportMappingStep } from '../../features/import/ImportMappingStep'
 import { ImportPreviewStep } from '../../features/import/ImportPreviewStep'
 import { Field, FormNotice, SubmitButton } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
+import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import { LogoMark } from '../Logo'
 import { OrbitSpinner } from '../OrbitSpinner'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 import styles from './Onboarding.module.css'
-import { createFirstAccountForm, createSpaceForm } from './onboardingForms'
+import { createFirstAccountForm, createSpaceForm, spaceAnswerChanges } from './onboardingForms'
+import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
@@ -197,6 +200,12 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: your space ----
   // What it checks and says is onboardingForms.ts; a refused name is said under the name.
+  // Where the person lives and who the space covers are asked here too (guidance.md 5.5): the
+  // answers the record holds, and the ones chosen on this visit to the step, which are what the
+  // step saves. Both questions can be left unanswered.
+  const [storedAnswers, setStoredAnswers] = createSignal<Answers>({})
+  const [chosenAnswers, setChosenAnswers] = createSignal<AnswerChanges>({})
+  const spaceAnswers = (): Answers => ({ ...storedAnswers(), ...chosenAnswers() }) as Answers
   const spaceForm = createSpaceForm({
     current: () => state.currentProfile,
     save: async ({ name, currency }) => {
@@ -209,15 +218,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           setProfiles(getProfiles().map((p) => (p.id === current.id ? { ...p, name } : p)))
           bumpProfileVersion()
         }
-        return
+      } else {
+        // Truly empty workspace (no profile at all): create and select one, through App's one
+        // way of choosing profiles, as a profile created from the sidebar is. This used to write
+        // the two storage keys itself and leave App's copy of the selection on the old one, which
+        // the next close of the sidebar dropdown wrote back.
+        const created = await api.createProfile(name)
+        setProfiles([...getProfiles(), created])
+        props.selectProfiles([created.id])
       }
-      // Truly empty workspace (no profile at all): create and select one, through App's one
-      // way of choosing profiles, as a profile created from the sidebar is. This used to write
-      // the two storage keys itself and leave App's copy of the selection on the old one, which
-      // the next close of the sidebar dropdown wrote back.
-      const created = await api.createProfile(name)
-      setProfiles([...getProfiles(), created])
-      props.selectProfiles([created.id])
+      // Saved for the profile the app now writes to, as every other write of the step is.
+      setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
+      setChosenAnswers({})
     },
     onSaved: () => {
       nextOnboardingStep()
@@ -301,6 +313,16 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           name: spaceForm.values.name || (state.currentProfile?.name ?? 'Personal Profile'),
           currency: getLocalCurrency(),
         })
+        setChosenAnswers({})
+        // Asked again when the step opens again: what the record holds now. A workspace with no
+        // profile yet holds none.
+        if (state.currentProfile) {
+          loadAnswers()
+            .then(setStoredAnswers)
+            .catch(() => setStoredAnswers({}))
+        } else {
+          setStoredAnswers({})
+        }
       })
     }
     if (step === 'account') {
@@ -578,6 +600,15 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             )}
           </Field>
         </div>
+        <p class={styles.fieldHint} data-test-id="onboarding-space-questions-lead">
+          Both questions are optional. You can change the answers in Settings.
+        </p>
+        <SpaceQuestions
+          idPrefix="onboarding-space"
+          answers={spaceAnswers()}
+          disabled={spaceForm.submitting()}
+          onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
+        />
       </form>
     </div>
   )

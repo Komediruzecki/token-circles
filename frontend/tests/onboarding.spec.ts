@@ -8,6 +8,43 @@
  */
 import { expect, test } from '@playwright/test'
 import { gotoServerless, gotoServerlessZeroState } from './test-helpers'
+import type { Page } from '@playwright/test'
+
+/** The active profile's guidance answers, as local-first keeps them: `guidance:<profile id>`. */
+async function storedAnswers(page: Page): Promise<unknown> {
+  return page.evaluate(
+    () =>
+      new Promise((resolve) => {
+        const key = `guidance:${localStorage.getItem('currentProfileId') ?? '1'}`
+        const req = indexedDB.open('finance-manager')
+        req.onsuccess = () => {
+          const db = req.result
+          const get = db.transaction('settings', 'readonly').objectStore('settings').get(key)
+          get.onsuccess = () => {
+            const value = (get.result as { value?: string } | undefined)?.value
+            resolve(value === undefined ? null : JSON.parse(value))
+            db.close()
+          }
+          get.onerror = () => {
+            resolve(null)
+            db.close()
+          }
+        }
+        req.onerror = () => resolve(null)
+      })
+  )
+}
+
+/** Leave the wizard and open Settings, General, at About this space. */
+async function aboutThisSpace(page: Page): Promise<void> {
+  await page.getByTestId('onboarding-skip').click()
+  await page.getByTestId('confirm-accept').click()
+  await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+  await page.evaluate(() => {
+    window.location.hash = 'settings'
+  })
+  await expect(page.getByTestId('settings-about-space')).toBeVisible({ timeout: 30000 })
+}
 
 test.describe('onboarding wizard', () => {
   test('@smoke auto-opens for a pristine user and completes the core path', async ({ page }) => {
@@ -58,6 +95,63 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('account-card').first()).toContainText('Main Checking')
     const flag = await page.evaluate(() => localStorage.getItem('finance_onboarding:local'))
     expect(flag).toBe('completed')
+  })
+
+  test('asks where you live and who the space covers, and Settings changes the answers', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    await expect(page.getByTestId('onboarding-space-region')).toContainText('Where do you live?')
+    await page.getByTestId('onboarding-space-region-HR').click()
+    await page.getByTestId('onboarding-space-adults-2').click()
+    await page.getByTestId('onboarding-space-children-0').click()
+    await expect(page.getByRole('radio', { name: 'Croatia' })).toBeChecked()
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await expect.poll(() => storedAnswers(page)).toEqual({ region: 'HR', adults: 2, children: 0 })
+
+    await aboutThisSpace(page)
+    const about = page.getByTestId('about-this-space')
+    await expect(about.getByRole('radio', { name: 'Croatia' })).toBeChecked()
+    await expect(page.getByTestId('settings-space-region-note')).toHaveText(
+      'Compared with Croatia, from your answer.'
+    )
+    await expect(page.getByTestId('settings-space-adults-2').getByRole('radio')).toBeChecked()
+
+    // A change is saved at once, and survives a reload.
+    await page.getByTestId('settings-space-region-DE').click()
+    await expect(page.getByTestId('settings-space-region-note')).toHaveText(
+      'Compared with Germany, from your answer.'
+    )
+    await expect.poll(() => storedAnswers(page)).toEqual({ region: 'DE', adults: 2, children: 0 })
+    await page.getByTestId('settings-space-household-ask-again').click()
+    await expect(page.getByTestId('settings-space-household-note')).toHaveText('Not answered yet.')
+    await expect.poll(() => storedAnswers(page)).toEqual({ region: 'DE' })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(page.getByTestId('settings-about-space')).toBeVisible({ timeout: 30000 })
+    await expect(about.getByRole('radio', { name: 'Germany' })).toBeChecked()
+    await expect(page.getByTestId('settings-space-household-note')).toHaveText('Not answered yet.')
+    expect(await storedAnswers(page)).toEqual({ region: 'DE' })
+  })
+
+  test('takes a region left unanswered as skipped, and compares by the base currency', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    await page.getByTestId('onboarding-currency').selectOption('GBP')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await expect.poll(() => storedAnswers(page)).toEqual({ region: 'skipped' })
+
+    await aboutThisSpace(page)
+    await expect(page.getByTestId('settings-space-region-note')).toHaveText(
+      'You skipped this in setup. Compared with the United Kingdom, going by your base currency, GBP.'
+    )
+    await expect(page.getByTestId('settings-space-household-note')).toHaveText('Not answered yet.')
   })
 
   test('does not appear when the workspace already has data', async ({ page }) => {

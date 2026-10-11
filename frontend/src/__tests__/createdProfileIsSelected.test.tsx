@@ -84,9 +84,13 @@ const SEED = [
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-/** Cloud mode's Worker: two profiles, a create that adds one, and nothing else stored. */
+/**
+ * Cloud mode's Worker: two profiles, a create that adds one, the settings the setup wizard keeps
+ * its answers in, and nothing else stored.
+ */
 function workerStandIn(seed = SEED) {
   const profiles = seed.map((p) => ({ ...p }))
+  const settings: Record<string, unknown> = { currency: 'EUR', locale: 'en-US' }
   return async (url: string, init: RequestInit = {}) => {
     const path = url.split('?')[0]
     if (path === '/api/auth/me') return json({ id: 1, username: 'owner', role: 'admin' })
@@ -99,6 +103,11 @@ function workerStandIn(seed = SEED) {
       return json(created, 201)
     }
     if (path === '/api/profiles') return json(profiles)
+    if (path === '/api/settings' && init.method === 'PUT') {
+      Object.assign(settings, JSON.parse(init.body as string))
+      return json({ ok: true })
+    }
+    if (path === '/api/settings') return json(settings)
     return json([])
   }
 }

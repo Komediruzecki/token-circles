@@ -11,12 +11,12 @@
  * build knows, is kept. Saves made in this tab run one after another, each on the record the one
  * before it wrote.
  */
-import { mergeAnswers, readAnswers } from '../../../shared/guidance/answers'
+import { answersRecord, mergeAnswers, readAnswers } from '../../../shared/guidance/answers'
 import { localProfileSettingKey } from '../../../shared/profileSettings'
 import { api } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { getStorageMode } from './storage/storageFactory'
-import type { AnswerChanges, Answers } from '../../../shared/guidance/answers'
+import type { AnswerChanges, Answers, AnswersRecord } from '../../../shared/guidance/answers'
 
 /** Where a profile's answers are stored, in the storage mode in use. */
 export function answersKey(profileId: number): string {
@@ -43,9 +43,14 @@ function checkProfile(profileId: number): void {
   }
 }
 
-async function storedRecord(profileId: number): Promise<unknown> {
+/** A profile's answers in the settings as `GET /api/settings` answers them. */
+export function answersIn(settings: Record<string, unknown>, profileId: number): Answers {
+  return readAnswers(settings[answersKey(profileId)])
+}
+
+async function storedRecord(profileId: number): Promise<AnswersRecord> {
   const settings = (await api.getSettings()) as Record<string, unknown>
-  return settings[answersKey(profileId)]
+  return answersRecord(settings[answersKey(profileId)])
 }
 
 /** The answers of a profile, the active one unless named. */
@@ -54,8 +59,16 @@ export async function loadAnswers(profileId: number = activeProfileId()): Promis
   return readAnswers(await storedRecord(profileId))
 }
 
-async function save(changes: AnswerChanges, profileId: number): Promise<Answers> {
-  const record = mergeAnswers(await storedRecord(profileId), changes)
+/**
+ * What a save changes: the fields, or a function that works them out from the record as it was
+ * just read, for a change that depends on what is there (setup's `skipped`, which never replaces
+ * an answer).
+ */
+export type AnswersUpdate = AnswerChanges | ((stored: AnswersRecord) => AnswerChanges)
+
+async function save(update: AnswersUpdate, profileId: number): Promise<Answers> {
+  const stored = await storedRecord(profileId)
+  const record = mergeAnswers(stored, typeof update === 'function' ? update(stored) : update)
   // Checked once the record is read: a switch before or during the read is caught here, before
   // anything is written.
   checkProfile(profileId)
@@ -68,14 +81,14 @@ let lastSave: Promise<unknown> = Promise.resolve()
 
 /**
  * Answer, change or clear questions for a profile, the active one unless named: re-read its
- * record, set each field in `changes` (null clears one, "Ask again"), and store the record.
+ * record, set each field in `update` (null clears one, "Ask again"), and store the record.
  * Answers what the profile has answered now, as this build reads it.
  */
 export function saveAnswers(
-  changes: AnswerChanges,
+  update: AnswersUpdate,
   profileId: number = activeProfileId()
 ): Promise<Answers> {
-  const next = lastSave.then(() => save(changes, profileId))
+  const next = lastSave.then(() => save(update, profileId))
   lastSave = next.catch(() => undefined)
   return next
 }

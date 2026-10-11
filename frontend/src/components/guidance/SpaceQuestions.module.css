@@ -1,0 +1,141 @@
+/* The space questions: radio groups drawn as chips, in setup and in Settings. */
+
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.question,
+.count {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.legend {
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.why {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin-top: 10px;
+}
+
+.countLegend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.question > .chips {
+  margin-top: 10px;
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip:hover {
+  background: var(--surface-hover);
+}
+
+.chip:has(.radio:checked) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+:global([data-theme='dark']) .chip:has(.radio:checked) {
+  color: var(--bg);
+}
+
+.chip:has(.radio:focus-visible) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.chip:has(.radio:disabled) {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+/* The radio stays in the page for keyboards and screen readers; the chip shows its state. */
+.radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin-top: 10px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.askAgain {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.askAgain:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.askAgain:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.problem {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--danger);
+}

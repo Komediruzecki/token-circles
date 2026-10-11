@@ -697,6 +697,31 @@ All notable changes to Token Circles are documented here. The format is based on
   stored record kept), a backup scenario, `guidance answers` as a stored kind (so the delete,
   clear and restore scenarios count it in both runtimes), and the restores between runtimes in
   `exportPerProfileSettings.test.ts` and `worker/test/backup-profile-settings.test.ts`.
+- **Setup asks where you live and who the space covers** (guidance.md 5.5, as written), on "Name
+  your space", in both modes: `components/guidance/SpaceQuestions.tsx`, radio groups drawn as
+  chips, with Germany, Croatia, Another EU country (EU27), United Kingdom, United States and
+  Somewhere else, adults 1, 2 or 3 or more and children 0, 1, 2 or 3 or more. Both are optional.
+  The step saves the answers chosen on it, for the profile the app writes to, after the rename or
+  the new profile; a region left unanswered is saved as `skipped` unless the record already holds
+  one, read from the record just before the write (`spaceAnswerChanges`; `saveAnswers` now also
+  takes a function of that record). Reopening the step shows the stored answers.
+- **Settings, General, About this space** (`components/guidance/AboutThisSpace.tsx`) shows the
+  active profile's answers and how the region was set; choosing another answer saves it at once,
+  and Ask again clears one. It reloads with the profile, the settings and the import logs.
+- **The region choice** (`shared/guidance/region.ts`, design section 3, moved here from commit 8
+  so Settings can say how the region was set): the answer (Somewhere else compares with the EU
+  average), else the bank formats of the profile's import logs (DKB and Sparkasse Germany, Erste
+  and PBZ Croatia, ING the EU average; Revolut, Wise, YNAB and N26 no hint; most sessions win, a
+  tie goes to the latest), else the base currency (EUR, GBP, USD), else the EU average. Its words
+  are `components/guidance/regionWords.ts`, like "Compared with Germany, going by your DKB
+  statements.".
+- **Tests:** `guidanceRegion.test.ts` (a `chooseRegion` table), `regionWords.test.ts`, the wizard's
+  questions in `onboardingForms.test.tsx` (as written; saved with the space; skipped; the stored
+  answers shown and kept; a newer build's region never replaced), `AboutThisSpace.test.tsx` (the
+  notes for an answer, the bank formats of this profile only, the base currency and nothing; a
+  change saved on the freshest record; Ask again; a failed save; another profile), and E2E in both
+  modes: `onboarding.spec.ts` (answer, see and change in Settings, survive a reload; a region left
+  unanswered) and `onboarding-server.spec.ts` (the record on the Worker, Settings, Ask again).
 
 ### Achievements
 

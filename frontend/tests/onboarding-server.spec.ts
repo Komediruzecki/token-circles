@@ -75,6 +75,55 @@ test.describe('the setup wizard on the account @smoke', () => {
     }
   })
 
+  test('the space step keeps where you live and who the space covers on the profile', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    /** The profile's answers as the Worker keeps them, under the plain key. */
+    const answers = async () => {
+      const res = await ctx.request.get(`${E2E_BASE}/api/settings`)
+      expect(res.ok(), `GET /api/settings: ${String(res.status())}`).toBeTruthy()
+      const { guidance } = (await res.json()) as { guidance?: string }
+      return guidance === undefined ? null : (JSON.parse(guidance) as unknown)
+    }
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+
+      await page.getByTestId('onboarding-space-region-UK').click()
+      await page.getByTestId('onboarding-space-adults-1').click()
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await expect.poll(answers).toEqual({ region: 'UK', adults: 1 })
+
+      // Settings shows them, and Ask again clears one there.
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await page.evaluate(() => {
+        window.location.hash = 'settings'
+      })
+      await expect(page.getByTestId('settings-about-space')).toBeVisible({ timeout: 30_000 })
+      await expect(
+        page.getByTestId('about-this-space').getByRole('radio', { name: 'United Kingdom' })
+      ).toBeChecked()
+      await expect(page.getByTestId('settings-space-region-note')).toHaveText(
+        'Compared with the United Kingdom, from your answer.'
+      )
+      await page.getByTestId('settings-space-region-ask-again').click()
+      await expect.poll(answers).toEqual({ adults: 1 })
+      await expect(page.getByTestId('settings-space-region-note')).toContainText(
+        'Not answered yet.'
+      )
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
   test('a skip is kept on the account, and another browser on it opens no wizard', async ({
     page,
     browser,
