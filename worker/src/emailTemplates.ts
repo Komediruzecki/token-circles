@@ -461,19 +461,19 @@ const textFooter = (reason: string, unsubUrl?: string | null) =>
 const lasts = (hours: number) => (hours === 1 ? '1 hour' : `${hours} hours`);
 
 /**
- * What a confirm link does, for both confirm mails. The link spends itself only for its own
- * account's session, which a new password account does not have yet, so it asks for a sign-in,
- * and a password sign-in in the browser that opened it confirms the address (email-link.ts).
+ * Everything the two confirm mails share: the button, the small print and the footer.
+ *
+ * Both say what the link does today. It spends itself only for its own account's session, which
+ * a new password account does not have yet, so opening it asks for a sign-in, in any browser, and
+ * that sign-in confirms the address (email-link.ts). They promise nothing more until the
+ * same-browser sign-in ships, which is when Confirm can say "One click" again (maff's call of
+ * 2026-10-11).
  */
-const CONFIRM_BODY = `Confirm that this address is yours and your ${BRAND} account opens. The link asks you to sign in with your password, in whichever browser you open it, and that confirms the address.`;
-
-/** Everything the two confirm mails share: the body, the button, the small print and the footer. */
 function confirmMail(opts: {
   subject: string;
   preheader: string;
   headline: string;
-  /** A paragraph before the body. */
-  lead?: string;
+  paragraphs: MailSpec['paragraphs'];
   link: string;
   ttlHours: number;
   assetOrigin?: string;
@@ -483,13 +483,13 @@ function confirmMail(opts: {
     preheader: opts.preheader,
     art: 'banner',
     headline: opts.headline,
-    paragraphs: opts.lead ? [opts.lead, CONFIRM_BODY] : [CONFIRM_BODY],
+    paragraphs: opts.paragraphs,
     buttons: [{ label: 'Confirm my email', href: opts.link }],
     notes: [
       `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
     ],
     paste: opts.link,
-    aside: `Didn't sign up for ${BRAND}? Ignore this mail. Without the link, the account stays closed.`,
+    aside: `Didn't sign up for ${BRAND}? Ignore this mail. Nobody can use the account until this address is confirmed.`,
     reason: `You are getting this because this address was used to sign up for ${BRAND}.`,
     assetOrigin: opts.assetOrigin,
   });
@@ -503,16 +503,19 @@ export function renderConfirmEmail(opts: {
 }): RenderedEmail {
   return confirmMail({
     subject: `Confirm your email for ${BRAND}`,
-    preheader: `One click opens your account. The link works for ${lasts(opts.ttlHours)}.`,
-    headline: "One click and you're in.",
+    preheader: `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
+    headline: "One link, one sign-in, and you're in.",
+    paragraphs: [
+      `Open the link in any browser and sign in there. That confirms this address and opens your ${BRAND} account.`,
+    ],
     ...opts,
   });
 }
 
 /**
  * A fresh confirm link: Send the link again, or a sign-up again for an address still waiting for
- * its link. Minting it retires the links sent before it (createEmailVerification), and the mail
- * says so.
+ * its link, which an inbox gets without having asked, so the mail says nothing of asking. Minting
+ * it retires the links sent before it (createEmailVerification), and the mail says so.
  */
 export function renderEmailVerification(opts: {
   link: string;
@@ -523,7 +526,10 @@ export function renderEmailVerification(opts: {
     subject: `Your new confirm link for ${BRAND}`,
     preheader: `It replaces the links sent before. It works once, for ${lasts(opts.ttlHours)}.`,
     headline: "Here's a fresh link.",
-    lead: 'You asked for a new link to confirm this address. It replaces the ones sent before, so use this one.',
+    paragraphs: [
+      'Use this link to confirm your address. It replaces the ones sent before.',
+      `Open it in any browser and sign in there, and your ${BRAND} account opens.`,
+    ],
     ...opts,
   });
 }

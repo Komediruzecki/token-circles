@@ -429,22 +429,42 @@ describe('the mail itself', () => {
   const confirm = renderConfirmEmail({ link, ttlHours: 24, assetOrigin: APP });
   const fresh = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
   const welcome = renderWelcome({ appUrl: APP });
-  /** What both confirm mails say the link does, until the same-browser sign-in ships. */
-  const SIGN_IN =
-    'Confirm that this address is yours and your Token Circles account opens. The link asks you to sign in with your password, in whichever browser you open it, and that confirms the address.';
+  /**
+   * What each confirm mail says the link does. Until the same-browser sign-in ships, opening the
+   * link always asks for a sign-in, wherever it is opened (email-link.ts), and the mails say so.
+   */
+  const CONFIRM_SAYS =
+    'Open the link in any browser and sign in there. That confirms this address and opens your Token Circles account.';
+  const FRESH_SAYS = [
+    'Use this link to confirm your address. It replaces the ones sent before.',
+    'Open it in any browser and sign in there, and your Token Circles account opens.',
+  ];
 
   it('gives a password sign-up Confirm: the link as its button, and again as text to paste', () => {
     expect(confirm.subject).toBe('Confirm your email for Token Circles');
-    expect(confirm.html).toContain('One click and you&#39;re in.');
+    expect(confirm.html).toContain('One link, one sign-in, and you&#39;re in.');
+    expect(confirm.html).toContain(
+      'Open the link, then sign in where it opens. It works for 24 hours.'
+    );
     // The button and the paste-this line.
     expect(confirm.html.split(`href="${link.replaceAll('&', '&amp;')}"`)).toHaveLength(3);
     expect(confirm.text).toContain(`Confirm my email: ${link}`);
   });
 
-  it('says in both confirm mails, html and text, that the link asks for a sign-in with the password, wherever it is opened', () => {
+  it('says in both confirm mails, html and text, that the link asks for a sign-in, wherever it is opened', () => {
+    for (const part of [confirm.html, confirm.text]) expect(part).toContain(CONFIRM_SAYS);
+    for (const part of [fresh.html, fresh.text]) {
+      for (const words of FRESH_SAYS) expect(part).toContain(words);
+    }
+  });
+
+  it('promises no one-click confirm in either mail while the link asks for a sign-in', () => {
+    // maff's call of 2026-10-11: the mails promise nothing the app does not do yet. "One click"
+    // can come back with the same-browser sign-in.
     for (const mail of [confirm, fresh]) {
-      expect(mail.html).toContain(SIGN_IN);
-      expect(mail.text).toContain(SIGN_IN);
+      for (const part of [mail.subject, mail.html, mail.text]) {
+        expect(part).not.toMatch(/one click|one-click|single click/i);
+      }
     }
   });
 
@@ -463,16 +483,21 @@ describe('the mail itself', () => {
   it('says in the fresh link, html and text, that it replaces the links sent before it', () => {
     expect(fresh.subject).toBe('Your new confirm link for Token Circles');
     expect(fresh.html).toContain('Here&#39;s a fresh link.');
-    const replaces =
-      'You asked for a new link to confirm this address. It replaces the ones sent before, so use this one.';
-    expect(fresh.html).toContain(replaces);
-    expect(fresh.text).toContain(replaces);
+    expect(fresh.html).toContain('It replaces the links sent before. It works once, for 24 hours.');
     expect(fresh.text).toContain(`Confirm my email: ${link}`);
   });
 
-  it('tells someone who never signed up that the account stays closed without the link', () => {
+  it('does not say the reader asked for the fresh link: it also goes to a sign-up again', () => {
+    // A sign-up again for an address still waiting for its link mails this too, to an inbox
+    // that may never have asked (routes/auth.ts).
+    for (const part of [fresh.subject, fresh.html, fresh.text]) {
+      expect(part).not.toMatch(/you asked/i);
+    }
+  });
+
+  it('tells someone who never signed up that nobody can use the account until the address is confirmed', () => {
     const ignore =
-      "Didn't sign up for Token Circles? Ignore this mail. Without the link, the account stays closed.";
+      "Didn't sign up for Token Circles? Ignore this mail. Nobody can use the account until this address is confirmed.";
     for (const mail of [confirm, fresh]) {
       expect(mail.html).toContain(ignore.replace("'", '&#39;'));
       expect(mail.text).toContain(ignore);

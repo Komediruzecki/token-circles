@@ -263,7 +263,10 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,
   migration `0033_welcome_once.sql`). A password sign-up gets Confirm (`renderConfirmEmail`): the
   link that opens the account and nothing else. Send the link again, and a sign-up again for an
-  address waiting for its link, get the same body as a fresh link (`renderEmailVerification`). The
+  address waiting for its link, get a fresh link (`renderEmailVerification`), which says it
+  replaces the links sent before and never that the reader asked for it. Until the same-browser
+  sign-in ships, both say the link asks for a sign-in, in any browser, and neither promises a
+  one-click confirm (maff's call of 2026-10-11): "One link, one sign-in, and you're in." The
   Welcome (`renderWelcome`) goes to an account once: when its address is first confirmed, by its
   link (opened with its own session, a password sign-in in the browser that opened it, or
   `POST /api/auth/email-link/finish`), Google sign-in, an emailed sign-in code or a reset link;
