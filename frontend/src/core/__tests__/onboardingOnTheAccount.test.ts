@@ -3,13 +3,13 @@
  * (`/api/account/state`, user_state), so every device the account signs in on reads the same one.
  *
  * Against a stand-in for the Worker that reads and keeps each account's record with the Worker's
- * own rules (shared/accountState.ts, readUserStateValue and applyUserStateWrite), because that is
- * the network.
+ * own rules (shared/accountState.ts, answerUserStateValue and applyUserStateWrite), because that
+ * is the network.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  answerUserStateValue,
   applyUserStateWrite,
-  readUserStateValue,
   sqliteDateTime,
 } from '../../../../shared/accountState'
 import { __resetAccountStateForTest, readAccountState } from '../accountState'
@@ -17,6 +17,7 @@ import {
   __resetGettingStartedForTest,
   gettingStartedRecord,
   gettingStartedSettled,
+  hideGettingStarted,
 } from '../gettingStarted'
 import {
   completeOnboarding,
@@ -64,9 +65,9 @@ function workerStandIn() {
     if (path === '/api/account/state' && method === 'GET') {
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
       return json({
-        onboarding: readUserStateValue('onboarding', stored(worker.records.get(id))),
+        onboarding: answerUserStateValue('onboarding', stored(worker.records.get(id))),
         tours: null,
-        getting_started: readUserStateValue(
+        getting_started: answerUserStateValue(
           'getting_started',
           stored(worker.gettingStarted.get(id))
         ),
@@ -465,6 +466,23 @@ describe('the Getting started card', () => {
     expect(gettingStartedRecord()).toEqual({ hidden: true })
   })
 
+  it('is not shown or written when its row cannot be read', async () => {
+    const unreadable = { hidden: 'no' }
+    worker.gettingStarted.set(5, unreadable as unknown as GettingStartedRecord)
+    signIn(5)
+
+    expect(await whereToOfferOnboarding()).toBe('welcome')
+    startOnboarding()
+    completeOnboarding()
+    await settled()
+    expect(gettingStartedRecord()).toBeNull()
+
+    hideGettingStarted()
+    await settled()
+    expect(cardPuts()).toEqual([])
+    expect(worker.gettingStarted.get(5)).toEqual(unreadable)
+  })
+
   it('is not written when the account state could not be read', async () => {
     worker.failRead = true
     signIn(5)
@@ -580,30 +598,49 @@ describe('whose record it is', () => {
 })
 
 describe('a record this build cannot read at all', () => {
-  it('is never replaced: each write is refused, and the decision stays in this browser', async () => {
-    const unreadable = {
-      step: 'welcome',
-      started_at: 'yesterday',
-      finished_at: null,
-      outcome: null,
-    }
+  // Written by another build, in a shape this one cannot read: the Worker answers it as
+  // unreadable, which is not the null of no record.
+  const unreadable = {
+    step: 'welcome',
+    started_at: 'yesterday',
+    finished_at: null,
+    outcome: null,
+  }
+
+  it('opens no wizard and sends nothing, at this start or the next', async () => {
     worker.records.set(5, unreadable as unknown as OnboardingRecord)
     signIn(5)
 
-    // It reads as no record, so the wizard opens here; nothing it sends is stored.
     await maybeOfferOnboarding()
-    expect(onboardingOpen()).toBe(true)
+    expect(onboardingOpen()).toBe(false)
+
+    // Relaunched from the tour menu and left: the record is unknown, so nothing goes to it and
+    // no card is begun.
+    startOnboarding()
     nextOnboardingStep()
     skipOnboarding()
     await settled()
+    expect(worker.sent).toEqual(['GET /api/account/state'])
     expect(worker.records.get(5)).toEqual(unreadable)
-    expect(getOnboardingStatus('account-5')).toBe('skipped')
+    expect(gettingStartedRecord()).toBeNull()
 
-    // The next start sends the decision again, is refused again, and opens nothing.
     signIn(5)
     await maybeOfferOnboarding()
     await settled()
     expect(onboardingOpen()).toBe(false)
+    expect(worker.sent).toEqual(['GET /api/account/state', 'GET /api/account/state'])
+  })
+
+  it("keeps this browser's decision without sending it over the record", async () => {
+    worker.records.set(5, unreadable as unknown as OnboardingRecord)
+    localStorage.setItem('finance_onboarding:account-5', 'skipped')
+    signIn(5)
+
+    expect(await whereToOfferOnboarding()).toBeNull()
+    await settled()
+
+    expect(worker.sent).toEqual(['GET /api/account/state'])
+    expect(getOnboardingStatus('account-5')).toBe('skipped')
     expect(worker.records.get(5)).toEqual(unreadable)
   })
 })

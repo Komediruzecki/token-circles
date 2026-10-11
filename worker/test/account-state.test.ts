@@ -348,7 +348,22 @@ describe('a value another build wrote', () => {
       expect(res.status, `${key} ${value}`).toBe(409);
       expect(await row(key), `${key} ${value}`).toBe(value);
       const state = (await (await read(mine)).json()) as Record<string, unknown>;
-      expect(state[key], `${key} ${value}`).toBeNull();
+      expect(state[key], `${key} ${value}`).toBe('unreadable');
     }
+  });
+
+  it('answers a row it cannot read as unreadable, which is not the null of no row', async () => {
+    await put('onboarding', '{"step":"welcome","started_at":"yesterday"}');
+    await put('tours', 'not json');
+    const res = await read(mine);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      onboarding: 'unreadable',
+      tours: 'unreadable',
+      getting_started: null,
+    });
+    // Reading it changes nothing.
+    expect(await row('onboarding')).toBe('{"step":"welcome","started_at":"yesterday"}');
+    expect(await row('tours')).toBe('not json');
   });
 });

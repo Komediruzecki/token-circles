@@ -26,11 +26,13 @@
  * know reads as no step, and the record keeps its times and outcome, so a finished record stays
  * finished. A tour id that is not well formed is dropped and the others are kept. A row that cannot
  * be read even so is never replaced: the write is refused and the row left as it is
- * (applyUserStateWrite).
+ * (applyUserStateWrite). GET answers it as UNREADABLE, which is not the null of no row, and the app
+ * treats that key as unknown: no wizard, no write, nothing sent.
  *
  * The names are in shared/accountStateKeys.ts, which has no imports.
  */
 import {
+  isUserStateKey,
   ONBOARDING_DECISIONS,
   ONBOARDING_STEPS,
   USER_STATE_MAX_BYTES,
@@ -65,8 +67,20 @@ export interface UserStateValues {
   getting_started: GettingStartedRecord;
 }
 
-/** What GET /api/account/state answers: every key, null where nothing is stored. */
-export type UserState = { [K in UserStateKey]: UserStateValues[K] | null };
+/**
+ * How GET /api/account/state answers a key whose row this build cannot read. The row is there, so
+ * the key is not empty, but what it holds is unknown: the app opens no wizard on it and writes
+ * nothing to it, and the tours it would hold are taken as this browser knows them.
+ */
+export const UNREADABLE = 'unreadable';
+
+export type Unreadable = typeof UNREADABLE;
+
+/**
+ * What GET /api/account/state answers: every key, null where nothing is stored, UNREADABLE where
+ * the row cannot be read.
+ */
+export type UserState = { [K in UserStateKey]: UserStateValues[K] | null | Unreadable };
 
 /** `date` as SQLite's `datetime('now')` writes it: UTC, `YYYY-MM-DD HH:MM:SS`. */
 export function sqliteDateTime(date: Date): string {
@@ -162,16 +176,44 @@ export function readUserStateValue<K extends UserStateKey>(
   }
 }
 
+/** A key's value as GET answers it, from the row's stored text (null when there is no row). */
+export function answerUserStateValue<K extends UserStateKey>(
+  key: K,
+  raw: string | null
+): UserStateValues[K] | null | Unreadable {
+  if (raw === null) return null;
+  return readUserStateValue(key, raw) ?? UNREADABLE;
+}
+
+/** What GET /api/account/state answers for an account's rows; a row under another key is left out. */
+export function answerUserState(rows: ReadonlyArray<{ key: string; value: string }>): UserState {
+  const state: UserState = { onboarding: null, tours: null, getting_started: null };
+  for (const row of rows) {
+    if (isUserStateKey(row.key)) {
+      (state as Record<UserStateKey, unknown>)[row.key] = answerUserStateValue(row.key, row.value);
+    }
+  }
+  return state;
+}
+
+/** One key of an answer: null when absent or null, UNREADABLE when there but not readable. */
+function readAnswered<T>(raw: unknown, read: (value: unknown) => T | null): T | null | Unreadable {
+  if (raw === undefined || raw === null) return null;
+  return read(raw) ?? UNREADABLE;
+}
+
 /**
  * What `GET /api/account/state` answered, or null when the answer is not an object of keys. A
- * missing or unreadable key reads as null, so a newer Worker's extra key is ignored.
+ * missing key reads as null, so a newer Worker's extra key is ignored. A key that holds something
+ * this build cannot read, UNREADABLE or a value another build's Worker answered, reads as
+ * UNREADABLE: unknown, never as nothing stored.
  */
 export function readUserState(raw: unknown): UserState | null {
   if (!isObject(raw)) return null;
   return {
-    onboarding: readOnboardingRecord(raw.onboarding),
-    tours: readToursRecord(raw.tours),
-    getting_started: readGettingStartedRecord(raw.getting_started),
+    onboarding: readAnswered(raw.onboarding, readOnboardingRecord),
+    tours: readAnswered(raw.tours, readToursRecord),
+    getting_started: readAnswered(raw.getting_started, readGettingStartedRecord),
   };
 }
 

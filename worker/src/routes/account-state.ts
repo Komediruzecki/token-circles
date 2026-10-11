@@ -3,13 +3,12 @@ import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { accept, HttpError } from '../http';
 import * as db from '../db';
-import { isUserStateKey, USER_STATE_KEYS } from '../../../shared/accountStateKeys';
+import { isUserStateKey } from '../../../shared/accountStateKeys';
 import {
+  answerUserState,
   applyUserStateWrite,
-  readUserStateValue,
   sqliteDateTime,
   USER_STATE_MESSAGES,
-  type UserState,
 } from '../../../shared/accountState';
 
 /**
@@ -24,20 +23,16 @@ import {
  */
 export const accountStateRoutes = new Hono<AppEnv>();
 
+// Every key: null where there is no row, 'unreadable' where the row was written by another build
+// in a shape this one cannot read, so the app can tell an unknown value from no value.
 accountStateRoutes.get('/api/account/state', requireAuth, async (c) => {
   const rows = await db.all<{ key: string; value: string }>(
     c.env.DB,
     'SELECT key, value FROM user_state WHERE user_id = ?',
     c.get('userId')
   );
-  const state = Object.fromEntries(USER_STATE_KEYS.map((key) => [key, null])) as UserState;
-  for (const row of rows) {
-    if (isUserStateKey(row.key)) {
-      (state as Record<string, unknown>)[row.key] = readUserStateValue(row.key, row.value);
-    }
-  }
   c.header('Cache-Control', 'no-store');
-  return c.json(state);
+  return c.json(answerUserState(rows));
 });
 
 /** How many times a write re-reads after another write to the same row got in first. */

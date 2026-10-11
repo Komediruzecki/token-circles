@@ -3,7 +3,8 @@
  *
  * Signed in, the tours finished belong to the account (`tours` in `/api/account/state`,
  * accountState.ts), so the tour menu shows them as done on every device. Local-first keeps them
- * in this browser's localStorage.
+ * in this browser's localStorage, and so does an account whose list another build wrote in a shape
+ * this one cannot read: nothing is sent over that list.
  *
  * Targeting contract: every step points at a dedicated `data-tour="<key>"` attribute
  * (NOT a CSS class, tag, placeholder, or `data-test-id`). The anchor element must be
@@ -13,6 +14,7 @@
  * actually exists in the component source).
  */
 import { createSignal } from 'solid-js'
+import { UNREADABLE } from '../../../shared/accountState'
 import {
   accountState,
   accountStateOwner,
@@ -535,7 +537,10 @@ export const [showTourSelection, setShowTourSelection] = createSignal(false)
 /** Signed in: the account keeps the list. Local-first, or nobody: this browser does. */
 const onTheAccount = (): boolean => isServerAccount(accountStateOwner())
 
-/** This browser's list: local-first's, and the one an account takes when it has none yet. */
+/**
+ * This browser's list: local-first's, the one an account takes when it has none yet, and the one
+ * an account uses while its own cannot be read.
+ */
 function loadBrowserTours(): Record<string, boolean> {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(TOURS_KEY) || '{}')
@@ -547,14 +552,23 @@ function loadBrowserTours(): Record<string, boolean> {
   }
 }
 
+/** Keep `ids` as finished in this browser's list. */
+function markBrowserToursFinished(ids: string[]): void {
+  const tours = loadBrowserTours()
+  for (const id of ids) tours[id] = true
+  localStorage.setItem(TOURS_KEY, JSON.stringify(tours))
+}
+
 /**
  * The tours finished, by id. Signed in, the account's list as last read (none until it is read,
- * or when it cannot be), and it updates as the list arrives; otherwise this browser's.
+ * or when the read fails), and it updates as the list arrives; this browser's while that list
+ * cannot be read. Local-first, or nobody: this browser's.
  */
 export function loadCompletedTours(): Record<string, boolean> {
   if (!onTheAccount()) return loadBrowserTours()
-  const seen = accountState()?.tours?.seen ?? []
-  return Object.fromEntries(seen.map((id) => [id, true]))
+  const tours = accountState()?.tours ?? null
+  if (tours === UNREADABLE) return loadBrowserTours()
+  return Object.fromEntries((tours?.seen ?? []).map((id) => [id, true]))
 }
 
 /** The tour writes in order, so a tour ended while another's write is out is not lost. */
@@ -568,12 +582,14 @@ export function toursWriteSettled(): Promise<void> {
 /**
  * Signed in: the account's list, read once. An account with no list yet takes this browser's,
  * once: the badges a person earned here before the list moved to the account. Null while the
- * list cannot be read.
+ * list cannot be fetched; UNREADABLE when it was, and another build wrote it in a shape this one
+ * cannot read.
  */
-async function accountTours(): Promise<string[] | null> {
+async function accountTours(): Promise<string[] | null | typeof UNREADABLE> {
   const of = accountStateOwner()
   const state = await readAccountState()
   if (state === null || accountStateOwner() !== of) return null
+  if (state.tours === UNREADABLE) return UNREADABLE
   if (state.tours !== null) return state.tours.seen
   // Only the tours there are: a key left by an older version would be refused, and with it the rest.
   const browser = loadBrowserTours()
@@ -593,17 +609,23 @@ export function loadAccountTours(): Promise<void> {
   return read
 }
 
-/** Keep `ids` as finished: on the account signed in, in this browser otherwise. */
+/**
+ * Keep `ids` as finished: on the account signed in, in this browser otherwise and while the
+ * account's list cannot be read.
+ */
 function markToursFinished(ids: string[]): void {
   if (!onTheAccount()) {
-    const tours = loadBrowserTours()
-    for (const id of ids) tours[id] = true
-    localStorage.setItem(TOURS_KEY, JSON.stringify(tours))
+    markBrowserToursFinished(ids)
     return
   }
   toursWrite = toursWrite.then(async () => {
-    // Nothing is sent on a list that could not be read: the state behind it is unknown.
+    // Nothing is sent on a list that could not be read: the state behind it is unknown. One that
+    // another build wrote is there but unreadable here, so this browser keeps the tour instead.
     const seen = await accountTours()
+    if (seen === UNREADABLE) {
+      markBrowserToursFinished(ids)
+      return
+    }
     if (seen === null) return
     const added = ids.filter((id) => !seen.includes(id))
     if (added.length === 0) return
@@ -718,6 +740,13 @@ export function resetAllTours() {
     return
   }
   toursWrite = toursWrite.then(async () => {
+    // A list this build cannot read is not replaced: the tours shown are this browser's, so these
+    // are the ones that start over.
+    const state = await readAccountState()
+    if (state?.tours === UNREADABLE) {
+      localStorage.removeItem(TOURS_KEY)
+      return
+    }
     // A plain write only adds, so the reset says so. The empty list is stored, not deleted: an
     // account with no list takes this browser's again at the next load (accountTours).
     await writeAccountState('tours', { seen: [], reset: true }).catch(() => {

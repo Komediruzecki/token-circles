@@ -448,9 +448,20 @@ All notable changes to Token Circles are documented here. The format is based on
   read, leaves the row byte for byte when the merge changes nothing, and refuses with 409 a row it
   cannot read at all (not JSON, a bad time, a list that is not a list), leaving it as it is. The
   app treats the 409 as any failed write: a decision stays in this browser's flag, a tour is not
-  marked. GET still answers such a row as `null`, so the wizard can open once on that device; see
-  the tests in `onboardingOnTheAccount.test.ts`. The frontend stand-ins of the Worker read and
-  write through the same two functions.
+  marked. GET answers such a row as `'unreadable'` (next entry). The frontend stand-ins of the
+  Worker read and write through the same functions.
+- **A row this build cannot read is unknown, not empty.** `GET /api/account/state` answers
+  `'unreadable'` (`UNREADABLE` in `shared/accountState.ts`) for a key whose row another build wrote
+  in a shape this one cannot read, and `null` only where there is no row; `answerUserState` builds
+  the answer, for the route and for the frontend stand-ins. The app's `readUserState` reads a key
+  as `UNREADABLE` when the answer holds that, or any value it cannot read, and as `null` only when
+  the key is absent or null. The app treats such a key as unknown and sends nothing over it: an
+  `onboarding` row opens no wizard, records no step and takes no decision (a relaunched wizard
+  closes without a write, and this browser's flag stays unsent); a `getting_started` row shows no
+  card, is not begun by the wizard and is not hidden; a `tours` row is not replaced, and the tour
+  menu shows this browser's `finance_spotlight_tours` map instead, where a tour finished now is
+  kept and Reset All Tours starts over. Before, GET answered such a row as `null`, so the wizard
+  opened once on that device and its writes were refused with 409.
 
 ### Orientation
 

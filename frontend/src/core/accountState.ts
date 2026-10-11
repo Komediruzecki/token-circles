@@ -10,10 +10,12 @@
  * The state is read once per signed-in account and kept for the session; each write answers the
  * stored value, which replaces the copy. A read that fails leaves the copy unknown (null), and the
  * callers then act on nothing: no wizard, and no write made on the strength of state they could
- * not read. The next call reads again.
+ * not read. The next call reads again. A single key can be unknown too: the Worker answers
+ * UNREADABLE for a row another build wrote in a shape this one cannot read, and the callers treat
+ * that key the same way.
  */
 import { createRoot, createSignal } from 'solid-js'
-import { readUserState } from '../../../shared/accountState'
+import { readUserState, UNREADABLE } from '../../../shared/accountState'
 import { USER_STATE_PATH } from '../../../shared/accountStateKeys'
 import { apiGet, apiPut } from './api'
 import { LOCAL_ONBOARDING_OWNER } from './onboardingFlag'
@@ -92,8 +94,9 @@ export async function writeAccountState<K extends UserStateKey>(
   const of = owner
   if (!isServerAccount(of)) return null
   const answer = await apiPut(`${USER_STATE_PATH}/${key}`, body)
-  const read = readUserState(answer)
-  const value = (read?.[key] ?? null) as UserStateValues[K] | null
+  const answered = readUserState(answer)?.[key] ?? null
+  // The Worker answers the value it stored; one this build cannot read is kept as unknown.
+  const value = (answered === UNREADABLE ? null : answered) as UserStateValues[K] | null
   const current = store.state()
   if (owner === of && current !== null && value !== null) {
     store.setState({ ...current, [key]: value })

@@ -4,13 +4,14 @@
  * them in this browser, as before.
  *
  * Against a stand-in for the Worker that reads and stores the list with the Worker's own rules
- * (shared/accountState.ts, readUserStateValue and applyUserStateWrite), because that is the network.
+ * (shared/accountState.ts, answerUserStateValue and applyUserStateWrite), because that is the
+ * network.
  */
 import { createMemo, createRoot } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  answerUserStateValue,
   applyUserStateWrite,
-  readUserStateValue,
   sqliteDateTime,
 } from '../../../../shared/accountState'
 import { __resetAccountStateForTest, setAccountStateOwner } from '../accountState'
@@ -55,7 +56,7 @@ function workerStandIn() {
       if (worker.failRead) return json({ error: 'Something went wrong on our side.' }, 500)
       return json({
         onboarding: null,
-        tours: readUserStateValue('tours', stored()),
+        tours: answerUserStateValue('tours', stored()),
         getting_started: null,
       })
     }
@@ -248,17 +249,29 @@ describe('a list another build wrote', () => {
     expect(worker.tours).toEqual({ seen: ['dashboard', 'loans'] })
   })
 
-  it('is never replaced when it cannot be read: the writes are refused, and nothing shows as done', async () => {
+  it('cannot be read: the tours show as this browser knows them, and nothing is sent', async () => {
     worker.tours = { seen: 'dashboard' }
     localStorage.setItem(BROWSER_TOURS, JSON.stringify({ import: true }))
 
     await loadAccountTours()
+    expect(isTourCompleted('import')).toBe(true)
+
+    // A tour finished here is kept here, as local-first keeps it.
     finish('loans')
     await toursWriteSettled()
+    expect(isTourCompleted('loans')).toBe(true)
+    expect(JSON.parse(localStorage.getItem(BROWSER_TOURS) ?? '{}')).toEqual({
+      import: true,
+      loans: true,
+    })
 
-    expect(worker.tours).toEqual({ seen: 'dashboard' })
-    expect(isTourCompleted('loans')).toBe(false)
+    resetAllTours()
+    await toursWriteSettled()
     expect(isTourCompleted('import')).toBe(false)
+    expect(getCompletedCount()).toBe(0)
+
+    expect(tourPuts()).toEqual([])
+    expect(worker.tours).toEqual({ seen: 'dashboard' })
   })
 })
 

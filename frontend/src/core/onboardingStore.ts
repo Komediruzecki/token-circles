@@ -6,7 +6,8 @@
  * opens for an account whose record is not finished, at the step it reached, on whichever device
  * signs in. Every account in use before the record existed was marked finished by migration 0035.
  * A decision kept from before, in this browser's flag or the profile's settings, goes to the
- * account once and the wizard stays closed. When the record cannot be read, nothing opens.
+ * account once and the wizard stays closed. When the record cannot be read (the request failed, or
+ * another build wrote it in a shape this one cannot read), nothing opens and nothing is sent.
  *
  * Local-first, the wizard opens once for a pristine workspace (no accounts, no transactions, no
  * bills). Finishing or skipping stamps the local account's localStorage flag (onboardingFlag.ts)
@@ -15,7 +16,7 @@
  * It can always be relaunched from Settings → About or the tour-selection modal.
  */
 import { createRoot, createSignal } from 'solid-js'
-import { furthestStep, onboardingFinished } from '../../../shared/accountState'
+import { furthestStep, onboardingFinished, UNREADABLE } from '../../../shared/accountState'
 import { ONBOARDING_STEPS } from '../../../shared/accountStateKeys'
 import {
   accountState,
@@ -161,14 +162,17 @@ function recordDecision(
 
 /**
  * Signed in: record `step` on the account when it is further than any step the record holds or
- * this tab has sent. Nothing is sent while the record is unknown (its read failed) or finished: a
- * relaunched wizard walks its steps without touching the record the first week counts.
+ * this tab has sent. Nothing is sent while the record is unknown (its read failed, or it cannot be
+ * read) or finished: a relaunched wizard walks its steps without touching the record the first
+ * week counts.
  */
 function recordStep(step: OnboardingStep): void {
   const of = owner
   if (!isServerAccount(of)) return
   const state = accountState()
-  if (state === null || onboardingFinished(state.onboarding)) return
+  if (state === null || state.onboarding === UNREADABLE || onboardingFinished(state.onboarding)) {
+    return
+  }
   const reached = furthestStep(state.onboarding?.step ?? null, furthestSent)
   if (reached !== null && furthestStep(reached, step) === reached) return
   furthestSent = step
@@ -226,7 +230,9 @@ function decide(outcome: OnboardingDecision): void {
   store.setOnboardingOpen(false)
   if (isServerAccount(of)) {
     // Relaunched over a finished record: the first decision stands, so there is nothing to send.
-    if (onboardingFinished(accountState()?.onboarding ?? null)) return
+    // Over one this build cannot read, the decision may stand there too, so the same.
+    const record = accountState()?.onboarding ?? null
+    if (record === UNREADABLE || onboardingFinished(record)) return
     void recordDecision(of, outcome, store.onboardingStep())
     beginGettingStarted(of)
     return
@@ -281,12 +287,14 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
 /**
  * Signed in: the step the account's record reached, unless the record is finished. A decision
  * kept from before the record existed, in this browser's flag or the profile's settings (the app
- * before this one wrote both), goes to the record instead, and the wizard stays closed.
+ * before this one wrote both), goes to the record instead, and the wizard stays closed. A record
+ * this build cannot read may be finished: nothing opens, and this browser's flag stays unsent.
  */
 async function whereToOfferOnTheAccount(asking: string): Promise<OnboardingStep | null> {
   const state = await readAccountState()
   if (owner !== asking || state === null) return null
   const record = state.onboarding
+  if (record === UNREADABLE) return null
   if (onboardingFinished(record)) {
     forgetOnboardingStatus(asking)
     return null

@@ -9,7 +9,7 @@
  * (onboardingStore.ts). An account that decided before the card existed has none, and sees no card.
  */
 import { createRoot, createSignal } from 'solid-js'
-import { readGettingStartedRecord } from '../../../shared/accountState'
+import { readGettingStartedRecord, UNREADABLE } from '../../../shared/accountState'
 import {
   accountState,
   accountStateOwner,
@@ -50,7 +50,10 @@ function writeLocal(record: GettingStartedRecord): void {
 /** The current owner's record, or null when there is none or it is not known. Reactive. */
 export function gettingStartedRecord(): GettingStartedRecord | null {
   const of = accountStateOwner()
-  if (isServerAccount(of)) return accountState()?.getting_started ?? null
+  if (isServerAccount(of)) {
+    const card = accountState()?.getting_started ?? null
+    return card === UNREADABLE ? null : card
+  }
   if (of !== LOCAL_ONBOARDING_OWNER) return null
   const written = local.record()
   return written === undefined ? readLocal() : written
@@ -70,9 +73,10 @@ export function gettingStartedSettled(): Promise<unknown> {
 
 /**
  * Make the record, with the card shown, for `of` when it has none: on the wizard's first finish or
- * skip. Signed in, only when the account's state is known, so a card hidden on another device is
- * never shown again on the strength of a read that failed; and the Worker keeps a hidden card
- * hidden, for a copy read before another device hid it (shared/accountState.ts).
+ * skip. Signed in, only when the account's state is known and holds no record (an unreadable one is
+ * not none), so a card hidden on another device is never shown again on the strength of a read that
+ * failed; and the Worker keeps a hidden card hidden, for a copy read before another device hid it
+ * (shared/accountState.ts).
  */
 export function beginGettingStarted(of: string | null): void {
   if (isServerAccount(of)) {
@@ -86,10 +90,14 @@ export function beginGettingStarted(of: string | null): void {
   if (of === LOCAL_ONBOARDING_OWNER && readLocal() === null) writeLocal({ hidden: false })
 }
 
-/** Hide the card for good: for the account on every device, or in this browser. */
+/**
+ * Hide the card for good: for the account on every device, or in this browser. Nothing is sent
+ * over a record this build cannot read.
+ */
 export function hideGettingStarted(): void {
   const of = accountStateOwner()
   if (isServerAccount(of)) {
+    if (accountState()?.getting_started === UNREADABLE) return
     writing = writeAccountState('getting_started', { hidden: true }).catch(() => {
       // Still shown; Hide can be pressed again.
     })
