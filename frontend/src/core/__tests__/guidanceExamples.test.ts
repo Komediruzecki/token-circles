@@ -280,10 +280,10 @@ describe('B. A family of four in Leipzig', () => {
   })
 
   it('checks the free money first, then grows the cushion to three months', () => {
-    expect(placement.next).toEqual({ circle: 4, check: 'free-money' })
+    expect(placement.next).toEqual({ circle: 4, check: 'free-money', unknown: 'not-on-file' })
     const answered = placeCircle(guidanceFacts({ ...input, answers: { freeMoney: 'taken' } }))
     expect(answered.current).toBe(4)
-    expect(answered.next).toEqual({ circle: 4, check: 'solid-cushion' })
+    expect(answered.next).toEqual({ circle: 4, check: 'solid-cushion', unknown: null })
   })
 
   it('is 15% of the way to Room to choose: EUR 18,500 against two years of spending', () => {
@@ -366,7 +366,7 @@ describe('C. Jordan, 34, a single adult with debt in Columbus, Ohio', () => {
     const own = check(placement, 2, 'own-income')!
     expect(own.met).toBe(false)
     expect(Math.round(own.target! - own.value!)).toBe(140)
-    expect(placement.next).toEqual({ circle: 2, check: 'own-income' })
+    expect(placement.next).toEqual({ circle: 2, check: 'own-income', unknown: null })
   })
 
   it('has 7 days of essentials in cash, and two debts at 10% or more', () => {

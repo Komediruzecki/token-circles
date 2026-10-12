@@ -5,12 +5,17 @@
  * Each circle is reached when the circle inside it is and its own required checks are met, so the
  * current circle is the first one not reached. They are worked out again from the facts each time
  * (facts.ts), so a hard month can move a person inward. A check is met (true), not met (false), or
- * not known yet (null): too few months, no accounts to read, a question not answered.
+ * not known yet (null), and a check not known says why (`unknown`): the accounts could not be read
+ * (`'unread'`: read them again), or nothing on file says yet (`'not-on-file'`: too few months, no
+ * account money could be in, a question not answered). A check not known is never a step to
+ * take: it is asked about or read again.
  *
  * Until a year is on file the placement is provisional ("Circles firm up once a full year is
  * here"), and the next step is Getting started's (shared/orientation.ts). After that it is the
  * current circle's first check not met, in the order the circle lists them, which for Solid
- * ground is the method's: free money, expensive debt, then the cushion.
+ * ground is the method's: free money, expensive debt, then the cushion; the step says when its
+ * check is not known. A required check not known leaves the placement provisional too: the person
+ * is placed at the circles that could be read, and may be further out.
  *
  * Four decisions live here, each in one place (guidance.md section 7):
  *
@@ -81,10 +86,18 @@ export type CheckId =
   | 'work-optional'
   | 'enough';
 
+/**
+ * Why a check is not known: what it reads could not be read (`'unread'`, the accounts), or nothing
+ * on file says yet (`'not-on-file'`).
+ */
+export type Unknown = 'unread' | 'not-on-file';
+
 export interface Check {
   id: CheckId;
   /** Met, not met, or not known yet. */
   met: boolean | null;
+  /** Why `met` is null; null when the check is known. */
+  unknown: Unknown | null;
   /** Whether the circle needs it to be reached. The others are on its checklist. */
   required: boolean;
   /** Read from the averages of less than a year: it may move as the year fills in. */
@@ -108,24 +121,35 @@ export interface Placement {
   current: CircleNumber | null;
   circles: CirclePlace[];
   /**
-   * The current circle's first check not met. Null while provisional, when Getting started's steps
-   * lead, and once every circle is reached.
+   * The current circle's first check not met, and why it is not known when it is not
+   * (`unknown`): then it is asked about or read again, not advised. Null while less than a year is
+   * on file, when Getting started's steps lead, and once every circle is reached.
    */
-  next: { circle: CircleNumber; check: CheckId } | null;
-  /** Less than a year on file. */
+  next: { circle: CircleNumber; check: CheckId; unknown: Unknown | null } | null;
+  /**
+   * Less than a year on file, or a required check of the current circle not known: the person
+   * may be further out than `current`.
+   */
   provisional: boolean;
 }
 
-/** A check from a value and a target, met when the value reaches it. */
+/**
+ * A check from a value and a target, met when the value reaches it. `unread` says the value needs
+ * the accounts and they could not be read: what was read without them can only grow once they
+ * are, so a value that reaches the target is met, and one below it is not known.
+ */
 function reaching(
   id: CheckId,
   value: number | null,
   target: number | null,
-  options: { required?: boolean; provisional?: boolean } = {}
+  options: { required?: boolean; provisional?: boolean; unread?: boolean } = {}
 ): Check {
+  const met = value === null || target === null ? null : value >= target;
+  const unread = options.unread === true && met !== true;
   return {
     id,
-    met: value === null || target === null ? null : value >= target,
+    met: unread ? null : met,
+    unknown: unread ? 'unread' : met === null ? 'not-on-file' : null,
     required: options.required ?? true,
     provisional: options.provisional ?? false,
     value,
@@ -165,7 +189,11 @@ export const CIRCLES: ReadonlyArray<{
   {
     // A month of essentials the person can reach. Today's balances, so never provisional.
     circle: 3,
-    checks: (facts) => [reaching('first-cushion', facts.cushionMonths, FIRST_CUSHION_MONTHS)],
+    checks: (facts) => [
+      reaching('first-cushion', facts.cushionMonths, FIRST_CUSHION_MONTHS, {
+        unread: !facts.accountsKnown,
+      }),
+    ],
   },
   {
     // The method's order: free money, then debt at the line or above, then the cushion.
@@ -176,6 +204,7 @@ export const CIRCLES: ReadonlyArray<{
             {
               id: 'free-money' as const,
               met: freeMoneyMet(facts.freeMoney),
+              unknown: freeMoneyMet(facts.freeMoney) === null ? ('not-on-file' as const) : null,
               required: false,
               provisional: false,
               value: null,
@@ -187,13 +216,20 @@ export const CIRCLES: ReadonlyArray<{
         id: 'no-expensive-debt',
         // A card or an overdraft is only known of when the accounts are.
         met: facts.debts.some((debt) => debt.expensive) ? false : facts.accountsKnown ? true : null,
+        unknown:
+          !facts.debts.some((debt) => debt.expensive) && !facts.accountsKnown ? 'unread' : null,
         required: true,
         provisional: false,
         value: facts.debts.filter((debt) => debt.expensive).length,
         target: 0,
       },
-      reaching('solid-cushion', facts.cushionMonths, SOLID_CUSHION_MONTHS),
-      reaching('full-cushion', facts.cushionMonths, FULL_CUSHION_MONTHS, { required: false }),
+      reaching('solid-cushion', facts.cushionMonths, SOLID_CUSHION_MONTHS, {
+        unread: !facts.accountsKnown,
+      }),
+      reaching('full-cushion', facts.cushionMonths, FULL_CUSHION_MONTHS, {
+        required: false,
+        unread: !facts.accountsKnown,
+      }),
     ],
   },
   {
@@ -206,7 +242,12 @@ export const CIRCLES: ReadonlyArray<{
           : 0;
       const target =
         facts.annualSpending === null ? null : ROOM_TO_CHOOSE_YEARS * facts.annualSpending;
-      return [reaching('two-years', facts.invested + beyond, target, { provisional: !facts.firm })];
+      return [
+        reaching('two-years', facts.invested + beyond, target, {
+          provisional: !facts.firm,
+          unread: !facts.accountsKnown,
+        }),
+      ];
     },
   },
   {
@@ -217,7 +258,7 @@ export const CIRCLES: ReadonlyArray<{
         'work-optional',
         facts.invested,
         facts.spending === null ? null : targetFromSpend(facts.spending, facts.withdrawalRatePct),
-        { provisional: !facts.firm }
+        { provisional: !facts.firm, unread: !facts.accountsKnown }
       ),
     ],
   },
@@ -228,7 +269,7 @@ export const CIRCLES: ReadonlyArray<{
       const perYear = facts.enoughPerYear ?? MORE_THAN_ENOUGH_DEFAULT;
       const target =
         perYear === null ? null : targetFromSpend(perYear / 12, facts.withdrawalRatePct);
-      return [reaching('enough', facts.invested, target)];
+      return [reaching('enough', facts.invested, target, { unread: !facts.accountsKnown })];
     },
   },
 ];
@@ -245,14 +286,17 @@ export function placeCircle(facts: GuidanceFacts): Placement {
     inside = reached;
   }
   const current = circles.find((place) => !place.reached) ?? null;
-  const provisional = !facts.firm;
+  // A required check not known stops the placement here without saying the circle is not reached.
+  const notKnown = current !== null && current.checks.some((c) => c.required && c.met === null);
   const check =
-    current === null || provisional ? undefined : current.checks.find((c) => c.met !== true);
+    current === null || !facts.firm ? undefined : current.checks.find((c) => c.met !== true);
   return {
     current: current?.circle ?? null,
     circles,
     next:
-      current !== null && check !== undefined ? { circle: current.circle, check: check.id } : null,
-    provisional,
+      current !== null && check !== undefined
+        ? { circle: current.circle, check: check.id, unknown: check.unknown }
+        : null,
+    provisional: !facts.firm || notKnown,
   };
 }

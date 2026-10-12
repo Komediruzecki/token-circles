@@ -1149,10 +1149,13 @@ All notable changes to Token Circles are documented here. The format is based on
   extra payments repaid.
 - **The seven circles** (`shared/guidance/circles.ts`, `placeCircle`). A circle is reached when the
   one inside it is and its own required checks are met, so the current circle is the first one not
-  reached, and a hard month moves a person inward. A check is met, not met, or not known yet (too
-  few months, no accounts read, a question not answered). Until a year is on file the placement is
-  provisional and has no next step of its own (Getting started's lead); after that the next step is
-  the current circle's first check not met. Solid ground checks free money first, in Germany,
+  reached, and a hard month moves a person inward. A check is met, not met, or not known yet, and
+  says why it is not known (`unknown`): the accounts could not be read, or nothing on file says yet
+  (too few months, no account money could be in, a question not answered). Until a year is on file
+  the placement is provisional and has no next step of its own (Getting started's lead); after that
+  the next step is the current circle's first check not met, and says when that check is not
+  known. A required check not known leaves the placement provisional too. Solid ground checks free
+  money first, in Germany,
   Croatia, the UK and the US (`FREE_MONEY_REGIONS`), then debt at 10% or more, then three months of
   essentials; six months is on its checklist, not required. Room to choose counts liquid money
   beyond six months towards two years of spending; Work optional is invested money that pays a year
@@ -1253,6 +1256,24 @@ All notable changes to Token Circles are documented here. The format is based on
   `orientation.test.ts` (the three wordings of what you spend), `orientationFacts.test.ts` (the
   same spending under Croatian names: "covers 22 days of what you spend") and
   `guidanceExamples.test.ts` (Mia's step, from `cushionOf`).
+- **A check not known is never a step to take** (review 3b-1, finding 3). With a year on file and
+  the accounts read, the review's person (32,000 within reach, 1,500 needed) is in circle 5 with
+  two years as the next step. When the accounts could not be read, or only an investment account
+  was on file, the same person was placed in circle 3 with "first cushion" as the next step, as if
+  the cushion were known to be short. `placeCircle` now tells a check it could not read from one
+  not met: a check not known says why (`unknown`), `'unread'` when the accounts could not be read
+  and `'not-on-file'` when nothing on file says yet, so a failed read is no longer "no accounts".
+  `next` carries it, so the circles panel (commit 10) can read the accounts again or ask, instead
+  of advising. A required check not known leaves the placement provisional at the circles it could
+  read. A figure read without the accounts (two years, work optional, more than enough) can only
+  grow once they are read: one that reaches its target is met, one below it is not known. The
+  number for More than enough not given is a check not known, so a person at circle 7 without one
+  is placed provisionally and asked for it.
+- **Tests:** `guidanceCircles.test.ts` (the review's three cases from the person's own entries:
+  the full picture, the accounts not read, only an investment account; a figure read without the
+  accounts below and above its target; why each check is not known; free money unanswered asked
+  about without making the placement provisional; the next step's `unknown` on every case it had)
+  and `guidanceExamples.test.ts` (the examples' next steps).
 
 ### Achievements
 

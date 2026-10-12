@@ -81,8 +81,13 @@ describe('where a person is', () => {
   it('is the first circle not reached, and the next step its first check not met', () => {
     const placement = placeCircle(outer)
     expect(placement.current).toBe(7)
-    expect(placement.next).toEqual({ circle: 7, check: 'enough' })
-    expect(placement.provisional).toBe(false)
+    // The number for it is not given: asked for, not advised, and the circle not known reached.
+    expect(placement.next).toEqual({ circle: 7, check: 'enough', unknown: 'not-on-file' })
+    expect(placement.provisional).toBe(true)
+    // With the number, the step is known.
+    const named = placeCircle(facts({ enoughPerYear: 80000 }))
+    expect(named.next).toEqual({ circle: 7, check: 'enough', unknown: null })
+    expect(named.provisional).toBe(false)
   })
 
   it('has no default for More than enough (D11): it waits for the person’s own number', () => {
@@ -126,7 +131,7 @@ describe('where a person is', () => {
     ])
     // Work optional's own check is met all the same, and shows as met.
     expect(check(placement, 6, 'work-optional')!.met).toBe(true)
-    expect(placement.next).toEqual({ circle: 4, check: 'no-expensive-debt' })
+    expect(placement.next).toEqual({ circle: 4, check: 'no-expensive-debt', unknown: null })
   })
 
   it('needs a year for the first circle (D10), and 90% of spending sorted', () => {
@@ -134,7 +139,7 @@ describe('where a person is', () => {
     expect(placeCircle(facts({ monthsInYear: 11, firm: false })).current).toBe(1)
     const unsorted = placeCircle(facts({ sortedShare: 89.9 }))
     expect(unsorted.current).toBe(1)
-    expect(unsorted.next).toEqual({ circle: 1, check: 'sorted' })
+    expect(unsorted.next).toEqual({ circle: 1, check: 'sorted', unknown: null })
     expect(placeCircle(facts({ sortedShare: 90 })).current).toBe(7)
   })
 
@@ -153,13 +158,15 @@ describe('Solid ground', () => {
     expect([...FREE_MONEY_REGIONS].sort()).toEqual(['DE', 'HR', 'UK', 'US'])
     const unanswered = placeCircle(facts({ freeMoney: null, cushionMonths: 2.9, liquid: 5800 }))
     expect(unanswered.current).toBe(4)
-    expect(unanswered.next).toEqual({ circle: 4, check: 'free-money' })
+    expect(unanswered.next).toEqual({ circle: 4, check: 'free-money', unknown: 'not-on-file' })
+    // It is asked about, and only a required check not known leaves the placement provisional.
+    expect(unanswered.provisional).toBe(false)
     // The EU average has no one scheme: the debts and the cushion come first there.
     const eu = placeCircle(
       facts({ region: 'EU27', freeMoney: null, cushionMonths: 2.9, liquid: 5800 })
     )
     expect(check(eu, 4, 'free-money')).toBeUndefined()
-    expect(eu.next).toEqual({ circle: 4, check: 'solid-cushion' })
+    expect(eu.next).toEqual({ circle: 4, check: 'solid-cushion', unknown: null })
   })
 
   it('takes free money as met when taken or not offered, and as the step still to take otherwise', () => {
@@ -170,6 +177,9 @@ describe('Solid ground', () => {
     expect(met('not-taken')).toBe(false)
     expect(met('not-sure')).toBe(false)
     expect(met(null)).toBeNull()
+    expect(check(placeCircle(facts({ freeMoney: null })), 4, 'free-money')!.unknown).toBe(
+      'not-on-file'
+    )
     // It is on the checklist, not a condition: Solid ground is reached without it.
     expect(placeCircle(facts({ freeMoney: 'not-taken' })).circles[3].reached).toBe(true)
   })
@@ -182,9 +192,9 @@ describe('Solid ground', () => {
   })
 
   it('cannot say there is no expensive debt without the accounts, where cards are', () => {
-    expect(check(placeCircle(facts({ accountsKnown: false })), 4, 'no-expensive-debt')!.met).toBe(
-      null
-    )
+    expect(
+      check(placeCircle(facts({ accountsKnown: false })), 4, 'no-expensive-debt')
+    ).toMatchObject({ met: null, unknown: 'unread' })
   })
 })
 
@@ -253,6 +263,94 @@ describe('moving inward', () => {
       })
     )
     expect(after.current).toBe(3)
-    expect(after.next).toEqual({ circle: 3, check: 'first-cushion' })
+    expect(after.next).toEqual({ circle: 3, check: 'first-cushion', unknown: null })
+  })
+})
+
+describe('what is not known', () => {
+  // The review's person: a year on file, 2,500 a month in, 1,500 of it on groceries, needed every
+  // month, free money taken, and 32,000 within reach.
+  const months = Array.from({ length: 12 }, (_, i) =>
+    addCalendarMonths('2025-10-01', i).slice(0, 7)
+  )
+  const year: GuidanceInput = {
+    today: '2026-10-11',
+    region: 'DE',
+    transactions: months.flatMap((month): FactsEntry[] => [
+      { date: `${month}-01`, type: 'income', amount: 2500, category_id: 9 },
+      { date: `${month}-02`, type: 'expense', amount: 900, category_id: 1 },
+      { date: `${month}-03`, type: 'expense', amount: 600, category_id: 1 },
+    ]),
+    categories: [
+      { id: 1, name: 'Groceries', type: 'expense', kind: 'groceries' },
+      { id: 9, name: 'Salary', type: 'income' },
+    ],
+    accounts: [
+      { id: 1, type: 'giro', balance: 2000 },
+      { id: 2, type: 'savings', balance: 30000 },
+    ],
+    answers: { freeMoney: 'taken' },
+  }
+  const reached = (placement: Placement) => placement.circles.map((c) => c.reached)
+
+  it('with the full picture, places the person and gives the next step', () => {
+    const placement = placeCircle(guidanceFacts(year))
+    expect(placement.current).toBe(5)
+    expect(placement.provisional).toBe(false)
+    expect(placement.next).toEqual({ circle: 5, check: 'two-years', unknown: null })
+  })
+
+  it('with the accounts not read, stops at the cushion it cannot read, and says so', () => {
+    const placement = placeCircle(guidanceFacts({ ...year, accounts: null }))
+    expect(placement.current).toBe(3)
+    expect(reached(placement)).toEqual([true, true, false, false, false, false, false])
+    expect(placement.provisional).toBe(true)
+    expect(placement.next).toEqual({ circle: 3, check: 'first-cushion', unknown: 'unread' })
+    expect(check(placement, 3, 'first-cushion')).toMatchObject({ met: null, unknown: 'unread' })
+    expect(check(placement, 4, 'no-expensive-debt')).toMatchObject({
+      met: null,
+      unknown: 'unread',
+    })
+  })
+
+  it('with only an investment account on file, says nothing on file holds the cushion', () => {
+    const placement = placeCircle(
+      guidanceFacts({ ...year, accounts: [{ id: 3, type: 'ib', balance: 9000 }] })
+    )
+    expect(placement.current).toBe(3)
+    expect(placement.provisional).toBe(true)
+    expect(placement.next).toEqual({ circle: 3, check: 'first-cushion', unknown: 'not-on-file' })
+    // The accounts were read: no card or overdraft is on file.
+    expect(check(placement, 4, 'no-expensive-debt')).toMatchObject({ met: true, unknown: null })
+  })
+
+  it('reads a figure without the accounts as unknown below its target, and as met above it', () => {
+    const unread = { accountsKnown: false, liquid: null, cushionMonths: null }
+    const short = placeCircle(facts({ ...unread, invested: 60000 }))
+    expect(check(short, 5, 'two-years')).toMatchObject({ met: null, unknown: 'unread' })
+    expect(check(short, 6, 'work-optional')).toMatchObject({ met: null, unknown: 'unread' })
+    // The accounts can only add to what the portfolio holds.
+    const plenty = placeCircle(facts({ ...unread, invested: 2000000, enoughPerYear: 80000 }))
+    expect(check(plenty, 5, 'two-years')).toMatchObject({ met: true, unknown: null })
+    expect(check(plenty, 6, 'work-optional')).toMatchObject({ met: true, unknown: null })
+    expect(check(plenty, 7, 'enough')).toMatchObject({ met: true, unknown: null })
+    // A check known not met says nothing is unknown.
+    expect(check(placeCircle(facts({ invested: 60000 })), 5, 'two-years')).toMatchObject({
+      met: false,
+      unknown: null,
+    })
+  })
+
+  it('says why each check is not known: what could not be read, or what is not on file yet', () => {
+    const few = placeCircle(
+      facts({ averaged: false, ownIncome: null, spending: null, sortedShare: null })
+    )
+    expect(check(few, 1, 'sorted')).toMatchObject({ met: null, unknown: 'not-on-file' })
+    expect(check(few, 2, 'own-income')).toMatchObject({ met: null, unknown: 'not-on-file' })
+    const noAccount = placeCircle(facts({ liquid: null, cushionMonths: null }))
+    for (const id of ['first-cushion', 'solid-cushion', 'full-cushion'] as const) {
+      const circle = id === 'first-cushion' ? 3 : 4
+      expect(check(noAccount, circle, id), id).toMatchObject({ met: null, unknown: 'not-on-file' })
+    }
   })
 })
