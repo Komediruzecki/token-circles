@@ -321,7 +321,6 @@
 .fieldHint {
   font-size: 11.5px;
   color: var(--text-secondary);
-  opacity: 0.85;
 }
 
 .secondaryAction {
