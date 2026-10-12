@@ -1131,14 +1131,14 @@ All notable changes to Token Circles are documented here. The format is based on
   under way), and an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less
   deductions and spending is expenses (`flows.ts`), in the base currency; own income leaves out the
   categories the person marks as support they expect to stop. Essential spending goes by
-  `essentialOf`, and
-  spending with no category counts as needed too (`unsure` says how much was counted that way).
-  Liquid money is savings and cash balances and the lowest total the current accounts ended a day
-  on in the last 30 days (today and the 29 before it), read back together as one pool from their
-  balances through the entries (`balanceMoves` books an entry as local-first's
-  `computeBalanceDeltas` does; an entry dated after today is undone first), each account from zero
-  up on each day, and null without a savings, cash or current account. Invested is the investment
-  accounts or the portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
+  `essentialOf`, and spending with no category counts as needed too (`unsure` says how much was
+  counted that way). Every account is read at its balance today: the stored balance less what the
+  entries dated after today moved (`accountsToday`). Liquid money is savings and cash at that
+  balance and the lowest total the current accounts ended a day on in the last 30 days (today and
+  the 29 before it), read back together as one pool through the entries (`balanceMoves` books an
+  entry as local-first's `computeBalanceDeltas` does), each account from zero up on each day, and
+  null without a savings, cash or current account. Invested is the investment accounts or the
+  portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
   with a balance left, at the rate their schedule charges for the next payment, and credit cards
   and current accounts below zero, unless the person says they carry no balance on either; a debt
   is expensive from `EXPENSIVE_DEBT_RATE` (10%), and a card or overdraft with no rate given is too.
@@ -1206,6 +1206,17 @@ All notable changes to Token Circles are documented here. The format is based on
   savings and still held or spent, money put by, and the first of the 30 days) and
   `tests/orientation.spec.ts` (two current accounts and a move between them leave the step as it
   was, local-first and signed in).
+- **One balance today for every account the facts read** (review 3b-1, finding 6). Both runtimes
+  store a balance with every entry in it, those dated after today too, and only the current
+  accounts' read-back took those back out. Savings at 600 after a rent of 900 booked for later in
+  the month read as 600, the current account beside it as 1,500. `accountsToday` now takes the
+  entries dated after today back out of every balance the facts read: savings, cash and current
+  accounts, cards and current accounts below zero, and investment accounts. A rent booked ahead no
+  longer reads as an overdraft either. The comments that called the stored balance "now" say what
+  it holds.
+- **Tests:** `guidanceFacts.test.ts` (a rent booked ahead on a current account, savings and cash;
+  a card's payment booked ahead and an overdraft that a booked rent made; an investment account
+  with money booked into it).
 
 ### Achievements
 

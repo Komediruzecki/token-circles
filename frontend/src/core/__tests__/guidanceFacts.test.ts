@@ -261,6 +261,14 @@ describe('the money a person can reach', () => {
     expect(liquidOf([{ id: 1, type: 'giro', balance: 950 }], booked, TODAY)).toBe(1000)
   })
 
+  it('reads savings and cash at their balance today, as it does a current account', () => {
+    // Rent of 900 booked for the 31st: the stored 600 already has it taken out, and today holds 1,500.
+    const rent = [entry('2026-10-31', { amount: 900, account_id: 1 })]
+    for (const type of ['giro', 'savings', 'cash']) {
+      expect(liquidOf([{ id: 1, type, balance: 600 }], rent, TODAY), type).toBe(1500)
+    }
+  })
+
   it('reads a transfer to savings out of the one account and into the other', () => {
     const moved = [
       entry('2026-10-01', { type: 'transfer', amount: 400, account_id: 1, transfer_account_id: 2 }),
@@ -506,6 +514,23 @@ describe('debts', () => {
     ])
   })
 
+  it('read cards and current accounts at their balance today', () => {
+    const booked = [
+      // Rent booked for the 31st took the stored balance below zero: today the account holds 800.
+      entry('2026-10-31', { amount: 900, account_id: 1 }),
+      // The card's payment is booked for the 20th: today 300 is owed on it.
+      entry('2026-10-20', { type: 'transfer', amount: 300, account_id: 9, transfer_account_id: 2 }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: -100, credit_rate: 11.5 },
+      { id: 2, type: 'credit', balance: 0, credit_rate: 19.9 },
+    ]
+    const debts = debtsOf({ today: TODAY, transactions: booked, accounts, loans: [] })
+    expect(debts.map(({ kind, id, owed }) => ({ kind, id, owed }))).toEqual([
+      { kind: 'card', id: 2, owed: 300 },
+    ])
+  })
+
   it('leave cards and overdrafts out when the person carries no balance on either', () => {
     const accounts = [{ id: 1, type: 'credit', balance: -1500, credit_rate: 19.9 }]
     const debts = debtsOf({
@@ -575,6 +600,27 @@ describe('invested money', () => {
     expect(investedOf(accounts, 7000, null)).toBe(7000)
     expect(investedOf(accounts, 7000, 2500)).toBe(9500)
     expect(investedOf(null, null, undefined)).toBe(0)
+  })
+
+  it('reads the investment accounts at their balance today', () => {
+    // 1,000 into the investment account is booked for the 20th: today it holds 4,000.
+    const booked = entry('2026-10-20', {
+      type: 'transfer',
+      amount: 1000,
+      account_id: 2,
+      transfer_account_id: 1,
+    })
+    const facts = guidanceFacts(
+      input({
+        transactions: [...input().transactions, booked],
+        accounts: [
+          { id: 1, type: 'ib', balance: 5000 },
+          { id: 2, type: 'giro', balance: 500 },
+        ],
+      })
+    )
+    expect(facts.invested).toBe(4000)
+    expect(facts.liquid).toBe(1500)
   })
 })
 

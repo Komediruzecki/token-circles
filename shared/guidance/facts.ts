@@ -14,11 +14,14 @@
  *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
  *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
  *   `unsure` says how much was counted that way.
- * - **Liquid money**, the money a person can reach: savings and cash balances, and the lowest
- *   total the current accounts ended a day on in the last 30 days, read back together as one pool
- *   from their balances through the entries since (guidance.md 3.1, "the lowest current-account
- *   balance"). So a move between two current accounts hides nothing. None of it counts below zero,
- *   and one account's overdraft takes nothing from another.
+ * - **Balances** are read as they stand today (`accountsToday`): the stored balance holds every
+ *   entry, those dated after today included, so what those moved is taken back out. Every account
+ *   below is read that way.
+ * - **Liquid money**, the money a person can reach: savings and cash at their balance today, and
+ *   the lowest total the current accounts ended a day on in the last 30 days, read back together
+ *   as one pool from their balances today through the entries since (guidance.md 3.1, "the lowest
+ *   current-account balance"). So a move between two current accounts hides nothing. None of it
+ *   counts below zero, and one account's overdraft takes nothing from another.
  * - **Invested** (`investedOf`): investment accounts or the portfolio, whichever holds more, and
  *   savings the person says are held elsewhere.
  * - **Debts** (`debtsOf`, design section 5): loans with a balance left, at the rate charged now,
@@ -80,7 +83,11 @@ export interface FactsEntry {
 export interface FactsAccount {
   id: number;
   type: string;
-  /** Now, in the base currency. Money owed is below zero. */
+  /**
+   * The stored balance, in the base currency: the starting balance and every entry, those dated
+   * after today included. The facts read it as it stands today (`accountsToday`). Money owed is
+   * below zero.
+   */
   balance: number;
   name?: string | null;
   /** A credit card's or an overdraft's yearly rate, in percent; null for none given. */
@@ -136,7 +143,7 @@ export interface Debt {
   /** The loan's or the account's id; null when the row gives none. */
   id: number | null;
   name: string | null;
-  /** Still owed now, above zero. */
+  /** Still owed today, above zero. */
   owed: number;
   /** The yearly rate charged now, in percent; null for a card or overdraft with none given. */
   rate: number | null;
@@ -151,7 +158,7 @@ export interface Debt {
 
 /** The money a person can reach against a month of what they need. */
 export interface Cushion {
-  /** Liquid money now; null when no account it could be in is on file. */
+  /** Liquid money today; null when no account it could be in is on file. */
   liquid: number | null;
   /** Essential spending, a month on average; null with too few months. */
   essentials: number | null;
@@ -323,11 +330,36 @@ function sumWindow(
 }
 
 /**
+ * The accounts as they stand at the end of today. A stored balance is the starting balance and
+ * every entry, those dated after today included, as both runtimes book an entry when it is saved;
+ * what the entries dated after today moved is taken back out, as it has not happened yet. Every
+ * balance the facts read goes through here: savings, cash, current accounts, cards and
+ * investment accounts alike.
+ */
+function accountsToday(
+  accounts: readonly FactsAccount[],
+  transactions: readonly FactsEntry[],
+  today: string
+): FactsAccount[] {
+  const later = new Map<number, number>();
+  for (const entry of transactions) {
+    if (entry.date.slice(0, 10) <= today) continue;
+    for (const move of balanceMoves(entry)) {
+      later.set(move.account, (later.get(move.account) ?? 0) + move.delta);
+    }
+  }
+  return accounts.map((account) => {
+    const moved = later.get(account.id);
+    return moved === undefined ? account : { ...account, balance: account.balance - moved };
+  });
+}
+
+/**
  * The current accounts' low point: the lowest total they ended a day on in the last
  * LOW_POINT_DAYS days, today and the days before it, read back together from their balances
- * through the entries since. Each account counts from zero up on each day, so one account's
- * overdraft takes nothing from another, and a move between two of them changes neither the total
- * nor its low point. An entry dated after today is undone first: it has not happened yet.
+ * today (`accountsToday`) through the entries since. Each account counts from zero up on each
+ * day, so one account's overdraft takes nothing from another, and a move between two of them
+ * changes neither the total nor its low point.
  */
 function currentAccountsLow(
   giros: readonly FactsAccount[],
@@ -337,25 +369,18 @@ function currentAccountsLow(
   const ids = new Set(giros.map((account) => account.id));
   // The first of the days read: its end-of-day balance already holds its own entries.
   const first = addDays(today, -(LOW_POINT_DAYS - 1));
-  const later = new Map<number, number>();
   const byDay = new Map<string, Array<{ account: number; delta: number }>>();
   for (const entry of transactions) {
     const day = entry.date.slice(0, 10);
-    if (day <= first) continue;
+    if (day <= first || day > today) continue;
     for (const move of balanceMoves(entry)) {
       if (!ids.has(move.account)) continue;
-      if (day > today) {
-        later.set(move.account, (later.get(move.account) ?? 0) + move.delta);
-      } else {
-        const moves = byDay.get(day);
-        if (moves) moves.push(move);
-        else byDay.set(day, [move]);
-      }
+      const moves = byDay.get(day);
+      if (moves) moves.push(move);
+      else byDay.set(day, [move]);
     }
   }
-  const balances = new Map(
-    giros.map((account) => [account.id, account.balance - (later.get(account.id) ?? 0)])
-  );
+  const balances = new Map(giros.map((account) => [account.id, account.balance]));
   const pooled = (): number => {
     let total = 0;
     for (const balance of balances.values()) if (balance > 0) total += balance;
@@ -376,9 +401,9 @@ function currentAccountsLow(
 const LIQUID_TYPES: ReadonlySet<string> = new Set(['savings', 'cash', 'giro']);
 
 /**
- * Liquid money: savings and cash balances, and the current accounts' low point, read as one pool
- * (`currentAccountsLow`), none of it below zero. Null when the accounts are unknown or none of them
- * is one money can be reached in.
+ * Liquid money: savings and cash at their balance today, and the current accounts' low point,
+ * read as one pool (`currentAccountsLow`), none of it below zero. Null when the accounts are
+ * unknown or none of them is one money can be reached in.
  */
 export function liquidOf(
   accounts: readonly FactsAccount[] | null,
@@ -388,7 +413,9 @@ export function liquidOf(
   if (accounts === null) return null;
   const reachable = accounts.filter((account) => LIQUID_TYPES.has(storedAccountType(account.type)));
   if (reachable.length === 0) return null;
-  const counted = reachable.filter((account) => finite(account.balance));
+  const counted = accountsToday(reachable, transactions, today).filter((account) =>
+    finite(account.balance)
+  );
   const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
   let total = giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0;
   for (const account of counted) {
@@ -421,7 +448,8 @@ export function cushionOf(
  * Invested money: the investment accounts' balances or the portfolio, whichever holds more, and
  * the savings held elsewhere. The app cannot tell which holdings an investment account's balance
  * already counts, so it never adds the two: counting both could place someone a circle further
- * out than their money is.
+ * out than their money is. The balances are taken as given: `guidanceFacts` passes them as they
+ * stand today (`accountsToday`).
  */
 export function investedOf(
   accounts: readonly FactsAccount[] | null,
@@ -497,7 +525,7 @@ export function debtsOf(
     });
   }
   if (input.answers?.carriesCardBalance === false) return debts;
-  for (const account of input.accounts ?? []) {
+  for (const account of accountsToday(input.accounts ?? [], input.transactions, input.today)) {
     const type = storedAccountType(account.type);
     if ((type !== 'credit' && type !== 'giro') || !(account.balance < 0)) continue;
     const kind = type === 'credit' ? 'card' : 'overdraft';
@@ -570,7 +598,11 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     unsure: { categories: sums.noKind.size, uncategorised: perMonth(sums.uncategorised) },
     liquid,
     cushionMonths: cushionMonthsOf(liquid, essentials),
-    invested: investedOf(input.accounts, input.holdings, input.answers?.savedElsewhere),
+    invested: investedOf(
+      input.accounts === null ? null : accountsToday(input.accounts, input.transactions, today),
+      input.holdings,
+      input.answers?.savedElsewhere
+    ),
     debts: debtsOf(input),
     accountsKnown: input.accounts !== null,
     principalRepaid,
