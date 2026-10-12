@@ -24,8 +24,8 @@
  *   run time which borrowed bands `bandsFor` reads. The file holds the UK's subscription count for
  *   the euro regions and Croatia's debt-payment lines for Germany and the EU, each marked
  *   `borrowedFrom`, and both are used, named as borrowed. Euro regions have no subscription-spend
- *   band (D4): the file states that gap, and a card compares the person with their own trend
- *   instead. The UK has no debt-payment band (D9), likewise.
+ *   band (D4): the file states that gap, and a card is to compare the person with their own trend
+ *   instead. The UK has no debt-payment band (D9), likewise. No card reads the bands yet.
  *
  * Pure, with no I/O: the caller works out the person's numbers and asks which band they fall in.
  */
@@ -194,7 +194,7 @@ export type BorrowedBands = Readonly<Partial<Record<MetricId, boolean>>>;
 /**
  * D4 and D9: the metrics whose borrowed bands the app uses, from the file's `borrowedFrom` rows. A
  * metric set to false has no band in a region that only has borrowed ones (`gapFor` says so), and
- * the card shows the person's own number without a comparison. Every metric the file borrows for
+ * a card is to show the person's own number without a comparison. Every metric the file borrows for
  * is listed, so a file that borrows for another one fails a test until this says whether to use it.
  */
 export const BORROWED_BANDS_USED: BorrowedBands = {
