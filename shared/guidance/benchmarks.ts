@@ -5,9 +5,10 @@
  *
  * They are `benchmarks.json`, the guidance research's file, shipped whole: every band names its
  * source URL and year, every metric and region has a `derivations` record saying which rule drew its
- * edges, and `about` says how to read a band (guidance.md section 4). One change from the research
+ * edges, and `about` says how to read a band (guidance.md section 4). Two changes from the research
  * copy besides its formatting: it cited the app's own plan at a path on the machine it was written
- * on, which has no place in this repo, so that source is left out.
+ * on, which has no place in this repo, so that source is left out; and the five cushion
+ * derivations, which credited that plan with their edges, name the sources they keep instead.
  *
  * This is the one module that imports the file, so the app can load it as a chunk of its own when a
  * band is first needed, and the Worker never holds it.
@@ -287,7 +288,9 @@ export function gapFor(
   const lender = BENCHMARKS.entries.find(
     (entry) => entry.metric === metric && entry.region === region && entry.borrowedFrom
   )?.borrowedFrom;
-  return lender ? `No figures of its own, and the app does not borrow ${lender}'s.` : null;
+  if (!lender) return null;
+  const name = BENCHMARKS.regions.find((one) => one.id === lender)?.inCopy ?? lender;
+  return `No figures of its own, and the app does not borrow ${name}'s.`;
 }
 
 /** The rule that drew a metric's edges in a region, in words. */

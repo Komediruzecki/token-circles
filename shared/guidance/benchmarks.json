@@ -2349,7 +2349,7 @@
       "region": "EU27",
       "strength": "moderate",
       "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
-      "text": "Edges come from the method: one month of essential spending is the first cushion, six months the top of the three-to-six-month convention. Regional figures give context, not the edges.",
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Eurostat's figures on how long households could live on their savings give context, not the edges.",
       "borrowedFrom": null
     },
     {
@@ -2357,7 +2357,7 @@
       "region": "HR",
       "strength": "moderate",
       "sourceIds": ["eurostat-ilc_odbt15", "rpf-wiki-2026"],
-      "text": "Edges come from the method: one month of essential spending is the first cushion, six months the top of the three-to-six-month convention. Regional figures give context, not the edges.",
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Eurostat's figures on how long households could live on their savings give context, not the edges.",
       "borrowedFrom": null
     },
     {
@@ -2365,7 +2365,7 @@
       "region": "DE",
       "strength": "moderate",
       "sourceIds": ["destatis-unexpected-2025", "rpf-wiki-2026"],
-      "text": "Edges come from the method: one month of essential spending is the first cushion, six months the top of the three-to-six-month convention. Regional figures give context, not the edges.",
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. Destatis figures on households with no money for an unexpected expense give context, not the edges.",
       "borrowedFrom": null
     },
     {
@@ -2373,7 +2373,7 @@
       "region": "UK",
       "strength": "moderate",
       "sourceIds": ["ons-opn-2025-06", "rpf-wiki-2026"],
-      "text": "Edges come from the method: one month of essential spending is the first cushion, six months the top of the three-to-six-month convention. Regional figures give context, not the edges.",
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. The ONS bulletin Public opinions and social trends (June 2025) gives context, not the edges.",
       "borrowedFrom": null
     },
     {
@@ -2381,7 +2381,7 @@
       "region": "US",
       "strength": "moderate",
       "sourceIds": ["fed-shed-2025", "rpf-wiki-2026"],
-      "text": "Edges come from the method: one month of essential spending is the first cushion, six months the top of the three-to-six-month convention. Regional figures give context, not the edges.",
+      "text": "Edges come from the r/personalfinance wiki: a fund of one month is enough while paying debts above 10%, and a full fund is three to six months. So the first cushion is a month of essential spending, and six months is the top. The Federal Reserve's Economic Well-Being of U.S. Households in 2025 gives context, not the edges.",
       "borrowedFrom": null
     },
     {

@@ -326,13 +326,30 @@ describe('D4 and D9: borrowed figures', () => {
     for (const region of ['DE', 'EU27'] as const) {
       expect(bandsFor('debt.serviceShare', region, {}, notBorrowed)).toEqual([])
       expect(gapFor('debt.serviceShare', region, notBorrowed)).toBe(
-        "No figures of its own, and the app does not borrow HR's."
+        "No figures of its own, and the app does not borrow Croatia's."
       )
       expect(bandsFor('subscriptions.count', region, {}, notBorrowed)).toHaveLength(3)
     }
     expect(bandsFor('debt.serviceShare', 'HR', {}, notBorrowed)).toHaveLength(3)
     expect(gapFor('debt.serviceShare', 'HR', notBorrowed)).toBeNull()
     expect(gapFor('debt.serviceShare', 'UK', notBorrowed)).toMatch(/No official debt-to-income/)
+    // The lender is named as the copy names it.
+    expect(gapFor('subscriptions.count', 'DE', { 'subscriptions.count': false })).toBe(
+      "No figures of its own, and the app does not borrow the UK's."
+    )
+  })
+})
+
+describe('where the cushion’s edges come from', () => {
+  it.each(REGIONS)('names the sources it keeps in %s, and no method it dropped', (region) => {
+    const derivation = derivationFor('cushion.months', region)!
+    expect(derivation.text).not.toMatch(/the method/)
+    expect(derivation.text).toMatch(/r\/personalfinance wiki/)
+    for (const id of derivation.sourceIds) {
+      // Each source by the first word of its publisher: Eurostat, Destatis, ONS, Federal, r/personalfinance.
+      const publisher = sourceFor(id)!.publisher.split(' ')[0]
+      expect(derivation.text, id).toContain(publisher)
+    }
   })
 })
 

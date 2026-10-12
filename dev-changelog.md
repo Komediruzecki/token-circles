@@ -1101,10 +1101,12 @@ All notable changes to Token Circles are documented here. The format is based on
   a person's numbers are set beside, for eleven metrics and five regions. The JSON is the guidance
   research's file, shipped whole: 164 bands, each with its edges, source URL, year and strength;
   the references the copy quotes; the gaps (a metric a region has no figure for, and why); a
-  derivation per metric and region; and the sources. Two changes from the research copy: it cited
-  the app's own plan as a source at a `file://` path on the machine it was written on, so that
-  source and its citations (15 bands, 5 derivations) are left out, and it is formatted as the
-  repo's JSON is, the data otherwise the same. `bandFor` takes the metric, the region, the value
+  derivation per metric and region; and the sources. Three changes from the research copy: it
+  cited the app's own plan as a source at a `file://` path on the machine it was written on, so
+  that source and its citations (15 bands, 5 derivations) are left out; the five cushion
+  derivations, which credited that plan with their edges, name the sources they keep instead; and
+  it is formatted as the repo's JSON is, the data otherwise the same. `bandFor` takes the metric,
+  the region, the value
   and `{ tenure, hasHousingLoan }`, and answers the band the value falls in, or null for a gap, a
   value that is not a number and one below what the metric can be; a tenure without rows of its
   own reads as not given (the UK's mortgage row), and no answer as no housing loan. Beside it:
@@ -1324,6 +1326,16 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `guidanceClearPicture.test.ts` (D10 at six months firms the facts at six, with the
   badges' year still twelve) and `guidanceBenchmarks.test.ts` (every band drawn from group
   averages or the savings points, against `BAND_RULE`).
+- **The benchmarks' words name what they mean** (review 3b-1, findings 11 and 12). `gapFor`'s
+  answer for a borrowing the app does not use named the lender by its id ("the app does not borrow
+  HR's"); it names it as the copy does, from the file's `inCopy`: "Croatia's", "the UK's". The five
+  cushion derivations still said "Edges come from the method", a source the file no longer holds.
+  Each now says where the edges come from, the r/personalfinance wiki (one month while paying debts
+  above 10%, three to six months in full), and names the region's figures that give context:
+  Eurostat's for the EU and Croatia, Destatis for Germany, the ONS for the UK and the Federal
+  Reserve for the US.
+- **Tests:** `guidanceBenchmarks.test.ts` (both lenders by name; every cushion derivation names
+  each source it keeps, and no method).
 
 ### Achievements
 
