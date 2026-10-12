@@ -247,7 +247,8 @@ export function inBand(entry: BandEntry, value: number): boolean {
 /**
  * The band `value` falls in for this metric, region and household, or null: when the region has no
  * band for the metric (see `gapFor`), and for a value that is not a number or lies outside every
- * band, like a share below zero.
+ * band, like a share below zero. Infinity lies above every edge, in the band open above: a cushion
+ * with nothing needed every month (facts.ts) reads high.
  */
 export function bandFor(
   metric: MetricId,
@@ -255,7 +256,7 @@ export function bandFor(
   value: number,
   facts: BandFacts = {}
 ): BandEntry | null {
-  if (!Number.isFinite(value)) return null;
+  if (Number.isNaN(value)) return null;
   return bandsFor(metric, region, facts).find((entry) => inBand(entry, value)) ?? null;
 }
 

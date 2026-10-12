@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { addCalendarMonths } from '../../../../shared/calendarMonths'
-import { bandsFor } from '../../../../shared/guidance/benchmarks'
+import { bandFor, bandsFor } from '../../../../shared/guidance/benchmarks'
 import {
   FIRST_CUSHION_MONTHS,
   FULL_CUSHION_MONTHS,
@@ -251,6 +251,8 @@ describe('what is needed every month', () => {
     expect(facts.essentials).toBe(0)
     expect(facts.cushionMonths).toBe(Number.POSITIVE_INFINITY)
     expect(facts.unsure.all).toBe(false)
+    // Set beside the official figures, that cushion is high.
+    expect(bandFor('cushion.months', facts.region, facts.cushionMonths!)?.band).toBe('high')
   })
 
   it('is read against what is spent only while nothing said any of it is needed', () => {

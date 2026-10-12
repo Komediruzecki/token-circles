@@ -389,10 +389,22 @@ describe('bandFor', () => {
 
   it('has no band for a value that is no number, or one below what the metric can be', () => {
     expect(bandFor('savings.rate', 'DE', Number.NaN)).toBeNull()
-    expect(bandFor('savings.rate', 'DE', Number.POSITIVE_INFINITY)).toBeNull()
     expect(bandFor('housing.share', 'DE', -1)).toBeNull()
+    expect(bandFor('housing.share', 'DE', Number.NEGATIVE_INFINITY)).toBeNull()
     // Below zero is a savings rate like any other.
     expect(bandFor('savings.rate', 'US', -3.6)?.band).toBe('low')
+  })
+
+  it('puts Infinity above every edge: a cushion with nothing needed reads high', () => {
+    for (const region of REGIONS) {
+      expect(bandFor('cushion.months', region, Number.POSITIVE_INFINITY)?.band, region).toBe('high')
+    }
+    for (const [metric, region] of CASES) {
+      if (bandsFor(metric, region).length === 0) continue
+      const top = bandFor(metric, region, Number.POSITIVE_INFINITY)
+      expect(top, `${metric} ${region}`).not.toBeNull()
+      expect(top!.max, `${metric} ${region}`).toBeNull()
+    }
   })
 
   it('has none where the region has a gap', () => {

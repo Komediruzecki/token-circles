@@ -1303,6 +1303,13 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `guidanceCircles.test.ts` (the review's retiree, from a year of entries, placed at
   circle 7; the same person with 100,000 invested, held at circle 2; own income with the accounts
   not read).
+- **Infinity reads above every edge** (review 3b-1, finding 9). With nothing needed every month the
+  cushion is Infinity months (`cushionMonthsOf`), and `bandFor` answered no band for it, as for a
+  value that is no number. It now lies above every edge, in the band open above, so that cushion
+  reads high; only NaN has no band. Every metric's bands in every region have one open above.
+- **Tests:** `guidanceBenchmarks.test.ts` (Infinity in the band open above for every metric and
+  region with bands, high for the cushion in all five; NaN and minus Infinity below a share still
+  none) and `guidanceFacts.test.ts` (a cushion with nothing needed set beside the bands).
 
 ### Achievements
 
