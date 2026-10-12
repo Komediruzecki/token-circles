@@ -904,8 +904,8 @@ All notable changes to Token Circles are documented here. The format is based on
   mug, as "grocer" sits in it) and Eating out to the fallback tick ("eat" must stand alone). The
   local-first defaults now give these two the Worker's icons, `shopping-cart` and `utensils`
   (`DEFAULT_CATEGORIES` in `idb.ts` takes an optional `icon`; the rest still come from the name),
-  and the name matching checks `/grocer/` (cart) and `/eating\s*out|dining\s*out/` (utensils)
-  before the food family, so an existing Groceries or Eating out with no icon of its own (`''`,
+  and the name matching checks `/grocer/` (cart) and `/eating\s*out|dining\s*out/` (utensils;
+  since widened to every meal, below) before the food family, so an existing Groceries or Eating out with no icon of its own (`''`,
   `tag`, `folder` or none) shows them in both runtimes. A reset renaming Food to Groceries keeps an
   icon the person chose (`resetKeepsIcon`, `shared/defaultCategories.ts`); Food's old default icon
   (`utensils` on the Worker) or none becomes the cart. Before, the Worker set every kept default's
@@ -999,6 +999,18 @@ All notable changes to Token Circles are documented here. The format is based on
   say "Space name" is maff's call.
 - **Tests:** `onboarding.spec.ts` (the fade test checks the lead's words and that it is one line
   at 390).
+- **A meal draws utensils** (visual pass 3a-2, N6). A category named "Restaurant" showed the
+  coffee mug while its Kind said "From the name: Eating out": the food row in `CategoryIcon.tsx`
+  mapped restaurant, dining, eat, meal, lunch, dinner and breakfast to the mug. Read whole, the
+  row held food, dining, grocer, restaurant, eat, meal, lunch, dinner, breakfast, cafe and
+  coffee; the meals moved to the utensils row (which held Eating out and Dining out):
+  `/eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i`. "eat" and
+  "eating" match only as words, so "Heating" and "Seat covers" do not become meals. Food, cafe and
+  coffee keep the mug (grocer stays in the row, behind the cart row before it). A chosen icon still
+  wins. CHANGELOG's Groceries and Eating out line now names the meals.
+- **Tests:** `CategoryIconResolve.test.ts` (the real `getCategorySvg`: ten meal names draw
+  utensils; Coffee, Cafe and Food the mug; Heating and Seat covers not utensils; a chosen icon on
+  Restaurant wins) and `CategoryIcon.test.ts`'s copy of the table (Restaurant and Dining).
 
 ### Achievements
 

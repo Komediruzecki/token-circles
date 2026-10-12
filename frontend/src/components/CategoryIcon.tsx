@@ -151,8 +151,13 @@ const iconNameMap: Record<string, IconDef> = {
 const iconPatterns: [RegExp, IconDef][] = [
   // The defaults Groceries and Eating out, before the food family below would take them: a cart
   // and utensils, as the Worker's defaults store them, for a category with no icon of its own.
+  // A meal is utensils too, so a Restaurant or Lunch draws what Eating out does; "eat" and
+  // "eating" only as words, or Heating would be a meal.
   [/grocer/i, iconNameMap['shopping-cart']!],
-  [/eating\s*out|dining\s*out/i, iconNameMap.utensils!],
+  [
+    /eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i,
+    iconNameMap.utensils!,
+  ],
   // Transport / Car
   [
     /car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i,
@@ -160,9 +165,9 @@ const iconPatterns: [RegExp, IconDef][] = [
       path: 'M5 17h14v-5H5v5zm11.5-5L18 8H6l1.5 4M7 17a1 1 0 100 2 1 1 0 000-2zm10 0a1 1 0 100 2 1 1 0 000-2zM9 4h6',
     },
   ],
-  // Food / Dining / Groceries
+  // Food / Coffee: what is not a meal (Groceries and meals are above)
   [
-    /food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i,
+    /food|grocer|cafe|coffee/i,
     {
       path: 'M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-4v4m4-4v4m4-4v4',
     },

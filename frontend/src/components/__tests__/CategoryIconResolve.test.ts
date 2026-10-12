@@ -91,8 +91,26 @@ describe('a category named like a default', () => {
     expect(drawn('Eating out', 'coffee')).toBe(key('coffee'))
   })
 
-  it('leaves the rest of the food family as it was', () => {
-    expect(drawn('Food')).toBe(drawn('Restaurant'))
-    expect(drawn('Food')).not.toBe(key('shopping-cart'))
+  it('draws a meal as utensils, and coffee as the mug', () => {
+    for (const name of [
+      'Restaurant',
+      'Restaurants',
+      'Dining',
+      'Meals',
+      'Lunch',
+      'Dinner',
+      'Breakfast',
+      'Eating',
+      'Eat',
+      'Work lunches',
+    ])
+      expect(drawn(name), name).toBe(key('utensils'))
+    for (const name of ['Coffee', 'Cafe', 'Food']) expect(drawn(name), name).toBe(drawn('Coffee'))
+    expect(drawn('Coffee')).not.toBe(key('utensils'))
+    // "eat" and "eating" only as words.
+    expect(drawn('Heating')).not.toBe(key('utensils'))
+    expect(drawn('Seat covers')).not.toBe(key('utensils'))
+    // A chosen icon still wins.
+    expect(drawn('Restaurant', 'coffee')).toBe(key('coffee'))
   })
 })
