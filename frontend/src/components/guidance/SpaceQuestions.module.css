@@ -3,7 +3,8 @@
 .questions {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  /* A form around the questions can set its own rhythm: setup's is 14 px. */
+  gap: var(--space-questions-gap, 18px);
 }
 
 .question,

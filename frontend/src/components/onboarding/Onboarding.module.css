@@ -568,12 +568,25 @@
 /* ---- footer ---- */
 
 .footer {
+  /* Positioned, so its shadow paints over the step's content above it. */
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 14px 22px 18px;
   border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  transition: box-shadow 0.2s ease;
+}
+
+/* The step goes on under the footer: a shadow along its top says there is more to scroll to. */
+.footer[data-more-below] {
+  box-shadow: 0 -14px 18px -14px rgba(4, 8, 20, 0.32);
+}
+
+:global([data-theme='dark']) .footer[data-more-below] {
+  box-shadow: 0 -14px 18px -14px rgba(0, 0, 0, 0.75);
 }
 
 .footerRight {
@@ -718,4 +731,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* The space questions keep the form's rhythm between them (SpaceQuestions.module.css). */
+  --space-questions-gap: 14px;
 }

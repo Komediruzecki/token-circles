@@ -556,10 +556,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
         Name your space
       </h2>
-      <p class={styles.stepLead}>
-        A profile is one financial space — yours, a partner's, or a shared household view. You can
-        add more later.
-      </p>
+      <p class={styles.stepLead}>Yours, a partner's or the household's. Add more later.</p>
       {/* Enter in the name continues, as the footer's Continue does. */}
       <form class={styles.stepForm} {...spaceForm.attrs} data-test-id="onboarding-space-form">
         <FormNotice form={spaceForm} testId="onboarding-space-notice" />
@@ -898,6 +895,29 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Whether the step goes on below the footer: the footer then shows a shadow along its top. Read
+  // on scroll, and whenever the middle or the step in it changes size.
+  const [moreBelow, setMoreBelow] = createSignal(false)
+  const readMoreBelow = () => {
+    if (!bodyEl) return
+    setMoreBelow(bodyEl.scrollTop + bodyEl.clientHeight < bodyEl.scrollHeight - 1)
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    const sizes = new ResizeObserver(readMoreBelow)
+    createEffect(() => {
+      if (!onboardingOpen()) return
+      onboardingStep()
+      sizes.disconnect()
+      if (!bodyEl) return
+      sizes.observe(bodyEl)
+      if (bodyEl.firstElementChild) sizes.observe(bodyEl.firstElementChild)
+      readMoreBelow()
+    })
+    onCleanup(() => {
+      sizes.disconnect()
+    })
+  }
+
   // A new step opens at its top, not at the scroll position the last one was left at, and focus
   // moves to its heading, so a screen reader announces the step and Tab starts from there. At once,
   // not smooth: the old step's content is already gone. Not on open, where the panel takes focus.
@@ -1206,7 +1226,12 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </span>
           </header>
 
-          <div class={styles.body} ref={bodyEl} data-test-id="onboarding-body">
+          <div
+            class={styles.body}
+            ref={bodyEl}
+            data-test-id="onboarding-body"
+            onScroll={readMoreBelow}
+          >
             <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
             <Show when={onboardingStep() === 'space'}>{spaceStep()}</Show>
             <Show when={onboardingStep() === 'account'}>{accountStep()}</Show>
@@ -1215,7 +1240,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             <Show when={onboardingStep() === 'done'}>{doneStep()}</Show>
           </div>
 
-          <footer class={styles.footer}>
+          <footer class={styles.footer} data-more-below={moreBelow() ? '' : undefined}>
             <Show
               when={onboardingStep() !== 'welcome' && onboardingStep() !== 'done'}
               fallback={<span />}

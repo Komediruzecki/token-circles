@@ -916,6 +916,19 @@ All notable changes to Token Circles are documented here. The format is based on
   scenarios in both runtimes (Food with `utensils` and with no icon becomes the cart; Food with
   `coffee` keeps it; Eating out set back to `utensils`). `CategoryIcon.test.ts`'s copy of the
   pattern table has the two new rows.
+- **Children can't be missed on a phone** (visual pass 3a, finding 8). On "Name your space" at
+  390x844, with the 44 px chips, the footer starts at y 770 and the Children legend sat at y
+  793-811, its chips at 817-861, with 105 px left to scroll and nothing saying so. The step's lead
+  is one line, without the dash ("Yours, a partner's or the household's. Add more later.", was
+  two), and the two questions keep the form's 14 px rhythm (`--space-questions-gap`, which
+  `.stepForm` sets; Settings keeps 18). Children's legend now starts at y 768 and its chips at
+  792, still under the footer, with 80 px to scroll, so the footer shows a shadow along its top
+  (`data-more-below`) while the step goes on below it, read on the middle's scroll and by a
+  `ResizeObserver` on the middle and the step in it; at the end it goes. The footer is positioned
+  so the shadow paints over the step's content.
+- **Tests:** `onboarding.spec.ts` ("the footer shows a shadow while the step goes on below it": the
+  new lead, the 14 px gap, Children under the footer with the shadow at 390x844, none at the end,
+  back on scrolling up, none at 390x1000 or 1280x800).
 
 ### Achievements
 
