@@ -424,7 +424,7 @@ describe("a goal's date, kept as the Worker keeps it", () => {
 })
 
 describe('achievements on a seeded demo profile', () => {
-  it('evaluate with every budget, goal, bill and loan in hand', async () => {
+  it('evaluate with every budget, goal, bill, loan and account in hand', async () => {
     useProfile(await profileNamed('Example Mid Income'))
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
@@ -442,6 +442,8 @@ describe('achievements on a seeded demo profile', () => {
     expect(snap!.goals.length).toBeGreaterThan(0)
     expect(snap!.bills.length).toBeGreaterThan(0)
     expect(snap!.loans.length).toBeGreaterThan(0)
+    // The accounts Getting started's cushion reads, from the same local rows.
+    expect(snap!.accounts!.length).toBeGreaterThan(0)
     expect(unlocks().map((u) => u.id)).toEqual(
       expect.arrayContaining(['first-budget', 'goal-in-sight'])
     )

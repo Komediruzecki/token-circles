@@ -1125,6 +1125,67 @@ All notable changes to Token Circles are documented here. The format is based on
   drawn by the rule); the values of the three people in the research's examples landing in the
   bands it gave them; and who reads the file (only `benchmarks.ts` imports the JSON, and nothing in
   `shared/guidance/` imports from outside `shared/`).
+- **A person's numbers** (`shared/guidance/facts.ts`, `guidanceFacts`), worked out on the device
+  from what the app holds, the same in both runtimes. The window is the last twelve tracked months
+  before this one (fewer when there are fewer; this month is left out while it is under way), and
+  an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less deductions and
+  spending is expenses (`flows.ts`), in the base currency; own income leaves out the categories the
+  person marks as support they expect to stop. Essential spending goes by `essentialOf`, and
+  spending with no category counts as needed too (`unsure` says how much was counted that way).
+  Liquid money is savings and cash balances and each current account's lowest end-of-day balance
+  in the last 30 days, read back from its balance now through the entries (`balanceMoves` books an
+  entry as `computeBalanceDeltas` does; an entry dated after today is undone first), none of it
+  below zero, and null without a savings, cash or current account. Invested is the investment
+  accounts or the portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
+  with a balance left, at the rate their schedule charges for the next payment, and credit cards
+  and current accounts below zero, unless the person says they carry no balance on either; a debt
+  is expensive from `EXPENSIVE_DEBT_RATE` (10%), and a card or overdraft with no rate given is too.
+  A card's payment is what went into it, a month on average over the last three full months. The
+  savings rate is worked out with and without the loan principal the window's installments and
+  extra payments repaid.
+- **The seven circles** (`shared/guidance/circles.ts`, `placeCircle`). A circle is reached when the
+  one inside it is and its own required checks are met, so the current circle is the first one not
+  reached, and a hard month moves a person inward. A check is met, not met, or not known yet (too
+  few months, no accounts read, a question not answered). Until a year is on file the placement is
+  provisional and has no next step of its own (Getting started's lead); after that the next step is
+  the current circle's first check not met. Solid ground checks free money first, in Germany,
+  Croatia, the UK and the US (`FREE_MONEY_REGIONS`), then debt at 10% or more, then three months of
+  essentials; six months is on its checklist, not required. Room to choose counts liquid money
+  beyond six months towards two years of spending; Work optional is invested money that pays a year
+  of spending at the person's withdrawal rate (`targetFromSpend`); More than enough waits for the
+  person's own number. The yearly-bills set-aside guidance.md lists for Solid ground is not checked:
+  nothing links a yearly bill to a set-aside yet (guidance.md's own gap table says so). Decisions,
+  each in one place: D1 `CIRCLES`, D2 `CIRCLE_NAMES`, D10 `CLEAR_PICTURE_MONTHS` (12), D11
+  `MORE_THAN_ENOUGH_DEFAULT` (null), and D6 `LOAN_PRINCIPAL_IS_SAVING` in facts.ts (true: principal
+  repaid counts as kept). The cushion lines (`FIRST_CUSHION_MONTHS` 1, `FULL_CUSHION_MONTHS` 6) and
+  `EXPENSIVE_DEBT_RATE` are held by tests to the benchmarks' band edges in every region, so the app
+  still imports nothing from `benchmarks.ts`. Nothing shows the circles yet.
+- **Getting started can suggest a cushion** (`shared/orientation.ts`, rule `cushion`, in the slot
+  its comment kept between heavy-month and loan-payoff). "Build a one-month cushion" shows while the
+  money a person can reach covers less than a month of essential spending (`cushionOf`, the facts'
+  own window, essentials and liquid money), and links to Goals. The reason counts whole days, never
+  an amount: "The money you can reach covers 28 days of what you need.", "1 day", and "doesn't
+  cover a day" below one. `OrientationFacts.cushionMonths` is null with fewer than three tracked
+  months or no account money could be in, and the step does not show then.
+- **The achievements snapshot holds the accounts** (`achievementsStore.ts`), read beside the other
+  lists, kept to the active profile, and null when the read fails, so the badges are worked out all
+  the same. That is one more request per evaluation. Getting started reads them from the snapshot
+  (`core/orientation.ts`), so it still computes only while it is visible on Dashboard, after paint;
+  at 3,000 entries one computation takes about as long as before.
+- **Tests:** `guidanceFacts.test.ts` (the window and a year on file, income and support, the sorted
+  share, essentials with choices, kinds and no kind, a space whose categories have no kind, the low
+  point and its 30 days, future entries, transfers, old type names, `balanceMoves` against
+  `computeBalanceDeltas`, loans at the rate now, cards and overdrafts with and without a rate, a
+  card's payment, invested money, D6, and the lines shared with the benchmarks),
+  `guidanceCircles.test.ts` (the order and names, reaching, provisional, Solid ground's checklist,
+  D11, and a family moved from circle 4 to 3 by a car repair paid from savings),
+  `guidanceExamples.test.ts` (the three people of the research's examples: Mia in circle 1 with 7
+  months and the cushion as her third step, the Leipzig family in circle 4, Jordan in circle 2;
+  where the examples' savings rates differ from the app's, the test says why),
+  `orientation.test.ts` and `orientationFacts.test.ts` (the step's threshold, days, words, link and
+  place), `GettingStarted.test.tsx`, `achievementsStore.test.ts`, `localRows-apiContract.test.ts`,
+  and `tests/orientation.spec.ts`, where the step shows under a month of savings and leaves past
+  one, local-first and signed in.
 
 ### Achievements
 

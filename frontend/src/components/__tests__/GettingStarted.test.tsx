@@ -96,6 +96,7 @@ function fourMonths(over: Partial<AchievementsSnapshot> = {}): AchievementsSnaps
       { id: 2, name: 'Salary' },
     ],
     bills: [],
+    accounts: [],
     evaluation: evaluateAchievements({
       transactions,
       budgets: [],
@@ -109,6 +110,12 @@ function fourMonths(over: Partial<AchievementsSnapshot> = {}): AchievementsSnaps
     ...over,
   }
 }
+
+/** A savings account holding `balance`, as the accounts list reads it. */
+const savings = (balance: number) =>
+  [
+    { id: 1, name: 'Savings', type: 'savings', currency: 'EUR', balance, profile_id: 1 },
+  ] as AchievementsSnapshot['accounts']
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
@@ -274,6 +281,56 @@ describe('with the card on the account', () => {
     )
     await painted()
     expect(workedOut.calls).toBe(1)
+    expect(card()).toBeNull()
+  })
+
+  it('suggests a cushion under a month of what is needed, and drops it at a month', async () => {
+    // A year on file, sorted, budgeted, and no month in the red: nothing else to do. Groceries is
+    // needed every month: 257 a month on average.
+    const transactions = Array.from({ length: 12 }, (_, i) => i + 1).flatMap((n) => [
+      row(`${monthsAgo(n)}-03`, { type: 'income', amount: 500, category_id: 2 }),
+      row(`${monthsAgo(n)}-05`, { amount: -(80 + 9 * n), category_id: 1 }),
+      row(`${monthsAgo(n)}-09`, { amount: -(60 + 9 * n), category_id: 1 }),
+    ])
+    const settled = (accounts: AchievementsSnapshot['accounts']) =>
+      fourMonths({
+        transactions,
+        budgets: [
+          {
+            category_id: 1,
+            amount: 200,
+            period: 'monthly',
+            start_date: '2020-01-01',
+            end_date: null,
+            created_at: '2020-01-01',
+          },
+        ],
+        evaluation: evaluateAchievements({
+          transactions,
+          budgets: [],
+          goals: [],
+          importLogs: [],
+          loans: [],
+          selfHosted: false,
+          today,
+        }),
+        accounts,
+      })
+
+    store.set!(settled(savings(200)))
+    mount()
+    await painted()
+    expect(steps()).toEqual([
+      {
+        id: 'cushion',
+        title: 'Build a one-month cushion',
+        href: '#goals',
+        reason: 'The money you can reach covers 23 days of what you need.',
+      },
+    ])
+
+    store.set!(settled(savings(257)))
+    await painted()
     expect(card()).toBeNull()
   })
 

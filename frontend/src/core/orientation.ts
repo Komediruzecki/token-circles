@@ -7,8 +7,10 @@
  * it links to: tracked months from the badges (shared/trackedMonths.ts), subscriptions from the
  * scan's window and tick rule, and the month and the category from the Progress page's advice
  * (achievements/monthFacts.ts). The month and the category are the last full month's, because a
- * fresh import leaves the current month empty.
+ * fresh import leaves the current month empty. The cushion is the circles' own (shared/guidance/
+ * facts.ts `cushionOf`), from the accounts the snapshot holds.
  */
+import { cushionOf } from '../../../shared/guidance/facts'
 import { lastFullMonth } from '../../../shared/orientation'
 import { trackedMonthsInYearWindow } from '../../../shared/trackedMonths'
 import {
@@ -18,9 +20,11 @@ import {
 } from '../features/subscriptionDetection'
 import { bucketByMonth } from './achievements/evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './achievements/monthFacts'
+import type { FactsAccount } from '../../../shared/guidance/facts'
 import type { KindedCategory } from '../../../shared/guidance/kinds'
 import type { OrientationFacts } from '../../../shared/orientation'
 import type { DetectableTransaction, ExistingBillLike } from '../features/subscriptionDetection'
+import type { Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 
 /** What the facts are read from: the parts of the achievements snapshot they need. */
@@ -28,13 +32,19 @@ export interface OrientationSource {
   /** YYYY-MM-DD the evaluation used. */
   today: string
   evaluation: Pick<Evaluation, 'trackedMonths'>
-  /** Whole rows: the scan reads their text. */
-  transactions: Array<EvaluateInput['transactions'][number] & DetectableTransaction>
+  /** Whole rows: the scan reads their text, and the cushion the accounts they move. */
+  transactions: Array<
+    EvaluateInput['transactions'][number] &
+      DetectableTransaction &
+      Partial<Pick<Transaction, 'account_id' | 'transfer_account_id'>>
+  >
   budgets: Array<Pick<EvaluateInput['budgets'][number], 'category_id'>>
   bills: Array<ExistingBillLike & { category_id?: number | null }>
   /** Whole rows: the scan reads the type and the kind of what charges are filed under. */
   categories: Array<{ id: number; name: string } & KindedCategory>
   loans: unknown[]
+  /** Null, or left out, when they could not be read. */
+  accounts?: readonly FactsAccount[] | null
 }
 
 /** The facts for `source`, with the scan's window ending at `nowMs`. */
@@ -59,5 +69,11 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
     topUnbudgeted: top !== null && name !== undefined ? { categoryId: top.categoryId, name } : null,
     heavyMonth: monthInTheRed(lastMonth) === null ? null : last,
     loans: source.loans.length,
+    cushionMonths: cushionOf({
+      today,
+      transactions,
+      categories: source.categories,
+      accounts: source.accounts ?? null,
+    }).months,
   }
 }

@@ -3,7 +3,9 @@
  * fixed order, three at a time, each with its reason in their counts and months.
  */
 import { describe, expect, it } from 'vitest'
+import { FIRST_CUSHION_MONTHS } from '../../../../shared/guidance/circles'
 import {
+  DAYS_IN_A_MONTH,
   lastFullMonth,
   NEXT_STEPS_SHOWN,
   nextSteps,
@@ -23,6 +25,7 @@ const settled: OrientationFacts = {
   topUnbudgeted: null,
   heavyMonth: null,
   loans: 0,
+  cushionMonths: 2,
 }
 
 const facts = (over: Partial<OrientationFacts>): OrientationFacts => ({ ...settled, ...over })
@@ -35,6 +38,7 @@ const everything = facts({
   topUnbudgeted: { categoryId: 7, name: 'Groceries' },
   heavyMonth: '2026-09',
   loans: 1,
+  cushionMonths: 0.5,
 })
 
 const only = (over: Partial<OrientationFacts>) => {
@@ -177,6 +181,41 @@ describe('loan-payoff', () => {
   })
 })
 
+describe('cushion', () => {
+  it('applies while the money you can reach covers less than a month of what you need', () => {
+    expect(only({ cushionMonths: 0.94 })).toEqual({
+      id: 'cushion',
+      title: 'Build a one-month cushion',
+      reason: 'The money you can reach covers 28 days of what you need.',
+      link: { hash: '#goals', label: 'Goals' },
+    })
+  })
+
+  it('counts whole days, so it never says a month while less than one is covered', () => {
+    expect(DAYS_IN_A_MONTH).toBe(30)
+    expect(only({ cushionMonths: 0.999 }).reason).toBe(
+      'The money you can reach covers 29 days of what you need.'
+    )
+    expect(only({ cushionMonths: 0.034 }).reason).toBe(
+      'The money you can reach covers 1 day of what you need.'
+    )
+    expect(only({ cushionMonths: 0.01 }).reason).toBe(
+      "The money you can reach doesn't cover a day of what you need."
+    )
+    expect(only({ cushionMonths: 0 }).reason).toBe(
+      "The money you can reach doesn't cover a day of what you need."
+    )
+  })
+
+  it('goes once a month is covered, and never shows while the cushion is unknown', () => {
+    expect(FIRST_CUSHION_MONTHS).toBe(1)
+    expect(orientationSteps(facts({ cushionMonths: 1 }))).toEqual([])
+    expect(orientationSteps(facts({ cushionMonths: 6 }))).toEqual([])
+    expect(orientationSteps(facts({ cushionMonths: Number.POSITIVE_INFINITY }))).toEqual([])
+    expect(orientationSteps(facts({ cushionMonths: null }))).toEqual([])
+  })
+})
+
 describe('the order and the cap', () => {
   it('lists every step that applies, in rule order', () => {
     expect(orientationSteps(everything).map((s) => s.id)).toEqual([
@@ -185,6 +224,7 @@ describe('the order and the cap', () => {
       'sort-uncategorised',
       'budget-top-category',
       'heavy-month',
+      'cushion',
       'loan-payoff',
     ])
     expect(ORIENTATION_RULES).toEqual(orientationSteps(everything).map((s) => s.id))

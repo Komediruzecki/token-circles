@@ -1,0 +1,258 @@
+/**
+ * The seven circles (shared/guidance/circles.ts): each is reached when the one inside it is and
+ * its own checks are met, the current circle is the first one not reached, and the next step is
+ * its first check not met. A year on file firms them up; a hard month moves a person inward.
+ */
+import { describe, expect, it } from 'vitest'
+import { addCalendarMonths } from '../../../../shared/calendarMonths'
+import {
+  CIRCLE_NAMES,
+  CIRCLES,
+  CLEAR_PICTURE_MONTHS,
+  FREE_MONEY_REGIONS,
+  MORE_THAN_ENOUGH_DEFAULT,
+  placeCircle,
+} from '../../../../shared/guidance/circles'
+import { guidanceFacts } from '../../../../shared/guidance/facts'
+import type { CheckId, Placement } from '../../../../shared/guidance/circles'
+import type { FactsEntry, GuidanceFacts, GuidanceInput } from '../../../../shared/guidance/facts'
+
+/** A year on file, every circle up to the seventh reached: the number for it is not given. */
+const outer: GuidanceFacts = {
+  today: '2026-10-11',
+  region: 'DE',
+  months: [],
+  monthsInYear: 12,
+  firm: true,
+  averaged: true,
+  sortedShare: 100,
+  income: 6000,
+  ownIncome: 6000,
+  spending: 3000,
+  annualSpending: 36000,
+  essentials: 2000,
+  unsure: { categories: 0, uncategorised: 0 },
+  liquid: 13000,
+  cushionMonths: 6.5,
+  invested: 900000,
+  debts: [],
+  accountsKnown: true,
+  principalRepaid: 0,
+  savings: { rate: 50, cash: 50, withPrincipal: 50 },
+  withdrawalRatePct: 4,
+  enoughPerYear: null,
+  freeMoney: 'taken',
+}
+
+const facts = (over: Partial<GuidanceFacts>): GuidanceFacts => ({ ...outer, ...over })
+
+const check = (placement: Placement, circle: number, id: CheckId) =>
+  placement.circles[circle - 1].checks.find((c) => c.id === id)
+
+describe('the circles (D1, D2)', () => {
+  it('are seven, in order, with their names', () => {
+    expect(CIRCLES.map((c) => c.circle)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(placeCircle(outer).circles.map((c) => c.name)).toEqual([
+      'Clear picture',
+      'Paying your way',
+      'Breathing room',
+      'Solid ground',
+      'Room to choose',
+      'Work optional',
+      'More than enough',
+    ])
+    expect(Object.values(CIRCLE_NAMES)).toHaveLength(7)
+  })
+
+  it('check what guidance.md 3.2 says each one checks, in the order the next step takes them', () => {
+    expect(placeCircle(outer).circles.map((c) => c.checks.map((k) => k.id))).toEqual([
+      ['year-on-file', 'sorted'],
+      ['own-income'],
+      ['first-cushion'],
+      ['free-money', 'no-expensive-debt', 'solid-cushion', 'full-cushion'],
+      ['two-years'],
+      ['work-optional'],
+      ['enough'],
+    ])
+  })
+})
+
+describe('where a person is', () => {
+  it('is the first circle not reached, and the next step its first check not met', () => {
+    const placement = placeCircle(outer)
+    expect(placement.current).toBe(7)
+    expect(placement.next).toEqual({ circle: 7, check: 'enough' })
+    expect(placement.provisional).toBe(false)
+  })
+
+  it('has no default for More than enough (D11): it waits for the person’s own number', () => {
+    expect(MORE_THAN_ENOUGH_DEFAULT).toBeNull()
+    expect(check(placeCircle(outer), 7, 'enough')).toMatchObject({ met: null, target: null })
+    // 80,000 a year at 4% is two million.
+    const named = placeCircle(facts({ enoughPerYear: 80000 }))
+    expect(check(named, 7, 'enough')).toMatchObject({ met: false, target: 2000000 })
+    const there = placeCircle(facts({ enoughPerYear: 30000 }))
+    expect(there.current).toBeNull()
+    expect(there.next).toBeNull()
+    expect(there.circles.every((c) => c.reached)).toBe(true)
+  })
+
+  it('reaches a circle only with every circle inside it', () => {
+    // Plenty invested, but a card at 19.9%: Solid ground is not reached, nor anything past it.
+    const placement = placeCircle(
+      facts({
+        debts: [
+          {
+            kind: 'card',
+            id: 1,
+            name: null,
+            owed: 900,
+            rate: 19.9,
+            payment: null,
+            expensive: true,
+          },
+        ],
+      })
+    )
+    expect(placement.current).toBe(4)
+    expect(placement.circles.map((c) => c.reached)).toEqual([
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ])
+    // Work optional's own check is met all the same, and shows as met.
+    expect(check(placement, 6, 'work-optional')!.met).toBe(true)
+    expect(placement.next).toEqual({ circle: 4, check: 'no-expensive-debt' })
+  })
+
+  it('needs a year for the first circle (D10), and 90% of spending sorted', () => {
+    expect(CLEAR_PICTURE_MONTHS).toBe(12)
+    expect(placeCircle(facts({ monthsInYear: 11, firm: false })).current).toBe(1)
+    const unsorted = placeCircle(facts({ sortedShare: 89.9 }))
+    expect(unsorted.current).toBe(1)
+    expect(unsorted.next).toEqual({ circle: 1, check: 'sorted' })
+    expect(placeCircle(facts({ sortedShare: 90 })).current).toBe(7)
+  })
+
+  it('stays provisional until a year is on file, and leaves the next step to Getting started', () => {
+    const early = placeCircle(facts({ monthsInYear: 7, firm: false }))
+    expect(early.provisional).toBe(true)
+    expect(early.next).toBeNull()
+    expect(check(early, 2, 'own-income')!.provisional).toBe(true)
+    // The cushion is today's balances against the months there are.
+    expect(check(early, 3, 'first-cushion')!.provisional).toBe(false)
+  })
+})
+
+describe('Solid ground', () => {
+  it('asks about free money first, where there is a scheme to ask about', () => {
+    expect([...FREE_MONEY_REGIONS].sort()).toEqual(['DE', 'HR', 'UK', 'US'])
+    const unanswered = placeCircle(facts({ freeMoney: null, cushionMonths: 2.9, liquid: 5800 }))
+    expect(unanswered.current).toBe(4)
+    expect(unanswered.next).toEqual({ circle: 4, check: 'free-money' })
+    // The EU average has no one scheme: the debts and the cushion come first there.
+    const eu = placeCircle(
+      facts({ region: 'EU27', freeMoney: null, cushionMonths: 2.9, liquid: 5800 })
+    )
+    expect(check(eu, 4, 'free-money')).toBeUndefined()
+    expect(eu.next).toEqual({ circle: 4, check: 'solid-cushion' })
+  })
+
+  it('takes free money as met when taken or not offered, and as the step still to take otherwise', () => {
+    const met = (freeMoney: GuidanceFacts['freeMoney']) =>
+      check(placeCircle(facts({ freeMoney })), 4, 'free-money')!.met
+    expect(met('taken')).toBe(true)
+    expect(met('not-offered')).toBe(true)
+    expect(met('not-taken')).toBe(false)
+    expect(met('not-sure')).toBe(false)
+    expect(met(null)).toBeNull()
+    // It is on the checklist, not a condition: Solid ground is reached without it.
+    expect(placeCircle(facts({ freeMoney: 'not-taken' })).circles[3].reached).toBe(true)
+  })
+
+  it('is reached at three months, and keeps six on its checklist', () => {
+    const three = placeCircle(facts({ cushionMonths: 3, liquid: 6000, invested: 0 }))
+    expect(three.circles[3].reached).toBe(true)
+    expect(check(three, 4, 'full-cushion')).toMatchObject({ met: false, required: false })
+    expect(three.current).toBe(5)
+  })
+
+  it('cannot say there is no expensive debt without the accounts, where cards are', () => {
+    expect(check(placeCircle(facts({ accountsKnown: false })), 4, 'no-expensive-debt')!.met).toBe(
+      null
+    )
+  })
+})
+
+describe('Room to choose and Work optional', () => {
+  it('count liquid money beyond six months of essentials towards two years of spending', () => {
+    // 72,000 is two years. 60,000 invested and 12,000 beyond six months of 2,000.
+    const two = placeCircle(facts({ invested: 60000, liquid: 24000, cushionMonths: 12 }))
+    expect(check(two, 5, 'two-years')).toMatchObject({ value: 72000, target: 72000, met: true })
+    expect(check(placeCircle(facts({ invested: 60000 })), 5, 'two-years')!.met).toBe(false)
+  })
+
+  it('put work optional at a year of spending over the withdrawal rate', () => {
+    expect(check(placeCircle(outer), 6, 'work-optional')!.target).toBe(900000)
+    expect(check(placeCircle(facts({ withdrawalRatePct: 3 })), 6, 'work-optional')!.target).toBe(
+      1200000
+    )
+    expect(placeCircle(facts({ invested: 899999 })).current).toBe(6)
+  })
+})
+
+describe('moving inward', () => {
+  /** A family with a year on file, nearly three months put by, and its free money taken. */
+  const months = Array.from({ length: 12 }, (_, i) =>
+    addCalendarMonths('2025-10-01', i).slice(0, 7)
+  )
+  const lines = (month: string): FactsEntry[] => [
+    { date: `${month}-01`, type: 'income', amount: 5900, category_id: 9 },
+    { date: `${month}-02`, type: 'expense', amount: 1650, category_id: 1 },
+    { date: `${month}-03`, type: 'expense', amount: 2000, category_id: 2 },
+    { date: `${month}-04`, type: 'expense', amount: 1500, category_id: 3 },
+  ]
+  const before: GuidanceInput = {
+    today: '2026-10-11',
+    region: 'DE',
+    transactions: months.flatMap(lines),
+    categories: [
+      { id: 1, name: 'Rent', type: 'expense', kind: 'housing' },
+      { id: 2, name: 'Groceries', type: 'expense', kind: 'groceries' },
+      { id: 3, name: 'Leisure', type: 'expense', kind: 'leisure' },
+      { id: 4, name: 'Car repairs', type: 'expense', kind: 'transport' },
+      { id: 9, name: 'Salaries', type: 'income' },
+    ],
+    accounts: [
+      { id: 1, type: 'giro', balance: 1200 },
+      { id: 2, type: 'savings', balance: 9400 },
+    ],
+    answers: { freeMoney: 'taken' },
+  }
+
+  it('moves a person in after a hard month: the cushion paid for it, and is the next step', () => {
+    const solid = placeCircle(guidanceFacts(before))
+    expect(solid.current).toBe(4)
+
+    // September: an 8,000 car repair, paid from savings.
+    const after = placeCircle(
+      guidanceFacts({
+        ...before,
+        transactions: [
+          ...before.transactions,
+          { date: '2026-09-20', type: 'expense', amount: 8000, category_id: 4 },
+        ],
+        accounts: [
+          { id: 1, type: 'giro', balance: 1200 },
+          { id: 2, type: 'savings', balance: 1400 },
+        ],
+      })
+    )
+    expect(after.current).toBe(3)
+    expect(after.next).toEqual({ circle: 3, check: 'first-cushion' })
+  })
+})

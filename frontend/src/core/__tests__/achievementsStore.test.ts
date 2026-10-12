@@ -24,6 +24,7 @@ vi.mock('../api', () => ({
     getCategories: vi.fn(async () => calls.categories ?? [{ id: 1, name: 'Food' }]),
     getBills: vi.fn(async () => calls.bills ?? []),
     getLoans: vi.fn(async () => calls.loans ?? []),
+    getAccounts: vi.fn(async () => calls.accounts ?? []),
     getLoan: vi.fn(async (id: number) =>
       (calls.loans as Array<{ id: number }>)?.find((l) => l.id === id)
     ),
@@ -47,7 +48,10 @@ import {
 import { api } from '../api'
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
-const apiMock = api as unknown as Record<'getSettings' | 'updateSettings' | 'getLoan', Mock>
+const apiMock = api as unknown as Record<
+  'getSettings' | 'updateSettings' | 'getLoan' | 'getAccounts',
+  Mock
+>
 
 const month = (m: string) =>
   [3, 4, 5].map((d) => ({ date: `${m}-0${d}`, type: 'expense', amount: 10, category_id: 1 }))
@@ -353,6 +357,28 @@ describe('badges are per profile', () => {
 
     expect(snapshot()!.categories.map((c) => c.name)).toEqual(['Food'])
     expect(snapshot()!.bills.map((b) => b.name)).toEqual(['Power'])
+  })
+
+  it("keeps only the active profile's accounts, for Getting started's cushion", async () => {
+    householdOfTwoAndThree()
+    calls.accounts = [
+      { id: 1, name: 'Savings', type: 'savings', balance: 900, profile_id: 2 },
+      { id: 2, name: 'Theirs', type: 'savings', balance: 5000, profile_id: 3 },
+    ]
+
+    await refreshAchievements()
+
+    expect(snapshot()!.accounts!.map((a) => a.name)).toEqual(['Savings'])
+  })
+
+  it('works the badges out when the accounts cannot be read, and holds them as unknown', async () => {
+    apiMock.getAccounts.mockRejectedValueOnce(new Error('offline'))
+    calls.transactions = month(thisMonth)
+
+    await refreshAchievements()
+
+    expect(snapshot()!.accounts).toBeNull()
+    expect(unlocks().map((u) => u.id)).toContain('first-entry')
   })
 
   it('restores dismissed advice under the per-profile key', async () => {

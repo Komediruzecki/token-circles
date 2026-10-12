@@ -1,0 +1,258 @@
+/**
+ * The seven circles (guidance.md section 3.2): where a person's own numbers put them, what each
+ * circle checks, and the next step.
+ *
+ * Each circle is reached when the circle inside it is and its own required checks are met, so the
+ * current circle is the first one not reached. They are worked out again from the facts each time
+ * (facts.ts), so a hard month can move a person inward. A check is met (true), not met (false), or
+ * not known yet (null): too few months, no accounts to read, a question not answered.
+ *
+ * Until a year is on file the placement is provisional ("Circles firm up once a full year is
+ * here"), and the next step is Getting started's (shared/orientation.ts). After that it is the
+ * current circle's first check not met, in the order the circle lists them, which for Solid
+ * ground is the method's: free money, expensive debt, then the cushion.
+ *
+ * Four decisions live here, each in one place (guidance.md section 7):
+ *
+ * - **D1, the structure**: `CIRCLES`, seven circles in order, each with the checks that reach it.
+ * - **D2, the names**: `CIRCLE_NAMES`.
+ * - **D10, a year for the first circle**: `CLEAR_PICTURE_MONTHS`.
+ * - **D11, no default for the seventh**: `MORE_THAN_ENOUGH_DEFAULT`, which is null, so the circle
+ *   has no target until the person names one.
+ *
+ * Pure: the caller works out the facts.
+ */
+import { targetFromSpend } from '../retirement';
+import { YEAR_ON_FILE_MONTHS } from '../trackedMonths';
+import type { FreeMoney, GuidanceFacts } from './facts';
+import type { Region } from './region';
+
+export type CircleNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+/** D2: what each circle is called. */
+export const CIRCLE_NAMES: Readonly<Record<CircleNumber, string>> = {
+  1: 'Clear picture',
+  2: 'Paying your way',
+  3: 'Breathing room',
+  4: 'Solid ground',
+  5: 'Room to choose',
+  6: 'Work optional',
+  7: 'More than enough',
+};
+
+/** D10: the tracked months of the last thirteen that the first circle needs. */
+export const CLEAR_PICTURE_MONTHS = YEAR_ON_FILE_MONTHS;
+
+/** The share of a year's spending, by amount, that the first circle needs sorted, in percent. */
+export const SORTED_SHARE = 90;
+
+/**
+ * The cushions, in months of essential spending: one for Breathing room, three for Solid ground,
+ * and six, the top of the three-to-six convention, on Solid ground's checklist. One and six are
+ * also `cushion.months`' band edges in every region (benchmarks.json, which a test holds them to).
+ */
+export const FIRST_CUSHION_MONTHS = 1;
+export const SOLID_CUSHION_MONTHS = 3;
+export const FULL_CUSHION_MONTHS = 6;
+
+/** Room to choose: years of spending invested, with liquid money beyond six months. */
+export const ROOM_TO_CHOOSE_YEARS = 2;
+
+/** D11: the yearly cost of more than enough when the person has named none. None. */
+export const MORE_THAN_ENOUGH_DEFAULT: number | null = null;
+
+/**
+ * The regions with free money from an employer or the state to check (guidance.md 4.4.11): a
+ * company pension in Germany, the state's top-up in Croatia, a workplace pension in the UK and an
+ * employer's match in the US. The EU average has no one scheme to ask about.
+ */
+export const FREE_MONEY_REGIONS: ReadonlySet<Region> = new Set<Region>(['DE', 'HR', 'UK', 'US']);
+
+export type CheckId =
+  | 'year-on-file'
+  | 'sorted'
+  | 'own-income'
+  | 'first-cushion'
+  | 'free-money'
+  | 'no-expensive-debt'
+  | 'solid-cushion'
+  | 'full-cushion'
+  | 'two-years'
+  | 'work-optional'
+  | 'enough';
+
+export interface Check {
+  id: CheckId;
+  /** Met, not met, or not known yet. */
+  met: boolean | null;
+  /** Whether the circle needs it to be reached. The others are on its checklist. */
+  required: boolean;
+  /** Read from the averages of less than a year: it may move as the year fills in. */
+  provisional: boolean;
+  /** The person's figure, in the unit of `target`; null when not known. */
+  value: number | null;
+  /** What the check asks for; null when there is nothing to reach yet. */
+  target: number | null;
+}
+
+export interface CirclePlace {
+  circle: CircleNumber;
+  name: string;
+  /** Every circle inside it is reached, and so is every required check of its own. */
+  reached: boolean;
+  checks: Check[];
+}
+
+export interface Placement {
+  /** The first circle not reached; null once all seven are. */
+  current: CircleNumber | null;
+  circles: CirclePlace[];
+  /**
+   * The current circle's first check not met. Null while provisional, when Getting started's steps
+   * lead, and once every circle is reached.
+   */
+  next: { circle: CircleNumber; check: CheckId } | null;
+  /** Less than a year on file. */
+  provisional: boolean;
+}
+
+/** A check from a value and a target, met when the value reaches it. */
+function reaching(
+  id: CheckId,
+  value: number | null,
+  target: number | null,
+  options: { required?: boolean; provisional?: boolean } = {}
+): Check {
+  return {
+    id,
+    met: value === null || target === null ? null : value >= target,
+    required: options.required ?? true,
+    provisional: options.provisional ?? false,
+    value,
+    target,
+  };
+}
+
+/** Free money: taken, or none on offer. Not taken, or not sure, is the step still to take. */
+function freeMoneyMet(answer: FreeMoney | null): boolean | null {
+  if (answer === null) return null;
+  return answer === 'taken' || answer === 'not-offered';
+}
+
+/**
+ * D1: the seven circles in order, each with its checks, in the order its next step takes them.
+ * guidance.md 3.2 says what each circle checks; 5.4 how it reads.
+ */
+export const CIRCLES: ReadonlyArray<{
+  circle: CircleNumber;
+  checks: (facts: GuidanceFacts) => Check[];
+}> = [
+  {
+    // A year of statements, sorted.
+    circle: 1,
+    checks: (facts) => [
+      reaching('year-on-file', facts.monthsInYear, CLEAR_PICTURE_MONTHS),
+      reaching('sorted', facts.sortedShare, SORTED_SHARE, { provisional: !facts.firm }),
+    ],
+  },
+  {
+    // Own income covers spending, over the window.
+    circle: 2,
+    checks: (facts) => [
+      reaching('own-income', facts.ownIncome, facts.spending, { provisional: !facts.firm }),
+    ],
+  },
+  {
+    // A month of essentials the person can reach. Today's balances, so never provisional.
+    circle: 3,
+    checks: (facts) => [reaching('first-cushion', facts.cushionMonths, FIRST_CUSHION_MONTHS)],
+  },
+  {
+    // The method's order: free money, then debt at the line or above, then the cushion.
+    circle: 4,
+    checks: (facts) => [
+      ...(FREE_MONEY_REGIONS.has(facts.region)
+        ? [
+            {
+              id: 'free-money' as const,
+              met: freeMoneyMet(facts.freeMoney),
+              required: false,
+              provisional: false,
+              value: null,
+              target: null,
+            },
+          ]
+        : []),
+      {
+        id: 'no-expensive-debt',
+        // A card or an overdraft is only known of when the accounts are.
+        met: facts.debts.some((debt) => debt.expensive) ? false : facts.accountsKnown ? true : null,
+        required: true,
+        provisional: false,
+        value: facts.debts.filter((debt) => debt.expensive).length,
+        target: 0,
+      },
+      reaching('solid-cushion', facts.cushionMonths, SOLID_CUSHION_MONTHS),
+      reaching('full-cushion', facts.cushionMonths, FULL_CUSHION_MONTHS, { required: false }),
+    ],
+  },
+  {
+    // Two years of spending set aside: invested money, and liquid money beyond six months.
+    circle: 5,
+    checks: (facts) => {
+      const beyond =
+        facts.liquid !== null && facts.essentials !== null
+          ? Math.max(0, facts.liquid - FULL_CUSHION_MONTHS * facts.essentials)
+          : 0;
+      const target =
+        facts.annualSpending === null ? null : ROOM_TO_CHOOSE_YEARS * facts.annualSpending;
+      return [reaching('two-years', facts.invested + beyond, target, { provisional: !facts.firm })];
+    },
+  },
+  {
+    // Invested money could pay for today's spending at the person's withdrawal rate.
+    circle: 6,
+    checks: (facts) => [
+      reaching(
+        'work-optional',
+        facts.invested,
+        facts.spending === null ? null : targetFromSpend(facts.spending, facts.withdrawalRatePct),
+        { provisional: !facts.firm }
+      ),
+    ],
+  },
+  {
+    // The person's own number for more than enough, at the same rate. No default (D11).
+    circle: 7,
+    checks: (facts) => {
+      const perYear = facts.enoughPerYear ?? MORE_THAN_ENOUGH_DEFAULT;
+      const target =
+        perYear === null ? null : targetFromSpend(perYear / 12, facts.withdrawalRatePct);
+      return [reaching('enough', facts.invested, target)];
+    },
+  },
+];
+
+/** Where the facts put a person in the seven circles, and their next step. */
+export function placeCircle(facts: GuidanceFacts): Placement {
+  const circles: CirclePlace[] = [];
+  let inside = true;
+  for (const { circle, checks: checksOf } of CIRCLES) {
+    const checks = checksOf(facts);
+    const reached: boolean =
+      inside && checks.every((check) => !check.required || check.met === true);
+    circles.push({ circle, name: CIRCLE_NAMES[circle], reached, checks });
+    inside = reached;
+  }
+  const current = circles.find((place) => !place.reached) ?? null;
+  const provisional = !facts.firm;
+  const check =
+    current === null || provisional ? undefined : current.checks.find((c) => c.met !== true);
+  return {
+    current: current?.circle ?? null,
+    circles,
+    next:
+      current !== null && check !== undefined ? { circle: current.circle, check: check.id } : null,
+    provisional,
+  };
+}

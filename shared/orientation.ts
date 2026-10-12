@@ -4,12 +4,12 @@
  * does not. The steps that apply come back in rule order, and the first NEXT_STEPS_SHOWN are the
  * ones shown, on the setup wizard's last step and on Dashboard.
  *
- * Every step says why in the person's own counts and months, never in amounts, and links to the
- * page where it is done. Rules carry stable ids, so a rule added later goes in its place in
- * RULES without moving the others: "cushion" between heavy-month and loan-payoff once essential
- * categories exist, and a first print at the end.
+ * Every step says why in the person's own counts, months and days, never in amounts, and links to
+ * the page where it is done. Rules carry stable ids, so a rule added later goes in its place in
+ * RULES without moving the others: a first print goes at the end.
  */
 import { addCalendarMonths } from './calendarMonths';
+import { FIRST_CUSHION_MONTHS } from './guidance/circles';
 import {
   TRACKED_MONTH_MIN_TRANSACTIONS,
   YEAR_ON_FILE_MONTHS,
@@ -22,6 +22,7 @@ export type OrientationStepId =
   | 'sort-uncategorised'
   | 'budget-top-category'
   | 'heavy-month'
+  | 'cushion'
   | 'loan-payoff';
 
 /** What the rules read. The counts are the profile's own; months are 'YYYY-MM'. */
@@ -47,6 +48,12 @@ export interface OrientationFacts {
   heavyMonth: string | null;
   /** Loans on file. */
   loans: number;
+  /**
+   * The money the person can reach, in months of what they need every month
+   * (shared/guidance/facts.ts `cushionOf`). Null while either is unknown: fewer than three tracked
+   * months, or no savings, cash or current account on file.
+   */
+  cushionMonths: number | null;
 }
 
 export interface OrientationStep {
@@ -60,6 +67,9 @@ export interface OrientationStep {
 
 /** How many steps are shown at once. */
 export const NEXT_STEPS_SHOWN = 3;
+
+/** A month of cushion in days, as the cushion step counts them. */
+export const DAYS_IN_A_MONTH = 30;
 
 const MONTH_NAMES = [
   'January',
@@ -178,6 +188,23 @@ const RULES: Rule[] = [
         reason: `${month} spent more than it earned.`,
         // Analytics shows a year at a time; Transactions shows the month.
         link: { hash: `#transactions?period=${heavyMonth}`, label: 'Transactions' },
+      };
+    },
+  },
+  {
+    id: 'cushion',
+    // Breathing room, the third circle (shared/guidance/circles.ts): a month of what is needed every
+    // month, in money the person can reach. The days are whole ones, so the step never says 30.
+    step: ({ cushionMonths }) => {
+      if (cushionMonths === null || cushionMonths >= FIRST_CUSHION_MONTHS) return null;
+      const days = Math.floor(cushionMonths * DAYS_IN_A_MONTH);
+      return {
+        title: 'Build a one-month cushion',
+        reason:
+          days === 0
+            ? "The money you can reach doesn't cover a day of what you need."
+            : `The money you can reach covers ${days} ${days === 1 ? 'day' : 'days'} of what you need.`,
+        link: { hash: '#goals', label: 'Goals' },
       };
     },
   },

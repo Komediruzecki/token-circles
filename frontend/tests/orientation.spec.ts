@@ -9,8 +9,13 @@
  * earned), and the card shows three steps all the same. The grocery runs come to a different
  * amount each month: one amount on one day every month is a regular payment, which the scan
  * proposes too.
+ *
+ * The cushion step reads a second statement, with a salary and the grocery runs alone, against a
+ * savings account opened after the import: it shows while the money there covers less than a
+ * month of groceries, and leaves once a second account takes it past one.
  */
 import { expect, test } from '@playwright/test'
+import { viaApp } from './form-errors-helpers'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
 import { E2E_BASE, gotoServerlessZeroState } from './test-helpers'
 import type { Page } from '@playwright/test'
@@ -81,20 +86,22 @@ async function cardShows(page: Page, expected: unknown[]): Promise<void> {
   await expect.poll(() => stepsIn(page, 'getting-started'), { timeout: 30_000 }).toEqual(expected)
 }
 
-/** Import the generated statement on the Import page, as pasted CSV. */
-async function importStatement(page: Page): Promise<void> {
+/** Import a generated statement on the Import page, as pasted CSV. */
+async function importStatement(page: Page, statement = STATEMENT, rows = 16): Promise<void> {
   await page.evaluate(() => {
     window.location.hash = 'import'
   })
   await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30_000 })
   await page.getByTestId('import-tab-paste-csv').click()
-  await page.getByTestId('import-paste-textarea').fill(STATEMENT)
+  await page.getByTestId('import-paste-textarea').fill(statement)
   await page.getByTestId('import-paste-parse').click()
   await page.getByTestId('import-continue-mapping').click()
   await page.getByTestId('import-continue-preview').click()
-  await expect(page.getByTestId('import-preview-total')).toHaveText('16')
+  await expect(page.getByTestId('import-preview-total')).toHaveText(String(rows))
   await page.getByTestId('import-execute-all').click()
-  await expect(page.getByTestId('import-result')).toContainText('Imported 16', { timeout: 30_000 })
+  await expect(page.getByTestId('import-result')).toContainText(`Imported ${rows}`, {
+    timeout: 30_000,
+  })
 }
 
 async function openDashboard(page: Page): Promise<void> {
@@ -253,6 +260,110 @@ test.describe('Getting started @smoke', () => {
       } finally {
         await elsewhere.close()
       }
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+})
+
+/**
+ * Four months of a salary and two grocery runs: 650.40 of groceries, 162.60 a month, all of it
+ * needed every month. Nothing to sort, no subscription and no month in the red, so the steps are
+ * the year still to import, a budget for Groceries, and the cushion.
+ */
+const GROCERIES = [
+  'Date,Description,Amount,Category,Type',
+  ...[4, 3, 2, 1].flatMap((n) => {
+    const m = monthsAgo(n)
+    return [
+      `${m}-01,Salary,1500.00,Salary,income`,
+      `${m}-10,Corner market,-${(64.2 + 7 * n).toFixed(2)},Groceries,expense`,
+      `${m}-21,Corner market,-${(58.4 + 9 * n).toFixed(2)},Groceries,expense`,
+    ]
+  }),
+].join('\n')
+
+const LAST_MONTH = new Date(`${monthsAgo(1)}-15T12:00:00`).toLocaleString('en-GB', {
+  month: 'long',
+})
+
+const BEFORE_A_CUSHION = [
+  {
+    title: 'Import the rest of your year',
+    reason: '4 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+    href: '#import',
+  },
+  {
+    title: 'Set a budget for Groceries',
+    reason: `You spent more on it in ${LAST_MONTH} than on any other category with no budget or bill.`,
+    href: '#budgets',
+  },
+]
+
+const CUSHION = {
+  // 100 against 162.60 a month is 18 whole days.
+  title: 'Build a one-month cushion',
+  reason: 'The money you can reach covers 18 days of what you need.',
+  href: '#goals',
+}
+
+/** Import the groceries, then open savings accounts and follow the card. */
+async function cushionComesAndGoes(page: Page): Promise<void> {
+  await importStatement(page, GROCERIES, 12)
+  await openDashboard(page)
+  // No account yet: nothing says what money there is, so no cushion step.
+  await cardShows(page, BEFORE_A_CUSHION)
+
+  await viaApp(page, 'POST', '/api/accounts', {
+    name: 'Rainy day',
+    type: 'savings',
+    starting_balance: 100,
+  })
+  await cardShows(page, [...BEFORE_A_CUSHION, CUSHION])
+
+  // 200 is more than a month: the step leaves.
+  await viaApp(page, 'POST', '/api/accounts', {
+    name: 'Holiday fund',
+    type: 'savings',
+    starting_balance: 100,
+  })
+  await cardShows(page, BEFORE_A_CUSHION)
+}
+
+test.describe('Getting started: the cushion @smoke', () => {
+  test.beforeEach(() => {
+    test.setTimeout(150_000)
+  })
+
+  test('local-first: the cushion step shows under a month of savings and leaves past one', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await page.getByTestId('onboarding-skip').click()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+    await cushionComesAndGoes(page)
+  })
+
+  test('signed in: the cushion step shows under a month of savings and leaves past one', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+      await cushionComesAndGoes(page)
     } finally {
       await deleteAccount(ctx, email)
     }

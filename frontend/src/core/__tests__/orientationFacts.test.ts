@@ -5,7 +5,7 @@
  * category from the Progress page's advice. These tests pin that they agree.
  */
 import { describe, expect, it } from 'vitest'
-import { nextSteps } from '../../../../shared/orientation'
+import { nextSteps, orientationSteps } from '../../../../shared/orientation'
 import { trackedMonthsInYearWindow } from '../../../../shared/trackedMonths'
 import { detectSubscriptions } from '../../features/subscriptionDetection'
 import { buildAdvice } from '../achievements/advice'
@@ -206,6 +206,46 @@ describe('agreeing with the advice', () => {
       NOW
     )
     expect(facts.topUnbudgeted).toBeNull()
+  })
+})
+
+describe('the cushion', () => {
+  // July to September: 600 a month on Groceries, needed every month, and 200 on Travel, not.
+  const months = ['2026-07', '2026-08', '2026-09']
+  const spent = months.flatMap((m) => [
+    row(`${m}-03`, { type: 'income', amount: 1000, category_id: null, account_id: 1 }),
+    row(`${m}-04`, { amount: 600, category_id: 7, account_id: 1, description: `GROCER ${m}` }),
+    row(`${m}-05`, { amount: 200, category_id: 10, account_id: 1, description: `TRIP ${m}` }),
+  ])
+  const accounts = (savings: number) => [
+    { id: 1, type: 'giro', balance: 300 },
+    { id: 2, type: 'savings', balance: savings },
+  ]
+  const cushion = (over: Partial<OrientationSource>) =>
+    orientationFacts(source(spent, over), NOW).cushionMonths
+
+  it('is the money the person can reach, in months of what they need every month', () => {
+    // 300 in the current account all month, and 300 put by, against 600 a month.
+    expect(cushion({ accounts: accounts(300) })).toBe(1)
+    expect(cushion({ accounts: accounts(150) })).toBeCloseTo(0.75, 6)
+  })
+
+  it('brings the step under a month, and takes it away at one', () => {
+    const steps = (savings: number) =>
+      orientationSteps(orientationFacts(source(spent, { accounts: accounts(savings) }), NOW))
+    expect(steps(290).find((step) => step.id === 'cushion')).toEqual({
+      id: 'cushion',
+      title: 'Build a one-month cushion',
+      reason: 'The money you can reach covers 29 days of what you need.',
+      link: { hash: '#goals', label: 'Goals' },
+    })
+    expect(steps(300).map((step) => step.id)).not.toContain('cushion')
+  })
+
+  it('is unknown, with no step, when the accounts could not be read or none holds money', () => {
+    expect(cushion({ accounts: null })).toBeNull()
+    expect(cushion({})).toBeNull()
+    expect(cushion({ accounts: [{ id: 3, type: 'ib', balance: 9000 }] })).toBeNull()
   })
 })
 

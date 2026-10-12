@@ -24,7 +24,7 @@ import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
-import type { Bill, Transaction } from '../types/models'
+import type { Account, Bill, Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
@@ -53,7 +53,8 @@ export function isSelfHosted(): boolean {
  * Everything the last evaluation ran on. The Progress page builds its advice and its year in
  * review from this instead of fetching the same five arrays a second time, and Getting started
  * reads its facts from it (core/orientation.ts). Transactions and bills are the whole rows: the
- * subscription count reads their text.
+ * subscription count reads their text. The accounts are read beside them for Getting started's
+ * cushion step; the badges do not use them.
  */
 export interface AchievementsSnapshot {
   transactions: Transaction[]
@@ -63,6 +64,8 @@ export interface AchievementsSnapshot {
   loans: EvaluateInput['loans']
   categories: Array<{ id: number; name: string }>
   bills: Bill[]
+  /** Null when they could not be read: the badges are worked out all the same. */
+  accounts: Account[] | null
   evaluation: Evaluation
   /** YYYY-MM-DD the evaluation used, so the page and the badges agree on "today". */
   today: string
@@ -206,6 +209,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     api.getCategories(),
     api.getBills(),
     loadLoans(profileId),
+    api.getAccounts().catch(() => null),
   ])
   const transactions = ownRows(lists[0], profileId)
   const budgets = ownRows(lists[1], profileId)
@@ -214,6 +218,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
   const categories = ownRows(lists[4], profileId)
   const bills = ownRows(lists[5], profileId)
   const loans = lists[6]
+  const accounts = lists[7] === null ? null : ownRows(lists[7], profileId)
 
   // The profile changed while the lists loaded. What came back is the old profile's, and so would
   // the write be: in cloud mode it would land in the new profile's settings, because X-Profile-Id
@@ -249,6 +254,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     loans,
     categories,
     bills,
+    accounts,
     evaluation,
     today,
   })
