@@ -1,7 +1,7 @@
 /**
  * Settings, General: About this space. The space questions setup asks, with the active profile's
  * answers chosen and how its region was set (shared/guidance/region.ts). Choosing another answer
- * saves it; "Ask again" clears one. Every save goes through `saveAnswers`, which re-reads the
+ * saves it; "Remove answer" clears one. Every save goes through `saveAnswers`, which re-reads the
  * record first, so an answer given meanwhile in another tab is kept.
  *
  * The region follows what decides it: the answers, the profile's import logs (their bank formats)

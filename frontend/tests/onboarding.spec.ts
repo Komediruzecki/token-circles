@@ -535,11 +535,11 @@ test.describe('onboarding wizard at phone width', () => {
     { width: 390, height: 844, phone: true },
     { width: 1280, height: 800, phone: false },
   ]) {
-    test(`the space questions' chips and Ask again are ${phone ? 'at least 44 px on a phone' : 'their desktop size'}`, async ({
+    test(`the space questions' chips and Remove answer are ${phone ? 'at least 44 px on a phone' : 'their desktop size'}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height })
-      // Each chip and Ask again: its height, and for a chip its width and how far its label's
+      // Each chip and Remove answer: its height, and for a chip its width and how far its label's
       // centre sits from the chip's.
       const heights = (prefix: string) =>
         page.evaluate(
@@ -580,7 +580,7 @@ test.describe('onboarding wizard at phone width', () => {
       await aboutThisSpace(page)
       await expect(page.getByTestId('settings-space-household-ask-again')).toBeVisible()
       const settings = await heights('settings-space')
-      // The chips, and Ask again for both questions.
+      // The chips, and Remove answer for both questions.
       expect(settings).toHaveLength(15)
       expect(allFit(settings), JSON.stringify(settings)).toBe(true)
     })
@@ -682,7 +682,7 @@ test.describe('onboarding wizard at phone width', () => {
 })
 
 test.describe('About this space in Settings', () => {
-  test('on a phone "Ask again" sits 6 to 8 px under a wrapped line and takes a tap at either edge', async ({
+  test('on a phone "Remove answer" sits 6 to 8 px under a wrapped line and takes a tap at either edge', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 })
@@ -758,7 +758,7 @@ test.describe('About this space in Settings', () => {
     { width: 390, height: 844 },
     { width: 1280, height: 800 },
   ]) {
-    test(`"Ask again" follows each status line at ${size.width} wide`, async ({ page }) => {
+    test(`"Remove answer" follows each status line at ${size.width} wide`, async ({ page }) => {
       await page.setViewportSize(size)
       await gotoServerless(page, 'settings', 'settings-about-space')
       // The card says what its answers belong to; the region's own line says what they are for.
@@ -773,7 +773,7 @@ test.describe('About this space in Settings', () => {
       )
       await expect(page.getByTestId('settings-space-household-ask-again')).toBeEnabled()
 
-      // Where "Ask again" sits against its status line: beside the line's last word, or under the
+      // Where "Remove answer" sits against its status line: beside the line's last word, or under the
       // line's start. Anything else is somewhere a reader would not look for it. Its words, not its
       // box: on a phone the box reaches past them to be 44 px tall.
       for (const question of ['region', 'household']) {

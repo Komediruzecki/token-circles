@@ -93,7 +93,7 @@ describe.each(['serverless', 'self-hosted'] as const)('a save, in %s mode', (mod
     })
   })
 
-  it('clears an answer set to null, as Ask again does', async () => {
+  it('clears an answer set to null, as Remove answer does', async () => {
     stored[answersKey(1)] = JSON.stringify({ region: 'US', adults: 2 })
     expect(await saveAnswers({ region: null })).toEqual({ adults: 2 })
     expect(recordOf(answersKey(1))).toEqual({ adults: 2 })

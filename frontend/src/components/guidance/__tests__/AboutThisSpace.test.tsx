@@ -1,7 +1,7 @@
 /**
  * Settings, About this space, run against the real local-first router on fake-indexeddb: the
  * answers the profile gave, how its region was set, a change saved on the freshest record, and
- * "Ask again".
+ * "Remove answer".
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -148,17 +148,28 @@ describe('About this space', () => {
     expect(radio('adults-1').checked).toBe(true)
   })
 
-  it('clears an answer with Ask again', async () => {
+  it('clears an answer with Remove answer', async () => {
     await seed({ region: 'US', adults: 2, children: 0 })
     await open()
     await vi.waitFor(() => {
       expect(byTestId('settings-space-region-ask-again')).not.toBeNull()
     })
     expect(householdNote()).toBe('2 adults, no children.')
+    // It says what it does: the answer goes, and nothing asks again then.
+    for (const question of ['region', 'household'])
+      expect(byTestId(`settings-space-${question}-ask-again`)!.textContent?.trim()).toBe(
+        'Remove answer'
+      )
 
     byTestId('settings-space-region-ask-again')!.click()
     await vi.waitFor(async () => {
       expect(await stored()).toEqual({ adults: 2, children: 0 })
+    })
+    // The region's line then says what the numbers are compared with now.
+    await vi.waitFor(() => {
+      expect(regionNote()).toBe(
+        'Not answered yet. Compared with the EU average, going by your base currency, EUR.'
+      )
     })
     byTestId('settings-space-household-ask-again')!.click()
     await vi.waitFor(async () => {
@@ -172,7 +183,7 @@ describe('About this space', () => {
     )
   })
 
-  it('says what a half-answered household holds, and Ask again clears it', async () => {
+  it('says what a half-answered household holds, and Remove answer clears it', async () => {
     await seed({ adults: 3 })
     await open()
     await vi.waitFor(() => {

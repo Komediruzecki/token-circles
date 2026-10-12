@@ -732,7 +732,8 @@ All notable changes to Token Circles are documented here. The format is based on
   takes a function of that record). Reopening the step shows the stored answers.
 - **Settings, General, About this space** (`components/guidance/AboutThisSpace.tsx`) shows the
   active profile's answers and how the region was set; choosing another answer saves it at once,
-  and Ask again clears one. It reloads with the profile, the settings and the import logs.
+  and Ask again (now "Remove answer") clears one. It reloads with the profile, the settings and
+  the import logs.
 - **The region choice** (`shared/guidance/region.ts`, design section 3, moved here from commit 8
   so Settings can say how the region was set): the answer (Somewhere else compares with the EU
   average), else the bank formats of the profile's import logs (DKB and Sparkasse Germany, Erste
@@ -870,8 +871,9 @@ All notable changes to Token Circles are documented here. The format is based on
   floating + button (button y 776-828, card ends at y 606), before and after.
 - **Tests:** `regionWords.test.ts` (every combination, and counts above three),
   `AboutThisSpace.test.tsx` (the line for a full, a half and a cleared answer; Ask again clears
-  it) and `onboarding.spec.ts` ("Ask again" follows each status line at 390 and 1280 wide: beside
-  the last word or under the line's start; nothing in the card under the + button at the end).
+  it) and `onboarding.spec.ts` ("Remove answer" follows each status line at 390 and 1280 wide:
+  beside the last word or under the line's start; nothing in the card under the + button at the
+  end).
 - **The category dialog says where its guesses come from** (visual pass 3a, findings 4 and 5).
   While "Needed every month" follows the kind (no choice stored, and the box not changed in this
   dialog), the words under it say why: "Ticked to match its kind, Housing. Untick it if this one
@@ -968,9 +970,9 @@ All notable changes to Token Circles are documented here. The format is based on
   label (`justify-content: center`): at 390 the "1", "2" and "0" chips are 44x44 in setup and in
   Settings, label centred to 0.0 px; region and "3 or more" chips keep their widths (76 to 155 px);
   at 1280 every chip keeps its size (35 to 155 by 36.3).
-- **Tests:** `onboarding.spec.ts` ("the space questions' chips and Ask again are at least 44 px on
-  a phone": every chip at least 44 wide as well as tall, its label within 0.5 px of its centre, in
-  setup and Settings).
+- **Tests:** `onboarding.spec.ts` ("the space questions' chips and Remove answer are at least 44
+  px on a phone": every chip at least 44 wide as well as tall, its label within 0.5 px of its
+  centre, in setup and Settings).
 - **Needed every month and Ask again keep the form's spacing on a phone** (visual pass 3a-2, N3
   and N5). The 44 px hit areas had pushed what a person sees apart. Measured on the text itself at
   390: the Kind help ended 31.5 px above "Needed every month" (20 before the 44 px rule) and the
@@ -988,8 +990,8 @@ All notable changes to Token Circles are documented here. The format is based on
   one hint; at 390 that is three lines where it was four.
 - **Tests:** `categories.spec.ts` ("its whole row toggles the box ..., with the form's spacing":
   20 and 9 px within 2, at 390 and 1280; at 390 taps at the row's top and bottom edges toggle it),
-  `onboarding.spec.ts` ('on a phone "Ask again" sits 6 to 8 px under a wrapped line and takes a
-  tap at either edge'; the placement test reads Ask again's words, not its box) and
+  `onboarding.spec.ts` ('on a phone "Remove answer" sits 6 to 8 px under a wrapped line and takes
+  a tap at either edge'; the placement test reads Ask again's words, not its box) and
   `categoryKindField.test.tsx` (the box's one hint ends with the guess; the whole description).
 - **"Name your space" says what a space is** (visual pass 3a-2, N4). The step's heading says
   "space" and its field "Profile name", and the lead ("Yours, a partner's or the household's. Add
@@ -1033,6 +1035,19 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` (the edge-tap test answers both questions in full, so the
   household's button sits beside its line under the chips, and checks no Ask again overlaps a
   chip).
+- **"Ask again" is "Remove answer"** (visual pass 3a-2, N9). In Settings the button clears the
+  answer and asks nothing at that moment; the question comes back only as an unanswered one. Its
+  visible label is now "Remove answer" ("Clear answer" could read as "a clear answer"). Test ids
+  (`settings-space-*-ask-again`), the `AskAgain` component, `onAskAgain` and `.askAgain` keep their
+  names; comments and test names that named the label say "Remove answer". After a removal the
+  status line still says what happens now: the region's reason line ("Not answered yet. Compared
+  with the EU average, going by your base currency, EUR.") and "Not answered yet." for the
+  household. The wider label still sits beside the household's short line at 390 (its words from
+  x 167 to x 262) and under the region's wrapped line, 7.1 px down; at 1280 both sit beside
+  their lines.
+- **Tests:** `AboutThisSpace.test.tsx` (both buttons read "Remove answer"; the region's reason
+  line after a removal), and the renamed tests in `onboarding.spec.ts`, `AboutThisSpace.test.tsx`
+  and `guidanceAnswersStore.test.ts`.
 
 ### Achievements
 

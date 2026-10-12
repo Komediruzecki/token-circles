@@ -81,7 +81,7 @@ let lastSave: Promise<unknown> = Promise.resolve()
 
 /**
  * Answer, change or clear questions for a profile, the active one unless named: re-read its
- * record, set each field in `update` (null clears one, "Ask again"), and store the record.
+ * record, set each field in `update` (null clears one, "Remove answer"), and store the record.
  * Answers what the profile has answered now, as this build reads it.
  */
 export function saveAnswers(

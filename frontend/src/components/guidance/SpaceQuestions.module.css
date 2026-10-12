@@ -108,7 +108,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  /* "Ask again" follows its status line: beside it when it fits, under its start when not. */
+  /* "Remove answer" follows its status line: beside it when it fits, under its start when not. */
   justify-content: flex-start;
   gap: 4px 12px;
   margin-top: 10px;
@@ -136,7 +136,7 @@
   cursor: progress;
 }
 
-/* A finger needs 44 by 44 px: the chips and Ask again grow to it at the app's phone width. A
+/* A finger needs 44 by 44 px: the chips and Remove answer grow to it at the app's phone width. A
    one-digit chip keeps its label in the middle. */
 @media (max-width: 768px) {
   .chip {
@@ -145,7 +145,7 @@
     min-height: 44px;
   }
 
-  /* The status line starts 14 px under the chips, not 10: Ask again's 44 px reach 13 px above
+  /* The status line starts 14 px under the chips, not 10: Remove answer's 44 px reach 13 px above
      its line, and must not reach into a chip. */
   .note {
     margin-top: 14px;

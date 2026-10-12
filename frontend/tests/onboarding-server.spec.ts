@@ -100,7 +100,7 @@ test.describe('the setup wizard on the account @smoke', () => {
       await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
       await expect.poll(answers).toEqual({ region: 'UK', adults: 1 })
 
-      // Settings shows them, and Ask again clears one there.
+      // Settings shows them, and Remove answer clears one there.
       await page.getByTestId('onboarding-skip').click()
       await page.getByTestId('confirm-accept').click()
       await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)

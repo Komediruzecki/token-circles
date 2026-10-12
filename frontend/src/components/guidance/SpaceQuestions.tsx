@@ -30,7 +30,7 @@ export interface SpaceQuestionsProps {
   regionNote?: JSX.Element
   /** A line under the household question. */
   householdNote?: JSX.Element
-  /** With it, an answered question offers "Ask again", which clears its answer. */
+  /** With it, an answered question offers "Remove answer", which clears its answer. */
   onAskAgain?: (question: 'region' | 'household') => void
 }
 
@@ -70,7 +70,7 @@ function AskAgain(props: { testId: string; disabled?: boolean; onClick: () => vo
         props.onClick()
       }}
     >
-      Ask again
+      Remove answer
     </button>
   )
 }

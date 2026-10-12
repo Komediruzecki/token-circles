@@ -57,7 +57,7 @@ export const ANSWER_FIELDS = [
 /** The stored record: every field, the ones this build reads and the ones it does not. */
 export type AnswersRecord = Record<string, unknown>;
 
-/** A change to the answers: a field set to its new answer, or to null to clear it ("Ask again"). */
+/** A change to the answers: a field set to its new answer, or to null to clear it ("Remove answer"). */
 export type AnswerChanges = { [K in keyof Answers]?: Answers[K] | null };
 
 /** The words for each refusal. */
