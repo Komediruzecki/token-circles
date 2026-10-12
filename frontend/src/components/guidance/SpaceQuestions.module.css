@@ -110,7 +110,7 @@
   align-items: baseline;
   /* "Ask again" follows its status line: beside it when it fits, under its start when not. */
   justify-content: flex-start;
-  gap: 2px 12px;
+  gap: 4px 12px;
   margin-top: 10px;
   font-size: 12.5px;
   line-height: 1.45;
@@ -145,10 +145,13 @@
     min-height: 44px;
   }
 
+  /* Its negative margins take back what it grew by (its own line is 18 px), so it sits by its
+     status line as it did. Coming after the line, it takes the taps where its edge reaches over. */
   .askAgain {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
+    margin-block: -13px;
   }
 }
 

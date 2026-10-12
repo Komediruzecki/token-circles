@@ -585,11 +585,7 @@ export default function Categories() {
                     <input
                       type="checkbox"
                       data-test-id="category-essential"
-                      aria-describedby={
-                        essentialGuess()
-                          ? 'category-essential-hint category-essential-guess'
-                          : 'category-essential-hint'
-                      }
+                      aria-describedby="category-essential-hint"
                       checked={categoryForm.values.essential}
                       onChange={(e) => {
                         categoryForm.chooseEssential(e.currentTarget.checked)
@@ -599,17 +595,12 @@ export default function Categories() {
                   </label>
                   <span id="category-essential-hint" class={styles.fieldHint}>
                     Spending you'd have whatever happens, like rent or groceries.
+                    {/* While the box is a guess, why it is ticked or not: the hint's end. */}
+                    <Show when={essentialGuess()}>
+                      {' '}
+                      <span data-test-id="category-essential-guess">{essentialGuess()}</span>
+                    </Show>
                   </span>
-                  {/* While the box is a guess, why it is ticked or not. */}
-                  <Show when={essentialGuess()}>
-                    <span
-                      id="category-essential-guess"
-                      class={styles.fieldHint}
-                      data-test-id="category-essential-guess"
-                    >
-                      {essentialGuess()}
-                    </span>
-                  </Show>
                 </div>
               </Show>
               <Field

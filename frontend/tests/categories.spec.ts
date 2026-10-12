@@ -156,7 +156,7 @@ test.describe('Categories dialog, "Needed every month"', () => {
     { width: 390, height: 844, phone: true },
     { width: 1280, height: 800, phone: false },
   ]) {
-    test(`its whole row toggles the box, ${phone ? 'at least 44 px tall on a phone' : 'at its desktop size'}`, async ({
+    test(`its whole row toggles the box, ${phone ? 'at least 44 px tall on a phone' : 'at its desktop size'}, with the form's spacing`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height })
@@ -169,11 +169,46 @@ test.describe('Categories dialog, "Needed every month"', () => {
       if (phone) expect(rowHeight).toBeGreaterThanOrEqual(44)
       else expect(rowHeight).toBeLessThan(30)
 
-      // A tap on the row's far end, away from the box and its words, still toggles it.
-      const before = await box.isChecked()
+      // What a person sees is the form's spacing at every width: the Kind help ends about 20 px
+      // above the row's words, and the hint starts about 9 px under them.
+      const gaps = await box.evaluate((input) => {
+        const textBox = (el: Element) => {
+          const range = document.createRange()
+          range.selectNodeContents(el)
+          return Array.from(range.getClientRects())
+        }
+        const words = textBox(input.closest('label')!.querySelector('span')!)[0]
+        const kindHelp = document.getElementById(
+          document
+            .querySelector('[data-test-id="category-kind"]')!
+            .getAttribute('aria-describedby')!
+        )!
+        const hint = document.getElementById(input.getAttribute('aria-describedby')!)!
+        return {
+          kindHelpToWords: words.top - textBox(kindHelp).at(-1)!.bottom,
+          wordsToHint: textBox(hint)[0].top - words.bottom,
+        }
+      })
+      expect(gaps.kindHelpToWords, JSON.stringify(gaps)).toBeGreaterThanOrEqual(18)
+      expect(gaps.kindHelpToWords, JSON.stringify(gaps)).toBeLessThanOrEqual(22)
+      expect(gaps.wordsToHint, JSON.stringify(gaps)).toBeGreaterThanOrEqual(7)
+      expect(gaps.wordsToHint, JSON.stringify(gaps)).toBeLessThanOrEqual(11)
+
+      // A tap on the row's far end, away from the box and its words, still toggles it; on a phone
+      // so does one at its top edge and one at its bottom edge, where it reaches over the hint.
       const size = (await row.boundingBox())!
-      await row.click({ position: { x: size.width - 4, y: size.height - 3 } })
-      await expect(box).toBeChecked({ checked: !before })
+      const taps = phone
+        ? [
+            { x: size.width / 2, y: 0.5 },
+            { x: size.width / 2, y: size.height - 0.5 },
+            { x: size.width - 4, y: size.height - 3 },
+          ]
+        : [{ x: size.width - 4, y: size.height - 3 }]
+      for (const position of taps) {
+        const before = await box.isChecked()
+        await row.click({ position, timeout: 5000 })
+        await expect(box, JSON.stringify(position)).toBeChecked({ checked: !before })
+      }
     })
   }
 })

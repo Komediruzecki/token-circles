@@ -873,12 +873,13 @@ All notable changes to Token Circles are documented here. The format is based on
   the last word or under the line's start; nothing in the card under the + button at the end).
 - **The category dialog says where its guesses come from** (visual pass 3a, findings 4 and 5).
   While "Needed every month" follows the kind (no choice stored, and the box not changed in this
-  dialog), a line under it says why: "Ticked to match its kind, Housing. Untick it if this one
+  dialog), the words under it say why: "Ticked to match its kind, Housing. Untick it if this one
   isn't needed every month.", "Unticked to match its kind, Eating out. Tick it if this one is
   needed every month." or, with no kind, "Ticked because it has no kind yet. Untick it if this one
   isn't needed every month." The kind named is the one the app goes by, so the line follows the
   Kind field. The line goes once the box is changed, never shows for a stored choice, and the box's
-  `aria-describedby` names it (`category-essential-guess`). `categoryForm` gains
+  `aria-describedby` reads it out. (It was a line of its own; it is now the last sentences of the
+  box's one hint: "Needed every month keeps the form's spacing" below.) `categoryForm` gains
   `essentialFollows()`, from two signals (changed in this dialog, choice stored), where it kept a
   plain flag. The Kind help said "Until you pick one, it's guessed from the name." even with no
   guess; it now follows the field: the name's guess keeps that sentence, the parent's says "it
@@ -969,6 +970,26 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` ("the space questions' chips and Ask again are at least 44 px on
   a phone": every chip at least 44 wide as well as tall, its label within 0.5 px of its centre, in
   setup and Settings).
+- **Needed every month and Ask again keep the form's spacing on a phone** (visual pass 3a-2, N3
+  and N5). The 44 px hit areas had pushed what a person sees apart. Measured on the text itself at
+  390: the Kind help ended 31.5 px above "Needed every month" (20 before the 44 px rule) and the
+  hint started 20.5 px under it (9 before); in Settings the region's wrapped Ask again started
+  18.1 px under its status line (5.1 before) and 33.1 px above the household question (20.1). The
+  row (`.check-row`, `CategoriesPage.module.css`) and Ask again (`.askAgain`,
+  `SpaceQuestions.module.css`) keep `min-height: 44px` and take back what they grew by with
+  negative block margins (-11.5 px from the row's 21 px line, -13 px from Ask again's 18 px), so
+  the gaps are 20 and 9 px again, the same as at 1280, and Ask again's words start 7.1 px under a
+  wrapped line (the note's row gap is 4 px, was 2) and 20.1 px above the next question. The row is
+  positioned, so it paints over the hint its lower edge reaches into and takes the tap there; Ask
+  again comes after its line and does already. No chip loses a tap at its edges. The general hint
+  and the guess line are one hint (`#category-essential-hint`): the guess is its last sentences,
+  in a span that keeps `data-test-id="category-essential-guess"`, and the box is described by that
+  one hint; at 390 that is three lines where it was four.
+- **Tests:** `categories.spec.ts` ("its whole row toggles the box ..., with the form's spacing":
+  20 and 9 px within 2, at 390 and 1280; at 390 taps at the row's top and bottom edges toggle it),
+  `onboarding.spec.ts` ('on a phone "Ask again" sits 6 to 8 px under a wrapped line and takes a
+  tap at either edge'; the placement test reads Ask again's words, not its box) and
+  `categoryKindField.test.tsx` (the box's one hint ends with the guess; the whole description).
 
 ### Achievements
 

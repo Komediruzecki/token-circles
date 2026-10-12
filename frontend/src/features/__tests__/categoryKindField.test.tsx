@@ -260,12 +260,21 @@ const kindHelp = () => {
     .map((id) => document.getElementById(id)?.textContent?.trim())
     .join(' ')
 }
-/** The line that says why "Needed every month" is ticked or not, if it shows. */
+/** What "Needed every month" is described by, as a screen reader reads it with the box. */
+const neededDescription = () =>
+  (neededBox()!.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent?.trim())
+    .join(' ')
+/** The words that say why "Needed every month" is ticked or not, if they show. */
 const guessLine = () => {
   const line = host.querySelector('[data-test-id="category-essential-guess"]')
   if (!line) return null
-  // Read out with the box.
-  expect(neededBox()!.getAttribute('aria-describedby')?.split(' ')).toContain(line.id)
+  // Read out with the box: the last sentences of its one hint.
+  const ids = neededBox()!.getAttribute('aria-describedby')?.split(' ') ?? []
+  expect(ids).toHaveLength(1)
+  expect(document.getElementById(ids[0])!.contains(line)).toBe(true)
+  expect(neededDescription().endsWith(` ${line.textContent!.trim()}`)).toBe(true)
   return line.textContent?.trim()
 }
 
@@ -276,6 +285,10 @@ describe('the Categories dialog says where its guesses come from', () => {
     type(labelled('Category Name') as HTMLInputElement, 'Rent')
     expect(guessLine()).toBe(
       "Ticked to match its kind, Housing. Untick it if this one isn't needed every month."
+    )
+    // One hint: what the box means, then why it is ticked.
+    expect(neededDescription()).toBe(
+      "Spending you'd have whatever happens, like rent or groceries. Ticked to match its kind, Housing. Untick it if this one isn't needed every month."
     )
     type(labelled('Category Name') as HTMLInputElement, 'Restaurant')
     expect(guessLine()).toBe(
@@ -299,6 +312,9 @@ describe('the Categories dialog says where its guesses come from', () => {
     expect(guessLine()).not.toBeNull()
     tick(neededBox()!, false)
     expect(guessLine()).toBeNull()
+    expect(neededDescription()).toBe(
+      "Spending you'd have whatever happens, like rent or groceries."
+    )
     // A kind picked after that leaves the box, and the line, as they are.
     type(kindField()!, 'groceries')
     expect(neededBox()!.checked).toBe(false)

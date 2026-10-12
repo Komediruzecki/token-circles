@@ -680,6 +680,52 @@ test.describe('onboarding wizard at phone width', () => {
 })
 
 test.describe('About this space in Settings', () => {
+  test('on a phone "Ask again" sits 6 to 8 px under a wrapped line and takes a tap at either edge', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await gotoServerless(page, 'settings', 'settings-about-space')
+    const answer = async () => {
+      await page.getByTestId('settings-space-region-HR').click()
+      await page.getByTestId('settings-space-adults-1').click()
+      await expect(page.getByTestId('settings-space-household-ask-again')).toBeEnabled()
+      await expect(page.getByTestId('settings-space-region-ask-again')).toBeEnabled()
+    }
+    await answer()
+
+    // The region's line wraps it at 390: its words start 6 to 8 px under the line's last.
+    const gap = await page.evaluate(() => {
+      const textBox = (el: Element) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return Array.from(range.getClientRects())
+      }
+      const line = textBox(document.querySelector('[data-test-id="settings-space-region-note"]')!)
+      const words = textBox(
+        document.querySelector('[data-test-id="settings-space-region-ask-again"]')!
+      )[0]
+      return words.top - line.at(-1)!.bottom
+    })
+    expect(gap).toBeGreaterThanOrEqual(6)
+    expect(gap).toBeLessThanOrEqual(8)
+
+    // Each is 44 px to a finger: a tap at its top edge clears the answer, and so does one at its
+    // bottom edge.
+    for (const question of ['region', 'household']) {
+      for (const edge of ['top', 'bottom']) {
+        const button = page.getByTestId(`settings-space-${question}-ask-again`)
+        const size = (await button.boundingBox())!
+        expect(size.height).toBeGreaterThanOrEqual(44)
+        await button.click({
+          position: { x: size.width / 2, y: edge === 'top' ? 0.5 : size.height - 0.5 },
+          timeout: 5000,
+        })
+        await expect(button, `${question} ${edge}`).toBeHidden()
+        await answer()
+      }
+    }
+  })
+
   for (const size of [
     { width: 390, height: 844 },
     { width: 1280, height: 800 },
@@ -700,7 +746,8 @@ test.describe('About this space in Settings', () => {
       await expect(page.getByTestId('settings-space-household-ask-again')).toBeEnabled()
 
       // Where "Ask again" sits against its status line: beside the line's last word, or under the
-      // line's start. Anything else is somewhere a reader would not look for it.
+      // line's start. Anything else is somewhere a reader would not look for it. Its words, not its
+      // box: on a phone the box reaches past them to be 44 px tall.
       for (const question of ['region', 'household']) {
         const placement = await page.evaluate((q) => {
           const note = document.querySelector(`[data-test-id="settings-space-${q}-note"]`)!
@@ -710,7 +757,9 @@ test.describe('About this space in Settings', () => {
           const lines = Array.from(range.getClientRects())
           const last = lines[lines.length - 1]
           const first = lines[0]
-          const a = ask.getBoundingClientRect()
+          const words = document.createRange()
+          words.selectNodeContents(ask)
+          const a = words.getBoundingClientRect()
           const middle = (r: DOMRect) => r.top + r.height / 2
           if (
             Math.abs(middle(a) - middle(last)) < 6 &&
