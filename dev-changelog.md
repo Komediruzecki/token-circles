@@ -1014,6 +1014,15 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `CategoryIconResolve.test.ts` (the real `getCategorySvg`: ten meal names draw
   utensils; Coffee, Cafe and Food the mug; Heating and Seat covers not utensils; a chosen icon on
   Restaurant wins) and `CategoryIcon.test.ts`'s copy of the table (Restaurant and Dining).
+- **An import gives a new category the same icons** (`worker/src/routes/imports.ts`
+  `getCategoryIcon`). When `/api/import/execute` created a category, its food row stored `coffee`
+  for groceries and every meal, and a stored icon counts as chosen: a Restaurants made by an
+  import while signed in kept the mug, while local-first's import stores `tag` and the name
+  matching draws utensils. The row is split as `CategoryIcon.tsx` splits it: `/grocer/` the cart,
+  the meals (with "eat" and "eating" only as words) `utensils`, food, cafe and coffee the mug.
+  Categories an earlier import made keep the icon it stored. CHANGELOG's line says so.
+- **Tests:** `import-dedup-categories.test.ts` ("gives a new category the icon the app draws for
+  its name"): Groceries, Restaurants, Work lunches, Coffee and Heating through a real import.
 - **The no-kind state says it once** (visual pass 3a-2, N7). With a name that suggests no kind,
   the dialog said "needed every month" three ways: the Kind field's empty choice ("None yet:
   counts as needed every month"), and the words under the box ("Ticked because it has no kind
