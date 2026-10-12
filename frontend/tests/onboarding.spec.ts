@@ -443,8 +443,10 @@ test.describe('onboarding wizard', () => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
 
       // Each hint on the step: its colour at its opacity over the glass panel, and the panel over
-      // the overlay's ground at each stop of its gradient, so the lowest ratio is the worst place on
-      // screen. Computed colours, composited on a canvas the way the page composites them.
+      // the overlay's ground at each stop of its gradient. The lowest ratio over the stops is an
+      // estimate of the worst place on screen: it leaves out the panel's backdrop blur and the orbit
+      // field behind it, which put the painted pixels within about 2% of it when measured. Computed
+      // colours, composited on a canvas the way the page composites them.
       const contrasts = (step: string) =>
         page.getByTestId(step).evaluate(async (stepEl) => {
           const panel = stepEl.closest<HTMLElement>('[data-test-id="onboarding-panel"]')!
