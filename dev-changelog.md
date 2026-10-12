@@ -1067,6 +1067,20 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` ("the questions' lead names them, on one line, nearer the
   questions than the fields": its words, one line and less room below than above at 390x844,
   375x667 and 1280x800), and the lead's words in `onboardingForms.test.tsx`.
+- **The fade says "more below" only while there is** (visual pass 3a-3, B). `readMoreBelow`
+  (`OnboardingWizard.tsx`) compared the visible bottom with the middle's whole scroll height, so a
+  step stopped inside the middle's bottom padding (14 px on a phone, 18 px wider) still faded its
+  last 20 px: tapping through the questions at 390x844 left the middle 14 px short of its end, the
+  picked Children chip at y 726-770 against a bottom at 770, its lower half faded. It compares with
+  where the step ends now, the scroll height less the bottom padding `window.getComputedStyle`
+  reads (half a pixel's slack, so one pixel of the step below still fades). `.body` has
+  `scroll-padding-bottom: 20px`, so a control brought into view stops above the fade: the same taps
+  now leave the middle at its end, the chip at y 712-756 and nothing faded. At 375x667 the taps
+  already reached the end.
+- **Tests:** `onboarding.spec.ts` ("the fade is on only while the step goes on below, and a row
+  brought into view stops above it", 375x667): no fade with the visible bottom at the step's end
+  or one pixel short of the scroll end, a fade with one pixel of the step below, and the last
+  region chip brought into view from the top ending 20 px or more above the middle's bottom.
 
 ### Achievements
 

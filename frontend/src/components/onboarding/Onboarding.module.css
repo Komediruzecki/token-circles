@@ -173,6 +173,8 @@
   min-height: 0;
   overflow-y: auto;
   padding: 10px 26px 18px;
+  /* A control scrolled into view, by focus or a tap, stops above the 20 px that fade. */
+  scroll-padding-bottom: 20px;
 }
 
 /* The step goes on below: its last visible 20 px fade into the panel, whatever the theme, since a

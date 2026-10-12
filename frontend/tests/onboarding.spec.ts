@@ -637,6 +637,51 @@ test.describe('onboarding wizard at phone width', () => {
     }
   })
 
+  test('the fade is on only while the step goes on below, and a row brought into view stops above it', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 375, height: 667 })
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    const body = page.getByTestId('onboarding-body')
+    // Where the step ends: the middle's bottom padding starts there.
+    const { padding, contentEnd, clientHeight, max } = await body.evaluate((el) => {
+      const padding = parseFloat(getComputedStyle(el).paddingBottom)
+      return {
+        padding,
+        contentEnd: el.scrollHeight - padding,
+        clientHeight: el.clientHeight,
+        max: el.scrollHeight - el.clientHeight,
+      }
+    })
+    expect(padding).toBeGreaterThan(2)
+    const scrollTo = async (top: number) => {
+      await body.evaluate((el, value) => {
+        el.scrollTop = value
+      }, top)
+      expect(await body.evaluate((el) => el.scrollTop)).toBe(top)
+    }
+
+    // Stopped inside the bottom padding, nothing of the step is below: no fade, the last row whole.
+    await scrollTo(contentEnd - clientHeight)
+    await expect(body).not.toHaveAttribute('data-more-below')
+    await scrollTo(max - 1)
+    await expect(body).not.toHaveAttribute('data-more-below')
+    // One pixel of the step below what shows, and it fades.
+    await scrollTo(contentEnd - clientHeight - 1)
+    await expect(body).toHaveAttribute('data-more-below', '')
+
+    // Brought into view from the top, the last region chip stops above the 20 px that fade.
+    await scrollTo(0)
+    const chip = page.locator('label[data-test-id^="onboarding-space-region-"]').last()
+    await chip.evaluate((el) => el.scrollIntoView({ block: 'nearest' }))
+    const bottom = (await body.boundingBox())!
+    const box = (await chip.boundingBox())!
+    expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    expect(box.y + box.height).toBeLessThanOrEqual(bottom.y + bottom.height - 20 + 0.5)
+  })
+
   for (const { width, height, phone } of [
     { width: 390, height: 844, phone: true },
     { width: 1280, height: 800, phone: false },
