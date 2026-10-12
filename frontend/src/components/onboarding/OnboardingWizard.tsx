@@ -556,7 +556,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
         Name your space
       </h2>
-      <p class={styles.stepLead}>Yours, a partner's or the household's. Add more later.</p>
+      <p class={styles.stepLead}>A profile is one space. You can add more later.</p>
       {/* Enter in the name continues, as the footer's Continue does. */}
       <form class={styles.stepForm} {...spaceForm.attrs} data-test-id="onboarding-space-form">
         <FormNotice form={spaceForm} testId="onboarding-space-notice" />

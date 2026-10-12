@@ -921,7 +921,7 @@ All notable changes to Token Circles are documented here. The format is based on
   390x844, with the 44 px chips, the footer starts at y 770 and the Children legend sat at y
   793-811, its chips at 817-861, with 105 px left to scroll and nothing saying so. The step's lead
   is one line, without the dash ("Yours, a partner's or the household's. Add more later.", was
-  two), and the two questions keep the form's 14 px rhythm (`--space-questions-gap`, which
+  two; now "A profile is one space. You can add more later.", below), and the two questions keep the form's 14 px rhythm (`--space-questions-gap`, which
   `.stepForm` sets; Settings keeps 18). Children's legend now starts at y 768 and its chips at
   792, still under the footer, with 80 px to scroll, so the step showed a cue while it goes on
   below (`data-more-below`), read on the middle's scroll and by a `ResizeObserver` on the middle
@@ -990,6 +990,15 @@ All notable changes to Token Circles are documented here. The format is based on
   `onboarding.spec.ts` ('on a phone "Ask again" sits 6 to 8 px under a wrapped line and takes a
   tap at either edge'; the placement test reads Ask again's words, not its box) and
   `categoryKindField.test.tsx` (the box's one hint ends with the guess; the whole description).
+- **"Name your space" says what a space is** (visual pass 3a-2, N4). The step's heading says
+  "space" and its field "Profile name", and the lead ("Yours, a partner's or the household's. Add
+  more later.") bridged neither. It is now "A profile is one space. You can add more later.",
+  one line at 390 and at 375 (298 px of 352 and 337; the old lead was two lines at 375). Of the
+  two briefed candidates both fit ("Each profile is one space. Add more later." 266 px); this one
+  is two whole sentences and says what "more" means. Nothing is renamed: whether the field should
+  say "Space name" is maff's call.
+- **Tests:** `onboarding.spec.ts` (the fade test checks the lead's words and that it is one line
+  at 390).
 
 ### Achievements
 

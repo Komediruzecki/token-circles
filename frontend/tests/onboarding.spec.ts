@@ -466,7 +466,7 @@ test.describe('onboarding wizard at phone width', () => {
       await page.getByTestId('onboarding-next').click()
       await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
       await expect(page.getByTestId('onboarding-step-space').locator('p').first()).toHaveText(
-        "Yours, a partner's or the household's. Add more later."
+        'A profile is one space. You can add more later.'
       )
 
       // The two questions keep the form's 14 px rhythm between them.
@@ -474,7 +474,8 @@ test.describe('onboarding wizard at phone width', () => {
       const household = (await page.getByTestId('onboarding-space-household').boundingBox())!
       expect(Math.round(household.y - (region.y + region.height))).toBe(14)
 
-      // What makes the room: the questions' lead and the currency help are one line each.
+      // What makes the room: the step's lead, the questions' lead and the currency help are one line
+      // each.
       const lines = (selector: string) =>
         page.evaluate((sel) => {
           const el = document.querySelector<HTMLElement>(sel)!
@@ -485,6 +486,7 @@ test.describe('onboarding wizard at phone width', () => {
       const currencyHint = await page
         .getByTestId('onboarding-currency')
         .getAttribute('aria-describedby')
+      expect(await lines('[data-test-id="onboarding-step-space"] > p')).toBe(1)
       expect(await lines('[data-test-id="onboarding-space-questions-lead"]')).toBe(1)
       expect(await lines(`[id="${currencyHint}"]`)).toBe(1)
 
