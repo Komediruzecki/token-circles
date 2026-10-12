@@ -160,10 +160,17 @@ describe('the Categories dialog', () => {
     expect(kindShown()).toBe('From the name: Housing')
     expect(neededBox()!.checked).toBe(true)
 
-    // A name that gives no kind counts as needed every month, and says so.
+    // A name that gives no kind counts as needed every month. The Kind field says only that there
+    // is none yet: the words under the box say why it is ticked, once.
     type(labelled('Category Name') as HTMLInputElement, 'Market')
-    expect(kindShown()).toBe('None yet: counts as needed every month')
+    expect(kindShown()).toBe('None yet')
     expect(neededBox()!.checked).toBe(true)
+    const saying = [kindShown(), kindHelp(), guessLine()].filter((words) =>
+      words?.toLowerCase().includes('needed every month')
+    )
+    expect(saying).toEqual([
+      "Ticked while it has no kind. Untick it if this one isn't needed every month.",
+    ])
   })
 
   it('stores a guess left alone as no choice, so the app keeps going by the name', async () => {
@@ -296,7 +303,7 @@ describe('the Categories dialog says where its guesses come from', () => {
     )
     type(labelled('Category Name') as HTMLInputElement, 'Market')
     expect(guessLine()).toBe(
-      "Ticked because it has no kind yet. Untick it if this one isn't needed every month."
+      "Ticked while it has no kind. Untick it if this one isn't needed every month."
     )
     // The kind picked is the one named.
     type(kindField()!, 'eating_out')
@@ -347,7 +354,7 @@ describe('the Categories dialog says where its guesses come from', () => {
       "What this category holds. Until you pick one, it's guessed from the name."
     )
     type(labelled('Category Name') as HTMLInputElement, 'Market')
-    expect(kindShown()).toBe('None yet: counts as needed every month')
+    expect(kindShown()).toBe('None yet')
     expect(kindHelp()).toBe(
       "What this category holds. The name doesn't suggest one, so pick the closest."
     )

@@ -150,7 +150,7 @@ export default function Categories() {
   }
   const guessedKindLabel = () => {
     const kind = categoryForm.guessed()
-    if (kind === null) return 'None yet: counts as needed every month'
+    if (kind === null) return 'None yet'
     return `From the ${guessFrom()}: ${KIND_LABELS[kind]}`
   }
   /** The Kind field's help, which says what its empty choice stands for. */
@@ -170,7 +170,7 @@ export default function Categories() {
     if (!categoryForm.essentialFollows()) return null
     const kind = readKind(categoryForm.values.kind) ?? categoryForm.guessed()
     if (kind === null)
-      return "Ticked because it has no kind yet. Untick it if this one isn't needed every month."
+      return "Ticked while it has no kind. Untick it if this one isn't needed every month."
     return categoryForm.values.essential
       ? `Ticked to match its kind, ${KIND_LABELS[kind]}. Untick it if this one isn't needed every month.`
       : `Unticked to match its kind, ${KIND_LABELS[kind]}. Tick it if this one is needed every month.`

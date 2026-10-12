@@ -638,7 +638,8 @@ All notable changes to Token Circles are documented here. The format is based on
   (`categoryForm.ts`, `kinds: true`). Kind shows the stored kind; its empty choice is no kind
   stored, labelled with the guess the app then goes by (`effectiveKind` over the page's
   categories, so a child goes by its parent): "From the name: Eating out", "From the parent:
-  Groceries", or "None yet: counts as needed every month". The box follows the kind shown, or that
+  Groceries", or "None yet: counts as needed every month" (now "None yet": "The no-kind state
+  says it once" below). The box follows the kind shown, or that
   guess, until it is changed. A new category sends the kind shown (null for the empty choice) and
   the box once changed; an edit sends either only when the person changed it (review F4 and F5
   below). The Budgets, Bills and Goals dialogs send neither. `tests/quick-entry-phone.spec.ts` makes
@@ -876,7 +877,7 @@ All notable changes to Token Circles are documented here. The format is based on
   dialog), the words under it say why: "Ticked to match its kind, Housing. Untick it if this one
   isn't needed every month.", "Unticked to match its kind, Eating out. Tick it if this one is
   needed every month." or, with no kind, "Ticked because it has no kind yet. Untick it if this one
-  isn't needed every month." The kind named is the one the app goes by, so the line follows the
+  isn't needed every month." (now "Ticked while it has no kind. ...", below). The kind named is the one the app goes by, so the line follows the
   Kind field. The line goes once the box is changed, never shows for a stored choice, and the box's
   `aria-describedby` reads it out. (It was a line of its own; it is now the last sentences of the
   box's one hint: "Needed every month keeps the form's spacing" below.) `categoryForm` gains
@@ -1011,6 +1012,17 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `CategoryIconResolve.test.ts` (the real `getCategorySvg`: ten meal names draw
   utensils; Coffee, Cafe and Food the mug; Heating and Seat covers not utensils; a chosen icon on
   Restaurant wins) and `CategoryIcon.test.ts`'s copy of the table (Restaurant and Dining).
+- **The no-kind state says it once** (visual pass 3a-2, N7). With a name that suggests no kind,
+  the dialog said "needed every month" three ways: the Kind field's empty choice ("None yet:
+  counts as needed every month"), and the words under the box ("Ticked because it has no kind
+  yet. ..."), which also read oddly. The empty choice now reads "None yet" when nothing gives a
+  guess ("From the name: X" and "From the parent: X" stay), and the words under the box "Ticked
+  while it has no kind. Untick it if this one isn't needed every month." The Kind help for that
+  state ("What this category holds. The name doesn't suggest one, so pick the closest.") is
+  unchanged.
+- **Tests:** `categoryKindField.test.tsx` ("None yet" in both places it was asserted; with no
+  kind, of the empty choice, the Kind help and the words under the box only the last says "needed
+  every month"; the new guess words).
 
 ### Achievements
 
