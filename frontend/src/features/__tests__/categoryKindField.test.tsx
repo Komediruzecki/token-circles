@@ -252,6 +252,102 @@ describe('the Categories dialog', () => {
   })
 })
 
+/** The Kind field's help: the hint its select is described by. */
+const kindHelp = () => {
+  const ids = kindField()!.getAttribute('aria-describedby') ?? ''
+  return ids
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent?.trim())
+    .join(' ')
+}
+/** The line that says why "Needed every month" is ticked or not, if it shows. */
+const guessLine = () => {
+  const line = host.querySelector('[data-test-id="category-essential-guess"]')
+  if (!line) return null
+  // Read out with the box.
+  expect(neededBox()!.getAttribute('aria-describedby')?.split(' ')).toContain(line.id)
+  return line.textContent?.trim()
+}
+
+describe('the Categories dialog says where its guesses come from', () => {
+  it('says why "Needed every month" is ticked or not, following the kind', async () => {
+    await mount('categories', '../Categories')
+    await addCategory()
+    type(labelled('Category Name') as HTMLInputElement, 'Rent')
+    expect(guessLine()).toBe(
+      "Ticked to match its kind, Housing. Untick it if this one isn't needed every month."
+    )
+    type(labelled('Category Name') as HTMLInputElement, 'Restaurant')
+    expect(guessLine()).toBe(
+      'Unticked to match its kind, Eating out. Tick it if this one is needed every month.'
+    )
+    type(labelled('Category Name') as HTMLInputElement, 'Market')
+    expect(guessLine()).toBe(
+      "Ticked because it has no kind yet. Untick it if this one isn't needed every month."
+    )
+    // The kind picked is the one named.
+    type(kindField()!, 'eating_out')
+    expect(guessLine()).toBe(
+      'Unticked to match its kind, Eating out. Tick it if this one is needed every month.'
+    )
+  })
+
+  it('drops the line once the box is changed, and for a stored choice', async () => {
+    await mount('categories', '../Categories')
+    await addCategory()
+    type(labelled('Category Name') as HTMLInputElement, 'Rent')
+    expect(guessLine()).not.toBeNull()
+    tick(neededBox()!, false)
+    expect(guessLine()).toBeNull()
+    // A kind picked after that leaves the box, and the line, as they are.
+    type(kindField()!, 'groceries')
+    expect(neededBox()!.checked).toBe(false)
+    expect(guessLine()).toBeNull()
+    dispose?.()
+
+    const db = await getDB()
+    await db.put('categories', { ...FOOD, kind: null, essential: 0 })
+    await mount('categories', '../Categories')
+    await editCategory('Food')
+    expect(neededBox()!.checked).toBe(false)
+    expect(guessLine()).toBeNull()
+  })
+
+  it('shows the line for a stored kind with no stored choice', async () => {
+    const db = await getDB()
+    await db.put('categories', { ...FOOD, kind: 'eating_out' })
+    await mount('categories', '../Categories')
+    await editCategory('Food')
+    expect(guessLine()).toBe(
+      'Unticked to match its kind, Eating out. Tick it if this one is needed every month.'
+    )
+  })
+
+  it("says where the Kind field's empty choice comes from", async () => {
+    await mount('categories', '../Categories')
+    await addCategory()
+    type(labelled('Category Name') as HTMLInputElement, 'Rent')
+    expect(kindHelp()).toBe(
+      "What this category holds. Until you pick one, it's guessed from the name."
+    )
+    type(labelled('Category Name') as HTMLInputElement, 'Market')
+    expect(kindShown()).toBe('None yet: counts as needed every month')
+    expect(kindHelp()).toBe(
+      "What this category holds. The name doesn't suggest one, so pick the closest."
+    )
+    type(kindField()!, 'housing')
+    expect(kindHelp()).toBe('What this category holds.')
+    dispose?.()
+
+    await mount('categories', '../Categories')
+    await editCategory('Bakery')
+    expect(kindShown()).toBe('From the parent: Groceries')
+    expect(kindHelp()).toBe(
+      'What this category holds. Until you pick one, it follows the parent category.'
+    )
+  })
+})
+
 describe('what the Categories dialog shows is what it stores', () => {
   /** What the app makes of `name` as stored: the kind it goes by and the box (essentialOf). */
   async function readBack(name: string) {

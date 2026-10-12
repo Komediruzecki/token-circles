@@ -37,6 +37,7 @@ import {
   KIND_LABELS,
   kindForName,
   KINDS,
+  readKind,
 } from '../../../shared/guidance/kinds'
 import CategoryIcon, { getCategorySvg } from '../components/CategoryIcon'
 import ConfirmButton from '../components/ConfirmButton'
@@ -141,11 +142,38 @@ export default function Categories() {
       effectiveKind({ ...category, type: 'expense' }, categoryLookup(categories())),
   })
   // The Kind field's empty choice: no kind stored, so the app goes by the guess. It says which.
+  /** Where the kind the app goes by comes from while none is picked: the name, the parent, none. */
+  const guessFrom = (): 'name' | 'parent' | null => {
+    const kind = categoryForm.guessed()
+    if (kind === null) return null
+    return kindForName(categoryForm.values.name) === kind ? 'name' : 'parent'
+  }
   const guessedKindLabel = () => {
     const kind = categoryForm.guessed()
     if (kind === null) return 'None yet: counts as needed every month'
-    const from = kindForName(categoryForm.values.name) === kind ? 'the name' : 'the parent'
-    return `From ${from}: ${KIND_LABELS[kind]}`
+    return `From the ${guessFrom()}: ${KIND_LABELS[kind]}`
+  }
+  /** The Kind field's help, which says what its empty choice stands for. */
+  const kindHelp = () => {
+    if (readKind(categoryForm.values.kind)) return 'What this category holds.'
+    switch (guessFrom()) {
+      case 'name':
+        return "What this category holds. Until you pick one, it's guessed from the name."
+      case 'parent':
+        return 'What this category holds. Until you pick one, it follows the parent category.'
+      default:
+        return "What this category holds. The name doesn't suggest one, so pick the closest."
+    }
+  }
+  /** Why "Needed every month" is ticked or not, while it follows the kind; null once it doesn't. */
+  const essentialGuess = (): string | null => {
+    if (!categoryForm.essentialFollows()) return null
+    const kind = readKind(categoryForm.values.kind) ?? categoryForm.guessed()
+    if (kind === null)
+      return "Ticked because it has no kind yet. Untick it if this one isn't needed every month."
+    return categoryForm.values.essential
+      ? `Ticked to match its kind, ${KIND_LABELS[kind]}. Untick it if this one isn't needed every month.`
+      : `Unticked to match its kind, ${KIND_LABELS[kind]}. Tick it if this one is needed every month.`
   }
   const openCategoryModal = (category: Category | null) => {
     setEditingCategory(category)
@@ -525,7 +553,7 @@ export default function Categories() {
                   class={styles.formGroup}
                   labelClass={styles.formLabel}
                   hintClass={styles.fieldHint}
-                  hint="What this category holds. Until you pick one, it's guessed from the name."
+                  hint={kindHelp()}
                 >
                   {(control) => (
                     <select
@@ -557,7 +585,11 @@ export default function Categories() {
                     <input
                       type="checkbox"
                       data-test-id="category-essential"
-                      aria-describedby="category-essential-hint"
+                      aria-describedby={
+                        essentialGuess()
+                          ? 'category-essential-hint category-essential-guess'
+                          : 'category-essential-hint'
+                      }
                       checked={categoryForm.values.essential}
                       onChange={(e) => {
                         categoryForm.chooseEssential(e.currentTarget.checked)
@@ -568,6 +600,16 @@ export default function Categories() {
                   <span id="category-essential-hint" class={styles.fieldHint}>
                     Spending you'd have whatever happens, like rent or groceries.
                   </span>
+                  {/* While the box is a guess, why it is ticked or not. */}
+                  <Show when={essentialGuess()}>
+                    <span
+                      id="category-essential-guess"
+                      class={styles.fieldHint}
+                      data-test-id="category-essential-guess"
+                    >
+                      {essentialGuess()}
+                    </span>
+                  </Show>
                 </div>
               </Show>
               <Field

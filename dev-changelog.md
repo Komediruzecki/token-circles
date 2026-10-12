@@ -871,6 +871,22 @@ All notable changes to Token Circles are documented here. The format is based on
   `AboutThisSpace.test.tsx` (the line for a full, a half and a cleared answer; Ask again clears
   it) and `onboarding.spec.ts` ("Ask again" follows each status line at 390 and 1280 wide: beside
   the last word or under the line's start; nothing in the card under the + button at the end).
+- **The category dialog says where its guesses come from** (visual pass 3a, findings 4 and 5).
+  While "Needed every month" follows the kind (no choice stored, and the box not changed in this
+  dialog), a line under it says why: "Ticked to match its kind, Housing. Untick it if this one
+  isn't needed every month.", "Unticked to match its kind, Eating out. Tick it if this one is
+  needed every month." or, with no kind, "Ticked because it has no kind yet. Untick it if this one
+  isn't needed every month." The kind named is the one the app goes by, so the line follows the
+  Kind field. The line goes once the box is changed, never shows for a stored choice, and the box's
+  `aria-describedby` names it (`category-essential-guess`). `categoryForm` gains
+  `essentialFollows()`, from two signals (changed in this dialog, choice stored), where it kept a
+  plain flag. The Kind help said "Until you pick one, it's guessed from the name." even with no
+  guess; it now follows the field: the name's guess keeps that sentence, the parent's says "it
+  follows the parent category", none says "The name doesn't suggest one, so pick the closest.",
+  and a picked kind reads "What this category holds."
+- **Tests:** `categoryKindField.test.tsx` (the three lines, the line following the Kind field,
+  leaving on a change, absent for a stored choice and shown for a stored kind with no choice; the
+  help for the name's guess, the parent's, none and a picked kind).
 
 ### Achievements
 
