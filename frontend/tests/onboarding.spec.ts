@@ -119,6 +119,9 @@ test.describe('onboarding wizard', () => {
       'Compared with Croatia, from your answer.'
     )
     await expect(page.getByTestId('settings-space-adults-2').getByRole('radio')).toBeChecked()
+    await expect(page.getByTestId('settings-space-household-note')).toHaveText(
+      '2 adults, no children.'
+    )
 
     // A change is saved at once, and survives a reload.
     await page.getByTestId('settings-space-region-DE').click()
@@ -530,6 +533,70 @@ test.describe('onboarding wizard at phone width', () => {
         if (step === 'account' || step === 'import')
           await page.getByTestId('confirm-accept').click()
       }
+    })
+  }
+})
+
+test.describe('About this space in Settings', () => {
+  for (const size of [
+    { width: 390, height: 844 },
+    { width: 1280, height: 800 },
+  ]) {
+    test(`"Ask again" follows each status line at ${size.width} wide`, async ({ page }) => {
+      await page.setViewportSize(size)
+      await gotoServerless(page, 'settings', 'settings-about-space')
+      await page.getByTestId('settings-space-region-HR').click()
+      await page.getByTestId('settings-space-adults-1').click()
+      await page.getByTestId('settings-space-children-0').click()
+      await expect(page.getByTestId('settings-space-household-note')).toHaveText(
+        '1 adult, no children.'
+      )
+      await expect(page.getByTestId('settings-space-household-ask-again')).toBeEnabled()
+
+      // Where "Ask again" sits against its status line: beside the line's last word, or under the
+      // line's start. Anything else is somewhere a reader would not look for it.
+      for (const question of ['region', 'household']) {
+        const placement = await page.evaluate((q) => {
+          const note = document.querySelector(`[data-test-id="settings-space-${q}-note"]`)!
+          const ask = document.querySelector(`[data-test-id="settings-space-${q}-ask-again"]`)!
+          const range = document.createRange()
+          range.selectNodeContents(note)
+          const lines = Array.from(range.getClientRects())
+          const last = lines[lines.length - 1]
+          const first = lines[0]
+          const a = ask.getBoundingClientRect()
+          const middle = (r: DOMRect) => r.top + r.height / 2
+          if (
+            Math.abs(middle(a) - middle(last)) < 6 &&
+            a.left >= last.right &&
+            a.left - last.right <= 24
+          )
+            return 'beside'
+          if (Math.abs(a.left - first.left) <= 1 && a.top >= last.bottom - 1) return 'under'
+          return `elsewhere: line ${Math.round(first.left)}-${Math.round(last.right)}, button at ${Math.round(a.left)}`
+        }, question)
+        expect(['beside', 'under'], question).toContain(placement)
+      }
+
+      // With Settings scrolled to its end, the floating + button covers nothing in the card.
+      await page.evaluate(() => {
+        window.scrollTo(0, document.documentElement.scrollHeight)
+      })
+      const covered = await page.evaluate(() => {
+        const fab = document
+          .querySelector('button[aria-label="Quick add entry"]')!
+          .getBoundingClientRect()
+        const card = document.querySelector('[data-test-id="settings-about-space"]')!
+        return Array.from(card.querySelectorAll('button, label'))
+          .filter((el) => {
+            const r = el.getBoundingClientRect()
+            return (
+              r.right > fab.left && r.left < fab.right && r.bottom > fab.top && r.top < fab.bottom
+            )
+          })
+          .map((el) => el.getAttribute('data-test-id') ?? el.textContent)
+      })
+      expect(covered).toEqual([])
     })
   }
 })

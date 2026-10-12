@@ -38,6 +38,31 @@ export function countChoice(count: number | undefined): number | undefined {
   return count === undefined ? undefined : Math.min(count, 3)
 }
 
+function adultsText(count: number): string {
+  if (count >= 3) return '3 or more adults'
+  return count === 1 ? '1 adult' : `${count} adults`
+}
+
+function childrenText(count: number): string {
+  if (count >= 3) return '3 or more children'
+  if (count === 0) return 'no children'
+  return count === 1 ? '1 child' : `${count} children`
+}
+
+/**
+ * The household answers as a status line, in the chips' words: "1 adult, no children.", "2
+ * adults. Children not answered yet.", or "Not answered yet." with neither.
+ */
+export function householdText(adults: number | undefined, children: number | undefined): string {
+  const a = countChoice(adults)
+  const c = countChoice(children)
+  if (a === undefined && c === undefined) return 'Not answered yet.'
+  if (c === undefined) return `${adultsText(a!)}. Children not answered yet.`
+  const kids = childrenText(c)
+  if (a === undefined) return `Adults not answered yet. ${kids[0].toUpperCase()}${kids.slice(1)}.`
+  return `${adultsText(a)}, ${kids}.`
+}
+
 const REGION_NAMES: Record<Region, string> = {
   DE: 'Germany',
   HR: 'Croatia',

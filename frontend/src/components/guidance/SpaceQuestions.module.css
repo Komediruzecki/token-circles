@@ -107,8 +107,9 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 6px 14px;
+  /* "Ask again" follows its status line: beside it when it fits, under its start when not. */
+  justify-content: flex-start;
+  gap: 2px 12px;
   margin-top: 10px;
   font-size: 12.5px;
   line-height: 1.45;

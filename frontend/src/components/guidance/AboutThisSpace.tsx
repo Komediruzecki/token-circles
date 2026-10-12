@@ -16,7 +16,7 @@ import { getProfileVersion } from '../../core/appStore'
 import { entityVersion } from '../../core/dataVersions'
 import { answersIn, saveAnswers } from '../../core/guidanceAnswers'
 import { refetchOnActive } from '../../core/pageVisibility'
-import { regionReasonText } from './regionWords'
+import { householdText, regionReasonText } from './regionWords'
 import { SpaceQuestions } from './SpaceQuestions'
 import styles from './SpaceQuestions.module.css'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
@@ -83,8 +83,7 @@ export function AboutThisSpace() {
           : ''
     return `${status}${regionReasonText(region())}`
   }
-  const householdNote = () =>
-    answers().adults === undefined && answers().children === undefined ? 'Not answered yet.' : ''
+  const householdNote = () => householdText(answers().adults, answers().children)
 
   return (
     <div data-test-id="about-this-space">

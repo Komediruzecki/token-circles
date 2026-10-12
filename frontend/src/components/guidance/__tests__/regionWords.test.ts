@@ -1,9 +1,10 @@
 /**
  * The words for how a region was set (components/guidance/regionWords.ts), one sentence for each
- * way, and the household choices a stored count falls under.
+ * way, the household choices a stored count falls under, and the household answers as a status
+ * line.
  */
 import { describe, expect, it } from 'vitest'
-import { countChoice, regionReasonText } from '../regionWords'
+import { countChoice, householdText, regionReasonText } from '../regionWords'
 import type { RegionChoice } from '../../../../../shared/guidance/region'
 
 describe('how the region was set', () => {
@@ -45,5 +46,24 @@ describe('how the region was set', () => {
 describe('the household choice a stored count falls under', () => {
   it('is the count up to three, and "3 or more" above it', () => {
     expect([undefined, 0, 1, 2, 3, 4, 9].map(countChoice)).toEqual([undefined, 0, 1, 2, 3, 3, 3])
+  })
+})
+
+describe('the household answers as a status line', () => {
+  it.each<[number | undefined, number | undefined, string]>([
+    [undefined, undefined, 'Not answered yet.'],
+    [1, 0, '1 adult, no children.'],
+    [2, 1, '2 adults, 1 child.'],
+    [1, 2, '1 adult, 2 children.'],
+    [3, 3, '3 or more adults, 3 or more children.'],
+    // A count above three, as an older or another client may store it, reads as its chip.
+    [5, 7, '3 or more adults, 3 or more children.'],
+    [2, undefined, '2 adults. Children not answered yet.'],
+    [1, undefined, '1 adult. Children not answered yet.'],
+    [undefined, 1, 'Adults not answered yet. 1 child.'],
+    [undefined, 0, 'Adults not answered yet. No children.'],
+    [undefined, 3, 'Adults not answered yet. 3 or more children.'],
+  ])('adults %s, children %s', (adults, children, words) => {
+    expect(householdText(adults, children)).toBe(words)
   })
 })

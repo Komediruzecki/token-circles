@@ -854,6 +854,23 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** a contract scenario in both runtimes (Food and an own Groceries, budgeted for March,
   the own one for April too: one Groceries, its entry moved, March's budgets one of 500, April's
   moved as it is) and `dangerZoneCategoriesReset.test.tsx` (the confirmation's words).
+- **About this space reads the same for both questions** (visual pass 3a, finding 3). An answered
+  household had no status line, and its Ask again sat at the far right of the note row
+  (`.note` was `justify-content: space-between` around an empty span): x 292 at 390 wide and
+  x 1142 at 1280. The region's sat under its line at 390 (x 39) but at the far right at 1280
+  (x 1142, its line ending at x 671). The household's line
+  is now `householdText` (`components/guidance/regionWords.ts`), in the chips' words: "1 adult,
+  no children.", "2 adults, 1 child.", "3 or more adults, 3 or more children."; half answered,
+  "2 adults. Children not answered yet." or "Adults not answered yet. 1 child."; neither, "Not
+  answered yet.". A count above three reads as "3 or more". The note row starts at the left, so
+  Ask again follows its line, 12 px after the last word when it fits (household at 390: line
+  39-155, button at 167) and under the line's start when not (region at 390). At 390 with
+  Settings scrolled to its end, nothing in the card or elsewhere on the page is under the
+  floating + button (button y 776-828, card ends at y 606), before and after.
+- **Tests:** `regionWords.test.ts` (every combination, and counts above three),
+  `AboutThisSpace.test.tsx` (the line for a full, a half and a cleared answer; Ask again clears
+  it) and `onboarding.spec.ts` ("Ask again" follows each status line at 390 and 1280 wide: beside
+  the last word or under the line's start; nothing in the card under the + button at the end).
 
 ### Achievements
 

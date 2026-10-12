@@ -87,7 +87,7 @@ describe('About this space', () => {
     expect(radio('adults-2').checked).toBe(true)
     expect(radio('children-1').checked).toBe(true)
     expect(regionNote()).toBe('Compared with Croatia, from your answer.')
-    expect(householdNote()).toBe('')
+    expect(householdNote()).toBe('2 adults, 1 child.')
     expect(byTestId('settings-space-region-ask-again')).not.toBeNull()
     expect(byTestId('settings-space-household-ask-again')).not.toBeNull()
   })
@@ -154,6 +154,7 @@ describe('About this space', () => {
     await vi.waitFor(() => {
       expect(byTestId('settings-space-region-ask-again')).not.toBeNull()
     })
+    expect(householdNote()).toBe('2 adults, no children.')
 
     byTestId('settings-space-region-ask-again')!.click()
     await vi.waitFor(async () => {
@@ -169,6 +170,40 @@ describe('About this space', () => {
     expect(regionNote()).toBe(
       'Not answered yet. Compared with the EU average, going by your base currency, EUR.'
     )
+  })
+
+  it('says what a half-answered household holds, and Ask again clears it', async () => {
+    await seed({ adults: 3 })
+    await open()
+    await vi.waitFor(() => {
+      expect(householdNote()).toBe('3 or more adults. Children not answered yet.')
+    })
+
+    chip('children-1').click()
+    await vi.waitFor(() => {
+      expect(householdNote()).toBe('3 or more adults, 1 child.')
+    })
+    await vi.waitFor(async () => {
+      expect(await stored()).toEqual({ adults: 3, children: 1 })
+      expect((byTestId('settings-space-household-ask-again') as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    })
+    byTestId('settings-space-household-ask-again')!.click()
+    await vi.waitFor(() => {
+      expect(householdNote()).toBe('Not answered yet.')
+    })
+    await vi.waitFor(async () => {
+      expect(await stored()).toEqual({})
+    })
+    expect(byTestId('settings-space-household-ask-again')).toBeNull()
+
+    await seed({ children: 0 })
+    dispose?.()
+    await open()
+    await vi.waitFor(() => {
+      expect(householdNote()).toBe('Adults not answered yet. No children.')
+    })
   })
 
   it('says a save failed, and shows the answer from before', async () => {
