@@ -136,9 +136,12 @@
   cursor: progress;
 }
 
-/* A finger needs 44 px: the chips and Ask again grow to it at the app's phone width. */
+/* A finger needs 44 by 44 px: the chips and Ask again grow to it at the app's phone width. A
+   one-digit chip keeps its label in the middle. */
 @media (max-width: 768px) {
   .chip {
+    justify-content: center;
+    min-width: 44px;
     min-height: 44px;
   }
 

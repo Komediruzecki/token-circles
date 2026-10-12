@@ -960,6 +960,15 @@ All notable changes to Token Circles are documented here. The format is based on
   shows as it opens", light and dark: both hints one line, the Children legend wholly above the
   footer with its chips under it, the mask on and no footer shadow, none at the end, at 390x1000
   or at 1280x800, on again at 375x667) and `onboardingForms.test.tsx` (the lead's words).
+- **The number chips are 44 by 44 px on a phone** (visual pass 3a-2, N2 and finding 6). At 390
+  wide the one-digit chips were 44 px tall but 35 to 39 px wide ("1" 35, "2" 38, "0" 39). In the
+  same `max-width: 768px` rule as their height, every chip has `min-width: 44px` and centres its
+  label (`justify-content: center`): at 390 the "1", "2" and "0" chips are 44x44 in setup and in
+  Settings, label centred to 0.0 px; region and "3 or more" chips keep their widths (76 to 155 px);
+  at 1280 every chip keeps its size (35 to 155 by 36.3).
+- **Tests:** `onboarding.spec.ts` ("the space questions' chips and Ask again are at least 44 px on
+  a phone": every chip at least 44 wide as well as tall, its label within 0.5 px of its centre, in
+  setup and Settings).
 
 ### Achievements
 

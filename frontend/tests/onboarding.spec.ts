@@ -533,29 +533,43 @@ test.describe('onboarding wizard at phone width', () => {
     { width: 390, height: 844, phone: true },
     { width: 1280, height: 800, phone: false },
   ]) {
-    test(`the space questions' chips and Ask again are ${phone ? 'at least 44 px tall on a phone' : 'their desktop size'}`, async ({
+    test(`the space questions' chips and Ask again are ${phone ? 'at least 44 px on a phone' : 'their desktop size'}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height })
+      // Each chip and Ask again: its height, and for a chip its width and how far its label's
+      // centre sits from the chip's.
       const heights = (prefix: string) =>
         page.evaluate(
           (p) =>
             Array.from(
-              document.querySelectorAll(
+              document.querySelectorAll<HTMLElement>(
                 `label[data-test-id^="${p}-region-"], label[data-test-id^="${p}-adults-"], label[data-test-id^="${p}-children-"], [data-test-id$="-ask-again"]`
               )
-            ).map((el) => el.getBoundingClientRect().height),
+            ).map((el) => {
+              const box = el.getBoundingClientRect()
+              const text = el.tagName === 'LABEL' ? el.querySelector('span') : null
+              const t = text?.getBoundingClientRect()
+              return {
+                id: el.dataset.testId,
+                h: box.height,
+                w: text ? box.width : null,
+                off: t ? Math.abs(t.left + t.width / 2 - (box.left + box.width / 2)) : 0,
+              }
+            }),
           prefix
         )
-      const allFit = (list: number[]) =>
-        phone ? list.every((h) => h >= 44) : list.every((h) => h < 40)
+      const allFit = (list: { h: number; w: number | null; off: number }[]) =>
+        phone
+          ? list.every(({ h, w, off }) => h >= 44 && (w === null || w >= 44) && off <= 0.5)
+          : list.every(({ h }) => h < 40)
 
       await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
       await page.getByTestId('onboarding-next').click()
       await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
       const wizard = await heights('onboarding-space')
       expect(wizard).toHaveLength(13)
-      expect(allFit(wizard), wizard.join(', ')).toBe(true)
+      expect(allFit(wizard), JSON.stringify(wizard)).toBe(true)
 
       await page.getByTestId('onboarding-space-region-HR').click()
       await page.getByTestId('onboarding-space-adults-1').click()
@@ -566,7 +580,7 @@ test.describe('onboarding wizard at phone width', () => {
       const settings = await heights('settings-space')
       // The chips, and Ask again for both questions.
       expect(settings).toHaveLength(15)
-      expect(allFit(settings), settings.join(', ')).toBe(true)
+      expect(allFit(settings), JSON.stringify(settings)).toBe(true)
     })
   }
 
