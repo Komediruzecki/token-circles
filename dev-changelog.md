@@ -1126,16 +1126,18 @@ All notable changes to Token Circles are documented here. The format is based on
   bands it gave them; and who reads the file (only `benchmarks.ts` imports the JSON, and nothing in
   `shared/guidance/` imports from outside `shared/`).
 - **A person's numbers** (`shared/guidance/facts.ts`, `guidanceFacts`), worked out on the device
-  from what the app holds, the same in both runtimes. The window is the last twelve tracked months
-  before this one (fewer when there are fewer; this month is left out while it is under way), and
-  an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less deductions and
-  spending is expenses (`flows.ts`), in the base currency; own income leaves out the categories the
-  person marks as support they expect to stop. Essential spending goes by `essentialOf`, and
+  from what the app holds, with the same code in both runtimes. The window is the last twelve
+  tracked months before this one (fewer when there are fewer; this month is left out while it is
+  under way), and an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less
+  deductions and spending is expenses (`flows.ts`), in the base currency; own income leaves out the
+  categories the person marks as support they expect to stop. Essential spending goes by
+  `essentialOf`, and
   spending with no category counts as needed too (`unsure` says how much was counted that way).
-  Liquid money is savings and cash balances and each current account's lowest end-of-day balance
-  in the last 30 days, read back from its balance now through the entries (`balanceMoves` books an
-  entry as `computeBalanceDeltas` does; an entry dated after today is undone first), none of it
-  below zero, and null without a savings, cash or current account. Invested is the investment
+  Liquid money is savings and cash balances and the lowest total the current accounts ended a day
+  on in the last 30 days (today and the 29 before it), read back together as one pool from their
+  balances through the entries (`balanceMoves` books an entry as local-first's
+  `computeBalanceDeltas` does; an entry dated after today is undone first), each account from zero
+  up on each day, and null without a savings, cash or current account. Invested is the investment
   accounts or the portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
   with a balance left, at the rate their schedule charges for the next payment, and credit cards
   and current accounts below zero, unless the person says they carry no balance on either; a debt
@@ -1186,6 +1188,24 @@ All notable changes to Token Circles are documented here. The format is based on
   place), `GettingStarted.test.tsx`, `achievementsStore.test.ts`, `localRows-apiContract.test.ts`,
   and `tests/orientation.spec.ts`, where the step shows under a month of savings and leaves past
   one, local-first and signed in.
+- **Current accounts are read back as one pool** (review 3b-1, finding 1). A move between two of a
+  person's own current accounts took the money out of reach for 30 days: each account was read
+  back on its own, so the one the money left was low after the move and the one it reached was low
+  before it. In the app, in both modes, a move of 400 from one bank to another brought "covers 18
+  days" for money that never left the person's hands. The current accounts are now read back
+  together, as guidance.md 3.1 words it ("the lowest current-account balance"): each one's
+  end-of-day balance from zero up, added up per day, and the lowest of those totals. Savings and
+  cash still count at their balance, so money moved in from savings counts from the day the low
+  point passes it, an under-count; reading savings and cash back as well is not built. The
+  read-back covers exactly the last 30 days, today and the 29 before it: an entry on the first of
+  them is no longer undone (finding 13). `balanceMoves` says it follows local-first's booking, and
+  that the Worker books a transfer with no account to go to the other way: older data only, as
+  both runtimes refuse a new one (finding 7).
+- **Tests:** `guidanceFacts.test.ts` (a move between two current accounts, a switch of banks, a
+  salary passed on to a spending account, an overdraft beside another account, money moved in from
+  savings and still held or spent, money put by, and the first of the 30 days) and
+  `tests/orientation.spec.ts` (two current accounts and a move between them leave the step as it
+  was, local-first and signed in).
 
 ### Achievements
 

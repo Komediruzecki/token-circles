@@ -271,6 +271,124 @@ describe('the money a person can reach', () => {
     ]
     // Before the transfer the current account held 500; after it, 100.
     expect(liquidOf(accounts, moved, TODAY)).toBe(500)
+    // The same with more put by: 2,000 on the 6th, and the two never held less than 7,500.
+    const putBy = [
+      entry('2026-10-06', {
+        type: 'transfer',
+        amount: 2000,
+        account_id: 1,
+        transfer_account_id: 2,
+      }),
+    ]
+    const after = [
+      { id: 1, type: 'giro', balance: 500 },
+      { id: 2, type: 'savings', balance: 7000 },
+    ]
+    expect(liquidOf(after, putBy, TODAY)).toBe(7500)
+  })
+
+  it('reads the current accounts as one pool: a move between two of them hides nothing', () => {
+    // 1,000 moved from one current account to the other on the 1st: the two never held less.
+    const moved = [
+      entry('2026-10-01', {
+        type: 'transfer',
+        amount: 1000,
+        account_id: 1,
+        transfer_account_id: 2,
+      }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 0 },
+      { id: 2, type: 'giro', balance: 1000 },
+    ]
+    expect(liquidOf(accounts, moved, TODAY)).toBe(1000)
+  })
+
+  it('reads a switch of banks at the low point before the salary', () => {
+    // The salary came into the old bank on September 21st; on the 8th it all moved to the new one.
+    const switched = [
+      entry('2026-09-21', { type: 'income', amount: 2000, account_id: 1, category_id: 9 }),
+      entry('2026-10-08', {
+        type: 'transfer',
+        amount: 2400,
+        account_id: 1,
+        transfer_account_id: 2,
+      }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 0 },
+      { id: 2, type: 'giro', balance: 2400 },
+    ]
+    expect(liquidOf(accounts, switched, TODAY)).toBe(400)
+  })
+
+  it('counts a salary passed on from the account it comes into once, and before it came', () => {
+    // Paid into the salary account on September 21st, all of it moved on to the spending account on
+    // the 1st: 3,000 since the salary, 1,000 before it.
+    const paid = [
+      entry('2026-09-21', { type: 'income', amount: 2000, account_id: 1, category_id: 9 }),
+      entry('2026-10-01', {
+        type: 'transfer',
+        amount: 2000,
+        account_id: 1,
+        transfer_account_id: 2,
+      }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 1000 },
+      { id: 2, type: 'giro', balance: 2000 },
+    ]
+    expect(liquidOf(accounts, paid, TODAY)).toBe(1000)
+  })
+
+  it('takes nothing from one current account for the overdraft of another', () => {
+    // The first account was 200 overdrawn from the 6th to the 8th; the second held 400 throughout.
+    const dipped = [
+      entry('2026-10-06', { amount: 500, account_id: 1 }),
+      entry('2026-10-08', { type: 'income', amount: 500, account_id: 1, category_id: 9 }),
+    ]
+    const accounts = [
+      { id: 1, type: 'giro', balance: 300 },
+      { id: 2, type: 'giro', balance: 400 },
+    ]
+    expect(liquidOf(accounts, dipped, TODAY)).toBe(400)
+  })
+
+  it('reads money moved in from savings at the current account’s low point before it came', () => {
+    // 2,000 moved from savings to the current account on the 6th. Savings count at their balance and
+    // the current accounts at their low point, so the 2,000 counts from the day the low point
+    // passes it: until then 3,500 reads, held or spent. An under-count, towards a larger cushion.
+    const moved = [
+      entry('2026-10-06', {
+        type: 'transfer',
+        amount: 2000,
+        account_id: 2,
+        transfer_account_id: 1,
+      }),
+    ]
+    const held = [
+      { id: 1, type: 'giro', balance: 2500 },
+      { id: 2, type: 'savings', balance: 3000 },
+    ]
+    expect(liquidOf(held, moved, TODAY)).toBe(3500)
+    // Spent on a 2,000 bill on the 7th.
+    const spent = [...moved, entry('2026-10-07', { amount: 2000, account_id: 1 })]
+    const after = [
+      { id: 1, type: 'giro', balance: 500 },
+      { id: 2, type: 'savings', balance: 3000 },
+    ]
+    expect(liquidOf(after, spent, TODAY)).toBe(3500)
+  })
+
+  it('reads back exactly 30 days: today and the 29 before it', () => {
+    // September 12th is the first of the 30: its balance at the end of the day counts, so a salary
+    // that day was already there. One on the 13th was not, the day before.
+    const salaryOn = (date: string) => [
+      entry(date, { type: 'income', amount: 1000, account_id: 1, category_id: 9 }),
+    ]
+    const giro = [{ id: 1, type: 'giro', balance: 1000 }]
+    expect(liquidOf(giro, salaryOn('2026-09-12'), TODAY)).toBe(1000)
+    expect(liquidOf(giro, salaryOn('2026-09-13'), TODAY)).toBe(0)
   })
 
   it('adds savings and cash, leaves investments and cards out, and counts nothing below zero', () => {
@@ -300,7 +418,7 @@ describe('the money a person can reach', () => {
     expect(guidanceFacts(input({ accounts: [] })).accountsKnown).toBe(true)
   })
 
-  it('moves balances as the app books them', () => {
+  it('moves balances as local-first books them', () => {
     const table: FactsEntry[] = [
       entry('2026-10-01', { type: 'income', amount: 100, account_id: 5 }),
       entry('2026-10-01', { type: 'expense', amount: 100, account_id: 5 }),

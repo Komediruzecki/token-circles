@@ -14,9 +14,11 @@
  *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
  *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
  *   `unsure` says how much was counted that way.
- * - **Liquid money**, the money a person can reach: savings and cash balances, and each current
- *   account's lowest balance at the end of a day in the last 30 days, read back from its balance
- *   now through the entries since. None of it counts below zero.
+ * - **Liquid money**, the money a person can reach: savings and cash balances, and the lowest
+ *   total the current accounts ended a day on in the last 30 days, read back together as one pool
+ *   from their balances through the entries since (guidance.md 3.1, "the lowest current-account
+ *   balance"). So a move between two current accounts hides nothing. None of it counts below zero,
+ *   and one account's overdraft takes nothing from another.
  * - **Invested** (`investedOf`): investment accounts or the portfolio, whichever holds more, and
  *   savings the person says are held elsewhere.
  * - **Debts** (`debtsOf`, design section 5): loans with a balance left, at the rate charged now,
@@ -39,7 +41,7 @@ import type { Region } from './region';
 /** How many tracked months the averages run over, at most: a year. */
 export const WINDOW_MONTHS = YEAR_ON_FILE_MONTHS;
 
-/** How far back a current account's low point is looked for. */
+/** The days the current accounts' low point is looked for in: today and the 29 before it. */
 export const LOW_POINT_DAYS = 30;
 
 /**
@@ -218,11 +220,17 @@ function baseAmount(entry: FactsEntry): number {
 }
 
 /**
- * What an entry does to the balances of the accounts it names, as the app books it
+ * What an entry does to the balances of the accounts it names, as local-first books it
  * (`computeBalanceDeltas` in frontend/src/core/storage/idb.ts, which a test holds this to): an
  * expense takes from its account and income adds to it, a transfer moves money from its account
  * to the other one, and income or a transfer with no account of its own adds to the other one. A
  * deduction moves nothing.
+ *
+ * The Worker books one case differently: a transfer from an account with no account to go to,
+ * which local-first leaves out and the Worker takes from the account it names
+ * (worker/src/recompute-balances.ts). Only older data holds one, as both runtimes refuse a new
+ * transfer without both accounts (shared/transactionSchema.ts); for those, the read-back follows
+ * local-first, so signed in it starts from a balance the Worker booked the other way.
  */
 export function balanceMoves(entry: FactsEntry): Array<{ account: number; delta: number }> {
   const value = baseAmount(entry);
@@ -314,29 +322,52 @@ function sumWindow(
   return sums;
 }
 
-/** The lowest balance `account` ended a day on in the last LOW_POINT_DAYS days. */
-function lowPoint(
-  account: FactsAccount,
+/**
+ * The current accounts' low point: the lowest total they ended a day on in the last
+ * LOW_POINT_DAYS days, today and the days before it, read back together from their balances
+ * through the entries since. Each account counts from zero up on each day, so one account's
+ * overdraft takes nothing from another, and a move between two of them changes neither the total
+ * nor its low point. An entry dated after today is undone first: it has not happened yet.
+ */
+function currentAccountsLow(
+  giros: readonly FactsAccount[],
   transactions: readonly FactsEntry[],
   today: string
 ): number {
-  const from = addDays(today, -LOW_POINT_DAYS);
-  let later = 0;
-  const byDay = new Map<string, number>();
+  const ids = new Set(giros.map((account) => account.id));
+  // The first of the days read: its end-of-day balance already holds its own entries.
+  const first = addDays(today, -(LOW_POINT_DAYS - 1));
+  const later = new Map<number, number>();
+  const byDay = new Map<string, Array<{ account: number; delta: number }>>();
   for (const entry of transactions) {
+    const day = entry.date.slice(0, 10);
+    if (day <= first) continue;
     for (const move of balanceMoves(entry)) {
-      if (move.account !== account.id) continue;
-      const day = entry.date.slice(0, 10);
-      if (day > today) later += move.delta;
-      else if (day > from) byDay.set(day, (byDay.get(day) ?? 0) + move.delta);
+      if (!ids.has(move.account)) continue;
+      if (day > today) {
+        later.set(move.account, (later.get(move.account) ?? 0) + move.delta);
+      } else {
+        const moves = byDay.get(day);
+        if (moves) moves.push(move);
+        else byDay.set(day, [move]);
+      }
     }
   }
-  // The balance at the end of today, then at the end of each day before one that moved it.
-  let balance = account.balance - later;
-  let low = balance;
+  const balances = new Map(
+    giros.map((account) => [account.id, account.balance - (later.get(account.id) ?? 0)])
+  );
+  const pooled = (): number => {
+    let total = 0;
+    for (const balance of balances.values()) if (balance > 0) total += balance;
+    return total;
+  };
+  // The end of today, then the end of each day before one that moved them.
+  let low = pooled();
   for (const day of [...byDay.keys()].sort().reverse()) {
-    balance -= byDay.get(day) ?? 0;
-    low = Math.min(low, balance);
+    for (const move of byDay.get(day) ?? []) {
+      balances.set(move.account, (balances.get(move.account) ?? 0) - move.delta);
+    }
+    low = Math.min(low, pooled());
   }
   return low;
 }
@@ -345,8 +376,9 @@ function lowPoint(
 const LIQUID_TYPES: ReadonlySet<string> = new Set(['savings', 'cash', 'giro']);
 
 /**
- * Liquid money: savings and cash balances, and each current account's low point, none below zero.
- * Null when the accounts are unknown or none of them is one money can be reached in.
+ * Liquid money: savings and cash balances, and the current accounts' low point, read as one pool
+ * (`currentAccountsLow`), none of it below zero. Null when the accounts are unknown or none of them
+ * is one money can be reached in.
  */
 export function liquidOf(
   accounts: readonly FactsAccount[] | null,
@@ -356,13 +388,11 @@ export function liquidOf(
   if (accounts === null) return null;
   const reachable = accounts.filter((account) => LIQUID_TYPES.has(storedAccountType(account.type)));
   if (reachable.length === 0) return null;
-  let total = 0;
-  for (const account of reachable) {
-    const held =
-      storedAccountType(account.type) === 'giro'
-        ? lowPoint(account, transactions, today)
-        : account.balance;
-    if (finite(held) && held > 0) total += held;
+  const counted = reachable.filter((account) => finite(account.balance));
+  const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
+  let total = giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0;
+  for (const account of counted) {
+    if (storedAccountType(account.type) !== 'giro' && account.balance > 0) total += account.balance;
   }
   return total;
 }

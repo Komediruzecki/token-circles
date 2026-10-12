@@ -12,7 +12,8 @@
  *
  * The cushion step reads a second statement, with a salary and the grocery runs alone, against a
  * savings account opened after the import: it shows while the money there covers less than a
- * month of groceries, and leaves once a second account takes it past one.
+ * month of groceries, and leaves once a second account takes it past one. A move between two
+ * current accounts leaves it as it was: they are read as one pool.
  */
 import { expect, test } from '@playwright/test'
 import { viaApp } from './form-errors-helpers'
@@ -330,6 +331,80 @@ async function cushionComesAndGoes(page: Page): Promise<void> {
   await cardShows(page, BEFORE_A_CUSHION)
 }
 
+/** Today as the app dates an entry: the device's calendar day. */
+function today(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/**
+ * Import the groceries, keep 50 in each of two current accounts, and move the one's money to the
+ * other today. The money the person can reach stays what it was. A savings account opened after
+ * the move shows the card has read it: had the move hidden the 50, the card would say 13 days.
+ */
+async function moveBetweenCurrentAccounts(page: Page): Promise<void> {
+  await importStatement(page, GROCERIES, 12)
+  await openDashboard(page)
+  await cardShows(page, BEFORE_A_CUSHION)
+
+  for (const name of ['Old bank', 'New bank']) {
+    await viaApp(page, 'POST', '/api/accounts', { name, type: 'giro', starting_balance: 50 })
+  }
+  // 100 within reach: 18 days.
+  await cardShows(page, [...BEFORE_A_CUSHION, CUSHION])
+
+  const accounts = await viaApp<Array<{ id: number; name: string }>>(page, 'GET', '/api/accounts')
+  const idOf = (name: string) => accounts.find((account) => account.name === name)?.id
+  await viaApp(page, 'POST', '/api/transactions', {
+    description: 'Move to the new bank',
+    amount: 50,
+    type: 'transfer',
+    date: today(),
+    account_id: idOf('Old bank'),
+    transfer_account_id: idOf('New bank'),
+  })
+  await viaApp(page, 'POST', '/api/accounts', {
+    name: 'Rainy day',
+    type: 'savings',
+    starting_balance: 25,
+  })
+  // 125 within reach: 23 days.
+  await cardShows(page, [
+    ...BEFORE_A_CUSHION,
+    { ...CUSHION, reason: 'The money you can reach covers 23 days of what you need.' },
+  ])
+}
+
+/** A local-first space with the setup wizard skipped, on Dashboard. */
+async function startLocalFirst(page: Page): Promise<void> {
+  await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+  await page.getByTestId('onboarding-skip').click()
+  await page.getByTestId('confirm-accept').click()
+  await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+}
+
+/** `run` in a new account's space, signed in, with the setup wizard skipped; deleted after. */
+async function signedIn(page: Page, run: (page: Page) => Promise<void>): Promise<void> {
+  const ctx = page.context()
+  const { email } = await signUpAndIn(ctx)
+  try {
+    await bootSignedIn(ctx)
+    await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+    await page.getByTestId('onboarding-skip').click()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+    await run(page)
+  } finally {
+    await deleteAccount(ctx, email)
+  }
+}
+
 test.describe('Getting started: the cushion @smoke', () => {
   test.beforeEach(() => {
     test.setTimeout(150_000)
@@ -338,34 +413,26 @@ test.describe('Getting started: the cushion @smoke', () => {
   test('local-first: the cushion step shows under a month of savings and leaves past one', async ({
     page,
   }) => {
-    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    await page.getByTestId('onboarding-next').click()
-    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
-    await page.getByTestId('onboarding-next').click()
-    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
-    await page.getByTestId('onboarding-skip').click()
-    await page.getByTestId('confirm-accept').click()
-    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-
+    await startLocalFirst(page)
     await cushionComesAndGoes(page)
   })
 
   test('signed in: the cushion step shows under a month of savings and leaves past one', async ({
     page,
   }) => {
-    const ctx = page.context()
-    const { email } = await signUpAndIn(ctx)
-    try {
-      await bootSignedIn(ctx)
-      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
-      await page.getByTestId('onboarding-skip').click()
-      await page.getByTestId('confirm-accept').click()
-      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await signedIn(page, cushionComesAndGoes)
+  })
 
-      await cushionComesAndGoes(page)
-    } finally {
-      await deleteAccount(ctx, email)
-    }
+  test('local-first: a move between two current accounts leaves the step as it was', async ({
+    page,
+  }) => {
+    await startLocalFirst(page)
+    await moveBetweenCurrentAccounts(page)
+  })
+
+  test('signed in: a move between two current accounts leaves the step as it was', async ({
+    page,
+  }) => {
+    await signedIn(page, moveBetweenCurrentAccounts)
   })
 })
