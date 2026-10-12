@@ -343,3 +343,54 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
   })
 })
+
+test.describe('onboarding wizard at phone width', () => {
+  for (const theme of ['light', 'dark']) {
+    test(`nothing scrolls sideways on any step at 390 wide, ${theme}`, async ({ page }) => {
+      /**
+       * What scrolls sideways: the page, and every box in the wizard that can scroll (overflow
+       * other than visible or clip) whose content is wider than the box. Then Continue is scrolled
+       * into view centred, as a browser does for an element it brings into view, and the panel must
+       * not move: a box that clips with overflow: hidden can still be scrolled that way.
+       */
+      const sidewaysScroll = () =>
+        page.evaluate(() => {
+          const wizard = document.querySelector<HTMLElement>('[data-test-id="onboarding-wizard"]')!
+          const root = document.documentElement
+          const wide: string[] = []
+          if (root.scrollWidth > root.clientWidth) wide.push(`page ${root.scrollWidth}`)
+          for (const el of [wizard, ...Array.from(wizard.querySelectorAll<HTMLElement>('*'))]) {
+            const overflowX = getComputedStyle(el).overflowX
+            if (overflowX === 'visible' || overflowX === 'clip') continue
+            if (el.scrollWidth > el.clientWidth)
+              wide.push(`${String(el.className) || el.tagName} ${el.scrollWidth}>${el.clientWidth}`)
+          }
+          const panel = document.querySelector('[data-test-id="onboarding-panel"]')!
+          const before = panel.getBoundingClientRect().left
+          document
+            .querySelector('[data-test-id="onboarding-next"], [data-test-id="onboarding-finish"]')!
+            .scrollIntoView({ block: 'center', inline: 'center' })
+          const moved = panel.getBoundingClientRect().left - before
+          return { wide, moved }
+        })
+
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.addInitScript((value) => {
+        localStorage.setItem('finance-theme', value)
+      }, theme)
+      await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+      const steps = ['welcome', 'space', 'account', 'import', 'subscriptions', 'done']
+      for (const [index, step] of steps.entries()) {
+        await expect(page.getByTestId(`onboarding-step-${step}`)).toBeVisible()
+        expect(await sidewaysScroll(), step).toEqual({ wide: [], moved: 0 })
+        if (index === steps.length - 1) break
+        await page.getByTestId('onboarding-next').click()
+        // Leaving the account and import steps empty asks first.
+        if (step === 'account' || step === 'import')
+          await page.getByTestId('confirm-accept').click()
+      }
+    })
+  }
+})

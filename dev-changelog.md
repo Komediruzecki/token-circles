@@ -280,6 +280,16 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Onboarding
 
+- **Nothing in the setup wizard scrolls sideways.** The orbit field behind the panel (`.backdrop`
+  in `frontend/src/components/onboarding/Onboarding.module.css`) is 160vmax square, 1350 px at
+  390x844, and as the overlay's absolutely positioned content it gave the overlay an 870 by 1097 px
+  scroll area. `overflow: hidden` stops a finger, not `scrollIntoView` or focus: a browser bringing
+  Continue into view centred moved the overlay 115 px sideways and 253 px down, and the panel with
+  it, in both themes, and the panel's own focus at open scrolled it 9 px down. The field is
+  `position: fixed` now, so the viewport clips it and the overlay is 390 px wide with nothing to
+  scroll. `tests/onboarding.spec.ts` ("onboarding wizard at phone width") checks every step at 390
+  wide, light and dark: no box in the wizard wider inside than out, and the panel still after
+  Continue is scrolled into view.
 - **Onboarding is decided per account.** The completed-or-skipped flag in localStorage is kept
   under the account it belongs to, `finance_onboarding:account-<id>`, or `finance_onboarding:local`
   in local-first (`frontend/src/core/onboardingStore.ts`: `setOnboardingOwner`,

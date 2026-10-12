@@ -26,6 +26,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Dates follow your calendar, not UTC's.** Just after midnight, today's transactions count in Analytics, forms open on your date, and a bill due today stays due today. A bill or recurring rule on the 31st falls on a shorter month's last day.
 - **Quick add and the Transactions form offer your profile's categories and accounts.** The + button, Cmd-K and the form list the active profile's rows as they are when you open them, so a category made on Budgets, Goals or Bills shows up. A form left open when you switch profile closes and says what was not saved.
 - **Each account gets its own setup wizard.** A new account is offered the setup wizard even when another account on this browser already finished or skipped it.
+- **The setup wizard stays put on a phone.** It could slide sideways, cutting off part of the panel, when the browser scrolled a button into view.
 - **Editing a category keeps its parent and tax-deductible setting**, and its icon can be cleared.
 - **Editing a transaction keeps balances and goals right.** A foreign-currency amount moves the account by its converted value, a category change updates both categories' goals, and notes you clear stay cleared.
 - **Copy last month keeps the budgets you already set.** It fills only the categories without a budget and tells you how many already had one.

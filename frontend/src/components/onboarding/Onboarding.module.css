@@ -21,8 +21,12 @@
 
 /* ---- decorative orbit field ---- */
 
+/* Fixed, not absolute: the field is far wider and taller than a phone, and as the overlay's own
+   content it gave the overlay a 870 px wide scroll area. overflow: hidden stops a finger, not a
+   scrollIntoView, so a browser bringing the Continue button into view slid the panel sideways. A
+   fixed box belongs to the viewport, which clips it without scrolling. */
 .backdrop {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   width: min(160vmax, 1700px);
