@@ -49,11 +49,16 @@ export interface OrientationFacts {
   /** Loans on file. */
   loans: number;
   /**
-   * The money the person can reach, in months of what they need every month
-   * (shared/guidance/facts.ts `cushionOf`). Null while either is unknown: fewer than three tracked
-   * months, or no savings, cash or current account on file.
+   * The money the person can reach, in months of what they need every month, or of what they
+   * spend (`cushionAgainst`), as shared/guidance/facts.ts `cushionOf` reads it. Null while either
+   * is unknown: fewer than three tracked months, or no savings, cash or current account on file.
    */
   cushionMonths: number | null;
+  /**
+   * What those months are of: what the person needs, or what they spend while nothing says any of
+   * it is needed (`Cushion.against`). The step says which.
+   */
+  cushionAgainst: 'needs' | 'spending';
 }
 
 export interface OrientationStep {
@@ -195,15 +200,17 @@ const RULES: Rule[] = [
     id: 'cushion',
     // Breathing room, the third circle (shared/guidance/circles.ts): a month of what is needed every
     // month, in money the person can reach. The days are whole ones, so the step never says 30.
-    step: ({ cushionMonths }) => {
+    // While nothing says what is needed, all of what is spent counts, and the step says so.
+    step: ({ cushionMonths, cushionAgainst }) => {
       if (cushionMonths === null || cushionMonths >= FIRST_CUSHION_MONTHS) return null;
       const days = Math.floor(cushionMonths * DAYS_IN_A_MONTH);
+      const what = cushionAgainst === 'spending' ? 'what you spend' : 'what you need';
       return {
         title: 'Build a one-month cushion',
         reason:
           days === 0
-            ? "The money you can reach doesn't cover a day of what you need."
-            : `The money you can reach covers ${days} ${days === 1 ? 'day' : 'days'} of what you need.`,
+            ? `The money you can reach doesn't cover a day of ${what}.`
+            : `The money you can reach covers ${days} ${days === 1 ? 'day' : 'days'} of ${what}.`,
         link: { hash: '#goals', label: 'Goals' },
       };
     },

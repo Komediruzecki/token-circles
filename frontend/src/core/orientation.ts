@@ -59,6 +59,12 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
     today,
     categories: source.categories,
   }).filter(worthTracking)
+  const cushion = cushionOf({
+    today,
+    transactions,
+    categories: source.categories,
+    accounts: source.accounts ?? null,
+  })
   return {
     today,
     trackedMonthsInYear: trackedMonthsInYearWindow(source.evaluation.trackedMonths, today),
@@ -69,11 +75,7 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
     topUnbudgeted: top !== null && name !== undefined ? { categoryId: top.categoryId, name } : null,
     heavyMonth: monthInTheRed(lastMonth) === null ? null : last,
     loans: source.loans.length,
-    cushionMonths: cushionOf({
-      today,
-      transactions,
-      categories: source.categories,
-      accounts: source.accounts ?? null,
-    }).months,
+    cushionMonths: cushion.months,
+    cushionAgainst: cushion.against,
   }
 }

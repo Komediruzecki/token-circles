@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { addCalendarMonths } from '../../../../shared/calendarMonths'
 import { placeCircle } from '../../../../shared/guidance/circles'
-import { guidanceFacts } from '../../../../shared/guidance/facts'
+import { cushionOf, guidanceFacts } from '../../../../shared/guidance/facts'
 import { loanStatus } from '../../../../shared/loanSchedule'
 import { orientationSteps } from '../../../../shared/orientation'
 import type { CheckId, Placement } from '../../../../shared/guidance/circles'
@@ -176,6 +176,7 @@ describe('A. Mia, 21, a student in Zagreb', () => {
       heavyMonth: null,
       loans: 0,
       cushionMonths: facts.cushionMonths,
+      cushionAgainst: cushionOf(input).against,
     } satisfies OrientationFacts)
     expect(steps.map((step) => step.id)).toEqual(['import-year', 'budget-top-category', 'cushion'])
     expect(steps[2]).toMatchObject({

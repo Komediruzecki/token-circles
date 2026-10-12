@@ -26,6 +26,7 @@ const settled: OrientationFacts = {
   heavyMonth: null,
   loans: 0,
   cushionMonths: 2,
+  cushionAgainst: 'needs',
 }
 
 const facts = (over: Partial<OrientationFacts>): OrientationFacts => ({ ...settled, ...over })
@@ -204,6 +205,15 @@ describe('cushion', () => {
     )
     expect(only({ cushionMonths: 0 }).reason).toBe(
       "The money you can reach doesn't cover a day of what you need."
+    )
+  })
+
+  it('says what you spend while nothing said any of it is needed', () => {
+    const spending = (cushionMonths: number) => only({ cushionMonths, cushionAgainst: 'spending' })
+    expect(spending(0.94).reason).toBe('The money you can reach covers 28 days of what you spend.')
+    expect(spending(0.034).reason).toBe('The money you can reach covers 1 day of what you spend.')
+    expect(spending(0.01).reason).toBe(
+      "The money you can reach doesn't cover a day of what you spend."
     )
   })
 

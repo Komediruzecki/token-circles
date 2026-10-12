@@ -99,7 +99,7 @@ describe('the window', () => {
     expect(two.liquid).toBe(1500)
     expect(
       cushionOf(input({ transactions: [1, 2].flatMap((n) => month(ago(n), 2000, 1000)) }))
-    ).toEqual({ liquid: 1500, essentials: null, months: null })
+    ).toEqual({ liquid: 1500, essentials: null, months: null, against: 'needs' })
 
     const three = guidanceFacts(
       input({ transactions: [1, 2, 3].flatMap((n) => month(ago(n), 2000, 1000 * n)) })
@@ -183,7 +183,9 @@ describe('what is needed every month', () => {
     const facts = guidanceFacts(input({ transactions, categories: kinds }))
     // Groceries 400, the gym 30, Konzum 120 and the 80 with no category.
     expect(facts.essentials).toBeCloseTo(630, 6)
-    expect(facts.unsure).toEqual({ categories: 1, uncategorised: 80 })
+    // Konzum and the 80 were counted only because nothing said otherwise; the rest was not.
+    expect(facts.unsure).toEqual({ categories: 1, uncategorised: 80, all: false })
+    expect(cushionOf(input({ transactions, categories: kinds })).against).toBe('needs')
   })
 
   it('in a space whose categories have no kind, is everything, and the cushion is read against it', () => {
@@ -211,11 +213,17 @@ describe('what is needed every month', () => {
     expect(facts.essentials).toBeCloseTo(900, 6)
     expect(facts.essentials).toBeCloseTo(facts.spending!, 6)
     expect(facts.unsure.categories).toBe(3)
+    // All of it was counted as needed only because nothing said otherwise.
+    expect(facts.unsure.all).toBe(true)
     expect(facts.cushionMonths).toBeCloseTo(0.5, 6)
-    expect(cushionOf(input({ transactions: spent, categories: croatian })).essentials).toBeCloseTo(
-      900,
-      6
-    )
+    const cushion = cushionOf(input({ transactions: spent, categories: croatian }))
+    expect(cushion.essentials).toBeCloseTo(900, 6)
+    // So the cushion is read against what is spent, and says so.
+    expect(cushion.against).toBe('spending')
+    // With two months there is no figure to read it against yet.
+    const two = spent.filter((one) => one.date.slice(0, 7) !== ago(3))
+    expect(guidanceFacts(input({ transactions: two, categories: croatian })).unsure.all).toBe(false)
+    expect(cushionOf(input({ transactions: two, categories: croatian })).against).toBe('needs')
     // The circles place it all the same.
     expect(placeCircle(facts).circles[2].checks[0]).toMatchObject({
       id: 'first-cushion',
@@ -236,6 +244,33 @@ describe('what is needed every month', () => {
     )
     expect(facts.essentials).toBe(0)
     expect(facts.cushionMonths).toBe(Number.POSITIVE_INFINITY)
+    expect(facts.unsure.all).toBe(false)
+  })
+
+  it('is read against what is spent only while nothing said any of it is needed', () => {
+    const against = (cats: GuidanceInput['categories']) =>
+      cushionOf(
+        input({
+          categories: cats,
+          transactions: [1, 2, 3].flatMap((n) => [
+            entry(`${ago(n)}-01`, { type: 'income', amount: 1500, category_id: 9 }),
+            entry(`${ago(n)}-02`, { amount: 500, category_id: 1 }),
+            entry(`${ago(n)}-03`, { amount: 300, category_id: null }),
+            entry(`${ago(n)}-04`, { amount: 100, category_id: 2 }),
+          ]),
+        })
+      ).against
+    const salary = { id: 9, name: 'Salary', type: 'income' }
+    // Najam has no kind, so all that is needed is what nothing said about; Eating out is not.
+    const najam = { id: 1, name: 'Najam', type: 'expense' }
+    const eatingOut = { id: 2, name: 'Eating out', type: 'expense', kind: 'eating_out' }
+    expect(against([najam, eatingOut, salary])).toBe('spending')
+    // A category the profile no longer has says nothing either.
+    expect(against([eatingOut, salary])).toBe('spending')
+    // One needed category with a kind, or one the person ticked, and it is what is needed.
+    expect(against([{ ...najam, kind: 'housing' }, eatingOut, salary])).toBe('needs')
+    expect(against([{ ...najam, essential: 1 }, eatingOut, salary])).toBe('needs')
+    expect(against([najam, { ...eatingOut, essential: 1 }, salary])).toBe('needs')
   })
 })
 
@@ -263,12 +298,12 @@ describe('money moved between accounts', () => {
     expect(facts.spending).toBeCloseTo(400, 6)
     expect(facts.essentials).toBeCloseTo(400, 6)
     expect(facts.sortedShare).toBeCloseTo(100, 6)
-    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0 })
+    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0, all: false })
     // The cushion: 1,000 against 400 a month, not against 1,400.
     expect(facts.cushionMonths).toBeCloseTo(2.5, 6)
     expect(
       cushionOf(input({ transactions: putBy(7), categories: moving, accounts: savings }))
-    ).toEqual({ liquid: 1000, essentials: 400, months: 2.5 })
+    ).toEqual({ liquid: 1000, essentials: 400, months: 2.5, against: 'needs' })
     // The savings rate: 800 of 1,200 kept.
     expect(facts.savings.cash).toBeCloseTo((800 / 1200) * 100, 6)
     // Circle 2: the salary covers what is spent.
@@ -303,7 +338,7 @@ describe('money moved between accounts', () => {
     )
     expect(facts.spending).toBeCloseTo(1400, 6)
     expect(facts.essentials).toBeCloseTo(400, 6)
-    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0 })
+    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0, all: false })
   })
 })
 

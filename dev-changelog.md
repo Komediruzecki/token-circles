@@ -1239,6 +1239,20 @@ All notable changes to Token Circles are documented here. The format is based on
   (`holdsTransfers`, a category inside one, and the list held to the bank import's rule sets: every
   name on it is one they file under, and every rule that files by the word transfer files under
   one) and `recurringPayments.test.ts` (a category inside Transfers).
+- **The cushion step says "what you spend" while nothing says what is needed** (review 3b-1,
+  finding 2). In a space whose categories have no kind, such as ones named in a language the guess
+  does not read, every expense counts as needed, and the step said "covers 28 days of what you
+  need" about what was all of the spending. guidance.md 3.1 asks for that figure to be labelled as
+  such. When everything counted as needed was counted only because nothing said otherwise, the
+  facts say so (`unsure.all`), `cushionOf` answers `against: 'spending'`, Getting started carries
+  it as `cushionAgainst`, and the step says "of what you spend". One category needed by its kind or
+  by the person's tick, and it says "of what you need" again. With too few months there is no
+  figure, and `against` is `'needs'`.
+- **Tests:** `guidanceFacts.test.ts` (a space with no kinds, and against what: no kinds, a category
+  the profile no longer has, one with a needed kind, one ticked, too few months, nothing needed),
+  `orientation.test.ts` (the three wordings of what you spend), `orientationFacts.test.ts` (the
+  same spending under Croatian names: "covers 22 days of what you spend") and
+  `guidanceExamples.test.ts` (Mia's step, from `cushionOf`).
 
 ### Achievements
 

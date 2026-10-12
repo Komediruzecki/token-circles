@@ -15,7 +15,9 @@
  * - **Essential spending** is spending in the categories needed every month (kinds.ts
  *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
  *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
- *   `unsure` says how much was counted that way.
+ *   `unsure` says how much was counted that way. When all of it was, the needed spending is what
+ *   is spent, and the cushion says so (`Cushion.against`; guidance.md 3.1, "all spending, labelled
+ *   as such").
  * - **Balances** are read as they stand today (`accountsToday`): the stored balance holds every
  *   entry, those dated after today included, so what those moved is taken back out. Every account
  *   below is read that way.
@@ -166,6 +168,11 @@ export interface Cushion {
   essentials: number | null;
   /** Liquid money in months of essential spending; null when either is unknown. */
   months: number | null;
+  /**
+   * What `months` is in: months of what is needed, or of what is spent when everything counted as
+   * needed was counted only because nothing said otherwise (`unsure.all`).
+   */
+  against: 'needs' | 'spending';
 }
 
 export interface GuidanceFacts {
@@ -191,9 +198,11 @@ export interface GuidanceFacts {
   essentials: number | null;
   /**
    * What was counted as needed because nothing said otherwise: the categories with no kind that
-   * were spent in, and the spending with no category, a month on average.
+   * were spent in, and the spending with no category, a month on average. `all` when that is
+   * everything counted as needed, so the needed spending is only what is spent; false with none,
+   * and with too few months.
    */
-  unsure: { categories: number; uncategorised: number | null };
+  unsure: { categories: number; uncategorised: number | null; all: boolean };
   liquid: number | null;
   /** Liquid money in months of essential spending. */
   cushionMonths: number | null;
@@ -281,6 +290,8 @@ interface WindowSums {
   uncategorised: number;
   /** Categories with no kind that the window spent in. */
   noKind: Set<number>;
+  /** Of `essentials`, what was counted as needed only because nothing said otherwise. */
+  unsureSpent: number;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -317,6 +328,7 @@ function sumWindow(
     essentials: 0,
     uncategorised: 0,
     noKind: new Set(),
+    unsureSpent: 0,
   };
   for (const entry of entries) {
     const id = entry.category_id;
@@ -329,6 +341,7 @@ function sumWindow(
     if (!isId(id)) {
       sums.uncategorised += spent;
       sums.essentials += spent;
+      sums.unsureSpent += spent;
       continue;
     }
     sums.sorted += spent;
@@ -339,9 +352,17 @@ function sumWindow(
     const verdict = verdicts.get(id);
     // A category the profile no longer has says nothing about its kind: needed, as no kind is.
     if (!verdict || verdict.essential) sums.essentials += spent;
-    if (!verdict || verdict.via === 'no-kind') sums.noKind.add(id);
+    if (!verdict || verdict.via === 'no-kind') {
+      sums.noKind.add(id);
+      sums.unsureSpent += spent;
+    }
   }
   return sums;
+}
+
+/** Whether all the window counted as needed was counted so only because nothing said otherwise. */
+function neededIsUnsure(sums: WindowSums): boolean {
+  return sums.essentials > 0 && sums.unsureSpent >= sums.essentials;
 }
 
 /**
@@ -454,9 +475,17 @@ export function cushionOf(
 ): Cushion {
   const months = windowMonths(input.transactions, input.today);
   const liquid = liquidOf(input.accounts, input.transactions, input.today);
-  if (months.length < MIN_MONTHS_FOR_AVERAGES) return { liquid, essentials: null, months: null };
-  const essentials = sumWindow(input, months).essentials / months.length;
-  return { liquid, essentials, months: cushionMonthsOf(liquid, essentials) };
+  if (months.length < MIN_MONTHS_FOR_AVERAGES) {
+    return { liquid, essentials: null, months: null, against: 'needs' };
+  }
+  const sums = sumWindow(input, months);
+  const essentials = sums.essentials / months.length;
+  return {
+    liquid,
+    essentials,
+    months: cushionMonthsOf(liquid, essentials),
+    against: neededIsUnsure(sums) ? 'spending' : 'needs',
+  };
 }
 
 /**
@@ -610,7 +639,11 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     spending,
     annualSpending: spending === null ? null : spending * 12,
     essentials,
-    unsure: { categories: sums.noKind.size, uncategorised: perMonth(sums.uncategorised) },
+    unsure: {
+      categories: sums.noKind.size,
+      uncategorised: perMonth(sums.uncategorised),
+      all: averaged && neededIsUnsure(sums),
+    },
     liquid,
     cushionMonths: cushionMonthsOf(liquid, essentials),
     invested: investedOf(

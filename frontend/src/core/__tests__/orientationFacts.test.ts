@@ -242,6 +242,27 @@ describe('the cushion', () => {
     expect(steps(300).map((step) => step.id)).not.toContain('cushion')
   })
 
+  it('is read against what is spent while nothing says what is needed, and the step says so', () => {
+    // Named in Croatian, so no kind is guessed: all 800 a month counts as needed, unsure.
+    const croatian = [
+      { id: 7, name: 'Namirnice' },
+      { id: 10, name: 'Putovanja' },
+    ]
+    const facts = orientationFacts(
+      source(spent, { categories: croatian, accounts: accounts(290) }),
+      NOW
+    )
+    expect(facts.cushionAgainst).toBe('spending')
+    // 590 against 800 a month: 22 whole days.
+    expect(orientationSteps(facts).find((step) => step.id === 'cushion')?.reason).toBe(
+      'The money you can reach covers 22 days of what you spend.'
+    )
+    // With Groceries needed by its kind, it is what is needed.
+    expect(orientationFacts(source(spent, { accounts: accounts(290) }), NOW).cushionAgainst).toBe(
+      'needs'
+    )
+  })
+
   it('is unknown, with no step, when the accounts could not be read or none holds money', () => {
     expect(cushion({ accounts: null })).toBeNull()
     expect(cushion({})).toBeNull()
