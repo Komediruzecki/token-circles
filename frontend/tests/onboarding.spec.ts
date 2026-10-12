@@ -439,6 +439,51 @@ test.describe('onboarding wizard', () => {
 })
 
 test.describe('onboarding wizard at phone width', () => {
+  test('a new step opens at its top, with focus on its heading', async ({ page }) => {
+    // Short enough that every step up to the import scrolls.
+    await page.setViewportSize({ width: 390, height: 600 })
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    const body = page.getByTestId('onboarding-body')
+    const scrollToEnd = async () => {
+      const top = await body.evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+        return el.scrollTop
+      })
+      expect(top).toBeGreaterThan(0)
+    }
+    const opensAtTop = async (step: string, heading: string) => {
+      await expect(page.getByTestId(`onboarding-step-${step}`)).toBeVisible()
+      await expect(page.getByRole('heading', { name: heading })).toBeFocused()
+      expect(await body.evaluate((el) => el.scrollTop)).toBe(0)
+    }
+
+    // By mouse.
+    await scrollToEnd()
+    await page.getByTestId('onboarding-next').click()
+    await opensAtTop('space', 'Name your space')
+
+    // By Enter in the name, which still continues.
+    await scrollToEnd()
+    await page.getByTestId('onboarding-profile-name').focus()
+    await page.keyboard.press('Enter')
+    await opensAtTop('account', 'Create your first account')
+
+    // Through a confirm.
+    await scrollToEnd()
+    await page.getByTestId('onboarding-next').click()
+    await page.getByTestId('confirm-accept').click()
+    await opensAtTop('import', 'Bring your data')
+
+    // And back.
+    await scrollToEnd()
+    await page.getByTestId('onboarding-back').click()
+    await opensAtTop('account', 'Create your first account')
+
+    // Escape still asks to leave.
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('confirm-accept')).toBeVisible()
+  })
+
   for (const theme of ['light', 'dark']) {
     test(`nothing scrolls sideways on any step at 390 wide, ${theme}`, async ({ page }) => {
       /**

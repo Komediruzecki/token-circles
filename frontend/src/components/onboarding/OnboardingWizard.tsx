@@ -10,7 +10,7 @@
  * account whose setup record is not finished, at the step it reached;
  * local-first, for a pristine workspace (core/onboardingStore.ts).
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
 import { refreshAchievements } from '../../core/achievementsStore'
 import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
@@ -496,7 +496,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         <div class={styles.heroMark}>
           <LogoMark size={72} />
         </div>
-        <h1 class={styles.title}>Welcome to Token Circles</h1>
+        <h1 class={styles.title} tabindex="-1" data-step-heading>
+          Welcome to Token Circles
+        </h1>
         <p class={styles.lead}>
           Your money, mapped as orbits: accounts circle your net worth, spending and income keep
           them in motion. Let's set up your space — it takes about two minutes.
@@ -551,7 +553,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const spaceStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-space">
-      <h2 class={styles.stepTitle}>Name your space</h2>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Name your space
+      </h2>
       <p class={styles.stepLead}>
         A profile is one financial space — yours, a partner's, or a shared household view. You can
         add more later.
@@ -630,7 +634,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         when={profileAccounts().length === 0}
         fallback={
           <>
-            <h2 class={styles.stepTitle}>Your accounts</h2>
+            <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+              Your accounts
+            </h2>
             <p class={styles.stepLead}>
               You already have {profileAccounts().length} account
               {profileAccounts().length === 1 ? '' : 's'} in orbit — add another below if you like,
@@ -639,7 +645,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </>
         }
       >
-        <h2 class={styles.stepTitle}>Create your first account</h2>
+        <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+          Create your first account
+        </h2>
         <p class={styles.stepLead}>
           An account is anything that holds money — a checking account, savings, cash in a drawer, a
           brokerage. Add the one you use most; more can join the orbit any time.
@@ -786,7 +794,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const importStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-import">
-      <h2 class={styles.stepTitle}>Bring your data</h2>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Bring your data
+      </h2>
       <p class={styles.stepLead}>
         This is the app's full importer. Drop bank statements and we detect the bank, or use CSV /
         Google Sheets — everything lands as regular transactions you can refine later.
@@ -888,6 +898,22 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // A new step opens at its top, not at the scroll position the last one was left at, and focus
+  // moves to its heading, so a screen reader announces the step and Tab starts from there. At once,
+  // not smooth: the old step's content is already gone. Not on open, where the panel takes focus.
+  createEffect(
+    on(
+      onboardingStep,
+      () => {
+        if (!onboardingOpen() || !bodyEl) return
+        // scrollTop, not scrollTo: the middle sets no smooth scrolling, so this is at once.
+        bodyEl.scrollTop = 0
+        bodyEl.querySelector<HTMLElement>('[data-step-heading]')?.focus({ preventScroll: true })
+      },
+      { defer: true }
+    )
+  )
+
   const [subScan, setSubScan] = createSignal<{
     chosenCount: () => number
     submitting: () => boolean
@@ -896,7 +922,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
-      <h2 class={styles.stepTitle}>Your subscriptions, spotted</h2>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Your subscriptions, spotted
+      </h2>
       <p class={styles.stepLead}>
         We scanned your transactions for recurring charges from known services — check the ones you
         want tracked, and adjust a price or period where we guessed wrong.
@@ -921,7 +949,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         </svg>
         <span class={styles.doneSatellite} />
       </div>
-      <h2 class={styles.title}>Your orbit is set</h2>
+      <h2 class={styles.title} tabindex="-1" data-step-heading>
+        Your orbit is set
+      </h2>
       <ul class={styles.summary}>
         <li>
           <b>{state.currentProfile?.name ?? 'Your space'}</b> is ready
@@ -1176,7 +1206,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </span>
           </header>
 
-          <div class={styles.body} ref={bodyEl}>
+          <div class={styles.body} ref={bodyEl} data-test-id="onboarding-body">
             <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
             <Show when={onboardingStep() === 'space'}>{spaceStep()}</Show>
             <Show when={onboardingStep() === 'account'}>{accountStep()}</Show>

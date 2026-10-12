@@ -177,6 +177,12 @@
 
 /* ---- steps ---- */
 
+/* A step's heading takes focus when the step opens, for screen readers; it is not a control, so it
+   shows no ring. */
+[data-step-heading]:focus {
+  outline: none;
+}
+
 .step {
   display: flex;
   flex-direction: column;

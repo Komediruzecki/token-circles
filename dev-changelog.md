@@ -394,6 +394,17 @@ All notable changes to Token Circles are documented here. The format is based on
   scroll. `tests/onboarding.spec.ts` ("onboarding wizard at phone width") checks every step at 390
   wide, light and dark: no box in the wizard wider inside than out, and the panel still after
   Continue is scrolled into view.
+- **Each wizard step opens at its top, with focus on its heading.** The body (`.body`,
+  `data-test-id="onboarding-body"`) kept its scroll position across a step change, so on a short
+  screen a step opened as far down as the last one was left: at 390x600, 45 px into "Name your
+  space" and 202 px into the import. Focus stayed on the Continue button, or fell to `<body>` when
+  that step's content went. An effect on `onboardingStep` (deferred, so not on open, where the panel
+  takes focus) sets the body's `scrollTop` to 0 at once and focuses the new step's heading
+  (`data-step-heading`, `tabindex="-1"`, `preventScroll`, no focus ring). Enter in the name,
+  Escape and the import step's `showTheWork` are unchanged. The report of "Name your space" opening
+  scrolled down at 1280x800 was the overlay scrolling (entry above, 450 px in one measured run),
+  not the body, whose `scrollTop` was 0 every time. `tests/onboarding.spec.ts` ("a new step opens at
+  its top") checks by mouse, by Enter, through a confirm and going back.
 - **Onboarding is decided per account.** The completed-or-skipped flag in localStorage is kept
   under the account it belongs to, `finance_onboarding:account-<id>`, or `finance_onboarding:local`
   in local-first (`frontend/src/core/onboardingStore.ts`: `setOnboardingOwner`,
