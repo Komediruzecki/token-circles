@@ -145,6 +145,12 @@
     min-height: 44px;
   }
 
+  /* The status line starts 14 px under the chips, not 10: Ask again's 44 px reach 13 px above
+     its line, and must not reach into a chip. */
+  .note {
+    margin-top: 14px;
+  }
+
   /* Its negative margins take back what it grew by (its own line is 18 px), so it sits by its
      status line as it did. Coming after the line, it takes the taps where its edge reaches over. */
   .askAgain {

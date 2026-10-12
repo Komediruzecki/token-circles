@@ -687,13 +687,39 @@ test.describe('About this space in Settings', () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 })
     await gotoServerless(page, 'settings', 'settings-about-space')
+    // Both answered in full, so the household's button sits beside its short line, under the
+    // children's chips.
     const answer = async () => {
       await page.getByTestId('settings-space-region-HR').click()
       await page.getByTestId('settings-space-adults-1').click()
+      await page.getByTestId('settings-space-children-0').click()
+      await expect(page.getByTestId('settings-space-household-note')).toHaveText(
+        '1 adult, no children.'
+      )
       await expect(page.getByTestId('settings-space-household-ask-again')).toBeEnabled()
       await expect(page.getByTestId('settings-space-region-ask-again')).toBeEnabled()
     }
     await answer()
+
+    // No chip's box and no button's 44 px overlap, so neither takes the other's taps.
+    const overlaps = await page.evaluate(() => {
+      const card = document.querySelector('[data-test-id="settings-about-space"]')!
+      const buttons = Array.from(card.querySelectorAll('[data-test-id$="-ask-again"]'))
+      const chips = Array.from(card.querySelectorAll('label'))
+      return buttons.flatMap((button) => {
+        const b = button.getBoundingClientRect()
+        return chips
+          .filter((chip) => {
+            const c = chip.getBoundingClientRect()
+            return c.left < b.right && c.right > b.left && c.top < b.bottom && c.bottom > b.top
+          })
+          .map(
+            (chip) =>
+              `${button.getAttribute('data-test-id')} over ${chip.getAttribute('data-test-id')}`
+          )
+      })
+    })
+    expect(overlaps).toEqual([])
 
     // The region's line wraps it at 390: its words start 6 to 8 px under the line's last.
     const gap = await page.evaluate(() => {

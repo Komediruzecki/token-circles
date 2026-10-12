@@ -1023,6 +1023,16 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `categoryKindField.test.tsx` ("None yet" in both places it was asserted; with no
   kind, of the empty choice, the Kind help and the words under the box only the last says "needed
   every month"; the new guess words).
+- **Ask again's 44 px stay clear of the chips** (found while measuring W7). With its negative
+  margins, Ask again's hit area reaches 13 px above its line; beside a short household line at
+  390 ("1 adult, no children.") its top edge (y 560.3) reached 3 px into the Children chips above
+  (bottom y 563.3), where the chips, positioned, took the taps: 20 px of its width answered a chip.
+  At the phone width the status line now starts 14 px under the chips (`.note`, was 10): the
+  chips end at y 559.3, the button's top edge is its own across its whole width, and its hit area
+  at its centre is 44 px (y 560 to 604). The region's wrapped line keeps its 7.1 px.
+- **Tests:** `onboarding.spec.ts` (the edge-tap test answers both questions in full, so the
+  household's button sits beside its line under the chips, and checks no Ask again overlaps a
+  chip).
 
 ### Achievements
 
