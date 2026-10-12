@@ -1,6 +1,6 @@
 import type { AppEnv } from './index';
 import * as db from './db';
-import { resetName } from '../../shared/defaultCategories';
+import { resetKeepsIcon, resetName } from '../../shared/defaultCategories';
 import type { Kind } from '../../shared/guidance/kinds';
 
 /**
@@ -290,6 +290,7 @@ const REQUIRED_CATEGORY_TABLES = ['budgets', 'budgets_zero_based'] as const;
 interface CategoryRow {
   id: number;
   name: string;
+  icon?: string | null;
 }
 
 /**
@@ -399,7 +400,7 @@ export async function deleteProfileCategory(
 export async function resetProfileCategories(DB: D1Database, profileId: number): Promise<void> {
   const existing = await db.all<CategoryRow>(
     DB,
-    'SELECT id, name FROM categories WHERE profile_id = ? ORDER BY id',
+    'SELECT id, name, icon FROM categories WHERE profile_id = ? ORDER BY id',
     profileId
   );
   const defaultsByName = new Map(
@@ -426,7 +427,7 @@ export async function resetProfileCategories(DB: D1Database, profileId: number):
         ).bind(
           defaultCategory.name,
           defaultCategory.color,
-          defaultCategory.icon,
+          resetKeepsIcon(category.name, category.icon) ? category.icon : defaultCategory.icon,
           defaultCategory.type,
           defaultCategory.taxDeductible,
           defaultCategory.kind,

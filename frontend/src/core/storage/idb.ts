@@ -3,7 +3,7 @@
  * Implements StorageAdapter for serverless/client-only operation using IndexedDB
  */
 import { openDB } from 'idb'
-import { resetName } from '../../../../shared/defaultCategories'
+import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   isImportSourceKind,
   isImportSourceSchedule,
@@ -379,7 +379,8 @@ export function getDB() {
 
 /**
  * The categories a local-first profile starts from, and what "Reset to defaults" sets it back to:
- * the Worker's list (worker/src/profileData.ts), without its icons. Each expense category carries
+ * the Worker's list (worker/src/profileData.ts). Of its icons, only Groceries' and Eating out's,
+ * which the name alone would draw otherwise; the rest come from the name. Each expense category carries
  * its kind (shared/guidance/kinds.ts); income categories take none. Groceries and Eating out
  * replaced Food, which a reset renames to Groceries (shared/defaultCategories.ts).
  */
@@ -389,6 +390,8 @@ export const DEFAULT_CATEGORIES: ReadonlyArray<{
   color: string
   tax_deductible: boolean
   kind: Kind | null
+  /** Only where the name alone draws another icon: Groceries a mug, Eating out none. */
+  icon?: string
 }> = [
   { type: 'income', name: 'Salary', color: '#22C55E', tax_deductible: false, kind: null },
   { type: 'income', name: 'Freelance', color: '#16A34A', tax_deductible: false, kind: null },
@@ -401,6 +404,7 @@ export const DEFAULT_CATEGORIES: ReadonlyArray<{
     color: '#F97316',
     tax_deductible: false,
     kind: 'groceries',
+    icon: 'shopping-cart',
   },
   {
     type: 'expense',
@@ -408,6 +412,7 @@ export const DEFAULT_CATEGORIES: ReadonlyArray<{
     color: '#84CC16',
     tax_deductible: false,
     kind: 'eating_out',
+    icon: 'utensils',
   },
   {
     type: 'expense',
@@ -761,6 +766,10 @@ export class IndexedDBAdapter implements StorageAdapter {
         await categoryStore.put({
           ...category,
           ...defaultCategory,
+          // An icon the person chose for Food stays as it becomes Groceries.
+          ...(resetKeepsIcon(String(category.name), category.icon as string | null)
+            ? { icon: category.icon }
+            : {}),
           essential: null,
           parent_id: null,
           profile_id: profileId,

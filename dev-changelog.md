@@ -625,7 +625,7 @@ All notable changes to Token Circles are documented here. The format is based on
   `kind` as any string, so a kind a later build adds cannot fail the list (`effectiveKind` ignores
   it), and `essential` as a boolean or 1/0.
 - **The defaults split Food** (`worker/src/profileData.ts`, `frontend/src/core/storage/idb.ts`):
-  Groceries (shopping-cart on the Worker) and Eating out (utensils), and every expense default
+  Groceries (shopping-cart) and Eating out (utensils) in both runtimes, and every expense default
   carries its kind. The local-first demo files "Grocery shopping" under Groceries and "Dining out"
   under Eating out (it was Entertainment), and budgets both. `DELETE /api/categories` matches a
   category called Food to Groceries (`resetName`, `shared/defaultCategories.ts`), so a reset renames
@@ -898,6 +898,24 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` (every chip and Ask again in setup and Settings: 44 px or more at
   390, under 40 at 1280) and `categories.spec.ts` (the row: 44 px or more at 390, under 30 at
   1280, and a tap at its far end toggles the box).
+- **Groceries and Eating out draw their own icons** (visual pass 3a, finding 7). Local-first's
+  defaults carried no icon, so Groceries fell to the food pattern in `CategoryIcon.tsx` (a coffee
+  mug, as "grocer" sits in it) and Eating out to the fallback tick ("eat" must stand alone). The
+  local-first defaults now give these two the Worker's icons, `shopping-cart` and `utensils`
+  (`DEFAULT_CATEGORIES` in `idb.ts` takes an optional `icon`; the rest still come from the name),
+  and the name matching checks `/grocer/` (cart) and `/eating\s*out|dining\s*out/` (utensils)
+  before the food family, so an existing Groceries or Eating out with no icon of its own (`''`,
+  `tag`, `folder` or none) shows them in both runtimes. A reset renaming Food to Groceries keeps an
+  icon the person chose (`resetKeepsIcon`, `shared/defaultCategories.ts`); Food's old default icon
+  (`utensils` on the Worker) or none becomes the cart. Before, the Worker set every kept default's
+  icon back to the default's, a chosen one on Food included, and local-first kept Food's icon
+  whatever it was; a default matched by its own name is still set back to the default's icon.
+- **Tests:** `CategoryIconResolve.test.ts` (Groceries and Eating out with no icon, any case; a
+  chosen icon wins; Food unchanged), `guidanceKinds.test.ts` (the local defaults' two icons;
+  `resetKeepsIcon`), `worker/test/category-kinds.test.ts` (the Worker's), and the reset contract
+  scenarios in both runtimes (Food with `utensils` and with no icon becomes the cart; Food with
+  `coffee` keeps it; Eating out set back to `utensils`). `CategoryIcon.test.ts`'s copy of the
+  pattern table has the two new rows.
 
 ### Achievements
 

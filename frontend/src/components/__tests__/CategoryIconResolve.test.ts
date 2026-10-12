@@ -10,7 +10,7 @@
  * word, which means the lookup has to cope with arbitrary user text.
  */
 import { describe, expect, it } from 'vitest'
-import { iconFromUserValue } from '../CategoryIcon'
+import { getCategorySvg, iconFromUserValue, iconSvgByKey } from '../CategoryIcon'
 
 describe('iconFromUserValue', () => {
   it('resolves an exact icon key', () => {
@@ -65,5 +65,34 @@ describe('iconFromUserValue', () => {
       if (def !== null)
         expect(typeof def.path, `"${key}" must resolve to a real path`).toBe('string')
     }
+  })
+})
+
+describe('a category named like a default', () => {
+  /** The path the category's icon draws. */
+  const drawn = (name: string, icon?: string | null) =>
+    (getCategorySvg(name, 18, icon) as unknown as SVGElement)
+      .querySelector('path')!
+      .getAttribute('d')
+  const key = (icon: string) =>
+    (iconSvgByKey(icon) as unknown as SVGElement).querySelector('path')!.getAttribute('d')
+
+  it('draws Groceries as a cart and Eating out as utensils, without an icon of its own', () => {
+    for (const icon of [undefined, null, '', 'tag', 'folder']) {
+      expect(drawn('Groceries', icon), String(icon)).toBe(key('shopping-cart'))
+      expect(drawn('Eating out', icon), String(icon)).toBe(key('utensils'))
+    }
+    expect(drawn('groceries')).toBe(key('shopping-cart'))
+    expect(drawn('Eating Out')).toBe(key('utensils'))
+  })
+
+  it('keeps an icon the person chose', () => {
+    expect(drawn('Groceries', 'home')).toBe(key('home'))
+    expect(drawn('Eating out', 'coffee')).toBe(key('coffee'))
+  })
+
+  it('leaves the rest of the food family as it was', () => {
+    expect(drawn('Food')).toBe(drawn('Restaurant'))
+    expect(drawn('Food')).not.toBe(key('shopping-cart'))
   })
 })

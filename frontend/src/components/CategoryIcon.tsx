@@ -149,6 +149,10 @@ const iconNameMap: Record<string, IconDef> = {
 }
 
 const iconPatterns: [RegExp, IconDef][] = [
+  // The defaults Groceries and Eating out, before the food family below would take them: a cart
+  // and utensils, as the Worker's defaults store them, for a category with no icon of its own.
+  [/grocer/i, iconNameMap['shopping-cart']!],
+  [/eating\s*out|dining\s*out/i, iconNameMap.utensils!],
   // Transport / Car
   [
     /car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i,

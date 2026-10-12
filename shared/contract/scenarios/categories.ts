@@ -191,8 +191,14 @@ export const categories = [
       const list = (await api.get('/api/categories')).body as Json[];
       const named = (name: string) => list.find((row) => row.name === name);
       expect(named('Food')).toBeUndefined();
-      // The same category, renamed: its entries and its budget stay with it.
-      expect(named('Groceries')).toMatchObject({ id: food, kind: 'groceries', essential: null });
+      // The same category, renamed: its entries and its budget stay with it. Its icon was the old
+      // default's, so it takes the new one's.
+      expect(named('Groceries')).toMatchObject({
+        id: food,
+        kind: 'groceries',
+        essential: null,
+        icon: 'shopping-cart',
+      });
       expect((await api.get(`/api/transactions/${lunch}`)).body).toMatchObject({
         category_id: food,
       });
@@ -206,6 +212,26 @@ export const categories = [
       }
       expect(named('Salary')).toMatchObject({ type: 'income', kind: null });
       expect(named('Housing')).toMatchObject({ kind: 'housing' });
+    }
+  ),
+
+  scenario(
+    'resetting the categories keeps the icon you gave Food as it becomes Groceries',
+    async (api, expect) => {
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+        icon: 'coffee',
+      });
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+      const list = (await api.get('/api/categories')).body as Json[];
+      expect(list.find((row) => row.name === 'Groceries')).toMatchObject({
+        id: food,
+        icon: 'coffee',
+      });
+      // A default matched by its own name is set back to the default's icon.
+      expect(list.find((row) => row.name === 'Eating out')).toMatchObject({ icon: 'utensils' });
     }
   ),
 
@@ -234,9 +260,10 @@ export const categories = [
       expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
 
       const list = (await api.get('/api/categories')).body as Json[];
-      // Food is the Groceries kept; the person's own is folded into it, entries and all.
+      // Food is the Groceries kept; the person's own is folded into it, entries and all. Food had
+      // no icon of its own, so it takes the cart.
       expect(list.filter((row) => row.name === 'Groceries')).toEqual([
-        expect.objectContaining({ id: food }),
+        expect.objectContaining({ id: food, icon: 'shopping-cart' }),
       ]);
       expect(list.find((row) => row.id === own)).toBeUndefined();
       expect((await api.get(`/api/transactions/${market}`)).body).toMatchObject({

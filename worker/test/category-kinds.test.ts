@@ -57,4 +57,10 @@ describe("the Worker's default categories", () => {
     expect(names).toContain('Eating out');
     expect(names).not.toContain('Food');
   });
+
+  it('give Groceries the cart and Eating out the utensils', () => {
+    const icon = (name: string) => DEFAULT_CATEGORIES.find((c) => c.name === name)?.icon;
+    expect(icon('Groceries')).toBe('shopping-cart');
+    expect(icon('Eating out')).toBe('utensils');
+  });
 });

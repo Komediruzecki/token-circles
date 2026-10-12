@@ -3,7 +3,7 @@
  * a name gives, the kind a category goes by, and whether it is needed every month.
  */
 import { describe, expect, it } from 'vitest'
-import { resetName } from '../../../../shared/defaultCategories'
+import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   categoryLookup,
   effectiveKind,
@@ -205,5 +205,24 @@ describe('the local-first defaults', () => {
   it('take Food back to Groceries on a reset', () => {
     expect(resetName(' FOOD ')).toBe('groceries')
     expect(resetName('Housing')).toBe('housing')
+  })
+
+  it("give Groceries and Eating out the Worker's icons", () => {
+    const icon = (name: string) => DEFAULT_CATEGORIES.find((c) => c.name === name)?.icon
+    expect(icon('Groceries')).toBe('shopping-cart')
+    expect(icon('Eating out')).toBe('utensils')
+  })
+})
+
+describe('the icon a reset gives Food as it becomes Groceries', () => {
+  it('keeps an icon the person chose, and replaces one nobody chose', () => {
+    expect(resetKeepsIcon('Food', 'coffee')).toBe(true)
+    expect(resetKeepsIcon(' food ', 'home')).toBe(true)
+    // The old default's own icon, and the values stored when nobody chose one.
+    for (const icon of ['utensils', 'tag', 'folder', '', ' ', null, undefined])
+      expect(resetKeepsIcon('Food', icon), String(icon)).toBe(false)
+    // A default matched by its own name is set back to the default, icon and all.
+    expect(resetKeepsIcon('Groceries', 'coffee')).toBe(false)
+    expect(resetKeepsIcon('Housing', 'coffee')).toBe(false)
   })
 })
