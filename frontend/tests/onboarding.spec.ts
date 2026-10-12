@@ -442,6 +442,47 @@ test.describe('onboarding wizard', () => {
 })
 
 test.describe('onboarding wizard at phone width', () => {
+  for (const { width, height, phone } of [
+    { width: 390, height: 844, phone: true },
+    { width: 1280, height: 800, phone: false },
+  ]) {
+    test(`the space questions' chips and Ask again are ${phone ? 'at least 44 px tall on a phone' : 'their desktop size'}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height })
+      const heights = (prefix: string) =>
+        page.evaluate(
+          (p) =>
+            Array.from(
+              document.querySelectorAll(
+                `label[data-test-id^="${p}-region-"], label[data-test-id^="${p}-adults-"], label[data-test-id^="${p}-children-"], [data-test-id$="-ask-again"]`
+              )
+            ).map((el) => el.getBoundingClientRect().height),
+          prefix
+        )
+      const allFit = (list: number[]) =>
+        phone ? list.every((h) => h >= 44) : list.every((h) => h < 40)
+
+      await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+      const wizard = await heights('onboarding-space')
+      expect(wizard).toHaveLength(13)
+      expect(allFit(wizard), wizard.join(', ')).toBe(true)
+
+      await page.getByTestId('onboarding-space-region-HR').click()
+      await page.getByTestId('onboarding-space-adults-1').click()
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+      await aboutThisSpace(page)
+      await expect(page.getByTestId('settings-space-household-ask-again')).toBeVisible()
+      const settings = await heights('settings-space')
+      // The chips, and Ask again for both questions.
+      expect(settings).toHaveLength(15)
+      expect(allFit(settings), settings.join(', ')).toBe(true)
+    })
+  }
+
   test('a new step opens at its top, with focus on its heading', async ({ page }) => {
     // Short enough that every step up to the import scrolls.
     await page.setViewportSize({ width: 390, height: 600 })

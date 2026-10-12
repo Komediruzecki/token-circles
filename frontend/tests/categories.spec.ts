@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute, getByTestId } from './test-helpers'
+import { gotoServerless, login, navigateToRoute, getByTestId } from './test-helpers'
 
 test.describe('Categories', () => {
   test.beforeEach(async ({ page }) => {
@@ -149,4 +149,31 @@ test.describe('Categories', () => {
     const modal = getByTestId(page, 'category-modal-title')
     await expect(modal).toBeVisible()
   })
+})
+
+test.describe('Categories dialog, "Needed every month"', () => {
+  for (const { width, height, phone } of [
+    { width: 390, height: 844, phone: true },
+    { width: 1280, height: 800, phone: false },
+  ]) {
+    test(`its whole row toggles the box, ${phone ? 'at least 44 px tall on a phone' : 'at its desktop size'}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height })
+      await gotoServerless(page, 'categories', 'categories-header')
+      await page.getByTestId('add-category-btn').click()
+      const box = page.getByTestId('category-essential')
+      await expect(box).toBeVisible()
+      const row = page.locator('label').filter({ has: box })
+      const rowHeight = (await row.boundingBox())!.height
+      if (phone) expect(rowHeight).toBeGreaterThanOrEqual(44)
+      else expect(rowHeight).toBeLessThan(30)
+
+      // A tap on the row's far end, away from the box and its words, still toggles it.
+      const before = await box.isChecked()
+      const size = (await row.boundingBox())!
+      await row.click({ position: { x: size.width - 4, y: size.height - 3 } })
+      await expect(box).toBeChecked({ checked: !before })
+    })
+  }
 })

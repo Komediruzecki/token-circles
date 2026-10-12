@@ -842,3 +842,10 @@ select.form-control {
   margin: 0;
   accent-color: var(--primary);
 }
+
+/* The whole row toggles the box, so on a phone the row is the 44 px target. */
+@media (max-width: 768px) {
+  .check-row {
+    min-height: 44px;
+  }
+}

@@ -887,6 +887,17 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `categoryKindField.test.tsx` (the three lines, the line following the Kind field,
   leaving on a change, absent for a stored choice and shown for a stored kind with no choice; the
   help for the name's guess, the parent's, none and a picked kind).
+- **44 px touch targets on a phone** (visual pass 3a, finding 6). At the app's phone width
+  (`max-width: 768px`) the region and count chips (setup and Settings share
+  `SpaceQuestions.module.css`) and Ask again have `min-height: 44px`, and so does the "Needed
+  every month" row in the category dialog (`.check-row`, a label, so the whole row toggles the
+  box). At 390 wide: chips 36.3 to 44 px (13 in setup, 13 in Settings), Ask again 18.1 to 44 px,
+  the row 21 to 44 px (the box itself stays 16 px). At 1280 every one keeps its size. Ask again
+  still sits on its status line's baseline. With Settings scrolled to its end at 390, the card ends
+  at y 606 and the + button starts at y 776: nothing is under it.
+- **Tests:** `onboarding.spec.ts` (every chip and Ask again in setup and Settings: 44 px or more at
+  390, under 40 at 1280) and `categories.spec.ts` (the row: 44 px or more at 390, under 30 at
+  1280, and a tap at its far end toggles the box).
 
 ### Achievements
 

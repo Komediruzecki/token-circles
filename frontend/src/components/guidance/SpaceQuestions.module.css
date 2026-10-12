@@ -135,6 +135,19 @@
   cursor: progress;
 }
 
+/* A finger needs 44 px: the chips and Ask again grow to it at the app's phone width. */
+@media (max-width: 768px) {
+  .chip {
+    min-height: 44px;
+  }
+
+  .askAgain {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+}
+
 .problem {
   margin: 12px 0 0;
   font-size: 13px;
