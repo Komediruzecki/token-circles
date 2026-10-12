@@ -1097,6 +1097,34 @@ All notable changes to Token Circles are documented here. The format is based on
 - **CHANGELOG: the meal line has its verb** (visual pass 3a-3, E). "and one named for a meal a
   knife and fork" reads "and one named for a meal shows a knife and fork"; the rest of the line is
   unchanged.
+- **The benchmarks** (`shared/guidance/benchmarks.ts` and `benchmarks.json`): the official figures
+  a person's numbers are set beside, for eleven metrics and five regions. The JSON is the guidance
+  research's file, shipped whole: 164 bands, each with its edges, source URL, year and strength;
+  the references the copy quotes; the gaps (a metric a region has no figure for, and why); a
+  derivation per metric and region; and the sources. Two changes from the research copy: it cited
+  the app's own plan as a source at a `file://` path on the machine it was written on, so that
+  source and its citations (15 bands, 5 derivations) are left out, and it is formatted as the
+  repo's JSON is, the data otherwise the same. `bandFor` takes the metric, the region, the value
+  and `{ tenure, hasHousingLoan }`, and answers the band the value falls in, or null for a gap, a
+  value that is not a number and one below what the metric can be; a tenure without rows of its
+  own reads as not given (the UK's mortgage row), and no answer as no housing loan. Beside it:
+  `bandsFor`, `referencesFor`, `gapFor` (the file's stated gap, or a borrowing the app does not
+  use), `derivationFor` and `sourceFor`. Two decisions live here, each in one place: `BAND_RULE`
+  (D5: typical runs from 0.75 times the lowest group average to 1.25 times the highest, and the
+  savings rate is the official rate plus or minus 5 points) and `BORROWED_BANDS_USED` (D4 and D9:
+  the UK's subscription count for the euro regions and Croatia's debt-payment lines for Germany and
+  the EU are used and named as borrowed; the euro regions have no subscription-spend band, the UK
+  no debt-payment band). `benchmarks.ts` is the only module that imports the JSON, and nothing
+  imports `benchmarks.ts` yet, so no chunk of the app carries it.
+- **Tests:** `guidanceBenchmarks.test.ts`: the file (every section, an https source and a year on
+  every figure, citations that resolve, no path on anyone's machine); bands or a stated gap for
+  every metric and region; no overlap or hole for any household a metric's rows tell apart, probed
+  at and either side of every edge; a table of what each region `chooseRegion` can pick gets; the
+  UK's tenure rows and the 45% line with a housing loan; D4 and D9 (every borrowing listed, the
+  lender named, a "no" leaving a gap that says why); D5 (the spending bands and the savings rate
+  drawn by the rule); the values of the three people in the research's examples landing in the
+  bands it gave them; and who reads the file (only `benchmarks.ts` imports the JSON, and nothing in
+  `shared/guidance/` imports from outside `shared/`).
 
 ### Achievements
 
