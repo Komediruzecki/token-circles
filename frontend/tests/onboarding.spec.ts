@@ -608,6 +608,35 @@ test.describe('onboarding wizard at phone width', () => {
     })
   }
 
+  test("the questions' lead names them, on one line, nearer the questions than the fields", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    const lead = page.getByTestId('onboarding-space-questions-lead')
+    await expect(lead).toHaveText('Both questions are optional. Change them later in Settings.')
+    for (const [width, height] of [
+      [390, 844],
+      [375, 667],
+      [1280, 800],
+    ]) {
+      await page.setViewportSize({ width, height })
+      // Its lines, the room above it (from the fields) and below it (to "Where do you live?").
+      const measured = await lead.evaluate((el) => {
+        const box = el.getBoundingClientRect()
+        const question = document.querySelector('[data-test-id="onboarding-space-region"] legend')!
+        return {
+          lines: Math.round(box.height / parseFloat(getComputedStyle(el).lineHeight)),
+          above: box.top - el.previousElementSibling!.getBoundingClientRect().bottom,
+          below: question.getBoundingClientRect().top - box.bottom,
+        }
+      })
+      expect(measured.lines, `${width}x${height}`).toBe(1)
+      expect(measured.below, `${width}x${height}`).toBeLessThan(measured.above)
+    }
+  })
+
   for (const { width, height, phone } of [
     { width: 390, height: 844, phone: true },
     { width: 1280, height: 800, phone: false },

@@ -612,8 +612,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             )}
           </Field>
         </div>
-        <p class={styles.fieldHint} data-test-id="onboarding-space-questions-lead">
-          Both are optional. Change them later in Settings.
+        <p
+          class={`${styles.fieldHint} ${styles.questionsLead}`}
+          data-test-id="onboarding-space-questions-lead"
+        >
+          Both questions are optional. Change them later in Settings.
         </p>
         <SpaceQuestions
           idPrefix="onboarding-space"

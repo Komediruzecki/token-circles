@@ -1057,6 +1057,16 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `AboutThisSpace.test.tsx` (both buttons read "Remove answer"; the region's reason
   line after a removal), and the renamed tests in `onboarding.spec.ts`, `AboutThisSpace.test.tsx`
   and `guidanceAnswersStore.test.ts`.
+- **The questions' lead names them and sits with them** (visual pass 3a-3, A). "Both are
+  optional." sat halfway between the fields and "Where do you live?" (14 px each way, 17.3 and
+  18.3 px between the text), so "Both" could mean Profile name and Base currency. It reads "Both
+  questions are optional. Change them later in Settings.", one line at 390, 375 and 1280 (320 px
+  of text in a 352 px box at 390, 337 at 375). `.questionsLead` (`margin: 6px 0 -6px`) gives it 20
+  px from the fields and 8 px to the first question (23.3 and 12.3 px between the text); the
+  margins cancel out, so Children's legend stays at y 733-751 at 390x844.
+- **Tests:** `onboarding.spec.ts` ("the questions' lead names them, on one line, nearer the
+  questions than the fields": its words, one line and less room below than above at 390x844,
+  375x667 and 1280x800), and the lead's words in `onboardingForms.test.tsx`.
 
 ### Achievements
 

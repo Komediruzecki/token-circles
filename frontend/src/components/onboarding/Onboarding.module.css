@@ -323,6 +323,12 @@
   color: var(--text-secondary);
 }
 
+/* The space questions' lead belongs to the questions under it, not the fields above: more room
+   above it than below. The margins cancel out, so nothing under it moves. */
+.questionsLead {
+  margin: 6px 0 -6px;
+}
+
 .secondaryAction {
   align-self: flex-start;
   padding: 9px 16px;
