@@ -833,6 +833,21 @@ test.describe('onboarding wizard at phone width', () => {
 })
 
 test.describe('About this space in Settings', () => {
+  test('each "Remove answer" is described by the question it clears', async ({ page }) => {
+    await gotoServerless(page, 'settings', 'settings-about-space')
+    await page.getByTestId('settings-space-region-HR').click()
+    await page.getByTestId('settings-space-adults-1').click()
+    const region = page.getByTestId('settings-space-region-ask-again')
+    const household = page.getByTestId('settings-space-household-ask-again')
+    await expect(region).toBeEnabled()
+    await expect(household).toBeEnabled()
+    // The same name, told apart by the browser's accessible description.
+    await expect(region).toHaveAccessibleName('Remove answer')
+    await expect(household).toHaveAccessibleName('Remove answer')
+    await expect(region).toHaveAccessibleDescription('Where do you live?')
+    await expect(household).toHaveAccessibleDescription('Who does this space cover?')
+  })
+
   test('on a phone "Remove answer" sits 6 to 8 px under a wrapped line and takes a tap at either edge', async ({
     page,
   }) => {

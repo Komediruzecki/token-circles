@@ -160,6 +160,17 @@ describe('About this space', () => {
       expect(byTestId(`settings-space-${question}-ask-again`)!.textContent?.trim()).toBe(
         'Remove answer'
       )
+    // Each is described by its question, so the two read apart: what aria-describedby points at.
+    const description = (button: HTMLElement) =>
+      (button.getAttribute('aria-describedby') ?? '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((ref) => document.getElementById(ref)?.textContent?.trim() ?? '')
+        .join(' ')
+    expect(description(byTestId('settings-space-region-ask-again')!)).toBe('Where do you live?')
+    expect(description(byTestId('settings-space-household-ask-again')!)).toBe(
+      'Who does this space cover?'
+    )
 
     byTestId('settings-space-region-ask-again')!.click()
     await vi.waitFor(async () => {

@@ -1081,6 +1081,15 @@ All notable changes to Token Circles are documented here. The format is based on
   brought into view stops above it", 375x667): no fade with the visible bottom at the step's end
   or one pixel short of the scroll end, a fade with one pixel of the step below, and the last
   region chip brought into view from the top ending 20 px or more above the middle's bottom.
+- **Each "Remove answer" says which answer it removes** (visual pass 3a-3, F). About this space's
+  two buttons had the same name and nothing else, so a screen reader's list of buttons gave
+  "Remove answer" twice. Each question's legend has an id (`<prefix>-region-question`,
+  `<prefix>-household-question`, in `SpaceQuestions.tsx`) and its button points at it with
+  `aria-describedby`: "Remove answer", described as "Where do you live?" or "Who does this space
+  cover?". The visible label and the test ids are unchanged.
+- **Tests:** `onboarding.spec.ts` ("each "Remove answer" is described by the question it clears":
+  both buttons' accessible name and description as Chromium computes them) and
+  `AboutThisSpace.test.tsx` (what each button's `aria-describedby` points at).
 
 ### Achievements
 

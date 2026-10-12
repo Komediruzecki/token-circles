@@ -59,12 +59,20 @@ function Chip(props: {
   )
 }
 
-function AskAgain(props: { testId: string; disabled?: boolean; onClick: () => void }) {
+/** "Remove answer". Both questions have one, so each is described by its question: a screen reader
+ *  lists "Remove answer, Where do you live?", not two buttons with the same name. */
+function AskAgain(props: {
+  testId: string
+  describedBy: string
+  disabled?: boolean
+  onClick: () => void
+}) {
   return (
     <button
       type="button"
       class={styles.askAgain}
       data-test-id={props.testId}
+      aria-describedby={props.describedBy}
       disabled={props.disabled}
       onClick={() => {
         props.onClick()
@@ -83,7 +91,9 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
   return (
     <div class={styles.questions}>
       <fieldset class={styles.question} data-test-id={id('region')}>
-        <legend class={styles.legend}>{REGION_QUESTION}</legend>
+        <legend id={id('region-question')} class={styles.legend}>
+          {REGION_QUESTION}
+        </legend>
         <p class={styles.why}>{REGION_WHY}</p>
         <div class={styles.chips}>
           <For each={REGION_CHOICES}>
@@ -107,6 +117,7 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
             <Show when={props.onAskAgain && props.answers.region}>
               <AskAgain
                 testId={id('region-ask-again')}
+                describedBy={id('region-question')}
                 disabled={props.disabled}
                 onClick={() => props.onAskAgain?.('region')}
               />
@@ -116,7 +127,9 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
       </fieldset>
 
       <fieldset class={styles.question} data-test-id={id('household')}>
-        <legend class={styles.legend}>{HOUSEHOLD_QUESTION}</legend>
+        <legend id={id('household-question')} class={styles.legend}>
+          {HOUSEHOLD_QUESTION}
+        </legend>
         <div class={styles.counts}>
           <fieldset class={styles.count}>
             <legend class={styles.countLegend}>Adults</legend>
@@ -163,6 +176,7 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
             <Show when={props.onAskAgain && householdAnswered()}>
               <AskAgain
                 testId={id('household-ask-again')}
+                describedBy={id('household-question')}
                 disabled={props.disabled}
                 onClick={() => props.onAskAgain?.('household')}
               />
