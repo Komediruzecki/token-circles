@@ -1090,6 +1090,9 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` ("each "Remove answer" is described by the question it clears":
   both buttons' accessible name and description as Chromium computes them) and
   `AboutThisSpace.test.tsx` (what each button's `aria-describedby` points at).
+- **CHANGELOG: the meal line has its verb** (visual pass 3a-3, E). "and one named for a meal a
+  knife and fork" reads "and one named for a meal shows a knife and fork"; the rest of the line is
+  unchanged.
 
 ### Achievements
 
