@@ -175,6 +175,13 @@
   padding: 10px 26px 18px;
 }
 
+/* The step goes on below: its last visible 20 px fade into the panel, whatever the theme, since a
+   mask takes the panel's own background rather than a colour of its own. Gone at the end. */
+.body[data-more-below] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+
 /* ---- steps ---- */
 
 /* A step's heading takes focus when the step opens, for screen readers; it is not a control, so it
@@ -568,25 +575,12 @@
 /* ---- footer ---- */
 
 .footer {
-  /* Positioned, so its shadow paints over the step's content above it. */
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   padding: 14px 22px 18px;
   border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
-  transition: box-shadow 0.2s ease;
-}
-
-/* The step goes on under the footer: a shadow along its top says there is more to scroll to. */
-.footer[data-more-below] {
-  box-shadow: 0 -14px 18px -14px rgba(4, 8, 20, 0.32);
-}
-
-:global([data-theme='dark']) .footer[data-more-below] {
-  box-shadow: 0 -14px 18px -14px rgba(0, 0, 0, 0.75);
 }
 
 .footerRight {

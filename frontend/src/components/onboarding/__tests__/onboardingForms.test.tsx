@@ -182,7 +182,7 @@ describe('asking where you live and who the space covers', () => {
     expect(labels('adults')).toEqual(['1', '2', '3 or more'])
     expect(labels('children')).toEqual(['0', '1', '2', '3 or more'])
     expect(byTestId('onboarding-space-questions-lead')?.textContent).toBe(
-      'Both questions are optional. You can change the answers in Settings.'
+      'Both are optional. Change them later in Settings.'
     )
   })
 

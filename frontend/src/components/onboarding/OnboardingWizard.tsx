@@ -590,7 +590,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             label="Base currency"
             class={styles.field}
             labelClass={styles.fieldLabel}
-            hint="Totals and charts are shown in this currency. Individual accounts can still hold others."
+            hint="Totals and charts use it. Accounts can still hold others."
             hintClass={styles.fieldHint}
           >
             {(control) => (
@@ -613,7 +613,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </Field>
         </div>
         <p class={styles.fieldHint} data-test-id="onboarding-space-questions-lead">
-          Both questions are optional. You can change the answers in Settings.
+          Both are optional. Change them later in Settings.
         </p>
         <SpaceQuestions
           idPrefix="onboarding-space"
@@ -895,8 +895,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // Whether the step goes on below the footer: the footer then shows a shadow along its top. Read
-  // on scroll, and whenever the middle or the step in it changes size.
+  // Whether the step goes on below what shows: the middle's bottom then fades out. Read on scroll,
+  // and whenever the middle or the step in it changes size.
   const [moreBelow, setMoreBelow] = createSignal(false)
   const readMoreBelow = () => {
     if (!bodyEl) return
@@ -1230,6 +1230,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             class={styles.body}
             ref={bodyEl}
             data-test-id="onboarding-body"
+            data-more-below={moreBelow() ? '' : undefined}
             onScroll={readMoreBelow}
           >
             <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
@@ -1240,7 +1241,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             <Show when={onboardingStep() === 'done'}>{doneStep()}</Show>
           </div>
 
-          <footer class={styles.footer} data-more-below={moreBelow() ? '' : undefined}>
+          <footer class={styles.footer}>
             <Show
               when={onboardingStep() !== 'welcome' && onboardingStep() !== 'done'}
               fallback={<span />}

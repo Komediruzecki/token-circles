@@ -442,46 +442,92 @@ test.describe('onboarding wizard', () => {
 })
 
 test.describe('onboarding wizard at phone width', () => {
-  test('the footer shows a shadow while the step goes on below it', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 })
-    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    const footer = page.getByTestId('onboarding-panel').locator('footer')
-    const body = page.getByTestId('onboarding-body')
-    await page.getByTestId('onboarding-next').click()
-    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
-    await expect(page.getByTestId('onboarding-step-space').locator('p').first()).toHaveText(
-      "Yours, a partner's or the household's. Add more later."
-    )
+  for (const theme of ['light', 'dark']) {
+    test(`the step's bottom fades while it goes on below, and Children shows as it opens, ${theme}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.addInitScript((value) => {
+        localStorage.setItem('finance-theme', value)
+      }, theme)
+      await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+      const footer = page.getByTestId('onboarding-panel').locator('footer')
+      const body = page.getByTestId('onboarding-body')
+      // The cue: the middle's bottom fades out (a mask), and the footer draws nothing of its own.
+      const cue = () =>
+        body.evaluate((el) => {
+          const style = getComputedStyle(el)
+          return {
+            fades: (style.maskImage || style.webkitMaskImage || 'none') !== 'none',
+            footerShadow: getComputedStyle(el.nextElementSibling!).boxShadow,
+          }
+        })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+      await expect(page.getByTestId('onboarding-step-space').locator('p').first()).toHaveText(
+        "Yours, a partner's or the household's. Add more later."
+      )
 
-    // The two questions keep the form's 14 px rhythm between them.
-    const region = (await page.getByTestId('onboarding-space-region').boundingBox())!
-    const household = (await page.getByTestId('onboarding-space-household').boundingBox())!
-    expect(Math.round(household.y - (region.y + region.height))).toBe(14)
+      // The two questions keep the form's 14 px rhythm between them.
+      const region = (await page.getByTestId('onboarding-space-region').boundingBox())!
+      const household = (await page.getByTestId('onboarding-space-household').boundingBox())!
+      expect(Math.round(household.y - (region.y + region.height))).toBe(14)
 
-    // Children starts under the footer as the step opens: the shadow says there is more.
-    const footerTop = (await footer.boundingBox())!.y
-    const children = page.getByTestId('onboarding-space-children-0')
-    expect((await children.boundingBox())!.y).toBeGreaterThan(footerTop)
-    await expect(footer).toHaveAttribute('data-more-below', '')
+      // What makes the room: the questions' lead and the currency help are one line each.
+      const lines = (selector: string) =>
+        page.evaluate((sel) => {
+          const el = document.querySelector<HTMLElement>(sel)!
+          return Math.round(
+            el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)
+          )
+        }, selector)
+      const currencyHint = await page
+        .getByTestId('onboarding-currency')
+        .getAttribute('aria-describedby')
+      expect(await lines('[data-test-id="onboarding-space-questions-lead"]')).toBe(1)
+      expect(await lines(`[id="${currencyHint}"]`)).toBe(1)
 
-    // At the end, nothing is left below; back up, the shadow returns.
-    await body.evaluate((el) => {
-      el.scrollTop = el.scrollHeight
+      // As the step opens, the Children question's legend is wholly above the footer; its chips
+      // go on under it, and the bottom fades to say so.
+      const footerTop = (await footer.boundingBox())!.y
+      const legend = (await page
+        .getByTestId('onboarding-space-household')
+        .locator('legend', { hasText: 'Children' })
+        .boundingBox())!
+      expect(legend.y + legend.height).toBeLessThanOrEqual(footerTop)
+      expect(
+        (await page.getByTestId('onboarding-space-children-0').boundingBox())!.y
+      ).toBeGreaterThan(legend.y + legend.height)
+      await expect(body).toHaveAttribute('data-more-below', '')
+      expect(await cue()).toEqual({ fades: true, footerShadow: 'none' })
+
+      // At the end, nothing is left below and nothing fades; back up, the fade returns.
+      await body.evaluate((el) => {
+        el.scrollTop = el.scrollHeight
+      })
+      await expect(body).not.toHaveAttribute('data-more-below')
+      expect(await cue()).toEqual({ fades: false, footerShadow: 'none' })
+      await body.evaluate((el) => {
+        el.scrollTop = 0
+      })
+      await expect(body).toHaveAttribute('data-more-below', '')
+
+      // A smaller phone fades too. A step that fits has none: on a taller screen, where only the
+      // middle grows, and wider.
+      await page.setViewportSize({ width: 375, height: 667 })
+      await expect(body).toHaveAttribute('data-more-below', '')
+      expect(await cue()).toEqual({ fades: true, footerShadow: 'none' })
+      await page.setViewportSize({ width: 390, height: 1000 })
+      await expect(body).not.toHaveAttribute('data-more-below')
+      expect(await cue()).toEqual({ fades: false, footerShadow: 'none' })
+      await page.setViewportSize({ width: 390, height: 844 })
+      await expect(body).toHaveAttribute('data-more-below', '')
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await expect(body).not.toHaveAttribute('data-more-below')
+      expect(await cue()).toEqual({ fades: false, footerShadow: 'none' })
     })
-    await expect(footer).not.toHaveAttribute('data-more-below')
-    await body.evaluate((el) => {
-      el.scrollTop = 0
-    })
-    await expect(footer).toHaveAttribute('data-more-below', '')
-
-    // A step that fits has none: on a taller screen, where only the middle grows, and wider.
-    await page.setViewportSize({ width: 390, height: 1000 })
-    await expect(footer).not.toHaveAttribute('data-more-below')
-    await page.setViewportSize({ width: 390, height: 844 })
-    await expect(footer).toHaveAttribute('data-more-below', '')
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await expect(footer).not.toHaveAttribute('data-more-below')
-  })
+  }
 
   for (const { width, height, phone } of [
     { width: 390, height: 844, phone: true },

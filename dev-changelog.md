@@ -922,13 +922,14 @@ All notable changes to Token Circles are documented here. The format is based on
   is one line, without the dash ("Yours, a partner's or the household's. Add more later.", was
   two), and the two questions keep the form's 14 px rhythm (`--space-questions-gap`, which
   `.stepForm` sets; Settings keeps 18). Children's legend now starts at y 768 and its chips at
-  792, still under the footer, with 80 px to scroll, so the footer shows a shadow along its top
-  (`data-more-below`) while the step goes on below it, read on the middle's scroll and by a
-  `ResizeObserver` on the middle and the step in it; at the end it goes. The footer is positioned
-  so the shadow paints over the step's content.
-- **Tests:** `onboarding.spec.ts` ("the footer shows a shadow while the step goes on below it": the
-  new lead, the 14 px gap, Children under the footer with the shadow at 390x844, none at the end,
-  back on scrolling up, none at 390x1000 or 1280x800).
+  792, still under the footer, with 80 px to scroll, so the step showed a cue while it goes on
+  below (`data-more-below`), read on the middle's scroll and by a `ResizeObserver` on the middle
+  and the step in it; at the end it goes. The cue was a shadow along the footer's top; it is now a
+  fade, and Children's legend shows as the step opens (the entry "Children shows as Name your space
+  opens" below).
+- **Tests:** `onboarding.spec.ts` (the new lead, the 14 px gap, the cue at 390x844, none at the
+  end, back on scrolling up, none at 390x1000 or 1280x800; now "the step's bottom fades while it
+  goes on below").
 - **About this space says what its answers belong to** (visual pass 3a, finding 9). The card's
   subtitle ("Your answers choose the official figures your numbers are compared with.") said what
   the region's own line says ("We compare your numbers with official statistics for that
@@ -943,6 +944,22 @@ All notable changes to Token Circles are documented here. The format is based on
   dialog, whose `.field-hint` is a block. `.form-hint` is a block with a 1.5 line-height, as there:
   18 px a line at 390 and 1280. The rule is local to the Accounts page, so nothing else moves.
   `accounts-crud.spec.ts` measures the two lines at 390.
+- **Children shows as "Name your space" opens** (visual pass 3a-2, N1 and finding 8). At 390x844
+  the Children legend sat at y 768-786 under a footer starting at y 770, and the footer's shadow
+  was all but invisible in dark (1.09:1). The questions' lead is one line ("Both are optional.
+  Change them later in Settings.", was "Both questions are optional. You can change the answers
+  in Settings.", two lines), and so is the currency help ("Totals and charts use it. Accounts can
+  still hold others.", was "Totals and charts are shown in this currency. Individual accounts can
+  still hold others.", two). At 390x844, both themes, the legend now sits at y 733-751 and its
+  chips at 757-801, with 45 px to scroll (was 80). The cue is a mask, not a shadow:
+  `data-more-below` moved from the footer to the scrolling middle, whose last 20 px fade into the
+  panel while the step goes on below (`mask-image`, with the `-webkit-` form for older WebKit), so
+  it needs no colour per theme; the footer no longer draws a shadow or needs positioning. It shows
+  at 390x844 and 375x667 in both themes, and not at the step's end, at 390x1000 or at 1280x800.
+- **Tests:** `onboarding.spec.ts` ("the step's bottom fades while it goes on below, and Children
+  shows as it opens", light and dark: both hints one line, the Children legend wholly above the
+  footer with its chips under it, the mask on and no footer shadow, none at the end, at 390x1000
+  or at 1280x800, on again at 375x667) and `onboardingForms.test.tsx` (the lead's words).
 
 ### Achievements
 
