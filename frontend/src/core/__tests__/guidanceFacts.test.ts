@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/guidance/circles'
 import {
   balanceMoves,
+  CARD_PAYMENT_MONTHS,
   cushionOf,
   debtsOf,
   EXPENSIVE_DEBT_RATE,
@@ -27,7 +28,12 @@ import { kindForName } from '../../../../shared/guidance/kinds'
 import { REGIONS } from '../../../../shared/guidance/region'
 import { amortize } from '../../../../shared/loanSchedule'
 import { computeBalanceDeltas } from '../storage/idb'
-import type { FactsAccount, FactsEntry, GuidanceInput } from '../../../../shared/guidance/facts'
+import type {
+  FactsAccount,
+  FactsAnswers,
+  FactsEntry,
+  GuidanceInput,
+} from '../../../../shared/guidance/facts'
 
 const TODAY = '2026-10-11'
 
@@ -598,6 +604,7 @@ describe('debts', () => {
   })
 
   it('count a card or an overdraft below zero, expensive unless its rate is set below the line', () => {
+    // Each card's balance is carried, as the person says: the rate decides.
     const accounts: FactsAccount[] = [
       { id: 1, type: 'credit', balance: -1500, credit_rate: 19.9, name: 'Visa' },
       { id: 2, type: 'credit', balance: -800, credit_rate: 0, name: 'Store card' },
@@ -606,7 +613,13 @@ describe('debts', () => {
       { id: 5, type: 'credit', balance: 20, credit_rate: 19.9, name: 'Paid off' },
       { id: 6, type: 'savings', balance: -10 },
     ]
-    const debts = debtsOf({ today: TODAY, transactions: [], accounts, loans: [] })
+    const debts = debtsOf({
+      today: TODAY,
+      transactions: [],
+      accounts,
+      loans: [],
+      answers: { carriesCardBalance: true },
+    })
     expect(
       debts.map(({ kind, id, owed, rate, expensive }) => ({ kind, id, owed, rate, expensive }))
     ).toEqual([
@@ -677,6 +690,7 @@ describe('debts', () => {
           { id: 2, type: 'credit', balance: -6200, credit_rate: 24.9 },
         ],
         loans: [{ ...loan, interest_rate: 7.2 }],
+        answers: { carriesCardBalance: true },
       })
     )
     expect(facts.debts.map((d) => [d.kind, d.expensive])).toEqual([
@@ -688,6 +702,119 @@ describe('debts', () => {
     ).toMatchObject({
       met: false,
       value: 1,
+    })
+  })
+
+  describe('a card', () => {
+    // October 11th: the card's payment is averaged over July, August and September.
+    const into = (date: string, amount: number) =>
+      entry(date, { type: 'transfer', amount, account_id: 9, transfer_account_id: 1 })
+    const spent = (date: string, amount: number) => entry(date, { amount, account_id: 1 })
+    const cards = (
+      transactions: readonly FactsEntry[],
+      balance: number,
+      answers?: FactsAnswers,
+      rate: number | null = 19.9
+    ) =>
+      debtsOf({
+        today: TODAY,
+        transactions,
+        accounts: [{ id: 1, type: 'credit', balance, credit_rate: rate }],
+        loans: [],
+        answers,
+      })
+    // Cleared each month: what a month spent on it is paid in at the month's end.
+    const cleared = [
+      ...['2026-06', '2026-07', '2026-08', '2026-09'].flatMap((m) => [
+        spent(`${m}-05`, 300),
+        into(`${m}-28`, 300),
+      ]),
+      spent('2026-10-05', 300),
+    ]
+    // Carrying 2,000: 100 spent on it and 150 paid in a month, since May.
+    const carrying = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09'].flatMap((m) => [
+      spent(`${m}-05`, 100),
+      into(`${m}-28`, 150),
+    ])
+    // Opened in September: too little history to say.
+    const recent = [spent('2026-09-10', 300), into('2026-09-28', 100), spent('2026-10-05', 300)]
+
+    it('cleared each month carries no balance, and is no debt', () => {
+      expect(CARD_PAYMENT_MONTHS).toBe(3)
+      expect(cards(cleared, -300)).toEqual([])
+    })
+
+    it('carrying a balance is carried, and expensive unless its rate is below the line', () => {
+      expect(cards(carrying, -2000)).toEqual([
+        expect.objectContaining({ kind: 'card', owed: 2000, carried: true, expensive: true }),
+      ])
+      expect(cards(carrying, -2000, undefined, 5)[0]).toMatchObject({
+        carried: true,
+        expensive: false,
+      })
+    })
+
+    it('with too little history, is not known to be carried, nor to be expensive', () => {
+      expect(cards(recent, -500)).toEqual([
+        expect.objectContaining({ kind: 'card', owed: 500, carried: null, expensive: null }),
+      ])
+      // Below the line it is not expensive either way.
+      expect(cards(recent, -500, undefined, 5)[0]).toMatchObject({
+        carried: null,
+        expensive: false,
+      })
+      // Nor is a card with no entries at all.
+      expect(cards([], -500)[0]).toMatchObject({ carried: null, expensive: null })
+      // Its entries go back far enough from the first of the three months.
+      const since = (date: string) => cards([spent(date, 400), into('2026-09-28', 100)], -500)[0]
+      expect(since('2026-07-01')).toMatchObject({ carried: true, expensive: true })
+      expect(since('2026-07-02')).toMatchObject({ carried: null, expensive: null })
+    })
+
+    it('leaves an overdraft carried, whatever its entries', () => {
+      const [overdraft] = debtsOf({
+        today: TODAY,
+        transactions: [],
+        accounts: [{ id: 4, type: 'giro', balance: -250, credit_rate: null }],
+        loans: [],
+      })
+      expect(overdraft).toMatchObject({ kind: 'overdraft', carried: true, expensive: true })
+    })
+
+    it('is what the person says, when they have said, whatever its entries show', () => {
+      const cases: Array<[FactsEntry[], number]> = [
+        [cleared, -300],
+        [carrying, -2000],
+        [recent, -500],
+      ]
+      for (const [transactions, balance] of cases) {
+        expect(cards(transactions, balance, { carriesCardBalance: false })).toEqual([])
+        expect(cards(transactions, balance, { carriesCardBalance: true })).toEqual([
+          expect.objectContaining({ carried: true, expensive: true }),
+        ])
+      }
+    })
+
+    it('not known to be carried, leaves expensive debt not known: a question, not advice', () => {
+      const debt = (transactions: FactsEntry[], balance: number, answers?: FactsAnswers) =>
+        placeCircle(
+          guidanceFacts(
+            input({
+              transactions: [...input().transactions, ...transactions],
+              accounts: [
+                { id: 2, type: 'savings', balance: 5000 },
+                { id: 1, type: 'credit', balance, credit_rate: null },
+              ],
+              answers,
+            })
+          )
+        ).circles[3].checks.find((c) => c.id === 'no-expensive-debt')
+      // Counted among the expensive ones only once it is known to be one.
+      expect(debt(recent, -500)).toMatchObject({ met: null, unknown: 'not-on-file', value: 0 })
+      expect(debt(cleared, -300)).toMatchObject({ met: true, unknown: null })
+      expect(debt(carrying, -2000)).toMatchObject({ met: false, unknown: null, value: 1 })
+      expect(debt(recent, -500, { carriesCardBalance: false })).toMatchObject({ met: true })
+      expect(debt(recent, -500, { carriesCardBalance: true })).toMatchObject({ met: false })
     })
   })
 })

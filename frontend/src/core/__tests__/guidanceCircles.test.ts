@@ -114,6 +114,7 @@ describe('where a person is', () => {
             owed: 900,
             rate: 19.9,
             payment: null,
+            carried: true,
             expensive: true,
           },
         ],
@@ -322,6 +323,35 @@ describe('what is not known', () => {
     expect(placement.next).toEqual({ circle: 3, check: 'first-cushion', unknown: 'not-on-file' })
     // The accounts were read: no card or overdraft is on file.
     expect(check(placement, 4, 'no-expensive-debt')).toMatchObject({ met: true, unknown: null })
+  })
+
+  it('with a card too new to say whether it is carried, asks the card question', () => {
+    const card: GuidanceInput = {
+      ...year,
+      // Opened in September: 300 spent on it, 100 paid in.
+      transactions: [
+        ...year.transactions,
+        { date: '2026-09-10', type: 'expense', amount: 300, category_id: 1, account_id: 3 },
+        {
+          date: '2026-09-28',
+          type: 'transfer',
+          amount: 100,
+          account_id: 1,
+          transfer_account_id: 3,
+        },
+      ],
+      accounts: [...(year.accounts ?? []), { id: 3, type: 'credit', balance: -200 }],
+    }
+    const asked = placeCircle(guidanceFacts(card))
+    expect(asked.current).toBe(4)
+    expect(asked.provisional).toBe(true)
+    expect(asked.next).toEqual({ circle: 4, check: 'no-expensive-debt', unknown: 'not-on-file' })
+    // Answered, the answer decides.
+    const answered = (carriesCardBalance: boolean) =>
+      placeCircle(guidanceFacts({ ...card, answers: { freeMoney: 'taken', carriesCardBalance } }))
+    expect(answered(false).current).toBe(5)
+    expect(answered(true).next).toEqual({ circle: 4, check: 'no-expensive-debt', unknown: null })
+    expect(answered(true).provisional).toBe(false)
   })
 
   it('reads a figure without the accounts as unknown below its target, and as met above it', () => {

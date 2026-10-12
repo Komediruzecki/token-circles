@@ -1142,9 +1142,10 @@ All notable changes to Token Circles are documented here. The format is based on
   null without a savings, cash or current account. Invested is the investment accounts or the
   portfolio, whichever holds more, plus savings held elsewhere. Debts are the loans
   with a balance left, at the rate their schedule charges for the next payment, and credit cards
-  and current accounts below zero, unless the person says they carry no balance on either; a debt
-  is expensive from `EXPENSIVE_DEBT_RATE` (10%), and a card or overdraft with no rate given is too.
-  A card's payment is what went into it, a month on average over the last three full months. The
+  and current accounts below zero whose balance is carried, unless the person says they carry no
+  balance on either; a debt is expensive from `EXPENSIVE_DEBT_RATE` (10%), and a card or overdraft
+  with no rate given is too. A card's payment is what went into it, a month on average over the
+  last three full months, and a card it covers is cleared each month and carries none. The
   savings rate is worked out with and without the loan principal the window's installments and
   extra payments repaid.
 - **The seven circles** (`shared/guidance/circles.ts`, `placeCircle`). A circle is reached when the
@@ -1274,6 +1275,24 @@ All notable changes to Token Circles are documented here. The format is based on
   accounts below and above its target; why each check is not known; free money unanswered asked
   about without making the placement provisional; the next step's `unknown` on every case it had)
   and `guidanceExamples.test.ts` (the examples' next steps).
+- **A card paid off each month is not expensive debt** (review 3b-1, finding 4). Every card below
+  zero counted as a carried balance, expensive without a rate, so a card spent on mid-month and
+  cleared at its end held a person at Solid ground with "no expensive debt" as the next step until
+  they answered the card question. guidance.md 3.1 counts a carried balance. Unanswered, a card's
+  entries now decide (`cardCarried`): when what went into it, a month on average over the last
+  `CARD_PAYMENT_MONTHS` full months, covers what it owes today, it is cleared each month and left
+  out of the debts; when its entries go back to the first of those months and do not cover it,
+  its balance is carried; when they do not go back that far, nobody knows yet. Such a card is
+  `carried: null` and `expensive: null` (a rate below the line keeps it cheap either way), and the
+  debt check is not known (`'not-on-file'`), so the next step is the card question, never "pay off
+  expensive debt". The answer, when given, beats the entries: no leaves every card and overdraft
+  out, yes counts every card below zero as carried. An overdraft is carried, as before. Every debt
+  says `carried` now.
+- **Tests:** `guidanceFacts.test.ts` (a card cleared each month, one carrying 2,000, one opened in
+  September, one with no entries, the first of the three months as the edge of enough history,
+  each of the three with either answer, a cheap card, an overdraft, and the debt check for each)
+  and `guidanceCircles.test.ts` (a card too new to say: the card question as the next step, and
+  either answer deciding).
 
 ### Achievements
 

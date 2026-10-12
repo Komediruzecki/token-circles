@@ -29,7 +29,8 @@
  * - **Invested** (`investedOf`): investment accounts or the portfolio, whichever holds more, and
  *   savings the person says are held elsewhere.
  * - **Debts** (`debtsOf`, design section 5): loans with a balance left, at the rate charged now,
- *   and credit cards and current accounts below zero.
+ *   and credit cards and current accounts below zero whose balance is carried (guidance.md 3.1, "a
+ *   carried card or overdraft balance"). A card cleared each month carries none (`cardCarried`).
  *
  * Pure, with no I/O: the caller passes what it read.
  */
@@ -59,7 +60,10 @@ export const LOW_POINT_DAYS = 30;
  */
 export const EXPENSIVE_DEBT_RATE = 10;
 
-/** The full months a card's payment is averaged over: the transfers into it. */
+/**
+ * The full months a card's payment is averaged over: the transfers into it. A card whose payment
+ * covers what it owes is cleared each month, and carries no balance (`cardCarried`).
+ */
 export const CARD_PAYMENT_MONTHS = 3;
 
 /**
@@ -114,7 +118,10 @@ export type FreeMoney = 'taken' | 'not-taken' | 'not-offered' | 'not-sure';
 export interface FactsAnswers {
   /** Categories whose income is support the person expects to stop (circle 2). */
   supportCategoryIds?: readonly number[] | null;
-  /** "Do you carry a balance on a credit card or overdraft?" No leaves both out of the debts. */
+  /**
+   * "Do you carry a balance on a credit card or overdraft?" No leaves both out of the debts; yes
+   * counts every card below zero as carried. Either beats what a card's entries suggest.
+   */
   carriesCardBalance?: boolean | null;
   /** Whether the employer's or the state's free money is taken (circle 4). */
   freeMoney?: FreeMoney | null;
@@ -156,8 +163,17 @@ export interface Debt {
    * last CARD_PAYMENT_MONTHS full months. Null when nothing says.
    */
   payment: number | null;
-  /** At EXPENSIVE_DEBT_RATE or more; a card or overdraft unless its rate is set below it. */
-  expensive: boolean;
+  /**
+   * The balance is carried from month to month: a loan's and an overdraft's always, a card's as its
+   * entries show (`cardCarried`) or as the person says. Null for a card whose entries are too few
+   * to say and the person has not said.
+   */
+  carried: boolean | null;
+  /**
+   * At EXPENSIVE_DEBT_RATE or more; a card or overdraft unless its rate is set below it. Null for a
+   * card not known to be carried, unless its rate is below the line, which it is either way.
+   */
+  expensive: boolean | null;
 }
 
 /** The money a person can reach against a month of what they need. */
@@ -538,6 +554,28 @@ function cardPayment(
   return paid > 0 ? paid / CARD_PAYMENT_MONTHS : null;
 }
 
+/**
+ * Whether a card's balance is carried, as its entries show. Not when what went into it, a month on
+ * average over the last CARD_PAYMENT_MONTHS full months, covers what it owes today: it is cleared
+ * each month. Carried when its entries go back to the first of those months and that does not
+ * cover it. Null when they do not go back that far: too little history to say.
+ */
+function cardCarried(
+  id: number,
+  owed: number,
+  payment: number | null,
+  transactions: readonly FactsEntry[],
+  today: string
+): boolean | null {
+  if (payment !== null && payment >= owed) return false;
+  const first = `${fullMonthsBefore(today, CARD_PAYMENT_MONTHS)[CARD_PAYMENT_MONTHS - 1]}-01`;
+  const since = transactions.some(
+    (entry) =>
+      entry.date.slice(0, 10) <= first && balanceMoves(entry).some((move) => move.account === id)
+  );
+  return since ? true : null;
+}
+
 /** Whether a debt at `rate` is expensive: a loan from the line up, a card or overdraft unless set below it. */
 export function isExpensive(kind: Debt['kind'], rate: number | null): boolean {
   if (kind === 'loan') return rate !== null && rate >= EXPENSIVE_DEBT_RATE;
@@ -547,7 +585,8 @@ export function isExpensive(kind: Debt['kind'], rate: number | null): boolean {
 /**
  * The debts: each loan with a balance left on `today`, at the rate its schedule charges for the
  * next payment, and each credit card and current account below zero, unless the person said they
- * carry no balance on either.
+ * carry no balance on either. A card cleared each month is left out (`cardCarried`), unless the
+ * person said they carry a balance.
  */
 export function debtsOf(
   input: Pick<GuidanceInput, 'today' | 'transactions' | 'accounts' | 'loans' | 'answers'>
@@ -565,23 +604,34 @@ export function debtsOf(
       owed: status.remaining_balance,
       rate,
       payment: status.monthly_payment > 0 ? status.monthly_payment : null,
+      carried: true,
       expensive: isExpensive('loan', rate),
     });
   }
-  if (input.answers?.carriesCardBalance === false) return debts;
+  const answer = input.answers?.carriesCardBalance;
+  if (answer === false) return debts;
   for (const account of accountsToday(input.accounts ?? [], input.transactions, input.today)) {
     const type = storedAccountType(account.type);
     if ((type !== 'credit' && type !== 'giro') || !(account.balance < 0)) continue;
     const kind = type === 'credit' ? 'card' : 'overdraft';
+    const owed = -account.balance;
     const rate = finite(account.credit_rate) ? account.credit_rate : null;
+    const payment =
+      kind === 'card' ? cardPayment(account.id, input.transactions, input.today) : null;
+    const carried =
+      kind === 'card' && answer !== true
+        ? cardCarried(account.id, owed, payment, input.transactions, input.today)
+        : true;
+    if (carried === false) continue;
     debts.push({
       kind,
       id: account.id,
       name: account.name ?? null,
-      owed: -account.balance,
+      owed,
       rate,
-      payment: kind === 'card' ? cardPayment(account.id, input.transactions, input.today) : null,
-      expensive: isExpensive(kind, rate),
+      payment,
+      carried,
+      expensive: !isExpensive(kind, rate) ? false : carried ? true : null,
     });
   }
   return debts;

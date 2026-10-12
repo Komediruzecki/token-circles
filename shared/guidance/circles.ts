@@ -157,6 +157,32 @@ function reaching(
   };
 }
 
+/**
+ * No debt at EXPENSIVE_DEBT_RATE or more. A card or an overdraft is only known of when the accounts
+ * are (`'unread'`), and a card whose entries cannot say whether its balance is carried leaves it
+ * not known until the person answers the card question (`'not-on-file'`). One expensive debt is
+ * enough to know it is not met.
+ */
+function noExpensiveDebt(facts: GuidanceFacts): Check {
+  const expensive = facts.debts.map((debt) => debt.expensive);
+  const unknown: Unknown | null = expensive.includes(true)
+    ? null
+    : !facts.accountsKnown
+      ? 'unread'
+      : expensive.includes(null)
+        ? 'not-on-file'
+        : null;
+  return {
+    id: 'no-expensive-debt',
+    met: expensive.includes(true) ? false : unknown === null ? true : null,
+    unknown,
+    required: true,
+    provisional: false,
+    value: expensive.filter((one) => one === true).length,
+    target: 0,
+  };
+}
+
 /** Free money: taken, or none on offer. Not taken, or not sure, is the step still to take. */
 function freeMoneyMet(answer: FreeMoney | null): boolean | null {
   if (answer === null) return null;
@@ -212,17 +238,7 @@ export const CIRCLES: ReadonlyArray<{
             },
           ]
         : []),
-      {
-        id: 'no-expensive-debt',
-        // A card or an overdraft is only known of when the accounts are.
-        met: facts.debts.some((debt) => debt.expensive) ? false : facts.accountsKnown ? true : null,
-        unknown:
-          !facts.debts.some((debt) => debt.expensive) && !facts.accountsKnown ? 'unread' : null,
-        required: true,
-        provisional: false,
-        value: facts.debts.filter((debt) => debt.expensive).length,
-        target: 0,
-      },
+      noExpensiveDebt(facts),
       reaching('solid-cushion', facts.cushionMonths, SOLID_CUSHION_MONTHS, {
         unread: !facts.accountsKnown,
       }),
