@@ -1293,6 +1293,16 @@ All notable changes to Token Circles are documented here. The format is based on
   each of the three with either answer, a cheap card, an overdraft, and the debt check for each)
   and `guidanceCircles.test.ts` (a card too new to say: the card question as the next step, and
   either answer deciding).
+- **Living off investments is paying your way** (review 3b-1, finding 5). A retiree with no income
+  on file, 3,000 a month spent from a current account that transfers from 2,000,000 invested
+  fill, was held at circle 2 with own income as the next step. Work optional's check (invested
+  money pays for the spending at the withdrawal rate) now meets the own-income check as well, and
+  the check says so (`via: 'work-optional'`); its value and target stay own income and spending.
+  Own income short of spending while the investments could not be read is not known (`'unread'`)
+  instead of a step to take.
+- **Tests:** `guidanceCircles.test.ts` (the review's retiree, from a year of entries, placed at
+  circle 7; the same person with 100,000 invested, held at circle 2; own income with the accounts
+  not read).
 
 ### Achievements
 

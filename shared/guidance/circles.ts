@@ -98,6 +98,11 @@ export interface Check {
   met: boolean | null;
   /** Why `met` is null; null when the check is known. */
   unknown: Unknown | null;
+  /**
+   * The check that meets this one when its own figures do not: own income by work optional, as
+   * living off investments is paying one's way. Absent otherwise.
+   */
+  via?: CheckId;
   /** Whether the circle needs it to be reached. The others are on its checklist. */
   required: boolean;
   /** Read from the averages of less than a year: it may move as the year fills in. */
@@ -183,6 +188,30 @@ function noExpensiveDebt(facts: GuidanceFacts): Check {
   };
 }
 
+/** Work optional: invested money could pay for today's spending at the withdrawal rate. */
+function workOptional(facts: GuidanceFacts): Check {
+  return reaching(
+    'work-optional',
+    facts.invested,
+    facts.spending === null ? null : targetFromSpend(facts.spending, facts.withdrawalRatePct),
+    { provisional: !facts.firm, unread: !facts.accountsKnown }
+  );
+}
+
+/**
+ * Own income covers spending, over the window. Invested money that covers it at the withdrawal
+ * rate, work optional's check, meets it too (`via`): living off investments is paying one's way.
+ * Short on its own figures while the investments could not be read, it is not known.
+ */
+function ownIncome(facts: GuidanceFacts): Check {
+  const own = reaching('own-income', facts.ownIncome, facts.spending, { provisional: !facts.firm });
+  if (own.met !== false) return own;
+  const invested = workOptional(facts);
+  if (invested.met === true) return { ...own, met: true, via: 'work-optional' };
+  if (invested.unknown === 'unread') return { ...own, met: null, unknown: 'unread' };
+  return own;
+}
+
 /** Free money: taken, or none on offer. Not taken, or not sure, is the step still to take. */
 function freeMoneyMet(answer: FreeMoney | null): boolean | null {
   if (answer === null) return null;
@@ -206,11 +235,9 @@ export const CIRCLES: ReadonlyArray<{
     ],
   },
   {
-    // Own income covers spending, over the window.
+    // Own income covers spending, over the window, or invested money does (circle 6's check).
     circle: 2,
-    checks: (facts) => [
-      reaching('own-income', facts.ownIncome, facts.spending, { provisional: !facts.firm }),
-    ],
+    checks: (facts) => [ownIncome(facts)],
   },
   {
     // A month of essentials the person can reach. Today's balances, so never provisional.
@@ -269,14 +296,7 @@ export const CIRCLES: ReadonlyArray<{
   {
     // Invested money could pay for today's spending at the person's withdrawal rate.
     circle: 6,
-    checks: (facts) => [
-      reaching(
-        'work-optional',
-        facts.invested,
-        facts.spending === null ? null : targetFromSpend(facts.spending, facts.withdrawalRatePct),
-        { provisional: !facts.firm, unread: !facts.accountsKnown }
-      ),
-    ],
+    checks: (facts) => [workOptional(facts)],
   },
   {
     // The person's own number for more than enough, at the same rate. No default (D11).

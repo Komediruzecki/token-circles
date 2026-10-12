@@ -216,6 +216,79 @@ describe('Room to choose and Work optional', () => {
   })
 })
 
+describe('living off investments', () => {
+  // The review's retiree: a year on file with no income, 3,000 a month spent from a current
+  // account that a monthly transfer from 2,000,000 invested fills.
+  const months = Array.from({ length: 12 }, (_, i) =>
+    addCalendarMonths('2025-10-01', i).slice(0, 7)
+  )
+  const retiree: GuidanceInput = {
+    today: '2026-10-11',
+    region: 'DE',
+    transactions: months.flatMap((month): FactsEntry[] => [
+      {
+        date: `${month}-01`,
+        type: 'transfer',
+        amount: 3000,
+        account_id: 2,
+        transfer_account_id: 1,
+      },
+      { date: `${month}-02`, type: 'expense', amount: 1500, category_id: 1, account_id: 1 },
+      { date: `${month}-03`, type: 'expense', amount: 900, category_id: 2, account_id: 1 },
+      { date: `${month}-04`, type: 'expense', amount: 600, category_id: 2, account_id: 1 },
+    ]),
+    categories: [
+      { id: 1, name: 'Rent', type: 'expense', kind: 'housing' },
+      { id: 2, name: 'Groceries', type: 'expense', kind: 'groceries' },
+    ],
+    accounts: [
+      { id: 1, type: 'giro', balance: 10000 },
+      { id: 2, type: 'ib', balance: 2000000 },
+    ],
+    answers: { freeMoney: 'not-offered' },
+  }
+
+  it('is paying your way: invested money covers the spending at the withdrawal rate', () => {
+    const facts = guidanceFacts(retiree)
+    expect(facts.ownIncome).toBe(0)
+    const placement = placeCircle(facts)
+    expect(check(placement, 2, 'own-income')).toMatchObject({
+      met: true,
+      via: 'work-optional',
+      value: 0,
+      target: 3000,
+    })
+    expect(check(placement, 6, 'work-optional')!.met).toBe(true)
+    // Past every circle to the one that waits for the person's own number.
+    expect(placement.current).toBe(7)
+  })
+
+  it('is not, with invested money short of it, and own income short too', () => {
+    const short = placeCircle(
+      guidanceFacts({
+        ...retiree,
+        accounts: [
+          { id: 1, type: 'giro', balance: 10000 },
+          { id: 2, type: 'ib', balance: 100000 },
+        ],
+      })
+    )
+    expect(check(short, 2, 'own-income')).toMatchObject({ met: false, unknown: null })
+    expect(check(short, 2, 'own-income')!.via).toBeUndefined()
+    expect(short.next).toEqual({ circle: 2, check: 'own-income', unknown: null })
+  })
+
+  it('is not known while the investments could not be read', () => {
+    const unread = placeCircle(facts({ ownIncome: 0, invested: 0, accountsKnown: false }))
+    expect(check(unread, 2, 'own-income')).toMatchObject({ met: null, unknown: 'unread' })
+    // Met on its own figures, it needs nothing else read.
+    expect(check(placeCircle(facts({ accountsKnown: false })), 2, 'own-income')).toMatchObject({
+      met: true,
+      unknown: null,
+    })
+  })
+})
+
 describe('moving inward', () => {
   /** A family with a year on file, nearly three months put by, and its free money taken. */
   const months = Array.from({ length: 12 }, (_, i) =>
