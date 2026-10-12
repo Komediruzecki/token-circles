@@ -936,6 +936,13 @@ All notable changes to Token Circles are documented here. The format is based on
   `guidance:<profile id>`, and the Worker's settings rows are keyed by profile (`PUT
 /api/settings` writes `(key, value, profile_id)` for the active profile). The subtitle is now
   "Each space keeps its own answers." `onboarding.spec.ts` checks it at 390 and 1280.
+- **The account dialog's hints keep the dialogs' leading** (visual pass 3a, finding 10). Its
+  hints (`.form-hint`, `AccountsPage.module.css`, used only by the account dialog) are `Field`'s
+  inline `<span>`s, so their lines took the field's 24 px line box, whatever their own 16.8 px
+  line-height said: 24 px between the overdraft hint's two lines, against 18 px in the Categories
+  dialog, whose `.field-hint` is a block. `.form-hint` is a block with a 1.5 line-height, as there:
+  18 px a line at 390 and 1280. The rule is local to the Accounts page, so nothing else moves.
+  `accounts-crud.spec.ts` measures the two lines at 390.
 
 ### Achievements
 
