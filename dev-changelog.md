@@ -929,6 +929,13 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `onboarding.spec.ts` ("the footer shows a shadow while the step goes on below it": the
   new lead, the 14 px gap, Children under the footer with the shadow at 390x844, none at the end,
   back on scrolling up, none at 390x1000 or 1280x800).
+- **About this space says what its answers belong to** (visual pass 3a, finding 9). The card's
+  subtitle ("Your answers choose the official figures your numbers are compared with.") said what
+  the region's own line says ("We compare your numbers with official statistics for that
+  place."). The answers belong to the space in both runtimes: local-first keeps them under
+  `guidance:<profile id>`, and the Worker's settings rows are keyed by profile (`PUT
+/api/settings` writes `(key, value, profile_id)` for the active profile). The subtitle is now
+  "Each space keeps its own answers." `onboarding.spec.ts` checks it at 390 and 1280.
 
 ### Achievements
 

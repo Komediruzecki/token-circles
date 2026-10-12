@@ -1351,7 +1351,7 @@ export default function Settings() {
                 <CardHead
                   icon={<IconPin />}
                   title="About this space"
-                  desc="Your answers choose the official figures your numbers are compared with."
+                  desc="Each space keeps its own answers."
                 />
                 <AboutThisSpace />
               </div>

@@ -627,6 +627,10 @@ test.describe('About this space in Settings', () => {
     test(`"Ask again" follows each status line at ${size.width} wide`, async ({ page }) => {
       await page.setViewportSize(size)
       await gotoServerless(page, 'settings', 'settings-about-space')
+      // The card says what its answers belong to; the region's own line says what they are for.
+      const card = page.getByTestId('settings-about-space')
+      await expect(card).toContainText('Each space keeps its own answers.')
+      await expect(card).not.toContainText('official figures')
       await page.getByTestId('settings-space-region-HR').click()
       await page.getByTestId('settings-space-adults-1').click()
       await page.getByTestId('settings-space-children-0').click()
