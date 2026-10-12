@@ -12,16 +12,19 @@
  * This is the one module that imports the file, so the app can load it as a chunk of its own when a
  * band is first needed, and the Worker never holds it.
  *
- * Two decisions live here, each in one place (guidance.md section 7):
+ * Two decisions are written down here (guidance.md section 7):
  *
  * - **D5, how wide "typical" is** (`BAND_RULE`). Where sources publish group averages, typical runs
  *   from 0.75 times the lowest to 1.25 times the highest; the savings rate's is the official rate
- *   plus or minus 5 points. The file draws its bands that way; a test holds it to the rule.
- * - **D4 and D9, figures borrowed from another region** (`BORROWED_BANDS_USED`). The file holds the
- *   UK's subscription count for the euro regions and Croatia's debt-payment lines for Germany and
- *   the EU, each marked `borrowedFrom`, and both are used, named as borrowed. Euro regions have no
- *   subscription-spend band (D4): the file states that gap, and a card compares the person with
- *   their own trend instead. The UK has no debt-payment band (D9), likewise.
+ *   plus or minus 5 points. `BAND_RULE` records the rule and redraws nothing: the research's
+ *   generator drew the file's bands with it, outside this repo. A test holds every band it drew to
+ *   it, so a different width fails that test until the file is drawn again.
+ * - **D4 and D9, figures borrowed from another region** (`BORROWED_BANDS_USED`), which decides at
+ *   run time which borrowed bands `bandsFor` reads. The file holds the UK's subscription count for
+ *   the euro regions and Croatia's debt-payment lines for Germany and the EU, each marked
+ *   `borrowedFrom`, and both are used, named as borrowed. Euro regions have no subscription-spend
+ *   band (D4): the file states that gap, and a card compares the person with their own trend
+ *   instead. The UK has no debt-payment band (D9), likewise.
  *
  * Pure, with no I/O: the caller works out the person's numbers and asks which band they fall in.
  */
@@ -170,8 +173,12 @@ export const BENCHMARKS: Readonly<BenchmarkFile> = data as unknown as BenchmarkF
  * (subscriptions, groceries, eating out, transport): `widenLow` times the lowest to `widenHigh`
  * times the highest, because people vary more than group averages do. The savings rate: the
  * official rate plus or minus `savingsPoints`. The widths are the model's choice, not a statistic,
- * and "Where this comes from" says so (`text`). The file's bands were drawn by this rule; a test
- * holds them to it, so a different answer means drawing the file again with the new widths.
+ * and "Where this comes from" says so (`text`).
+ *
+ * This records the rule; it cannot redraw a band. The research's generator drew every band in
+ * benchmarks.json with these widths, outside this repo, and nothing here draws them again. A test
+ * holds each band the rule drew to it, so changing a width here fails that test until the file is
+ * drawn again with the new one.
  */
 export const BAND_RULE = {
   widenLow: BENCHMARKS.bandRule.widenLow,

@@ -356,6 +356,101 @@ describe('D5: the band rule', () => {
     }
   )
 
+  // The published averages the research drew the subscription bands from. The file quotes one
+  // figure of each set (its references); the rest are here, by source.
+  const SUBSCRIPTION_AVERAGES: Readonly<Record<string, readonly number[]>> = {
+    // DBT 2023: 2.9 per adult, and 3.4 to 4 among people who have any.
+    'subscriptions.count UK': [2.9, 4.0],
+    // Self Financial's averages among people who pay for any: 2025, 2026 and 2023.
+    'subscriptions.count US': [2.8, 3.4, 4.4],
+    // A month: Self Financial 2026 and CNET 2026.
+    'subscriptions.monthlySpend US': [35.03, 111],
+    // Barclaycard 2020, women and men, a year, as the DBT 2023 assessment quotes them.
+    'subscriptions.monthlySpend UK': [420 / 12, 680 / 12],
+  }
+
+  it('holds every band the rule drew to it, so a changed width fails until the file is drawn again', () => {
+    const bands = (metric: MetricId, region: RegionId) =>
+      (['low', 'typical', 'high'] as const).map((band) => {
+        const entry = BENCHMARKS.entries.find(
+          (e) => e.metric === metric && e.region === region && e.band === band
+        )
+        expect(entry, `${metric} ${region} ${band}`).toBeDefined()
+        return entry!
+      })
+    const edges = ([low, typical, high]: BandEntry[]) => [
+      low.min,
+      low.max,
+      typical.min,
+      typical.max,
+      high.min,
+      high.max,
+    ]
+    const byGroups = BENCHMARKS.derivations.filter((row) =>
+      /x the lowest to [\d.]+ x the highest/.test(row.text)
+    )
+    expect([...new Set(byGroups.map((row) => row.metric))].sort()).toEqual([
+      'spending.eatingOut',
+      'spending.foodAtHome',
+      'spending.transport',
+      'subscriptions.count',
+      'subscriptions.monthlySpend',
+    ])
+    for (const row of byGroups) {
+      const at = `${row.metric} ${row.region}`
+      const drawn = bands(row.metric, row.region)
+      if (row.metric.startsWith('subscriptions.')) {
+        const averages = SUBSCRIPTION_AVERAGES[`${row.metric} ${row.borrowedFrom ?? row.region}`]
+        expect(averages, at).toBeDefined()
+        const lo = BAND_RULE.widenLow * Math.min(...averages)
+        const hi = BAND_RULE.widenHigh * Math.max(...averages)
+        // Whole subscriptions, typical up to and including the top one; spend in whole units.
+        const [from, to] =
+          row.metric === 'subscriptions.count'
+            ? [Math.floor(lo + 0.5), Math.floor(hi + 0.5) + 1]
+            : [Math.round(lo), Math.round(hi)]
+        expect(edges(drawn), at).toEqual([0, from, from, to, to, null])
+      } else {
+        const range = referencesFor(row.metric, row.region).find((ref) => ref.kind === 'groupRange')
+        expect(range, at).toBeDefined()
+        const [low, typical, high] = drawn
+        // The file quotes the group range rounded, so the edges agree to the rounding.
+        expect(Math.abs(typical.min! - BAND_RULE.widenLow * range!.min!), at).toBeLessThanOrEqual(
+          0.1
+        )
+        expect(Math.abs(typical.max! - BAND_RULE.widenHigh * range!.max!), at).toBeLessThanOrEqual(
+          0.1
+        )
+        expect([low.min, low.max, high.min, high.max], at).toEqual([
+          0,
+          typical.min,
+          typical.max,
+          null,
+        ])
+      }
+    }
+    const byPoints = BENCHMARKS.derivations.filter((row) =>
+      /plus or minus \d+ points/.test(row.text)
+    )
+    expect(byPoints.map((row) => row.region).sort()).toEqual([...REGIONS].sort())
+    const tenth = (value: number) => Math.round(value * 10) / 10
+    for (const row of byPoints) {
+      const official = referencesFor(row.metric, row.region).find(
+        (ref) => ref.unit === 'percent of disposable income'
+      )!.value!
+      const from = tenth(Math.max(0, official - BAND_RULE.savingsPoints))
+      const to = tenth(official + BAND_RULE.savingsPoints)
+      expect(edges(bands(row.metric, row.region)), row.region).toEqual([
+        null,
+        from,
+        from,
+        to,
+        to,
+        null,
+      ])
+    }
+  })
+
   it('draws the savings rate as the official rate plus or minus the points, in every region', () => {
     for (const region of REGIONS) {
       const official = referencesFor('savings.rate', region).find(

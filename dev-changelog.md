@@ -1109,9 +1109,10 @@ All notable changes to Token Circles are documented here. The format is based on
   value that is not a number and one below what the metric can be; a tenure without rows of its
   own reads as not given (the UK's mortgage row), and no answer as no housing loan. Beside it:
   `bandsFor`, `referencesFor`, `gapFor` (the file's stated gap, or a borrowing the app does not
-  use), `derivationFor` and `sourceFor`. Two decisions live here, each in one place: `BAND_RULE`
-  (D5: typical runs from 0.75 times the lowest group average to 1.25 times the highest, and the
-  savings rate is the official rate plus or minus 5 points) and `BORROWED_BANDS_USED` (D4 and D9:
+  use), `derivationFor` and `sourceFor`. Two decisions are written down here: `BAND_RULE` (D5:
+  typical runs from 0.75 times the lowest group average to 1.25 times the highest, and the savings
+  rate is the official rate plus or minus 5 points), which records the rule the research's
+  generator drew the file's bands with and redraws nothing, and `BORROWED_BANDS_USED` (D4 and D9:
   the UK's subscription count for the euro regions and Croatia's debt-payment lines for Germany and
   the EU are used and named as borrowed; the euro regions have no subscription-spend band, the UK
   no debt-payment band). `benchmarks.ts` is the only module that imports the JSON, and nothing
@@ -1121,8 +1122,8 @@ All notable changes to Token Circles are documented here. The format is based on
   every metric and region; no overlap or hole for any household a metric's rows tell apart, probed
   at and either side of every edge; a table of what each region `chooseRegion` can pick gets; the
   UK's tenure rows and the 45% line with a housing loan; D4 and D9 (every borrowing listed, the
-  lender named, a "no" leaving a gap that says why); D5 (the spending bands and the savings rate
-  drawn by the rule); the values of the three people in the research's examples landing in the
+  lender named, a "no" leaving a gap that says why); D5 (every band the rule drew, subscriptions
+  included, held to it); the values of the three people in the research's examples landing in the
   bands it gave them; and who reads the file (only `benchmarks.ts` imports the JSON, and nothing in
   `shared/guidance/` imports from outside `shared/`).
 - **A person's numbers** (`shared/guidance/facts.ts`, `guidanceFacts`), worked out on the device
@@ -1163,7 +1164,8 @@ All notable changes to Token Circles are documented here. The format is based on
   of spending at the person's withdrawal rate (`targetFromSpend`); More than enough waits for the
   person's own number. The yearly-bills set-aside guidance.md lists for Solid ground is not checked:
   nothing links a yearly bill to a set-aside yet (guidance.md's own gap table says so). Decisions,
-  each in one place: D1 `CIRCLES`, D2 `CIRCLE_NAMES`, D10 `CLEAR_PICTURE_MONTHS` (12), D11
+  each in one place: D1 `CIRCLES`, D2 `CIRCLE_NAMES`, D10 `CLEAR_PICTURE_MONTHS` (12, read by the
+  first circle's check and by the facts' `firm`), D11
   `MORE_THAN_ENOUGH_DEFAULT` (null), and D6 `LOAN_PRINCIPAL_IS_SAVING` in facts.ts (true: principal
   repaid counts as kept). The cushion lines (`FIRST_CUSHION_MONTHS` 1, `FULL_CUSHION_MONTHS` 6) and
   `EXPENSIVE_DEBT_RATE` are held by tests to the benchmarks' band edges in every region, so the app
@@ -1310,6 +1312,18 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `guidanceBenchmarks.test.ts` (Infinity in the band open above for every metric and
   region with bands, high for the cushion in all five; NaN and minus Infinity below a share still
   none) and `guidanceFacts.test.ts` (a cushion with nothing needed set beside the bands).
+- **Each decision's place controls it** (review 3b-1, finding 10). The facts' `firm` read the
+  badges' year (`YEAR_ON_FILE_MONTHS`), so D10's `CLEAR_PICTURE_MONTHS` did not decide when the
+  circles firm up, though guidance.md section 7 makes that handoff part of D10. It reads
+  `CLEAR_PICTURE_MONTHS` now. D5's `BAND_RULE` draws nothing: the research's generator drew the
+  file's bands with it, outside this repo. Its comment and the module's say so, and a test now holds
+  every band the rule drew to it, subscriptions included, from the published averages they were
+  drawn from, so a different width fails until the file is drawn again. The two phase 3b commit
+  messages that said each decision lives in one place, that D5 lives in `BAND_RULE`, and that the
+  facts are worked out the same way signed in or not were reworded before anything was pushed.
+- **Tests:** `guidanceClearPicture.test.ts` (D10 at six months firms the facts at six, with the
+  badges' year still twelve) and `guidanceBenchmarks.test.ts` (every band drawn from group
+  averages or the savings points, against `BAND_RULE`).
 
 ### Achievements
 

@@ -40,6 +40,7 @@ import { amortize, loanStatus, rateStretches } from '../loanSchedule';
 import { nextPaymentMonth } from '../loanScenarios';
 import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
+import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
 import { categoryLookup, essentialOf, holdsTransfers } from './kinds';
 import type { LoanInput } from '../loanSchedule';
@@ -198,7 +199,10 @@ export interface GuidanceFacts {
   months: string[];
   /** Tracked months in the year window that ends this month: a year is on file at twelve. */
   monthsInYear: number;
-  /** A year is on file. Until then whatever comes from the averages may still move. */
+  /**
+   * The months the first circle needs are on file (D10, CLEAR_PICTURE_MONTHS in circles.ts). Until
+   * then whatever comes from the averages may still move.
+   */
   firm: boolean;
   /** The window has the months an average needs. */
   averaged: boolean;
@@ -681,7 +685,7 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     region: input.region,
     months,
     monthsInYear,
-    firm: monthsInYear >= YEAR_ON_FILE_MONTHS,
+    firm: monthsInYear >= CLEAR_PICTURE_MONTHS,
     averaged,
     sortedShare: sums.spending > 0 ? (sums.sorted / sums.spending) * 100 : null,
     income,
