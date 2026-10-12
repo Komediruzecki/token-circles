@@ -15,6 +15,9 @@
  * category with none of these counts as essential: it errs towards a larger cushion, and a card
  * can say how many categories it counted that way (`essentialOf`'s `via`).
  *
+ * A category that holds transfers (`holdsTransfers`) holds money moved between accounts, not money
+ * spent: what is filed under it is neither spending nor needed, whatever its kind.
+ *
  * Pure, and used by both runtimes: the Worker stores kinds on the defaults and the categories an
  * import creates, and the app reads them.
  */
@@ -216,6 +219,51 @@ function parentOf(category: KindedCategory, lookup?: CategoryLookup): KindedCate
   if (!lookup || category.parent_id === null || !Number.isInteger(id) || id <= 0) return undefined;
   const parent = lookup(id);
   return parent === category ? undefined : parent;
+}
+
+/**
+ * The category names the bank import's rule sets file transfers under (shared/bankImport/
+ * categoryRules.ts), as `transferNameKey` reads them. A transfer whose other account the import
+ * cannot tell is filed by those rules like any other entry. Only the worldwide set has a transfers
+ * category, Transfers. The Croatian set has none: such a transfer goes where its words match, else
+ * under Other, and counts as spending there.
+ */
+export const TRANSFER_CATEGORY_NAMES: readonly string[] = ['transfers'];
+
+/** A name with accents and case gone, and anything but letters and digits as one space. */
+function transferNameKey(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Whether a category is itself one of transfers: by its type, or by its name. */
+function namesTransfers(category: KindedCategory): boolean {
+  if (category.type === 'transfer' || category.type === 'account') return true;
+  return (
+    typeof category.name === 'string' &&
+    TRANSFER_CATEGORY_NAMES.includes(transferNameKey(category.name))
+  );
+}
+
+/**
+ * Whether entries filed under `category` move money between accounts instead of paying anyone: a
+ * transfer or account category, one the bank import files transfers under, or one filed inside
+ * either, as a category goes by its parent's kind. An expense filed under one is money moved, not
+ * spent: the guidance counts it neither as spending nor as needed (facts.ts), whatever the person
+ * chose for the category, and the recurring-payment finder never proposes it.
+ */
+export function holdsTransfers(
+  category: KindedCategory | undefined,
+  lookup?: CategoryLookup
+): boolean {
+  if (category === undefined) return false;
+  if (namesTransfers(category)) return true;
+  const parent = parentOf(category, lookup);
+  return parent !== undefined && namesTransfers(parent);
 }
 
 /**

@@ -8,8 +8,10 @@
  *   average down. A tracked month is the badges' (shared/trackedMonths.ts), and an average needs
  *   MIN_MONTHS_FOR_AVERAGES of them, as the retirement averages do.
  * - **Spending** is expenses and **income** is income less deductions (flows.ts), a month on
- *   average over the window, in the base currency. **Own income** leaves out the categories the
- *   person marks as support they expect to stop.
+ *   average over the window, in the base currency. An expense filed under a category that holds
+ *   transfers (kinds.ts `holdsTransfers`) is money moved, not spent, and counts nowhere here: not
+ *   as spending, not as needed (guidance.md 3.1, "transfers excluded"). **Own income** leaves out
+ *   the categories the person marks as support they expect to stop.
  * - **Essential spending** is spending in the categories needed every month (kinds.ts
  *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
  *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
@@ -36,7 +38,7 @@ import { nextPaymentMonth } from '../loanScenarios';
 import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
 import { flowsOf } from './flows';
-import { categoryLookup, essentialOf } from './kinds';
+import { categoryLookup, essentialOf, holdsTransfers } from './kinds';
 import type { LoanInput } from '../loanSchedule';
 import type { KindedCategory } from './kinds';
 import type { Region } from './region';
@@ -281,16 +283,29 @@ interface WindowSums {
   noKind: Set<number>;
 }
 
-/** The window's money, added up. */
+/** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
 function sumWindow(
   input: Pick<GuidanceInput, 'transactions' | 'categories' | 'answers'>,
   months: readonly string[]
 ): WindowSums {
   const inWindow = new Set(months);
-  const entries = input.transactions.filter((entry) => inWindow.has(monthOf(entry.date)));
+  const lookup = categoryLookup(input.categories);
+  const held = new Map<number, boolean>();
+  const moved = (entry: FactsEntry): boolean => {
+    const id = entry.category_id;
+    if (entry.type !== 'expense' || !isId(id)) return false;
+    let holds = held.get(id);
+    if (holds === undefined) {
+      holds = holdsTransfers(lookup(id), lookup);
+      held.set(id, holds);
+    }
+    return holds;
+  };
+  const entries = input.transactions.filter(
+    (entry) => inWindow.has(monthOf(entry.date)) && !moved(entry)
+  );
   const amount = (entry: FactsEntry) => baseAmount(entry);
   const flows = flowsOf(entries, amount);
-  const lookup = categoryLookup(input.categories);
   const support = new Set(input.answers?.supportCategoryIds ?? []);
   const verdicts = new Map<number, ReturnType<typeof essentialOf> | null>();
   const sums: WindowSums = {

@@ -222,6 +222,16 @@ describe('transfers', () => {
     // Filed under anything else, the same payments are one.
     expect(detect(monthly.map((d) => paid(SAVINGS, 200, d, { category_id: 5 })))).toHaveLength(1)
   })
+
+  it('filed inside Transfers are not payments either', () => {
+    const inside: KindedCategory = { id: 10, name: 'Sparen', type: 'expense', parent_id: 8 }
+    const found = detectSubscriptions(
+      monthly.map((d) => paid(SAVINGS, 200, d, { category_id: 10 })),
+      [],
+      { today: TODAY, categories: [...CATEGORIES, inside] }
+    )
+    expect(found).toEqual([])
+  })
 })
 
 describe('no payment found twice', () => {

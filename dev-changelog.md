@@ -1129,8 +1129,10 @@ All notable changes to Token Circles are documented here. The format is based on
   from what the app holds, with the same code in both runtimes. The window is the last twelve
   tracked months before this one (fewer when there are fewer; this month is left out while it is
   under way), and an average needs three of them (`MIN_MONTHS_FOR_AVERAGES`). Income is income less
-  deductions and spending is expenses (`flows.ts`), in the base currency; own income leaves out the
-  categories the person marks as support they expect to stop. Essential spending goes by
+  deductions and spending is expenses (`flows.ts`), in the base currency, less the expenses filed
+  under a category that holds transfers (`holdsTransfers`), which are money moved, not spent; own
+  income leaves out the categories the person marks as support they expect to stop. Essential
+  spending goes by
   `essentialOf`, and spending with no category counts as needed too (`unsure` says how much was
   counted that way). Every account is read at its balance today: the stored balance less what the
   entries dated after today moved (`accountsToday`). Liquid money is savings and cash at that
@@ -1217,6 +1219,26 @@ All notable changes to Token Circles are documented here. The format is based on
 - **Tests:** `guidanceFacts.test.ts` (a rent booked ahead on a current account, savings and cash;
   a card's payment booked ahead and an overdraft that a booked rent made; an investment account
   with money booked into it).
+- **Money moved is not spending** (review 3b-1, finding 2). An expense filed under Transfers, where
+  the bank import's worldwide rules file a transfer whose other account they cannot tell, counted
+  as spending and, as Transfers has no kind, as needed every month. 1,000 a month put by at a bank
+  the app does not hold, beside 400 of real needs, read as 1,400 needed and a cushion of 21 days
+  instead of 2.5 months. `holdsTransfers` (`shared/guidance/kinds.ts`) is now the one rule for what
+  holds transfers: a transfer or account category, a category named as the import's rule sets
+  file transfers (`TRANSFER_CATEGORY_NAMES`: Transfers; the Croatian set has none), and a category
+  filed inside one. The facts leave the expenses filed under one out of spending, the needed
+  spending and the sorted share, and so out of the cushion, circle 2 and the savings rate, whatever
+  the person ticked for the category. The recurring-payment finder had its own copy of the rule and
+  now uses this one, so it also skips a category filed inside Transfers. Other is unchanged: its
+  name gives it the kind other, so it counts as spending and not as needed, and the Croatian rule
+  set files an unpaired transfer there. Income filed under Transfers still counts as income.
+- **Tests:** `guidanceFacts.test.ts` (1,000 a month under Transfers beside 400 of groceries: the
+  spending, the needed spending, the sorted share, the cushion, the savings rate and circle 2; a
+  transfer and an account category, Transfers in capitals and padded, one ticked as needed, and a
+  category inside Transfers; Other still spending and not needed), `guidanceKinds.test.ts`
+  (`holdsTransfers`, a category inside one, and the list held to the bank import's rule sets: every
+  name on it is one they file under, and every rule that files by the word transfer files under
+  one) and `recurringPayments.test.ts` (a category inside Transfers).
 
 ### Achievements
 

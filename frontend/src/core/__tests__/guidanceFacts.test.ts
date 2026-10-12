@@ -239,6 +239,74 @@ describe('what is needed every month', () => {
   })
 })
 
+describe('money moved between accounts', () => {
+  const moving = [
+    { id: 1, name: 'Groceries', type: 'expense', kind: 'groceries' },
+    // Where the bank import's worldwide rules file a transfer: no kind, so needed if it counted.
+    { id: 7, name: 'Transfers', type: 'expense' },
+    { id: 9, name: 'Salary', type: 'income' },
+  ]
+  // Each month: a salary of 1,200, groceries of 400, and 1,000 put by as an expense.
+  const putBy = (categoryId: number) =>
+    [1, 2, 3].flatMap((n) => [
+      entry(`${ago(n)}-01`, { type: 'income', amount: 1200, category_id: 9 }),
+      entry(`${ago(n)}-02`, { amount: 250, category_id: 1 }),
+      entry(`${ago(n)}-03`, { amount: 150, category_id: 1 }),
+      entry(`${ago(n)}-04`, { amount: 1000, category_id: categoryId }),
+    ])
+  const savings: FactsAccount[] = [{ id: 1, type: 'savings', balance: 1000 }]
+
+  it('filed as an expense under Transfers is neither spending nor needed', () => {
+    const facts = guidanceFacts(
+      input({ transactions: putBy(7), categories: moving, accounts: savings })
+    )
+    expect(facts.spending).toBeCloseTo(400, 6)
+    expect(facts.essentials).toBeCloseTo(400, 6)
+    expect(facts.sortedShare).toBeCloseTo(100, 6)
+    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0 })
+    // The cushion: 1,000 against 400 a month, not against 1,400.
+    expect(facts.cushionMonths).toBeCloseTo(2.5, 6)
+    expect(
+      cushionOf(input({ transactions: putBy(7), categories: moving, accounts: savings }))
+    ).toEqual({ liquid: 1000, essentials: 400, months: 2.5 })
+    // The savings rate: 800 of 1,200 kept.
+    expect(facts.savings.cash).toBeCloseTo((800 / 1200) * 100, 6)
+    // Circle 2: the salary covers what is spent.
+    expect(placeCircle(facts).circles.find((place) => place.circle === 2)?.checks).toEqual([
+      expect.objectContaining({ id: 'own-income', met: true }),
+    ])
+  })
+
+  it('is any category of transfers or accounts, Transfers however it is written, and what is filed inside one', () => {
+    const others = [
+      ...moving,
+      // Even marked as needed every month: what it holds was moved, not spent.
+      { id: 2, name: 'Transfers', type: 'expense', essential: 1 },
+      { id: 3, name: 'Moving money', type: 'transfer' },
+      { id: 4, name: 'Tagesgeld', type: 'account' },
+      { id: 5, name: '  TRANSFERS ', type: 'expense' },
+      { id: 6, name: 'To the holiday pot', type: 'expense', parent_id: 7 },
+    ]
+    for (const id of [2, 3, 4, 5, 6]) {
+      const facts = guidanceFacts(
+        input({ transactions: putBy(id), categories: others, accounts: savings })
+      )
+      expect([id, facts.spending, facts.essentials]).toEqual([id, 400, 400])
+    }
+  })
+
+  it('leaves Other as spending, which its kind does not count as needed', () => {
+    const other = [...moving, { id: 8, name: 'Other', type: 'expense' }]
+    expect(kindForName('Other')).toBe('other')
+    const facts = guidanceFacts(
+      input({ transactions: putBy(8), categories: other, accounts: savings })
+    )
+    expect(facts.spending).toBeCloseTo(1400, 6)
+    expect(facts.essentials).toBeCloseTo(400, 6)
+    expect(facts.unsure).toEqual({ categories: 0, uncategorised: 0 })
+  })
+})
+
 describe('the money a person can reach', () => {
   // October 11th: the last 30 days run from September 12th.
   const giro: FactsAccount = { id: 1, type: 'giro', balance: 1500 }

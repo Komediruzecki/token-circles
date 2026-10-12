@@ -5,8 +5,9 @@
  * `detectSubscriptions` runs it after the named match, on the expenses that match left over, so a
  * payment is found by one of the two at most. Transfers are not payments: an entry filed under a
  * transfer or account category, or under Transfers (where the bank import files a transfer whose
- * other account it could not tell), is skipped. So is a cash withdrawal (`isCashWithdrawal`): cash
- * taken out on a regular day is not a payment to anyone.
+ * other account it could not tell), or inside one of those, is skipped (`holdsTransfers`, the rule
+ * the guidance's facts use too). So is a cash withdrawal (`isCashWithdrawal`): cash taken out on a
+ * regular day is not a payment to anyone.
  *
  * The rest are grouped by payee: the beneficiary, else the description, normalised and without
  * digits, so reference and card numbers do not split one payee in many. A group is a regular
@@ -28,7 +29,7 @@
  * otherwise: a monthly payment to a person, a pharmacy co-pay, the rent. Pure, no signals and no
  * fetching.
  */
-import { categoryLookup, effectiveKind } from '../../../shared/guidance/kinds'
+import { categoryLookup, effectiveKind, holdsTransfers } from '../../../shared/guidance/kinds'
 import {
   cadenceFromGapDays,
   commonCurrency,
@@ -155,13 +156,6 @@ export function isCashWithdrawal(txn: DetectableTransaction): boolean {
   )
 }
 
-/** Whether entries filed under `category` move money between accounts instead of paying anyone. */
-function isTransferCategory(category: KindedCategory | undefined): boolean {
-  if (category === undefined) return false
-  if (category.type === 'transfer' || category.type === 'account') return true
-  return typeof category.name === 'string' && normalizeMerchantText(category.name) === 'transfers'
-}
-
 /** The category most of the charges are filed under; of two as common, the later charge's. */
 function commonCategory(charges: readonly PayeeCharge[]): number | null {
   const counts = new Map<number, number>()
@@ -197,7 +191,7 @@ export function findRecurringPayments(
   const payees = new Map<string, PayeeCharge[]>()
   for (const txn of expenses) {
     const categoryId = Number.isInteger(txn.category_id) ? Number(txn.category_id) : null
-    if (categoryId !== null && isTransferCategory(lookup(categoryId))) continue
+    if (categoryId !== null && holdsTransfers(lookup(categoryId), lookup)) continue
     if (isCashWithdrawal(txn)) continue
     const payee = payeeText(txn)
     const key = payeeKey(payee)

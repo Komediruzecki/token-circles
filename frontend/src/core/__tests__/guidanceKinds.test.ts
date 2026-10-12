@@ -3,18 +3,21 @@
  * a name gives, the kind a category goes by, and whether it is needed every month.
  */
 import { describe, expect, it } from 'vitest'
+import { RULE_GROUPS } from '../../../../shared/bankImport/categoryRules'
 import { resetKeepsIcon, resetName } from '../../../../shared/defaultCategories'
 import {
   categoryLookup,
   effectiveKind,
   ESSENTIAL_KINDS,
   essentialOf,
+  holdsTransfers,
   isEssential,
   KIND_LABELS,
   kindForName,
   kindIsEssential,
   KINDS,
   readKind,
+  TRANSFER_CATEGORY_NAMES,
 } from '../../../../shared/guidance/kinds'
 import { DEFAULT_CATEGORIES } from '../storage/idb'
 
@@ -183,6 +186,48 @@ describe('whether a category is needed every month', () => {
       kind: null,
       via: 'no-kind',
     })
+  })
+})
+
+describe('what holds transfers', () => {
+  it('is a category of transfers or accounts, and Transfers however it is written', () => {
+    expect(holdsTransfers({ name: 'Moving money', type: 'transfer' })).toBe(true)
+    expect(holdsTransfers({ name: 'Tagesgeld', type: 'account' })).toBe(true)
+    for (const name of ['Transfers', '  TRANSFERS ', 'transfers.']) {
+      expect(holdsTransfers({ name, type: 'expense' }), name).toBe(true)
+    }
+    for (const name of ['Other', 'Transfer fees', 'Savings', 'Groceries']) {
+      expect(holdsTransfers({ name, type: 'expense' }), name).toBe(false)
+    }
+    expect(holdsTransfers(undefined)).toBe(false)
+  })
+
+  it('is a category filed inside one, whatever its own name', () => {
+    const transfers = { id: 7, name: 'Transfers', type: 'expense', parent_id: null }
+    const pot = { id: 8, name: 'Holiday pot', type: 'expense', parent_id: 7 }
+    const lookup = categoryLookup([transfers, pot])
+    expect(holdsTransfers(pot, lookup)).toBe(true)
+    // Without the parent to look at, the name alone says nothing.
+    expect(holdsTransfers(pot)).toBe(false)
+  })
+
+  it('are the names the bank import files transfers under, in every rule set', () => {
+    const filed = RULE_GROUPS.flatMap((group) => group.rules)
+    // Every name on the list is one a rule set files under.
+    const names = filed.map((rule) => rule.category.toLowerCase())
+    for (const name of TRANSFER_CATEGORY_NAMES) expect(names, name).toContain(name)
+    // Every rule that files by the word transfer files under a category that holds them.
+    const byTransfer = filed.filter((rule) => rule.keywords.some((word) => /transfer/i.test(word)))
+    expect(byTransfer.length).toBeGreaterThan(0)
+    for (const rule of byTransfer) {
+      expect(holdsTransfers({ name: rule.category, type: 'expense' }), rule.category).toBe(true)
+    }
+    // And no other rule does.
+    expect(
+      filed
+        .filter((rule) => holdsTransfers({ name: rule.category, type: 'expense' }))
+        .map((rule) => rule.category)
+    ).toEqual(['Transfers'])
   })
 })
 
