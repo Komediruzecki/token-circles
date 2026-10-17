@@ -7,6 +7,8 @@ import {
   ACCOUNT_MESSAGES as M,
   checkAccountCreate,
   checkAccountEdit,
+  readAccountType,
+  storedAccountType,
 } from '../../../../shared/accountSchema'
 import { refusalOf } from '../../../../shared/refusal'
 
@@ -219,5 +221,30 @@ describe('an edit of an account', () => {
         longer
       )
     ).toEqual({ ok: true, value: { notes: 'Joint' } })
+  })
+})
+
+describe('an account type', () => {
+  it('is read by every writer as the form reads it, or refused', () => {
+    expect(readAccountType(undefined)).toBe('giro')
+    expect(readAccountType('  ')).toBe('giro')
+    expect(readAccountType(' Savings ')).toBe('savings')
+    expect(readAccountType('Checking')).toBe('giro')
+    expect(readAccountType('retirement')).toBe('ib')
+    expect(readAccountType('credit')).toBeNull()
+    expect(readAccountType('constructor')).toBeNull()
+    expect(readAccountType(7)).toBeNull()
+  })
+
+  // What a reader makes of a stored type: one this build does not have stays as it is, so the
+  // list still loads, the account shows as a plain one, and an edit sends the type back unchanged.
+  it('is read back from storage as stored, a v4 name as its replacement, none as giro', () => {
+    expect(storedAccountType('cash')).toBe('cash')
+    expect(storedAccountType('credit')).toBe('credit')
+    expect(storedAccountType('checking')).toBe('giro')
+    expect(storedAccountType('investment')).toBe('ib')
+    expect(storedAccountType('constructor')).toBe('constructor')
+    expect(storedAccountType(undefined)).toBe('giro')
+    expect(storedAccountType('')).toBe('giro')
   })
 })

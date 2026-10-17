@@ -54,6 +54,7 @@ import RecurringSection from '../components/RecurringSection'
 import { SkeletonTable } from '../components/Skeleton'
 import TransactionSummaryBar from '../components/TransactionSummaryBar'
 import TransactionTable from '../components/TransactionTable'
+import { accountTypeBadge } from '../core/accountTypes'
 import { api, errorStatus, getLocalCurrency, toast } from '../core/api'
 import { apiPut } from '../core/api'
 import { plainMessage } from '../core/apiError'
@@ -1797,7 +1798,7 @@ export default function Transactions() {
                               value={String(acct.id)}
                               selected={acct.id === txForm.values.account_id}
                             >
-                              {acct.name} ({acct.type})
+                              {acct.name} ({accountTypeBadge(acct.type)})
                             </option>
                           )}
                         </For>

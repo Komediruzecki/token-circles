@@ -336,6 +336,40 @@ All notable changes to Token Circles are documented here. The format is based on
   with a second registration of `POST /api/calculator/compound-interest`. Achievements leave out a
   loan deleted while they count. The `formButtonType` guard reads the whole tag.
 
+- **Account types: one list, checked by every writer, and a reader that keeps the rest.**
+  `ACCOUNT_TYPES` in `shared/accountSchema.ts` is the list. MCP `create_account` stored any string
+  (`z.string().max(50)`, described as "e.g. giro, savings, credit, cash"); its `type` is now
+  `z.enum(ACCOUNT_TYPES)`, and the tool and field descriptions are built from the list and
+  `ACCOUNT_TYPE_WORDS`. `POST /api/import/execute` in both runtimes reads each `accountTypes` value
+  with `readAccountType` (the Accounts form's reading: blank is giro, `checking`, `investment` and
+  `retirement` are their v4 replacements, case and spaces ignored) and answers 422 before any write
+  for a type the app does not have: `validation_errors` holds `accountTypes.<name>` with
+  `ACCOUNT_MESSAGES.type`, and `error` is `importedAccountTypeError(name)`, the same words in both.
+  A dry run refuses it too. The Worker stored the value raw and local-first cast it. Where no client
+  chose a type (the sheet sync, email-in, `/api/v1/import`, MCP `create_transactions`), an account
+  is still giro, and local-first's IB detection still gives `ib`. The accounts routes and handlers
+  already ran `checkAccountCreate` and `checkAccountEdit`; restore copies rows as stored. On the
+  client, `AccountSchema.type` was `z.enum`, so one account of another type failed
+  `api.getAccounts()` (Transactions, quick entry, Tags) for every account; it is now
+  `z.string().transform(storedAccountType)`, which keeps an unknown type and reads a v4 name as its
+  replacement, as local-first's `normalizeAccount` now does through the same function.
+  `Account.type` is `AccountType | (string & {})`. Every display reads the type through
+  `knownAccountType` (`core/accountTypes.ts`): the badge's word (`accountTypeBadge`), its colour
+  (`accountTypeTone`), the card's icon (`accountTypeIcon`), the Transactions account select and the
+  constellation's label and colour. A v4 name shows as its replacement everywhere, which matters
+  in cloud mode, where the Accounts page gets the stored type raw: a `retirement` account had the
+  "ib" word but the plain colour and icon, and "Account" in the constellation. A type the app does
+  not have is a plain account everywhere: "account" on the badge and in the select, "Account" in
+  the constellation, the plain colour and icon. The edit dialog opens a v4 name as its replacement
+  (`storedAccountType` in `accountForm.open`, which `checkAccountEdit` reads as the same type) and
+  shows an unknown type as a disabled, selected "Other account" option instead of a blank select.
+  An untouched save sends the type back unchanged and writes nothing, so this is what keeps a
+  rollback safe once a build writes a new type. Tests: two contract scenarios (`imports.ts`, both
+  runtimes), `mcp-tools-write.test.ts`, `api.getAccounts.test.ts`, the Accounts page in
+  `accountForm.test.tsx` (local-first) and `accountsPageTypes.test.tsx` (cloud),
+  `accountTypes.test.ts`, `accountConstellation.test.tsx` and
+  `transactionsAccountTypeWord.test.tsx`.
+
 ### Tests and tooling
 
 - **The release suite** (#593). `frontend/tests/release/` runs the 5.16 dev test scope in both

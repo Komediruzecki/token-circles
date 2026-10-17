@@ -5,6 +5,11 @@ import { recalcGoalsByCategory } from '../recalc-goals';
 import { HttpError, accept, refuse } from '../http';
 import * as db from '../db';
 import { localMonth } from '../local-date';
+import {
+  ACCOUNT_TYPES,
+  ACCOUNT_TYPE_WORDS,
+  DEFAULT_ACCOUNT_TYPE,
+} from '../../../shared/accountSchema';
 import { BUDGET_MESSAGES, checkBudgetCreate } from '../../../shared/budgetSchema';
 import { addCalendarMonths } from '../../../shared/calendarMonths';
 import { checkTagCreate, clashingTagName, defaultTagColor } from '../../../shared/tagSchema';
@@ -16,6 +21,11 @@ import { checkTagCreate, clashingTagName, defaultTagColor } from '../../../share
 import { profileArg, DATE } from './args';
 
 const quoted = (names: readonly string[]) => names.map((name) => `"${name}"`);
+
+/** "giro (a current account), savings (a savings account), ...": every type the app has. */
+const TYPES_IN_WORDS = ACCOUNT_TYPES.map((type) => `${type} (${ACCOUNT_TYPE_WORDS[type]})`).join(
+  ', '
+);
 
 /** The refusal for rows that name accounts the profile does not have. */
 function unknownAccounts(unknown: readonly string[], existing: readonly string[]): string {
@@ -148,14 +158,15 @@ defineTool({
 defineTool({
   name: 'create_account',
   title: 'Create an account',
-  description:
-    'Create a bank account, card or cash account in the profile. Returns its id, which create_transactions and list_transactions take.',
+  description: `Create an account in the profile: ${TYPES_IN_WORDS}. Returns its id, which create_transactions and list_transactions take.`,
   scope: 'write',
   input: z
     .object({
       ...profileArg,
       name: z.string().min(1).max(200),
-      type: z.string().max(50).default('giro').describe('e.g. giro, savings, credit, cash.'),
+      // The app's own list (shared/accountSchema.ts). Any string used to be stored, and the
+      // description suggested "credit": one type the app does not have empties its account list.
+      type: z.enum(ACCOUNT_TYPES).default(DEFAULT_ACCOUNT_TYPE).describe(`${TYPES_IN_WORDS}.`),
       currency: z.string().length(3).default('EUR'),
       bankName: z.string().max(200).optional(),
       startingBalance: z.number().default(0),
