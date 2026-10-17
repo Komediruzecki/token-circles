@@ -61,6 +61,10 @@ function workerStandIn() {
 
 const byTestId = (id: string) => document.querySelector<HTMLElement>(`[data-test-id="${id}"]`)
 const waitLong = { timeout: 10_000 }
+// A test here waits on the App up to three times, each for as long as waitLong allows, so it gets
+// the time those waits add up to. At vitest's default of 5 s, a loaded runner ended a test while
+// its wait still had time left.
+vi.setConfig({ testTimeout: 30_000 })
 const apiSent = () => worker.sent.filter((r) => !r.startsWith('GET /api/auth/me'))
 
 let host: HTMLDivElement
