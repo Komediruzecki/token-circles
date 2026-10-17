@@ -193,6 +193,30 @@ describe('worker import — confirm before creating categories (B5)', () => {
     expect(names).toContain('Junk');
   });
 
+  it('gives a new category the icon the app draws for its name: a cart, utensils, the mug', async () => {
+    const rows = [
+      ['2026-07-01', 'Market', '-10', 'Groceries'],
+      ['2026-07-02', 'Pizza', '-15', 'Restaurants'],
+      ['2026-07-03', 'Canteen', '-8', 'Work lunches'],
+      ['2026-07-04', 'Espresso', '-3', 'Coffee'],
+      ['2026-07-05', 'Boiler', '-90', 'Heating'],
+    ];
+    const res = await execute({ rows, mapping: MAPPING });
+    expect(res.status).toBe(200);
+    const { results } = await env.DB.prepare(
+      'SELECT name, icon FROM categories WHERE profile_id = ?'
+    )
+      .bind(PROFILE)
+      .all<{ name: string; icon: string }>();
+    const icons = Object.fromEntries((results ?? []).map((c) => [c.name, c.icon]));
+    expect(icons.Groceries).toBe('shopping-cart');
+    expect(icons.Restaurants).toBe('utensils');
+    expect(icons['Work lunches']).toBe('utensils');
+    expect(icons.Coffee).toBe('coffee');
+    // "eat" only as a word: Heating is not a meal.
+    expect(['coffee', 'utensils']).not.toContain(icons.Heating);
+  });
+
   it('preview (dry_run) reports the distinct new categories without mutating', async () => {
     await env.DB.prepare(
       "INSERT INTO categories (name, type, color, icon, profile_id) VALUES ('Groceries', 'expense', '#fff', 'tag', ?)"

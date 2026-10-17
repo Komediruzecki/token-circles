@@ -1,9 +1,13 @@
 /**
  * The calendar year in totals: what came in, what went out, the best saving month and the
  * biggest category. One pass over the year's transactions, so it costs nothing to recompute.
+ *
+ * What came in is income less deductions, and what went out is expenses: a deduction is pay that
+ * never reached an account (shared/guidance/flows.ts).
  */
-import { TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
-import { bucketByMonth, sumTypes } from './evaluate'
+import { flowsOf, savedOf } from '../../../../shared/guidance/flows'
+import { isTrackedMonth } from '../../../../shared/trackedMonths'
+import { baseAmount, bucketByMonth } from './evaluate'
 import type { EvaluateInput } from './evaluate'
 
 export interface YearReview {
@@ -30,26 +34,25 @@ export function buildYearReview(input: {
   let bestMonth: YearReview['bestMonth'] = null
   let trackedMonths = 0
   for (const [month, list] of byMonth) {
-    if (list.length >= TRACKED_MONTH_MIN_TRANSACTIONS) trackedMonths++
-    const saved = sumTypes(list, ['income']) - sumTypes(list, ['expense', 'deduction'])
+    if (isTrackedMonth(list.length)) trackedMonths++
+    const saved = savedOf(flowsOf(list, baseAmount))
     if (saved > 0 && (bestMonth === null || saved > bestMonth.saved)) bestMonth = { month, saved }
   }
 
   const perCategory = new Map<number, number>()
   for (const t of inYear) {
     if (t.type !== 'expense' || t.category_id === null) continue
-    perCategory.set(t.category_id, (perCategory.get(t.category_id) ?? 0) + Math.abs(t.amount))
+    perCategory.set(t.category_id, (perCategory.get(t.category_id) ?? 0) + baseAmount(t))
   }
   const top = [...perCategory.entries()].sort((a, b) => b[1] - a[1])[0]
 
-  const income = sumTypes(inYear, ['income'])
-  const expenses = sumTypes(inYear, ['expense', 'deduction'])
+  const flows = flowsOf(inYear, baseAmount)
   return {
     year,
     trackedMonths,
-    income,
-    expenses,
-    saved: income - expenses,
+    income: flows.income,
+    expenses: flows.spending,
+    saved: savedOf(flows),
     bestMonth,
     topCategory: top ? { id: top[0], total: top[1] } : null,
     entries: inYear.length,

@@ -1,0 +1,224 @@
+/**
+ * Every mail Token Circles sends, held to the same rules through the sample catalogue
+ * (worker/scripts/mail-samples.ts), which has a sample of every renderer in emailTemplates.ts.
+ *
+ * Two layouts: the mail layout of 2026-10-11, which the sign-up, account and billing mails are on,
+ * and the first shell, which the four mails that show an amount of money keep word for word
+ * (maff's call of 2026-10-11). The rules for wording are for the first kind; the second kind is
+ * pinned as it is.
+ */
+import { describe, expect, it } from 'vitest';
+import * as templates from '../src/emailTemplates';
+import { mailSamples } from '../scripts/mail-samples';
+import { amountMailDigests } from './helpers/amount-mail-grid';
+
+const samples = mailSamples();
+const onTheLayout = samples.filter((sample) => sample.layout === 'mail');
+const onTheFirstShell = samples.filter((sample) => sample.layout === 'first');
+
+/** Gmail clips a mail whose HTML is past 102 KB, and hides the rest behind a link. */
+const GMAIL_CLIPS_AT = 102 * 1024;
+
+/** Every renderer emailTemplates.ts exports: every render* but the layout itself. */
+const RENDERERS = Object.keys(templates).filter(
+  (name) => name.startsWith('render') && name !== 'renderMail'
+);
+
+/** The card of a mail on the layout: from the card to the footer that follows it. */
+const cardOf = (html: string) =>
+  html.slice(
+    html.indexOf('class="tc-card"'),
+    html.indexOf('Your money, in clear orbit. Open source and local-first.')
+  );
+
+async function sha256(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+describe('the mail catalogue', () => {
+  it('has a sample of every mail the Worker can send, each under its own name', () => {
+    expect(new Set(samples.map((sample) => sample.template))).toEqual(new Set(RENDERERS));
+    const names = samples.map((sample) => sample.name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('gives every mail the subject this snapshot holds', () => {
+    expect(Object.fromEntries(samples.map((sample) => [sample.name, sample.render().subject])))
+      .toMatchInlineSnapshot(`
+      {
+        "account-exists": "You already have a Token Circles account",
+        "bills-reminder": "Upcoming bills — Token Circles",
+        "budget-alert": "Budget alert (November 2026) — Token Circles",
+        "confirm-email": "Confirm your email for Token Circles",
+        "confirm-email-fresh-link": "Your new confirm link for Token Circles",
+        "email-change": "Confirm your new email for Token Circles",
+        "email-change-notice": "Someone asked to change your Token Circles email",
+        "email-change-notice-unnamed": "Someone asked to change your Token Circles email",
+        "login-code": "123456 is your Token Circles sign-in code",
+        "password-reset": "Reset your Token Circles password",
+        "payment-action-required": "Your bank needs you to confirm a Token Circles payment",
+        "payment-failed": "Your Token Circles payment didn't go through",
+        "spending-report": "Your spending report (October 2026, first half) — Token Circles",
+        "subscription-ended": "Your Token Circles Basic plan has ended",
+        "support-ack": "We got your message (TC-SAMPLE)",
+        "test-basic": "Test mail from Token Circles",
+        "welcome": "Token Circles is ready for your first statement",
+      }
+    `);
+  });
+
+  it('keeps every mail under the 102 KB at which Gmail clips one', () => {
+    for (const sample of samples) {
+      const bytes = new TextEncoder().encode(sample.render().html).length;
+      expect(bytes, sample.name).toBeLessThan(GMAIL_CLIPS_AT);
+    }
+  });
+
+  it('gives every HTML mail a plain-text twin, with no markup in it', () => {
+    for (const sample of samples) {
+      const { html, text } = sample.render();
+      expect(html, sample.name).toMatch(/^<!doctype html>/i);
+      expect(text.trim().length, sample.name).toBeGreaterThan(100);
+      expect(text, sample.name).not.toMatch(/<\/?[a-z][^>]*>/i);
+      expect(text, sample.name).not.toMatch(/&(?:#\d+|amp|lt|gt|quot|nbsp);/);
+    }
+  });
+
+  it('puts every link in the card of a mail on the layout in its text twin as well', () => {
+    for (const sample of onTheLayout) {
+      const { html, text } = sample.render();
+      const card = cardOf(html);
+      const art = new Set(
+        [...card.matchAll(/<a href="([^"]+)" style="display:block"><img /g)].map((m) => m[1])
+      );
+      const links = [...card.matchAll(/<a [^>]*href="([^"]+)"/g)]
+        .map((m) => m[1]!)
+        .filter((href) => !art.has(href))
+        .map((href) => href.replaceAll('&amp;', '&'));
+      for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);
+    }
+  });
+
+  it('keeps the last two words of every headline on the layout on one line', () => {
+    // On a phone, "One link, one sign-in, and you're in." left "in." alone on the last line.
+    for (const sample of onTheLayout) {
+      const headline = sample.render().html.match(/<h1 [^>]*>(.*?)<\/h1>/)![1]!;
+      expect(headline, sample.name).toMatch(/&nbsp;\S+$/);
+    }
+  });
+
+  it('never puts a number on one line and its unit on the next, in a mail on the layout', () => {
+    // At 600 px the sign-in code mail read "It works once, for 10" with "minutes." below.
+    for (const sample of onTheLayout) {
+      const card = cardOf(sample.render().html);
+      expect(card, sample.name).not.toMatch(/\d (?:minutes?|hours?|days?)\b/);
+    }
+  });
+
+  it('keeps the contact address on the line of the dot before it, in every footer on the layout', () => {
+    // On a phone the copyright line ended in a stray dot, with the address alone below it.
+    for (const sample of onTheLayout) {
+      expect(sample.render().html, sample.name).toContain(
+        'AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:hello@tokencircles.com"'
+      );
+    }
+  });
+
+  it('gives the text twin every fact of the footer: its line, its links and the address', () => {
+    const line = 'Your money, in clear orbit. Open source and local-first.';
+    for (const sample of onTheLayout) {
+      const { html, text } = sample.render();
+      expect(text, sample.name).toContain(line);
+      const footer = html.slice(html.indexOf(line));
+      const links = [...footer.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) =>
+        m[1]!.replace(/^mailto:/, '')
+      );
+      expect(links.length, sample.name).toBeGreaterThan(5);
+      for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);
+    }
+  });
+
+  it('starts the text twin with the eyebrow, where a mail on the layout has one', () => {
+    const eyebrowOf = (html: string) =>
+      html
+        .match(/<div class="tc-link"[^>]*>([^<]+)<\/div>/)?.[1]
+        ?.replaceAll('&#39;', "'")
+        .replaceAll('&amp;', '&');
+    const withOne = onTheLayout.filter((sample) => eyebrowOf(sample.render().html));
+    expect(withOne.length).toBeGreaterThan(0);
+    for (const sample of withOne) {
+      const { html, text } = sample.render();
+      expect(text.startsWith(`${eyebrowOf(html)}\n`), sample.name).toBe(true);
+    }
+  });
+
+  it('words no subject or body of the mails on the layout with an em dash', () => {
+    // The mails on the first shell are left out on purpose: they show an amount of money and stay
+    // exactly as they are, em dashes included. maff's call of 2026-10-11.
+    expect(onTheLayout.length).toBeGreaterThan(0);
+    for (const sample of onTheLayout) {
+      const { subject, html, text } = sample.render();
+      for (const part of [subject, html, text]) expect(part, sample.name).not.toContain('—');
+    }
+  });
+
+  it('puts every mail on the layout, with its art, and no mail on it carries the orbit GIF', () => {
+    for (const sample of onTheLayout) {
+      const { html } = sample.render();
+      expect(html, sample.name).toContain('<td class="tc-card"');
+      expect(html, sample.name).toMatch(/\/email\/(?:hero|banner)-engraved-night-v1\.jpg/);
+      expect(html, sample.name).not.toContain('orbit.gif');
+    }
+  });
+
+  it('leaves the mails on the first shell exactly as they were, word for word', async () => {
+    // maff's call of 2026-10-11: the mails that show an amount of money do not move to the new
+    // layout and keep their subjects and words. Each digest is of the subject, HTML and text the
+    // sample renders, taken from the templates before this change (the year in the footer read
+    // as YYYY, so the pin does not expire with the calendar).
+    const digests: Record<string, string> = {};
+    for (const sample of onTheFirstShell) {
+      const { subject, html, text } = sample.render();
+      const year = String(new Date().getUTCFullYear());
+      digests[sample.name] = await sha256(
+        [subject, html, text].join('\n').replaceAll(`&copy; ${year}`, '&copy; YYYY')
+      );
+    }
+    expect(digests).toEqual({
+      'payment-failed': '64cc883dff74be0f7fedbe8bde3cddf908612d2c190a0319be218d4d4606fa06',
+      'budget-alert': '69888cd8d58f671db940b542e0e0991b276b9e654e02f6b25c1212b0a4a85aaf',
+      'spending-report': '1426e75dc8b8cfc4ab22e27acf0c8777aa68c9a0db232c015d798d580c6a8ba6',
+      'bills-reminder': '560c2df9b752fd8249f31246b7ef2bb20550dfeb2e85147ce46a4474bfe1fd90',
+    });
+  });
+
+  it('leaves every branch of the four mails that show an amount as it was', async () => {
+    // A grid of inputs over each renderer's branches (test/helpers/amount-mail-grid.ts): the
+    // budget alert over budget, approaching it and both; bills due today, tomorrow, in a few days,
+    // overdue alone and with others, with and without a due date; the spending report with and
+    // without categories, a negative net, and no transactions; the failed payment with and without
+    // an amount and a retry date; each with and without its optional fields. These digests are the
+    // ones the renderers at 9bd2661a give for the same grid: that commit's emailTemplates.ts was
+    // copied out with `git show 9bd2661a:worker/src/emailTemplates.ts` and the grid rendered with
+    // it under plain Node, and the result matched the renderers here byte for byte.
+    expect(await amountMailDigests(templates)).toEqual({
+      renderBudgetAlert: {
+        inputs: 192,
+        digest: 'da31ec826bddbe33fdfba03ef90ec035b2c7ae86f24314fb1a6d833b113f3b83',
+      },
+      renderBillsReminder: {
+        inputs: 120,
+        digest: 'eb49742066c63c06fb8249055679b82b8f87b5a3b37c90c44967b2a9ed6c2547',
+      },
+      renderSpendingReport: {
+        inputs: 144,
+        digest: 'd8a27d4fff6619f1566d70bc587cc25b523ad67610b15804419e46f13f284726',
+      },
+      renderPaymentFailed: {
+        inputs: 128,
+        digest: '9ed93b8c44a0966f520f2790c4b8f11965dafdb78354fb5ea7d4471b0c40c924',
+      },
+    });
+  });
+});

@@ -1,6 +1,7 @@
+import { ACCOUNT_MESSAGES } from '../../accountSchema';
 import { balanceOf, expectMoney, isoDay, rowsOf, transactionForm } from '../helpers';
 import { added, expectOk, scenario } from '../types';
-import type { ContractApi, Expect } from '../types';
+import type { ContractApi, Expect, Json } from '../types';
 
 /** The body the Accounts dialog sends for a new account (features/accountForm.ts, createBody). */
 export function accountBody(name: string, balance: number) {
@@ -251,4 +252,89 @@ export const accounts = [
     expectMoney(expect, summary.body.unreconciled_total, 20.2, 'unreconciled total');
     expect((await api.other.get(`/api/accounts/${id}/reconciliation-summary`)).status).toBe(404);
   }),
+
+  scenario(
+    "a credit card keeps its limit and rate, a Giro account its overdraft's, and no other type takes either",
+    async (api, expect) => {
+      const read = async (id: number) => (await api.get(`/api/accounts/${id}`)).body as Json;
+      const card = await added(api, expect, '/api/accounts', {
+        name: 'Visa',
+        type: 'credit',
+        currency: 'EUR',
+        balance: -350,
+        credit_limit: 2000,
+        credit_rate: '15.9',
+      });
+      expect(await read(card)).toMatchObject({
+        type: 'credit',
+        credit_limit: 2000,
+        credit_rate: 15.9,
+      });
+      expectMoney(expect, await balanceOf(api, expect, card), -350, 'what is owed on the card');
+      expect((await rowsOf(api, expect, '/api/accounts')).find((a) => a.id === card)).toMatchObject(
+        {
+          credit_limit: 2000,
+          credit_rate: 15.9,
+        }
+      );
+
+      const everyday = await added(api, expect, '/api/accounts', {
+        name: 'Everyday',
+        type: 'giro',
+        currency: 'EUR',
+        balance: 100,
+        credit_limit: 500,
+        credit_rate: 9.5,
+      });
+      expect(await read(everyday)).toMatchObject({ credit_limit: 500, credit_rate: 9.5 });
+
+      // Another type takes neither, and a limit below zero or a rate over 100 is refused.
+      const pot = await api.post('/api/accounts', {
+        name: 'Pot',
+        type: 'savings',
+        currency: 'EUR',
+        credit_limit: 100,
+        credit_rate: 2,
+      });
+      expect(pot.status).toBe(400);
+      expect(pot.body.fields).toEqual({
+        credit_limit: ACCOUNT_MESSAGES.creditLimitType,
+        credit_rate: ACCOUNT_MESSAGES.creditRateType,
+      });
+      const odd = await api.post('/api/accounts', {
+        name: 'Store card',
+        type: 'credit',
+        currency: 'EUR',
+        credit_limit: -5,
+        credit_rate: 120,
+      });
+      expect(odd.status).toBe(400);
+      expect(odd.body.fields).toEqual({
+        credit_limit: ACCOUNT_MESSAGES.creditLimit,
+        credit_rate: ACCOUNT_MESSAGES.creditRate,
+      });
+
+      // An edit that blanks one takes it away, and one that makes the account savings takes both;
+      // setting one on it after that is refused.
+      expectOk(expect, await api.put(`/api/accounts/${card}`, { credit_rate: '' }), 'PUT no rate');
+      expect(await read(card)).toMatchObject({ credit_limit: 2000, credit_rate: null });
+      expectOk(expect, await api.put(`/api/accounts/${everyday}`, { type: 'savings' }), 'PUT type');
+      expect(await read(everyday)).toMatchObject({
+        type: 'savings',
+        credit_limit: null,
+        credit_rate: null,
+      });
+      const later = await api.put(`/api/accounts/${everyday}`, { credit_limit: 300 });
+      expect(later.status).toBe(400);
+      expect(later.body.fields).toEqual({ credit_limit: ACCOUNT_MESSAGES.creditLimitType });
+
+      // An account made without either has neither.
+      const wallet = await added(api, expect, '/api/accounts', {
+        name: 'Wallet',
+        type: 'cash',
+        currency: 'EUR',
+      });
+      expect(await read(wallet)).toMatchObject({ credit_limit: null, credit_rate: null });
+    }
+  ),
 ];

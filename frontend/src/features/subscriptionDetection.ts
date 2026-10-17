@@ -14,9 +14,27 @@
  */
 
 import { localToday } from '../utils/period'
+import {
+  cadenceFromGapDays,
+  commonCurrency,
+  DAY_MS,
+  gapDays,
+  median,
+  nextDueDate,
+  normalizeMerchantText,
+  parseDay,
+  pickAmountCluster,
+} from './chargePatterns'
+import { findRecurringPayments } from './recurringPayments'
 import { BRANDS } from './subscriptionBrands'
 import { CATALOG_ITEMS } from './subscriptionCatalog'
+import type { BillType } from '../../../shared/billSchema'
+import type { KindedCategory } from '../../../shared/guidance/kinds'
+import type { DetectedFrequency, GroupTxn } from './chargePatterns'
 import type { CatalogItem, CatalogPlan } from './subscriptionCatalog'
+
+export { cadenceFromGapDays, normalizeMerchantText }
+export type { DetectedFrequency }
 
 export interface DetectableTransaction {
   description?: string | null
@@ -28,6 +46,8 @@ export interface DetectableTransaction {
   date: string
   type?: string | null
   currency?: string | null
+  /** The category the entry is filed under: the finder reads its kind, and skips transfers. */
+  category_id?: number | null
 }
 
 export interface ExistingBillLike {
@@ -35,7 +55,6 @@ export interface ExistingBillLike {
   type?: string | null
 }
 
-export type DetectedFrequency = 'weekly' | 'biweekly' | 'monthly' | 'yearly'
 export type DetectionConfidence = 'high' | 'medium' | 'low'
 
 export interface DetectedSubscription {
@@ -57,7 +76,18 @@ export interface DetectedSubscription {
   categoryHints: string[]
   /** A subscription/bill with this brand already exists. */
   alreadyTracked: boolean
-  matchedVia: 'catalog' | 'brand'
+  /**
+   * What found it: the catalogue or the brand registry by name, or the recurring-payment finder
+   * (recurringPayments.ts), for a payee neither has a name for.
+   */
+  matchedVia: 'catalog' | 'brand' | 'recurring'
+  /**
+   * The bill it adds: a subscription, or a bill for a regular payment the finder files under
+   * housing, utilities, insurance, debt or childcare.
+   */
+  billType: BillType
+  /** The category the finder's charges are filed under; the named finds go by `categoryHints`. */
+  categoryId?: number
   /** Up to 3 raw transaction descriptions behind the proposal. */
   sampleDescriptions: string[]
   /** The catalogue entry backing this proposal, when one exists. */
@@ -69,6 +99,8 @@ export interface DetectedSubscription {
 export interface DetectSubscriptionsOptions {
   /** "Today" for due-date rolling — injectable for tests. Defaults to now. */
   today?: string
+  /** The profile's categories: the finder reads the type and the kind of a charge's category. */
+  categories?: readonly KindedCategory[]
 }
 
 // Bare tokens that overwhelmingly mean one-off purchases (or common words), not
@@ -103,15 +135,27 @@ const CATALOG_ALIASES: Record<string, string[]> = {
   'Mobile plan': ['mobile'],
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
+/**
+ * How far back a scan reads: enough history for a yearly cadence to show up twice, without
+ * chewing through decades of imported data.
+ */
+export const SCAN_WINDOW_DAYS = 750
 
-export function normalizeMerchantText(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
+/** The transactions a scan reads: those dated inside the SCAN_WINDOW_DAYS up to `nowMs`. */
+export function recentForScan<T extends { date: string }>(transactions: T[], nowMs: number): T[] {
+  const cutoff = nowMs - SCAN_WINDOW_DAYS * DAY_MS
+  return transactions.filter((t) => {
+    const ms = new Date(`${(t.date || '').slice(0, 10)}T00:00:00Z`).getTime()
+    return Number.isFinite(ms) && ms >= cutoff
+  })
+}
+
+/**
+ * Whether a proposal is worth adding: not a bill yet, and more than a low-confidence guess. The
+ * scan ticks these, and Getting started counts them.
+ */
+export function worthTracking(found: DetectedSubscription): boolean {
+  return !found.alreadyTracked && found.confidence !== 'low'
 }
 
 /** Bounded Levenshtein distance (small inputs only). */
@@ -132,13 +176,67 @@ export function editDistance(a: string, b: string): number {
   return prev[n]
 }
 
+/** Two rows of the distance table, reused by every call (grown when a longer word arrives). */
+let rowA = new Int32Array(64)
+let rowB = new Int32Array(64)
+
+/**
+ * Whether `a` and `b` are at most `max` edits apart: editDistance(a, b) <= max, without finishing
+ * the table once every cell in a row is already over `max` (a row's minimum never falls later),
+ * and without allocating a row per call.
+ */
+export function withinEditDistance(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false
+  if (a === b) return true
+  const n = b.length
+  if (rowA.length <= n) {
+    rowA = new Int32Array(n + 1)
+    rowB = new Int32Array(n + 1)
+  }
+  let prev = rowA
+  let cur = rowB
+  for (let j = 0; j <= n; j++) prev[j] = j
+  for (let i = 1; i <= a.length; i++) {
+    cur[0] = i
+    let rowMin = i
+    const ca = a.charCodeAt(i - 1)
+    for (let j = 1; j <= n; j++) {
+      const cost = ca === b.charCodeAt(j - 1) ? 0 : 1
+      const v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
+      cur[j] = v
+      if (v < rowMin) rowMin = v
+    }
+    if (rowMin > max) return false
+    const swap = prev
+    prev = cur
+    cur = swap
+  }
+  return prev[n] <= max
+}
+
 /** Whole-token match with a typo budget scaled to the keyword length. */
 function tokenMatches(token: string, keyword: string): boolean {
   // eslint-disable-next-line security/detect-possible-timing-attacks -- merchant text vs catalog keyword; nothing secret
   if (token === keyword) return true
-  if (keyword.length >= 8) return editDistance(token, keyword) <= 2
-  if (keyword.length >= 5) return editDistance(token, keyword) <= 1
-  return false
+  const budget = keyword.length >= 8 ? 2 : keyword.length >= 5 ? 1 : 0
+  return budget > 0 && withinEditDistance(token, keyword, budget)
+}
+
+/**
+ * A keyword as matching reads it: normalised, and split into tokens. Every catalogue name, alias
+ * and brand keyword is prepared once, when the module loads (MERCHANT_KEYS), not once per
+ * transaction: a scan of a few thousand entries used to normalise the whole catalogue for each one.
+ */
+export interface PreparedKeyword {
+  /** The keyword normalised (normalizeMerchantText); empty never matches. */
+  norm: string
+  /** `norm` split on spaces. */
+  tokens: string[]
+}
+
+export function prepareKeyword(keyword: string): PreparedKeyword {
+  const norm = normalizeMerchantText(keyword)
+  return { norm, tokens: norm.split(' ') }
 }
 
 /**
@@ -146,10 +244,9 @@ function tokenMatches(token: string, keyword: string): boolean {
  * phrase (or all tokens present); single-word keywords must match a whole
  * token — never a substring, so "max" can't hit "MAXIMA MARKET".
  */
-function textMatchesKeyword(normText: string, tokens: string[], keyword: string): boolean {
-  const normKey = normalizeMerchantText(keyword)
+function textMatchesKeyword(normText: string, tokens: string[], key: PreparedKeyword): boolean {
+  const { norm: normKey, tokens: keyTokens } = key
   if (!normKey) return false
-  const keyTokens = normKey.split(' ')
   if (keyTokens.length > 1) {
     if (` ${normText} `.includes(` ${normKey} `)) return true
     return keyTokens.every((kt) => tokens.some((t) => tokenMatches(t, kt)))
@@ -174,6 +271,23 @@ function catalogItemFor(name: string): CatalogItem | undefined {
 }
 
 /**
+ * Every key matchMerchant tries, prepared once (prepareKeyword), in the order it tries them:
+ * each catalogue entry's name then its aliases, and each brand's keywords longest first, in
+ * registry order. A test holds this to preparing the catalogue and the registry on the spot.
+ */
+export const MERCHANT_KEYS = {
+  catalog: CATALOG_ITEMS.map((item) => ({
+    item,
+    keys: [item.name, ...(CATALOG_ALIASES[item.name] ?? [])].map(prepareKeyword),
+  })),
+  brands: BRANDS.map((brand) => ({
+    brand,
+    keys: [...brand.keywords].sort((a, b) => b.length - a.length).map(prepareKeyword),
+    catalogItem: catalogItemFor(brand.displayName),
+  })),
+}
+
+/**
  * Resolve a transaction's merchant text to a catalogue/brand identity.
  * Catalogue names win over brand keywords (a "GOOGLE ONE" charge should
  * surface as "Google One", not "Google"); within each source, more specific
@@ -187,11 +301,10 @@ export function matchMerchant(text: string): MerchantMatch | null {
   // 1) Catalogue names + aliases, longest name first so "YouTube Premium"
   //    beats "YouTube Music"'s shared prefix and multiword names beat tokens.
   const catalogCandidates: { key: string; item: CatalogItem }[] = []
-  for (const item of CATALOG_ITEMS) {
-    const keys = [item.name, ...(CATALOG_ALIASES[item.name] ?? [])]
+  for (const { item, keys } of MERCHANT_KEYS.catalog) {
     for (const key of keys) {
       if (textMatchesKeyword(normText, tokens, key)) {
-        catalogCandidates.push({ key: normalizeMerchantText(key), item })
+        catalogCandidates.push({ key: key.norm, item })
         break
       }
     }
@@ -210,16 +323,15 @@ export function matchMerchant(text: string): MerchantMatch | null {
 
   // 2) Brand registry keywords (registry order = specificity contract, e.g.
   //    OneDrive before Microsoft), longest keyword within a brand first.
-  for (const brand of BRANDS) {
-    const sorted = [...brand.keywords].sort((a, b) => b.length - a.length)
-    for (const keyword of sorted) {
-      if (textMatchesKeyword(normText, tokens, keyword)) {
+  for (const { brand, keys, catalogItem } of MERCHANT_KEYS.brands) {
+    for (const key of keys) {
+      if (textMatchesKeyword(normText, tokens, key)) {
         return {
           name: brand.displayName,
           matchedVia: 'brand',
-          keyword: normalizeMerchantText(keyword),
+          keyword: key.norm,
           categoryHints: [brand.defaultCategory],
-          catalogItem: catalogItemFor(brand.displayName),
+          catalogItem,
         }
       }
     }
@@ -234,79 +346,6 @@ function isExpense(txn: DetectableTransaction): boolean {
 
 function merchantText(txn: DetectableTransaction): string {
   return [txn.description, txn.beneficiary, txn.payor, txn.notes].filter(Boolean).join(' ')
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
-}
-
-/** Bucket a median day-gap into a bill frequency; null = no clear cadence. */
-export function cadenceFromGapDays(gap: number): DetectedFrequency | null {
-  if (gap >= 5 && gap <= 9) return 'weekly'
-  if (gap >= 11 && gap <= 17) return 'biweekly'
-  if (gap >= 24 && gap <= 38) return 'monthly'
-  if (gap >= 330 && gap <= 400) return 'yearly'
-  return null
-}
-
-function parseDay(date: string): number {
-  return new Date(`${date.slice(0, 10)}T00:00:00Z`).getTime()
-}
-
-function toIsoDate(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10)
-}
-
-function addPeriod(dateMs: number, frequency: DetectedFrequency): number {
-  if (frequency === 'weekly') return dateMs + 7 * DAY_MS
-  if (frequency === 'biweekly') return dateMs + 14 * DAY_MS
-  const d = new Date(dateMs)
-  if (frequency === 'monthly') d.setUTCMonth(d.getUTCMonth() + 1)
-  else d.setUTCFullYear(d.getUTCFullYear() + 1)
-  return d.getTime()
-}
-
-interface GroupTxn {
-  amount: number
-  dateMs: number
-  date: string
-  currency: string | null
-  raw: string
-}
-
-const sameAmount = (a: number, ref: number) => Math.abs(a - ref) <= Math.max(0.5, ref * 0.05)
-
-/**
- * The recurring-amount evidence within a group: cluster charges by amount and
- * pick the cluster that looks like the plan — the one holding the most recent
- * charge when it repeats, else the largest repeating cluster. Returns null when
- * no amount repeats (one-off shopping, or a single charge). This keeps a real
- * "AMAZON PRIME 8.99" cadence detectable amid unrelated "AMAZON.DE" orders that
- * share the group, and follows price changes once the new price has recurred.
- */
-function pickAmountCluster(txns: GroupTxn[]): GroupTxn[] | null {
-  if (txns.length < 2) return null
-  const byAmount = [...txns].sort((a, b) => a.amount - b.amount)
-  const clusters: GroupTxn[][] = []
-  for (const txn of byAmount) {
-    const last = clusters[clusters.length - 1]
-    if (last && sameAmount(txn.amount, median(last.map((t) => t.amount)))) last.push(txn)
-    else clusters.push([txn])
-  }
-  const repeating = clusters.filter((c) => c.length >= 2)
-  if (repeating.length === 0) return null
-  const latestMs = Math.max(...txns.map((t) => t.dateMs))
-  const withLatest = repeating.find((c) => c.some((t) => t.dateMs === latestMs))
-  const best =
-    withLatest ??
-    repeating.sort(
-      (a, b) =>
-        b.length - a.length ||
-        Math.max(...b.map((t) => t.dateMs)) - Math.max(...a.map((t) => t.dateMs))
-    )[0]
-  return [...best].sort((a, b) => a.dateMs - b.dateMs)
 }
 
 /** The plan (or base price) whose price matches the amount, within tolerance. */
@@ -327,6 +366,10 @@ function planForAmount(item: CatalogItem | undefined, amount: number): CatalogPl
  * there's only one charge), and confidence reflects how recurring/stable the
  * evidence is. Groups whose only evidence is an ambiguous bare token (e.g. one
  * "AMAZON.DE" charge) are dropped rather than proposed as noise.
+ *
+ * The expenses no name matches go on to the recurring-payment finder (recurringPayments.ts), which
+ * proposes the regular ones by payee. Each expense is read by one of the two, so a payment is
+ * never proposed twice.
  */
 export function detectSubscriptions(
   transactions: DetectableTransaction[],
@@ -351,6 +394,8 @@ export function detectSubscriptions(
     txns: GroupTxn[]
   }
   const groups = new Map<string, Group>()
+  // The expenses no name matched: the finder's to read.
+  const leftovers: DetectableTransaction[] = []
 
   for (const txn of transactions) {
     if (!txn.date || !Number.isFinite(txn.amount) || txn.amount === 0) continue
@@ -358,7 +403,10 @@ export function detectSubscriptions(
     const text = merchantText(txn)
     if (!text.trim()) continue
     const match = matchMerchant(text)
-    if (!match) continue
+    if (!match) {
+      leftovers.push(txn)
+      continue
+    }
     const key = normalizeMerchantText(match.name)
     let group = groups.get(key)
     if (!group) {
@@ -394,11 +442,7 @@ export function detectSubscriptions(
     const stable = cluster !== null
 
     // Cadence from the median gap between distinct charge days.
-    const gaps: number[] = []
-    for (let i = 1; i < txns.length; i++) {
-      const gap = (txns[i].dateMs - txns[i - 1].dateMs) / DAY_MS
-      if (gap >= 2) gaps.push(gap)
-    }
+    const gaps = gapDays(txns)
     const cadence = gaps.length > 0 ? cadenceFromGapDays(median(gaps)) : null
 
     const latest = txns[txns.length - 1]
@@ -418,35 +462,31 @@ export function detectSubscriptions(
 
     const frequency: DetectedFrequency = cadence ?? 'monthly'
 
-    // Next expected charge, rolled forward so it's never in the past.
-    let dueMs = addPeriod(latest.dateMs, frequency)
-    while (dueMs < todayMs) dueMs = addPeriod(dueMs, frequency)
-
-    const currencyCounts = new Map<string, number>()
-    for (const t of txns) {
-      if (t.currency) currencyCounts.set(t.currency, (currencyCounts.get(t.currency) ?? 0) + 1)
-    }
-    const currency = [...currencyCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
-
     results.push({
       key,
       name: group.match.name,
       amount,
-      currency,
+      currency: commonCurrency(txns),
       frequency,
       confidence,
       occurrences: txns.length,
       firstDate: txns[0].date,
       lastDate: latest.date,
-      suggestedDueDate: toIsoDate(dueMs),
+      // Next expected charge, rolled forward so it's never in the past.
+      suggestedDueDate: nextDueDate(latest.dateMs, frequency, todayMs),
       categoryHints: group.match.categoryHints,
       alreadyTracked: trackedKeys.has(key),
       matchedVia: group.match.matchedVia,
+      billType: 'subscription',
       sampleDescriptions: [...new Set(txns.map((t) => t.raw))].slice(-3),
       catalogItem: group.match.catalogItem,
       matchedPlan,
     })
   }
+
+  results.push(
+    ...findRecurringPayments(leftovers, existingBills, { todayMs, categories: opts.categories })
+  )
 
   const confidenceRank: Record<DetectionConfidence, number> = { high: 0, medium: 1, low: 2 }
   return results.sort(

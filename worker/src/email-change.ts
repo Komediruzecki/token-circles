@@ -15,6 +15,7 @@ import { insertEmailVerification, verifyLink, VERIFY_TOKEN_TTL_HOURS } from './e
 import { renderEmailChange, renderEmailChangeNotice } from './emailTemplates';
 import { HttpError } from './http';
 import { clientIp, enforce } from './ratelimit';
+import { claimWelcomeOnMove, welcomeClaimed } from './welcome';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // The longest address SMTP carries (RFC 5321). The address is written into mail, so it is bounded.
@@ -198,12 +199,14 @@ export async function cancelEmailChange(d1: D1Database, userId: number): Promise
  *
  * 'taken' when another account has the address by now (a pending change holds nothing, so someone
  * may have signed up with it meanwhile), and then nothing changes. 'gone' when the account is.
+ * `welcome` is true when the move confirmed the account's first address (a Google account stored
+ * with none confirmed) and claimed its welcome (welcome.ts), for the caller to mail.
  */
 export async function applyEmailChange(
   d1: D1Database,
   userId: number,
   email: string
-): Promise<'changed' | 'taken' | 'gone'> {
+): Promise<{ outcome: 'changed' | 'taken' | 'gone'; welcome: boolean }> {
   // One batch: the move, and the end of everything else the account has out by mail: a change
   // still waiting, the confirm link for the address it leaves, the password reset links and
   // sign-in codes that address was sent, and the unsubscribe link its reminders carried (the next
@@ -211,7 +214,8 @@ export async function applyEmailChange(
   // a refused move ends nothing.
   const onceMoved = (sql: string) =>
     d1.prepare(`${sql} AND (SELECT email FROM users WHERE id = ?) = ?`).bind(userId, userId, email);
-  const [moved] = await d1.batch([
+  const [claim, moved] = await d1.batch([
+    claimWelcomeOnMove(d1, userId, email),
     d1
       .prepare(
         `UPDATE users SET email = ?, email_verified = 1, unsubscribe_token = NULL
@@ -222,6 +226,9 @@ export async function applyEmailChange(
     onceMoved('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL'),
     onceMoved('DELETE FROM login_codes WHERE user_id = ? AND used_at IS NULL'),
   ]);
-  if ((moved.meta.changes ?? 0) > 0) return 'changed';
-  return (await db.first(d1, 'SELECT id FROM users WHERE id = ?', userId)) ? 'taken' : 'gone';
+  if ((moved!.meta.changes ?? 0) > 0) return { outcome: 'changed', welcome: welcomeClaimed(claim) };
+  const outcome = (await db.first(d1, 'SELECT id FROM users WHERE id = ?', userId))
+    ? 'taken'
+    : 'gone';
+  return { outcome, welcome: false };
 }

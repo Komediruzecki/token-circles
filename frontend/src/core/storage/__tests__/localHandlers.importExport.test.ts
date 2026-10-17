@@ -179,7 +179,10 @@ describe('localHandlers - data management', () => {
     const names = list.map((c: any) => c.name)
     expect(names).not.toContain('Custom')
     expect(names).toContain('Housing')
-    expect(names).toContain('Food')
+    // Groceries and Eating out took the place of Food.
+    expect(names).toContain('Groceries')
+    expect(names).toContain('Eating out')
+    expect(names).not.toContain('Food')
   })
 
   it('clears all data', async () => {

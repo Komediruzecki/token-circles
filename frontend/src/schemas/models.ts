@@ -4,6 +4,7 @@
 // always evaluate before its body, making this chunk-order-independent.
 import '../core/zodConfig'
 import { z } from 'zod'
+import { storedAccountType } from '../../../shared/accountSchema'
 
 export const ProfileSchema = z.object({
   id: z.number(),
@@ -21,6 +22,16 @@ export const CategorySchema = z.object({
   type: z.enum(['income', 'expense', 'transfer', 'account']),
   parent_id: z.number().nullable(),
   tax_deductible: z.boolean().or(z.number().transform((n) => !!n)),
+  // What the category holds (shared/guidance/kinds.ts). A plain string, not an enum of the kinds:
+  // a kind a later build adds must not fail the whole list here, as an account type once did.
+  // Code that goes by kinds reads them through `effectiveKind`, which ignores one it lacks.
+  kind: z.string().nullable().optional(),
+  // 1 or 0 in D1 once the person says whether it is needed every month; null while the kind decides.
+  essential: z
+    .boolean()
+    .or(z.number().transform((n) => !!n))
+    .nullable()
+    .optional(),
   created_at: z.string(),
   profile_id: z.number(),
   parent_name: z.string().nullable().optional(),
@@ -30,13 +41,20 @@ export const AccountSchema = z.object({
   id: z.number(),
   name: z.string(),
   bank_name: z.string().optional().nullable(),
-  type: z.enum(['giro', 'savings', 'ib', 'cash']),
+  // Any string: one type this build does not have (a later build's, or one an API client stored)
+  // failed the whole list. It is kept as it is and shows as a plain account (core/accountTypes.ts);
+  // a type v4 renamed reads as the one that replaced it.
+  type: z.string().transform(storedAccountType),
   currency: z.string(),
   balance: z.number(),
   notes: z.string().optional().nullable(),
   profile_id: z.number(),
   starting_balance: z.number().optional().nullable(),
   starting_date: z.string().optional().nullable(),
+  // A credit card's limit or a Giro account's overdraft, and the yearly rate on money owed
+  // (migration 0037). Null for none given; a local row from before them has neither key.
+  credit_limit: z.number().optional().nullable(),
+  credit_rate: z.number().optional().nullable(),
 })
 
 export const TransactionSchema = z.object({

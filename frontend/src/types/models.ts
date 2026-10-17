@@ -2,6 +2,7 @@
  * Finance Manager TypeScript Type Definitions
  * Based on database schema and API responses
  */
+import type { AccountType as SharedAccountType } from '../../../shared/accountSchema'
 
 // ============ BASIC TYPES ============
 export type ProfileId = number
@@ -17,7 +18,8 @@ export type BillId = number
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'CAD' | 'AUD' | 'JPY' | (string & {})
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'deduction'
 export type BudgetPeriod = 'monthly' | 'weekly' | 'yearly'
-export type AccountType = 'giro' | 'savings' | 'ib' | 'cash'
+/** The types the app has: `ACCOUNT_TYPES` in shared/accountSchema.ts. */
+export type AccountType = SharedAccountType
 
 export type PageName =
   | 'dashboard'
@@ -175,6 +177,10 @@ export interface Category {
   type: TransactionType | 'account'
   parent_id: CategoryId | null
   tax_deductible: boolean
+  /** What an expense category holds (shared/guidance/kinds.ts), or null: the name decides. */
+  kind?: string | null
+  /** Whether it is needed every month, once the person says; null while the kind decides. */
+  essential?: boolean | null
   created_at: string
   profile_id: ProfileId
   parent_name?: string | null
@@ -196,7 +202,11 @@ export interface Account {
   id: AccountId
   name: string
   bank_name?: string | null
-  type: AccountType
+  /**
+   * One of the types the app has, or a type this build does not have (a later build's), kept as
+   * it is and shown as a plain account (core/accountTypes.ts).
+   */
+  type: AccountType | (string & {})
   /** Profile base currency. Account balances never mix native currency units. */
   currency: Currency
   /** Current balance in the profile base currency. */
@@ -206,6 +216,13 @@ export interface Account {
   /** Opening balance in the profile base currency. */
   starting_balance?: number | null
   starting_date?: string | null
+  /**
+   * How much a credit card lets you owe, or how far below zero a Giro account's overdraft goes, in
+   * the profile base currency. Null for none given.
+   */
+  credit_limit?: number | null
+  /** The yearly percentage charged on money owed on the account. Null for none given. */
+  credit_rate?: number | null
 }
 
 // ============ BUDGETS ============

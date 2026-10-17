@@ -26,6 +26,7 @@
  * de-duplication and scope-keyed caching are the next step, and they attach at the same seam.
  */
 import { batch, createSignal } from 'solid-js'
+import { isUserStatePath } from '../../../shared/accountStateKeys'
 import { isReadSentAsPost } from './readsSentAsPost'
 import type { Accessor, Setter } from 'solid-js'
 
@@ -136,9 +137,12 @@ const WRITES_THAT_ALSO_MOVE: readonly { path: RegExp; moves: string }[] = [
  * resolve to `categories`. Anything that is not an `/api/<name>` path resolves to nothing, so an
  * unexpected URL is inert rather than invalidating the world. The path's own entity comes first,
  * and each name appears once however many routes through the table reach it.
+ *
+ * The account's own state (`/api/account/state`: a wizard step, a finished tour, a hidden card)
+ * moves no data, so it resolves to nothing too: a tour finished on one page reloads none.
  */
 export function tagsForPath(path: string): string[] {
-  if (isReadSentAsPost(path)) return []
+  if (isReadSentAsPost(path) || isUserStatePath(path)) return []
   const match = /^\/api\/([a-zA-Z][a-zA-Z0-9-]*)/.exec(path)
   if (!match) return []
   const tags: string[] = []

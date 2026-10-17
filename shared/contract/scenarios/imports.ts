@@ -1,6 +1,7 @@
+import { ACCOUNT_MESSAGES, importedAccountTypeError } from '../../accountSchema';
 import { IMPORT_UPLOAD_MESSAGES } from '../../importUpload';
 import { IMPORT_SOURCE_MESSAGES } from '../../importSourceSchema';
-import { addCategory, balanceOf, expectMoney, listTransactions } from '../helpers';
+import { addCategory, balanceOf, expectMoney, listTransactions, rowsOf } from '../helpers';
 import { SHEETS } from '../outbound';
 import { expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
@@ -128,6 +129,113 @@ export const imports = [
       expectMoney(expect, await balanceOf(api, expect, savings.id), 300, 'Savings');
       const names = await categoryNames(api, expect);
       expect(names).toEqual(expect.arrayContaining(['Food', 'Fun', 'Salary']));
+    }
+  ),
+
+  scenario(
+    'a category an import creates takes the kind its name suggests, when it is an expense',
+    async (api, expect) => {
+      await account(api, expect, 'Everyday', 1000);
+      await execute(api, expect, {
+        importId: 'contract-import-kinds',
+        rows: [
+          ['2026-03-01', 'Pay', '2500', 'Salary', 'Everyday', 'income'],
+          ['2026-03-02', 'Pizza', '-18', 'Restaurant', 'Everyday', 'expense'],
+          ['2026-03-03', 'Card fee', '-2', 'Bank Fees', 'Everyday', 'expense'],
+          ['2026-03-04', 'Vet', '-60', 'Pets', 'Everyday', 'expense'],
+        ],
+        categoryTypes: {
+          Salary: 'income',
+          Restaurant: 'expense',
+          'Bank Fees': 'expense',
+          Pets: 'expense',
+        },
+        accountTypes: {},
+        accountBalances: {},
+        accountBalanceDates: {},
+        approvedCategories: ['Salary', 'Restaurant', 'Bank Fees', 'Pets'],
+      });
+      const reply = await api.get('/api/categories');
+      expectOk(expect, reply, 'GET /api/categories');
+      const kinds = Object.fromEntries(
+        (reply.body as Json[]).map((row) => [row.name, [row.kind, row.essential]])
+      );
+      expect(kinds).toEqual({
+        Salary: [null, null],
+        Restaurant: ['eating_out', null],
+        'Bank Fees': ['taxes', null],
+        Pets: [null, null],
+      });
+    }
+  ),
+
+  scenario(
+    'an import refuses an account type the app does not have, and writes nothing',
+    async (api, expect) => {
+      // The Import page offers the app's types; a client that sends another one is told which, at
+      // the account, before anything is written. Stored, one unknown type used to fail the app's
+      // whole account list.
+      await account(api, expect, 'Everyday', 1000);
+      for (const dry_run of [true, false]) {
+        const reply = await api.post(
+          '/api/import/execute',
+          executeBody({ accountTypes: { Savings: 'loan' }, dry_run })
+        );
+        expect(reply.status, `dry_run ${dry_run}`).toBe(422);
+        expect(reply.body.error).toBe(importedAccountTypeError('Savings'));
+        expect(reply.body.validation_errors).toContainEqual({
+          field: 'accountTypes.Savings',
+          reason: ACCOUNT_MESSAGES.type,
+        });
+      }
+      expect(await listTransactions(api, expect)).toEqual([]);
+      expect(await accountNamed(api, expect, 'Savings')).toBeUndefined();
+    }
+  ),
+
+  scenario(
+    'an import reads an account type as the Accounts form does, and makes no type a giro',
+    async (api, expect) => {
+      await account(api, expect, 'Everyday', 1000);
+      // A type v4 renamed is the type that replaced it, whatever its case.
+      await execute(api, expect, { accountTypes: { Savings: ' Checking ' } });
+      expect(await accountNamed(api, expect, 'Savings')).toMatchObject({ type: 'giro' });
+
+      // No type for the account at all: the import makes it a giro account.
+      await execute(api, expect, {
+        rows: [['2026-03-05', 'To pocket', '20', 'Pocket', 'Everyday', 'transfer']],
+        categoryTypes: { Pocket: 'account' },
+        accountTypes: {},
+        accountBalances: {},
+        accountBalanceDates: {},
+      });
+      expect(await accountNamed(api, expect, 'Pocket')).toMatchObject({ type: 'giro' });
+    }
+  ),
+
+  scenario(
+    'an import log keeps the bank formats its session read, and drops any the app does not read',
+    async (api, expect) => {
+      const sent = [
+        ['contract-formats-two', ['dkb', ' Sparkasse ', 'dkb'], 'dkb,sparkasse'],
+        ['contract-formats-text', 'erste, PBZ', 'erste,pbz'],
+        ['contract-formats-unknown', ['mybank'], null],
+        ['contract-formats-none', undefined, null],
+      ] as const;
+      for (const [importId, formats, stored] of sent) {
+        const reply = await api.post('/api/import-logs', {
+          import_id: importId,
+          source: 'statements',
+          imported: 2,
+          ...(formats === undefined ? {} : { bank_formats: formats }),
+        });
+        expectOk(expect, reply, `POST the log ${importId}`);
+        expect(reply.body.bank_formats, importId).toBe(stored);
+      }
+      const listed = await rowsOf(api, expect, '/api/import-logs');
+      expect(Object.fromEntries(listed.map((log) => [log.import_id, log.bank_formats]))).toEqual(
+        Object.fromEntries(sent.map(([importId, , stored]) => [importId, stored]))
+      );
     }
   ),
 

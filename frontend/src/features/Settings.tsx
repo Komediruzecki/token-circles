@@ -32,6 +32,7 @@ import BillingPlans from '../components/BillingPlans'
 import ChangelogModal from '../components/ChangelogModal'
 import DangerZone from '../components/DangerZone'
 import { Field, FormNotice, SubmitButton } from '../components/form'
+import { AboutThisSpace } from '../components/guidance/AboutThisSpace'
 import { canOfferInstall, InstallAppButton } from '../components/InstallAppButton'
 import LegalLinks from '../components/LegalLinks'
 import { LogViewer } from '../components/LogViewer'
@@ -307,6 +308,12 @@ const IconCoin = () => (
     <circle cx="12" cy="12" r="9" />
     <path d="M12 6.5v11" />
     <path d="M15 9.3a3.4 3 0 00-3-1.3c-1.7 0-3 .9-3 2s1.3 2 3 2 3 .9 3 2-1.3 2-3 2a3.4 3 0 01-3-1.3" />
+  </Svg>
+)
+const IconPin = () => (
+  <Svg>
+    <path d="M12 21s-7-6.2-7-11.5a7 7 0 0114 0C19 14.8 12 21 12 21z" />
+    <circle cx="12" cy="9.5" r="2.5" />
   </Svg>
 )
 const IconDatabase = () => (
@@ -1338,6 +1345,15 @@ export default function Settings() {
                     )}
                   </Field>
                 </form>
+              </div>
+
+              <div class={styles.card} data-test-id="settings-about-space">
+                <CardHead
+                  icon={<IconPin />}
+                  title="About this space"
+                  desc="Each space keeps its own answers."
+                />
+                <AboutThisSpace />
               </div>
 
               <div class={styles.card} data-tour="settings-storage">

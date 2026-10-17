@@ -17,6 +17,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './index';
 import { logAuthEvent } from './authlog';
 import { CLEARED_KINDS, type ClearedKind } from '../../shared/accessCleared';
+import { claimWelcome, claimWelcomeOnConfirm, welcomeClaimed } from './welcome';
 
 const encoder = new TextEncoder();
 
@@ -607,14 +608,17 @@ export function clearedWorthSaying(cleared: ClearedAccess, by: 'sign-in' | 'rese
 
 /**
  * Find-or-create the user for a verified Google account. `created` is true only
- * for a brand-new account (the caller sends the welcome email then — matching
- * the email/password registration path); linking Google to an existing account
- * is not a new signup. `cleared` names what linking removed that the person
- * would miss (clearedWorthSaying), so the app can say what.
+ * for a brand-new account; linking Google to an existing account is not a new signup.
+ * `cleared` names what linking removed that the person would miss (clearedWorthSaying), so the
+ * app can say what.
  *
  * Linking to an account whose address was never confirmed first clears what was set up on it
  * before the address was confirmed (clearUnconfirmedAccess). Its data stays. A confirmed account
  * is linked and nothing else changes.
+ *
+ * `welcome` is true when this sign-in claimed the account's Welcome mail (welcome.ts), for the
+ * caller to send: a new account with an address Google confirmed, or a link that confirms an
+ * address for the first time.
  */
 export async function resolveGoogleUser(
   db: D1Database,
@@ -626,6 +630,7 @@ export async function resolveGoogleUser(
   cleared: ClearedKind[];
   /** users.token_version as of the look-up, or as the join's own batch left it. */
   tokenVersion: number;
+  welcome: boolean;
 }> {
   const byProvider = await db
     .prepare(
@@ -640,6 +645,7 @@ export async function resolveGoogleUser(
       email: null,
       cleared: [],
       tokenVersion: byProvider.token_version,
+      welcome: false,
     };
   }
 
@@ -657,8 +663,11 @@ export async function resolveGoogleUser(
       // One batch, so a failure anywhere leaves the account as it was. The clearing touches the
       // account only if its address is still unconfirmed as the batch runs; a confirmed account
       // is just linked.
+      const clearing = clearUnconfirmedAccess(db, byEmail.id);
       const results = await db.batch([
-        ...clearUnconfirmedAccess(db, byEmail.id),
+        ...clearing,
+        // Before the write that confirms the address, after which it claims nothing.
+        claimWelcomeOnConfirm(db, byEmail.id),
         db
           .prepare(
             "UPDATE users SET auth_provider = 'google', provider_id = ?, email_verified = 1 WHERE id = ?"
@@ -669,7 +678,8 @@ export async function resolveGoogleUser(
       ]);
       const cleared = clearedWorthSaying(clearedAccess(results), 'sign-in');
       const tokenVersion = (results.at(-1)?.results[0] as { token_version: number }).token_version;
-      return { userId: byEmail.id, created: false, email: null, cleared, tokenVersion };
+      const welcome = welcomeClaimed(results[clearing.length]);
+      return { userId: byEmail.id, created: false, email: null, cleared, tokenVersion, welcome };
     }
   }
 
@@ -690,11 +700,16 @@ export async function resolveGoogleUser(
     .prepare('INSERT INTO profiles (name, user_id) VALUES (?, ?)')
     .bind('Personal Profile', userId)
     .run();
+  // Google has confirmed the address, so its welcome goes now. An account made without a
+  // confirmed address has nowhere to send one.
+  const welcome =
+    verified && email !== null && welcomeClaimed(await claimWelcome(db, userId).run());
   return {
     userId,
     created: true,
     email: verified ? email : null,
     cleared: [],
     tokenVersion: created!.token_version,
+    welcome,
   };
 }

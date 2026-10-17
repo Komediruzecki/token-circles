@@ -155,6 +155,7 @@ export function ImportMappingStep(props: { flow: ImportFlow; embedded?: boolean 
                               <option value="savings">Savings</option>
                               <option value="ib">Investment</option>
                               <option value="cash">Cash</option>
+                              <option value="credit">Credit Card</option>
                             </select>
                             <input
                               type="text"

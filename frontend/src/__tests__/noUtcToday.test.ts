@@ -37,7 +37,7 @@ const ALLOWED: Array<{ file: string; line: string; why: string }> = [
     why: 'shiftDate builds dt with Date.UTC from a YYYY-MM-DD',
   },
   {
-    file: 'features/subscriptionDetection.ts',
+    file: 'features/chargePatterns.ts',
     line: 'return new Date(ms).toISOString().slice(0, 10)',
     why: 'toIsoDate prints a UTC-midnight day number from parseDay',
   },

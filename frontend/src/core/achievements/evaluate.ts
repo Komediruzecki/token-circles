@@ -3,14 +3,24 @@
  * an input, so a fixture profile always evaluates the same way. Runs over arrays the app already
  * holds; cost is one pass per array.
  */
+import { flowsOf, savedOf } from '../../../../shared/guidance/flows'
 import { amortize, payoffDate } from '../../../../shared/loanSchedule'
-import { ACHIEVEMENTS, TRACKED_MONTH_MIN_TRANSACTIONS, VOLUME_STEPS } from './definitions'
+import { trackedMonthsOf } from '../../../../shared/trackedMonths'
+import { normalizedTransactionAmount } from '../transactionAmount'
+import { ACHIEVEMENTS, VOLUME_STEPS } from './definitions'
 import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
 import type { AchievementId } from './definitions'
 
 export interface EvaluateInput {
-  transactions: Array<Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'>>
+  /**
+   * `amount_local` is the amount converted to the base currency, which every sum of money here
+   * reads (`baseAmount`). A row without one is in the base currency already.
+   */
+  transactions: Array<
+    Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'> &
+      Partial<Pick<Transaction, 'amount_local'>>
+  >
   budgets: Array<
     Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'>
   >
@@ -90,25 +100,31 @@ export function bucketByMonth(transactions: EvaluateInput['transactions']): Map<
   return byMonth
 }
 
-/** Total of the given transaction types, absolute amounts. */
+/**
+ * A transaction's size in the base currency: its converted amount when it has one, else its
+ * amount, as Budgets, Dashboard and Analytics count it in both runtimes. Every sum of money in
+ * achievements, advice and the year in review goes through this. `amount` alone is in the
+ * transaction's own currency, so a month with an entry in another currency added two currencies.
+ */
+export const baseAmount = (t: Pick<Tx, 'amount' | 'amount_local'>): number =>
+  Math.abs(normalizedTransactionAmount(t))
+
+/** Total of the given transaction types, in the base currency. */
 export function sumTypes(list: Tx[], types: string[]): number {
-  return list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + Math.abs(t.amount), 0)
+  return list.filter((t) => types.includes(t.type)).reduce((acc, t) => acc + baseAmount(t), 0)
 }
 
 export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const nowMonth = monthOf(input.today)
   const byMonth = bucketByMonth(input.transactions)
-  const tracked = [...byMonth.entries()]
-    .filter(([, list]) => list.length >= TRACKED_MONTH_MIN_TRANSACTIONS)
-    .map(([m]) => m)
-    .sort()
+  // A tracked month is defined once, in shared/trackedMonths.ts, for everything that counts them.
+  const tracked = trackedMonthsOf(input.transactions.map((t) => t.date))
   const trackedSet = new Set(tracked)
   const inMonth = (m: string): Tx[] => byMonth.get(m) ?? []
 
-  // Deductions count as outflow: what leaves the profile in the month.
-  const savingMonths = tracked.filter(
-    (m) => sum(inMonth(m), ['income']) > sum(inMonth(m), ['expense', 'deduction'])
-  )
+  // A month saved when what reached an account beat what was spent. A deduction lowers income
+  // and is never spending (shared/guidance/flows.ts).
+  const savingMonths = tracked.filter((m) => savedOf(flowsOf(inMonth(m), baseAmount)) > 0)
   const namedMonths = tracked.filter((m) =>
     inMonth(m).every((t) => t.type === 'transfer' || t.category_id !== null)
   )
@@ -169,11 +185,14 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
     return year === undefined ? null : `${year}-12`
   })()
 
-  /** Average monthly spend across tracked months: what "three months of spending" means here. */
+  /**
+   * Average monthly spend across tracked months: what "three months of spending" means here.
+   * Expenses only: a deduction is pay that never arrived, which no cushion pays.
+   */
   const avgMonthlySpend =
     tracked.length === 0
       ? 0
-      : tracked.reduce((acc, m) => acc + sum(inMonth(m), ['expense', 'deduction']), 0) /
+      : tracked.reduce((acc, m) => acc + flowsOf(inMonth(m), baseAmount).spending, 0) /
         tracked.length
 
   const reachedGoals = input.goals.filter(

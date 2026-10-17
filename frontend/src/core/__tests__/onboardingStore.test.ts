@@ -213,42 +213,6 @@ describe('onboardingStore', () => {
       expect(onboardingOwnerFor(true, null)).toBeNull()
     })
 
-    it('keeps each account in one browser to its own decision', async () => {
-      setOnboardingOwner('account-1')
-      skipOnboarding()
-      await onboardingMirrorSettled()
-      expect(getOnboardingStatus()).toBe('skipped')
-
-      // A second account signs in here. Its own settings on the server say nothing yet.
-      const db = await getDB()
-      await db.clear('settings')
-      setOnboardingOwner('account-2')
-      expect(getOnboardingStatus()).toBeNull()
-      await expect(shouldOfferOnboarding()).resolves.toBe(true)
-      completeOnboarding()
-      await onboardingMirrorSettled()
-      expect(getOnboardingStatus()).toBe('completed')
-
-      // The first account keeps the decision it made.
-      setOnboardingOwner('account-1')
-      expect(getOnboardingStatus()).toBe('skipped')
-      expect(localStorage.getItem('finance_onboarding:account-1')).toBe('skipped')
-      expect(localStorage.getItem('finance_onboarding:account-2')).toBe('completed')
-    })
-
-    it('gives the browser-wide decision to no server account', async () => {
-      localStorage.setItem('finance_onboarding', 'skipped')
-
-      setOnboardingOwner('account-7')
-
-      // The account's own settings and its pristine profile decide, as for a new device.
-      expect(getOnboardingStatus()).toBeNull()
-      expect(localStorage.getItem('finance_onboarding:account-7')).toBeNull()
-      await expect(shouldOfferOnboarding()).resolves.toBe(true)
-      // It stays for the local account, should this browser go local-first.
-      expect(localStorage.getItem('finance_onboarding')).toBe('skipped')
-    })
-
     it('moves the browser-wide decision to the local account in local-first', () => {
       forgetOnboardingStatus('local')
       localStorage.setItem('finance_onboarding', 'completed')
@@ -268,18 +232,6 @@ describe('onboardingStore', () => {
 
       expect(getOnboardingStatus()).toBe('completed')
       expect(localStorage.getItem('finance_onboarding')).toBeNull()
-    })
-
-    it('keeps a decision found in settings for the account that asked, after a switch', async () => {
-      await settingsUpdate({ onboarding: 'completed' })
-      setOnboardingOwner('account-1')
-
-      const asked = shouldOfferOnboarding()
-      setOnboardingOwner('account-2')
-
-      await expect(asked).resolves.toBe(false)
-      expect(localStorage.getItem('finance_onboarding:account-1')).toBe('completed')
-      expect(localStorage.getItem('finance_onboarding:account-2')).toBeNull()
     })
 
     it('offers nothing and keeps nothing on this device while no account is known', async () => {

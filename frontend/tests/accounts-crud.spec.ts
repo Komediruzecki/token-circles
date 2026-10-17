@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login, navigateToRoute, getByTestId } from './test-helpers'
+import { gotoServerless, login, navigateToRoute, getByTestId } from './test-helpers'
 
 test.describe('Accounts CRUD Operations', () => {
   test.beforeEach(async ({ page }) => {
@@ -172,5 +172,25 @@ test.describe('Accounts CRUD Operations', () => {
     const cardCount = await page.getByTestId('account-card').count()
     // Each account card has exactly one delete control.
     expect(await page.getByTestId('account-delete-btn').count()).toBe(cardCount)
+  })
+})
+
+test.describe("the account dialog's hints", () => {
+  test("keep the leading of the other dialogs' hints, 18 px a line", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await gotoServerless(page, 'accounts', 'accounts-header')
+    await page.getByTestId('add-account-btn').click()
+    await page.getByTestId('add-account-modal').getByLabel('Account Type').selectOption('giro')
+    const limit = page.getByTestId('account-credit-limit')
+    await expect(limit).toBeVisible()
+    // The overdraft hint runs to two lines at 390: the distance between them is its leading.
+    const pitch = await limit.evaluate((input) => {
+      const id = input.getAttribute('aria-describedby')!.split(' ').pop()!
+      const range = document.createRange()
+      range.selectNodeContents(document.getElementById(id)!)
+      const tops = [...new Set(Array.from(range.getClientRects()).map((r) => Math.round(r.top)))]
+      return tops.length > 1 ? tops[1] - tops[0] : null
+    })
+    expect(pitch).toBe(18)
   })
 })

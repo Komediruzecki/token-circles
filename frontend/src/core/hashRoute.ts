@@ -29,11 +29,29 @@ const HASH_ALIASES: Record<string, PageName> = {
  */
 const PAGES_WITH_PATHS = new Set<string>(['loans'])
 
+/** The route a fragment names, with or without its '#' and query: `#reset-password?token=…`. */
+export function hashRouteName(rawHash: string): string {
+  return rawHash.replace(/^#/, '').split('?')[0]
+}
+
 /**
- * Fragments handled outside the page router entirely. `reset-password` is rendered by App as a
- * full-screen route before the shell mounts, so the active page must be left alone.
+ * Opens the sign-in screen on the form that sends a reset link (LoginScreen). The "already has an
+ * account" mail's Reset password button links here.
  */
-const NON_PAGE_ROUTES = new Set(['reset-password'])
+export const FORGOT_PASSWORD = 'forgot-password'
+
+/**
+ * Fragments handled outside the page router entirely, so the active page must be left alone and
+ * the period stays off them (periodStore). `reset-password` is rendered by App as a full-screen
+ * route before the shell mounts; `forgot-password` is read by the sign-in screen, and a signed-in
+ * app just stays where it is.
+ */
+const NON_PAGE_ROUTES = new Set(['reset-password', FORGOT_PASSWORD])
+
+/** Whether a route is one of the fragments above, which name no page. */
+export function isNonPageRoute(name: string): boolean {
+  return NON_PAGE_ROUTES.has(name)
+}
 
 /** The page name a hash fragment selects, or `null` to leave the active page unchanged. */
 export function resolvePageFromHash(
@@ -41,13 +59,31 @@ export function resolvePageFromHash(
   isPage: (name: string) => boolean
 ): PageName | null {
   // Accepts the fragment with or without '#', and ignores a query suffix (`#transactions?tag=3`).
-  const name = rawHash.replace(/^#/, '').split('?')[0]
+  const name = hashRouteName(rawHash)
   if (!name) return 'dashboard'
   if (isPage(name)) return name as PageName
   const page = name.split('/')[0]
   if (page !== name && PAGES_WITH_PATHS.has(page) && isPage(page)) return page as PageName
   const alias = HASH_ALIASES[name]
   if (alias) return alias
-  if (NON_PAGE_ROUTES.has(name)) return null
+  if (isNonPageRoute(name)) return null
   return 'notFound'
+}
+
+/**
+ * Whether the address is `page` with `flag=1` in its query: a link that asks the page to open
+ * something, such as Getting started's `#bills?scan=1`. A flag is answered once: it is taken off
+ * the address with history.replaceState, which fires no hashchange, so a reload or a later visit
+ * does not open the same thing again. The rest of the query (the period) stays.
+ */
+export function takeHashFlag(page: string, flag: string): boolean {
+  const raw = window.location.hash.replace(/^#/, '')
+  const q = raw.indexOf('?')
+  if (q < 0 || raw.slice(0, q) !== page) return false
+  const params = new URLSearchParams(raw.slice(q + 1))
+  if (params.get(flag) !== '1') return false
+  params.delete(flag)
+  const rest = params.toString()
+  history.replaceState(history.state, '', rest ? `#${page}?${rest}` : `#${page}`)
+  return true
 }

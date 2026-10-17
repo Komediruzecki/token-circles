@@ -157,12 +157,12 @@ function settingValue(value: unknown): string {
 }
 
 /**
- * A retirement plan and a badge record belong to one profile (shared/profileSettings.ts). This
- * Worker keeps each as a row of its profile under the plain key; a file from local-first names
- * the profile in the key instead (`retirement_settings:<id>`). Such a row is restored as a row of
- * the profile its key names, under the plain key, and stands in for a row the file has for that
- * profile under the plain key: it is the one local-first kept current. One naming a profile the
- * file does not carry is left out.
+ * A retirement plan, a badge record and the guidance answers belong to one profile
+ * (shared/profileSettings.ts). This Worker keeps each as a row of its profile under the plain key;
+ * a file from local-first names the profile in the key instead (`retirement_settings:<id>`). Such
+ * a row is restored as a row of the profile its key names, under the plain key, and stands in for
+ * a row the file has for that profile under the plain key: it is the one local-first kept current.
+ * One naming a profile the file does not carry is left out.
  */
 function profileSettingsInWorkerForm(source: Row[], profileIds: Set<number>): Row[] {
   const named = new Map<string, Row>();

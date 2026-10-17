@@ -12,28 +12,47 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Loans: try a what-if before you pay.** Each loan has its own page. Compare sets your plan beside a what-if (more each month, a one-off or yearly payment, a payoff date to hit, or a new rate) in "Finish sooner" or "Pay less each month" mode, and Month by month exports the schedule as CSV.
 - **Forms say what is wrong, under the field.** A refused save marks the field and says why, in the same words signed in or without an account. That covers the forms from transactions, budgets and loans to Settings, import, sign-in and support.
+- **Getting started: three next steps from your own data.** When you finish or skip the setup wizard, its last step and a Getting started card on Dashboard list up to three next steps, each with its reason in your own counts and months and a link to the page where it's done: import the rest of your year, review the subscriptions the scan spotted, sort the entries without a category, set a budget for your biggest category without one, see what put last month in the red, or compare paying a loan off faster. A step goes once it's done. Hide the card and it stays hidden, signed in on every device.
+- **Getting started can suggest a one-month cushion** when the money you can reach covers less than a month of what you need.
+- **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
+- **Credit cards, and overdrafts with a rate.** A credit card is its own account type, with a limit and an interest rate, and a Giro account can carry its overdraft's. Cash accounts show banknotes now, so the card icon means a card.
+- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **The subscription scan finds regular payments it has no name for**, like the rent or a local gym, and adds each as a bill or a subscription. It leaves cash withdrawals out, and lists what you pay every week or two unticked.
 
 ### Changed
 
+- **The setup wizard follows your account.** Signed in, a new account meets the setup wizard once, on whichever device it signs in first, and a wizard left part way reopens at the step you reached. Finish or skip it on one device and no other device shows it. An account that already has data, or that finished or skipped the wizard before, does not see it again.
+- **Tours you finish follow your account.** Signed in, the tour menu marks the tours you finished as Done on every device, and Reset All Tours starts them over everywhere.
+- **The streak says months in a row.** The badge rail on Dashboard and the record on Progress read "4 months in a row" where they said "4 months tracked": the number counts tracked months without a gap, up to this month or last. With no streak running, both say "Start a streak".
+- **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
+- **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
+- **Account mails share the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Reminders and the failed-payment mail, which show amounts, stay as they were.
 - **New accounts confirm their email before using the app.** Create account ends on Check your inbox, and an account whose address is not confirmed yet sees Confirm your email, which can send the link again. A sign-in code, a reset link or Google sign-in also confirm it.
 - **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.
 - **Email links finish where you sign in.** A confirm or change-of-address link opened in another browser completes once you sign in to that account there.
 - **Sign-in history is kept for 90 days**, and deleting your account deletes it with everything else.
+- **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 
 ### Fixed
 
 - **Loans show what you owe today.** The remaining balance, progress bar, next payment date and paid-off status count interest, extra payments and rate changes. Due dates stay on the loan's day of the month, or on the last day of a shorter month.
+- **The setup wizard's hints are easier to read.** The grey lines under its fields, like the one under Base currency, were faded below 4.5:1 contrast in light theme. They show at full strength now.
 - **Dates follow your calendar, not UTC's.** Just after midnight, today's transactions count in Analytics, forms open on your date, and a bill due today stays due today. A bill or recurring rule on the 31st falls on a shorter month's last day.
 - **Quick add and the Transactions form offer your profile's categories and accounts.** The + button, Cmd-K and the form list the active profile's rows as they are when you open them, so a category made on Budgets, Goals or Bills shows up. A form left open when you switch profile closes and says what was not saved.
 - **Each account gets its own setup wizard.** A new account is offered the setup wizard even when another account on this browser already finished or skipped it.
+- **The setup wizard fits a phone and stays put.** On the import step the mapping and preview tables could stretch the panel past the edge of the screen, taking its buttons with it, and the panel could slide sideways when the browser scrolled a button into view. The tables now scroll sideways inside the panel.
+- **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **Editing a category keeps its parent and tax-deductible setting**, and its icon can be cleared.
 - **Editing a transaction keeps balances and goals right.** A foreign-currency amount moves the account by its converted value, a category change updates both categories' goals, and notes you clear stay cleared.
 - **Copy last month keeps the budgets you already set.** It fills only the categories without a budget and tells you how many already had one.
 - **Budgets and bills count the right month.** Set Budget changes the month's budget instead of adding another, Allocate uses the month on screen, budget alerts compare a month with its own budgets, and the Bills dialog saves its category. Weekly and biweekly bills fall due on their own schedule.
 - **Analytics and reports count every day.** Each day of a month falls in one of its weeks, a PDF report includes every transaction in its range, and net worth uses each account's latest balance for the day. In local-first mode, the heatmap's day view lists that day's transactions.
+- **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
+- **Badges and advice count an entry in another currency at its converted amount.** 50,000 yen of shopping counts as what it cost in your own currency, so saving months, budgets held, the rainy-day badge, the year in review and the advice on Progress add up. Badges you already have stay yours.
 - **Failures say what happened.** An unexpected server error reads "Something went wrong on our side. Try again in a moment.", deleting something another tab already deleted says so, and renaming a tag or profile to a name in use tells you it is taken.
 - **Backups keep each profile's connected sources and settings.** A restore puts each retirement plan back under its own profile, and any profile but your last can be deleted.
 - **Local-first mode: bills keep their account, and uploaded files import.** Paying a bill moves its account's balance, and a statement file uploaded on Import is read and imported.
+- **An account of a type Token Circles doesn't have no longer empties your account list.** One an AI assistant added through the MCP server as "credit" shows as a plain account, and Transactions and quick add list every account again. The MCP server and the import now refuse any type but Giro, Savings, Investment or Cash.
 
 ## [5.16.1] — 2026-09-27
 

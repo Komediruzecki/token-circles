@@ -15,6 +15,7 @@
  */
 import { createSignal } from 'solid-js'
 import * as periodUtils from '../utils/period'
+import { isNonPageRoute } from './hashRoute'
 import type { Period } from '../utils/period'
 
 const [period, setPeriodRaw] = createSignal<Period>(periodUtils.defaultPeriod())
@@ -43,7 +44,7 @@ function buildHash(page: string, params: URLSearchParams): string {
 /** Merge the period into the current page's hash, preserving page + other params. */
 function writePeriodToHash(p: Period): void {
   const { page, params } = readHash()
-  if (!page || page === 'reset-password') return
+  if (!page || isNonPageRoute(page)) return
   for (const k of PERIOD_KEYS) params.delete(k)
   for (const [k, v] of Object.entries(periodUtils.serializePeriod(p))) params.set(k, v)
   const next = buildHash(page, params)
@@ -91,7 +92,7 @@ export function initPeriodSync(): () => void {
 
   const onHashChange = () => {
     const parts = readHash()
-    if (!parts.page || parts.page === 'reset-password') return
+    if (!parts.page || isNonPageRoute(parts.page)) return
     const parsed = periodUtils.parsePeriod(Object.fromEntries(parts.params.entries()))
     if (parsed) {
       // Only adopt if it actually differs, to avoid needless re-renders.

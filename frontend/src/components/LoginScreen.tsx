@@ -3,6 +3,7 @@ import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
+import { FORGOT_PASSWORD, hashRouteName } from '../core/hashRoute'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -35,7 +36,10 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
  */
 export default function LoginScreen() {
-  const [mode, setMode] = createSignal<SignInMode>('login')
+  // #forgot-password opens the screen on the form that sends a reset link: the Reset password
+  // button of the "already has an account" mail links there.
+  const forgotInHash = () => hashRouteName(window.location.hash) === FORGOT_PASSWORD
+  const [mode, setMode] = createSignal<SignInMode>(forgotInHash() ? 'forgot' : 'login')
   // What the screen says that is not a problem with the form: a reset link on its way, or a link
   // from an email waiting for this sign-in.
   const [notice, setNotice] = createSignal('')
@@ -124,12 +128,29 @@ export default function LoginScreen() {
 
   /** Another mode, or another way in: the values stay, and nothing from before is said. */
   const switchTo = (next: SignInMode) => {
+    // Leaving the reset form takes #forgot-password off the address, so that neither a reload nor
+    // the app after signing in opens the form again. replaceState fires no hashchange.
+    if (next !== 'forgot' && forgotInHash()) {
+      history.replaceState(history.state, '', window.location.pathname + window.location.search)
+    }
     setMode(next)
     setNotice('')
     setElsewhere('')
     setLinkProblem('')
     form.reset({ ...form.values })
   }
+
+  // The address can change to #forgot-password with this screen open: a pasted link only moves
+  // the fragment, and loads nothing.
+  onMount(() => {
+    const onHashChange = () => {
+      if (forgotInHash() && mode() !== 'forgot') switchTo('forgot')
+    }
+    window.addEventListener('hashchange', onHashChange)
+    onCleanup(() => {
+      window.removeEventListener('hashchange', onHashChange)
+    })
+  })
 
   /** From the refused sign-in: send the confirm link to the address in the form, signed out. */
   const sendConfirmLink = () => {

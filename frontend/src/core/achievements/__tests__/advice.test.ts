@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildAdvice } from '../advice'
+import { parseDismissed, serializeRecords } from '../records'
 import { adviceInput, month, tx } from './fixtures'
 import type { AdviceInput } from '../advice'
 
@@ -120,9 +121,22 @@ describe('buildAdvice', () => {
     const cards = buildAdvice(
       make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }) })
     )
-    const card = cards.find((c) => c.kind === 'unbudgeted-subscription')
+    const card = cards.find((c) => c.kind === 'unbudgeted-category')
+    expect(card!.id).toBe('unbudgeted-category:2:2026-09')
     expect(card!.title).toContain('Transport')
     expect(card!.figure).toBe('120')
+  })
+
+  it('keeps hiding that card when it was dismissed under its old name', () => {
+    // Before the kind was named for what it flags, its id began unbudgeted-subscription.
+    const stored = serializeRecords([], ['unbudgeted-subscription:2:2026-09', 'in-the-red:2026-08'])
+    const dismissed = parseDismissed(stored)
+    expect(dismissed).toEqual(['unbudgeted-category:2:2026-09', 'in-the-red:2026-08'])
+
+    const cards = buildAdvice(
+      make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }), dismissed })
+    )
+    expect(kinds(cards)).not.toContain('unbudgeted-category')
   })
 
   it('ranks warnings first and drops what the user dismissed', () => {

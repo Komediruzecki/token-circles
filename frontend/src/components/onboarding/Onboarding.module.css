@@ -21,8 +21,12 @@
 
 /* ---- decorative orbit field ---- */
 
+/* Fixed, not absolute: the field is far wider and taller than a phone, and as the overlay's own
+   content it gave the overlay an 870 px wide scroll area. overflow: hidden stops a finger, not a
+   scrollIntoView, so a browser bringing the Continue button into view slid the panel sideways. A
+   fixed box belongs to the viewport, which clips it without scrolling. */
 .backdrop {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   width: min(160vmax, 1700px);
@@ -80,9 +84,15 @@
 
 /* ---- glass panel ---- */
 
+/* min-width: 0 because the panel is a grid item, and a grid item's automatic minimum is its
+   content's width. On a phone the import step stretched the panel past the edge of the screen, its
+   footer buttons with it: 382 px wide on a 375 px screen before a file was chosen, 583 px with the
+   mapping table and 1141 px with the preview. At zero the panel keeps the overlay's width and each
+   table scrolls sideways inside its own wrapper. */
 .panel {
   position: relative;
   width: 100%;
+  min-width: 0;
   max-width: 720px;
   max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
@@ -169,9 +179,24 @@
   min-height: 0;
   overflow-y: auto;
   padding: 10px 26px 18px;
+  /* A control scrolled into view, by focus or a tap, stops above the 20 px that fade. */
+  scroll-padding-bottom: 20px;
+}
+
+/* The step goes on below: its last visible 20 px fade into the panel, whatever the theme, since a
+   mask takes the panel's own background rather than a colour of its own. Gone at the end. */
+.body[data-more-below] {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
 }
 
 /* ---- steps ---- */
+
+/* A step's heading takes focus when the step opens, for screen readers; it is not a control, so it
+   shows no ring. */
+[data-step-heading]:focus {
+  outline: none;
+}
 
 .step {
   display: flex;
@@ -304,7 +329,12 @@
 .fieldHint {
   font-size: 11.5px;
   color: var(--text-secondary);
-  opacity: 0.85;
+}
+
+/* The space questions' lead belongs to the questions under it, not the fields above: more room
+   above it than below. The margins cancel out, so nothing under it moves. */
+.questionsLead {
+  margin: 6px 0 -6px;
 }
 
 .secondaryAction {
@@ -530,6 +560,20 @@
   color: var(--text);
 }
 
+.next-steps {
+  width: 100%;
+  max-width: 540px;
+  text-align: left;
+}
+
+.next-steps-title {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
 .doneStep kbd {
   padding: 1px 6px;
   border: 1px solid var(--border);
@@ -694,4 +738,6 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* The space questions keep the form's rhythm between them (SpaceQuestions.module.css). */
+  --space-questions-gap: 14px;
 }

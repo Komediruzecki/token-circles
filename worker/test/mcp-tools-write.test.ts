@@ -6,6 +6,7 @@
 import { env, SELF } from 'cloudflare:test';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { mintApiToken } from '../src/apitoken';
+import { ACCOUNT_TYPES, DEFAULT_ACCOUNT_TYPE } from '../../shared/accountSchema';
 import { BUDGET_MESSAGES } from '../../shared/budgetSchema';
 import { defaultTagColor, TAG_MESSAGES } from '../../shared/tagSchema';
 
@@ -104,6 +105,44 @@ describe('write tools', () => {
       .bind(PROFILE_ID)
       .first<{ n: number }>();
     expect(count?.n).toBe(2);
+  });
+
+  // The tool stored any string as the type: one the app does not have failed the app's account
+  // list, every account with it.
+  it('create_account refuses a type the app does not have, and stores nothing', async () => {
+    for (const type of ['loan', 'mortgage']) {
+      const result = await call('create_account', { name: `Card ${type}`, type, currency: 'EUR' });
+      expect(result.isError, `type "${type}"`).toBe(true);
+      expect(result.content[0].text).toContain('type');
+    }
+    const count = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM accounts WHERE profile_id = ? AND name LIKE 'Card%'"
+    )
+      .bind(PROFILE_ID)
+      .first<{ n: number }>();
+    expect(count?.n).toBe(0);
+
+    const plain = unwrap(await call('create_account', { name: 'Card plain', currency: 'EUR' }));
+    const stored = await env.DB.prepare('SELECT type FROM accounts WHERE id = ?')
+      .bind(plain.id)
+      .first<{ type: string }>();
+    expect(stored?.type).toBe(DEFAULT_ACCOUNT_TYPE);
+  });
+
+  it('create_account offers the types the app has, and names only those', async () => {
+    const res = await SELF.fetch('https://api.example.com/mcp', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+    const tools = ((await res.json()) as any).result.tools as any[];
+    const tool = tools.find((t) => t.name === 'create_account');
+    const type = tool.inputSchema.properties.type;
+    expect(type.enum).toEqual([...ACCOUNT_TYPES]);
+    // Each says what every type is, "giro (a current account)", and names no other.
+    for (const said of [tool.description, type.description] as string[]) {
+      expect([...said.matchAll(/(\w+) \(/g)].map((match) => match[1])).toEqual([...ACCOUNT_TYPES]);
+    }
   });
 
   it('create_transactions attaches rows to the named account', async () => {

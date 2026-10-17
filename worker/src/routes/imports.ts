@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import { calendarDateIn } from '../../../shared/calendarDate';
 import { parseImportCsv } from '../../../shared/importCsv';
+import { kindForName } from '../../../shared/guidance/kinds';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
@@ -18,6 +19,12 @@ import {
   uploadRefusal,
 } from '../../../shared/importUpload';
 import { parseImportNumber } from '../import-number';
+import {
+  ACCOUNT_MESSAGES,
+  DEFAULT_ACCOUNT_TYPE,
+  importedAccountTypeError,
+  readAccountType,
+} from '../../../shared/accountSchema';
 import {
   checkImportRowNumbers,
   MISSING_DATE_WARNING,
@@ -53,13 +60,17 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
 export const importRoutes = new Hono<AppEnv>();
 
-// ── getCategoryIcon — ported verbatim from backend/utils.js ───────────────────
-// Maps a category name to an icon key when /execute auto-creates a category.
+// ── getCategoryIcon — ported from backend/utils.js ─────────────────────────────
+// Maps a category name to an icon key when /execute auto-creates a category. Groceries and
+// meals get the icons the app's own name matching draws for them (CategoryIcon.tsx): a stored
+// icon counts as chosen, so a mug stored here would outlast what local-first shows.
 function getCategoryIcon(name: string): string {
   const lower = name.toLowerCase();
   const patterns: Array<[RegExp, string]> = [
     [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, 'car'],
-    [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, 'coffee'],
+    [/grocer/i, 'shopping-cart'],
+    [/eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i, 'utensils'],
+    [/food|cafe|coffee/i, 'coffee'],
     [/hous|rent|mortgage|home|lease|property|real\s*estate/i, 'home'],
     [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, 'zap'],
     [
@@ -500,6 +511,8 @@ export async function executeImport(
       .filter(Boolean)
   );
   const accountValidationErrors: Array<{ field: string; reason: string }> = [];
+  // The first account whose type is refused: the refusal names it.
+  let refusedType: string | null = null;
   const toCreate = Object.entries((categoryTypes || {}) as Record<string, string>)
     .filter(
       ([name, type]) =>
@@ -517,9 +530,24 @@ export async function executeImport(
           reason: 'Use an unambiguous number such as 1234.56 or 1.234,56.',
         });
       }
+      // The type the Import page chose for it, read as the Accounts form's is: none is a giro
+      // account, and a type the app does not have is refused at the account, before anything is
+      // written. Stored, it once failed the app's whole account list.
+      const chosenType =
+        accountTypes && Object.prototype.hasOwnProperty.call(accountTypes, name)
+          ? accountTypes[name]
+          : undefined;
+      const accType = readAccountType(chosenType);
+      if (accType === null) {
+        refusedType ??= name.trim();
+        accountValidationErrors.push({
+          field: `accountTypes.${name}`,
+          reason: ACCOUNT_MESSAGES.type,
+        });
+      }
       return {
         name: name.trim(),
-        accType: (accountTypes && accountTypes[name]) || 'giro',
+        accType: accType ?? DEFAULT_ACCOUNT_TYPE,
         balance: balance ?? 0,
         balanceDate: (accountBalanceDates && accountBalanceDates[name]) || today(),
       };
@@ -528,7 +556,10 @@ export async function executeImport(
     return {
       status: 422,
       body: {
-        error: 'One or more account starting balances are invalid or ambiguous.',
+        error:
+          refusedType !== null
+            ? importedAccountTypeError(refusedType)
+            : 'One or more account starting balances are invalid or ambiguous.',
         validation_errors: accountValidationErrors,
         skipped_items: skippedItems,
         warnings,
@@ -665,9 +696,13 @@ export async function executeImport(
         const catType =
           (categoryTypes && categoryTypes[name]) ||
           (INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw)) ? 'income' : 'expense');
+        // An expense category takes the kind its name suggests, as in local-first: "Restaurant"
+        // is eating out (shared/guidance/kinds.ts). In the cloud, where a new account starts with
+        // no categories, this is how most categories get one.
+        const kind = catType === 'expense' ? kindForName(name) : null;
         return DB.prepare(
-          'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
-        ).bind(name, catType, color, getCategoryIcon(name), pid);
+          'INSERT INTO categories (name, type, color, icon, kind, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(name, catType, color, getCategoryIcon(name), kind, pid);
       })
     );
     await loadCategories();
