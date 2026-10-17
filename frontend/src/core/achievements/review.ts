@@ -3,7 +3,7 @@
  * biggest category. One pass over the year's transactions, so it costs nothing to recompute.
  */
 import { TRACKED_MONTH_MIN_TRANSACTIONS } from './definitions'
-import { bucketByMonth, sumTypes } from './evaluate'
+import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
 import type { EvaluateInput } from './evaluate'
 
 export interface YearReview {
@@ -38,7 +38,7 @@ export function buildYearReview(input: {
   const perCategory = new Map<number, number>()
   for (const t of inYear) {
     if (t.type !== 'expense' || t.category_id === null) continue
-    perCategory.set(t.category_id, (perCategory.get(t.category_id) ?? 0) + Math.abs(t.amount))
+    perCategory.set(t.category_id, (perCategory.get(t.category_id) ?? 0) + baseAmount(t))
   }
   const top = [...perCategory.entries()].sort((a, b) => b[1] - a[1])[0]
 
