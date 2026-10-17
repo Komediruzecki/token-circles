@@ -343,3 +343,133 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
   })
 })
+
+test.describe('onboarding wizard at phone width', () => {
+  const sizes = [
+    { width: 390, height: 844 },
+    { width: 375, height: 667 },
+  ]
+  for (const size of sizes) {
+    for (const theme of ['light', 'dark']) {
+      test(`the panel stays on a ${size.width}x${size.height} screen on every step, ${theme}`, async ({
+        page,
+      }) => {
+        /**
+         * Everything wrong with the panel's place on the screen, as a list (empty when right):
+         * - the page, the overlay, the panel or its body scrolls sideways, or any other box in the
+         *   wizard is wider inside than out. A table, what is inside it and its own wrapper are
+         *   the exception: the import step's mapping and preview tables are wider than a phone and
+         *   scroll inside their wrappers.
+         * - the panel reaches past an edge of the screen, or a footer button past the panel's.
+         * - the overlay is scrolled at all.
+         * Then the footer's primary button (Continue, or what stands in for it) is scrolled into
+         * view centred, as a browser does for an element it brings into view, and the panel must
+         * not move and the overlay must still not be scrolled: a box that clips with
+         * overflow: hidden can still be scrolled that way.
+         */
+        const misplaced = () =>
+          page.evaluate(() => {
+            const found: string[] = []
+            const root = document.documentElement
+            const overlay = document.querySelector<HTMLElement>(
+              '[data-test-id="onboarding-wizard"]'
+            )!
+            const panel = document.querySelector<HTMLElement>('[data-test-id="onboarding-panel"]')!
+            if (root.scrollWidth > root.clientWidth)
+              found.push(`page ${root.scrollWidth}>${root.clientWidth}`)
+            for (const el of [overlay, ...Array.from(overlay.querySelectorAll<HTMLElement>('*'))]) {
+              const overflowX = getComputedStyle(el).overflowX
+              if (overflowX === 'visible' || overflowX === 'clip') continue
+              if (el.closest('table') || el.querySelector(':scope > table')) continue
+              if (el.scrollWidth > el.clientWidth)
+                found.push(
+                  `${String(el.className) || el.tagName} ${el.scrollWidth}>${el.clientWidth}`
+                )
+            }
+            const box = panel.getBoundingClientRect()
+            if (
+              box.left < 0 ||
+              box.top < 0 ||
+              box.right > root.clientWidth ||
+              box.bottom > root.clientHeight
+            )
+              found.push(`panel ${box.left},${box.top} to ${box.right},${box.bottom}`)
+            const buttons = Array.from(panel.querySelectorAll<HTMLElement>('footer button'))
+            for (const button of buttons) {
+              const b = button.getBoundingClientRect()
+              if (
+                b.left < box.left ||
+                b.top < box.top ||
+                b.right > box.right ||
+                b.bottom > box.bottom
+              )
+                found.push(`${button.dataset.testId} ${b.left},${b.top} to ${b.right},${b.bottom}`)
+            }
+            if (overlay.scrollLeft || overlay.scrollTop)
+              found.push(`overlay scrolled to ${overlay.scrollLeft},${overlay.scrollTop}`)
+
+            const primary = buttons[buttons.length - 1]
+            primary.scrollIntoView({ block: 'center', inline: 'center' })
+            const after = panel.getBoundingClientRect()
+            if (after.left !== box.left || after.top !== box.top)
+              found.push(`panel moved ${after.left - box.left},${after.top - box.top}`)
+            if (overlay.scrollLeft || overlay.scrollTop)
+              found.push(
+                `overlay scrolled to ${overlay.scrollLeft},${overlay.scrollTop} by ${primary.dataset.testId}`
+              )
+            return found
+          })
+        // The panel rises 14 px as it opens; measure where it settles.
+        const check = async (step: string) => {
+          await page
+            .getByTestId('onboarding-panel')
+            .evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+          expect(await misplaced(), step).toEqual([])
+        }
+
+        await page.setViewportSize(size)
+        await page.addInitScript((value) => {
+          localStorage.setItem('finance-theme', value)
+        }, theme)
+        await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+        await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
+        await check('welcome')
+        await page.getByTestId('onboarding-next').click()
+        await expect(page.getByTestId('onboarding-profile-name')).toHaveValue('Personal Profile')
+        await check('space')
+        await page.getByTestId('onboarding-next').click()
+
+        await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+        await check('account, empty')
+        await page.getByTestId('onboarding-account-name').fill('Revolut EUR')
+        await page.getByTestId('onboarding-account-create').click()
+        await expect(page.getByTestId('onboarding-account-chip')).toHaveCount(1)
+        await check('account, one added')
+        await page.getByTestId('onboarding-next').click()
+
+        await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+        await check('import, no file')
+        await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+        await expect(page.getByTestId('bank-file-row')).toBeVisible()
+        await page.getByTestId('bank-target-account').selectOption('Revolut EUR')
+        await check('import, a file chosen')
+        await page.getByTestId('bank-process-btn').click()
+        await expect(page.getByTestId('import-map-date')).toBeVisible()
+        await check('import, mapping')
+        await page.getByTestId('onboarding-import-to-preview').click()
+        await expect(page.getByTestId('onboarding-import-selected')).toBeVisible()
+        await check('import, preview')
+        await page.getByTestId('onboarding-import-skip').click()
+        await page.getByTestId('confirm-accept').click()
+
+        await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible()
+        await check('subscriptions')
+        await page.getByTestId('onboarding-next').click()
+        await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
+        await check('done')
+      })
+    }
+  }
+})
