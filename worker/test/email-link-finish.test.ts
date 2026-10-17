@@ -568,8 +568,10 @@ describe('POST /api/auth/email-link/finish', () => {
     const { session } = await seedAccount(UID, ADDRESS, 0);
     const marker = await openSignedOut(await mintLink('confirm'));
     const [id, exp, hash, sig] = marker.slice(`${MARKER}=`.length).split('.');
-    const forged = (n: number) =>
-      `${MARKER}=${id}.${exp}.${hash}.${`${'AB'[n % 2]}${sig!.slice(1)}`}`;
+    // Three first characters, none of them the signature's own, so each forged marker differs
+    // from the genuine one and from the other two.
+    const firsts = 'ABCD'.replace(sig![0]!, '').slice(0, 3);
+    const forged = (n: number) => `${MARKER}=${id}.${exp}.${hash}.${firsts[n]}${sig!.slice(1)}`;
     const genuine = `${MARKER}=${id}.${exp}.${hash}.${sig}`;
 
     const fourth = await finishWith([session, forged(0), forged(1), forged(2), genuine].join('; '));
