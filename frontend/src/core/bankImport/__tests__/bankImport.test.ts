@@ -482,7 +482,7 @@ describe('n26 adapter', () => {
     '"Booking Date","Value Date","Partner Name","Partner Iban",Type,"Payment Reference","Account Name","Amount (EUR)","Original Amount","Original Currency","Exchange Rate"',
     '2025-03-03,2025-03-03,"Backhaus Muster",,Presentment,,"Main Account",-4.85,4.85,EUR,1',
     '2025-03-04,2025-03-05,"Erika Beispiel","DE02120300000000202051","Outgoing Transfer","Miete Maerz","Main Account",-850.0,,,',
-    '2025-03-05,2025-03-05,"Acme GmbH","DE02500105170137075030","Credit Transfer","Gehalt 03/2025","Main Account",2600.0,,,',
+    '2025-03-05,2025-03-05,"Acme GmbH","DE02500105170305707310","Credit Transfer","Gehalt 03/2025","Main Account",2600.0,,,',
   ].join('\n')
 
   it('filename hint is word-bounded — month+year names are not N26', () => {
@@ -566,20 +566,20 @@ describe('wise adapter', () => {
 describe('ing adapter', () => {
   const csv = [
     '"Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";"Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"',
-    '"20260113";"Albert Heijn 1522 AMSTERDAM NLD";"NL69INGB0123456789";"";"BA";"Af";"31,25";"Betaalautomaat";"Pasvolgnr: 008 13-01-2026 18:22";"1204,71";""',
-    '"20260114";"J. Jansen";"NL69INGB0123456789";"NL44RABO0123456789";"GT";"Bij";"120,00";"Online bankieren";"Naam: J. Jansen Omschrijving: Terugbetaling etentje";"1324,71";""',
+    '"20260113";"Albert Heijn 1522 AMSTERDAM NLD";"NL69INGB9876543210";"";"BA";"Af";"31,25";"Betaalautomaat";"Pasvolgnr: 008 13-01-2026 18:22";"1204,71";""',
+    '"20260114";"J. Jansen";"NL69INGB9876543210";"NL44RABO9876543210";"GT";"Bij";"120,00";"Online bankieren";"Naam: J. Jansen Omschrijving: Terugbetaling etentje";"1324,71";""',
   ].join('\n')
 
   it('detects both delimiters and the IBAN filename', () => {
     expect(ingAdapter.detect(toDetectInput('x.csv', enc(csv)))).toBeGreaterThan(0.9)
     expect(
-      ingAdapter.detect(toDetectInput('NL69INGB0123456789_22-12-2024_28-12-2024.csv', enc('')))
+      ingAdapter.detect(toDetectInput('NL69INGB9876543210_22-12-2024_28-12-2024.csv', enc('')))
     ).toBeGreaterThan(0.6)
   })
 
   it('applies the Af/Bij direction to unsigned decimal-comma amounts', async () => {
     const parsed = await ingAdapter.parse(enc(csv), 'x.csv')
-    expect(parsed.meta.iban).toBe('NL69INGB0123456789')
+    expect(parsed.meta.iban).toBe('NL69INGB9876543210')
     const txns = ingAdapter.transform(parsed, baseCtx({ targetAccount: 'ING Betaal' }))
     expect(txns).toHaveLength(2)
     expect(txns[0]).toMatchObject({
@@ -599,9 +599,9 @@ describe('ing adapter', () => {
 describe('sparkasse adapter', () => {
   const csv = [
     '"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"',
-    '"DE21500500001234567897";"14.07.26";"14.07.26";"KARTENZAHLUNG";"2026-07-13T18:44 Debitk.1 2029-12";"";"";"687572811234";"";"";"";"EDEKA MUSTERMARKT//MUSTERSTADT/DE";"DE58100500000890123456";"BELADEBEXXX";"-27,43";"EUR";"Umsatz gebucht"',
-    '"DE21500500001234567897";"15.07.26";"15.07.26";"LOHN GEHALT";"Gehalt 07/2026 Beispiel AG";"";"";"";"";"";"";"Beispiel AG";"DE02600501010002034304";"SOLADEST600";"3120,55";"EUR";"Umsatz gebucht"',
-    '"DE21500500001234567897";"16.07.26";"16.07.26";"KARTENZAHLUNG";"Pending example";"";"";"";"";"";"";"Shop";"DE58100500000890123456";"BELADEBEXXX";"-9,99";"EUR";"Umsatz vorgemerkt"',
+    '"DE21500500007987654321";"14.07.26";"14.07.26";"KARTENZAHLUNG";"2026-07-13T18:44 Debitk.1 2029-12";"";"";"687572811234";"";"";"";"EDEKA MUSTERMARKT//MUSTERSTADT/DE";"DE58100500000890123456";"BELADEBEXXX";"-27,43";"EUR";"Umsatz gebucht"',
+    '"DE21500500007987654321";"15.07.26";"15.07.26";"LOHN GEHALT";"Gehalt 07/2026 Beispiel AG";"";"";"";"";"";"";"Beispiel AG";"DE02600501014034302000";"SOLADEST600";"3120,55";"EUR";"Umsatz gebucht"',
+    '"DE21500500007987654321";"16.07.26";"16.07.26";"KARTENZAHLUNG";"Pending example";"";"";"";"";"";"";"Shop";"DE58100500000890123456";"BELADEBEXXX";"-9,99";"EUR";"Umsatz vorgemerkt"',
   ].join('\n')
 
   it('detects, reads meta, skips pending, parses signed comma amounts', async () => {
@@ -610,7 +610,7 @@ describe('sparkasse adapter', () => {
       sparkasseAdapter.detect(toDetectInput('20260716-1234567-umsatz.CSV', bytes))
     ).toBeGreaterThan(0.9)
     const parsed = await sparkasseAdapter.parse(bytes, 'x.csv')
-    expect(parsed.meta.iban).toBe('DE21500500001234567897')
+    expect(parsed.meta.iban).toBe('DE21500500007987654321')
     expect(parsed.meta.currency).toBe('EUR')
     const txns = sparkasseAdapter.transform(parsed, baseCtx({ targetAccount: 'Sparkasse Giro' }))
     expect(txns).toHaveLength(2) // vorgemerkt dropped
@@ -630,14 +630,14 @@ describe('sparkasse adapter', () => {
 // ---------------------------------------------------------------------------
 describe('dkb adapter', () => {
   const csv = [
-    '"Girokonto";"DE88120300001056358037"',
+    '"Girokonto";"DE88120300007308536501"',
     '""',
     '"Kontostand vom 15.07.2026:";"1.234,56 EUR"',
     '""',
     '"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"',
-    '"13.07.26";"13.07.26";"Gebucht";"Max Mustermann";"REWE Markt GmbH";"2026-07-12 Debitk.55 VISA Debit";"Ausgang";"DE88120300001056358037";"-42,17 €";"";"";"908070605040302"',
-    '"14.07.26";"14.07.26";"Gebucht";"Beispiel AG";"Max Mustermann";"GEHALT 07/26";"Eingang";"DE88120300001056358037";"2.850,00 €";"";"";""',
-    '"15.07.26";"15.07.26";"Vorgemerkt";"Max Mustermann";"Telekom Deutschland GmbH";"Rechnung 07/26";"Ausgang";"DE88120300001056358037";"-39,95 €";"";"";""',
+    '"13.07.26";"13.07.26";"Gebucht";"Max Mustermann";"REWE Markt GmbH";"2026-07-12 Debitk.55 VISA Debit";"Ausgang";"DE88120300007308536501";"-42,17 €";"";"";"908070605040302"',
+    '"14.07.26";"14.07.26";"Gebucht";"Beispiel AG";"Max Mustermann";"GEHALT 07/26";"Eingang";"DE88120300007308536501";"2.850,00 €";"";"";""',
+    '"15.07.26";"15.07.26";"Vorgemerkt";"Max Mustermann";"Telekom Deutschland GmbH";"Rechnung 07/26";"Ausgang";"DE88120300007308536501";"-39,95 €";"";"";""',
   ].join('\n')
 
   it('detects despite the preamble and finds the account IBAN in it', async () => {
@@ -646,7 +646,7 @@ describe('dkb adapter', () => {
       dkbAdapter.detect(toDetectInput('05-05-2026_Umsatzliste_Girokonto_DE88.csv', bytes))
     ).toBeGreaterThan(0.9)
     const parsed = await dkbAdapter.parse(bytes, 'x.csv')
-    expect(parsed.meta.iban).toBe('DE88120300001056358037')
+    expect(parsed.meta.iban).toBe('DE88120300007308536501')
     const txns = dkbAdapter.transform(parsed, baseCtx({ targetAccount: 'DKB Giro' }))
     expect(txns).toHaveLength(2) // Vorgemerkt dropped
     expect(txns[0]).toMatchObject({
@@ -757,18 +757,18 @@ describe('registry cross-detection', () => {
     ],
     [
       'ing',
-      'NL69INGB0123456789_01-01-2026_31-01-2026.csv',
-      '"Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";"Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"\n"20260113";"X";"NL69INGB0123456789";"";"BA";"Af";"1,00";"Y";"Z";"1,00";""',
+      'NL69INGB9876543210_01-01-2026_31-01-2026.csv',
+      '"Datum";"Naam / Omschrijving";"Rekening";"Tegenrekening";"Code";"Af Bij";"Bedrag (EUR)";"Mutatiesoort";"Mededelingen";"Saldo na mutatie";"Tag"\n"20260113";"X";"NL69INGB9876543210";"";"BA";"Af";"1,00";"Y";"Z";"1,00";""',
     ],
     [
       'sparkasse',
       '20260716-1234567-umsatz.CSV',
-      '"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"\n"DE21500500001234567897";"14.07.26";"14.07.26";"K";"V";"";"";"";"";"";"";"B";"DE58100500000890123456";"B";"-1,00";"EUR";"Umsatz gebucht"',
+      '"Auftragskonto";"Buchungstag";"Valutadatum";"Buchungstext";"Verwendungszweck";"Glaeubiger ID";"Mandatsreferenz";"Kundenreferenz (End-to-End)";"Sammlerreferenz";"Lastschrift Ursprungsbetrag";"Auslagenersatz Ruecklastschrift";"Beguenstigter/Zahlungspflichtiger";"Kontonummer/IBAN";"BIC (SWIFT-Code)";"Betrag";"Waehrung";"Info"\n"DE21500500007987654321";"14.07.26";"14.07.26";"K";"V";"";"";"";"";"";"";"B";"DE58100500000890123456";"B";"-1,00";"EUR";"Umsatz gebucht"',
     ],
     [
       'dkb',
       '05-05-2026_Umsatzliste_Girokonto_DE88.csv',
-      '"Girokonto";"DE88120300001056358037"\n""\n"Kontostand vom 15.07.2026:";"1,00 EUR"\n""\n"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"\n"13.07.26";"13.07.26";"Gebucht";"A";"B";"C";"Ausgang";"DE88120300001056358037";"-1,00 €";"";"";""',
+      '"Girokonto";"DE88120300007308536501"\n""\n"Kontostand vom 15.07.2026:";"1,00 EUR"\n""\n"Buchungsdatum";"Wertstellung";"Status";"Zahlungspflichtige*r";"Zahlungsempfänger*in";"Verwendungszweck";"Umsatztyp";"IBAN";"Betrag (€)";"Gläubiger-ID";"Mandatsreferenz";"Kundenreferenz"\n"13.07.26";"13.07.26";"Gebucht";"A";"B";"C";"Ausgang";"DE88120300007308536501";"-1,00 €";"";"";""',
     ],
     ['ynab', 'ynab-export.csv', 'Date,Payee,Memo,Outflow,Inflow\n06/22/2026,X,Y,1.00,'],
   ]
@@ -785,7 +785,7 @@ describe('registry cross-detection', () => {
 
   it('detects the DKB comma-delimited new-export variant by content', () => {
     const commaDkb = [
-      '"Girokonto","DE88120300001056358037"',
+      '"Girokonto","DE88120300007308536501"',
       '""',
       '"Kontostand vom 15.07.2026:","1,00 EUR"',
       '""',
