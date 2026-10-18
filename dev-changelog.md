@@ -356,6 +356,13 @@ All notable changes to Token Circles are documented here. The format is based on
   leaving wrangler, workerd and esbuild on :8787 for the next local run's `reuseExistingServer` to
   adopt. `e2eWorkerTeardown.test.ts` runs the real supervisor against a stand-in wrangler and fails
   without the line.
+- **The first-three-markers test forges three distinct markers.** In
+  `worker/test/email-link-finish.test.ts`, "looks at the first three markers a request carries, and
+  no further" made its forged markers by setting the signature's first character to `A` or `B`.
+  When the genuine signature already started with that letter, a "forged" marker was the genuine
+  one, the request confirmed, and the test failed about 1 run in 32. Each forged marker now takes
+  a first character from `ABCD` other than the signature's own, so all three differ from the genuine
+  marker and from each other, as in the test above it.
 
 ### Dependencies
 
