@@ -338,6 +338,12 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Tests and tooling
 
+- **The confirm-email tests get the time their waits allow.** Each test in
+  `frontend/src/__tests__/confirmEmailGate.test.tsx` waits on the real App, up to 10 s a wait, but
+  ran under vitest's default limit of 5 s, so on a loaded runner a test could end while its wait
+  still had time left: "reads the signed-in account's from start, and nobody's after signing out"
+  timed out that way in CI and in local full runs, and passed alone. The file's tests now have
+  30 s, enough for three of its waits.
 - **The release suite** (#593). `frontend/tests/release/` runs the 5.16 dev test scope in both
   storage modes as its own Playwright project, present only with `E2E_RELEASE=1`
   (`pnpm run test:e2e:release`): cloud cases in profiles of their own, local-first cases through
