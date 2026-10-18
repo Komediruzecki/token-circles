@@ -1,12 +1,13 @@
 /**
  * TourSelectionModal — Lets users choose which spotlight tour to take
  */
-import { createMemo, For } from 'solid-js'
+import { createMemo, For, onMount } from 'solid-js'
 import { startOnboarding } from '../core/onboardingStore'
 import {
   getCompletedCount,
   getTotalTourCount,
   isTourCompleted,
+  loadAccountTours,
   resetAllTours,
   setShowTourSelection,
   SPOTLIGHT_TOURS,
@@ -18,6 +19,8 @@ import styles from './TourSelectionModal.module.css'
 export default function TourSelectionModal() {
   const completedCount = createMemo(() => getCompletedCount())
   const totalCount = createMemo(() => getTotalTourCount())
+  // Signed in, the tours finished are the account's: the badges fill in as its list arrives.
+  onMount(() => void loadAccountTours())
 
   return (
     <div class={styles.overlay} onClick={() => setShowTourSelection(false)}>
@@ -97,18 +100,18 @@ export default function TourSelectionModal() {
           <div class={styles.tourGrid}>
             <For each={SPOTLIGHT_TOURS}>
               {(tour) => {
-                const completed = isTourCompleted(tour.id)
+                const completed = () => isTourCompleted(tour.id)
                 return (
                   <button
                     class={styles.tourCard}
-                    classList={{ [styles.completed]: completed }}
+                    classList={{ [styles.completed]: completed() }}
                     onClick={() => {
                       startTour(tour.id)
                     }}
                   >
                     <span class={styles.tourLabel}>{tour.label}</span>
                     <span class={styles.tourBadge}>
-                      {completed ? 'Done' : `${tour.steps.length} steps`}
+                      {completed() ? 'Done' : `${tour.steps.length} steps`}
                     </span>
                   </button>
                 )

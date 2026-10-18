@@ -6,6 +6,7 @@ import {
   importedAccountTypeError,
   readAccountType,
 } from '../../../../../shared/accountSchema'
+import { kindForName } from '../../../../../shared/guidance/kinds'
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
@@ -846,12 +847,17 @@ export async function importExecute(body: unknown): Promise<Response> {
           // Preserve original casing: capitalize first letter only
           const displayName = rawCat.trim()
           const storedName = displayName.charAt(0).toUpperCase() + displayName.slice(1)
+          // An expense category takes the kind its name suggests, as on the Worker: "Restaurant"
+          // is eating out (shared/guidance/kinds.ts).
+          const kind = type === 'expense' ? kindForName(storedName) : null
           const id = await db.add('categories', {
             name: storedName,
             type,
             color: defaultColor,
             icon: 'tag',
             tax_deductible: false,
+            kind,
+            essential: null,
             profile_id: profileId,
           })
           cat = {

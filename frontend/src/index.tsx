@@ -7,6 +7,7 @@ import { noteWaitingBuild } from './core/appVersion'
 import { installBootRecovery, markBooted } from './core/bootRecovery'
 import { applyDemoModeFromUrl } from './core/demoMode'
 import { consumeEmailVerifyRedirect } from './core/emailVerification'
+import { consumeForgotPasswordLink } from './core/forgotPasswordLink'
 import { applyPlanIntentFromUrl } from './core/planIntent'
 import { Root } from './Root'
 
@@ -48,6 +49,10 @@ consumeEmailVerifyRedirect()
 // Google sign-in adds ?cleared= when joining an account removed what it had set up before its
 // address was confirmed, naming what. Same treatment: read once, stripped, shown by the app.
 consumeAccessClearedRedirect()
+// The mail's Reset password button lands here as `#forgot-password`. The sign-in screen opens on
+// the reset form from it, and only account mode has a sign-in screen, so the device moves there
+// before the app reads the mode.
+consumeForgotPasswordLink()
 
 const root = document.getElementById('root')
 

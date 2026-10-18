@@ -138,6 +138,19 @@ await ctx.addInitScript(() => {
   localStorage.removeItem('finance_spotlight_tours')
 })
 
+/**
+ * The same clean slate for the signed-in account, which keeps the tours it finished on the Worker
+ * (`tours` in /api/account/state) rather than in this browser. Sent with the saved session through
+ * the app's own origin, as the app sends it; resetPage runs it before every load.
+ */
+async function clearAccountTours() {
+  // A plain write only adds to the list; reset replaces it.
+  const res = await ctx.request.put(`${BASE}/api/account/state/tours`, {
+    data: { seen: [], reset: true },
+  })
+  if (!res.ok()) throw new Error(`could not clear the account's tours: HTTP ${res.status()}`)
+}
+
 const page = await ctx.newPage()
 page.on('pageerror', (e) => console.log('  [pageerror]', String(e).slice(0, 140)))
 
@@ -148,10 +161,12 @@ const tooltip = page.locator('[class*="tooltip"]')
  *
  * Called at startup and after every Worker restart. A page that watched its API disappear is
  * holding empty stores and failed requests; nothing short of a reload gets it back to the state a
- * tour expects, and the init script above re-clears the "Done" badges on the way in.
+ * tour expects, and clearAccountTours and the init script above re-clear the "Done" badges on the
+ * way in.
  */
 async function resetPage() {
   try {
+    await clearAccountTours()
     await page.goto(BASE, { waitUntil: 'domcontentloaded', timeout: 30000 })
     await page.waitForSelector('[data-test-id="whats-new-btn"]', { timeout: 30000 })
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {})

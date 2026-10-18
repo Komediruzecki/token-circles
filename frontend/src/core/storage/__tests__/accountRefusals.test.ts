@@ -130,6 +130,8 @@ describe('a new account in local-first', () => {
       starting_balance: 0,
       starting_date: null,
       notes: '',
+      credit_limit: null,
+      credit_rate: null,
     })
   })
 
@@ -147,7 +149,7 @@ describe('a new account in local-first', () => {
   })
 
   it('answers a refusal with each field and a summary of them all', async () => {
-    expect(await refusal(await create({ name: ' ', type: 'credit' }))).toEqual({
+    expect(await refusal(await create({ name: ' ', type: 'loan' }))).toEqual({
       error: `${M.name} ${M.type}`,
       fields: { name: M.name, type: M.type },
     })
@@ -156,7 +158,7 @@ describe('a new account in local-first', () => {
   it.each([
     ['no name', { type: 'giro' }, { name: M.name }],
     ['a name over 100 characters', { name: 'x'.repeat(101) }, { name: M.nameLength }],
-    ['a type it does not have', { name: 'A', type: 'credit' }, { type: M.type }],
+    ['a type it does not have', { name: 'A', type: 'loan' }, { type: M.type }],
     ['a balance that is not a number', { name: 'A', balance: '12abc' }, { balance: M.balance }],
     [
       'a starting balance that is not a number',
@@ -213,7 +215,7 @@ describe('an edit of an account in local-first', () => {
 
   it.each([
     ['a blank name', { name: '  ' }, { name: M.name }],
-    ['a type it does not have', { type: 'credit' }, { type: M.type }],
+    ['a type it does not have', { type: 'loan' }, { type: M.type }],
     ['a balance that is not a number', { balance: 'abc' }, { balance: M.balance }],
     ['a blank balance', { balance: null }, { balance: M.balance }],
     [

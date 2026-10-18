@@ -3,6 +3,9 @@
  * Scans the profile's transactions for catalogue/brand charges ("Netflix",
  * "Google One", "Claude", ...) and proposes them as subscriptions with the
  * detected price and cadence, each row editable and individually selectable.
+ * Regular payments to a payee with no such name (features/recurringPayments.ts) are proposed as
+ * "Regular payment to {payee}", and added under the payee's name, in the category their charges
+ * are filed under: as a bill for a home, a loan or a child, else as a subscription.
  *
  * Two faces of the same panel:
  *   - `SubscriptionScanPanel`: embeddable (onboarding wizard step, modal body).
@@ -34,12 +37,17 @@ import { ApiError } from '../core/apiError'
 import { parseDecimalInput } from '../core/decimalInput'
 import { monthlyEquivalent } from '../core/subscriptionMath'
 import { matchBrand } from '../features/subscriptionBrands'
-import { detectSubscriptions } from '../features/subscriptionDetection'
+import {
+  detectSubscriptions,
+  recentForScan,
+  worthTracking,
+} from '../features/subscriptionDetection'
 import { createForm, FormNotice, SubmitButton } from './form'
 import { OrbitSpinner } from './OrbitSpinner'
 import { refusedMessages } from './refusedSubscriptions'
 import styles from './SubscriptionScan.module.css'
 import type { JSX } from 'solid-js'
+import type { KindedCategory } from '../../../shared/guidance/kinds'
 import type { FieldErrors } from '../../../shared/refusal'
 import type {
   DetectableTransaction,
@@ -53,15 +61,11 @@ interface BillRow {
   type?: string | null
 }
 
-interface CategoryRow {
+interface CategoryRow extends KindedCategory {
   id: number
   name: string
   type: string
 }
-
-// Scan the recent past only: enough history for a yearly cadence to show up
-// twice, without chewing through decades of imported data.
-const SCAN_WINDOW_DAYS = 750
 
 export interface SubscriptionScanPanelProps {
   /** Panel scans when this turns true (and on explicit rescan). */
@@ -121,19 +125,17 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
       // is a { rows, total } envelope — a bare-array assumption scans nothing.
       const txns = listRows<DetectableTransaction>(txnsRes)
       const bills = listRows<BillRow>(billsRes)
-      setCategories(listRows<CategoryRow>(catsRes))
-      const cutoff = Date.now() - SCAN_WINDOW_DAYS * 24 * 60 * 60 * 1000
-      const recent = txns.filter((t) => {
-        const ms = new Date(`${(t.date || '').slice(0, 10)}T00:00:00Z`).getTime()
-        return Number.isFinite(ms) && ms >= cutoff
+      const cats = listRows<CategoryRow>(catsRes)
+      setCategories(cats)
+      const found = detectSubscriptions(recentForScan(txns, Date.now()), bills, {
+        categories: cats,
       })
-      const found = detectSubscriptions(recent, bills)
       setDetected(found)
       const next: Record<string, RowState> = {}
       const prices: Record<string, string> = {}
       for (const d of found) {
         next[d.key] = {
-          included: !d.alreadyTracked && d.confidence !== 'low',
+          included: worthTracking(d),
           frequency: d.frequency,
         }
         prices[d.key] = String(d.amount)
@@ -202,14 +204,14 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
     return undefined
   }
 
-  /** The bill a row adds. */
+  /** The bill a row adds. A regular payment keeps the category its charges are filed under. */
   const billOf = (d: DetectedSubscription, price: string | undefined) => ({
     name: d.name,
     amount: amountOf(price),
     dueDate: d.suggestedDueDate,
-    category_id: resolveCategoryId(d),
+    category_id: d.matchedVia === 'recurring' ? d.categoryId : resolveCategoryId(d),
     frequency: row(d.key).frequency,
-    type: 'subscription',
+    type: d.billType,
   })
 
   /** How many the last add created, for the host's `addSelected`. */
@@ -292,7 +294,9 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
   }
 
   const detectedRow = (d: DetectedSubscription) => {
-    const brand = matchBrand(d.name)
+    const recurring = d.matchedVia === 'recurring'
+    // A payee no name matched takes no brand's look, whatever words its name shares with one.
+    const brand = matchBrand(recurring ? '' : d.name)
     const known = brand.displayName !== ''
     const isTracked = () => d.alreadyTracked || added().has(d.key)
     const priceId = `sub-scan-price-${createUniqueId()}`
@@ -338,7 +342,7 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
           </span>
           <span class={styles.info}>
             <span class={styles.name}>
-              {d.name}
+              {recurring ? `Regular payment to ${d.name}` : d.name}
               <Show when={d.matchedPlan}>
                 <span class={styles.plan}>{d.matchedPlan!.label}</span>
               </Show>

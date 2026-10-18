@@ -50,3 +50,9 @@
 # Workbox runtime is content-hashed → immutable.
 /workbox-*.js
   Cache-Control: public, max-age=31536000, immutable
+
+# Images the mails load. A mail in an inbox points at its image for as long as it is kept, so a
+# file under /email/ is never overwritten: new art gets a new versioned name (-v2). That rule is
+# what makes caching them forever safe. docs/design/mail-art/README.md.
+/email/*
+  Cache-Control: public, max-age=31536000, immutable

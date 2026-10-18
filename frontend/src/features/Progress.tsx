@@ -5,6 +5,7 @@
  */
 import { createMemo, For, Show } from 'solid-js'
 import BadgeMedallion from '../components/BadgeMedallion'
+import { streakLabel } from '../components/BadgeRail'
 import BadgeTimeline from '../components/BadgeTimeline'
 import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import { buildAdvice } from '../core/achievements/advice'
@@ -157,7 +158,7 @@ export default function Progress(): JSX.Element {
         <div class={styles.recordHead}>
           <div>
             <h2 id="record-title" class={styles.streak} data-test-id="progress-streak">
-              {streak() === 1 ? '1 month tracked' : `${streak()} months tracked`}
+              {streakLabel(streak())}
             </h2>
             <p class={styles.hint}>
               A month counts once it holds three entries. The current one may still be in progress.

@@ -95,7 +95,7 @@ function accountAt(email: string) {
 }
 
 describe('a sign-up whose account work fails the first time', () => {
-  it('makes the account and its profile on the second try, and mails the welcome once', async () => {
+  it('makes the account and its profile on the second try, and mails Confirm once', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const refusing = dbThatRefuses(realDb, /INSERT INTO users/, 1);
 
@@ -164,11 +164,13 @@ describe('a sign-up whose confirm link cannot be stored', () => {
   });
 });
 
-describe('the welcome of a new account', () => {
+describe('the Confirm mail of a new account', () => {
   it('carries the confirm link stored with the account, and goes to its address alone', async () => {
     await signUp(NEW);
 
-    expect(mailed.map((mail) => mail.to)).toEqual([NEW]);
+    expect(mailed.map(({ to, subject }) => ({ to, subject }))).toEqual([
+      { to: NEW, subject: 'Confirm your email for Token Circles' },
+    ]);
     const token = /verify-email\?token=([0-9a-f]+)/.exec(mailed[0]!.text)?.[1];
     expect(token, mailed[0]!.text).toBeDefined();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -212,7 +214,7 @@ describe('signing up again with the address of an account waiting for its confir
     await signUp(WAITING, 'another-new-password');
 
     expect(mailed.map(({ to, subject }) => ({ to, subject }))).toEqual([
-      { to: WAITING, subject: 'Confirm your Token Circles email address' },
+      { to: WAITING, subject: 'Your new confirm link for Token Circles' },
     ]);
     expect(mailed[0]!.text).toMatch(/\/api\/auth\/verify-email\?token=[0-9a-f]+/);
   });

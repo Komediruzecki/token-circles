@@ -270,8 +270,8 @@ describe('saving a new address', () => {
       .first<{ id: number }>();
     expect(theirs).not.toBeNull();
     expect(theirs!.id).not.toBe(UID);
-    // A welcome, not the "you already have an account" notice.
-    expect(mailsTo(NEW).at(-1)!.subject).toMatch(/welcome/i);
+    // Confirm, the mail of a new sign-up, not the "you already have an account" notice.
+    expect(mailsTo(NEW).at(-1)!.subject).toBe('Confirm your email for Token Circles');
   });
 
   it('replaces a change still waiting, so only the newest link works', async () => {
@@ -498,7 +498,7 @@ describe('the link, when it should not work', () => {
     // Unconfirmed, so a refused link that marked the address it leaves as confirmed would show.
     await seed(0);
     await saveWhileUnconfirmed(NEW);
-    // Before the sign-up, whose welcome mail to the same address carries a link of its own.
+    // Before the sign-up, whose Confirm mail to the same address carries a link of its own.
     const link = latestLinkTo(NEW);
     expect(
       (await call('POST', '/api/auth/register', { email: NEW, password: 'theirs-now' }, false))

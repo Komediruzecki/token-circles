@@ -1,18 +1,23 @@
 /**
  * parseEntry — turn a plain-language quick-entry string into a transaction draft.
  *
- * The Orbit Command Bar reads what you type ("coffee 4.50 food", "salary 3000
- * income", "-20 groceries yesterday") and fills the chips; this is the pure,
+ * The Orbit Command Bar reads what you type ("coffee 4.50", "salary 3000",
+ * "-20 groceries yesterday") and fills the chips; this is the pure,
  * side-effect-free core it leans on, kept separate so it can be unit-tested and
  * reused by other entry surfaces. It never invents an amount or a category — it
  * proposes, the user confirms.
  */
+import { categoryLookup, effectiveKind } from '../../../../shared/guidance/kinds'
 import { localToday } from '../../utils/period'
+import type { Kind } from '../../../../shared/guidance/kinds'
 
 export interface ParseCategory {
   id: number
   name: string
   type: 'income' | 'expense'
+  /** What it holds (shared/guidance/kinds.ts); without one, its parent's or its name's. */
+  kind?: string | null
+  parent_id?: number | null
 }
 
 export interface ParseContext {
@@ -49,69 +54,66 @@ const INCOME_WORDS = [
   'cashback',
 ]
 
-/** Merchant / keyword → a fragment that a real category name likely contains. */
-const HINT_TABLE: Record<string, string> = {
-  coffee: 'food',
-  latte: 'food',
-  cafe: 'food',
-  lunch: 'food',
-  dinner: 'food',
-  breakfast: 'food',
-  grocery: 'food',
-  groceries: 'food',
-  restaurant: 'food',
-  snack: 'food',
-  meal: 'food',
-  food: 'food',
-  uber: 'transport',
-  taxi: 'transport',
-  tram: 'transport',
-  bus: 'transport',
-  train: 'transport',
-  metro: 'transport',
-  fuel: 'transport',
-  petrol: 'transport',
-  gas: 'transport',
-  parking: 'transport',
-  transport: 'transport',
-  transit: 'transport',
-  flight: 'transport',
-  rent: 'housing',
-  mortgage: 'housing',
-  hoa: 'housing',
-  housing: 'housing',
-  netflix: 'subscription',
-  spotify: 'subscription',
-  disney: 'subscription',
-  youtube: 'subscription',
-  subscription: 'subscription',
-  prime: 'subscription',
-  icloud: 'subscription',
-  streaming: 'subscription',
-  gym: 'health',
-  pharmacy: 'health',
-  doctor: 'health',
-  dentist: 'health',
-  health: 'health',
-  medical: 'health',
-  salary: 'salary',
-  paycheck: 'salary',
-  payroll: 'salary',
-  wage: 'salary',
-  shopping: 'shopping',
-  clothes: 'shopping',
-  amazon: 'shopping',
-  utility: 'utilities',
-  utilities: 'utilities',
-  electric: 'utilities',
-  water: 'utilities',
-  internet: 'utilities',
-  entertainment: 'entertainment',
-  movie: 'entertainment',
-  game: 'entertainment',
-  concert: 'entertainment',
+/**
+ * Words that say what an entry was for: the kind of category it goes in (shared/guidance/kinds.ts),
+ * and a fragment a category's name likely holds, for a category with no kind to go by. A category
+ * is matched by its effective kind first, so "coffee" finds Eating out whatever it is called, and
+ * by name after, so a profile that still has Food finds it.
+ */
+interface Hint {
+  kind?: Kind
+  name: string
 }
-const CATEGORY_HINTS = new Map<string, string>(Object.entries(HINT_TABLE))
+
+const hints = (words: string[], hint: Hint): [string, Hint][] => words.map((w) => [w, hint])
+
+const CATEGORY_HINTS = new Map<string, Hint>([
+  ...hints(
+    ['coffee', 'latte', 'cafe', 'lunch', 'dinner', 'breakfast', 'restaurant', 'snack', 'meal'],
+    {
+      kind: 'eating_out',
+      name: 'food',
+    }
+  ),
+  ...hints(['grocery', 'groceries', 'food'], { kind: 'groceries', name: 'food' }),
+  ...hints(
+    [
+      'uber',
+      'taxi',
+      'tram',
+      'bus',
+      'train',
+      'metro',
+      'fuel',
+      'petrol',
+      'gas',
+      'parking',
+      'transport',
+      'transit',
+      'flight',
+    ],
+    { kind: 'transport', name: 'transport' }
+  ),
+  ...hints(['rent', 'mortgage', 'hoa', 'housing'], { kind: 'housing', name: 'housing' }),
+  ...hints(
+    ['netflix', 'spotify', 'disney', 'youtube', 'subscription', 'prime', 'icloud', 'streaming'],
+    { kind: 'subscriptions', name: 'subscription' }
+  ),
+  ...hints(['gym', 'pharmacy', 'doctor', 'dentist', 'health', 'medical'], {
+    kind: 'health',
+    name: 'health',
+  }),
+  ...hints(['salary', 'paycheck', 'payroll', 'wage'], { name: 'salary' }),
+  ...hints(['shopping', 'clothes', 'amazon'], { kind: 'shopping', name: 'shopping' }),
+  ...hints(['utility', 'utilities', 'electric', 'water', 'internet'], {
+    kind: 'utilities',
+    name: 'utilities',
+  }),
+  ...hints(['entertainment', 'movie', 'game', 'concert'], {
+    kind: 'leisure',
+    name: 'entertainment',
+  }),
+])
 
 const FILLER = new Set([
   'at',
@@ -193,11 +195,14 @@ function matchCategory(
   }
   if (best) return { id: best.id, name: best.name }
 
-  // 2) A hint keyword → a category whose name contains the hint's target.
+  // 2) A hint keyword → a category of the hint's kind, else one whose name holds its fragment.
+  const lookup = categoryLookup(categories)
   for (const tok of tokens) {
-    const target = CATEGORY_HINTS.get(tok)
-    if (!target) continue
-    const hit = pool.find((c) => c.name.toLowerCase().includes(target))
+    const hint = CATEGORY_HINTS.get(tok)
+    if (!hint) continue
+    const hit =
+      (hint.kind && pool.find((c) => effectiveKind(c, lookup) === hint.kind)) ||
+      pool.find((c) => c.name.toLowerCase().includes(hint.name))
     if (hit) return { id: hit.id, name: hit.name }
   }
   return null

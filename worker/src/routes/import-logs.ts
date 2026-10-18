@@ -4,6 +4,7 @@ import { requireAuth } from '../auth';
 import { getProfileId, getProfileIds } from '../profile';
 import * as db from '../db';
 import { recomputeBalancesForAccounts } from '../recompute-balances';
+import { storedBankFormats } from '../../../shared/bankFormats';
 
 // Import session log (migration 0014). The Import page POSTs one row after a successful
 // /api/import/execute and lists past sessions so users can audit what an import created.
@@ -19,6 +20,8 @@ interface ImportLogRow {
   accounts_created: number;
   categories_created: number;
   details: string | null;
+  /** The bank formats the session read (migration 0038, shared/bankFormats.ts), or null. */
+  bank_formats: string | null;
   created_at: string;
 }
 
@@ -49,6 +52,8 @@ importLogsRoutes.post('/api/import-logs', requireAuth, async (c) => {
     categories_created: num(b.categories_created),
     // Cap the JSON blob so a hostile payload can't bloat the table
     details: typeof b.details === 'string' ? b.details.slice(0, 8000) : null,
+    // The formats the app reads, from a list or comma-separated text; any other id is dropped.
+    bank_formats: storedBankFormats(b.bank_formats),
   });
   const row = await db.first<ImportLogRow>(
     c.env.DB,

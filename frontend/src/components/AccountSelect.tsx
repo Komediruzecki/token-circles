@@ -151,6 +151,7 @@ export function AccountSelect(props: AccountSelectProps) {
               <option value="savings">Savings</option>
               <option value="ib">Investment</option>
               <option value="cash">Cash</option>
+              <option value="credit">Credit Card</option>
             </select>
             <select
               class={styles.field}

@@ -1,7 +1,9 @@
 /**
- * Import session log handlers — IndexedDB-backed (mirrors worker migration 0014).
- * One row per successful import: counts + a JSON details blob with created names.
+ * Import session log handlers — IndexedDB-backed (mirrors worker migrations 0014 and 0038).
+ * One row per successful import: counts + a JSON details blob with created names, and the bank
+ * formats the session read (shared/bankFormats.ts).
  */
+import { storedBankFormats } from '../../../../../shared/bankFormats'
 import { getDB } from '../idb'
 import { adapter, idParam, json } from './helpers'
 
@@ -14,7 +16,8 @@ export async function importLogsList(): Promise<Response> {
     all.push(...rows)
   }
   all.sort((a, b) => (b.id as number) - (a.id as number))
-  return json(all.slice(0, 50))
+  // A row from before bank formats were kept has none, as the Worker answers.
+  return json(all.slice(0, 50).map((row) => ({ bank_formats: null, ...row })))
 }
 
 export async function importLogsCreate(body: unknown): Promise<Response> {
@@ -31,6 +34,8 @@ export async function importLogsCreate(body: unknown): Promise<Response> {
     accounts_created: num(b.accounts_created),
     categories_created: num(b.categories_created),
     details: typeof b.details === 'string' ? b.details.slice(0, 8000) : null,
+    // The formats the app reads, from a list or comma-separated text; any other id is dropped.
+    bank_formats: storedBankFormats(b.bank_formats),
     created_at: new Date().toISOString(),
   }
   const id = (await db.add('import_logs', row)) as number

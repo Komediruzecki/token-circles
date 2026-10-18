@@ -6,10 +6,12 @@
  * data (the real import flow, embedded) → detected subscriptions → orbit
  * complete. Every step can be skipped (with a confirm where data would be
  * lost), so nobody is ever stuck — and the whole thing can be relaunched from
- * the tour menu. Auto-opens via `maybeOfferOnboarding()` for pristine
- * profiles only.
+ * the tour menu. Auto-opens via `maybeOfferOnboarding()`: signed in, for an
+ * account whose setup record is not finished, at the step it reached;
+ * local-first, for a pristine workspace (core/onboardingStore.ts).
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
+import { refreshAchievements } from '../../core/achievementsStore'
 import { api, apiGet, getLocalCurrency, showToast } from '../../core/api'
 import {
   bumpProfileVersion,
@@ -19,6 +21,7 @@ import {
   useAppState,
 } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
+import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
@@ -36,11 +39,15 @@ import { createImportFlow } from '../../features/import/importFlow'
 import { ImportMappingStep } from '../../features/import/ImportMappingStep'
 import { ImportPreviewStep } from '../../features/import/ImportPreviewStep'
 import { Field, FormNotice, SubmitButton } from '../form'
+import { currentNextSteps, NextSteps } from '../GettingStarted'
+import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import { LogoMark } from '../Logo'
 import { OrbitSpinner } from '../OrbitSpinner'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 import styles from './Onboarding.module.css'
-import { createFirstAccountForm, createSpaceForm } from './onboardingForms'
+import { createFirstAccountForm, createSpaceForm, spaceAnswerChanges } from './onboardingForms'
+import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
+import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 
@@ -52,6 +59,7 @@ const ACCOUNT_TYPE_LABELS: { value: AccountType; label: string }[] = [
   { value: 'savings', label: 'Savings' },
   { value: 'ib', label: 'Investment' },
   { value: 'cash', label: 'Cash' },
+  { value: 'credit', label: 'Credit Card' },
 ]
 
 const CURRENCIES = ['EUR', 'USD', 'GBP', 'JPY', 'CAD']
@@ -166,6 +174,10 @@ const icons = {
   ),
 }
 
+/** What the space step says when the space is saved and its answers are not. */
+export const SPACE_ANSWERS_NOT_SAVED =
+  "Your space is saved, but your answers didn't save. You can give them in Settings, under About this space."
+
 export interface OnboardingWizardProps {
   /**
    * App's one way of choosing profiles: the first id becomes where writes land, the list is the
@@ -192,6 +204,12 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   // ---- step: your space ----
   // What it checks and says is onboardingForms.ts; a refused name is said under the name.
+  // Where the person lives and who the space covers are asked here too (guidance.md 5.5): the
+  // answers the record holds, and the ones chosen on this visit to the step, which are what the
+  // step saves. Both questions can be left unanswered.
+  const [storedAnswers, setStoredAnswers] = createSignal<Answers>({})
+  const [chosenAnswers, setChosenAnswers] = createSignal<AnswerChanges>({})
+  const spaceAnswers = (): Answers => ({ ...storedAnswers(), ...chosenAnswers() }) as Answers
   const spaceForm = createSpaceForm({
     current: () => state.currentProfile,
     save: async ({ name, currency }) => {
@@ -204,15 +222,25 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           setProfiles(getProfiles().map((p) => (p.id === current.id ? { ...p, name } : p)))
           bumpProfileVersion()
         }
-        return
+      } else {
+        // Truly empty workspace (no profile at all): create and select one, through App's one
+        // way of choosing profiles, as a profile created from the sidebar is. This used to write
+        // the two storage keys itself and leave App's copy of the selection on the old one, which
+        // the next close of the sidebar dropdown wrote back.
+        const created = await api.createProfile(name)
+        setProfiles([...getProfiles(), created])
+        props.selectProfiles([created.id])
       }
-      // Truly empty workspace (no profile at all): create and select one, through App's one
-      // way of choosing profiles, as a profile created from the sidebar is. This used to write
-      // the two storage keys itself and leave App's copy of the selection on the old one, which
-      // the next close of the sidebar dropdown wrote back.
-      const created = await api.createProfile(name)
-      setProfiles([...getProfiles(), created])
-      props.selectProfiles([created.id])
+      // Saved for the profile the app now writes to, as every other write of the step is. The
+      // space is saved by now, so a failure here does not hold the step: it says so and moves on,
+      // and the answers can be given in Settings. Kept as chosen, they show if the person comes
+      // back to the step, whose save tries them again.
+      try {
+        setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
+        setChosenAnswers({})
+      } catch {
+        showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
+      }
     },
     onSaved: () => {
       nextOnboardingStep()
@@ -274,6 +302,15 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   })
   let importInitialized = false
 
+  // ---- step: done, with the next steps from what the profile now holds ----
+  const [nextUp, setNextUp] = createSignal<OrientationStep[]>([])
+  const loadNextSteps = async () => {
+    setNextUp([])
+    // Evaluated now rather than after the usual pause, so the steps count what was just imported.
+    await refreshAchievements().catch(() => undefined)
+    if (onboardingOpen() && onboardingStep() === 'done') setNextUp(currentNextSteps())
+  }
+
   // Seed per-step state when the wizard opens / advances.
   createEffect(() => {
     if (!onboardingOpen()) return
@@ -287,6 +324,16 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           name: spaceForm.values.name || (state.currentProfile?.name ?? 'Personal Profile'),
           currency: getLocalCurrency(),
         })
+        setChosenAnswers({})
+        // Asked again when the step opens again: what the record holds now. A workspace with no
+        // profile yet holds none.
+        if (state.currentProfile) {
+          loadAnswers()
+            .then(setStoredAnswers)
+            .catch(() => setStoredAnswers({}))
+        } else {
+          setStoredAnswers({})
+        }
       })
     }
     if (step === 'account') {
@@ -310,6 +357,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // The summary counts what's really on the profile (imports can create
       // accounts too), not just what this step's form made.
       void refreshProfileAccounts()
+      void untrack(loadNextSteps)
     }
   })
 
@@ -448,7 +496,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         <div class={styles.heroMark}>
           <LogoMark size={72} />
         </div>
-        <h1 class={styles.title}>Welcome to Token Circles</h1>
+        <h1 class={styles.title} tabindex="-1" data-step-heading>
+          Welcome to Token Circles
+        </h1>
         <p class={styles.lead}>
           Your money, mapped as orbits: accounts circle your net worth, spending and income keep
           them in motion. Let's set up your space — it takes about two minutes.
@@ -503,11 +553,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const spaceStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-space">
-      <h2 class={styles.stepTitle}>Name your space</h2>
-      <p class={styles.stepLead}>
-        A profile is one financial space — yours, a partner's, or a shared household view. You can
-        add more later.
-      </p>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Name your space
+      </h2>
+      <p class={styles.stepLead}>A profile is one space. You can add more later.</p>
       {/* Enter in the name continues, as the footer's Continue does. */}
       <form class={styles.stepForm} {...spaceForm.attrs} data-test-id="onboarding-space-form">
         <FormNotice form={spaceForm} testId="onboarding-space-notice" />
@@ -541,7 +590,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             label="Base currency"
             class={styles.field}
             labelClass={styles.fieldLabel}
-            hint="Totals and charts are shown in this currency. Individual accounts can still hold others."
+            hint="Totals and charts use it. Accounts can still hold others."
             hintClass={styles.fieldHint}
           >
             {(control) => (
@@ -563,6 +612,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             )}
           </Field>
         </div>
+        <p
+          class={`${styles.fieldHint} ${styles.questionsLead}`}
+          data-test-id="onboarding-space-questions-lead"
+        >
+          Both questions are optional. Change them later in Settings.
+        </p>
+        <SpaceQuestions
+          idPrefix="onboarding-space"
+          answers={spaceAnswers()}
+          disabled={spaceForm.submitting()}
+          onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
+        />
       </form>
     </div>
   )
@@ -573,7 +634,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         when={profileAccounts().length === 0}
         fallback={
           <>
-            <h2 class={styles.stepTitle}>Your accounts</h2>
+            <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+              Your accounts
+            </h2>
             <p class={styles.stepLead}>
               You already have {profileAccounts().length} account
               {profileAccounts().length === 1 ? '' : 's'} in orbit — add another below if you like,
@@ -582,7 +645,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </>
         }
       >
-        <h2 class={styles.stepTitle}>Create your first account</h2>
+        <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+          Create your first account
+        </h2>
         <p class={styles.stepLead}>
           An account is anything that holds money — a checking account, savings, cash in a drawer, a
           brokerage. Add the one you use most; more can join the orbit any time.
@@ -729,7 +794,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const importStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-import">
-      <h2 class={styles.stepTitle}>Bring your data</h2>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Bring your data
+      </h2>
       <p class={styles.stepLead}>
         This is the app's full importer. Drop bank statements and we detect the bank, or use CSV /
         Google Sheets — everything lands as regular transactions you can refine later.
@@ -831,6 +898,49 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  // Whether the step goes on below what shows: the middle's bottom then fades out. Read on scroll,
+  // and whenever the middle or the step in it changes size. The step ends where the middle's bottom
+  // padding starts: stopped inside that padding, nothing is left below, and a fade there would only
+  // dim the last row.
+  const [moreBelow, setMoreBelow] = createSignal(false)
+  const readMoreBelow = () => {
+    if (!bodyEl) return
+    const padding = parseFloat(window.getComputedStyle(bodyEl).paddingBottom) || 0
+    const contentEnd = bodyEl.scrollHeight - padding
+    setMoreBelow(bodyEl.scrollTop + bodyEl.clientHeight < contentEnd - 0.5)
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    const sizes = new ResizeObserver(readMoreBelow)
+    createEffect(() => {
+      if (!onboardingOpen()) return
+      onboardingStep()
+      sizes.disconnect()
+      if (!bodyEl) return
+      sizes.observe(bodyEl)
+      if (bodyEl.firstElementChild) sizes.observe(bodyEl.firstElementChild)
+      readMoreBelow()
+    })
+    onCleanup(() => {
+      sizes.disconnect()
+    })
+  }
+
+  // A new step opens at its top, not at the scroll position the last one was left at, and focus
+  // moves to its heading, so a screen reader announces the step and Tab starts from there. At once,
+  // not smooth: the old step's content is already gone. Not on open, where the panel takes focus.
+  createEffect(
+    on(
+      onboardingStep,
+      () => {
+        if (!onboardingOpen() || !bodyEl) return
+        // scrollTop, not scrollTo: the middle sets no smooth scrolling, so this is at once.
+        bodyEl.scrollTop = 0
+        bodyEl.querySelector<HTMLElement>('[data-step-heading]')?.focus({ preventScroll: true })
+      },
+      { defer: true }
+    )
+  )
+
   const [subScan, setSubScan] = createSignal<{
     chosenCount: () => number
     submitting: () => boolean
@@ -839,7 +949,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
-      <h2 class={styles.stepTitle}>Your subscriptions, spotted</h2>
+      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
+        Your subscriptions, spotted
+      </h2>
       <p class={styles.stepLead}>
         We scanned your transactions for recurring charges from known services — check the ones you
         want tracked, and adjust a price or period where we guessed wrong.
@@ -864,7 +976,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         </svg>
         <span class={styles.doneSatellite} />
       </div>
-      <h2 class={styles.title}>Your orbit is set</h2>
+      <h2 class={styles.title} tabindex="-1" data-step-heading>
+        Your orbit is set
+      </h2>
       <ul class={styles.summary}>
         <li>
           <b>{state.currentProfile?.name ?? 'Your space'}</b> is ready
@@ -892,6 +1006,18 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </li>
         </Show>
       </ul>
+      <Show when={nextUp().length > 0}>
+        <section class={styles.nextSteps} data-test-id="onboarding-next-steps">
+          <h3 class={styles.nextStepsTitle}>Next steps</h3>
+          {/* A step's link leaves setup the way Go to my dashboard does, for the step's page. */}
+          <NextSteps
+            steps={nextUp()}
+            onFollow={() => {
+              completeOnboarding()
+            }}
+          />
+        </section>
+      </Show>
       <p class={styles.stepLead}>
         Tip: press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere for quick entry, and take a page tour any
         time from the sidebar.
@@ -1107,7 +1233,13 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </span>
           </header>
 
-          <div class={styles.body} ref={bodyEl}>
+          <div
+            class={styles.body}
+            ref={bodyEl}
+            data-test-id="onboarding-body"
+            data-more-below={moreBelow() ? '' : undefined}
+            onScroll={readMoreBelow}
+          >
             <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
             <Show when={onboardingStep() === 'space'}>{spaceStep()}</Show>
             <Show when={onboardingStep() === 'account'}>{accountStep()}</Show>

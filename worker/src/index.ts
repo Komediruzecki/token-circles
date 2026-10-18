@@ -7,6 +7,7 @@ import { emailCodeRoutes } from './routes/email-code';
 import { passkeyRoutes } from './routes/passkeys';
 import { profilesRoutes } from './routes/profiles';
 import { accountRoutes } from './routes/account';
+import { accountStateRoutes } from './routes/account-state';
 import { accountsRoutes } from './routes/accounts';
 import { transactionsRoutes } from './routes/transactions';
 import { categoriesRoutes } from './routes/categories';
@@ -175,6 +176,7 @@ app.route('/', passkeyRoutes);
 // file storage (needs an R2 bucket), and spreadsheet-file imports.
 app.route('/', profilesRoutes);
 app.route('/', accountRoutes);
+app.route('/', accountStateRoutes);
 app.route('/', accountsRoutes);
 app.route('/', transactionsRoutes);
 app.route('/', categoriesRoutes);

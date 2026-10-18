@@ -27,6 +27,10 @@ that are not negotiable.
 
 - [Marketing Screenshots](marketing-screenshots.md) — Re-shooting the product stills the landing sites bundle: seeding, profiles, and the traps that produce a plausible wrong image
 
+## Design
+
+- [Mail art](design/mail-art/README.md): the engraved art at the top of the mails, its master and prompt, and why a file under `frontend/public/email/` is never overwritten
+
 ## Feature Specifications
 
 Detailed EARS (Exactly As Required Specification) documents for all features:

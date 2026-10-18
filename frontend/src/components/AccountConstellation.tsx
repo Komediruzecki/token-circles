@@ -33,6 +33,7 @@ const TYPE_META: Record<AccountType, { color: string; label: string }> = {
   savings: { color: '#59d2a2', label: 'Savings' },
   ib: { color: '#f0a860', label: 'Investment' },
   cash: { color: '#c9a0ff', label: 'Cash' },
+  credit: { color: '#f48fa0', label: 'Credit card' },
 }
 // A type v4 renamed is the type that replaced it, and one this build does not have is a plain
 // account (core/accountTypes.ts).

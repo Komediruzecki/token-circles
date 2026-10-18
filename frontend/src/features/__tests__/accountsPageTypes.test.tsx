@@ -28,7 +28,8 @@ const serverAccounts = [
   row(2, 'Pension', 'retirement'),
   row(3, 'Everyday', 'giro'),
   row(4, 'Old current', 'checking'),
-  row(5, 'Visa', 'credit'),
+  row(5, 'Sock drawer', 'sock_drawer'),
+  row(6, 'Visa', 'credit'),
 ]
 
 vi.mock('../../core/api', async (importOriginal) => ({
@@ -76,7 +77,7 @@ async function cards() {
   const { default: Accounts } = await import('../Accounts')
   dispose = render(() => <Accounts />, host)
   await vi.waitFor(() => {
-    expect(host.querySelectorAll('[data-test-id="account-card"]').length).toBe(5)
+    expect(host.querySelectorAll('[data-test-id="account-card"]').length).toBe(6)
   })
   return Object.fromEntries(
     Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="account-card"]'), (card) => {
@@ -103,9 +104,16 @@ describe('the Accounts page shows a stored type as the app reads it', () => {
 
   it('shows a type this build does not have as a plain account', async () => {
     const shown = await cards()
-    expect(shown.Visa.word).toBe('account')
-    expect(shown.Visa.className).toContain(badgeStyles.badgeDefault)
-    expect(shown.Visa.icon).not.toBe(shown.Everyday.icon)
+    expect(shown['Sock drawer'].word).toBe('account')
+    expect(shown['Sock drawer'].className).toContain(badgeStyles.badgeDefault)
+    expect(shown['Sock drawer'].icon).not.toBe(shown.Everyday.icon)
+  })
+
+  it('shows a credit card as a type of its own: word, colour and icon', async () => {
+    const shown = await cards()
+    expect(shown.Visa.word).toBe('credit')
+    expect(shown.Visa.className).toContain(badgeStyles.badgeExpense)
+    expect(shown.Visa.icon).not.toBe(shown['Sock drawer'].icon)
   })
 
   it("names the type in the constellation's legend the same way", async () => {
@@ -116,6 +124,7 @@ describe('the Accounts page shows a stored type as the app reads it', () => {
         ?.querySelector('[data-test-id="constellation-type"]')?.textContent
     expect(label('Pension')).toBe('Investment')
     expect(label('Old current')).toBe('Checking')
-    expect(label('Visa')).toBe('Account')
+    expect(label('Sock drawer')).toBe('Account')
+    expect(label('Visa')).toBe('Credit card')
   })
 })

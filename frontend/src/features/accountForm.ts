@@ -12,12 +12,17 @@
  *
  * An edit checks only what it changes, as the runtimes do: an account saved under older rules (a
  * name over 100 characters) can still have its bank changed.
+ *
+ * A credit card and a Giro account also show a limit and a yearly interest rate (an overdraft's,
+ * on a Giro account). Another type sends neither, and the runtimes clear both when an edit gives
+ * the account that type.
  */
 import {
   ACCOUNT_MESSAGES,
   checkAccountCreate,
   checkAccountEdit,
   storedAccountType,
+  takesCreditLine,
 } from '../../../shared/accountSchema'
 import { fieldErrorsOf } from '../../../shared/refusal'
 import { createForm } from '../components/form'
@@ -35,6 +40,10 @@ export interface AccountFormValues {
   starting_date: string
   /** The current balance, as typed. */
   balance: string
+  /** A credit card's limit, or a Giro account's overdraft limit, as typed. */
+  credit_limit: string
+  /** The yearly interest rate on money owed, in percent, as typed. */
+  credit_rate: string
 }
 
 /** An account as the page holds one, to open it for editing. */
@@ -46,6 +55,8 @@ export interface EditableAccount {
   balance: number
   starting_balance?: number | null
   starting_date?: string | null
+  credit_limit?: number | null
+  credit_rate?: number | null
 }
 
 export interface AccountFormOptions {
@@ -65,6 +76,8 @@ const BLANK: AccountFormValues = {
   starting_balance: '',
   starting_date: '',
   balance: '',
+  credit_limit: '',
+  credit_rate: '',
 }
 
 const cents = (amount: number) => Math.round(amount * 100) / 100
@@ -73,6 +86,24 @@ const cents = (amount: number) => Math.round(amount * 100) / 100
 interface Built {
   body: Record<string, unknown>
   fields: FieldErrors
+}
+
+/**
+ * The limit and the rate, for a type that takes them, read as the balances are (a comma or a dot
+ * for the decimals). A blank one is none. Another type sends neither.
+ */
+function creditLine(values: AccountFormValues, fields: FieldErrors): Record<string, unknown> {
+  if (!takesCreditLine(values.type)) return {}
+  const read = (text: string, field: 'credit_limit' | 'credit_rate', message: string) => {
+    if (!text.trim()) return null
+    const number = parseDecimalInput(text)
+    if (number === null) fields[field] = message
+    return number ?? undefined
+  }
+  return {
+    credit_limit: read(values.credit_limit, 'credit_limit', ACCOUNT_MESSAGES.creditLimit),
+    credit_rate: read(values.credit_rate, 'credit_rate', ACCOUNT_MESSAGES.creditRate),
+  }
 }
 
 /**
@@ -99,6 +130,7 @@ function createBody(values: AccountFormValues): Built {
       currency: getLocalCurrency(),
       starting_balance: starting ?? undefined,
       starting_date: values.starting_date || null,
+      ...creditLine(values, fields),
     },
     fields,
   }
@@ -117,6 +149,7 @@ function editBody(values: AccountFormValues, account: EditableAccount): Built {
     bank_name: values.bank_name,
     currency: getLocalCurrency(),
     starting_date: values.starting_date || null,
+    ...creditLine(values, fields),
   }
   const current = parseDecimalInput(values.balance)
   if (current === null) {
@@ -184,6 +217,8 @@ export function createAccountForm(options: AccountFormOptions): AccountForm {
             starting_date: account.starting_date || '',
             // The current balance: correcting it adjusts the starting balance (editBody).
             balance: String(account.balance ?? ''),
+            credit_limit: String(account.credit_limit ?? ''),
+            credit_rate: String(account.credit_rate ?? ''),
           }
         : BLANK
     )

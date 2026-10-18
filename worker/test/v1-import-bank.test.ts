@@ -186,6 +186,25 @@ describe('POST /api/v1/import - bank adapters first', () => {
     expect(JSON.parse(log!.details)).toMatchObject({ parsedBy: 'bank:erste', bank: 'erste' });
   });
 
+  // The format goes in a column of its own (migration 0038), which a long details blob cut at 8000
+  // characters cannot lose. The generic CSV path read no bank's format.
+  it("records the bank's format in the log's bank_formats, and none for a plain CSV", async () => {
+    const lastLog = () =>
+      env.DB.prepare(
+        'SELECT bank_formats FROM import_logs WHERE profile_id = ? ORDER BY id DESC LIMIT 1'
+      )
+        .bind(PROFILE_ID)
+        .first<{ bank_formats: string | null }>();
+    await post({
+      body: erste(),
+      filename: 'ERSTE_Izvadak.csv',
+      query: { account: 'Erste Current' },
+    });
+    expect(await lastLog()).toEqual({ bank_formats: 'erste' });
+    await post({ body: PLAIN_CSV, filename: 'plain.csv' });
+    expect(await lastLog()).toEqual({ bank_formats: null });
+  });
+
   it('still falls back to generic CSV for an app-shaped file no adapter claims', async () => {
     const res = await post({ body: PLAIN_CSV, filename: 'plain.csv' });
     expect(res.status).toBe(200);

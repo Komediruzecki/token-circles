@@ -146,6 +146,102 @@ describe('naming your space', () => {
   })
 })
 
+describe('asking where you live and who the space covers', () => {
+  const chip = (id: string) => byTestId(`onboarding-space-${id}`) as HTMLLabelElement
+  const radio = (id: string) => chip(id).querySelector('input') as HTMLInputElement
+
+  async function stored(key = 'guidance:1'): Promise<unknown> {
+    const row = (await (await getDB()).get('settings', key)) as { value?: string } | undefined
+    return row?.value === undefined ? undefined : JSON.parse(row.value)
+  }
+
+  it('asks both questions as guidance.md writes them, and says they are optional', async () => {
+    await openAt('space')
+    const legends = [...host.querySelectorAll('legend')].map((l) => l.textContent)
+    expect(legends).toEqual([
+      'Where do you live?',
+      'Who does this space cover?',
+      'Adults',
+      'Children',
+    ])
+    expect(byTestId('onboarding-space-region')?.textContent).toContain(
+      'We compare your numbers with official statistics for that place.'
+    )
+    const labels = (prefix: string) =>
+      [...host.querySelectorAll<HTMLElement>(`[data-test-id^="onboarding-space-${prefix}-"]`)]
+        .filter((el) => el.tagName === 'LABEL')
+        .map((el) => el.textContent)
+    expect(labels('region')).toEqual([
+      'Germany',
+      'Croatia',
+      'Another EU country',
+      'United Kingdom',
+      'United States',
+      'Somewhere else',
+    ])
+    expect(labels('adults')).toEqual(['1', '2', '3 or more'])
+    expect(labels('children')).toEqual(['0', '1', '2', '3 or more'])
+    expect(byTestId('onboarding-space-questions-lead')?.textContent).toBe(
+      'Both questions are optional. Change them later in Settings.'
+    )
+  })
+
+  it('saves the answers chosen with the space, and moves on', async () => {
+    await openAt('space')
+    chip('region-HR').click()
+    chip('adults-2').click()
+    chip('children-1').click()
+    expect(radio('region-HR').checked).toBe(true)
+
+    continueButton().click()
+
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('account')
+    })
+    expect(await stored()).toEqual({ region: 'HR', adults: 2, children: 1 })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('counts a region left unanswered as skipped, and the household as not asked', async () => {
+    await openAt('space')
+    continueButton().click()
+
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('account')
+    })
+    expect(await stored()).toEqual({ region: 'skipped' })
+  })
+
+  it('shows the answers the record holds, and keeps what it does not change', async () => {
+    const record = { region: 'DE', children: 0, tenure: 'own_outright' }
+    await (await getDB()).put('settings', { key: 'guidance:1', value: JSON.stringify(record) })
+    await openAt('space')
+    await vi.waitFor(() => {
+      expect(radio('region-DE').checked).toBe(true)
+    })
+    expect(radio('children-0').checked).toBe(true)
+
+    chip('adults-3').click()
+    continueButton().click()
+
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('account')
+    })
+    expect(await stored()).toEqual({ ...record, adults: 3 })
+  })
+
+  it('never puts skipped over a region only a newer build reads', async () => {
+    await (await getDB()).put('settings', { key: 'guidance:1', value: '{"region":"AT"}' })
+    await openAt('space')
+    continueButton().click()
+
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('account')
+    })
+    expect(await stored()).toEqual({ region: 'AT' })
+  })
+})
+
 describe('creating your first account', () => {
   const field = (id: string) => byTestId(id) as HTMLInputElement
   const create = () => byTestId('onboarding-account-create') as HTMLButtonElement

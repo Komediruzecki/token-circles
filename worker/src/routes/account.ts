@@ -113,6 +113,8 @@ accountRoutes.delete('/api/account', requireAuth, async (c) => {
     P('DELETE FROM auth_logs WHERE user_id = ?', userId);
   }
   P('DELETE FROM custom_reports WHERE user_id = ?', userId);
+  // What the account kept about itself: the setup wizard's record, the tours, the cards hidden.
+  P('DELETE FROM user_state WHERE user_id = ?', userId);
   P('DELETE FROM error_logs WHERE user_id = ?', userId);
   P('DELETE FROM profiles WHERE user_id = ?', userId);
   P('DELETE FROM users WHERE id = ?', userId);

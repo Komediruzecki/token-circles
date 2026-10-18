@@ -201,6 +201,10 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
     'API tokens authenticate against the Worker; local-first has no API.',
   'DELETE /api/account/api-tokens/:id':
     'API tokens authenticate against the Worker; local-first has no API.',
+  'GET /api/account/state':
+    "State that follows a cloud account (the setup wizard's record, tours, the Getting started card). Local-first keeps it in this browser's localStorage and never calls the route.",
+  'PUT /api/account/state/:key':
+    "State that follows a cloud account (the setup wizard's record, tours, the Getting started card). Local-first keeps it in this browser's localStorage and never calls the route.",
   'POST /api/auth/forgot-password': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/login':
     'Signing in. Local-first has no account to sign in to; Sign in there switches to cloud mode and reloads before it shows a form (App.tsx handleLogin).',

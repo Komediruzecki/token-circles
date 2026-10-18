@@ -37,7 +37,14 @@ const count = async (sql: string, ...args: unknown[]) =>
     .first<{ n: number }>())!.n;
 
 beforeEach(async () => {
-  for (const t of ['auth_sessions', 'auth_logs', 'rate_limits', 'profiles', 'users']) {
+  for (const t of [
+    'auth_sessions',
+    'auth_logs',
+    'rate_limits',
+    'user_state',
+    'profiles',
+    'users',
+  ]) {
     await env.DB.prepare(`DELETE FROM ${t}`).run();
   }
   const hash = await hashPassword(PASSWORD);
@@ -92,5 +99,55 @@ describe('deleting an account', () => {
         OTHER.email
       )
     ).toBe(othersBefore);
+  });
+
+  it("deletes the state it kept about itself, and leaves another account's", async () => {
+    const cookie = await signIn(OWNER.email);
+    const theirs = await signIn(OTHER.email);
+    const put = (session: string, key: string, body: unknown) =>
+      SELF.fetch(`https://api.example.com/api/account/state/${key}`, {
+        method: 'PUT',
+        headers: { Cookie: session, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    for (const session of [cookie, theirs]) {
+      expect((await put(session, 'onboarding', { step: 'import' })).status).toBe(200);
+      expect((await put(session, 'tours', { seen: ['dashboard'] })).status).toBe(200);
+    }
+    const rows = (id: number) =>
+      count('SELECT COUNT(*) AS n FROM user_state WHERE user_id = ?', id);
+    expect([await rows(OWNER.id), await rows(OTHER.id)]).toEqual([2, 2]);
+
+    expect((await deleteAccount(cookie)).status).toBe(200);
+
+    expect([await rows(OWNER.id), await rows(OTHER.id)]).toEqual([0, 2]);
+  });
+
+  it('deletes from every table that keeps rows by user_id', async () => {
+    // The one route that deletes an account must reach every per-account table, including the
+    // ones added after it was written. Read from the schema, so a new table fails here until the
+    // route deletes its rows too.
+    const { results: tables } = await env.DB.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%'"
+    ).all<{ name: string }>();
+    const withUserId: string[] = [];
+    for (const { name } of tables) {
+      const { results: columns } = await env.DB.prepare(`PRAGMA table_info("${name}")`).all<{
+        name: string;
+      }>();
+      if (columns.some((column) => column.name === 'user_id')) withUserId.push(name);
+    }
+    expect(withUserId).toContain('user_state');
+    const [route] = Object.values(
+      import.meta.glob<string>('../src/routes/account.ts', {
+        query: '?raw',
+        import: 'default',
+        eager: true,
+      })
+    );
+    const missing = withUserId.filter(
+      (table) => !new RegExp(`DELETE FROM ${table} WHERE user_id = \\?`).test(route)
+    );
+    expect(missing).toEqual([]);
   });
 });

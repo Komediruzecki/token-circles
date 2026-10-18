@@ -23,6 +23,9 @@ type Row = Record<string, unknown>
  * Categories made through the local `POST /api/categories` before it wrote complete rows hold the
  * form's body as sent: no `tax_deductible`, and `icon: null` when the icon was left blank. Either
  * one failed CategorySchema, and one such row failed every `api.getCategories()` over its profile.
+ *
+ * A row from before categories had a kind has neither `kind` nor `essential`; it reads as the
+ * Worker's NULLs do, so the app goes by its name (shared/guidance/kinds.ts).
  */
 export function normalizeCategory<T>(cat: T): T {
   const row = cat as Row
@@ -32,11 +35,14 @@ export function normalizeCategory<T>(cat: T): T {
     parent_id: row.parent_id ?? null,
     created_at: row.created_at ?? '',
     tax_deductible: row.tax_deductible ?? false,
+    kind: row.kind ?? null,
+    essential: row.essential ?? null,
   } as T
 }
 
 export function normalizeAccount<T>(acct: T): T {
-  const a: Row = { notes: '', ...(acct as Row) }
+  // A row stored before migration 0037 has no limit or rate: none, as the Worker answers.
+  const a: Row = { notes: '', credit_limit: null, credit_rate: null, ...(acct as Row) }
   // A type v4 renamed reads as the one that replaced it; any other is kept as it is, one this
   // build does not have included (the pages show it as a plain account).
   a.type = storedAccountType(a.type)

@@ -825,3 +825,32 @@ select.form-control {
   font-size: 12px;
   color: var(--text-secondary);
 }
+
+/* "Needed every month": a checkbox with its words beside it, not above. */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.check-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+/* The whole row toggles the box, so on a phone the row is the 44 px target. The negative margins
+   take back what it grew by (its own line is 21 px), so its words sit where they did against the
+   Kind help above and the hint below; positioned, it paints, and takes taps, over the hint its
+   lower edge reaches into. */
+@media (max-width: 768px) {
+  .check-row {
+    position: relative;
+    min-height: 44px;
+    margin-block: -11.5px;
+  }
+}

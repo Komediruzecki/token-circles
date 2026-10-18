@@ -3,7 +3,9 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
-import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
+import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
+import { bucketByMonth, sumTypes } from './evaluate'
+import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -12,7 +14,7 @@ export type AdviceKind =
   | 'goal-pace'
   | 'in-the-red'
   | 'uncategorised'
-  | 'unbudgeted-subscription'
+  | 'unbudgeted-category'
   | 'streak-at-risk'
 
 export interface AdviceCard {
@@ -132,11 +134,9 @@ function monthsBetween(from: string, to: string): number {
 
 function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const last = addMonths(monthOf(input.today), -1)
-  const list = byMonth.get(last)
-  if (!list || list.length < 3) return []
-  const income = sumTypes(list, ['income'])
-  const out = sumTypes(list, ['expense', 'deduction'])
-  if (out <= income) return []
+  const red = monthInTheRed(byMonth.get(last))
+  if (!red) return []
+  const { income, out } = red
   return [
     {
       id: `in-the-red:${last}`,
@@ -153,8 +153,7 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
 
 function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const list = byMonth.get(month) ?? []
-  const n = list.filter((t) => t.type !== 'transfer' && t.category_id === null).length
+  const n = uncategorisedIn(byMonth.get(month) ?? [])
   if (n === 0) return []
   return [
     {
@@ -170,37 +169,29 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
   ]
 }
 
-function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+/**
+ * The biggest category spent on this month with no budget and no bill behind it. Named
+ * `unbudgeted-category` for what it flags; it was `unbudgeted-subscription`, and a dismissal
+ * stored under that name still applies (parseDismissed in records.ts).
+ */
+function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const budgeted = new Set(input.budgets.map((b) => b.category_id))
-  const billed = new Set(
-    input.bills
-      .map((b) => b.category_id)
-      .filter((id): id is number => id !== null && id !== undefined)
-  )
-  const counts = new Map<number, number>()
-  for (const t of byMonth.get(month) ?? []) {
-    if (t.type !== 'expense' || t.category_id === null) continue
-    if (budgeted.has(t.category_id) || billed.has(t.category_id)) continue
-    counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + baseAmount(t))
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
-  if (!top || top[1] <= 0) return []
+  const top = biggestUnbudgeted(byMonth.get(month) ?? [], input.budgets, input.bills)
+  if (!top) return []
   return [
     {
-      id: `unbudgeted-subscription:${top[0]}:${month}`,
-      kind: 'unbudgeted-subscription',
+      id: `unbudgeted-category:${top.categoryId}:${month}`,
+      kind: 'unbudgeted-category',
       tone: 'info',
-      title: `${categoryName(input, top[0])} has no budget`,
+      title: `${categoryName(input, top.categoryId)} has no budget`,
       detail: 'It is the biggest thing you spend on with nothing set aside for it.',
-      figure: round(top[1]),
+      figure: round(top.spent),
       link: { page: 'budgets', label: 'Budgets' },
-      weight: top[1],
+      weight: top.spent,
     },
   ]
 }
 
-const TRACKED_MIN = 3
 const LATE_IN_MONTH_DAYS = 8
 
 function streakAtRisk(
@@ -211,18 +202,18 @@ function streakAtRisk(
   if (streak < 2) return []
   const month = monthOf(input.today)
   const have = (byMonth.get(month) ?? []).length
-  if (have >= TRACKED_MIN) return []
+  if (isTrackedMonth(have)) return []
   const [y, m] = input.today.split('-').map(Number)
   const daysLeft = new Date(Date.UTC(y, m, 0)).getUTCDate() - Number(input.today.slice(8, 10))
   if (daysLeft > LATE_IN_MONTH_DAYS) return []
-  const need = TRACKED_MIN - have
+  const need = TRACKED_MONTH_MIN_TRANSACTIONS - have
   return [
     {
       id: `streak-at-risk:${month}`,
       kind: 'streak-at-risk',
       tone: 'warn',
       title: `Your ${streak}-month streak needs this month`,
-      detail: `A month counts once it holds ${TRACKED_MIN} entries, and this one is nearly over.`,
+      detail: `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries, and this one is nearly over.`,
       figure: plural(need, 'entry to go', 'entries to go'),
       link: { page: 'transactions', label: 'Transactions' },
       weight: streak,
@@ -242,7 +233,7 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
     ...inTheRed(input, byMonth),
     ...streakAtRisk(input, byMonth, streak),
     ...uncategorised(input, byMonth),
-    ...unbudgetedSubscriptions(input, byMonth),
+    ...unbudgetedCategory(input, byMonth),
   ]
     .filter((c) => !dismissed.has(c.id))
     .sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone] || b.weight - a.weight)

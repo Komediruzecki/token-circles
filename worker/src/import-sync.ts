@@ -109,6 +109,8 @@ export async function runScheduledSheetSyncs(cron: string, env: Env): Promise<vo
             rows_skipped_invalid: skipped,
             rows_with_warnings: warned,
           }),
+          // A sheet is no bank's statement.
+          bank_formats: null,
         });
       } else if (skipped > 0) {
         // A run where every changed row was unreadable writes no session (an entry a day for a

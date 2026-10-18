@@ -50,7 +50,7 @@ categoriesRoutes.get('/api/categories', requireAuth, async (c) => {
   if (type === 'income' || income === 'true') types.push('income');
   if (type === 'expense' || expense === 'true') types.push('expense');
 
-  let sql = `SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.created_at, c.profile_id, p.name as parent_name
+  let sql = `SELECT c.id, c.name, c.color, c.icon, c.type, c.parent_id, c.tax_deductible, c.kind, c.essential, c.created_at, c.profile_id, p.name as parent_name
              FROM categories c
              LEFT JOIN categories p ON c.parent_id = p.id AND p.profile_id = c.profile_id
              WHERE c.profile_id IN (${ph})`;
@@ -100,6 +100,8 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
     type: input.type,
     parent_id: input.parent_id,
     tax_deductible: input.tax_deductible ? 1 : 0,
+    kind: input.kind,
+    essential: input.essential,
     profile_id: pid,
   });
 
@@ -110,6 +112,8 @@ categoriesRoutes.post('/api/categories', requireAuth, async (c) => {
     icon: input.icon,
     type: input.type,
     parent_id: input.parent_id,
+    kind: input.kind,
+    essential: input.essential,
     profile_id: pid,
   });
 });

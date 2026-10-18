@@ -113,6 +113,8 @@ export interface ImportLogEntry {
   accounts_created: number
   categories_created: number
   details: string | null
+  /** The bank formats the session read, joined by commas (shared/bankFormats.ts), or null. */
+  bank_formats?: string | null
   created_at: string
 }
 
@@ -172,6 +174,19 @@ export function rowsMissingAccount(
 
 export function sourceRowNumber(index: number): number {
   return index + 2
+}
+
+/**
+ * The bank formats an import session read, for its log: the formats of the statements the Bank
+ * Imports tab recognised, each once. None for every other tab, which reads a plain table. The
+ * runtimes keep the ones they read (shared/bankFormats.ts).
+ */
+export function importedBankFormats(
+  tab: string,
+  rows: readonly Pick<BankFileRow, 'bankId'>[]
+): BankId[] {
+  if (tab !== 'bank-imports') return []
+  return [...new Set(rows.flatMap((row) => (row.bankId ? [row.bankId] : [])))]
 }
 
 export interface ImportValidationIssue {
@@ -1545,6 +1560,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             rows_skipped_invalid: invalidSkipped,
             rows_with_warnings: Array.isArray(data.warnings) ? data.warnings.length : 0,
           }),
+          bank_formats: importedBankFormats(activeImportTab(), bankFiles()),
         }),
       }).catch((e: unknown) => {
         console.error('Failed to record import log:', e)
