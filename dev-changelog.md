@@ -361,6 +361,14 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Found along the way
 
+- **The wizard's hints at full strength** (#625). `.fieldHint` in
+  `frontend/src/components/onboarding/Onboarding.module.css` drew `--text-secondary` at
+  `opacity: 0.85`: 3.94:1 against the panel in light and 5.92:1 in dark, under the 4.5:1 that text
+  needs. Without the opacity they are 5.48:1 and 7.69:1. Only the wizard uses the class; the other
+  `fieldHint` classes belong to other modules. `tests/onboarding.spec.ts` ("the wizard's hints read
+  at 4.5:1 or better against the panel"), light and dark: every hint on the space and account
+  steps, from computed colours, the hint at its opacity over the glass panel and the panel over each
+  stop of the overlay's gradient.
 - **Analytics weeks, heatmap days, whole PDF reports, net worth by day** (#612).
   `shared/calendarWeeks.ts` puts every day of a month in one of its weeks, a week's trends cover the
   seven days its label names, and a week or month the calendar does not have answers no days, in

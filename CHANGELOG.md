@@ -23,6 +23,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Loans show what you owe today.** The remaining balance, progress bar, next payment date and paid-off status count interest, extra payments and rate changes. Due dates stay on the loan's day of the month, or on the last day of a shorter month.
+- **The setup wizard's hints are easier to read.** The grey lines under its fields, like the one under Base currency, were faded below 4.5:1 contrast in light theme. They show at full strength now.
 - **Dates follow your calendar, not UTC's.** Just after midnight, today's transactions count in Analytics, forms open on your date, and a bill due today stays due today. A bill or recurring rule on the 31st falls on a shorter month's last day.
 - **Quick add and the Transactions form offer your profile's categories and accounts.** The + button, Cmd-K and the form list the active profile's rows as they are when you open them, so a category made on Budgets, Goals or Bills shows up. A form left open when you switch profile closes and says what was not saved.
 - **Each account gets its own setup wizard.** A new account is offered the setup wizard even when another account on this browser already finished or skipped it.

@@ -335,6 +335,85 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible()
   })
 
+  for (const theme of ['light', 'dark']) {
+    test(`the wizard's hints read at 4.5:1 or better against the panel, ${theme}`, async ({
+      page,
+    }) => {
+      await page.addInitScript((value) => {
+        localStorage.setItem('finance-theme', value)
+      }, theme)
+      await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+
+      // Each hint on the step: its colour at its opacity over the glass panel, and the panel over
+      // the overlay's ground at each stop of its gradient. The lowest ratio over the stops is an
+      // estimate of the worst place on screen: it leaves out the panel's backdrop blur and the orbit
+      // field behind it, which put the painted pixels within about 2% of it when measured. Computed
+      // colours, composited on a canvas the way the page composites them.
+      const contrasts = (step: string) =>
+        page.getByTestId(step).evaluate(async (stepEl) => {
+          const panel = stepEl.closest<HTMLElement>('[data-test-id="onboarding-panel"]')!
+          const overlay = panel.closest<HTMLElement>('[data-test-id="onboarding-wizard"]')!
+          await Promise.all(
+            panel
+              .getAnimations({ subtree: true })
+              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+              .map((a) => a.finished)
+          )
+          const ctx = document.createElement('canvas').getContext('2d', {
+            willReadFrequently: true,
+          })!
+          const paint = (color: string, alpha = 1) => {
+            ctx.fillStyle = '#010203'
+            ctx.fillStyle = color
+            if (ctx.fillStyle === '#010203') throw new Error(`the canvas cannot read ${color}`)
+            ctx.globalAlpha = alpha
+            ctx.fillRect(0, 0, 1, 1)
+            ctx.globalAlpha = 1
+          }
+          const luminance = () => {
+            const [r, g, b] = Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)).map((v) => {
+              const c = v / 255
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+            })
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+          }
+          const ground = getComputedStyle(overlay).backgroundImage.match(/rgba?\([^)]*\)/g) ?? []
+          const hints = Array.from(stepEl.querySelectorAll<HTMLElement>('[class*="fieldHint"]'))
+          return hints.map((hint) => {
+            let opacity = 1
+            for (let n: HTMLElement | null = hint; n && n !== panel; n = n.parentElement) {
+              opacity *= parseFloat(getComputedStyle(n).opacity)
+            }
+            const ratios = ground.map((stop) => {
+              paint(stop)
+              paint(getComputedStyle(panel).backgroundColor)
+              const back = luminance()
+              paint(getComputedStyle(hint).color, opacity)
+              const fore = luminance()
+              return (Math.max(back, fore) + 0.05) / (Math.min(back, fore) + 0.05)
+            })
+            return {
+              hint: hint.textContent!.trim(),
+              stops: ratios.length,
+              lowest: Math.round(Math.min(...ratios) * 100) / 100,
+            }
+          })
+        })
+
+      await page.getByTestId('onboarding-next').click()
+      const space = await contrasts('onboarding-step-space')
+      await page.getByTestId('onboarding-next').click()
+      const account = await contrasts('onboarding-step-account')
+      expect(space.length).toBeGreaterThan(0)
+      expect(account.length).toBeGreaterThan(0)
+      for (const measured of [...space, ...account]) {
+        expect(measured.stops, measured.hint).toBeGreaterThan(1)
+        expect(measured.lowest, measured.hint).toBeGreaterThanOrEqual(4.5)
+      }
+    })
+  }
+
   test('back navigation walks the steps in reverse', async ({ page }) => {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
     await page.getByTestId('onboarding-next').click()
