@@ -280,7 +280,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Onboarding
 
-- **The setup wizard's panel stays on a phone's screen.** Two causes. The orbit field behind the
+- **The setup wizard's panel stays on a phone's screen** (#624). Two causes. The orbit field behind the
   panel (`.backdrop` in `frontend/src/components/onboarding/Onboarding.module.css`) is 160vmax
   square, 1350 px at 390x844, and as the overlay's absolutely positioned content it gave the overlay
   an 870 by 1097 px scroll area. `overflow: hidden` stops a finger, not `scrollIntoView` or focus: a
@@ -308,7 +308,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Achievements
 
-- **Achievements count money in the base currency.** `sumTypes` in
+- **Achievements count money in the base currency** (#622). `sumTypes` in
   `frontend/src/core/achievements/evaluate.ts` added `Math.abs(t.amount)`, the figure in the
   transaction's own currency, so a month with an entry in another currency was summed in two
   currencies. Every sum of money in achievements now goes through `baseAmount`, which is
@@ -403,8 +403,7 @@ All notable changes to Token Circles are documented here. The format is based on
   reach 28 February. 13 Worker routes and 12 local-first routes that nothing called are removed,
   with a second registration of `POST /api/calculator/compound-interest`. Achievements leave out a
   loan deleted while they count. The `formButtonType` guard reads the whole tag.
-
-- **Account types: one list, checked by every writer, and a reader that keeps the rest.**
+- **Account types: one list, checked by every writer, and a reader that keeps the rest** (#621).
   `ACCOUNT_TYPES` in `shared/accountSchema.ts` is the list. MCP `create_account` stored any string
   (`z.string().max(50)`, described as "e.g. giro, savings, credit, cash"); its `type` is now
   `z.enum(ACCOUNT_TYPES)`, and the tool and field descriptions are built from the list and
@@ -440,7 +439,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Tests and tooling
 
-- **The confirm-email tests get the time their waits allow.** Each test in
+- **The confirm-email tests get the time their waits allow** (#628). Each test in
   `frontend/src/__tests__/confirmEmailGate.test.tsx` waits on the real App, up to 10 s a wait, but
   ran under vitest's default limit of 5 s, so on a loaded runner a test could end while its wait
   still had time left: "reads the signed-in account's from start, and nobody's after signing out"
@@ -458,7 +457,7 @@ All notable changes to Token Circles are documented here. The format is based on
   leaving wrangler, workerd and esbuild on :8787 for the next local run's `reuseExistingServer` to
   adopt. `e2eWorkerTeardown.test.ts` runs the real supervisor against a stand-in wrangler and fails
   without the line.
-- **The first-three-markers test forges three distinct markers.** In
+- **The first-three-markers test forges three distinct markers** (#623). In
   `worker/test/email-link-finish.test.ts`, "looks at the first three markers a request carries, and
   no further" made its forged markers by setting the signature's first character to `A` or `B`.
   When the genuine signature already started with that letter, a "forged" marker was the genuine
