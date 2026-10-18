@@ -238,7 +238,7 @@ describe('an account type', () => {
     expect(readAccountType(' Savings ')).toBe('savings')
     expect(readAccountType('Checking')).toBe('giro')
     expect(readAccountType('retirement')).toBe('ib')
-    expect(readAccountType('loan')).toBeNull()
+    expect(readAccountType('sock_drawer')).toBeNull()
     expect(readAccountType('constructor')).toBeNull()
     expect(readAccountType(7)).toBeNull()
   })
@@ -247,7 +247,7 @@ describe('an account type', () => {
   // list still loads, the account shows as a plain one, and an edit sends the type back unchanged.
   it('is read back from storage as stored, a v4 name as its replacement, none as giro', () => {
     expect(storedAccountType('cash')).toBe('cash')
-    expect(storedAccountType('loan')).toBe('loan')
+    expect(storedAccountType('sock_drawer')).toBe('sock_drawer')
     expect(storedAccountType('checking')).toBe('giro')
     expect(storedAccountType('investment')).toBe('ib')
     expect(storedAccountType('constructor')).toBe('constructor')

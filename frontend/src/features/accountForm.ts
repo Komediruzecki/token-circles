@@ -21,6 +21,7 @@ import {
   ACCOUNT_MESSAGES,
   checkAccountCreate,
   checkAccountEdit,
+  storedAccountType,
   takesCreditLine,
 } from '../../../shared/accountSchema'
 import { fieldErrorsOf } from '../../../shared/refusal'
@@ -208,7 +209,9 @@ export function createAccountForm(options: AccountFormOptions): AccountForm {
       account
         ? {
             name: account.name,
-            type: account.type,
+            // A type v4 renamed opens as the one that replaced it, which the edit's check reads as
+            // the same type; any other is kept as it is (the dialog shows it as a plain account).
+            type: storedAccountType(account.type),
             bank_name: account.bank_name || '',
             starting_balance: String(account.starting_balance ?? ''),
             starting_date: account.starting_date || '',

@@ -41,7 +41,7 @@ beforeEach(async () => {
       notes: '',
     } as never)
   await account(1, 'A everyday', 'giro')
-  await account(2, 'B car loan', 'loan')
+  await account(2, 'B sock drawer', 'sock_drawer')
   await account(3, 'C old', 'checking')
   await account(4, 'D bare')
 })
@@ -53,7 +53,7 @@ describe('a stored account type, read back in local-first', () => {
   it('is kept when this build does not have it, and the list loads', async () => {
     const expected = [
       ['A everyday', 'giro'],
-      ['B car loan', 'loan'],
+      ['B sock drawer', 'sock_drawer'],
       ['C old', 'giro'],
       ['D bare', 'giro'],
     ]

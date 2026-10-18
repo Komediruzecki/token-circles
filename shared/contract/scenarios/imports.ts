@@ -179,7 +179,7 @@ export const imports = [
       for (const dry_run of [true, false]) {
         const reply = await api.post(
           '/api/import/execute',
-          executeBody({ accountTypes: { Savings: 'loan' }, dry_run })
+          executeBody({ accountTypes: { Savings: 'sock_drawer' }, dry_run })
         );
         expect(reply.status, `dry_run ${dry_run}`).toBe(422);
         expect(reply.body.error).toBe(importedAccountTypeError('Savings'));
@@ -212,6 +212,19 @@ export const imports = [
       expect(await accountNamed(api, expect, 'Pocket')).toMatchObject({ type: 'giro' });
     }
   ),
+
+  scenario('an import takes a credit card, as the Accounts form does', async (api, expect) => {
+    // The Import page's mapping step offers Credit Card, and the import writes it as chosen.
+    await account(api, expect, 'Everyday', 1000);
+    await execute(api, expect, {
+      rows: [['2026-03-05', 'Card bill', '20', 'Visa', 'Everyday', 'transfer']],
+      categoryTypes: { Visa: 'account' },
+      accountTypes: { Visa: 'credit' },
+      accountBalances: {},
+      accountBalanceDates: {},
+    });
+    expect(await accountNamed(api, expect, 'Visa')).toMatchObject({ type: 'credit' });
+  }),
 
   scenario(
     'an import log keeps the bank formats its session read, and drops any the app does not read',

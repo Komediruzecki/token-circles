@@ -164,8 +164,8 @@ defineTool({
     .object({
       ...profileArg,
       name: z.string().min(1).max(200),
-      // The app's own list (shared/accountSchema.ts). Any string used to be stored, and the
-      // description suggested "credit": one type the app does not have empties its account list.
+      // The app's own list (shared/accountSchema.ts). Any string used to be stored, and one type
+      // the app did not have emptied its account list.
       type: z.enum(ACCOUNT_TYPES).default(DEFAULT_ACCOUNT_TYPE).describe(`${TYPES_IN_WORDS}.`),
       currency: z.string().length(3).default('EUR'),
       bankName: z.string().max(200).optional(),

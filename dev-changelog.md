@@ -666,6 +666,12 @@ All notable changes to Token Circles are documented here. The format is based on
   a local row from before them as null for both, and the client's `AccountSchema` takes both as
   optional numbers. The Accounts dialog shows Credit Limit or Overdraft Limit and Interest Rate for
   those two types, and cash accounts get a banknote icon so the card icon is a credit card's.
+  With #621 merged, every display that reads the type through `knownAccountType` shows a credit
+  card as one: `accountTypeTone` gives it `expense` and `accountTypeIcon` the card, with cash on
+  the banknotes (both maps live in `core/accountTypes.ts` now), the constellation names it "Credit
+  card", the Transactions select says "credit", and the edit dialog opens it on Credit Card, not
+  "Other account". The import and MCP `create_account` take `credit` as they take every type on
+  the list.
 - **Tests:** `worker/test/account-credit.test.ts` (the migration's columns), a contract scenario in
   both runtimes (stored, read, refused on another type and out of range, cleared on a type change
   or a blank), a backup scenario (both columns survive a restore), the rules in
@@ -673,7 +679,11 @@ All notable changes to Token Circles are documented here. The format is based on
   readers (`api.getAccounts.test.ts`, `accountTypeRead.test.ts`), and
   `src/__tests__/accountTypeChoices.test.ts`, which fails when a place that offers account types
   and `ACCOUNT_TYPES` disagree. The tests that used `credit` as the type a build does not have use
-  `loan` now.
+  `loan` now, and #621's own tests use `sock_drawer`, a type no build will have. A credit card on
+  each display: `accountTypes.test.ts`, `accountsPageTypes.test.tsx`,
+  `accountConstellation.test.tsx`, `transactionsAccountTypeWord.test.tsx` and the edit dialog in
+  `accountForm.test.tsx`; the import takes one in a contract scenario (`imports.ts`, both
+  runtimes), and `mcp-tools-write.test.ts` checks `create_account` does.
 - **Import logs keep the bank formats a session read** (`shared/bankFormats.ts`, migration 0038):
   the adapter ids, comma-separated, in a column of their own, because both runtimes cut `details`
   at 8000 characters. Every writer goes through `storedBankFormats`, which keeps the ids in
@@ -1349,9 +1359,13 @@ All notable changes to Token Circles are documented here. The format is based on
   and the in-the-red and budget-drift advice), the year in review's biggest category and the
   biggest unbudgeted category in advice.
   `EvaluateInput.transactions` takes an optional `amount_local`; the store already passes whole
-  rows. `txBaseValue` (`core/currency.ts`) also estimates a foreign row without `amount_local` from
-  the browser's base currency, which would make the evaluator read localStorage; no report does
-  that estimate. Earned badges stay earned (`diffUnlocks` only adds). For a profile with converted
+  rows. `txBaseValue` (`core/currency.ts`) was not used: it also estimates a foreign row without
+  `amount_local` from the browser's base currency, which would make the evaluator read
+  localStorage. The Transactions totals and local-first's PDF reports (`clientPdfReports.ts`) do use
+  that estimate; Budgets and Analytics do not, in either runtime (the Worker's `COALESCE`, the
+  local-first handlers' `getAmount`, which is `normalizedTransactionAmount`). `baseAmount` counts as
+  they do, so badges and advice see a month as Budgets and Analytics show it. Earned badges stay
+  earned (`diffUnlocks` only adds). For a profile with converted
   entries, saver-x3, saver-x6, perfect-year, held-the-line, under-budget-six, clean-sweep and
   rainy-day can now be earned where they were not, or not be earned where they would have been;
   no other badge sums transactions. Tests: `achievements/__tests__/baseCurrency.test.ts`.
@@ -1425,15 +1439,31 @@ All notable changes to Token Circles are documented here. The format is based on
   `api.getAccounts()` (Transactions, quick entry, Tags) for every account; it is now
   `z.string().transform(storedAccountType)`, which keeps an unknown type and reads a v4 name as its
   replacement, as local-first's `normalizeAccount` now does through the same function.
-  `Account.type` is `AccountType | (string & {})`. `core/accountTypes.ts` shows such an account as
-  a plain one: the badge on Accounts and the Transactions account select say "account", the
-  constellation says "Account", with the default icon and colour. An edit sends the stored type
-  back unchanged, so this is what keeps a rollback safe once a build writes a new type. Tests: two
-  contract scenarios (`imports.ts`, both runtimes), `mcp-tools-write.test.ts`,
-  `api.getAccounts.test.ts`, and the Accounts page in `accountForm.test.tsx`.
+  `Account.type` is `AccountType | (string & {})`. Every display reads the type through
+  `knownAccountType` (`core/accountTypes.ts`): the badge's word (`accountTypeBadge`), its colour
+  (`accountTypeTone`), the card's icon (`accountTypeIcon`), the Transactions account select and the
+  constellation's label and colour. A v4 name shows as its replacement everywhere, which matters
+  in cloud mode, where the Accounts page gets the stored type raw: a `retirement` account had the
+  "ib" word but the plain colour and icon, and "Account" in the constellation. A type the app does
+  not have is a plain account everywhere: "account" on the badge and in the select, "Account" in
+  the constellation, the plain colour and icon. The edit dialog opens a v4 name as its replacement
+  (`storedAccountType` in `accountForm.open`, which `checkAccountEdit` reads as the same type) and
+  shows an unknown type as a disabled, selected "Other account" option instead of a blank select.
+  An untouched save sends the type back unchanged and writes nothing, so this is what keeps a
+  rollback safe once a build writes a new type. Tests: two contract scenarios (`imports.ts`, both
+  runtimes), `mcp-tools-write.test.ts`, `api.getAccounts.test.ts`, the Accounts page in
+  `accountForm.test.tsx` (local-first) and `accountsPageTypes.test.tsx` (cloud),
+  `accountTypes.test.ts`, `accountConstellation.test.tsx` and
+  `transactionsAccountTypeWord.test.tsx`.
 
 ### Tests and tooling
 
+- **The confirm-email tests get the time their waits allow.** Each test in
+  `frontend/src/__tests__/confirmEmailGate.test.tsx` waits on the real App, up to 10 s a wait, but
+  ran under vitest's default limit of 5 s, so on a loaded runner a test could end while its wait
+  still had time left: "reads the signed-in account's from start, and nobody's after signing out"
+  timed out that way in CI and in local full runs, and passed alone. The file's tests now have
+  30 s, enough for three of its waits.
 - **The release suite** (#593). `frontend/tests/release/` runs the 5.16 dev test scope in both
   storage modes as its own Playwright project, present only with `E2E_RELEASE=1`
   (`pnpm run test:e2e:release`): cloud cases in profiles of their own, local-first cases through
@@ -1446,6 +1476,13 @@ All notable changes to Token Circles are documented here. The format is based on
   leaving wrangler, workerd and esbuild on :8787 for the next local run's `reuseExistingServer` to
   adopt. `e2eWorkerTeardown.test.ts` runs the real supervisor against a stand-in wrangler and fails
   without the line.
+- **The first-three-markers test forges three distinct markers.** In
+  `worker/test/email-link-finish.test.ts`, "looks at the first three markers a request carries, and
+  no further" made its forged markers by setting the signature's first character to `A` or `B`.
+  When the genuine signature already started with that letter, a "forged" marker was the genuine
+  one, the request confirmed, and the test failed about 1 run in 32. Each forged marker now takes
+  a first character from `ABCD` other than the signature's own, so all three differ from the genuine
+  marker and from each other, as in the test above it.
 
 ### Dependencies
 

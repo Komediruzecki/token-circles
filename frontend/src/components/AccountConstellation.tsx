@@ -8,8 +8,10 @@
  * language as CategoryOrbits and the hero.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
+import { knownAccountType } from '../core/accountTypes'
 import { formatCurrency, getLocalCurrency } from '../core/api'
 import styles from './AccountConstellation.module.css'
+import type { AccountType } from '../../../shared/accountSchema'
 
 const money = (amount: number) => formatCurrency(amount, getLocalCurrency())
 
@@ -26,19 +28,19 @@ export interface AccountConstellationProps {
 }
 
 // Account type → brand hue + label.
-const TYPE_META: Record<string, { color: string; label: string }> = {
+const TYPE_META: Record<AccountType, { color: string; label: string }> = {
   giro: { color: '#6e9bff', label: 'Checking' },
   savings: { color: '#59d2a2', label: 'Savings' },
   ib: { color: '#f0a860', label: 'Investment' },
-  investment: { color: '#f0a860', label: 'Investment' },
   cash: { color: '#c9a0ff', label: 'Cash' },
   credit: { color: '#f48fa0', label: 'Credit card' },
 }
-// A type this build does not have is a plain account (core/accountTypes.ts).
-const typeMeta = (t: string) =>
-  Object.prototype.hasOwnProperty.call(TYPE_META, t)
-    ? TYPE_META[t]
-    : { color: '#93b4ff', label: 'Account' }
+// A type v4 renamed is the type that replaced it, and one this build does not have is a plain
+// account (core/accountTypes.ts).
+const typeMeta = (t: string) => {
+  const known = knownAccountType(t)
+  return known ? TYPE_META[known] : { color: '#93b4ff', label: 'Account' }
+}
 
 const C = 160 // svg center
 const CORE_R = 40
@@ -190,7 +192,9 @@ export default function AccountConstellation(props: AccountConstellationProps) {
                 <i class={styles.legendDot} style={{ background: n.meta.color }} />
                 <span class={styles.legendName}>
                   {n.name}
-                  <span class={styles.legendType}>{n.meta.label}</span>
+                  <span data-test-id="constellation-type" class={styles.legendType}>
+                    {n.meta.label}
+                  </span>
                 </span>
                 <span class={styles.legendAmount}>{money(n.balance)}</span>
               </li>

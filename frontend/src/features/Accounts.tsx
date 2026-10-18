@@ -39,7 +39,12 @@ import ConfirmButton from '../components/ConfirmButton'
 import { Field, FormNotice, SubmitButton } from '../components/form'
 import OrbitalDivider from '../components/OrbitalDivider'
 import { accountActivityPresentation } from '../core/accountActivity'
-import { accountTypeBadge } from '../core/accountTypes'
+import {
+  accountTypeBadge,
+  accountTypeIcon,
+  accountTypeTone,
+  knownAccountType,
+} from '../core/accountTypes'
 import { apiDelete, apiGet, formatCurrency, getLocalCurrency, showToast } from '../core/api'
 import { useAppState } from '../core/appStore'
 import { entityVersion } from '../core/dataVersions'
@@ -163,38 +168,9 @@ export default function Accounts() {
     }
   }
 
-  // Get account type badge status
-  const getAccountBadgeStatus = (
-    type: string
-  ): 'primary' | 'success' | 'warning' | 'info' | 'expense' | 'default' => {
-    const statusMap: Record<
-      string,
-      'primary' | 'success' | 'warning' | 'info' | 'expense' | 'default'
-    > = {
-      giro: 'primary',
-      savings: 'success',
-      ib: 'info',
-      cash: 'warning',
-      credit: 'expense',
-    }
-    return statusMap[type] || 'default'
-  }
-
-  // Get type icon
+  // A card's icon: its type's, or a plain account's (core/accountTypes.ts).
   const getTypeIcon = (type: string) => {
-    const paths: Record<string, string> = {
-      giro: 'M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11m16-11v11M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01',
-      savings:
-        'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-      ib: 'M13 17V9m-4 8v-4m8 4v-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-      // Banknotes. The card below was cash's icon until cards became a type of their own.
-      cash: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z',
-      credit:
-        'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
-    }
-    const d =
-      paths[type] ||
-      'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'
+    const d = accountTypeIcon(type)
     return (
       <svg
         width="18"
@@ -366,7 +342,7 @@ export default function Accounts() {
                           </div>
                           <div class={styles.accountActions}>
                             <span data-test-id="account-type" style={{ display: 'contents' }}>
-                              <Badge status={getAccountBadgeStatus(account.type)}>
+                              <Badge status={accountTypeTone(account.type)}>
                                 {accountTypeBadge(account.type)}
                               </Badge>
                             </span>
@@ -527,6 +503,13 @@ export default function Accounts() {
                     value={accountForm.values.type}
                     onInput={(e) => accountForm.set('type', e.currentTarget.value)}
                   >
+                    {/* A type this build does not have: shown, not offered. An untouched save
+                        sends it back, which writes nothing (core/accountTypes.ts). */}
+                    <Show when={knownAccountType(accountForm.values.type) === null}>
+                      <option value={accountForm.values.type} selected disabled>
+                        Other account
+                      </option>
+                    </Show>
                     <option value="giro">Giro / Checking</option>
                     <option value="savings">Savings</option>
                     <option value="ib">Investment / Brokerage</option>
