@@ -3,7 +3,7 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
-import { bucketByMonth, sumTypes } from './evaluate'
+import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -182,7 +182,7 @@ function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>)
   for (const t of byMonth.get(month) ?? []) {
     if (t.type !== 'expense' || t.category_id === null) continue
     if (budgeted.has(t.category_id) || billed.has(t.category_id)) continue
-    counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + Math.abs(t.amount))
+    counts.set(t.category_id, (counts.get(t.category_id) ?? 0) + baseAmount(t))
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
   if (!top || top[1] <= 0) return []
