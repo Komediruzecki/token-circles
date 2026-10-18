@@ -32,6 +32,12 @@
 import { isCalendarDate } from './transactionSchema';
 import type { Checked, FieldErrors } from './refusal';
 
+/**
+ * The account types the app has: the one list every writer checks, in both runtimes (the
+ * accounts routes and handlers, the import, the MCP's create_account). The app's readers keep a
+ * type that is not on it and show it as a plain account (frontend/src/core/accountTypes.ts), so a
+ * type a later build adds does not empty this build's account list.
+ */
 export const ACCOUNT_TYPES = ['giro', 'savings', 'ib', 'cash'] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
 
@@ -45,6 +51,47 @@ export const LEGACY_ACCOUNT_TYPES: Readonly<Record<string, AccountType>> = {
   retirement: 'ib',
 };
 
+/**
+ * A stored type as the app reads it back: none is a giro account, a name v4 replaced is the type
+ * that replaced it, and any other is kept as it is. A type this build does not have (one a later
+ * build adds, or one an API client stored before the writers checked) shows as a plain account,
+ * and an edit sends it back unchanged.
+ */
+export function storedAccountType(stored: unknown): string {
+  if (isBlank(stored)) return DEFAULT_ACCOUNT_TYPE;
+  const type = String(stored);
+  return Object.prototype.hasOwnProperty.call(LEGACY_ACCOUNT_TYPES, type)
+    ? LEGACY_ACCOUNT_TYPES[type]
+    : type;
+}
+
+/** What each type is, in the words an API client reads (the MCP's create_account describes them). */
+export const ACCOUNT_TYPE_WORDS: Readonly<Record<AccountType, string>> = {
+  giro: 'a current account',
+  savings: 'a savings account',
+  ib: 'an investment account',
+  cash: 'cash',
+};
+
+/** Whether `value` is one of the types the app has, exactly as it stores them. */
+export function isAccountType(value: unknown): value is AccountType {
+  return typeof value === 'string' && (ACCOUNT_TYPES as readonly string[]).includes(value);
+}
+
+/**
+ * The type a body names, read as every writer reads it: none is a giro account, a name v4 replaced
+ * is the type that replaced it, and neither case nor the space around it matters. Null for a type
+ * the app does not have, which a writer refuses.
+ */
+export function readAccountType(raw: unknown): AccountType | null {
+  if (isBlank(raw)) return DEFAULT_ACCOUNT_TYPE;
+  const type = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (isAccountType(type)) return type;
+  return Object.prototype.hasOwnProperty.call(LEGACY_ACCOUNT_TYPES, type)
+    ? LEGACY_ACCOUNT_TYPES[type]
+    : null;
+}
+
 /** The words for each refusal. A form shows them under the field; a summary joins them. */
 export const ACCOUNT_MESSAGES = {
   name: 'Give the account a name.',
@@ -57,6 +104,11 @@ export const ACCOUNT_MESSAGES = {
   bankName: 'Write the bank name as text.',
   notes: 'Write the notes as text.',
 } as const;
+
+/** An import's refusal of an account to create whose type the app does not have, in both runtimes. */
+export function importedAccountTypeError(name: string): string {
+  return `"${name}" has an account type the app does not have. ${ACCOUNT_MESSAGES.type}`;
+}
 
 /** The fields an account body may carry, in the order the form shows them. */
 export interface AccountInput {
@@ -110,13 +162,8 @@ const READERS: { [K in Field]: (raw: unknown) => Read<AccountInput[K] | null> } 
     return name.length > ACCOUNT_NAME_MAX ? { error: M.nameLength } : { value: name };
   },
   type: (raw) => {
-    if (isBlank(raw)) return { value: DEFAULT_ACCOUNT_TYPE };
-    const type = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
-    if ((ACCOUNT_TYPES as readonly string[]).includes(type)) return { value: type as AccountType };
-    const renamed = Object.prototype.hasOwnProperty.call(LEGACY_ACCOUNT_TYPES, type)
-      ? LEGACY_ACCOUNT_TYPES[type]
-      : undefined;
-    return renamed ? { value: renamed } : { error: M.type };
+    const type = readAccountType(raw);
+    return type ? { value: type } : { error: M.type };
   },
   bank_name: textReader(M.bankName),
   starting_balance: balanceReader(M.startingBalance),

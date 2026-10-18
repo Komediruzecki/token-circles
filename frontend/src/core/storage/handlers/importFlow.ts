@@ -1,6 +1,11 @@
 /**
  * Import handlers — IndexedDB-backed implementations
  */
+import {
+  ACCOUNT_MESSAGES,
+  importedAccountTypeError,
+  readAccountType,
+} from '../../../../../shared/accountSchema'
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
@@ -20,6 +25,7 @@ import { BaseCurrencyConflictError, ensureBaseCurrency } from '../baseCurrency'
 import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json, refuse } from './helpers'
 import { readUploadWithin, uploadReader } from './uploadRead'
+import type { AccountType } from '../../../../../shared/accountSchema'
 import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
@@ -644,7 +650,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     const accountConfigs: Array<{
       name: string
       lower: string
-      type: 'giro' | 'savings' | 'ib'
+      type: AccountType
       balance: number
       balanceDate: string
     }> = []
@@ -687,10 +693,28 @@ export async function importExecute(body: unknown): Promise<Response> {
           422
         )
       }
+      // The type the Import page chose, read as the Worker reads it: none is a giro account, and
+      // a type the app does not have is refused at the account, before anything is written.
+      const type = readAccountType(
+        Object.prototype.hasOwnProperty.call(acctTypes, catLower) ? acctTypes[catLower] : undefined
+      )
+      if (type === null) {
+        return json(
+          {
+            error: importedAccountTypeError(catName),
+            validation_errors: [
+              { field: `accountTypes.${catName}`, reason: ACCOUNT_MESSAGES.type },
+            ],
+            skipped_items: skipped,
+            warnings,
+          },
+          422
+        )
+      }
       accountConfigs.push({
         name: catName,
         lower: catLower,
-        type: (acctTypes[catLower] || 'giro') as 'giro' | 'savings' | 'ib',
+        type,
         balance,
         balanceDate: acctBalanceDates[catLower] || localToday(),
       })

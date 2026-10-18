@@ -10,6 +10,7 @@
  * marks the field in its own words, and puts the 409's sentence in the dialog's notice. An edit
  * checks only what it changes, so an account saved under older rules can still be edited.
  */
+import { createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_MESSAGES as M } from '../../../../shared/accountSchema'
@@ -300,5 +301,82 @@ describe('editing an account', () => {
     expect(dialog()).not.toBeNull()
     expect(((await db.get('accounts', EVERYDAY)) as Row).name).toBe('Everyday')
     expect(failureToasts()).toEqual([])
+  })
+})
+
+describe('an account of a type this build does not know', () => {
+  // A later build, or an API client, can store a type this one does not have. The page shows it as
+  // a plain account, and an edit sends the type back as it is, so a rollback changes nothing.
+  it('shows as a plain account, and an edit keeps its type', async () => {
+    const db = await getDB()
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await mountPage()
+    const card = host.querySelector<HTMLElement>('[data-test-id="account-card"]')!
+    expect(card.querySelector('[data-test-id="account-type"]')?.textContent).toBe('account')
+
+    await openEdit('Everyday')
+    type(field('Account Name'), 'Visa')
+    submit()
+
+    await vi.waitFor(async () => {
+      expect((await db.get('accounts', EVERYDAY)) as Row).toMatchObject({
+        name: 'Visa',
+        type: 'credit',
+      })
+    })
+    expect(failureToasts()).toEqual([])
+  })
+
+  it('opens the edit with its type shown as a plain account, not a blank select', async () => {
+    const db = await getDB()
+    await db.put('accounts', { ...(await db.get('accounts', EVERYDAY)), type: 'credit' })
+    await mountPage()
+
+    await openEdit('Everyday')
+
+    const select = field('Account Type') as unknown as HTMLSelectElement
+    expect(select.value).toBe('credit')
+    expect(select.selectedIndex).toBeGreaterThanOrEqual(0)
+    const chosen = select.selectedOptions[0]
+    expect(chosen.textContent).toBe('Other account')
+    // It says what the account is; it is not a type anyone can pick.
+    expect(chosen.disabled).toBe(true)
+  })
+
+  it('offers no plain-account option for an account of a type it has', async () => {
+    await mountPage()
+    await openEdit('Everyday')
+
+    const select = field('Account Type') as unknown as HTMLSelectElement
+    expect(select.value).toBe('giro')
+    expect(Array.from(select.options).map((o) => o.value)).toEqual([
+      'giro',
+      'savings',
+      'ib',
+      'cash',
+    ])
+  })
+})
+
+describe('an account a type v4 renamed', () => {
+  // The Worker hands the Accounts page the stored type as it is, so a row older versions saved
+  // reaches the form as `checking` or `retirement`. The form opens it as the type that replaced
+  // it, and the edit's check reads the two as the same type, so an untouched save writes nothing.
+  it('opens as the type that replaced it', async () => {
+    const { createAccountForm } = await import('../accountForm')
+    const opened = (type: string) =>
+      createRoot((dispose) => {
+        const form = createAccountForm({ onSaved: () => {} })
+        form.open({ id: 7, name: 'Old', type, balance: 0 })
+        const value = form.values.type
+        dispose()
+        return value
+      })
+
+    expect(opened('checking')).toBe('giro')
+    expect(opened('retirement')).toBe('ib')
+    expect(opened('investment')).toBe('ib')
+    expect(opened('credit')).toBe('credit')
+    expect(opened('savings')).toBe('savings')
   })
 })

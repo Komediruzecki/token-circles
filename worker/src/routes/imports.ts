@@ -19,6 +19,12 @@ import {
 } from '../../../shared/importUpload';
 import { parseImportNumber } from '../import-number';
 import {
+  ACCOUNT_MESSAGES,
+  DEFAULT_ACCOUNT_TYPE,
+  importedAccountTypeError,
+  readAccountType,
+} from '../../../shared/accountSchema';
+import {
   checkImportRowNumbers,
   MISSING_DATE_WARNING,
   unreadableNumbersReason,
@@ -500,6 +506,8 @@ export async function executeImport(
       .filter(Boolean)
   );
   const accountValidationErrors: Array<{ field: string; reason: string }> = [];
+  // The first account whose type is refused: the refusal names it.
+  let refusedType: string | null = null;
   const toCreate = Object.entries((categoryTypes || {}) as Record<string, string>)
     .filter(
       ([name, type]) =>
@@ -517,9 +525,24 @@ export async function executeImport(
           reason: 'Use an unambiguous number such as 1234.56 or 1.234,56.',
         });
       }
+      // The type the Import page chose for it, read as the Accounts form's is: none is a giro
+      // account, and a type the app does not have is refused at the account, before anything is
+      // written. Stored, it once failed the app's whole account list.
+      const chosenType =
+        accountTypes && Object.prototype.hasOwnProperty.call(accountTypes, name)
+          ? accountTypes[name]
+          : undefined;
+      const accType = readAccountType(chosenType);
+      if (accType === null) {
+        refusedType ??= name.trim();
+        accountValidationErrors.push({
+          field: `accountTypes.${name}`,
+          reason: ACCOUNT_MESSAGES.type,
+        });
+      }
       return {
         name: name.trim(),
-        accType: (accountTypes && accountTypes[name]) || 'giro',
+        accType: accType ?? DEFAULT_ACCOUNT_TYPE,
         balance: balance ?? 0,
         balanceDate: (accountBalanceDates && accountBalanceDates[name]) || today(),
       };
@@ -528,7 +551,10 @@ export async function executeImport(
     return {
       status: 422,
       body: {
-        error: 'One or more account starting balances are invalid or ambiguous.',
+        error:
+          refusedType !== null
+            ? importedAccountTypeError(refusedType)
+            : 'One or more account starting balances are invalid or ambiguous.',
         validation_errors: accountValidationErrors,
         skipped_items: skippedItems,
         warnings,
