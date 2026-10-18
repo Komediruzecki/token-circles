@@ -280,6 +280,20 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Onboarding
 
+- **The setup wizard's panel stays on a phone's screen.** Two causes. The orbit field behind the
+  panel (`.backdrop` in `frontend/src/components/onboarding/Onboarding.module.css`) is 160vmax
+  square, 1350 px at 390x844, and as the overlay's absolutely positioned content it gave the overlay
+  an 870 by 1097 px scroll area. `overflow: hidden` stops a finger, not `scrollIntoView` or focus: a
+  browser bringing Continue into view centred moved the overlay 115 px sideways and 253 px down, and
+  the panel with it, in both themes, and the panel's own focus at open scrolled it 9 px down. The
+  field is `position: fixed` now, so the viewport clips it. And the panel, a grid item of the
+  overlay, took its content's width as its minimum: on the import step it was 382 px wide on a
+  375 px screen before a file was chosen, 583 px with the mapping table and 1141 px with the
+  preview, its footer buttons past the screen's edge. `.panel` has `min-width: 0` now, and each
+  table scrolls sideways inside its own wrapper. `tests/onboarding.spec.ts` ("onboarding wizard at
+  phone width") walks every step and import sub-step at 390x844 and 375x667, light and dark: the
+  overlay never scrolls, the panel and its footer buttons stay on screen and still when Continue is
+  scrolled into view, and no box but a table's wrapper is wider inside than out.
 - **Onboarding is decided per account.** The completed-or-skipped flag in localStorage is kept
   under the account it belongs to, `finance_onboarding:account-<id>`, or `finance_onboarding:local`
   in local-first (`frontend/src/core/onboardingStore.ts`: `setOnboardingOwner`,

@@ -21,8 +21,12 @@
 
 /* ---- decorative orbit field ---- */
 
+/* Fixed, not absolute: the field is far wider and taller than a phone, and as the overlay's own
+   content it gave the overlay an 870 px wide scroll area. overflow: hidden stops a finger, not a
+   scrollIntoView, so a browser bringing the Continue button into view slid the panel sideways. A
+   fixed box belongs to the viewport, which clips it without scrolling. */
 .backdrop {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
   width: min(160vmax, 1700px);
@@ -80,9 +84,15 @@
 
 /* ---- glass panel ---- */
 
+/* min-width: 0 because the panel is a grid item, and a grid item's automatic minimum is its
+   content's width. On a phone the import step stretched the panel past the edge of the screen, its
+   footer buttons with it: 382 px wide on a 375 px screen before a file was chosen, 583 px with the
+   mapping table and 1141 px with the preview. At zero the panel keeps the overlay's width and each
+   table scrolls sideways inside its own wrapper. */
 .panel {
   position: relative;
   width: 100%;
+  min-width: 0;
   max-width: 720px;
   max-height: calc(100vh - 40px);
   max-height: calc(100dvh - 40px);
