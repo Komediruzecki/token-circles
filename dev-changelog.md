@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.0] — 2026-10-28
+
 ### Deploy notes
 
 - Two migrations, both a column on an existing table: `0031_email_change.sql` adds `purpose`
@@ -151,7 +153,9 @@ All notable changes to Token Circles are documented here. The format is based on
   code that does not sign in answers 401 at `code`. A wrong address or password stays one message
   for the whole form. Every field has a label, and the sign-in fields keep the ids password managers
   use. `components/captchaGate.ts` is the one captcha gate: a send waits for its token and each
-  token is used for one request. The reset page says a link is invalid only when the Worker says so,
+  token is used for one request. A sign-in code request sets a random 32-byte handle as the
+  `fm_logincode` cookie and the row keeps its SHA-256 (`handle_hash`, migration 0032,
+  `worker/src/login-codes.ts`). The reset page says a link is invalid only when the Worker says so,
   and a failed check offers Try again. A mail call gives up after 10 seconds
   (`worker/src/email.ts`).
 
@@ -207,7 +211,8 @@ All notable changes to Token Circles are documented here. The format is based on
   `fm_email_link` marker on `/api/auth` for 30 minutes, and the link finishes on a password sign-in
   to that account or through `POST /api/auth/email-link/finish` after any other sign-in. A browser
   that starts local-first opens the sign-in for these links, and the reset page works there. Google
-  sign-in stores and matches addresses in lower case. Account deletion deletes its sessions.
+  sign-in stores and matches addresses in lower case. The reset route checks the link's expiry. Only
+  unexpired API tokens count toward the plan's limit. Account deletion deletes its sessions.
 - **The notice after confirming an address names only what went.** `clearedWorthSaying`
   (`worker/src/auth.ts`) returns the kinds that went, under the names in `shared/accessCleared.ts`
   (`password`, `passkeys`, `two-factor`, `api-tokens`). Google sign-in puts them on its redirect as

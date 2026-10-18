@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.0] — 2026-10-28
+
 ### Added
 
 - **Loans: try a what-if before you pay.** Each loan has its own page. Compare sets your plan beside a what-if (more each month, a one-off or yearly payment, a payoff date to hit, or a new rate) in "Finish sooner" or "Pay less each month" mode, and Month by month exports the schedule as CSV.
@@ -18,6 +20,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **New accounts confirm their email before using the app.** Create account ends on Check your inbox, and an account whose address is not confirmed yet sees Confirm your email, which can send the link again. A sign-in code, a reset link or Google sign-in also confirm it.
 - **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.
 - **Email links finish where you sign in.** A confirm or change-of-address link opened in another browser completes once you sign in to that account there.
+- **Confirming your email removes earlier sign-in methods.** The first time Google sign-in, an emailed code or a reset link confirms your address, a password, passkeys, two-factor or API tokens set up before then stop working, and other devices are signed out. The app names what went and the next step.
 - **Sign-in history is kept for 90 days**, and deleting your account deletes it with everything else.
 
 ### Fixed
