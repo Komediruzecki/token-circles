@@ -214,6 +214,28 @@ describe('buildAdvice: which budget a month is judged against', () => {
     ).filter((c) => c.kind === 'budget-drift')
     expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
   })
+
+  it('breaks a tie in saved time by the row saved last, whatever order the list is in', () => {
+    // D1 stores created_at to the second, so two rows saved in one second tie on it. The Worker
+    // lists budgets newest id first; the higher id is the one saved last.
+    const at = '2026-10-09T08:00:00Z'
+    const drift = buildAdvice(
+      apartment({
+        budgets: [
+          { ...row('2026-10-01', 310, at), id: 9 },
+          { ...row('2026-10-01', 400, at), id: 7 },
+        ],
+      })
+    ).filter((c) => c.kind === 'budget-drift')
+    expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
+  })
+
+  it('names a category whose budget lapsed as having none this month', () => {
+    const cards = buildAdvice(apartment({ budgets: [row('2026-06-01', 94.9)] }))
+    const card = cards.find((c) => c.kind === 'unbudgeted-subscription')
+    expect(card?.title).toBe('Apartment has no budget')
+    expect(card?.figure).toBe('918.81')
+  })
 })
 
 describe('buildAdvice: one card per thing to say', () => {
@@ -227,6 +249,41 @@ describe('buildAdvice: one card per thing to say', () => {
     }
     const cards = buildAdvice(make({ goals: [goal, { ...goal, current_amount: 50 }] }))
     expect(cards.filter((c) => c.kind === 'goal-pace')).toHaveLength(1)
+  })
+
+  it('keeps two categories that share a name apart, so dismissing one leaves the other', () => {
+    const food = (category_id: number) => ({ ...MONTHLY, category_id })
+    const args = {
+      categories: [
+        { id: 1, name: 'Food' },
+        { id: 5, name: 'Food' },
+      ],
+      budgets: [food(1), food(5)],
+      transactions: [
+        ...month('2026-09', 3, { amount: 60, category_id: 1 }),
+        ...month('2026-09', 3, { amount: 70, category_id: 5 }),
+      ],
+    }
+    const drift = buildAdvice(make(args)).filter((c) => c.kind === 'budget-drift')
+    expect(drift.map((c) => c.figure)).toEqual(['210 of 100', '180 of 100'])
+    const after = buildAdvice(make({ ...args, dismissed: [drift[0].id] }))
+    expect(after.filter((c) => c.kind === 'budget-drift').map((c) => c.figure)).toEqual([
+      '180 of 100',
+    ])
+  })
+
+  it('keeps a collapsed card dismissed, with nothing behind it', () => {
+    const goal = {
+      name: 'New bike',
+      target_amount: 1200,
+      current_amount: 100,
+      deadline: '2026-12-31',
+      created_at: '2026-01-01T00:00:00Z',
+    }
+    const args = { goals: [goal, { ...goal, current_amount: 50 }] }
+    const [card] = buildAdvice(make(args)).filter((c) => c.kind === 'goal-pace')
+    const after = buildAdvice(make({ ...args, dismissed: [card.id] }))
+    expect(kinds(after)).not.toContain('goal-pace')
   })
 
   it('says only the last finished month was in the red, however many before it were', () => {

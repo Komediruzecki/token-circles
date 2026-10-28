@@ -69,21 +69,22 @@ type Budget = AdviceInput['budgets'][number]
  * Copy last month each write a row starting on the month's first day, with no end date), and the
  * Budgets page reads a month's rows by start_date in both runtimes. Taking every row without an end
  * date as still running judged this month against each earlier month's budget as well, one card per
- * month. Two rows for one month keep the one saved last.
+ * month. Two rows for one month keep the one saved last: the later created_at, and on a tie (D1
+ * stores it to the second) the higher id, whatever order the list came in.
  */
+function savedLater(a: Budget, b: Budget): boolean {
+  if (a.start_date !== b.start_date) return a.start_date > b.start_date
+  if (a.created_at !== b.created_at) return a.created_at > b.created_at
+  return (a.id ?? 0) >= (b.id ?? 0)
+}
+
 function budgetsForMonth(budgets: Budget[], month: string): Budget[] {
   const latest = new Map<number, Budget>()
   for (const b of budgets) {
     if (b.period !== 'monthly') continue
     if (monthOf(b.start_date) !== month) continue
     const held = latest.get(b.category_id)
-    if (
-      !held ||
-      held.start_date < b.start_date ||
-      (held.start_date === b.start_date && held.created_at <= b.created_at)
-    ) {
-      latest.set(b.category_id, b)
-    }
+    if (!held || savedLater(b, held)) latest.set(b.category_id, b)
   }
   return [...latest.values()]
 }
@@ -205,7 +206,8 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
 
 function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const budgeted = new Set(input.budgets.map((b) => b.category_id))
+  // A category is budgeted when it has a budget this month: one set only for June has lapsed.
+  const budgeted = new Set(budgetsForMonth(input.budgets, month).map((b) => b.category_id))
   const billed = new Set(
     input.bills
       .map((b) => b.category_id)
@@ -269,8 +271,9 @@ const TONE_ORDER: Record<AdviceCard['tone'], number> = { warn: 0, info: 1 }
 /**
  * Everything worth saying, most urgent first, minus what the user dismissed. Warnings rank before
  * information, and within each, what is happening this month before a month already finished.
- * Two cards that say the same thing are one card: the first in that order is kept, so the one a
- * dismissal names is the one shown, run after run.
+ * Two cards with the same id are one card, the first in that order; the id names what a card is
+ * about (a category, a goal, a month), so two categories that share a name stay two cards and
+ * dismissing one leaves the other.
  */
 export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
   const byMonth = bucketByMonth(input.transactions)
@@ -291,9 +294,8 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
         b.weight - a.weight
     )
     .filter((c) => {
-      const key = `${c.kind}\n${c.title}\n${c.detail}`
-      if (said.has(key)) return false
-      said.add(key)
+      if (said.has(c.id)) return false
+      said.add(c.id)
       return true
     })
     .filter((c) => !dismissed.has(c.id))
