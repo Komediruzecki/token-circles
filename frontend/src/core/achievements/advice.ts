@@ -27,6 +27,8 @@ export interface AdviceCard {
   link?: { page: string; label: string }
   /** Ranking weight within a tone; bigger is more urgent. */
   weight: number
+  /** About a month already finished. Ranked after what is still happening this month. */
+  past?: boolean
 }
 
 export interface AdviceInput extends EvaluateInput {
@@ -34,6 +36,8 @@ export interface AdviceInput extends EvaluateInput {
   /** Recurring charges already known, so a detected one is not advised twice. */
   bills: Array<{ category_id?: number | null; amount?: number; name?: string }>
   dismissed: string[]
+  /** Formats an amount of money in the base currency. Plain digits when not given. */
+  money?: (amount: number) => string
 }
 
 const MONTH_NAME = (month: string): string =>
@@ -58,15 +62,42 @@ function categoryName(input: AdviceInput, id: number | null): string {
   return input.categories.find((c) => c.id === id)?.name ?? 'an uncategorised category'
 }
 
+type Budget = AdviceInput['budgets'][number]
+
+/**
+ * The budget each category has for `month`. Budgets are one row per month (Set Budget, Allocate and
+ * Copy last month each write a row starting on the month's first day, with no end date), and the
+ * Budgets page reads a month's rows by start_date in both runtimes. Taking every row without an end
+ * date as still running judged this month against each earlier month's budget as well, one card per
+ * month. Two rows for one month keep the one saved last: the later created_at, and on a tie (D1
+ * stores it to the second) the higher id, whatever order the list came in.
+ */
+function savedLater(a: Budget, b: Budget): boolean {
+  if (a.start_date !== b.start_date) return a.start_date > b.start_date
+  if (a.created_at !== b.created_at) return a.created_at > b.created_at
+  return (a.id ?? 0) >= (b.id ?? 0)
+}
+
+function budgetsForMonth(budgets: Budget[], month: string): Budget[] {
+  const latest = new Map<number, Budget>()
+  for (const b of budgets) {
+    if (b.period !== 'monthly') continue
+    if (monthOf(b.start_date) !== month) continue
+    const held = latest.get(b.category_id)
+    if (!held || savedLater(b, held)) latest.set(b.category_id, b)
+  }
+  return [...latest.values()]
+}
+
 function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
   const list = byMonth.get(month) ?? []
   if (list.length === 0) return []
+  const money = input.money ?? round
   const elapsed = monthElapsed(input.today)
   const cards: AdviceCard[] = []
-  for (const b of input.budgets) {
-    if (b.period !== 'monthly' || b.amount <= 0) continue
-    if (b.end_date !== null && b.end_date < `${month}-01`) continue
+  for (const b of budgetsForMonth(input.budgets, month)) {
+    if (b.amount <= 0) continue
     const spent = sumTypes(
       list.filter((t) => t.category_id === b.category_id),
       ['expense']
@@ -84,7 +115,7 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
       detail: over
         ? `You have spent more on ${name} this month than the budget allows.`
         : `At this pace ${name} finishes the month above its budget.`,
-      figure: `${round(spent)} of ${round(b.amount)}`,
+      figure: `${money(spent)} of ${money(b.amount)}`,
       link: { page: 'budgets', label: 'Budgets' },
       weight: over ? spent - b.amount : pace - b.amount,
     })
@@ -93,6 +124,7 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
 }
 
 function goalPace(input: AdviceInput): AdviceCard[] {
+  const money = input.money ?? round
   const cards: AdviceCard[] = []
   for (const g of input.goals) {
     if (!g.deadline || g.target_amount <= 0) continue
@@ -112,7 +144,7 @@ function goalPace(input: AdviceInput): AdviceCard[] {
       tone: 'warn',
       title: `${name} will miss its date`,
       detail: `Reaching it by ${MONTH_NAME(monthOf(g.deadline))} needs more each month than you have been putting aside.`,
-      figure: `${round(needed)} a month, ${round(pace)} so far`,
+      figure: `${money(needed)} a month, ${money(pace)} so far`,
       link: { page: 'goals', label: 'Savings Goals' },
       weight: needed - pace,
     })
@@ -137,6 +169,7 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
   const income = sumTypes(list, ['income'])
   const out = sumTypes(list, ['expense', 'deduction'])
   if (out <= income) return []
+  const money = input.money ?? round
   return [
     {
       id: `in-the-red:${last}`,
@@ -144,9 +177,10 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
       tone: 'warn',
       title: `${MONTH_NAME(last)} spent more than it earned`,
       detail: 'A month in the red breaks a saving streak. Worth a look at where it went.',
-      figure: `${round(out - income)} over`,
+      figure: `${money(out - income)} over`,
       link: { page: 'analytics', label: 'Analytics' },
       weight: out - income,
+      past: true,
     },
   ]
 }
@@ -172,7 +206,8 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
 
 function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  const budgeted = new Set(input.budgets.map((b) => b.category_id))
+  // A category is budgeted when it has a budget this month: one set only for June has lapsed.
+  const budgeted = new Set(budgetsForMonth(input.budgets, month).map((b) => b.category_id))
   const billed = new Set(
     input.bills
       .map((b) => b.category_id)
@@ -186,6 +221,7 @@ function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>)
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]
   if (!top || top[1] <= 0) return []
+  const money = input.money ?? round
   return [
     {
       id: `unbudgeted-subscription:${top[0]}:${month}`,
@@ -193,7 +229,7 @@ function unbudgetedSubscriptions(input: AdviceInput, byMonth: Map<string, Tx[]>)
       tone: 'info',
       title: `${categoryName(input, top[0])} has no budget`,
       detail: 'It is the biggest thing you spend on with nothing set aside for it.',
-      figure: round(top[1]),
+      figure: money(top[1]),
       link: { page: 'budgets', label: 'Budgets' },
       weight: top[1],
     },
@@ -232,10 +268,17 @@ function streakAtRisk(
 
 const TONE_ORDER: Record<AdviceCard['tone'], number> = { warn: 0, info: 1 }
 
-/** Everything worth saying, most urgent first, minus what the user dismissed. */
+/**
+ * Everything worth saying, most urgent first, minus what the user dismissed. Warnings rank before
+ * information, and within each, what is happening this month before a month already finished.
+ * Two cards with the same id are one card, the first in that order; the id names what a card is
+ * about (a category, a goal, a month), so two categories that share a name stay two cards and
+ * dismissing one leaves the other.
+ */
 export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
   const byMonth = bucketByMonth(input.transactions)
   const dismissed = new Set(input.dismissed)
+  const said = new Set<string>()
   return [
     ...budgetDrift(input, byMonth),
     ...goalPace(input),
@@ -244,6 +287,16 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
     ...uncategorised(input, byMonth),
     ...unbudgetedSubscriptions(input, byMonth),
   ]
+    .sort(
+      (a, b) =>
+        TONE_ORDER[a.tone] - TONE_ORDER[b.tone] ||
+        Number(a.past ?? false) - Number(b.past ?? false) ||
+        b.weight - a.weight
+    )
+    .filter((c) => {
+      if (said.has(c.id)) return false
+      said.add(c.id)
+      return true
+    })
     .filter((c) => !dismissed.has(c.id))
-    .sort((a, b) => TONE_ORDER[a.tone] - TONE_ORDER[b.tone] || b.weight - a.weight)
 }
