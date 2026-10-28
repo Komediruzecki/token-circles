@@ -333,3 +333,70 @@ describe('buildAdvice: one card per thing to say', () => {
     expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
   })
 })
+
+/**
+ * A budget with rollover on is worth its amount plus what carried in: last month's unused budget
+ * when last month's had rollover on too, plus a manual adjustment, minus what was used of it. The
+ * Budgets page shows that figure (effective_budget, GET /api/budgets/summary and the local-first
+ * budgetsSummary), so advice judges spending against it as well.
+ */
+describe('buildAdvice: a budget with rollover', () => {
+  const row = (start: string, amount: number, over: Record<string, unknown> = {}) => ({
+    category_id: 1,
+    amount,
+    period: 'monthly' as const,
+    start_date: start,
+    end_date: null,
+    created_at: `${start}T08:00:00Z`,
+    ...over,
+  })
+  const drift = (budgets: unknown[], spentInSeptember: number) =>
+    buildAdvice(
+      make({
+        today: '2026-09-28',
+        budgets,
+        transactions: [
+          tx('2026-08-10', { amount: 40 }),
+          tx('2026-09-10', { amount: spentInSeptember }),
+        ],
+      })
+    ).filter((c) => c.kind === 'budget-drift')
+
+  it("counts last month's unused budget carried in", () => {
+    // August: 100 budgeted, 40 spent, so 60 carries into September's 100.
+    const budgets = [
+      row('2026-08-01', 100, { rollover_enabled: true }),
+      row('2026-09-01', 100, { rollover_enabled: true }),
+    ]
+    expect(drift(budgets, 140)).toEqual([])
+    expect(drift(budgets, 170).map((c) => c.figure)).toEqual(['170 of 160'])
+  })
+
+  it('reads the Worker rows, where rollover_enabled is 0 or 1', () => {
+    const budgets = [
+      row('2026-08-01', 100, { rollover_enabled: 1 }),
+      row('2026-09-01', 100, { rollover_enabled: 1 }),
+    ]
+    expect(drift(budgets, 170).map((c) => c.figure)).toEqual(['170 of 160'])
+  })
+
+  it('adds a manual rollover and takes off what was used of it', () => {
+    const budgets = [
+      row('2026-09-01', 100, { rollover_enabled: true, rollover_amount: 25, rollover_used: 10 }),
+    ]
+    expect(drift(budgets, 120).map((c) => c.figure)).toEqual(['120 of 115'])
+  })
+
+  it('carries nothing when last month had rollover off, or this month has', () => {
+    const lastOff = [
+      row('2026-08-01', 100, { rollover_enabled: false }),
+      row('2026-09-01', 100, { rollover_enabled: true }),
+    ]
+    expect(drift(lastOff, 120).map((c) => c.figure)).toEqual(['120 of 100'])
+    const thisOff = [
+      row('2026-08-01', 100, { rollover_enabled: true }),
+      row('2026-09-01', 100, { rollover_enabled: false, rollover_amount: 25 }),
+    ]
+    expect(drift(thisOff, 120).map((c) => c.figure)).toEqual(['120 of 100'])
+  })
+})

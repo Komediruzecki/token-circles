@@ -1,6 +1,7 @@
 /**
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
+import { budgetRollover } from '../../../../../shared/budgetRollover'
 import {
   BUDGET_MESSAGES,
   checkAllocation,
@@ -30,6 +31,7 @@ import {
   refuse,
 } from './helpers'
 import { normalizeBudget } from './normalize'
+import type { RolloverBudget } from '../../../../../shared/budgetRollover'
 import type { BudgetDefaults } from '../../../../../shared/budgetSchema'
 
 export async function budgetsList(): Promise<Response> {
@@ -411,17 +413,8 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
     for (const cid of Object.keys(prevSpentMap)) prevSpentMap[+cid] = toCents(prevSpentMap[+cid]!)
 
-    const prevUnusedMap: Record<number, { unused: number; rollover_enabled: boolean }> = {}
-    for (const pb of prevBudgets) {
-      const unused = Math.max(
-        0,
-        toCents((pb.amount as number) - (prevSpentMap[pb.category_id as number] || 0))
-      )
-      prevUnusedMap[pb.category_id as number] = {
-        unused,
-        rollover_enabled: !!(pb as Record<string, unknown>).rollover_enabled,
-      }
-    }
+    const prevByCategory: Record<number, Record<string, unknown>> = {}
+    for (const pb of prevBudgets) prevByCategory[pb.category_id as number] = pb
 
     const cats = await getAllForProfiles('categories')
     const catMap: Record<number, Record<string, unknown>> = {}
@@ -431,25 +424,17 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
       const spentAmt = spentMap[b.category_id as number] || 0
       const baseRemaining = toCents((b.amount as number) - spentAmt)
       const cat = catMap[b.category_id as number]
-
-      let rollover_contribution = 0
-      let auto_rollover = 0
-      const re = !!(b as Record<string, unknown>).rollover_enabled
-
-      if (re) {
-        const prevInfo = prevUnusedMap[b.category_id as number]
-        if (prevInfo && prevInfo.rollover_enabled) {
-          auto_rollover = prevInfo.unused
-        }
-        rollover_contribution = toCents(
-          (((b as Record<string, unknown>).rollover_amount as number) || 0) +
-            auto_rollover -
-            (((b as Record<string, unknown>).rollover_used as number) || 0)
-        )
-      }
-
-      const effective_budget = toCents((b.amount as number) + Math.max(0, rollover_contribution))
-      const effective_remaining = toCents(effective_budget - spentAmt)
+      // The rollover rule is shared/budgetRollover.ts, which the Worker and Progress's advice run too.
+      const prev = prevByCategory[b.category_id as number]
+      const rollover = budgetRollover(
+        b as unknown as RolloverBudget,
+        prev
+          ? {
+              budget: prev as unknown as RolloverBudget,
+              spent: prevSpentMap[b.category_id as number] || 0,
+            }
+          : undefined
+      )
 
       return {
         ...b,
@@ -459,10 +444,10 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
         type: cat?.type,
         spent: spentAmt,
         remaining: baseRemaining,
-        effective_budget,
-        effective_remaining,
-        rollover_contribution: Math.max(0, rollover_contribution),
-        auto_rollover,
+        effective_budget: rollover.effective_budget,
+        effective_remaining: toCents(rollover.effective_budget - spentAmt),
+        rollover_contribution: rollover.rollover_contribution,
+        auto_rollover: rollover.auto_rollover,
         percentage:
           (b.amount as number) > 0 ? Math.min(100, (spentAmt / (b.amount as number)) * 100) : 0,
       }

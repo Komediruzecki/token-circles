@@ -11,6 +11,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Budget badges judge each month by its own budget.** Held the line, Six months under and Clean sweep also held a month to every earlier budget for the category, so a budget you raised still counted at its old amount; badges you already have stay yours.
+- **Worth a look counts budget rollover.** A category with rollover on is judged against the budget Budgets shows, last month's unused amount included, so it no longer reads as over budget while Budgets says there is money left.
 
 ## [5.17.0] — 2026-10-28
 

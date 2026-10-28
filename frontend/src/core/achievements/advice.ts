@@ -3,6 +3,8 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
+import { budgetRollover } from '../../../../shared/budgetRollover'
+import { toCents } from '../../../../shared/money'
 import { budgetsForMonth } from './budgets'
 import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
 import { addMonths, monthOf } from './months'
@@ -70,16 +72,28 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
   const money = input.money ?? round
   const elapsed = monthElapsed(input.today)
   const cards: AdviceCard[] = []
-  for (const b of budgetsForMonth(input.budgets, month)) {
-    if (b.amount <= 0) continue
-    const spent = sumTypes(
-      list.filter((t) => t.category_id === b.category_id),
+  // Last month's budgets and spending, for what rolls over into this month's.
+  const lastMonth = addMonths(month, -1)
+  const lastBudgets = budgetsForMonth(input.budgets, lastMonth)
+  const lastList = byMonth.get(lastMonth) ?? []
+  const spentIn = (txs: Tx[], categoryId: number): number =>
+    sumTypes(
+      txs.filter((t) => t.category_id === categoryId),
       ['expense']
     )
+  for (const b of budgetsForMonth(input.budgets, month)) {
+    // The budget the Budgets page shows: the amount plus what rolled over into it.
+    const prev = lastBudgets.find((p) => p.category_id === b.category_id)
+    const budget = budgetRollover(
+      b,
+      prev ? { budget: prev, spent: toCents(spentIn(lastList, b.category_id)) } : undefined
+    ).effective_budget
+    if (budget <= 0) continue
+    const spent = spentIn(list, b.category_id)
     if (spent === 0) continue
     const pace = spent / elapsed
-    const over = spent > b.amount
-    if (!over && pace <= b.amount) continue
+    const over = spent > budget
+    if (!over && pace <= budget) continue
     const name = categoryName(input, b.category_id)
     cards.push({
       id: `budget-drift:${b.category_id}:${month}`,
@@ -89,9 +103,9 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
       detail: over
         ? `You have spent more on ${name} this month than the budget allows.`
         : `At this pace ${name} finishes the month above its budget.`,
-      figure: `${money(spent)} of ${money(b.amount)}`,
+      figure: `${money(spent)} of ${money(budget)}`,
       link: { page: 'budgets', label: 'Budgets' },
-      weight: over ? spent - b.amount : pace - b.amount,
+      weight: over ? spent - budget : pace - budget,
     })
   }
   return cards
