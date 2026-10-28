@@ -468,6 +468,10 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Dependencies
 
+- Override floors for the Dependabot alerts opened on 28 October: seroval and seroval-plugins
+  1.6.11 (under solid-js, which allows ~1.6.8), serialize-javascript 7.1.3 (under workbox-build's
+  terser plugin, build time only), and the worker's undici override raised from 7.29.1 to 7.30.1
+  (miniflare, local development and tests only). deepmerge has a low alert with no fixed release.
 - Every open Dependabot alert, and the patch bumps Dependabot proposed in #633, #634, #636, #637 and
   #638, with both lockfiles regenerated under pnpm 10 so the overrides blocks stay. Root: Vite 8.3.5,
   Vitest 5.0.5, ESLint 10.13.0, Prettier 3.9.10, typescript-eslint 8.72.0, Playwright 1.64.1, idb
