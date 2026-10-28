@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.0] — 2026-10-28
+
 ### Added
 
 - **Loans: try a what-if before you pay.** Each loan has its own page. Compare sets your plan beside a what-if (more each month, a one-off or yearly payment, a payoff date to hit, or a new rate) in "Finish sooner" or "Pay less each month" mode, and Month by month exports the schedule as CSV.
@@ -18,27 +20,27 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **New accounts confirm their email before using the app.** Create account ends on Check your inbox, and an account whose address is not confirmed yet sees Confirm your email, which can send the link again. A sign-in code, a reset link or Google sign-in also confirm it.
 - **A new email address takes effect once you confirm it.** Change it in Settings and your account keeps its current address until you open the link sent to the new one. Settings shows the waiting address with Send again and Cancel change, and your current address gets a notice.
 - **Email links finish where you sign in.** A confirm or change-of-address link opened in another browser completes once you sign in to that account there.
+- **Confirming your email removes earlier sign-in methods.** The first time Google sign-in, an emailed code or a reset link confirms your address, a password, passkeys, two-factor or API tokens set up before then stop working, and other devices are signed out. The app names what went and the next step.
 - **Sign-in history is kept for 90 days**, and deleting your account deletes it with everything else.
 
 ### Fixed
 
 - **Loans show what you owe today.** The remaining balance, progress bar, next payment date and paid-off status count interest, extra payments and rate changes. Due dates stay on the loan's day of the month, or on the last day of a shorter month.
-- **The setup wizard's hints are easier to read.** The grey lines under its fields, like the one under Base currency, were faded below 4.5:1 contrast in light theme. They show at full strength now.
 - **Dates follow your calendar, not UTC's.** Just after midnight, today's transactions count in Analytics, forms open on your date, and a bill due today stays due today. A bill or recurring rule on the 31st falls on a shorter month's last day.
 - **Quick add and the Transactions form offer your profile's categories and accounts.** The + button, Cmd-K and the form list the active profile's rows as they are when you open them, so a category made on Budgets, Goals or Bills shows up. A form left open when you switch profile closes and says what was not saved.
 - **Each account gets its own setup wizard.** A new account is offered the setup wizard even when another account on this browser already finished or skipped it.
-- **The setup wizard fits a phone and stays put.** On the import step the mapping and preview tables could stretch the panel past the edge of the screen, taking its buttons with it, and the panel could slide sideways when the browser scrolled a button into view. The tables now scroll sideways inside the panel.
+- **The setup wizard fits a phone and stays put.** Its import tables scroll sideways inside the panel instead of pushing it and its buttons off the screen.
 - **Editing a category keeps its parent and tax-deductible setting**, and its icon can be cleared.
 - **Editing a transaction keeps balances and goals right.** A foreign-currency amount moves the account by its converted value, a category change updates both categories' goals, and notes you clear stay cleared.
 - **Copy last month keeps the budgets you already set.** It fills only the categories without a budget and tells you how many already had one.
 - **Budgets and bills count the right month.** Set Budget changes the month's budget instead of adding another, Allocate uses the month on screen, budget alerts compare a month with its own budgets, and the Bills dialog saves its category. Weekly and biweekly bills fall due on their own schedule.
 - **Analytics and reports count every day.** Each day of a month falls in one of its weeks, a PDF report includes every transaction in its range, and net worth uses each account's latest balance for the day. In local-first mode, the heatmap's day view lists that day's transactions.
 - **Worth a look on Progress raises each over-budget category once.** It compared this month's spending with every month's budget for the category, so one category could show a card per month. It now uses this month's budget, shows three cards with Show N more for the rest, and gives amounts in your currency.
-- **Badges and advice count an entry in another currency at its converted amount.** 50,000 yen of shopping counts as what it cost in your own currency, so saving months, budgets held, the rainy-day badge, the year in review and the advice on Progress add up. Badges you already have stay yours.
+- **Badges and advice count an entry in another currency at its converted amount.** 50,000 yen of shopping no longer outweighs a salary, and badges you already have stay yours.
 - **Failures say what happened.** An unexpected server error reads "Something went wrong on our side. Try again in a moment.", deleting something another tab already deleted says so, and renaming a tag or profile to a name in use tells you it is taken.
 - **Backups keep each profile's connected sources and settings.** A restore puts each retirement plan back under its own profile, and any profile but your last can be deleted.
 - **Local-first mode: bills keep their account, and uploaded files import.** Paying a bill moves its account's balance, and a statement file uploaded on Import is read and imported.
-- **An account of a type Token Circles doesn't have no longer hides your accounts from Transactions, quick add and Tags.** One an AI assistant added through the MCP server as "credit" shows as a plain account, its edit dialog says "Other account" and keeps the type, and Transactions, quick add and Tags list every account again. The MCP server and the import now refuse any type but Giro, Savings, Investment or Cash. An account an older version saved as Checking or Retirement gets its type's icon and colour on Accounts and the Net Worth Map.
+- **Transactions, quick add and Tags list all your accounts again.** An account an AI assistant made through the MCP server, with a type the app doesn't have, hid every account there; it now shows as a plain account.
 
 ## [5.16.1] — 2026-09-27
 

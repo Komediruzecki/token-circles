@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.0] — 2026-10-28
+
 ### Deploy notes
 
 - Two migrations, both a column on an existing table: `0031_email_change.sql` adds `purpose`
@@ -151,7 +153,9 @@ All notable changes to Token Circles are documented here. The format is based on
   code that does not sign in answers 401 at `code`. A wrong address or password stays one message
   for the whole form. Every field has a label, and the sign-in fields keep the ids password managers
   use. `components/captchaGate.ts` is the one captcha gate: a send waits for its token and each
-  token is used for one request. The reset page says a link is invalid only when the Worker says so,
+  token is used for one request. A sign-in code request sets a random 32-byte handle as the
+  `fm_logincode` cookie and the row keeps its SHA-256 (`handle_hash`, migration 0032,
+  `worker/src/login-codes.ts`). The reset page says a link is invalid only when the Worker says so,
   and a failed check offers Try again. A mail call gives up after 10 seconds
   (`worker/src/email.ts`).
 
@@ -207,7 +211,8 @@ All notable changes to Token Circles are documented here. The format is based on
   `fm_email_link` marker on `/api/auth` for 30 minutes, and the link finishes on a password sign-in
   to that account or through `POST /api/auth/email-link/finish` after any other sign-in. A browser
   that starts local-first opens the sign-in for these links, and the reset page works there. Google
-  sign-in stores and matches addresses in lower case. Account deletion deletes its sessions.
+  sign-in stores and matches addresses in lower case. The reset route checks the link's expiry. Only
+  unexpired API tokens count toward the plan's limit. Account deletion deletes its sessions.
 - **The notice after confirming an address names only what went.** `clearedWorthSaying`
   (`worker/src/auth.ts`) returns the kinds that went, under the names in `shared/accessCleared.ts`
   (`password`, `passkeys`, `two-factor`, `api-tokens`). Google sign-in puts them on its redirect as
@@ -280,7 +285,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Onboarding
 
-- **The setup wizard's panel stays on a phone's screen.** Two causes. The orbit field behind the
+- **The setup wizard's panel stays on a phone's screen** (#624). Two causes. The orbit field behind the
   panel (`.backdrop` in `frontend/src/components/onboarding/Onboarding.module.css`) is 160vmax
   square, 1350 px at 390x844, and as the overlay's absolutely positioned content it gave the overlay
   an 870 by 1097 px scroll area. `overflow: hidden` stops a finger, not `scrollIntoView` or focus: a
@@ -308,7 +313,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Achievements
 
-- **Achievements count money in the base currency.** `sumTypes` in
+- **Achievements count money in the base currency** (#622). `sumTypes` in
   `frontend/src/core/achievements/evaluate.ts` added `Math.abs(t.amount)`, the figure in the
   transaction's own currency, so a month with an entry in another currency was summed in two
   currencies. Every sum of money in achievements now goes through `baseAmount`, which is
@@ -403,8 +408,7 @@ All notable changes to Token Circles are documented here. The format is based on
   reach 28 February. 13 Worker routes and 12 local-first routes that nothing called are removed,
   with a second registration of `POST /api/calculator/compound-interest`. Achievements leave out a
   loan deleted while they count. The `formButtonType` guard reads the whole tag.
-
-- **Account types: one list, checked by every writer, and a reader that keeps the rest.**
+- **Account types: one list, checked by every writer, and a reader that keeps the rest** (#621).
   `ACCOUNT_TYPES` in `shared/accountSchema.ts` is the list. MCP `create_account` stored any string
   (`z.string().max(50)`, described as "e.g. giro, savings, credit, cash"); its `type` is now
   `z.enum(ACCOUNT_TYPES)`, and the tool and field descriptions are built from the list and
@@ -440,7 +444,7 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Tests and tooling
 
-- **The confirm-email tests get the time their waits allow.** Each test in
+- **The confirm-email tests get the time their waits allow** (#628). Each test in
   `frontend/src/__tests__/confirmEmailGate.test.tsx` waits on the real App, up to 10 s a wait, but
   ran under vitest's default limit of 5 s, so on a loaded runner a test could end while its wait
   still had time left: "reads the signed-in account's from start, and nobody's after signing out"
@@ -458,7 +462,7 @@ All notable changes to Token Circles are documented here. The format is based on
   leaving wrangler, workerd and esbuild on :8787 for the next local run's `reuseExistingServer` to
   adopt. `e2eWorkerTeardown.test.ts` runs the real supervisor against a stand-in wrangler and fails
   without the line.
-- **The first-three-markers test forges three distinct markers.** In
+- **The first-three-markers test forges three distinct markers** (#623). In
   `worker/test/email-link-finish.test.ts`, "looks at the first three markers a request carries, and
   no further" made its forged markers by setting the signature's first character to `A` or `B`.
   When the genuine signature already started with that letter, a "forged" marker was the genuine
