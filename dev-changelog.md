@@ -459,6 +459,9 @@ All notable changes to Token Circles are documented here. The format is based on
   5.0.3 and Vite 8.3.2; dompurify 3.4.16 and postcss-selector-parser 7.1.6; a fast-uri 3.1.8
   override in the root workspace; solid-js 1.9.16 (seroval 1.6.8); brace-expansion and source-map-js
   lockfile refreshes; the worker's sharp override raised to 0.35.5.
+- postal-mime 4.1.4 in `worker/` (from 3.0.0, superseding Dependabot's #627), which clears the open
+  audit finding for postal-mime. Email-in needed no code change; a new test sends a raw message with
+  a CSV attachment through `handleIngestEmail` and checks its rows reach the importer.
 
 ## [5.16.1] — 2026-09-27
 
