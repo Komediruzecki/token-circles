@@ -8,8 +8,8 @@
  * scan's window and tick rule, and the month and the category from the Progress page's advice
  * (achievements/monthFacts.ts). The month and the category are the last full month's, because a
  * fresh import leaves the current month empty; the category's budget is this month's, as the
- * advice reads it, so one that lapsed does not count and one set now does. The cushion is the circles' own (shared/guidance/
- * facts.ts `cushionOf`), from the accounts the snapshot holds.
+ * advice reads it, so one that lapsed does not count and one set now does. The cushion is the
+ * circles' own (shared/guidance/facts.ts `cushionOf`), from the accounts the snapshot holds.
  */
 import { cushionOf } from '../../../shared/guidance/facts'
 import { lastFullMonth } from '../../../shared/orientation'
