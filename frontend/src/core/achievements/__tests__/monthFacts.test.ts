@@ -10,9 +10,9 @@ const budget = (category_id: number) => ({
   category_id,
   amount: 100,
   period: 'monthly' as const,
-  start_date: '2026-01-01',
+  start_date: '2026-09-01',
   end_date: null,
-  created_at: '2026-01-01T00:00:00Z',
+  created_at: '2026-09-01T00:00:00Z',
 })
 
 describe('uncategorisedIn', () => {
@@ -65,7 +65,7 @@ describe('biggestUnbudgeted', () => {
       tx('2026-09-06', { category_id: null, amount: 999 }),
     ]
     // 1 has a budget and 2 a bill; 4 is income, and the last has no category.
-    expect(biggestUnbudgeted(list, [budget(1)], [{ category_id: 2 }])).toEqual({
+    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }])).toEqual({
       categoryId: 3,
       spent: 220,
     })
@@ -73,7 +73,14 @@ describe('biggestUnbudgeted', () => {
 
   it('names nothing when every category spent on has a budget or a bill', () => {
     const list = [tx('2026-09-01', { category_id: 1 }), tx('2026-09-02', { category_id: 2 })]
-    expect(biggestUnbudgeted(list, [budget(1)], [{ category_id: 2 }])).toBeNull()
-    expect(biggestUnbudgeted([], [], [])).toBeNull()
+    expect(biggestUnbudgeted(list, '2026-09', [budget(1)], [{ category_id: 2 }])).toBeNull()
+    expect(biggestUnbudgeted([], '2026-09', [], [])).toBeNull()
+  })
+
+  it("counts only the budgets of the month it is given: an earlier month's has lapsed", () => {
+    const list = [tx('2026-09-01', { category_id: 1, amount: 500 })]
+    const june = { ...budget(1), start_date: '2026-06-01', created_at: '2026-06-01T00:00:00Z' }
+    expect(biggestUnbudgeted(list, '2026-09', [june], [])).toEqual({ categoryId: 1, spent: 500 })
+    expect(biggestUnbudgeted(list, '2026-06', [june], [])).toBeNull()
   })
 })

@@ -319,6 +319,15 @@ All notable changes to Token Circles are documented here. The format is based on
   entries: Dashboard's load held the main thread 1,465 ms with no record and 1,463 ms with the card
   shown; now nothing over 50 ms with no record, and one 89 ms task with the card shown. A category
   saved on another page cost 1,452 to 1,456 ms; now nothing.
+- **A lapsed budget is no budget in Getting started either.** 5.17.0 made Progress's advice count
+  a category as budgeted only with a budget row for this month (`budgetsForMonth`), while the
+  budget-top-category step still counted any budget ever set. `budgetsForMonth` moved from
+  advice.ts to `achievements/monthFacts.ts`, and `biggestUnbudgeted(list, month, budgets, bills)`
+  applies it, so both call it the same way: advice with this month's entries, the step with the
+  last full month's, both against this month's budgets, so setting the budget the step asks for
+  takes the step away. `OrientationSource.budgets` holds the rows' `period`, `start_date`,
+  `created_at` and `id`. `core/__tests__/orientationFacts.test.ts` checks that a category budgeted
+  only in an earlier month has no budget in both, and that this month's budget takes it off both.
 
 ### Guidance
 

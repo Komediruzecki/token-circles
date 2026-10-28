@@ -5,7 +5,7 @@
  */
 import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
 import { bucketByMonth, sumTypes } from './evaluate'
-import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
+import { biggestUnbudgeted, budgetsForMonth, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -62,33 +62,6 @@ function monthElapsed(today: string): number {
 
 function categoryName(input: AdviceInput, id: number | null): string {
   return input.categories.find((c) => c.id === id)?.name ?? 'an uncategorised category'
-}
-
-type Budget = AdviceInput['budgets'][number]
-
-/**
- * The budget each category has for `month`. Budgets are one row per month (Set Budget, Allocate and
- * Copy last month each write a row starting on the month's first day, with no end date), and the
- * Budgets page reads a month's rows by start_date in both runtimes. Taking every row without an end
- * date as still running judged this month against each earlier month's budget as well, one card per
- * month. Two rows for one month keep the one saved last: the later created_at, and on a tie (D1
- * stores it to the second) the higher id, whatever order the list came in.
- */
-function savedLater(a: Budget, b: Budget): boolean {
-  if (a.start_date !== b.start_date) return a.start_date > b.start_date
-  if (a.created_at !== b.created_at) return a.created_at > b.created_at
-  return (a.id ?? 0) >= (b.id ?? 0)
-}
-
-function budgetsForMonth(budgets: Budget[], month: string): Budget[] {
-  const latest = new Map<number, Budget>()
-  for (const b of budgets) {
-    if (b.period !== 'monthly') continue
-    if (monthOf(b.start_date) !== month) continue
-    const held = latest.get(b.category_id)
-    if (!held || savedLater(b, held)) latest.set(b.category_id, b)
-  }
-  return [...latest.values()]
 }
 
 function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
@@ -210,12 +183,7 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
  */
 function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
   const month = monthOf(input.today)
-  // A category is budgeted when it has a budget this month: one set only for June has lapsed.
-  const top = biggestUnbudgeted(
-    byMonth.get(month) ?? [],
-    budgetsForMonth(input.budgets, month),
-    input.bills
-  )
+  const top = biggestUnbudgeted(byMonth.get(month) ?? [], month, input.budgets, input.bills)
   if (!top) return []
   const money = input.money ?? round
   return [

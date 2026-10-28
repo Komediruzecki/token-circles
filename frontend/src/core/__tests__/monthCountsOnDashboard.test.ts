@@ -48,7 +48,14 @@ function dashboard(months: string[]) {
     today: TODAY,
     evaluation,
     transactions: transactions as unknown as OrientationSource['transactions'],
-    budgets: [{ category_id: 1 }],
+    budgets: [
+      {
+        category_id: 1,
+        period: 'monthly',
+        start_date: '2026-10-01',
+        created_at: '2026-10-01T08:00:00Z',
+      },
+    ],
     bills: [],
     categories: [{ id: 1, name: 'Groceries' }],
     loans: [],

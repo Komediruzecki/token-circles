@@ -7,7 +7,8 @@
  * it links to: tracked months from the badges (shared/trackedMonths.ts), subscriptions from the
  * scan's window and tick rule, and the month and the category from the Progress page's advice
  * (achievements/monthFacts.ts). The month and the category are the last full month's, because a
- * fresh import leaves the current month empty. The cushion is the circles' own (shared/guidance/
+ * fresh import leaves the current month empty; the category's budget is this month's, as the
+ * advice reads it, so one that lapsed does not count and one set now does. The cushion is the circles' own (shared/guidance/
  * facts.ts `cushionOf`), from the accounts the snapshot holds.
  */
 import { cushionOf } from '../../../shared/guidance/facts'
@@ -20,12 +21,14 @@ import {
 } from '../features/subscriptionDetection'
 import { bucketByMonth } from './achievements/evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './achievements/monthFacts'
+import { monthOf } from './achievements/months'
 import type { FactsAccount } from '../../../shared/guidance/facts'
 import type { KindedCategory } from '../../../shared/guidance/kinds'
 import type { OrientationFacts } from '../../../shared/orientation'
 import type { DetectableTransaction, ExistingBillLike } from '../features/subscriptionDetection'
 import type { Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
+import type { BudgetRow } from './achievements/monthFacts'
 
 /** What the facts are read from: the parts of the achievements snapshot they need. */
 export interface OrientationSource {
@@ -38,7 +41,8 @@ export interface OrientationSource {
       DetectableTransaction &
       Partial<Pick<Transaction, 'account_id' | 'transfer_account_id'>>
   >
-  budgets: Array<Pick<EvaluateInput['budgets'][number], 'category_id'>>
+  /** Which month each is for, so one that lapsed does not count (monthFacts' budgetsForMonth). */
+  budgets: readonly BudgetRow[]
   bills: Array<ExistingBillLike & { category_id?: number | null }>
   /** Whole rows: the scan reads the type and the kind of what charges are filed under. */
   categories: Array<{ id: number; name: string } & KindedCategory>
@@ -52,7 +56,8 @@ export function orientationFacts(source: OrientationSource, nowMs: number): Orie
   const { today, transactions } = source
   const last = lastFullMonth(today)
   const lastMonth = bucketByMonth(transactions).get(last) ?? []
-  const top = biggestUnbudgeted(lastMonth, source.budgets, source.bills)
+  // Spent in the last full month, budgeted this month: the step goes once the budget is set.
+  const top = biggestUnbudgeted(lastMonth, monthOf(today), source.budgets, source.bills)
   const name =
     top === null ? undefined : source.categories.find((c) => c.id === top.categoryId)?.name
   const spotted = detectSubscriptions(recentForScan(transactions, nowMs), source.bills, {

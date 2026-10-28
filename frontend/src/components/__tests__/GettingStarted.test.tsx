@@ -204,7 +204,7 @@ describe('with the card on the account', () => {
     await painted()
     expect(steps().map((s) => s.id)).not.toContain('loan-payoff')
 
-    // A budget for Groceries, and a loan on file.
+    // This month's budget for Groceries (an earlier month's has lapsed), and a loan on file.
     store.set!(
       fourMonths({
         budgets: [
@@ -212,9 +212,9 @@ describe('with the card on the account', () => {
             category_id: 1,
             amount: 200,
             period: 'monthly',
-            start_date: '2020-01-01',
+            start_date: `${today.slice(0, 7)}-01`,
             end_date: null,
-            created_at: '2020-01-01',
+            created_at: `${today.slice(0, 7)}-01`,
           },
         ],
         loans: [
@@ -263,9 +263,9 @@ describe('with the card on the account', () => {
             category_id: 1,
             amount: 200,
             period: 'monthly',
-            start_date: '2020-01-01',
+            start_date: `${today.slice(0, 7)}-01`,
             end_date: null,
-            created_at: '2020-01-01',
+            created_at: `${today.slice(0, 7)}-01`,
           },
         ],
         evaluation: evaluateAchievements({
@@ -300,9 +300,9 @@ describe('with the card on the account', () => {
             category_id: 1,
             amount: 200,
             period: 'monthly',
-            start_date: '2020-01-01',
+            start_date: `${today.slice(0, 7)}-01`,
             end_date: null,
-            created_at: '2020-01-01',
+            created_at: `${today.slice(0, 7)}-01`,
           },
         ],
         evaluation: evaluateAchievements({

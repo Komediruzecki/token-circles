@@ -11,6 +11,7 @@ import { detectSubscriptions } from '../../features/subscriptionDetection'
 import { buildAdvice } from '../achievements/advice'
 import { evaluateAchievements } from '../achievements/evaluate'
 import { orientationFacts } from '../orientation'
+import type { EvaluateInput } from '../achievements/evaluate'
 import type { AchievementsSnapshot } from '../achievementsStore'
 import type { OrientationSource } from '../orientation'
 
@@ -100,7 +101,14 @@ const transactions = [
 describe('the facts', () => {
   const facts = orientationFacts(
     source(transactions, {
-      budgets: [{ category_id: 9 }],
+      budgets: [
+        {
+          category_id: 9,
+          period: 'monthly',
+          start_date: '2026-10-01',
+          created_at: '2026-10-01T08:00:00Z',
+        },
+      ],
       bills: [
         { name: 'Rent', category_id: 8 },
         { name: 'Spotify', category_id: null },
@@ -176,10 +184,10 @@ describe('a regular payment the scan proposed', () => {
 })
 
 describe('agreeing with the advice', () => {
-  const advice = (list: Row[]) =>
+  const advice = (list: Row[], budgets: EvaluateInput['budgets'] = []) =>
     buildAdvice({
       transactions: list,
-      budgets: [],
+      budgets,
       goals: [],
       importLogs: [],
       loans: [],
@@ -198,6 +206,37 @@ describe('agreeing with the advice', () => {
     const balanced = transactions.filter((t) => t.category_id !== 8)
     expect(advice(balanced).map((card) => card.kind)).not.toContain('in-the-red')
     expect(orientationFacts(source(balanced), NOW).heavyMonth).toBeNull()
+  })
+
+  it('a category budgeted only in an earlier month has no budget, and one set this month has', () => {
+    // Groceries is spent on in September, the last full month, and in October. Budgets are one row
+    // per month, so June's budget for it lapsed: both say Groceries has none.
+    const budget = (start_date: string) => ({
+      category_id: 7,
+      amount: 250,
+      period: 'monthly' as const,
+      start_date,
+      end_date: null,
+      created_at: `${start_date}T08:00:00Z`,
+    })
+    const list = [
+      row('2026-09-02', { amount: -300, category_id: 7 }),
+      row('2026-10-05', { amount: -40, category_id: 7 }),
+    ]
+    const unbudgeted = (budgets: EvaluateInput['budgets']) => ({
+      advice: advice(list, budgets).find((card) => card.kind === 'unbudgeted-category')?.id ?? null,
+      gettingStarted: orientationFacts(source(list, { budgets }), NOW).topUnbudgeted,
+    })
+
+    expect(unbudgeted([budget('2026-06-01')])).toEqual({
+      advice: 'unbudgeted-category:7:2026-10',
+      gettingStarted: { categoryId: 7, name: 'Groceries' },
+    })
+    // Setting October's budget, as the step asks, takes Groceries off both.
+    expect(unbudgeted([budget('2026-06-01'), budget('2026-10-01')])).toEqual({
+      advice: null,
+      gettingStarted: null,
+    })
   })
 
   it('a category the profile has no name for is not offered', () => {
