@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { env } from 'cloudflare:test';
+import { beforeEach, describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parseAttachment } from '../src/import-email';
+import { handleIngestEmail, parseAttachment } from '../src/import-email';
 
 // Email-in (Ask 3) turns a forwarded bank-statement attachment into { headers, rows } that feed
 // the shared executeImport. parseAttachment is that step; the auth/dedup/insert around it are
@@ -92,4 +93,109 @@ describe('parseAttachment', () => {
       parseAttachment('statement.pdf', 'application/pdf', new Uint8Array([1, 2, 3]))
     ).toBeNull();
   });
+});
+
+// The whole email-in path: a raw message goes through PostalMime.parse, its CSV attachment comes
+// back as bytes (ArrayBuffer by default, whatever the transfer encoding), and those rows reach the
+// importer. A postal-mime upgrade that changes the attachment's content type or its bytes lands
+// here as "No importable CSV/XLSX attachment found" and no transactions.
+
+const INGEST_USER = 9310;
+const INGEST_PROFILE = 93100;
+const SECRET = 'ingest-test-secret';
+
+const CSV_LINES = [
+  'Date,Description,Amount',
+  '2026-07-01,Corner bakery,-4.50',
+  '2026-07-02,Example payroll,1000.00',
+];
+
+/** A multipart message with a short text part and statement.csv sent in this transfer encoding. */
+function rawMessage(encoding: 'base64' | '7bit'): string {
+  const csv = CSV_LINES.join('\r\n') + '\r\n';
+  const body = encoding === 'base64' ? btoa(csv).replace(/.{76}/g, '$&\r\n') : csv;
+  return [
+    'From: Statements <statements@bank.example>',
+    `To: ingest+${SECRET}@ledger.example`,
+    'Subject: Your July statement',
+    'Date: Fri, 03 Jul 2026 09:00:00 +0000',
+    'MIME-Version: 1.0',
+    'Content-Type: multipart/mixed; boundary="tc-boundary"',
+    '',
+    '--tc-boundary',
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    'Your statement is attached.',
+    '--tc-boundary',
+    'Content-Type: text/csv; name="statement.csv"',
+    'Content-Disposition: attachment; filename="statement.csv"',
+    `Content-Transfer-Encoding: ${encoding}`,
+    '',
+    body,
+    '--tc-boundary--',
+    '',
+  ].join('\r\n');
+}
+
+/** The parts of a ForwardableEmailMessage that handleIngestEmail reads, with the raw bytes. */
+function forwarded(raw: string) {
+  const rejected: string[] = [];
+  const bytes = new TextEncoder().encode(raw);
+  const message = {
+    from: 'statements@bank.example',
+    to: `ingest+${SECRET}@ledger.example`,
+    raw: new Blob([bytes]).stream(),
+    rawSize: bytes.length,
+    headers: new Headers(),
+    setReject: (reason: string) => void rejected.push(reason),
+  } as unknown as ForwardableEmailMessage;
+  return { message, rejected };
+}
+
+describe('handleIngestEmail', () => {
+  beforeEach(async () => {
+    await env.DB.prepare('DELETE FROM transactions WHERE profile_id = ?')
+      .bind(INGEST_PROFILE)
+      .run();
+    await env.DB.prepare('DELETE FROM import_logs WHERE profile_id = ?').bind(INGEST_PROFILE).run();
+    await env.DB.prepare('DELETE FROM profiles WHERE id = ?').bind(INGEST_PROFILE).run();
+    await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(INGEST_USER).run();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO users (id, email, auth_provider, token_version) VALUES (?, 'email-in@example.com', 'password', 1)"
+      ).bind(INGEST_USER),
+      env.DB.prepare("INSERT INTO profiles (id, user_id, name) VALUES (?, ?, 'Main')").bind(
+        INGEST_PROFILE,
+        INGEST_USER
+      ),
+    ]);
+  });
+
+  it.each(['base64', '7bit'] as const)(
+    'imports the rows of a %s CSV attachment',
+    async (encoding) => {
+      const { message, rejected } = forwarded(rawMessage(encoding));
+      await handleIngestEmail(message, {
+        ...env,
+        EMAIL_INGEST_SECRET: SECRET,
+        EMAIL_INGEST_PROFILE_ID: String(INGEST_PROFILE),
+      });
+      expect(rejected).toEqual([]);
+      const { results } = await env.DB.prepare(
+        'SELECT date, description, amount, type FROM transactions WHERE profile_id = ? ORDER BY date'
+      )
+        .bind(INGEST_PROFILE)
+        .all();
+      expect(results).toEqual([
+        { date: '2026-07-01', description: 'Corner bakery', amount: 4.5, type: 'expense' },
+        { date: '2026-07-02', description: 'Example payroll', amount: 1000, type: 'income' },
+      ]);
+      const log = await env.DB.prepare(
+        'SELECT source, imported FROM import_logs WHERE profile_id = ?'
+      )
+        .bind(INGEST_PROFILE)
+        .first();
+      expect(log).toEqual({ source: 'Email import (statement.csv)', imported: 2 });
+    }
+  );
 });
