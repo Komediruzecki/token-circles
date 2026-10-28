@@ -1,11 +1,13 @@
 /**
- * AccountConstellation — net worth as an orbital system.
+ * AccountConstellation: net worth as an orbital system.
  * The brand made literal for accounts: a luminous net-worth core with each
- * account orbiting it as a glowing satellite, sized by its share of total
- * balance and colored by account type (giro / savings / investment / cash).
- * Satellites distribute around one or two orbit rings; an interactive legend
- * lists each account with balance and share. Speaks the same orbital
- * language as CategoryOrbits and the hero.
+ * account orbiting it as a glowing satellite. A satellite's size follows its
+ * balance against the largest one (owed or held), and its colour and legend
+ * label follow the account's type: Checking, Savings, Investment, Cash or
+ * Credit Card, and a plain Account for a type this build does not have.
+ * Satellites sit on one orbit ring, or two past six accounts. The legend lists
+ * each account with its type and balance; hovering a row or a satellite dims
+ * the others. Speaks the same orbital language as CategoryOrbits and the hero.
  */
 import { createMemo, createSignal, For, Show } from 'solid-js'
 import { knownAccountType } from '../core/accountTypes'
@@ -33,7 +35,7 @@ const TYPE_META: Record<AccountType, { color: string; label: string }> = {
   savings: { color: '#59d2a2', label: 'Savings' },
   ib: { color: '#f0a860', label: 'Investment' },
   cash: { color: '#c9a0ff', label: 'Cash' },
-  credit: { color: '#f48fa0', label: 'Credit card' },
+  credit: { color: '#f48fa0', label: 'Credit Card' },
 }
 // A type v4 renamed is the type that replaced it, and one this build does not have is a plain
 // account (core/accountTypes.ts).
@@ -68,7 +70,7 @@ export default function AccountConstellation(props: AccountConstellationProps) {
         meta,
         x: C + Math.cos(angle) * r,
         y: C + Math.sin(angle) * r,
-        // Satellite radius scales with balance share (sqrt for area-fairness).
+        // Satellite radius scales with the balance against the largest (sqrt for area-fairness).
         rad: 7 + Math.sqrt(Math.abs(a.balance) / maxAbs) * 15,
         orbitR: r,
       }

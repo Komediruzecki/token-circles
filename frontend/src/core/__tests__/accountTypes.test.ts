@@ -48,7 +48,7 @@ describe('a credit card is a type this build has', () => {
 })
 
 describe('a type this build does not have is a plain account', () => {
-  it.each(['sock_drawer', 'loan'])('%s: the word "account", the plain colour', (stored) => {
+  it.each(['sock_drawer'])('%s: the word "account", the plain colour', (stored) => {
     expect(accountTypeBadge(stored)).toBe('account')
     expect(accountTypeTone(stored)).toBe('default')
   })

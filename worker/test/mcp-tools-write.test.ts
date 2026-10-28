@@ -110,11 +110,13 @@ describe('write tools', () => {
   // The tool stored any string as the type: one the app does not have failed the app's account
   // list, every account with it.
   it('create_account refuses a type the app does not have, and stores nothing', async () => {
-    for (const type of ['sock_drawer', 'loan']) {
-      const result = await call('create_account', { name: `Card ${type}`, type, currency: 'EUR' });
-      expect(result.isError, `type "${type}"`).toBe(true);
-      expect(result.content[0].text).toContain('type');
-    }
+    const result = await call('create_account', {
+      name: 'Card sock_drawer',
+      type: 'sock_drawer',
+      currency: 'EUR',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('type');
     const count = await env.DB.prepare(
       "SELECT COUNT(*) AS n FROM accounts WHERE profile_id = ? AND name LIKE 'Card%'"
     )

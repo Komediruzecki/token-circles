@@ -59,13 +59,13 @@ describe('the constellation legend', () => {
     expect(rows['Sock drawer'].color).not.toBe(rows.Everyday.color)
   })
 
-  it('names a credit card "Credit card", in a colour of its own', () => {
+  it('names a credit card "Credit Card", in a colour of its own', () => {
     const rows = legend([
       account(1, 'Everyday', 'giro'),
       account(2, 'Visa', 'credit'),
       account(3, 'Sock drawer', 'sock_drawer'),
     ])
-    expect(rows.Visa.label).toBe('Credit card')
+    expect(rows.Visa.label).toBe('Credit Card')
     expect(rows.Visa.color).not.toBe(rows.Everyday.color)
     expect(rows.Visa.color).not.toBe(rows['Sock drawer'].color)
   })

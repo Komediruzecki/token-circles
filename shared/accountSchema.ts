@@ -111,7 +111,7 @@ export function readAccountType(raw: unknown): AccountType | null {
 export const ACCOUNT_MESSAGES = {
   name: 'Give the account a name.',
   nameLength: `Keep the name to ${ACCOUNT_NAME_MAX} characters or fewer.`,
-  type: 'Choose Giro, Savings, Investment, Cash or Credit card.',
+  type: 'Choose Giro, Savings, Investment, Cash or Credit Card.',
   balance: 'Enter the balance as a number, like 1250.50.',
   startingBalance: 'Enter the starting balance as a number, like 1250.50.',
   startingDate: 'Enter a real date, written like 2026-03-31, or leave it blank.',

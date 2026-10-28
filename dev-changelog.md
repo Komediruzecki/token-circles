@@ -381,7 +381,8 @@ All notable changes to Token Circles are documented here. The format is based on
   With #621 merged, every display that reads the type through `knownAccountType` shows a credit
   card as one: `accountTypeTone` gives it `expense` and `accountTypeIcon` the card, with cash on
   the banknotes (both maps live in `core/accountTypes.ts` now), the constellation names it "Credit
-  card", the Transactions select says "credit", and the edit dialog opens it on Credit Card, not
+  Card" as every place that offers the type does (so does the refusal, "Choose Giro, Savings,
+  Investment, Cash or Credit Card."), the Transactions select says "credit", and the edit dialog opens it on Credit Card, not
   "Other account". The import and MCP `create_account` take `credit` as they take every type on
   the list.
 - **Tests:** `worker/test/account-credit.test.ts` (the migration's columns), a contract scenario in
@@ -391,7 +392,8 @@ All notable changes to Token Circles are documented here. The format is based on
   readers (`api.getAccounts.test.ts`, `accountTypeRead.test.ts`), and
   `src/__tests__/accountTypeChoices.test.ts`, which fails when a place that offers account types
   and `ACCOUNT_TYPES` disagree. The tests that used `credit` as the type a build does not have use
-  `loan` now, and #621's own tests use `sock_drawer`, a type no build will have. A credit card on
+  `sock_drawer` now, as #621's own tests do: a type no build will have, where `loan` could become
+  one. A credit card on
   each display: `accountTypes.test.ts`, `accountsPageTypes.test.tsx`,
   `accountConstellation.test.tsx`, `transactionsAccountTypeWord.test.tsx` and the edit dialog in
   `accountForm.test.tsx`; the import takes one in a contract scenario (`imports.ts`, both

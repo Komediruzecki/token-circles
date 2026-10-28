@@ -125,6 +125,6 @@ describe('the Accounts page shows a stored type as the app reads it', () => {
     expect(label('Pension')).toBe('Investment')
     expect(label('Old current')).toBe('Checking')
     expect(label('Sock drawer')).toBe('Account')
-    expect(label('Visa')).toBe('Credit card')
+    expect(label('Visa')).toBe('Credit Card')
   })
 })
