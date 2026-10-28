@@ -36,6 +36,26 @@ All notable changes to Token Circles are documented here. The format is based on
   `EvaluateInput.budgets` takes the optional rollover fields, `rollover_enabled` as a boolean or
   0/1. Tests: `achievements/__tests__/advice.test.ts` ("a budget with rollover").
 
+### Budgets
+
+- **Every reader of a month's budget takes the row saved last.** A month can hold two rows for one
+  category (two `POST /api/budgets`, an import, a restore, an API client), and the readers each
+  picked their own: `GET /api/budgets/summary` and `/api/budgets/zero-based` had no `ORDER BY`, so
+  the Budgets page kept whichever row D1 or IndexedDB listed last for the category; Allocate and the
+  MCP `upsert_budget` tool changed the first (`ORDER BY start_date, id`); advice and badges took the
+  latest `start_date`, then `created_at`, then `id`. A new allocation could change a row the page
+  did not show. The rule is now one, in `shared/budgetSavedOrder.ts` (`bySavedOrder`): the later
+  `created_at`, then the higher `id`, whatever day the row starts. The summary (this month's rows
+  and the previous month's, which rollover reads) and zero-based list `ORDER BY created_at, id`, so
+  the row that counts comes last; Allocate and `upsert_budget` take `ORDER BY created_at DESC, id
+DESC`. Local-first sorts with `bySavedOrder` in `budgetsSummary`, `budgetsZeroBased` and
+  `budgetsAllocate`, and `budgetsForMonth` in achievements uses it too. No migration, no change to
+  a response's shape. `/api/budgets/alerts`, `/api/budgets/zero-based/summary` and the MCP
+  `get_budgets_and_goals` tool still list every row of the month. Tests:
+  `worker/test/budgets-one-row-per-month.test.ts`, `worker/test/mcp-tools-write.test.ts`,
+  `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
+  `achievements/__tests__/advice.test.ts`.
+
 ## [5.17.0] — 2026-10-28
 
 ### Deploy notes

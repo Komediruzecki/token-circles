@@ -100,13 +100,16 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
   // D13: budgetsAllocate writes one row per month with no end_date, so the old
   // `end_date IS NULL OR end_date >= ?` filter stacked every prior month's row for
   // a category. Restrict to budgets whose start_date falls in the queried month
-  // (mirrors zero-based) — exactly one row per category per month.
+  // (mirrors zero-based) — exactly one row per category per month. A month that holds two
+  // anyway lists the one saved last after the other, which is the one the page keeps
+  // (shared/budgetSavedOrder.ts); without an ORDER BY it kept whichever D1 listed last.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+     WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
+     ORDER BY b.created_at, b.id`,
     ...pids,
     startDate,
     endDate
@@ -142,7 +145,8 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     c.env.DB,
     `SELECT b.category_id, b.amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
        FROM budgets b
-       WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+       WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
+       ORDER BY b.created_at, b.id`,
     ...pids,
     prevStart,
     prevEnd
@@ -504,11 +508,14 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
 
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
-    `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
+    `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'
+      ORDER BY created_at, id`,
     ...pids,
     startOfMonth,
     endOfMonth
   );
+  // The row saved last for a category is listed last and so is the one kept, as on the summary
+  // and the row Allocate changes (shared/budgetSavedOrder.ts).
   const budgetMap: Record<number, BudgetRow> = {};
   budgets.forEach((b) => (budgetMap[b.category_id] = b));
 
@@ -769,12 +776,13 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
 
   // The month's budget for the category, whatever day it starts: one an API client, an import or
   // an MCP agent started mid-month is still the month's, and allocating changes it rather than
-  // adding a second one that the month would count as well.
+  // adding a second one that the month would count as well. Of two, the one saved last, which is
+  // the one the Budgets page shows (shared/budgetSavedOrder.ts); it changed the first.
   const existing = await db.first<{ id: number; start_date: string }>(
     c.env.DB,
     `SELECT * FROM budgets
       WHERE category_id = ? AND profile_id = ? AND period = ? AND start_date >= ? AND start_date < ?
-      ORDER BY start_date, id`,
+      ORDER BY created_at DESC, id DESC`,
     category_id,
     pid,
     budgetPeriod,

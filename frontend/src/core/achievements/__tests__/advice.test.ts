@@ -230,6 +230,19 @@ describe('buildAdvice: which budget a month is judged against', () => {
     expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
   })
 
+  it('takes the row saved last even when the other starts later in the month', () => {
+    // The Budgets page and Allocate take the row saved last for the month, whatever day it starts.
+    const drift = buildAdvice(
+      apartment({
+        budgets: [
+          row('2026-10-15', 400, '2026-10-02T08:00:00Z'),
+          row('2026-10-01', 310, '2026-10-09T08:00:00Z'),
+        ],
+      })
+    ).filter((c) => c.kind === 'budget-drift')
+    expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
+  })
+
   it('names a category whose budget lapsed as having none this month', () => {
     const cards = buildAdvice(apartment({ budgets: [row('2026-06-01', 94.9)] }))
     const card = cards.find((c) => c.kind === 'unbudgeted-subscription')

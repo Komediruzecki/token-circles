@@ -2,6 +2,7 @@
  * Budget handlers — IndexedDB-backed implementations for all /api/budgets routes.
  */
 import { budgetRollover } from '../../../../../shared/budgetRollover'
+import { bySavedOrder } from '../../../../../shared/budgetSavedOrder'
 import {
   BUDGET_MESSAGES,
   checkAllocation,
@@ -371,10 +372,14 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
     // `!end_date || end_date >= startDate` filter stacked every prior month's row
     // for a category. Restrict to budgets whose start_date falls in the queried
     // month (mirrors budgetsZeroBased) — exactly one row per category per month.
-    const budgets = allBudgets.filter(
-      (b: Record<string, unknown>) =>
-        (b.start_date as string) >= startDate && (b.start_date as string) < endDate
-    )
+    // A month that holds two rows for a category lists the one saved last after the other, which
+    // is the one the page keeps, as on the Worker (shared/budgetSavedOrder.ts).
+    const budgets = allBudgets
+      .filter(
+        (b: Record<string, unknown>) =>
+          (b.start_date as string) >= startDate && (b.start_date as string) < endDate
+      )
+      .sort(bySavedOrder)
 
     const txns = allTxns.filter(
       (t: Record<string, unknown>) =>
@@ -404,10 +409,12 @@ export async function budgetsSummary(query: URLSearchParams): Promise<Response> 
       prevSpentMap[cid] = (prevSpentMap[cid] || 0) + getAmount(t)
     }
 
-    const prevBudgets = allBudgets.filter(
-      (b: Record<string, unknown>) =>
-        (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
-    )
+    const prevBudgets = allBudgets
+      .filter(
+        (b: Record<string, unknown>) =>
+          (b.start_date as string) >= prevStart && (b.start_date as string) < startDate
+      )
+      .sort(bySavedOrder)
 
     // Every figure below is money a person reads, worked out to the cent (shared/money.ts).
     for (const cid of Object.keys(spentMap)) spentMap[+cid] = toCents(spentMap[+cid]!)
@@ -474,12 +481,16 @@ export async function budgetsZeroBased(query: URLSearchParams): Promise<Response
         (a.name as string).localeCompare(b.name as string)
       )
 
-    const budgets = (await getAllForProfiles('budgets')).filter(
-      (b: Record<string, unknown>) =>
-        (b.start_date as string) >= startOfMonth &&
-        (b.start_date as string) < endOfMonth &&
-        b.period === 'monthly'
-    )
+    // The row saved last for a category sorts last and so is the one kept, as on the summary and
+    // the row Allocate changes (shared/budgetSavedOrder.ts).
+    const budgets = (await getAllForProfiles('budgets'))
+      .filter(
+        (b: Record<string, unknown>) =>
+          (b.start_date as string) >= startOfMonth &&
+          (b.start_date as string) < endOfMonth &&
+          b.period === 'monthly'
+      )
+      .sort(bySavedOrder)
 
     const budgetMap: Record<number, Record<string, unknown>> = {}
     for (const b of budgets) budgetMap[b.category_id as number] = b
@@ -708,7 +719,8 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
 
     // The month's budget for the category, whatever day it starts: one an API client or an import
     // started mid-month is still the month's, and allocating changes it rather than adding a
-    // second one that the month would count as well.
+    // second one that the month would count as well. Of two, the one saved last, which is the one
+    // the Budgets page shows (shared/budgetSavedOrder.ts); it changed the first.
     const db = await getDB()
     const existing = (await db.getAllFromIndex('budgets', 'by_profile', pid))
       .filter(
@@ -719,11 +731,8 @@ export async function budgetsAllocate(query: URLSearchParams, body: unknown): Pr
           b.start_date >= start_date &&
           b.start_date < nextStart
       )
-      .sort(
-        (a, b) =>
-          String(a.start_date).localeCompare(String(b.start_date)) ||
-          (a.id as number) - (b.id as number)
-      )[0]
+      .sort(bySavedOrder)
+      .at(-1)
 
     // Allocate is an upsert: re-allocating a category for the same month updates the amount
     // instead of erroring, so users can freely change an allocation from the same action.
