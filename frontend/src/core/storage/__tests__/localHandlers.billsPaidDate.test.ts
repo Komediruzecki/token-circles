@@ -20,11 +20,13 @@ import { billsCreate, billsList, billsPayOrMarkPaid } from '../localHandlers.js'
 /**
  * Pin the zone for the assertions that follow. Node re-reads `process.env.TZ` on assignment, and
  * each test file runs in its own worker, so this does not leak across files. The returned offset
- * lets a test prove the pin actually took effect rather than silently testing the host's zone.
+ * lets a test prove the pin actually took effect rather than silently testing the host's zone. It is
+ * read at the instant the test freezes the clock at, not today: today's offset moves with daylight
+ * saving time, so reading it then would fail the check for half of every year.
  */
-function pinTimezone(tz: string): number {
+function pinTimezone(tz: string, at: string): number {
   process.env.TZ = tz
-  return new Date().getTimezoneOffset()
+  return new Date(at).getTimezoneOffset()
 }
 
 async function seedProfile() {
@@ -68,7 +70,7 @@ describe('marking a bill paid, west of UTC', () => {
   beforeEach(async () => {
     // 12:00 UTC on the 1st is 08:00 local — the UTC calendar says September, the local one does
     // too, but a date STRING of '2026-09-01' read back as UTC midnight lands on 31 August local.
-    const offset = pinTimezone('America/New_York')
+    const offset = pinTimezone('America/New_York', '2026-09-01T12:00:00Z')
     expect(offset, 'timezone pin must take effect or this tests nothing').toBe(240)
     freezeAt('2026-09-01T12:00:00Z')
     await seedProfile()
@@ -89,7 +91,7 @@ describe('marking a bill paid, east of UTC after local midnight', () => {
   beforeEach(async () => {
     // 23:50 UTC on 31 August is 01:50 on 1 September in Zagreb. toISOString() still says August.
     // This is the window the bug was originally caught in.
-    const offset = pinTimezone('Europe/Zagreb')
+    const offset = pinTimezone('Europe/Zagreb', '2026-08-31T23:50:00Z')
     expect(offset, 'timezone pin must take effect or this tests nothing').toBe(-120)
     freezeAt('2026-08-31T23:50:00Z')
     await seedProfile()

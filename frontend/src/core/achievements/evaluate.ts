@@ -21,8 +21,10 @@ export interface EvaluateInput {
     Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'> &
       Partial<Pick<Transaction, 'amount_local'>>
   >
+  /** `id` breaks a tie between two rows of one month saved in the same second. */
   budgets: Array<
-    Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'>
+    Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'> &
+      Partial<Pick<Budget, 'id'>>
   >
   goals: Array<
     Pick<SavingsGoal, 'target_amount' | 'current_amount' | 'created_at' | 'deadline' | 'name'>
