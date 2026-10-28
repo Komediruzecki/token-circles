@@ -3,6 +3,7 @@
  * the page renders it and the tests pin it. Every card names the figure it was built from and
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
+import { budgetsForMonth } from './budgets'
 import { baseAmount, bucketByMonth, sumTypes } from './evaluate'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
@@ -60,33 +61,6 @@ function monthElapsed(today: string): number {
 
 function categoryName(input: AdviceInput, id: number | null): string {
   return input.categories.find((c) => c.id === id)?.name ?? 'an uncategorised category'
-}
-
-type Budget = AdviceInput['budgets'][number]
-
-/**
- * The budget each category has for `month`. Budgets are one row per month (Set Budget, Allocate and
- * Copy last month each write a row starting on the month's first day, with no end date), and the
- * Budgets page reads a month's rows by start_date in both runtimes. Taking every row without an end
- * date as still running judged this month against each earlier month's budget as well, one card per
- * month. Two rows for one month keep the one saved last: the later created_at, and on a tie (D1
- * stores it to the second) the higher id, whatever order the list came in.
- */
-function savedLater(a: Budget, b: Budget): boolean {
-  if (a.start_date !== b.start_date) return a.start_date > b.start_date
-  if (a.created_at !== b.created_at) return a.created_at > b.created_at
-  return (a.id ?? 0) >= (b.id ?? 0)
-}
-
-function budgetsForMonth(budgets: Budget[], month: string): Budget[] {
-  const latest = new Map<number, Budget>()
-  for (const b of budgets) {
-    if (b.period !== 'monthly') continue
-    if (monthOf(b.start_date) !== month) continue
-    const held = latest.get(b.category_id)
-    if (!held || savedLater(b, held)) latest.set(b.category_id, b)
-  }
-  return [...latest.values()]
 }
 
 function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {

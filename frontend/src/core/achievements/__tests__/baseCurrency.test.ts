@@ -44,7 +44,7 @@ describe('badges, for months with an entry in another currency', () => {
   })
 
   it('hold a budget by the converted spending in its category', () => {
-    // A budget of 400; 2 x 10 and 310 spent in August, a finished month.
+    // August's budget of 400; 2 x 10 and 310 spent in August, a finished month.
     const r = evaluateAchievements(
       input({
         transactions: [...month('2026-08', 2, { amount: 10 }), tx('2026-08-20', YEN_SHOPPING)],
@@ -53,9 +53,9 @@ describe('badges, for months with an entry in another currency', () => {
             category_id: 1,
             amount: 400,
             period: 'monthly',
-            start_date: '2026-01-01',
+            start_date: '2026-08-01',
             end_date: null,
-            created_at: '2026-01-01T00:00:00Z',
+            created_at: '2026-08-01T00:00:00Z',
           },
         ],
       })

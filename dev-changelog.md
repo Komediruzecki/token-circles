@@ -9,6 +9,21 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Achievements
+
+- **Budget badges hold a month against that month's budgets only.** `heldMonths` in
+  `frontend/src/core/achievements/evaluate.ts` took every monthly row with
+  `start_date <= end && (end_date === null || end_date >= start)` as active, and budgets are one row
+  per month with no `end_date`, so each finished month also had to stay under every earlier month's
+  row for the category, and under rows of categories budgeted only in an earlier month. It now reads
+  `budgetsForMonth`, the helper #641 added to advice, moved to
+  `frontend/src/core/achievements/budgets.ts` so badges and advice share it: the rows whose
+  `start_date` falls in the month, one per category, the one saved last. held-the-line,
+  under-budget-six and clean-sweep are built on it. A month with no budget row of its own is no
+  longer held. Badges already earned stay earned (`diffUnlocks` only adds). Tests:
+  `achievements/__tests__/evaluate.test.ts` ("which budget a finished month is held against"); three
+  fixtures that dated a budget months before the month they test now date it in that month.
+
 ## [5.17.0] — 2026-10-28
 
 ### Deploy notes
