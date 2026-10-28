@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
@@ -24,7 +25,7 @@ vi.mock('../../core/achievementsStore', () => ({
         category_id: 1,
         amount: 100,
         period: 'monthly',
-        start_date: '2020-01-01',
+        start_date: `${(globalThis as never as { __snap: { month: string } }).__snap.month}-01`,
         end_date: null,
         created_at: '2020-01-01T00:00:00Z',
       },
@@ -44,8 +45,12 @@ vi.mock('../../core/achievementsStore', () => ({
     { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
   ],
   streak: () => 2,
-  dismissedAdvice: () => [],
-  dismissAdvice: vi.fn(async () => undefined),
+  // A test that needs dismissals to take effect puts a signal on globalThis.__dismissed.
+  dismissedAdvice: () =>
+    (globalThis as never as { __dismissed?: () => string[] }).__dismissed?.() ?? [],
+  dismissAdvice: vi.fn(async (id: string) => {
+    ;(globalThis as never as { __dismiss?: (id: string) => void }).__dismiss?.(id)
+  }),
   restoreAdvice: vi.fn(),
 }))
 
@@ -119,6 +124,65 @@ describe('Progress page', () => {
     expect(c.textContent).toContain('Food')
     ;(cards[0].querySelector('.dismiss, [aria-label^="Dismiss"]') as HTMLButtonElement).click()
     expect(vi.mocked(dismissAdvice)).toHaveBeenCalled()
+  })
+
+  it('shows advice money in the base currency', () => {
+    localStorage.setItem('localCurrency', 'EUR')
+    const c = mount(() => <Progress />)
+    const food = [...c.querySelectorAll('[data-advice-card]')].find((li) =>
+      li.textContent!.includes('Food is over budget')
+    )!
+    // Three entries of 60 against Food's budget of 100.
+    expect(food.textContent).toContain('€180.00 of €100.00')
+  })
+
+  it('shows three cards of advice and keeps the rest behind a button', () => {
+    const snap = (globalThis as never as { __snap: { transactions: unknown[] } }).__snap
+    const before = snap.transactions
+    const d = new Date(`${thisMonth}-15T00:00:00Z`)
+    d.setUTCMonth(d.getUTCMonth() - 1)
+    const lastMonth = d.toISOString().slice(0, 7)
+    // Four things to say: Food over budget, last month in the red, a category with no budget,
+    // and an entry with no category.
+    snap.transactions = [
+      ...before,
+      ...month(lastMonth, 3, { amount: 900 }),
+      { date: `${thisMonth}-20`, type: 'expense', amount: 40, category_id: 2 },
+    ]
+    try {
+      const c = mount(() => <Progress />)
+      expect(c.querySelectorAll('[data-advice-card]')).toHaveLength(3)
+      const toggle = c.querySelector('[data-test-id="advice-toggle"]') as HTMLButtonElement
+      expect(toggle.textContent).toBe('Show 1 more')
+      toggle.click()
+      expect(c.querySelectorAll('[data-advice-card]')).toHaveLength(4)
+    } finally {
+      snap.transactions = before
+    }
+  })
+
+  it('moves focus to the empty note when the last card is dismissed', async () => {
+    const g = globalThis as never as {
+      __dismissed?: () => string[]
+      __dismiss?: (id: string) => void
+    }
+    const [dismissed, setDismissed] = createSignal<string[]>([])
+    g.__dismissed = dismissed
+    g.__dismiss = (id) => setDismissed((d) => [...d, id])
+    try {
+      const c = mount(() => <Progress />)
+      let button: HTMLButtonElement | null
+      while ((button = c.querySelector('[data-advice-card] [aria-label^="Dismiss"]'))) {
+        button.focus()
+        button.click()
+        await Promise.resolve()
+      }
+      const empty = c.querySelector('[data-test-id="advice-empty"]')!
+      expect(document.activeElement).toBe(empty)
+    } finally {
+      delete g.__dismissed
+      delete g.__dismiss
+    }
   })
 
   it('sends a card link to the page it names', () => {
