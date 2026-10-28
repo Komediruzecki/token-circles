@@ -24,7 +24,7 @@ vi.mock('../../core/achievementsStore', () => ({
         category_id: 1,
         amount: 100,
         period: 'monthly',
-        start_date: '2020-01-01',
+        start_date: `${(globalThis as never as { __snap: { month: string } }).__snap.month}-01`,
         end_date: null,
         created_at: '2020-01-01T00:00:00Z',
       },
