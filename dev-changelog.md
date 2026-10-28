@@ -56,6 +56,19 @@ DESC`. Local-first sorts with `bySavedOrder` in `budgetsSummary`, `budgetsZeroBa
   `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
   `achievements/__tests__/advice.test.ts`.
 
+### Tests
+
+- **confirmEmailGate.test.tsx no longer signs a test back in from the test before it.** About once
+  per loaded full run, "whose setup decision the app reads" failed waiting for the sign-in screen
+  (`expected false to be true`). The App's loading flag lives in `appStore` and the first boot in the
+  file turned it off for good, so every later App showed its shell before its `onMount` boot had
+  run, and a test could end with that boot still going. The local-first test ended while its boot
+  still waited on `GET /auth/me`, the file's first local request, which pays for the storage layer's
+  import; when that landed after the next test's Logout, it set `isAuthenticated` back to true.
+  `mountApp` now sets the flag on before each render, so a test's wait for the app or the gate is a
+  wait for that boot to finish, as on a page load. Shown by delaying the local `authMe` by 1.5 s in a
+  scratch copy: the test failed with the same message every run before the change and passed after.
+
 ## [5.17.0] — 2026-10-28
 
 ### Deploy notes

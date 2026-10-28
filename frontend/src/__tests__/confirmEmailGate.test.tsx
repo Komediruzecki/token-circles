@@ -15,6 +15,7 @@ import {
   setCurrentProfile,
   setIsAuthenticated,
   setIsLoginModalOpen,
+  setLoading,
   setProfiles,
   setShowDropdown,
 } from '../core/appStore'
@@ -109,6 +110,12 @@ afterEach(() => {
 })
 
 async function mountApp(mode: StorageMode = 'self-hosted') {
+  // Every App boots from the loading screen, as on a page load. The flag is the store's, and the
+  // first boot in this file left it off: every later App then showed its shell before its boot had
+  // run, so a test could end with that boot still going. The local-first one was then still waiting
+  // on its first local request (which pays for the storage layer's import) when the next test signed
+  // out; landing then, it signed that test back in, and the sign-in screen never came.
+  setLoading(true)
   localStorage.setItem('finance_storage_mode', mode)
   // The stand-in Worker's account is id 1; local-first has its one local account.
   for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
