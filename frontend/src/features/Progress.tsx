@@ -129,6 +129,9 @@ export default function Progress(): JSX.Element {
     }
   }
 
+  /** Where focus goes when the last card of advice is dismissed. */
+  let empty: HTMLParagraphElement | undefined
+
   const categoryName = (id: number): string =>
     snap()?.categories.find((c) => c.id === id)?.name ?? 'Uncategorised'
 
@@ -191,7 +194,7 @@ export default function Progress(): JSX.Element {
         <Show
           when={advice().length > 0}
           fallback={
-            <p class={styles.empty} data-test-id="advice-empty">
+            <p class={styles.empty} data-test-id="advice-empty" ref={empty} tabIndex={-1}>
               Nothing needs your attention this month.
             </p>
           }
@@ -204,6 +207,7 @@ export default function Progress(): JSX.Element {
             onDismiss={(id) => {
               void dismissAdvice(id)
             }}
+            onEmpty={() => empty?.focus()}
           />
         </Show>
       </section>

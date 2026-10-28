@@ -334,15 +334,20 @@ All notable changes to Token Circles are documented here. The format is based on
   kept every monthly row with `end_date === null`, so a category with five months of budgets raised
   five "is over budget" cards, one per row and all with the same id (dev showed "918.81 of 94.90",
   "of 156", "of 156", "of 220", "of 310"). It now reads `budgetsForMonth`: the rows whose
-  `start_date` falls in the current month, one per category, the last saved when there are two. That
-  is how `GET /api/budgets/summary`, `/api/budgets/alerts` and the local-first `budgetsSummary` /
-  `budgetsAlerts` already read them (D13). `buildAdvice` also collapses cards with the same kind,
-  title and detail into the first one, ranks a finished month's card (in the red) after this
-  month's within a tone, and formats money through an optional `money` formatter; Progress passes
-  `formatCurrency`, so figures read in the base currency. In-the-red already named only the last
-  finished month. The list moved to `features/ProgressAdvice.tsx`: the first three cards, then a
-  "Show N more" / "Show fewer" button in the same container (`aria-expanded`, `aria-controls` on the
-  list); a dismissal lets the next card move up. Tests: `achievements/__tests__/advice.test.ts`,
+  `start_date` falls in the current month, one per category, the last saved when there are two (later
+  `created_at`, then higher `id`, since D1 stores `created_at` to the second; `EvaluateInput.budgets`
+  takes an optional `id`). That is how `GET /api/budgets/summary`, `/api/budgets/alerts` and the
+  local-first `budgetsSummary` / `budgetsAlerts` already read them (D13). The "has no budget" card
+  reads the same month's budgets, so a category whose budget lapsed is named again. `buildAdvice`
+  also collapses cards with the same id into the first one (the id names the category, goal or
+  month, so two categories that share a name stay two cards), ranks a finished month's card (in the
+  red) after this month's within a tone, and formats money through an optional `money` formatter;
+  Progress passes `formatCurrency`, so figures read in the base currency. In-the-red already named
+  only the last finished month. The list moved to `features/ProgressAdvice.tsx`: the first three
+  cards, then a "Show N more" / "Show fewer" button in the same container (`aria-expanded`,
+  `aria-controls` on the list), which folds again once nothing is hidden. A dismissal lets the next
+  card move up and moves focus to the card now in its place, else the toggle, else the card before,
+  else the "Nothing needs your attention" note (`tabindex="-1"`). Tests: `achievements/__tests__/advice.test.ts`,
   `features/__tests__/progressAdvice.test.tsx`, `features/__tests__/progressPage.test.tsx`. Three
   fixtures dated their budget in January and expected it to apply in September; they now date it in
   the month they test.

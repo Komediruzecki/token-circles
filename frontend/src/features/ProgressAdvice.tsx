@@ -2,8 +2,9 @@
  * The "Worth a look" cards on Progress. A long history can raise many at once, so the list shows
  * the first ADVICE_SHOWN, most useful first, and a button in the same container shows the rest.
  * Dismissing a card lets the next one move up: the list is always the first cards of what is left.
+ * Focus follows the dismissal, so a keyboard user carries on from where the card was.
  */
-import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
 import type { AdviceCard } from '../core/achievements/advice'
@@ -26,17 +27,44 @@ export default function AdviceList(props: {
   cards: AdviceCard[]
   onOpen: (page: string) => void
   onDismiss: (id: string) => void
+  /** The last card went: the page moves focus to what replaces the list. */
+  onEmpty?: () => void
 }): JSX.Element {
   const listId = `advice-list-${createUniqueId()}`
   const [open, setOpen] = createSignal(false)
   const hidden = () => Math.max(0, props.cards.length - ADVICE_SHOWN)
   const shown = createMemo(() => (open() ? props.cards : props.cards.slice(0, ADVICE_SHOWN)))
+  let list: HTMLUListElement | undefined
+  let toggle: HTMLButtonElement | undefined
+
+  // Open with nothing left to hide is no state at all: the next cards to arrive start folded.
+  createEffect(() => {
+    if (hidden() === 0) setOpen(false)
+  })
+
+  /**
+   * After a dismissal the card's own button is gone, and focus would fall to the page. It goes to
+   * the card now in that place, else the toggle, else the card before, else back to the page.
+   */
+  const dismiss = (id: string, index: number): void => {
+    props.onDismiss(id)
+    queueMicrotask(() => {
+      // The page swaps the list out when it empties; a detached list's buttons cannot take focus.
+      const buttons = list?.isConnected
+        ? [...list.querySelectorAll<HTMLButtonElement>('[data-dismiss]')]
+        : []
+      const next =
+        buttons[index] ?? (toggle?.isConnected ? toggle : undefined) ?? buttons[index - 1]
+      if (next) next.focus()
+      else props.onEmpty?.()
+    })
+  }
 
   return (
     <div class={styles.adviceList}>
-      <ul class={styles.advice} id={listId}>
+      <ul class={styles.advice} id={listId} ref={list}>
         <For each={shown()}>
-          {(card) => (
+          {(card, index) => (
             <li class={styles.adviceCard} data-tone={card.tone} data-advice-card>
               <div class={styles.adviceBody}>
                 <div class={styles.adviceTitle} data-advice-title>
@@ -63,9 +91,10 @@ export default function AdviceList(props: {
               <button
                 type="button"
                 class={styles.dismiss}
+                data-dismiss
                 aria-label={`Dismiss: ${card.title}`}
                 onClick={() => {
-                  props.onDismiss(card.id)
+                  dismiss(card.id, index())
                 }}
               >
                 <IconDismiss />
@@ -77,6 +106,7 @@ export default function AdviceList(props: {
       <Show when={hidden() > 0}>
         <button
           type="button"
+          ref={toggle}
           class={styles.adviceToggle}
           data-test-id="advice-toggle"
           aria-expanded={open() ? 'true' : 'false'}

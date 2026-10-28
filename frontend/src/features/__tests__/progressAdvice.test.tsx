@@ -84,6 +84,80 @@ describe('Worth a look list', () => {
     expect(toggle(c)).toBeNull()
   })
 
+  it('closes again once dismissals leave nothing hidden, so new cards start folded', () => {
+    const [list, setList] = createSignal(cards(5))
+    const c = mount(() => (
+      <AdviceList
+        cards={list()}
+        onOpen={vi.fn()}
+        onDismiss={(id) => setList((l) => l.filter((x) => x.id !== id))}
+      />
+    ))
+    toggle(c)!.click()
+    expect(toggle(c)!.textContent).toBe('Show fewer')
+    ;(c.querySelector('[aria-label="Dismiss: Card 5"]') as HTMLButtonElement).click()
+    ;(c.querySelector('[aria-label="Dismiss: Card 4"]') as HTMLButtonElement).click()
+    expect(toggle(c)).toBeNull()
+    setList((l) => [...l, card(8), card(9)])
+    expect(titles(c)).toEqual(['Card 1', 'Card 2', 'Card 3'])
+    expect(toggle(c)!.textContent).toBe('Show 2 more')
+    expect(toggle(c)!.getAttribute('aria-expanded')).toBe('false')
+  })
+
+  describe('where focus goes after a dismissal', () => {
+    const live = (n: number, onEmpty = vi.fn()) => {
+      const [list, setList] = createSignal(cards(n))
+      const c = mount(() => (
+        <AdviceList
+          cards={list()}
+          onOpen={vi.fn()}
+          onDismiss={(id) => setList((l) => l.filter((x) => x.id !== id))}
+          onEmpty={onEmpty}
+        />
+      ))
+      return c
+    }
+    const dismiss = async (c: HTMLElement, title: string): Promise<void> => {
+      const button = c.querySelector(`[aria-label="Dismiss: ${title}"]`) as HTMLButtonElement
+      button.focus()
+      button.click()
+      await Promise.resolve()
+    }
+
+    it('moves to the next card', async () => {
+      const c = live(5)
+      await dismiss(c, 'Card 2')
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Dismiss: Card 3')
+    })
+
+    it('moves to the card that moved up into the last place shown', async () => {
+      const c = live(5)
+      await dismiss(c, 'Card 3')
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Dismiss: Card 4')
+    })
+
+    it('moves to the toggle when the last open card goes and others stay hidden', async () => {
+      const c = live(5)
+      toggle(c)!.click()
+      await dismiss(c, 'Card 5')
+      expect(titles(c)).toHaveLength(4)
+      expect(document.activeElement).toBe(toggle(c))
+    })
+
+    it('moves to the card before when the last card goes and nothing is hidden', async () => {
+      const c = live(2)
+      await dismiss(c, 'Card 2')
+      expect(document.activeElement?.getAttribute('aria-label')).toBe('Dismiss: Card 1')
+    })
+
+    it('hands focus back to the page when the last card goes', async () => {
+      const onEmpty = vi.fn()
+      const c = live(1, onEmpty)
+      await dismiss(c, 'Card 1')
+      expect(onEmpty).toHaveBeenCalled()
+    })
+  })
+
   it('sends a card link to the page it names', () => {
     const onOpen = vi.fn()
     const c = mount(() => <AdviceList cards={cards(1)} onOpen={onOpen} onDismiss={vi.fn()} />)

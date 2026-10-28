@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
@@ -44,8 +45,12 @@ vi.mock('../../core/achievementsStore', () => ({
     { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
   ],
   streak: () => 2,
-  dismissedAdvice: () => [],
-  dismissAdvice: vi.fn(async () => undefined),
+  // A test that needs dismissals to take effect puts a signal on globalThis.__dismissed.
+  dismissedAdvice: () =>
+    (globalThis as never as { __dismissed?: () => string[] }).__dismissed?.() ?? [],
+  dismissAdvice: vi.fn(async (id: string) => {
+    ;(globalThis as never as { __dismiss?: (id: string) => void }).__dismiss?.(id)
+  }),
   restoreAdvice: vi.fn(),
 }))
 
@@ -153,6 +158,30 @@ describe('Progress page', () => {
       expect(c.querySelectorAll('[data-advice-card]')).toHaveLength(4)
     } finally {
       snap.transactions = before
+    }
+  })
+
+  it('moves focus to the empty note when the last card is dismissed', async () => {
+    const g = globalThis as never as {
+      __dismissed?: () => string[]
+      __dismiss?: (id: string) => void
+    }
+    const [dismissed, setDismissed] = createSignal<string[]>([])
+    g.__dismissed = dismissed
+    g.__dismiss = (id) => setDismissed((d) => [...d, id])
+    try {
+      const c = mount(() => <Progress />)
+      let button: HTMLButtonElement | null
+      while ((button = c.querySelector('[data-advice-card] [aria-label^="Dismiss"]'))) {
+        button.focus()
+        button.click()
+        await Promise.resolve()
+      }
+      const empty = c.querySelector('[data-test-id="advice-empty"]')!
+      expect(document.activeElement).toBe(empty)
+    } finally {
+      delete g.__dismissed
+      delete g.__dismiss
     }
   })
 
