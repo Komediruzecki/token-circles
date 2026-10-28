@@ -445,6 +445,12 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Dependencies
 
+- Every open Dependabot alert, and the patch bumps Dependabot proposed in #633, #634, #636, #637 and
+  #638, with both lockfiles regenerated under pnpm 10 so the overrides blocks stay. Root: Vite 8.3.5,
+  Vitest 5.0.5, ESLint 10.13.0, Prettier 3.9.10, typescript-eslint 8.72.0, Playwright 1.64.1, idb
+  8.0.4, solid-js 1.9.17, zod 4.6.7. Worker: Vitest 4.1.12 (with `@vitest/mocker` 4.1.12 and Vite
+  8.3.5 under it), hono 4.13.14, zod 4.6.7, `@cloudflare/vitest-pool-workers` 0.23.0. The root
+  overrides now floor dompurify at 3.4.17 (under jspdf) and fast-uri at 3.1.9.
 - The worker-deps group (#591): `@simplewebauthn/server` 14.0.3, hono 4.13.12 and
   `@cloudflare/workers-types` 5.20261002.1, with the worker lockfile regenerated under pnpm 10, and
   undici overridden to exactly 7.29.1 in `worker/` for six advisories (both miniflare releases pin
