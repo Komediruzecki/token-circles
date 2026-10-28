@@ -25,6 +25,7 @@ import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { addToast } from '../core/toastStore'
 import { localToday } from '../utils/period'
+import AdviceList from './ProgressAdvice'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
 import type { AdviceCard } from '../core/achievements/advice'
@@ -48,18 +49,6 @@ const monthLabel = (ym: string): string =>
 
 const monthInitial = (ym: string): string =>
   new Date(`${ym}-15T00:00:00Z`).toLocaleDateString(undefined, { month: 'narrow', timeZone: 'UTC' })
-
-const IconDismiss = (): JSX.Element => (
-  <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true">
-    <path
-      d="M5 5l10 10M15 5L5 15"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      fill="none"
-    />
-  </svg>
-)
 
 export default function Progress(): JSX.Element {
   const snap = () => snapshot()
@@ -96,6 +85,7 @@ export default function Progress(): JSX.Element {
         selfHosted: false,
         today: s.today,
         dismissed: dismissedAdvice(),
+        money: (n) => formatCurrency(n),
       },
       streak()
     )
@@ -206,44 +196,15 @@ export default function Progress(): JSX.Element {
             </p>
           }
         >
-          <ul class={styles.advice}>
-            <For each={advice()}>
-              {(card) => (
-                <li class={styles.adviceCard} data-tone={card.tone} data-advice-card>
-                  <div class={styles.adviceBody}>
-                    <div class={styles.adviceTitle}>{card.title}</div>
-                    <p class={styles.adviceDetail}>{card.detail}</p>
-                    <div class={styles.adviceFoot}>
-                      <span class={styles.figure}>{card.figure}</span>
-                      <Show when={card.link}>
-                        {(link) => (
-                          <button
-                            type="button"
-                            class={styles.ghost}
-                            onClick={() => {
-                              setPage(link().page as PageName)
-                            }}
-                          >
-                            {link().label}
-                          </button>
-                        )}
-                      </Show>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    class={styles.dismiss}
-                    aria-label={`Dismiss: ${card.title}`}
-                    onClick={() => {
-                      void dismissAdvice(card.id)
-                    }}
-                  >
-                    <IconDismiss />
-                  </button>
-                </li>
-              )}
-            </For>
-          </ul>
+          <AdviceList
+            cards={advice()}
+            onOpen={(page) => {
+              setPage(page as PageName)
+            }}
+            onDismiss={(id) => {
+              void dismissAdvice(id)
+            }}
+          />
         </Show>
       </section>
 

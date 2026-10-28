@@ -121,6 +121,41 @@ describe('Progress page', () => {
     expect(vi.mocked(dismissAdvice)).toHaveBeenCalled()
   })
 
+  it('shows advice money in the base currency', () => {
+    localStorage.setItem('localCurrency', 'EUR')
+    const c = mount(() => <Progress />)
+    const food = [...c.querySelectorAll('[data-advice-card]')].find((li) =>
+      li.textContent!.includes('Food is over budget')
+    )!
+    // Three entries of 60 against Food's budget of 100.
+    expect(food.textContent).toContain('€180.00 of €100.00')
+  })
+
+  it('shows three cards of advice and keeps the rest behind a button', () => {
+    const snap = (globalThis as never as { __snap: { transactions: unknown[] } }).__snap
+    const before = snap.transactions
+    const d = new Date(`${thisMonth}-15T00:00:00Z`)
+    d.setUTCMonth(d.getUTCMonth() - 1)
+    const lastMonth = d.toISOString().slice(0, 7)
+    // Four things to say: Food over budget, last month in the red, a category with no budget,
+    // and an entry with no category.
+    snap.transactions = [
+      ...before,
+      ...month(lastMonth, 3, { amount: 900 }),
+      { date: `${thisMonth}-20`, type: 'expense', amount: 40, category_id: 2 },
+    ]
+    try {
+      const c = mount(() => <Progress />)
+      expect(c.querySelectorAll('[data-advice-card]')).toHaveLength(3)
+      const toggle = c.querySelector('[data-test-id="advice-toggle"]') as HTMLButtonElement
+      expect(toggle.textContent).toBe('Show 1 more')
+      toggle.click()
+      expect(c.querySelectorAll('[data-advice-card]')).toHaveLength(4)
+    } finally {
+      snap.transactions = before
+    }
+  })
+
   it('sends a card link to the page it names', () => {
     const c = mount(() => <Progress />)
     const link = [...c.querySelectorAll('[data-advice-card] button')].find(
