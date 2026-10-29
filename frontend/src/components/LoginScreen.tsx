@@ -3,6 +3,7 @@ import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
+import { createHistoryStep } from '../core/historyStep'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -122,6 +123,44 @@ export default function LoginScreen() {
 
   const form = createSignInForm({ mode, captcha, saved })
 
+  // Each step's way back to the form: its own Back button, and the back gesture (below).
+  const leaveTwofa = () => {
+    setStage('form')
+    form.reset({ email: form.values.email, password: '' })
+  }
+  const leaveEmailCode = () => {
+    setStage('form')
+  }
+  const leaveInbox = () => {
+    switchTo('login')
+    form.reset({ email: inbox(), password: '' })
+    setStage('form')
+  }
+
+  // The steps after the form are in memory only, so in an installed app the back gesture had no
+  // entry to pop and closed the app. One history entry while any step is on screen; popping it is
+  // that step's Back. The second factor the Google callback lands on keeps ?twofa=1 on its own
+  // entry only, so the form under it does not reopen the step on a reload.
+  createHistoryStep({
+    active: () => stage() !== 'form',
+    back: () => {
+      const now = stage()
+      if (now === 'twofa') leaveTwofa()
+      else if (now === 'email-code') leaveEmailCode()
+      else if (now === 'inbox') leaveInbox()
+    },
+    below: () => {
+      try {
+        const url = new URL(window.location.href)
+        if (!url.searchParams.has('twofa')) return undefined
+        url.searchParams.delete('twofa')
+        return url.toString()
+      } catch {
+        return undefined
+      }
+    },
+  })
+
   /** Another mode, or another way in: the values stay, and nothing from before is said. */
   const switchTo = (next: SignInMode) => {
     setMode(next)
@@ -173,27 +212,15 @@ export default function LoginScreen() {
           when={stage() === 'form'}
           fallback={
             stage() === 'twofa' ? (
-              <TwofaChallenge
-                onBack={() => {
-                  setStage('form')
-                  form.reset({ email: form.values.email, password: '' })
-                }}
-              />
+              <TwofaChallenge onBack={leaveTwofa} />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
                 email={form.values.email}
-                onBack={() => setStage('form')}
+                onBack={leaveEmailCode}
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <CheckInbox
-                email={inbox()}
-                onBack={() => {
-                  switchTo('login')
-                  form.reset({ email: inbox(), password: '' })
-                  setStage('form')
-                }}
-              />
+              <CheckInbox email={inbox()} onBack={leaveInbox} />
             )
           }
         >

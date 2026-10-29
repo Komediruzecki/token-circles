@@ -9,6 +9,29 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Sign-in
+
+- **The sign-in steps after the form have a history entry, so the back gesture leaves them.**
+  `LoginScreen`'s `stage` ('form' | 'inbox' | 'twofa' | 'email-code') was a signal with no history
+  behind it, so in an installed PWA on Android the back gesture had nothing to pop and closed the
+  app; the email-code verify step had no Back button either. New `frontend/src/core/historyStep.ts`:
+  `createHistoryStep({ active, back, below })` pushes one entry (`history.pushState`, same URL and
+  hash, `tcHistoryStep: true` in the state) when `active` turns true, and on `popstate` to an entry
+  without the mark runs `back`, the step's own Back. Leaving by the step's Back takes the entry with
+  `history.back()` when the current entry is still marked, so history does not grow and the next
+  gesture is not swallowed; moving between steps (email-code to twofa) keeps `active` true and adds
+  nothing. No URL change means no `hashchange`, so App.tsx's hash routing and appVersion's reload
+  never see it. A sign-in reloads, and a reload keeps the current entry, so `reloadIntoTheApp`
+  (`signInForm.ts`) now goes through `afterHistoryStep`, which pops the entry first (the step stays
+  on screen meanwhile; a one-second fallback reloads anyway). For the twofa step the Google
+  callback lands on, `below` drops `?twofa=1` from the entry under the step, and
+  `TwofaChallenge`'s `stripTwofaMarker` keeps `history.state` instead of writing `null`, which would
+  have erased the mark. `EmailCodeLogin`'s verify step gets Back to sign in
+  (`emailcode-verify-back`). `LoginModal` has the same in-memory stages and is not changed here.
+  Tests: `components/__tests__/loginScreen.backGesture.test.tsx` (real screen and steps on jsdom's
+  history: the gesture from each step, own Back from each step, the sign-in pop, listener removal)
+  and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code step).
+
 ## [5.17.1] — 2026-10-29
 
 ### Achievements

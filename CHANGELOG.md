@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Back to sign in from every sign-in step.** The screen where you type the code we emailed you now has Back to sign in, and the phone's back gesture takes you from the emailed code, the two-factor code or Check your inbox back to the sign-in form. In the installed app on Android it used to close the app instead.
+
 ## [5.17.1] — 2026-10-29
 
 ### Changed
