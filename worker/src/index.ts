@@ -40,6 +40,7 @@ import { apiTokensRoutes } from './routes/api-tokens';
 import { v1Routes } from './routes/v1';
 import { mcpRoutes } from './mcp';
 import { runScheduledReminders } from './reminders';
+import { runWeekOneMails } from './weekOne';
 import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
@@ -219,7 +220,11 @@ export default {
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
     ctx.waitUntil(
       Promise.all([
-        runScheduledReminders(event.cron, env),
+        // The week-one mails go after the reminders, never beside them, so the two senders never
+        // call Resend at the same time.
+        runScheduledReminders(event.cron, env)
+          .catch((e) => console.error('[reminder] run failed:', (e as Error).message))
+          .then(() => runWeekOneMails(event.cron, env)),
         sweepRateLimits(env),
         sweepExpiredSessions(env),
         sweepAuthLogs(env),

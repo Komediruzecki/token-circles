@@ -24,11 +24,11 @@ import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 // the app origin lands on the static-asset fallback and never unsubscribes anyone.
 // The app origin of THIS deployment — mail assets (logo, engraved art) load from
 // here so a dev-sent mail never depends on a prod release shipping the asset.
-function appOrigin(env: Env): string {
+export function appOrigin(env: Env): string {
   return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || 'https://tokencircles.com';
 }
 
-function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
+export function unsubscribeUrl(unsubToken: string | null, env: Env): string | null {
   const apiBase = env.API_PUBLIC_ORIGIN || env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || '';
   return unsubToken && apiBase
     ? `${apiBase}/api/notifications/unsubscribe?token=${unsubToken}`
@@ -73,7 +73,10 @@ export interface UserRow {
 }
 
 // Lazily mint a per-user unsubscribe token (used in email footers) and persist it.
-async function ensureUnsubToken(env: Env, u: UserRow): Promise<string> {
+export async function ensureUnsubToken(
+  env: Env,
+  u: Pick<UserRow, 'id' | 'unsubscribe_token'>
+): Promise<string> {
   if (u.unsubscribe_token) return u.unsubscribe_token;
   const token = crypto.randomUUID();
   await db.run(env.DB, 'UPDATE users SET unsubscribe_token = ? WHERE id = ?', token, u.id);
