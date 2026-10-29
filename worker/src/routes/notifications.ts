@@ -236,7 +236,7 @@ const unknownToken = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'Link not recognized',
-    'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, disable reminders under Settings, Notifications.',
+    'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, turn reminders off under Settings, Email reminders.',
     { status: 400 }
   );
 
