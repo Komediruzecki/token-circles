@@ -286,6 +286,17 @@
   overflow-wrap: anywhere;
 }
 
+.reminders-unsubscribed {
+  margin: 0 0 12px;
+  max-width: 520px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in oklab, var(--primary) 6%, transparent);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 .pending-email-actions {
   display: flex;
   gap: 9px;

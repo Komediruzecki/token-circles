@@ -14,6 +14,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Reminder mails come back when you turn one on.** After you unsubscribe with the link in a reminder mail, Settings, Email reminders says so, and saving with a reminder on starts the mails again. Before, the switches still read on and no reminder was ever sent.
 - **Budget badges judge each month by its own budget.** Held the line, Six months under and Clean sweep also held a month to every earlier budget for the category, so a budget you raised still counted at its old amount; badges you already have stay yours.
 - **Allocate changes the budget Budgets shows.** When a month held two budgets for one category, the category's budget on Budgets, Allocate and Progress could each be a different one; those three now use the one saved last.
 

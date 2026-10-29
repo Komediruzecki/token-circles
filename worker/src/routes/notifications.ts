@@ -15,7 +15,8 @@ import {
 } from '../reminders';
 import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
-import { requireFeature } from '../plan';
+import { getUserPlan, requireFeature } from '../plan';
+import { planHasFeature } from '../plans';
 import { localNow } from '../local-date';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
@@ -23,14 +24,15 @@ import { localNow } from '../local-date';
 // the email address lives on the user. Mirrors backend/routes/notifications.js.
 export const notificationsRoutes = new Hono<AppEnv>();
 
-// GET — current email, a new one waiting to be confirmed (or null), and the toggles for the
-// active profile (each flag defaults ON).
+// GET — current email, a new one waiting to be confirmed (or null), the toggles for the
+// active profile (each flag defaults ON), and whether the account unsubscribed by the link in a
+// reminder mail (`unsubscribed`), which stops every reminder whatever the toggles say.
 notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
-  const user = await db.first<{ email: string | null }>(
+  const user = await db.first<{ email: string | null; notifications_unsubscribed: number | null }>(
     c.env.DB,
-    'SELECT email FROM users WHERE id = ?',
+    'SELECT email, notifications_unsubscribed FROM users WHERE id = ?',
     userId
   );
   const rows = await db.all<{ key: string; value: string }>(
@@ -47,6 +49,7 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
     billsReminders: flag('email_bills_reminders'),
+    unsubscribed: !!user?.notifications_unsubscribed,
   });
 });
 
@@ -54,6 +57,11 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
 // it is stored as a change waiting for that address to open the link mailed to it
 // (email-change.ts), and the answer names it as `pendingEmail`. An address another account has is
 // a 409, and a refused address refuses the whole save.
+//
+// A save with a reminder on (the master switch and at least one kind) also clears the account's
+// unsubscribe by link: turning a reminder on in Settings is asking for reminder mails again. A save
+// with every reminder off leaves it as it is, and so does a plan without email reminders, whose
+// Settings page cannot save here.
 notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
@@ -87,6 +95,11 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
+  const remindersOn =
+    !!b.emailNotifications && (!!b.budgetAlerts || !!b.spendingReport || !!b.billsReminders);
+  if (remindersOn && planHasFeature(await getUserPlan(c), 'emailReminders')) {
+    await db.run(c.env.DB, 'UPDATE users SET notifications_unsubscribed = 0 WHERE id = ?', userId);
+  }
   return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
 });
 
@@ -231,7 +244,7 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'You are unsubscribed',
-    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES}`
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES} To get reminders again, turn one on in Settings, Email reminders, and save.`
   );
 
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {

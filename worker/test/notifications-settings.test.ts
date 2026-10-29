@@ -62,6 +62,7 @@ describe('PUT /api/notifications/settings', () => {
       budgetAlerts: true,
       spendingReport: true,
       billsReminders: true,
+      unsubscribed: false,
     });
 
     const saved = await send('PUT', MAIN, {

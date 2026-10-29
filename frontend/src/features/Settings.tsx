@@ -682,6 +682,9 @@ export default function Settings() {
     budgetAlerts: boolean
     spendingReport: boolean
     billsReminders: boolean
+    // The account pressed Unsubscribe on the link in a reminder mail. No reminder is sent until a
+    // save with a reminder on, which lifts it (worker routes/notifications.ts).
+    unsubscribed?: boolean
   } | null>(null)
   // The account's address as last loaded; the field can hold an edit that is not saved yet.
   const [accountEmail, setAccountEmail] = createSignal('')
@@ -706,8 +709,9 @@ export default function Settings() {
   const notifForm = createNotificationsForm({
     onSaved: (answer) => {
       // The account keeps its address until the new one opens the link, so the field goes back to
-      // it and the new address shows as waiting.
-      if (answer.pendingEmail) void loadNotifications()
+      // it and the new address shows as waiting. A save can also lift an unsubscribe by link, so
+      // the card reloads to drop the line about it.
+      if (answer.pendingEmail || notif()?.unsubscribed) void loadNotifications()
     },
   })
   const resendEmailChange = async () => {
@@ -1544,6 +1548,15 @@ export default function Settings() {
                         )}
                       </Show>
                     </div>
+                    <Show when={notif()?.unsubscribed && !emailAlertsLocked()}>
+                      <p
+                        class={styles.remindersUnsubscribed}
+                        data-test-id="settings-reminders-unsubscribed"
+                      >
+                        You turned reminder mails off with the unsubscribe link in one of them. To
+                        get them again, turn a reminder on and save.
+                      </p>
+                    </Show>
                     <div class={styles.row}>
                       <span class={styles.rowLabel}>Enable email notifications</span>
                       <Toggle

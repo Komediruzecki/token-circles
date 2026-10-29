@@ -383,6 +383,8 @@ export interface NotificationSettings {
   budgetAlerts: boolean
   billsReminders: boolean
   spendingReport: boolean
+  /** The account unsubscribed by the link in a reminder mail; a save with a reminder on lifts it. */
+  unsubscribed?: boolean
 }
 
 // ============ EMERGENCY FUND ============
