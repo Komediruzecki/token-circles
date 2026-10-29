@@ -8,9 +8,11 @@
  * sign in), one written into the box without an input event, and one the browser autofills.
  *
  * The reveal button shows the password and hides it again. It is a button of its own beside the
- * label, never inside it, so the field is still called "Password". A pointer press on it leaves
- * focus and the caret in the field, it never sends the form, and the field goes back to a password
- * when the form is sent, so the password manager still finds a password field to save.
+ * label, never inside it, so the field is still called "Password". Its name says what a press
+ * does, and it has no pressed state and no tooltip. A pointer press on it leaves focus and the
+ * caret in the field, it never sends the form, and the field goes back to a password when the form
+ * is sent, before the form's own submit handler runs, so the password manager still finds a
+ * password field to save.
  */
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -34,15 +36,24 @@ afterEach(() => {
   host = undefined
 })
 
-/** The sign-in form's two fields, as the screens build them. */
-function mount(initial: Values = EMPTY) {
+/**
+ * The sign-in form's two fields, as the screens build them. `onSubmit` runs first in the form's
+ * own submit handler, the one a sign-in screen gives its form.
+ */
+function mount(initial: Values = EMPTY, onSubmit?: () => void) {
   const send = vi.fn()
   const form = createForm<Values>({ initial, send, failure: "That didn't work. Try again." })
   host = document.createElement('div')
   document.body.appendChild(host)
   dispose = render(
     () => (
-      <form {...form.attrs}>
+      <form
+        {...form.attrs}
+        onSubmit={(event) => {
+          onSubmit?.()
+          void form.submit(event)
+        }}
+      >
         <Field form={form} name="email" id="test-email" label="Email address" floating>
           {(control) => (
             <input
@@ -185,14 +196,17 @@ describe('a floating label', () => {
 })
 
 describe('the reveal button', () => {
-  it('is a button inside the password field, named Show password, not pressed', () => {
+  it('is a button inside the password field, named Show password, with no pressed state or tooltip', () => {
     mount()
     const button = reveal()
 
     expect(button.type).toBe('button')
     expect(button.getAttribute('aria-label')).toBe('Show password')
-    expect(button.getAttribute('aria-pressed')).toBe('false')
     expect(button.getAttribute('aria-controls')).toBe('test-password')
+    // The name says what a press does. A pressed state as well reads as a double negative
+    // ("Hide password, pressed"), and a tooltip has a screen reader say the name twice.
+    expect(button.hasAttribute('aria-pressed')).toBe(false)
+    expect(button.hasAttribute('title')).toBe(false)
     // An icon, not words or an emoji, and outside the label, so the field is still "Password".
     expect(button.querySelector('svg')).not.toBeNull()
     expect(button.textContent?.trim()).toBe('')
@@ -217,8 +231,9 @@ describe('the reveal button', () => {
 
     reveal().click()
     expect(password().type).toBe('text')
-    expect(reveal().getAttribute('aria-pressed')).toBe('true')
     expect(reveal().getAttribute('aria-label')).toBe('Hide password')
+    expect(reveal().hasAttribute('aria-pressed')).toBe(false)
+    expect(reveal().hasAttribute('title')).toBe(false)
     expect(password().value).toBe('a-long-password')
     // The eye struck through.
     expect(drawn()).toEqual([
@@ -228,7 +243,6 @@ describe('the reveal button', () => {
 
     reveal().click()
     expect(password().type).toBe('password')
-    expect(reveal().getAttribute('aria-pressed')).toBe('false')
     expect(reveal().getAttribute('aria-label')).toBe('Show password')
   })
 
@@ -330,8 +344,26 @@ describe('the reveal button', () => {
     await tick()
 
     expect(password().type).toBe('password')
-    expect(reveal().getAttribute('aria-pressed')).toBe('false')
     expect(reveal().getAttribute('aria-label')).toBe('Show password')
+  })
+
+  it("hides it before the form's own submit handler runs, and the form still sends the password", async () => {
+    const seen: string[] = []
+    const { send } = mount(EMPTY, () => seen.push(password().type))
+    type(email(), 'name@example.com')
+    type(password(), 'a-long-password')
+    reveal().click()
+    expect(password().type).toBe('text')
+
+    host!.querySelector('form')!.requestSubmit()
+    await tick()
+
+    // The form's handler listens in the bubble phase and was added first, with the form. The hide
+    // listens in the capture phase, so it has run by then.
+    expect(seen).toEqual(['password'])
+    // What is sent is the form's values, so hiding first takes nothing from it.
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send).toHaveBeenCalledWith({ email: 'name@example.com', password: 'a-long-password' })
   })
 
   it('keeps the text clear of the button: the field leaves room at its right end', () => {

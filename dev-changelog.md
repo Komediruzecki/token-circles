@@ -24,32 +24,37 @@ All notable changes to Token Circles are documented here. The format is based on
   never `+`: a password manager can put its icon straight after the input. The box sets the field's
   size whatever the page's input class says: 48px tall, 16px text (iOS zooms the page on focus
   below 16px), and 20px above the text for the label. `reveal` adds a `<button type="button">` over
-  the box's right end, 44px wide and as tall as the field, with `aria-label` "Show password" or
-  "Hide password", `aria-pressed` and `aria-controls`, and the eye from the new
-  `frontend/src/components/form/EyeGlyph.tsx` (Feather's eye and eye-off). The control takes its
-  `type` from `control`, so the page sets none, and gets 48px of right padding. The button cancels
-  `mousedown`, so focus stays in the field, and puts the caret back after the type changes, at once
-  and again on the next frame: Chromium moves the caret to the start once a mouse click that
-  changed the type is over (chrome-headless-shell 153; a scripted click, and Firefox 155, keep it).
-  The field goes back to a password on its form's `submit`, so the password manager finds a
-  password field to save and the value stays out of the browser's autocomplete history. A floating
-  field's `tip` goes under the field (`.floatTip`, hidden while empty), which is where Forgot
-  password? now sits. Edge's own reveal (`::-ms-reveal`) is hidden in these fields.
+  the box's right end, 44px wide and as tall as the field, with `aria-controls` and the eye from
+  the new `frontend/src/components/form/EyeGlyph.tsx` (Feather's eye and eye-off). Its
+  `aria-label`, "Show password" or "Hide password", is the state, as in GOV.UK's pattern: it has no
+  `aria-pressed`, since "Hide password, pressed" reads as a double negative, and no `title`, which
+  would have the name announced twice. The control takes its `type` from `control`, so the page sets
+  none, and gets 48px of right padding. The button cancels `mousedown`, so focus stays in the field,
+  and puts the caret back after the type changes, at once and again on the next frame: Chromium
+  moves the caret to the start once a mouse click that changed the type is over
+  (chrome-headless-shell 153; a scripted click, and Firefox 155, keep it). The field goes back to a
+  password on its form's `submit`, so the password manager finds a password field to save and the
+  value stays out of the browser's autocomplete history. That listener is on the form in the capture
+  phase, so it runs before the page's own submit handler; the form sends its values, not the field's
+  text, so the password still goes out. It is removed with the field, with the same capture flag,
+  and a field that comes back (Forgot password?, then Back to sign in) adds its own, so one submit
+  hides it once. A floating field's `tip` goes under the field (`.floatTip`, hidden while empty),
+  which is where Forgot password? now sits. Edge's own reveal (`::-ms-reveal`) is hidden in these
+  fields.
 - **Where it is used.** `LoginScreen.tsx` (the address, and the password with its reveal;
   `.label` and `.labelRow` left `LoginScreen.module.css`), `LoginModal.tsx` (both fields; `.label`
   left `LoginModal.module.css`), the request step of `EmailCodeLogin.tsx`, and both fields of
   `ResetPassword.tsx`, each with a reveal of its own. The code fields (the emailed code and
-  `TwofaChallenge`) keep their label above them: a one-time code is centred digits with a hint, and
-  the emailed code's step is being changed on `fix/sign-in-back`. Settings' passkey re-auth password
-  (`PasskeySettings.tsx`) is not on the form kit and is unchanged. Every id, `data-test-id`, label
-  text and `autocomplete` token stays as it was.
+  `TwofaChallenge`) keep their label above them: a one-time code is centred digits with a hint.
+  Settings' passkey re-auth password (`PasskeySettings.tsx`) is not on the form kit and is
+  unchanged. Every id, `data-test-id`, label text and `autocomplete` token stays as it was.
 - **Measured** in headless Chromium at 375px and 1280px, light and dark, Sign in and Create account:
   each field 48px (43px before); the label 14px below the field's top at rest (15px) and 6px below
   it floated (12.5px, weight 600); label contrast 5.35:1 in light and 8.84:1 in dark, 16.7:1 while
   the field has focus; the eye 44x48 and flush with the field, with the text ending 5px and the
   label 4px before it. The fields and the submit button take 20px less height in Sign in and 45.5px
   less in Create account. Tests: `frontend/src/components/form/__tests__/floatingField.test.tsx`
-  (17) and `frontend/src/components/__tests__/signInFields.test.tsx` (9).
+  (18) and `frontend/src/components/__tests__/signInFields.test.tsx` (10).
 - **The sign-in steps and the sign-in dialog have history entries, so the back gesture leaves
   them.** `LoginScreen`'s `stage` ('form' | 'inbox' | 'twofa' | 'email-code') and `LoginModal`
   (opened from the profile menu) were signals with no history behind them, so in an installed PWA

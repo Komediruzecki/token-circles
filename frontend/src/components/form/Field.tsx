@@ -26,6 +26,9 @@
  * `reveal` is for a password: a button at the box's right end shows it and hides it again, and
  * the field goes back to a password whenever its form is sent, so a password manager still finds
  * a password field to save. The control takes its `type` from `control`, so the page sets none.
+ * The button's name says what a press does, Show password or Hide password, as GOV.UK's does. It
+ * has no pressed state, since "Hide password, pressed" reads as a double negative, and no tooltip,
+ * which would have a screen reader say the name twice.
  *
  * `floating` and `reveal` are fixed for the field's life, like its form and name.
  */
@@ -160,14 +163,18 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
   }
 
   // A form sent with the password showing sends it as a password: the password manager looks for
-  // one to save, and a text field's value can go into the browser's autocomplete history.
+  // one to save, and a text field's value can go into the browser's autocomplete history. In the
+  // capture phase, so it runs before any submit handler the page gave the form. What the form
+  // sends is its values, not the field's text, so hiding it first takes nothing from them.
+  // The listener goes with the field, and a field that comes back adds its own. Removing it needs
+  // the same capture flag: without the flag the remove matches nothing and the old one stays on.
   onMount(() => {
     const owner = revealable ? input()?.form : null
     if (!owner) return
     const hide = () => setShown(false)
-    owner.addEventListener('submit', hide)
+    owner.addEventListener('submit', hide, { capture: true })
     onCleanup(() => {
-      owner.removeEventListener('submit', hide)
+      owner.removeEventListener('submit', hide, { capture: true })
     })
   })
 
@@ -207,9 +214,7 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
             type="button"
             class={styles.reveal}
             aria-controls={controlId}
-            aria-pressed={shown() ? 'true' : 'false'}
             aria-label={shown() ? 'Hide password' : 'Show password'}
-            title={shown() ? 'Hide password' : 'Show password'}
             // A press would take focus from the field, and the caret with it.
             onMouseDown={(event) => {
               event.preventDefault()

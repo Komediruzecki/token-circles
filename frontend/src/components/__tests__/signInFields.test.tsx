@@ -138,6 +138,49 @@ function button(text: string): HTMLButtonElement {
   return found
 }
 
+interface Recorded {
+  calls: unknown[][]
+  contexts: unknown[]
+  invocationCallOrder: number[]
+}
+
+/**
+ * How many submit listeners the page's forms hold in the capture phase, where only a password's
+ * hide-on-submit listens. Worked out from every add and remove the DOM was asked for, in order,
+ * by the DOM's own rule: a remove takes a listener off only when the function and the capture
+ * flag both match, so a remove that leaves the flag out leaves the listener listening.
+ */
+function captureSubmitListeners() {
+  const adds = vi.spyOn(EventTarget.prototype, 'addEventListener')
+  const removes = vi.spyOn(EventTarget.prototype, 'removeEventListener')
+  const capturing = (options: unknown) =>
+    options === true ||
+    (typeof options === 'object' &&
+      options !== null &&
+      (options as EventListenerOptions).capture === true)
+  const listed = ({ calls, contexts, invocationCallOrder }: Recorded, adding: boolean) =>
+    calls.map((call, i) => ({ adding, call, target: contexts[i], at: invocationCallOrder[i] ?? 0 }))
+  return {
+    on() {
+      const held = new Set<unknown>()
+      const all = [...listed(adds.mock, true), ...listed(removes.mock, false)]
+      for (const { adding, call, target } of all.sort((a, b) => a.at - b.at)) {
+        const [type, listener, options] = call
+        if (!(target instanceof HTMLFormElement) || type !== 'submit' || !capturing(options)) {
+          continue
+        }
+        if (adding) held.add(listener)
+        else held.delete(listener)
+      }
+      return held.size
+    },
+    restore() {
+      adds.mockRestore()
+      removes.mockRestore()
+    },
+  }
+}
+
 describe('the sign-in screen', () => {
   const email = () => byId('login-email')
   const password = () => byId('login-password')
@@ -163,13 +206,14 @@ describe('the sign-in screen', () => {
     reveal.click()
     await settle()
     expect(password().type).toBe('text')
-    expect(reveal.getAttribute('aria-pressed')).toBe('true')
     expect(reveal.getAttribute('aria-label')).toBe('Hide password')
+    // The name is the state. A pressed state as well would read as a double negative.
+    expect(reveal.hasAttribute('aria-pressed')).toBe(false)
 
     reveal.click()
     await settle()
     expect(password().type).toBe('password')
-    expect(reveal.getAttribute('aria-pressed')).toBe('false')
+    expect(reveal.getAttribute('aria-label')).toBe('Show password')
     expect(sent).toEqual([])
     // The address has no reveal button.
     expect(revealOf(email())).toBeNull()
@@ -199,7 +243,55 @@ describe('the sign-in screen', () => {
       ['/api/auth/login', 'a-long-password'],
     ])
     expect(password().type).toBe('password')
-    expect(revealOf(password())!.getAttribute('aria-pressed')).toBe('false')
+    expect(revealOf(password())!.getAttribute('aria-label')).toBe('Show password')
+  })
+
+  it('takes the hide-on-submit listener away with the password field, so Back and one submit hide it once', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    const listeners = captureSubmitListeners()
+    try {
+      await mountLoginScreen()
+      expect(listeners.on()).toBe(1)
+
+      // Forgot password? takes the password field away, and its listener with it.
+      button('Forgot password?').click()
+      await settle()
+      expect(host.querySelector('#login-password')).toBeNull()
+      expect(listeners.on()).toBe(0)
+
+      // Back brings a new password field, which adds a listener of its own.
+      button('Back to sign in').click()
+      await settle()
+      expect(listeners.on()).toBe(1)
+
+      type(email(), 'name@example.com')
+      type(password(), 'a-long-password')
+      revealOf(password())!.click()
+      await settle()
+      expect(password().type).toBe('text')
+
+      const flips: string[] = []
+      const watching = new MutationObserver((records) => {
+        for (const record of records) {
+          flips.push(`${record.oldValue} to ${(record.target as HTMLInputElement).type}`)
+        }
+      })
+      watching.observe(password(), {
+        attributes: true,
+        attributeFilter: ['type'],
+        attributeOldValue: true,
+      })
+      host.querySelector('form')!.requestSubmit()
+      await settle()
+      watching.disconnect()
+
+      expect(flips).toEqual(['text to password'])
+      expect(sent.map((s) => [s.url, s.body.password])).toEqual([
+        ['/api/auth/login', 'a-long-password'],
+      ])
+    } finally {
+      listeners.restore()
+    }
   })
 
   it('puts Forgot password? under the password field, and it still opens the reset form', async () => {
