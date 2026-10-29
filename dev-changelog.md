@@ -51,9 +51,10 @@ All notable changes to Token Circles are documented here. The format is based on
     email-code/request and support/contact each still verify a fresh token with siteverify, once.
 - Tests: `components/__tests__/captchaForms.test.tsx` (33, every form against a stand-in
   `window.turnstile`; 27 fail on 5.17.1, and the other six pin what already held: the forms that
-  were already `interaction-only`, and the captcha-off path); `formKit.test.tsx` (`NOT_SENT`,
-  `blocked`); the `loginScreen.captcha` and `EmailCodeLogin` tests, which had pinned the hint beside
-  a busy button, now pin the held label.
+  were already `interaction-only`, and the captcha-off path); `captchaGate.test.ts` (10, the gate
+  alone: the 20 s hold timing out, the re-arm rules, a widget drawn anew); `formKit.test.tsx`
+  (`NOT_SENT`, `blocked`); the `loginScreen.captcha` and `EmailCodeLogin` tests, which had pinned the
+  hint beside a busy button, now pin the held label.
 
 ## [5.17.1] — 2026-10-29
 
