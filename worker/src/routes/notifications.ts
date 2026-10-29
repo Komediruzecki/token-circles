@@ -100,7 +100,8 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
 // by link (users.notifications_unsubscribed), and nothing else does. It lifts it only when the
 // active profile's saved switches would send something, the master switch and at least one kind,
 // read the way the scheduler reads them (reminders.ts notifEnabled: stored 'true'); otherwise a 400
-// the card shows. Idempotent: an account that is not unsubscribed answers 200 too.
+// the card shows. Pressing it again does no harm: an account that is not unsubscribed answers 200 when its switches
+// would send, and the same 400 when they would not.
 notificationsRoutes.post('/api/notifications/resubscribe', requireAuth, async (c) => {
   await requireFeature(
     c,
