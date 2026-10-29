@@ -5,8 +5,9 @@
  *
  * No plan gates it, since Free gets these mails, so it saves on its own when flipped instead of
  * waiting for the card's Save, which a plan without reminders cannot press. It shows only while a
- * mail can still come (`weekOneAhead`). After an unsubscribe from a mail's footer it shows off and
- * cannot be turned on here: that unsubscribe stops every mail, these two included.
+ * mail can still come (`weekOneAhead`). After the general unsubscribe from a mail's footer it shows
+ * off and cannot be turned on here: that unsubscribe stops every reminder mail, these two
+ * included, while sign-in and billing mail still arrive.
  */
 import { createSignal, Show } from 'solid-js'
 import ToggleField from '../components/ToggleField'
@@ -24,7 +25,7 @@ export const WEEK_ONE_TITLE = 'First-week mails'
 export const WEEK_ONE_DESCRIPTION =
   'Up to two in your first week: how to export statements from your bank, and what your first import found.'
 export const WEEK_ONE_UNSUBSCRIBED =
-  'You unsubscribed from Token Circles mails with a link in one of them, so these stay off.'
+  'You unsubscribed from reminder mails with a link in one of them, which stops these two as well. Sign-in and billing mail still arrive.'
 
 export default function WeekOneMails(props: {
   loaded: WeekOneSettings

@@ -46,7 +46,13 @@ All notable changes to Token Circles are documented here. The format is based on
   that exists before the week-one mails gets one. It must ship with 0033 or after it, never
   before: 0033 dates every existing account's Welcome claim to the day it runs, and the week-one
   windows count from that claim. An account that signs up between the migrations and the deploy
-  gets no Welcome claim from the old code, so it gets no week-one mail either.
+  is made by the old code, which writes no Welcome claim. A Google sign-up then, or a password
+  sign-up that confirms before the deploy, never gets one, so it gets no week-one mail. A password
+  sign-up that confirms after the deploy gets its claim from the new code when it confirms, so it
+  gets the new Welcome and, counted from that confirmation, the week-one mails like any new
+  account.
+- `wrangler.jsonc` adds a fourth trigger, `30 8 * * *`, to dev and prod: the week-one mails run on
+  it alone. The deploy registers it; nothing else is needed.
 
 ### Account email and sign-in
 
@@ -156,9 +162,12 @@ All notable changes to Token Circles are documented here. The format is based on
   account's profiles has an `import_id`; day 7 only once one does. Day 0 is the account's Welcome
   claim, the `reminder_dedup (user_id, 'welcome')` row every confirm path writes in the batch that
   confirms the address, so no new column records when an address was confirmed; its `sent_at` is
-  UTC, as are the windows: day 2 in `[2, 5)` days, day 7 in `[7, 10)` (`WEEK_ONE`). They run on the
-  daily `0 8 * * *` cron, after the reminders rather than beside them (`index.ts` `scheduled`), so
-  two senders never call Resend at once; a window of days instead of a day catches up a missed run.
+  UTC, as are the windows: day 2 in `[2, 5)` days, day 7 in `[7, 10)` (`WEEK_ONE`). They run on a
+  trigger of their own, `30 8 * * *` (`WEEK_ONE_CRON`), and `index.ts` `scheduled` runs nothing
+  else on it, because D1 allows an invocation 1,000 queries on Workers Paid and the 08:00 run's
+  reminders and sheet syncs spend from the same budget; a full week-one run is at most about 552
+  (`WEEK_ONE_BATCH`). Half an hour apart, the two senders never call Resend at once either. A
+  window of days instead of a day catches up a missed run.
   Every confirmed account is eligible whatever its plan; they skip `withinQuota`/`recordSend`, so
   Free's `remindersPerMonth` of 0 does not stop them and they do not count against a paid plan's.
   `users.week_one_mails = 0` or `notifications_unsubscribed = 1` stops them. Each send claims
@@ -180,18 +189,19 @@ All notable changes to Token Circles are documented here. The format is based on
   `sendMail` also returns Resend's `status` on a refusal, which the week-one sender reads.
   `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); the
   catalogue's footer check now reads `&amp;` in an href as `&`, and the amount-mail digests hash
-  subject, HTML and text only, so they still pin the reviewed output byte for byte (unchanged
+  every field of a mail but `listUnsubscribe`, so they still pin the reviewed output byte for byte (unchanged
   digests) while `listUnsubscribe` is held by `list-unsubscribe-headers.test.ts`.
 - **`/api/notifications/unsubscribe?token=...&list=week-one`** (`routes/notifications.ts`). GET
   shows "Stop first-week mails?" with one button that posts back to the same URL, and changes
   nothing; once they are off it says so with no button. POST, from the button or an RFC 8058
   one-click request, sets `users.week_one_mails = 0` and leaves `notifications_unsubscribed` alone,
   so a paid plan's reminders keep coming; it is idempotent and answers an unknown token 400. The
-  link without `list`, or with any other value, is the general unsubscribe as #648 left it, and
-  that stops the week-one mails too. `worker/test/week-one-unsubscribe.test.ts`.
+  link without `list`, or with any other value, is the general unsubscribe as #648 made it, and
+  that stops the week-one mails too; its page and its done page now name first-week mails among
+  what it stops. `worker/test/week-one-unsubscribe.test.ts`.
 - **The week-one switch in Settings** (`frontend/src/features/WeekOneMails.tsx`). `GET
 /api/notifications/settings` adds `weekOneMails`, `weekOneAhead` (the Welcome claim is under 10
-  days old and not both mails have gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no
+  days old and day 7, always the last, has not gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no
   plan gate. The switch sits in the Email reminders card outside the plan lock, shows only while
   `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
   disabled. `ToggleField` takes `disabled`.

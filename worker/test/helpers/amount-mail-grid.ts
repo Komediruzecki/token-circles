@@ -185,11 +185,14 @@ export async function amountMailDigests(
   const out: Record<string, { inputs: number; digest: string }> = {};
   for (const [name, inputs] of Object.entries(amountMailGrid())) {
     const render = renderers[name as keyof AmountRenderers] as (input: unknown) => unknown;
-    // The words maff reviewed: subject, HTML and text. listUnsubscribe (#648) repeats the footer's
-    // link for the List-Unsubscribe header, and list-unsubscribe-headers.test.ts holds it.
+    // Everything a mail is but listUnsubscribe (#648), which repeats the footer's link for the
+    // List-Unsubscribe header and is held by list-unsubscribe-headers.test.ts.
     const rendered = inputs.map((input) => {
-      const mail = render(input) as { subject: string; html: string; text: string } | null;
-      return JSON.stringify(mail && { subject: mail.subject, html: mail.html, text: mail.text });
+      const mail = render(input) as Record<string, unknown> | null;
+      if (mail === null) return JSON.stringify(mail);
+      const reviewed = { ...mail };
+      delete reviewed.listUnsubscribe;
+      return JSON.stringify(reviewed);
     });
     out[name] = {
       inputs: inputs.length,
