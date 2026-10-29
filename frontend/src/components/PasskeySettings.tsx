@@ -3,6 +3,7 @@ import { toast } from '../core/api'
 import { apiFetch } from '../core/apiFetch'
 import { showConfirm } from '../core/confirmStore'
 import { passkeysSupported, registerPasskey } from '../core/webauthn'
+import { createForm, Field } from './form'
 import layoutStyles from './Layout.module.css'
 
 /**
@@ -22,7 +23,13 @@ export default function PasskeySettings() {
   const [busy, setBusy] = createSignal(false)
   // Stale session: the server wants the password (or a 2FA code) before minting options.
   const [reauthNeeded, setReauthNeeded] = createSignal(false)
-  const [reauthValue, setReauthValue] = createSignal('')
+  // The proof's field is a kit `Field`, for its label and its reveal button, so its value lives in
+  // a form. There is no `<form>` element: Confirm sends it, and Enter does nothing, as before.
+  const reauthForm = createForm<{ proof: string }>({
+    initial: { proof: '' },
+    send: (values) => add(values.proof.trim()),
+    failure: 'Could not start passkey setup',
+  })
 
   if (!passkeysSupported()) return null
 
@@ -45,7 +52,7 @@ export default function PasskeySettings() {
       if (result.ok) {
         toast('Passkey added — you can now sign in with it', 'success')
         setReauthNeeded(false)
-        setReauthValue('')
+        reauthForm.reset()
         void load()
       } else if (result.reauth) {
         setReauthNeeded(true)
@@ -131,32 +138,39 @@ export default function PasskeySettings() {
       <Show when={reauthNeeded()}>
         <div style={{ margin: '10px 0 0' }}>
           <p style={{ margin: '0 0 6px', 'font-size': '13px', color: 'var(--text-secondary)' }}>
-            It has been a while since you signed in — confirm your password (or a 2FA code) to add a
+            It has been a while since you signed in. Confirm your password (or a 2FA code) to add a
             passkey.
           </p>
           <div style={{ display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
-            <input
-              type="password"
-              data-test-id="passkey-reauth-input"
-              placeholder="Password or 2FA code"
-              value={reauthValue()}
-              onInput={(e) => setReauthValue(e.currentTarget.value)}
-              autocomplete="current-password"
-              style={{
-                padding: '8px 10px',
-                'border-radius': '8px',
-                border: '1px solid var(--border, rgba(255,255,255,0.12))',
-                background: 'var(--bg, #0b0e14)',
-                color: 'var(--text, #e6e8eb)',
-                'font-size': '14px',
-                width: '200px',
-              }}
-            />
+            {/* The label sits in the box, as on the sign-in screens, and stays at its top edge once
+                the field holds a value: a placeholder went as soon as the person typed. The box
+                sets the padding and the text size. The eye stays although a 2FA code also goes
+                here: the usual answer is the password, which the sign-in screen lets you see, and
+                a code works once and is shown as you type it on every other screen that asks. */}
+            <Field form={reauthForm} name="proof" label="Password or 2FA code" floating reveal>
+              {(control) => (
+                <input
+                  {...control}
+                  data-test-id="passkey-reauth-input"
+                  value={reauthForm.values.proof}
+                  onInput={(e) => reauthForm.set('proof', e.currentTarget.value)}
+                  autocomplete="current-password"
+                  style={{
+                    'border-radius': '8px',
+                    border: '1px solid var(--border, rgba(255,255,255,0.12))',
+                    background: 'var(--bg, #0b0e14)',
+                    color: 'var(--text, #e6e8eb)',
+                    width: '260px',
+                    'max-width': '100%',
+                  }}
+                />
+              )}
+            </Field>
             <button
               data-test-id="passkey-reauth-confirm"
               class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-              disabled={busy() || !reauthValue().trim()}
-              onClick={() => void add(reauthValue().trim())}
+              disabled={busy() || !reauthForm.values.proof.trim()}
+              onClick={() => void reauthForm.submit()}
             >
               Confirm
             </button>

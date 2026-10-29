@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The password box for adding a passkey keeps its label while you type**, and has the eye from the sign-in screens.
+
 ## [5.17.2] — 2026-10-30
 
 ### Changed

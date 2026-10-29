@@ -9,6 +9,26 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Sign-in
+
+- **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the
+  field a stale session shows before adding a passkey was a bare `<input type="password">` whose
+  only name was `placeholder="Password or 2FA code"`, which goes as soon as the person types and is
+  not a dependable accessible name. It is now a form-kit `Field` with `floating` and `reveal`
+  (5.17.2's note that it "is not on the form kit and is unchanged" no longer holds): a
+  `<label for>` reading "Password or 2FA code" inside the box, kept at its top edge once the field
+  holds a value, and the Show password / Hide password button, with the `type` from `control`. The value moved from a
+  signal to a `createForm<{ proof: string }>` whose `send` is the existing `add(reauth)`; there is
+  still no `<form>` element, so Confirm sends it and Enter does nothing, as before, and `add`'s
+  toasts are unchanged. A successful add calls `reset()` where it used to clear the signal. The box
+  sets the padding and the 16px text; the input is 260px wide (`max-width: 100%`), up from 200px,
+  because the resting label is 159px at 15px Inter and the box keeps 13px on the left and 48px for
+  the eye on the right, which 200px would have cut to 139px. `autocomplete="current-password"` and
+  `data-test-id="passkey-reauth-input"` stay. The prompt above it reads "It has been a while since
+  you signed in. Confirm your password (or a 2FA code) to add a passkey." (a full stop where an em
+  dash was). Tests: `frontend/src/components/__tests__/PasskeySettings.test.tsx` (3 new: the field
+  found by its label before and after it holds a value, with no placeholder; the reveal; the prompt).
+
 ## [5.17.2] — 2026-10-30
 
 ### Sign-in
