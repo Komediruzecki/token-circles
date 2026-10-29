@@ -23,14 +23,15 @@ import { localNow } from '../local-date';
 // the email address lives on the user. Mirrors backend/routes/notifications.js.
 export const notificationsRoutes = new Hono<AppEnv>();
 
-// GET — current email, a new one waiting to be confirmed (or null), and the toggles for the
-// active profile (each flag defaults ON).
+// GET — current email, a new one waiting to be confirmed (or null), the toggles for the
+// active profile (each flag defaults ON), and whether the account unsubscribed by the link in a
+// reminder mail (`unsubscribed`), which stops every reminder whatever the toggles say.
 notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
-  const user = await db.first<{ email: string | null }>(
+  const user = await db.first<{ email: string | null; notifications_unsubscribed: number | null }>(
     c.env.DB,
-    'SELECT email FROM users WHERE id = ?',
+    'SELECT email, notifications_unsubscribed FROM users WHERE id = ?',
     userId
   );
   const rows = await db.all<{ key: string; value: string }>(
@@ -47,6 +48,7 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
     billsReminders: flag('email_bills_reminders'),
+    unsubscribed: !!user?.notifications_unsubscribed,
   });
 });
 
@@ -54,6 +56,10 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
 // it is stored as a change waiting for that address to open the link mailed to it
 // (email-change.ts), and the answer names it as `pendingEmail`. An address another account has is
 // a 409, and a refused address refuses the whole save.
+//
+// A save never lifts an unsubscribe by link (users.notifications_unsubscribed): the switches still
+// read on after one, and the form sends all of them on every save, so a save that only changed the
+// address would have turned reminder mails back on. POST /api/notifications/resubscribe does that.
 notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
@@ -88,6 +94,44 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
   return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
+});
+
+// POST — "Send me reminders again" in Settings, Email reminders: lifts the account's unsubscribe
+// by link (users.notifications_unsubscribed), and nothing else does. It lifts it only when the
+// active profile's saved switches would send something, the master switch and at least one kind,
+// read the way the scheduler reads them (reminders.ts notifEnabled: stored 'true'); otherwise a 400
+// the card shows. Pressing it again does no harm: an account that is not unsubscribed answers 200 when its switches
+// would send, and the same 400 when they would not.
+notificationsRoutes.post('/api/notifications/resubscribe', requireAuth, async (c) => {
+  await requireFeature(
+    c,
+    'emailReminders',
+    'Email alerts are a premium feature. Upgrade to get reminder mails.'
+  );
+  const pid = await getProfileId(c);
+  const rows = await db.all<{ key: string; value: string }>(
+    c.env.DB,
+    "SELECT key, value FROM settings WHERE profile_id = ? AND key LIKE 'email_%'",
+    pid
+  );
+  const on = new Set(rows.filter((r) => r.value === 'true').map((r) => r.key));
+  const sendsSomething =
+    on.has('email_notifications') &&
+    (on.has('email_budget_alerts') ||
+      on.has('email_spending_report') ||
+      on.has('email_bills_reminders'));
+  if (!sendsSomething) {
+    throw new HttpError(
+      400,
+      'Turn on email notifications and at least one reminder, save, then try again.'
+    );
+  }
+  await db.run(
+    c.env.DB,
+    'UPDATE users SET notifications_unsubscribed = 0 WHERE id = ?',
+    c.get('userId')
+  );
+  return c.json({ ok: true, unsubscribed: false });
 });
 
 // POST — send a test email to the user's own address. Optional body { type }:
@@ -223,7 +267,7 @@ const unknownToken = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'Link not recognized',
-    'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, disable reminders under Settings, Notifications.',
+    'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, turn reminders off under Settings, Email reminders.',
     { status: 400 }
   );
 
@@ -231,7 +275,7 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'You are unsubscribed',
-    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES}`
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES} To get them again, press Send me reminders again in Settings, Email reminders.`
   );
 
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
