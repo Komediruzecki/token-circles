@@ -9,6 +9,11 @@
  * `unchanged` is the same for a form with nothing new to send, like a settings form that is saved:
  * the button says what its children say ("Saved"), is `aria-disabled`, and a click on it sends
  * nothing. The person who just saved keeps their place on the button.
+ *
+ * `blocked` is the same while something beside the button has to be done first, like ticking the
+ * captcha's box: the button keeps its words, and the line that says what to do describes it
+ * (pass its id as `aria-describedby`). Give the form the same as its `blocked` option, so a submit
+ * that does not come through the button (Enter in a field) does nothing either.
  */
 import { splitProps } from 'solid-js'
 import styles from './Form.module.css'
@@ -24,16 +29,30 @@ export interface SubmitButtonProps extends Omit<
   busyLabel?: string
   /** True while there is nothing new to send: the button is inactive but keeps focus. */
   unchanged?: boolean
+  /** True while something beside the button has to be done first: inactive, and keeps focus. */
+  blocked?: boolean
   children: JSX.Element
 }
 
 export const SAVING = 'Saving…'
 
 export default function SubmitButton(props: SubmitButtonProps): JSX.Element {
-  const [local, button] = splitProps(props, ['busy', 'busyLabel', 'unchanged', 'children', 'class'])
-  const inactive = () => local.busy || local.unchanged === true
+  const [local, button] = splitProps(props, [
+    'busy',
+    'busyLabel',
+    'unchanged',
+    'blocked',
+    'children',
+    'class',
+  ])
+  const inactive = () => local.busy || local.unchanged === true || local.blocked === true
+  // Blocked looks like unchanged: inactive, and nothing in progress. It waits for the person.
   const classes = () =>
-    [styles.submit, local.unchanged && !local.busy ? styles.unchanged : '', local.class]
+    [
+      styles.submit,
+      (local.unchanged || local.blocked) && !local.busy ? styles.unchanged : '',
+      local.class,
+    ]
       .filter(Boolean)
       .join(' ')
   return (

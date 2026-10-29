@@ -4,6 +4,7 @@ import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
 import { FORGOT_PASSWORD, hashRouteName } from '../core/hashRoute'
+import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -11,6 +12,7 @@ import {
   passkeysSupported,
   signInWithPasskey,
 } from '../core/webauthn'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
@@ -21,7 +23,6 @@ import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
 import { createSignInForm, RESET_LINK_SENT, SIGN_IN_REFUSED } from './signInForm'
 import SupportContact from './SupportContact'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
 import type { SignInMode, SignInOutcome } from './signInForm'
 
@@ -35,6 +36,16 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * account whose address is not confirmed yet, and offers to send the confirm link again. Creating
  * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
  */
+/**
+ * Every way out of the screen reloads, and a reload keeps the current history entry: a step's entry
+ * (historyStep.ts) still on its way back goes first, or the app would start on it.
+ */
+function reloadPage() {
+  afterHistoryStep(() => {
+    window.location.reload()
+  })
+}
+
 export default function LoginScreen() {
   // #forgot-password opens the screen on the form that sends a reset link: the Reset password
   // button of the "already has an account" mail links there.
@@ -100,7 +111,7 @@ export default function LoginScreen() {
         conditionalAbort = new AbortController()
         return signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
           (result) => {
-            if (result.ok) window.location.reload()
+            if (result.ok) reloadPage()
             // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
             // the explicit button is the path that reports errors.
           }
@@ -112,7 +123,8 @@ export default function LoginScreen() {
   })
   onCleanup(stopConditional)
   // The widget is invisible until Cloudflare wants a click, so the submit button is never gated
-  // on a token: the send waits for one instead (captchaGate.ts).
+  // on a token: the send holds for one instead. While Cloudflare's box waits for a tick, the
+  // button waits too (captchaGate.ts).
   const captcha = createCaptchaGate()
 
   const saved = (outcome: SignInOutcome) => {
@@ -126,8 +138,48 @@ export default function LoginScreen() {
 
   const form = createSignInForm({ mode, captcha, saved })
 
-  /** Another mode, or another way in: the values stay, and nothing from before is said. */
+  // Each step's way back to the form: its own Back button, and the back gesture (below).
+  const leaveTwofa = () => {
+    setStage('form')
+    form.reset({ email: form.values.email, password: '' })
+  }
+  const leaveEmailCode = () => {
+    setStage('form')
+  }
+  const leaveInbox = () => {
+    switchTo('login')
+    form.reset({ email: inbox(), password: '' })
+    setStage('form')
+  }
+
+  // The steps after the form are in memory only, so in an installed app the back gesture had no
+  // entry to pop and closed the app. One history entry while any step is on screen; popping it is
+  // that step's Back. The second factor the Google callback lands on keeps ?twofa=1 on its own
+  // entry only, so the form under it does not reopen the step on a reload.
+  createHistoryStep({
+    active: () => stage() !== 'form',
+    back: () => {
+      const now = stage()
+      if (now === 'twofa') leaveTwofa()
+      else if (now === 'email-code') leaveEmailCode()
+      else if (now === 'inbox') leaveInbox()
+    },
+    below: () => {
+      try {
+        const url = new URL(window.location.href)
+        if (!url.searchParams.has('twofa')) return undefined
+        url.searchParams.delete('twofa')
+        return url.toString()
+      } catch {
+        return undefined
+      }
+    },
+  })
+
+  /** Another mode, or another way in: the values stay, and nothing from before is said or sent. */
   const switchTo = (next: SignInMode) => {
+    // A send still holding for its token was for the mode left behind: it must never go out.
+    captcha.cancel()
     // Leaving the reset form takes #forgot-password off the address, so that neither a reload nor
     // the app after signing in opens the form again. replaceState fires no hashchange.
     if (next !== 'forgot' && forgotInHash()) {
@@ -162,7 +214,7 @@ export default function LoginScreen() {
   // serverless and reload; the gate won't render in that mode. Switch back in Settings.
   const tryDemo = () => {
     setStorageMode('serverless')
-    window.location.reload()
+    reloadPage()
   }
 
   return (
@@ -194,27 +246,15 @@ export default function LoginScreen() {
           when={stage() === 'form'}
           fallback={
             stage() === 'twofa' ? (
-              <TwofaChallenge
-                onBack={() => {
-                  setStage('form')
-                  form.reset({ email: form.values.email, password: '' })
-                }}
-              />
+              <TwofaChallenge onBack={leaveTwofa} />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
                 email={form.values.email}
-                onBack={() => setStage('form')}
+                onBack={leaveEmailCode}
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <CheckInbox
-                email={inbox()}
-                onBack={() => {
-                  switchTo('login')
-                  form.reset({ email: inbox(), password: '' })
-                  setStage('form')
-                }}
-              />
+              <CheckInbox email={inbox()} onBack={leaveInbox} />
             )
           }
         >
@@ -272,6 +312,11 @@ export default function LoginScreen() {
             class={styles.form}
             {...form.attrs}
             onSubmit={(event) => {
+              // While Cloudflare's box waits for a tick there is no submit, so nothing is cleared.
+              if (captcha.asking()) {
+                event.preventDefault()
+                return
+              }
               setNotice('')
               setElsewhere('')
               void form.submit(event)
@@ -283,7 +328,7 @@ export default function LoginScreen() {
               id="login-email"
               label="Email address"
               class={styles.field}
-              labelClass={styles.label}
+              floating
             >
               {(control) => (
                 <input
@@ -307,9 +352,10 @@ export default function LoginScreen() {
                 form={form}
                 name="password"
                 id="login-password"
-                label={<span class={styles.label}>Password</span>}
+                label="Password"
                 class={styles.field}
-                labelClass={styles.labelRow}
+                floating
+                reveal
                 tip={
                   <Show when={mode() === 'login'}>
                     <button
@@ -327,7 +373,6 @@ export default function LoginScreen() {
                 {(control) => (
                   <input
                     {...control}
-                    type="password"
                     name="password"
                     value={form.values.password}
                     onInput={(e) => form.set('password', e.currentTarget.value)}
@@ -340,38 +385,19 @@ export default function LoginScreen() {
 
             {/* Invisible unless Cloudflare wants a click. It sits directly above the button so
                 that, on the rare occasion it does appear, it reads as part of submitting. */}
-            <div class={styles.captchaSlot}>
-              <Turnstile
-                appearance="interaction-only"
-                onToken={captcha.onToken}
-                onStatus={captcha.onStatus}
-              />
-            </div>
-            {/* Only while a submit is actually waiting on the token. Before that there is nothing
-                to explain — the button is live and the challenge resolves on its own. Turnstile
-                draws its own actionable panel for the states the user has to fix. */}
-            <Show
-              when={
-                turnstileEnabled &&
-                form.submitting() &&
-                !captcha.token() &&
-                !captchaIsStuck(captcha.status())
-              }
-            >
-              <div data-test-id="captcha-hint" class={styles.captchaHint}>
-                {captchaStatusMessage(captcha.status())}
-              </div>
-            </Show>
+            <CaptchaCheck gate={captcha} hintClass={styles.captchaHint} />
 
             <SubmitButton
               busy={form.submitting()}
-              busyLabel={
+              blocked={captcha.asking()}
+              aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+              busyLabel={captcha.busyLabel(
                 mode() === 'register'
                   ? 'Creating your account…'
                   : mode() === 'forgot' || mode() === 'confirm'
                     ? 'Sending…'
                     : 'Signing in…'
-              }
+              )}
               class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
             >
               {mode() === 'register'
@@ -395,7 +421,10 @@ export default function LoginScreen() {
                   // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
                   // flag harmlessly — the nudge only renders for an authenticated session.
                   markPasskeyNudgeAfterLogin()
-                  api.loginWithGoogle()
+                  // Off to Google from the entry under any step's, so coming back has none to pop.
+                  afterHistoryStep(() => {
+                    api.loginWithGoogle()
+                  })
                 }}
                 type="button"
               >
@@ -420,7 +449,7 @@ export default function LoginScreen() {
                     setElsewhere('')
                     stopConditional()
                     void signInWithPasskey().then((result) => {
-                      if (result.ok) window.location.reload()
+                      if (result.ok) reloadPage()
                       else if (!result.aborted) setElsewhere(result.error)
                     })
                   }}

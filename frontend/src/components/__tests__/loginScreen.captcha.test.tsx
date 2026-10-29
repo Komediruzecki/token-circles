@@ -8,6 +8,9 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { historySettled } from './historySettled'
+import type * as TurnstileModule from '../Turnstile'
+import type { TurnstileStatus } from '../Turnstile'
 
 const loginWithPassword = vi.fn()
 const register = vi.fn()
@@ -26,11 +29,13 @@ vi.mock('../../core/api', () => ({
 let releaseToken: (token: string) => void = () => {}
 let tokenPromise: Promise<string>
 
-vi.mock('../Turnstile', () => ({
-  default: () => null,
-  captchaIsStuck: () => false,
-  captchaStatusMessage: () => 'Checking your browser…',
-  resetTurnstile: vi.fn(),
+vi.mock('../Turnstile', async () => ({
+  ...(await vi.importActual<typeof TurnstileModule>('../Turnstile')),
+  // Drawn, and checking out of sight: what the widget reports while a press waits on its token.
+  default: (props: { onStatus?: (status: TurnstileStatus) => void }) => {
+    props.onStatus?.('ready')
+    return null
+  },
   turnstileEnabled: true,
   waitForTurnstileToken: () => tokenPromise,
 }))
@@ -62,9 +67,11 @@ beforeEach(() => {
   document.body.appendChild(host)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   host.remove()
+  // A screen unmounted on a step takes its entry back: let that land before the next test.
+  await historySettled()
 })
 
 const flush = () => new Promise((r) => setTimeout(r, 0))
@@ -122,17 +129,21 @@ describe('the sign-in form while the captcha is invisible', () => {
     )
   })
 
-  it('explains the wait only once a submit is actually blocked on it', async () => {
+  it('says it is checking, not signing in, while a submit waits on the token', async () => {
     loginWithPassword.mockResolvedValue({ twofaRequired: true })
     await mount()
     const hint = () => host.querySelector('[data-test-id="captcha-hint"]')
 
-    expect(hint(), 'an idle form has nothing to explain').toBeNull()
+    expect(hint()?.textContent, 'an idle form has nothing to explain').toBe('')
 
     type(emailInput(), 'someone@example.com')
     type(passwordInput(), 'a-long-enough-password')
     submitBtn().click()
-    await waitFor(() => hint() !== null, 'the captcha hint once submit is waiting')
+    await waitFor(() => submitBtn().textContent === "Checking you're human…", 'the held label')
+    // Nothing has gone out, so nothing says it is signing in, and there is no box to point at:
+    // the line under the widget is only for a box that waits for a tick (captchaForms.test.tsx).
+    expect(loginWithPassword).not.toHaveBeenCalled()
+    expect(hint()?.textContent).toBe('')
 
     releaseToken('token-from-cloudflare')
     await waitFor(() => loginWithPassword.mock.calls.length > 0, 'the sign-in request')

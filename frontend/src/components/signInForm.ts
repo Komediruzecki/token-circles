@@ -28,6 +28,7 @@ import {
 import { api } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { noteAddressConfirmed } from '../core/emailVerification'
+import { afterHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import { createForm } from './form'
 import type { FieldErrors } from '../../../shared/refusal'
@@ -75,7 +76,10 @@ export function signInChecks(mode: SignInMode, values: SignInValues): FieldError
 /** The page reloads into the signed-in app. The form waits on it, so its button stays busy. */
 export function reloadIntoTheApp(): Promise<never> {
   markPasskeyNudgeAfterLogin()
-  window.location.reload()
+  // From a step after the form, its history entry goes first: a reload keeps the current entry.
+  afterHistoryStep(() => {
+    window.location.reload()
+  })
   return new Promise<never>(() => {})
 }
 
@@ -94,35 +98,34 @@ export function createSignInForm(options: {
   return createForm<SignInValues, SignInOutcome>({
     initial: { email: '', password: '' },
     check: (values) => signInChecks(options.mode(), values),
+    // Cloudflare's box waits for a tick: a submit changes nothing until it is ticked.
+    blocked: options.captcha.asking,
     send: async (values) => {
       const mode = options.mode()
       const email = values.email.trim()
+      // The token this send takes: the captcha tells its failure from an older send's by it.
+      let token: string | undefined
       try {
+        token = await options.captcha.next()
         if (mode === 'forgot') {
-          await api.forgotPassword(email, await options.captcha.next())
+          await api.forgotPassword(email, token)
           return { kind: 'reset-link-sent' }
         }
         if (mode === 'confirm') {
-          await api.resendConfirmLink(email, await options.captcha.next())
+          await api.resendConfirmLink(email, token)
           return { kind: 'check-inbox', email }
         }
         if (mode === 'register') {
-          await api.register(email, values.password, await options.captcha.next())
+          await api.register(email, values.password, token)
           return { kind: 'check-inbox', email }
         }
-        const login = await api.loginWithPassword(
-          email,
-          values.password,
-          await options.captcha.next()
-        )
+        const login = await api.loginWithPassword(email, values.password, token)
         if (login?.emailConfirmed) noteAddressConfirmed()
         // The password was right; the session waits behind the second factor.
         if (login?.twofaRequired) return { kind: 'second-factor' }
         return await reloadIntoTheApp()
       } catch (error) {
-        throw forTheWholeForm(options.captcha.explain(error))
-      } finally {
-        options.captcha.spent()
+        throw forTheWholeForm(options.captcha.explain(error, token))
       }
     },
     saved: options.saved,

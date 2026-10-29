@@ -2,12 +2,12 @@ import { createEffect, createSignal, Show } from 'solid-js'
 import { addressProblems, SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import { createForm, Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import { reloadIntoTheApp, SIGN_IN_FAILED } from './signInForm'
 import styles from './SignInSteps.module.css'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import type { FieldErrors } from '../../../shared/refusal'
 
 /**
@@ -27,20 +27,22 @@ export default function EmailCodeLogin(props: {
   onTwofa: () => void
 }) {
   const [step, setStep] = createSignal<'request' | 'verify'>('request')
-  // The widget shows here; the send waits for its token rather than the button waiting for it.
+  // The widget shows here only when Cloudflare wants a click; the send holds for its token rather
+  // than the button waiting for it (captchaGate.ts).
   const captcha = createCaptchaGate()
 
   const request = createForm<{ email: string }>({
     // The address the screen had when this step opened.
     initial: { email: props.email ?? '' },
     check: (values) => addressProblems(values),
+    blocked: captcha.asking,
     send: async (values) => {
+      let token: string | undefined
       try {
-        await api.requestEmailCode(values.email.trim(), await captcha.next())
+        token = await captcha.next()
+        await api.requestEmailCode(values.email.trim(), token)
       } catch (error) {
-        throw captcha.explain(error)
-      } finally {
-        captcha.spent()
+        throw captcha.explain(error, token)
       }
     },
     saved: () => {
@@ -85,13 +87,7 @@ export default function EmailCodeLogin(props: {
           </p>
           <FormNotice form={request} testId="emailcode-error" />
           <form {...request.attrs}>
-            <Field
-              form={request}
-              name="email"
-              label="Email address"
-              class={styles.field}
-              labelClass={styles.label}
-            >
+            <Field form={request} name="email" label="Email address" class={styles.field} floating>
               {(control) => (
                 <input
                   {...control}
@@ -104,18 +100,13 @@ export default function EmailCodeLogin(props: {
                 />
               )}
             </Field>
-            <Turnstile onToken={captcha.onToken} onStatus={captcha.onStatus} />
-            {/* The ordinary "not solved yet" hint, which also says why a send is waiting.
-                Turnstile draws its own panel for the states the user must fix. */}
-            <Show when={turnstileEnabled && !captcha.token() && !captchaIsStuck(captcha.status())}>
-              <div data-test-id="captcha-hint" class={styles.hint}>
-                {captchaStatusMessage(captcha.status())}
-              </div>
-            </Show>
+            <CaptchaCheck gate={captcha} hintClass={styles.hint} />
             <SubmitButton
               data-test-id="emailcode-send"
               busy={request.submitting()}
-              busyLabel="Sending…"
+              blocked={captcha.asking()}
+              aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+              busyLabel={captcha.busyLabel('Sending…')}
               class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
             >
               Email me a code
@@ -185,6 +176,18 @@ export default function EmailCodeLogin(props: {
             }}
           >
             Send another
+          </button>
+        </p>
+        <p class={styles.links}>
+          <button
+            type="button"
+            data-test-id="emailcode-verify-back"
+            class={`${styles.link} ${styles.linkQuiet}`}
+            onClick={() => {
+              props.onBack()
+            }}
+          >
+            Back to sign in
           </button>
         </p>
       </form>

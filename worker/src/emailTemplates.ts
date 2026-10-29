@@ -31,9 +31,6 @@ const REPO_URL = 'https://github.com/Komediruzecki/token-circles';
 const TERMS_URL = `${ABOUT_URL}/terms`;
 const PRIVACY_URL = `${ABOUT_URL}/privacy`;
 const CONTACT_EMAIL = 'hello@tokencircles.com';
-// Mail assets load from the SENDING environment's app origin (dev mails must
-// not depend on a prod release shipping the asset); footer links stay
-// canonical. Defaults to the prod app for safety.
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 export interface RenderedEmail {
@@ -87,7 +84,9 @@ export function formatMoney(amount: number, currency?: string | null): string {
 // Dark by default, which is what Gmail and classic Outlook show; paper in light mode through
 // prefers-color-scheme, which Apple Mail reads. Every dark colour of the page, the card and the
 // button is also a bgcolor attribute, which classic Outlook reads where it ignores CSS. The
-// system font stack, as the app uses: no web fonts, no serif.
+// system font stack, as the app uses: no web fonts, no serif. The head declares "light only"
+// (COLOR_SCHEME_META), which stops the Gmail apps recolouring the mail, and every line of text
+// carries its own colour.
 //
 // The art is a real <img> above live text, never a CSS background: Gmail's desktop webmail draws
 // background images badly and classic Outlook needs VML for them. Its files sit in
@@ -122,11 +121,34 @@ const ART = {
 } as const;
 
 /**
+ * The color-scheme lines of every mail's head. The mail is drawn dark, with a paper variant for
+ * clients that fire prefers-color-scheme: light, but it declares "light only". MercuryPitch's probe
+ * mails of 2026-10-14 (its PR #1010) found that the Gmail app on the iPhone, in dark mode, recolours
+ * a mail that declares "dark" (here "dark light" turned the page white) and shows one that declares
+ * "light only" as drawn; it ignores "dark", and neither prefers-color-scheme query fires there.
+ * Proton on the iPhone fires the query either way, and a media query reads the reader's setting,
+ * not the declaration, so the paper variant still comes where it did. A client that honours "light
+ * only" gives text with no colour of its own the light defaults, black and link blue, so every
+ * line of text, link and picture carries its own: worker/test/mail-color-scheme.test.ts.
+ */
+const COLOR_SCHEME_META = `<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">`;
+
+/**
+ * Text a client turns into a link takes the colour of the words around it. Apple Mail's data
+ * detectors, and possibly the Gmail apps, link dates and addresses; under "light only" such a link
+ * would be link blue. The Gmail apps keep a head <style> and match `u + #body` (MercuryPitch's
+ * probe), which is why <body> has id="body". The Gmail rule sets the colour alone and is not
+ * !important, so the mail's own links keep their inline colours.
+ */
+const AUTO_LINK_STYLE = `<style>a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}u + #body a{color:inherit;}</style>`;
+
+/**
  * The light scheme and the phone width: the only rules that cannot be inline. `tables` adds the
  * rules only a mail with a table needs, so a mail without one carries none of them.
  */
 const mailStyle = (tables: boolean) => `<style>
-:root { color-scheme: dark light; supported-color-schemes: dark light; }
+:root { color-scheme: light only; supported-color-schemes: light only; }
 @media (prefers-color-scheme: light) {
   .tc-page { background:#eeeae1 !important; }
   .tc-card { background:#fbf9f4 !important; }
@@ -135,6 +157,7 @@ const mailStyle = (tables: boolean) => `<style>
   .tc-muted { color:#525c79 !important; }
   .tc-link { color:#2f5cc4 !important; }
   .tc-rule { border-color:#ddd8cc !important; }
+  .tc-sep { color:#c4beb1 !important; }
   .tc-btn-td { background:#2f5cc4 !important; }
   .tc-btn { color:#ffffff !important; }
   .tc-btn2-td { border-color:#2f5cc4 !important; }
@@ -176,7 +199,8 @@ export interface MailLink {
 export interface MailStep {
   title: string;
   text: string;
-  link: MailLink;
+  /** The page the step opens. None where the reader cannot open a page yet. */
+  link?: MailLink;
 }
 
 /** One cell of a table: its words, plain text, and how they read. */
@@ -242,6 +266,13 @@ export interface MailSpec {
   unsubUrl?: string | null;
   /** The words of that link, where it stops less than every mail: "Stop first-week mails". */
   unsubLabel?: string;
+  /**
+   * The mail goes to an address that is not confirmed yet, with the link that confirms it. It then
+   * carries no link into the app, the wordmark's and the text twin's "Open the app" included: a
+   * sign-in before the address is confirmed is refused, so such a link would end on a sign-in
+   * that answers as a wrong password (routes/auth.ts).
+   */
+  unconfirmed?: boolean;
   /** The origin that serves the wordmark and the art: the sending environment's app. */
   assetOrigin?: string;
 }
@@ -294,7 +325,7 @@ function mailSteps({ title, items }: NonNullable<MailSpec['steps']>, bottom: num
   const rows = items
     .map(
       (step, i) =>
-        `<tr><td class="tc-rule" style="border-top:1px solid ${INK.rule};padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34" valign="top" class="tc-muted" style="font:600 14px/1.5 ${FONT};color:${INK.muted}">${i + 1}</td><td valign="top"><div class="tc-text" style="font:600 16px/1.4 ${FONT};color:${INK.text}">${escapeHtml(step.title)}</div><div class="tc-soft" style="margin:4px 0 0;font:14px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(step.text)}</div><div style="margin:8px 0 0;font:14px/1.4 ${FONT}">${mailLink({ label: `${step.link.label} →`, href: step.link.href })}</div></td></tr></table></td></tr>`
+        `<tr><td class="tc-rule" style="border-top:1px solid ${INK.rule};padding:16px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="34" valign="top" class="tc-muted" style="font:600 14px/1.5 ${FONT};color:${INK.muted}">${i + 1}</td><td valign="top"><div class="tc-text" style="font:600 16px/1.4 ${FONT};color:${INK.text}">${escapeHtml(step.title)}</div><div class="tc-soft" style="margin:4px 0 0;font:14px/1.6 ${FONT};color:${INK.soft}">${escapeHtml(step.text)}</div>${step.link ? `<div style="margin:8px 0 0;font:14px/1.4 ${FONT}">${mailLink({ label: `${step.link.label} →`, href: step.link.href })}</div>` : ''}</td></tr></table></td></tr>`
     )
     .join('');
   return `<tr><td class="tc-pad" style="padding:26px 36px ${bottom}px"><div class="tc-muted" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.muted};margin:0 0 6px">${escapeHtml(title)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>`;
@@ -349,26 +380,76 @@ const mailTableText = (table: MailTable) =>
     ...(table.rows.length ? table.rows.map((row) => row.text) : [table.empty ?? '']),
   ].join('\n');
 
-/** The text twin's last lines, the same for every mail on this layout. */
-const mailTextFooter = (reason: string, unsubUrl?: string | null, unsubLabel = 'Unsubscribe') =>
+/** The footer's first line. */
+const TAGLINE = 'Your money, in clear orbit. Open source and local-first.';
+
+/**
+ * The footer's row of links. Four short words joined by no-break spaces, so the row never wraps
+ * and no line starts or ends with a dot: about 200 px at 13 px, which fits the 264 px a 320 px
+ * phone leaves it. The app is the wordmark's link; the contact address has a line of its own.
+ */
+const FOOTER_LINKS: MailLink[] = [
+  { label: 'About', href: ABOUT_URL },
+  { label: 'GitHub', href: REPO_URL },
+  { label: 'Terms', href: TERMS_URL },
+  { label: 'Privacy', href: PRIVACY_URL },
+];
+
+const footerLink = ({ label, href }: MailLink, color: string = INK.link, cls = 'tc-link') =>
+  `<a class="${cls}" href="${escapeHtml(href)}" style="color:${color};text-decoration:none">${escapeHtml(label)}</a>`;
+
+/**
+ * The footer, centred under the card, one block a line: the tagline, the links, the copyright,
+ * the contact address, and then, set apart, why this mail came with its unsubscribe link.
+ */
+function mailFooter(reason: string, unsubUrl?: string | null, unsubLabel = 'Unsubscribe'): string {
+  // Each sentence of the tagline holds together, so a phone breaks it between them and never
+  // after "local-", which left "first." alone on a line at 375 px.
+  const taglineHtml = TAGLINE.split('. ')
+    .map(
+      (sentence, i, all) =>
+        `<span style="white-space:nowrap">${escapeHtml(i < all.length - 1 ? `${sentence}.` : sentence)}</span>`
+    )
+    .join(' ');
+  const dot = `<span class="tc-sep" style="color:${INK.rule}">&nbsp;&middot;&nbsp;</span>`;
+  const p = (margin: string, size: number, html: string, extra = '') =>
+    `<p class="tc-muted" style="margin:${margin};font:${size}px/1.6 ${FONT};color:${INK.muted};${extra}">${html}</p>`;
+  return `<tr><td align="center" style="padding:24px 16px 8px;text-align:center">
+${p('0 0 12px', 14, taglineHtml)}
+${p('0 0 14px', 13, FOOTER_LINKS.map((link) => footerLink(link)).join(dot), 'white-space:nowrap')}
+${p('0 0 4px', 12, `&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0`, 'white-space:nowrap')}
+${p('0', 12, footerLink({ label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` }, INK.muted, 'tc-muted'))}
+${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: unsubLabel, href: unsubUrl })}` : ''}`)}
+</td></tr>`;
+}
+
+/** The text twin's last lines, the same for every mail on this layout, in the footer's order. */
+const mailTextFooter = (
+  reason: string,
+  unsubUrl?: string | null,
+  unconfirmed = false,
+  unsubLabel = 'Unsubscribe'
+) =>
   [
-    'Your money, in clear orbit. Open source and local-first.',
-    `Open the app: ${APP_URL}`,
-    `About: ${ABOUT_URL}`,
-    `GitHub: ${REPO_URL}`,
-    `Terms: ${TERMS_URL}`,
-    `Privacy: ${PRIVACY_URL}`,
+    TAGLINE,
+    ...(unconfirmed ? [] : [`Open the app: ${APP_URL}`]),
+    ...FOOTER_LINKS.map(({ label, href }) => `${label}: ${href}`),
+    `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0`,
+    CONTACT_EMAIL,
     '',
     reason,
     ...(unsubUrl ? [`${unsubLabel}: ${unsubUrl}`] : []),
-    `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0 · ${CONTACT_EMAIL}`,
   ].join('\n');
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
 export function renderMail(spec: MailSpec): RenderedEmail {
+  // The wordmark and the art load from the SENDING environment's app origin, so a dev mail never
+  // depends on a prod release shipping the file; the links stay canonical. The prod app when the
+  // caller names none.
   const assets = spec.assetOrigin || APP_URL;
   const art = ART[spec.art];
-  const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0">`;
+  const wordmark = `<img src="${assets}/icon-192.png" width="26" height="26" alt="" class="tc-text" style="vertical-align:middle;border:0;border-radius:7px;color:${INK.text}"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span>`;
+  const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" class="tc-soft" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0;color:${INK.soft}">`;
   // The card's last row carries its bottom padding.
   const after = { steps: !!spec.steps, signOff: !!spec.signOff, aside: !!spec.aside };
   const rows = [
@@ -397,37 +478,25 @@ export function renderMail(spec: MailSpec): RenderedEmail {
       ? `<tr><td class="tc-pad" style="padding:8px 36px 30px"><div class="tc-rule" style="border-top:1px solid ${INK.rule};padding-top:16px">${mailSmall(escapeHtml(spec.aside), 0)}</div></td></tr>`
       : '',
   ].join('');
-  const footerLinks = [
-    { label: 'Open the app', href: APP_URL },
-    { label: 'About', href: ABOUT_URL },
-    { label: 'GitHub', href: REPO_URL },
-    { label: 'Terms', href: TERMS_URL },
-    { label: 'Privacy', href: PRIVACY_URL },
-  ]
-    .map(mailLink)
-    .join(' &nbsp;&middot;&nbsp; ');
   const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="dark light">
-<meta name="supported-color-schemes" content="dark light">
+${COLOR_SCHEME_META}
 <title>${escapeHtml(spec.subject)}</title>
+${AUTO_LINK_STYLE}
 ${mailStyle(!!spec.tables)}
 </head>
-<body class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+<body id="body" class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;color:${INK.page}">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
 <table role="presentation" class="tc-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK.page}" style="background:${INK.page}"><tr><td align="center" style="padding:22px 12px 30px">
 <!--[if mso]><table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px"><tr><td><![endif]-->
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
-<tr><td style="padding:2px 6px 14px"><a href="${APP_URL}" style="text-decoration:none"><img src="${assets}/icon-192.png" width="26" height="26" alt="" style="vertical-align:middle;border:0;border-radius:7px"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
+<tr><td style="padding:2px 6px 14px">${spec.unconfirmed ? wordmark : `<a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}">${wordmark}</a>`}</td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
-<tr><td class="tc-pad" style="padding:22px 36px 4px">
-<p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
-<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}${spec.unsubUrl ? ` ${mailLink({ label: spec.unsubLabel ?? 'Unsubscribe', href: spec.unsubUrl })}` : ''}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
-</td></tr>
+${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel)}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
@@ -449,13 +518,13 @@ ${mailStyle(!!spec.tables)}
           spec.steps.title,
           ...spec.steps.items.map(
             (step, i) =>
-              `${i + 1}. ${step.title}\n${step.text}\n${step.link.label}: ${step.link.href}`
+              `${i + 1}. ${step.title}\n${step.text}${step.link ? `\n${step.link.label}: ${step.link.href}` : ''}`
           ),
         ]
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason, spec.unsubUrl, spec.unsubLabel),
+    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed, spec.unsubLabel),
   ].join('\n\n');
   // The footer's unsubscribe link is also the List-Unsubscribe header sendMail sends, so the two
   // can never name different links.
@@ -474,60 +543,49 @@ ${mailStyle(!!spec.tables)}
 // A password sign-up gets Confirm, which carries the link that opens the account and nothing
 // else. The Welcome comes once the address is confirmed (by that link, Google sign-in, an emailed
 // sign-in code or a reset link), or at once for a Google sign-up, whose address Google confirmed:
-// worker/src/welcome.ts decides when, and makes sure it goes once.
+// worker/src/welcome.ts decides when, and makes sure it goes once. Confirm and the fresh link go to
+// an address that is not confirmed yet, so neither links into the app (MailSpec.unconfirmed).
 
 /** How long a link lasts, in words. */
 const lasts = (hours: number) => (hours === 1 ? '1 hour' : `${hours} hours`);
 
+/** What both confirm mails say to someone who never signed up. */
+const NOT_YOU = `Didn't sign up for ${BRAND}? Ignore this mail. Nobody can use the account until this address is confirmed.`;
+
+/** Why a mail with a confirm link came. */
+const SIGNED_UP = `You are getting this because this address was used to sign up for ${BRAND}.`;
+
 /**
- * Everything the two confirm mails share: the button, the small print and the footer.
+ * Confirm: the mail a password sign-up gets, with the link that opens the account.
  *
- * Both say what the link does today. It spends itself only for its own account's session, which
- * a new password account does not have yet, so opening it asks for a sign-in, in any browser, and
- * that sign-in confirms the address (email-link.ts). They promise nothing more until the
- * same-browser sign-in ships, which is when Confirm can say "One click" again (maff's call of
+ * It says what the link does today. The link spends itself only for its own account's session,
+ * which a new password account does not have yet, so opening it asks for a sign-in, in any
+ * browser, and that sign-in confirms the address (email-link.ts). It promises nothing more until
+ * the same-browser sign-in ships, which is when Confirm can say "One click" again (maff's call of
  * 2026-10-11).
  */
-function confirmMail(opts: {
-  subject: string;
-  preheader: string;
-  headline: string;
-  paragraphs: MailSpec['paragraphs'];
-  link: string;
-  ttlHours: number;
-  assetOrigin?: string;
-}): RenderedEmail {
-  return renderMail({
-    subject: opts.subject,
-    preheader: opts.preheader,
-    art: 'banner',
-    headline: opts.headline,
-    paragraphs: opts.paragraphs,
-    buttons: [{ label: 'Confirm my email', href: opts.link }],
-    notes: [
-      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
-    ],
-    paste: opts.link,
-    aside: `Didn't sign up for ${BRAND}? Ignore this mail. Nobody can use the account until this address is confirmed.`,
-    reason: `You are getting this because this address was used to sign up for ${BRAND}.`,
-    assetOrigin: opts.assetOrigin,
-  });
-}
-
-/** Confirm: the mail a password sign-up gets, with the link that opens the account. */
 export function renderConfirmEmail(opts: {
   link: string;
   ttlHours: number;
   assetOrigin?: string;
 }): RenderedEmail {
-  return confirmMail({
+  return renderMail({
     subject: `Confirm your email for ${BRAND}`,
     preheader: `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
+    art: 'banner',
     headline: "One link, one sign-in, and you're in.",
     paragraphs: [
       `Open the link in any browser and sign in there. That confirms this address and opens your ${BRAND} account.`,
     ],
-    ...opts,
+    buttons: [{ label: 'Confirm my email', href: opts.link }],
+    notes: [
+      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
+    ],
+    paste: opts.link,
+    aside: NOT_YOU,
+    unconfirmed: true,
+    reason: SIGNED_UP,
+    assetOrigin: opts.assetOrigin,
   });
 }
 
@@ -535,23 +593,60 @@ export function renderConfirmEmail(opts: {
  * A fresh confirm link: Send the link again, or a sign-up again for an address still waiting for
  * its link, which an inbox gets without having asked, so the mail says nothing of asking. Minting
  * it retires the links sent before it (createEmailVerification), and the mail says so.
+ *
+ * It says what the link does today. It spends itself at once where its own account is signed in
+ * (a link asked for from the Confirm your email screen, in that session); anywhere else it asks
+ * for a sign-in, in any browser, and that sign-in confirms the address (email-link.ts). So the
+ * sign-in is conditional here. It promises nothing more until the same-browser sign-in ships,
+ * which is when a mail can say "One click" again (maff's call of 2026-10-11).
  */
 export function renderEmailVerification(opts: {
   link: string;
   ttlHours: number;
   assetOrigin?: string;
 }): RenderedEmail {
-  return confirmMail({
+  return renderMail({
     subject: `Your new confirm link for ${BRAND}`,
     preheader: `It replaces the links sent before. It works once, for ${lasts(opts.ttlHours)}.`,
+    art: 'banner',
     headline: "Here's a fresh link.",
     paragraphs: [
       'Use this link to confirm your address. It replaces the ones sent before.',
-      `Open it in any browser and sign in there, and your ${BRAND} account opens.`,
+      `If it asks you to sign in, sign in right there, in this browser or any other, and your ${BRAND} account opens.`,
     ],
-    ...opts,
+    buttons: [{ label: 'Confirm my email', href: opts.link }],
+    notes: [
+      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
+    ],
+    paste: opts.link,
+    aside: NOT_YOU,
+    unconfirmed: true,
+    reason: SIGNED_UP,
+    assetOrigin: opts.assetOrigin,
   });
 }
+
+/** Where the Welcome says to start: the three pages, and why each. */
+const WELCOME_STEPS = [
+  {
+    title: 'Bring your history',
+    text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
+    label: 'Open Import',
+    hash: '#import',
+  },
+  {
+    title: 'Find your subscriptions',
+    text: `${BRAND} spots the subscriptions in your statements, from streaming to cloud storage, with each one's price and how often it charges. Tick the ones you want tracked as bills.`,
+    label: 'Open Bills',
+    hash: '#bills',
+  },
+  {
+    title: 'Watch your year fill in',
+    text: "Progress counts every month that holds three or more entries. Twelve in a row earns the A year badge, and a full year's import can earn it on day one.",
+    label: 'Open Progress',
+    hash: '#progress',
+  },
+] as const;
 
 /**
  * The Welcome. Step 3 is the version for before finance prints ship: what Progress counts, and the
@@ -573,23 +668,11 @@ export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = 
     buttons: [{ label: 'Import statements', href: `${app}/#import` }],
     steps: {
       title: 'Where to go first',
-      items: [
-        {
-          title: 'Bring your history',
-          text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
-          link: { label: 'Open Import', href: `${app}/#import` },
-        },
-        {
-          title: 'Find your subscriptions',
-          text: `${BRAND} spots the subscriptions in your statements, from streaming to cloud storage, with each one's price and how often it charges. Tick the ones you want tracked as bills.`,
-          link: { label: 'Open Bills', href: `${app}/#bills` },
-        },
-        {
-          title: 'Watch your year fill in',
-          text: "Progress counts every month that holds three or more entries. Twelve in a row earns the A year badge, and a full year's import can earn it on day one.",
-          link: { label: 'Open Progress', href: `${app}/#progress` },
-        },
-      ],
+      items: WELCOME_STEPS.map(({ title, text, label, hash }) => ({
+        title,
+        text,
+        link: { label, href: `${app}/${hash}` },
+      })),
     },
     signOff: "Questions, or a bank file that won't import? Reply to this mail.",
     reason: `You are getting this because a ${BRAND} account was created with this address.`,

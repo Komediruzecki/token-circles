@@ -1,9 +1,10 @@
 /*
- * Sign-in gate. The form is left-aligned with a label above every field — a placeholder is not a
- * label: it disappears the moment you type, so a half-filled form stops saying what its fields
- * are, and screen readers get nothing to announce.
+ * Sign-in gate. Each field's label sits inside its box and moves to the top edge once the field
+ * has focus or a value (the form kit's `floating`, Form.module.css). It stays a real label: a
+ * placeholder would disappear the moment you type, so a half-filled form would stop saying what
+ * its fields are, and screen readers would get nothing to announce.
  *
- * Only the header is centred; everything from the first label down reads as a column.
+ * Only the header is centred; everything from the first field down reads as a column.
  */
 
 .screen {
@@ -110,20 +111,6 @@
   gap: 6px;
 }
 
-/* Holds the label and, on the password field, the forgot link on the same baseline. */
-.labelRow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text, #e6e8eb);
-}
-
 .input {
   width: 100%;
   padding: 10px 12px;
@@ -140,14 +127,7 @@
   outline-offset: 1px;
 }
 
-/*
- * Turnstile in interaction-only mode renders nothing at all when it passes silently, so this slot
- * collapses to zero height rather than reserving a gap for a widget that usually never appears.
- */
-.captchaSlot:empty {
-  display: none;
-}
-
+/* Under Cloudflare's box, while it waits for a tick. */
 .captchaHint {
   color: var(--text-secondary);
   font-size: 12px;

@@ -70,28 +70,14 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Mails
 
-- **A second mail layout, with engraved art** (`renderMail` in `worker/src/emailTemplates.ts`). The
-  wordmark sits above the card and the art flush at its top; then an eyebrow where it adds
-  something (only the Welcome has one), one headline, one or two short paragraphs, a button (or a button and a quieter outlined one, which a phone stacks
-  under it, each full width), at most one list of numbered steps, and the footer outside the
-  card. Dark by default; paper in light mode through
-  `prefers-color-scheme`, with the page, card and button colours also set as `bgcolor` attributes
-  for classic Outlook, which also ignores `max-width`: an `<!--[if mso]>` table holds the column
-  (wordmark, card and footer) at 600 px there. The system font stack, no Georgia. The art is two cuts of one image,
-  `frontend/public/email/hero-engraved-night-v1.jpg` (1200 x 560, for the welcome) and
-  `banner-engraved-night-v1.jpg` (1199 x 360, for every other mail on the layout), loaded from the
-  sending app. `/email/*` is now served `Cache-Control: public, max-age=31536000, immutable`, which
-  is safe only because a file there is never overwritten: new art gets a new name. The master and
-  its prompt are in `docs/design/mail-art/`. In the HTML a headline keeps its last two words on one
-  line and a number keeps its unit ("10 minutes"), through no-break spaces; the plain-text twin
-  carries every fact of the footer (its line, the links, Terms, Privacy and the contact address).
 - **Confirm and the Welcome are two mails, and the Welcome goes once** (`worker/src/welcome.ts`,
   migration `0033_welcome_once.sql`). A password sign-up gets Confirm (`renderConfirmEmail`): the
-  link that opens the account and nothing else. Send the link again, and a sign-up again for an
-  address waiting for its link, get a fresh link (`renderEmailVerification`), which says it
-  replaces the links sent before and never that the reader asked for it. Until the same-browser
-  sign-in ships, both say the link asks for a sign-in, in any browser, and neither promises a
-  one-click confirm (maff's call of 2026-10-11): "One link, one sign-in, and you're in." The
+  link that opens the account and nothing else, where 5.17.1 sends one Welcome with the confirm link
+  in it. `renderWelcome` loses its `verifyUrl` form, and the catalogue's `welcome-confirm` sample is
+  `confirm-email`. Confirm is on the 5.17.1 layout with `MailSpec.unconfirmed`, as the fresh link
+  (`renderEmailVerification`) is, so neither carries a link into the app. Until the same-browser
+  sign-in ships, Confirm says the link asks for a sign-in, in any browser, and promises no one-click
+  confirm (maff's call of 2026-10-11): "One link, one sign-in, and you're in." The
   Welcome (`renderWelcome`) goes to an account once: when its address is first confirmed, by its
   link (opened with its own session, a password sign-in in the browser that opened it, or
   `POST /api/auth/email-link/finish`), a change link (a Google account stored with no confirmed
@@ -104,59 +90,10 @@ All notable changes to Token Circles are documented here. The format is based on
   that race only one sends it. The mail goes in `waitUntil`, best effort: a failed send is logged
   (`[email] Resend <status>` by `sendMail` when Resend refuses it, `Welcome email failed:` when the
   send throws) and is not retried; the claim stays. `resolveGoogleUser` returns `welcome`; `spendLink`
-  and `confirmWithOwnLink` take the route's welcomer. Step 3 of the Welcome is the version for
-  before finance prints ship: Progress, and the A year badge.
-- **The account mails moved to the new layout**
-  (`worker/src/emailTemplates.ts`). On the layout now, with their facts kept and their em dashes
-  gone: the link to a new address (`renderEmailChange`); the notice to the old address
-  (`renderEmailChangeNotice`), one sentence of what was asked and the one thing to do, in Settings;
-  "already has an account" (`renderAccountExists`), with Sign in, and Reset password to
-  `#forgot-password`, the reset form; the password reset; the sign-in code, large and monospaced and still first in the subject; the test
-  mail ("Test mail from Token Circles"), which no longer says the reminders look like it; and the
-  support reply ("We got your message (TC-...)"); and the two billing mails that show no amount,
-  the bank asking to confirm a payment (`renderPaymentActionRequired`) and a plan that ended
-  (`renderSubscriptionEnded`), which lost the old shell's `card` helper, their last user. The four
-  that show an amount stayed on the first shell until maff's call of 2026-10-29 (next entry).
-  `worker/scripts/mail-samples.ts` renders every mail from plainly fake data, and
-  `worker/test/mail-catalogue.test.ts` holds every one to the rules (a sample of every renderer, a
-  snapshot of every subject, under 102 KB, a text twin with the card's links, no em dash) and pins
-  the four amount mails over a grid of 584 inputs (`worker/test/helpers/amount-mail-grid.ts`, one
-  digest per renderer). The worker's `typecheck` also checks `worker/scripts/`, which has its own
-  tsconfig.
-- **The four mails that show an amount moved to the new layout, amounts kept**
-  (`worker/src/emailTemplates.ts`, maff's call of 2026-10-29). The budget alert
-  (`renderBudgetAlert`), the spending report (`renderSpendingReport`), upcoming bills
-  (`renderBillsReminder`) and the failed payment (`renderPaymentFailed`) are on `renderMail` now:
-  the banner art, paper in light mode, the shared footer and text twin, and no animated
-  `/email/orbit.gif` and no em dash in any subject or body. Every amount still goes through
-  `formatMoney` in the profile's currency, in the HTML and in the text. `MailSpec` takes up to two
-  `tables` (column heads or none, a category's colour as a dot through `sanitizeColor`, status
-  tones `over`, `warn` and `good` with darker colours on paper, figures right-aligned and never
-  broken, each row also one line of the text twin) and an `unsubUrl`: an Unsubscribe link after the
-  footer's reason and an `Unsubscribe:` line in the text. A mail without a table carries none of
-  the table rules, and the samples of every other mail render byte for byte as before. Subjects lose
-  " — Token Circles" and say what happened: "Budget alert: Groceries went over" or "Budget alert:
-  Fuel is at 92%" (the budget furthest along; a preview adds "for October 2026"), "2 bills due
-  within a week" or "1 bill overdue, 3 due within a week", "Your spending report, 2026-10-01 to
-  2026-10-15" ("for <period>" on a preview); the failed payment's subject is unchanged. Headlines
-  carry the outcome ("A budget went over its limit.", "You kept €701.25."); the budget headline
-  says "close to its limit" only when every budget listed is at 80% or more, because the preview
-  lists them all. The footer reason names the toggle under Email reminders, or the preview. A bill
-  with no due date reads "No date", and one transaction is "1 transaction". `shell()` and
-  everything only it used (`btn`, `h1`, `p`, `textFooter`, the old table helpers, the first
-  palette, the serif and the GIF's URL) are gone; `frontend/public/email/orbit.gif` stays, because
-  mails already sent point at it. The grid of 584 inputs keeps its inputs and pinned counts and
-  gets new digests on purpose, taken under plain Node as the old ones were (the same lines give the
-  old digests from `c010b74c`'s templates), and a new test walks it: every mail on the layout, no
-  orbit GIF, no em dash in subject, HTML or text, and every amount of its input in both parts.
-- **`worker/scripts/send-sample-mails.ts` mails a sample of every mail to one inbox**, through
-  Resend's REST API, from `mail-samples.ts`. It needs `--to`, reads `RESEND_API_KEY` and
-  `EMAIL_FROM` from the environment under the Worker's names, and prints one line per sample: its
-  name and Resend's message id, or the error. Before sending anything it trims the key and refuses
-  one that is not `^re_[A-Za-z0-9_-]+$` (exit 2, nothing sent, nothing of the value printed), and
-  an error it prints has `[key]` wherever it quoted the key. `--dry-run <folder>` writes each mail as `.html` and
-  `.txt` instead of sending, and needs no key; `--only`, `--app-url` and `--asset-origin` pick the
-  samples and the origins. It runs on a Node that strips types by default, with no build step.
+  and `confirmWithOwnLink` take the route's welcomer.
+- **"Already has an account" has Reset password** (`renderAccountExists`): a quieter second button
+  after Sign in that opens the sign-in screen on the reset form, `#forgot-password` (above). In
+  5.17.1 the mail has Sign in alone and says the reset is on the sign-in screen.
 - **The week-one mails** (`worker/src/weekOne.ts`, renderers `renderWeekOneDay2` and
   `renderWeekOneDay7` in `emailTemplates.ts`). Day 2 goes only while no transaction in any of the
   account's profiles has an `import_id`; day 7 only once one does. Day 0 is the account's Welcome
@@ -182,15 +119,12 @@ All notable changes to Token Circles are documented here. The format is based on
   the first of `shared/orientation.ts` `nextSteps` with the facts the Worker can count (the
   subscription scan, the month in the red, the top category without a budget and the cushion read
   as "does not apply"). No amount, category or merchant name reaches the mail.
-- **The week-one stop link and its headers.** `renderMail` now sets `RenderedEmail.listUnsubscribe`
-  from `MailSpec.unsubUrl`, so every mail on the layout with a footer unsubscribe link (the three
-  reminders and the two week-one mails) sends that same URL as List-Unsubscribe through
-  `sendMail`'s `listUnsubscribe` (#648); the week-one sender passes `rendered.listUnsubscribe`.
-  `sendMail` also returns Resend's `status` on a refusal, which the week-one sender reads.
-  `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); the
-  catalogue's footer check now reads `&amp;` in an href as `&`, and the amount-mail digests hash
-  every field of a mail but `listUnsubscribe`, so they still pin the reviewed output byte for byte (unchanged
-  digests) while `listUnsubscribe` is held by `list-unsubscribe-headers.test.ts`.
+- **The week-one stop link and its headers.** The week-one sender passes `rendered.listUnsubscribe`,
+  which `renderMail` sets from `MailSpec.unsubUrl` (5.17.1), to `sendMail`'s `listUnsubscribe`
+  (#648), so a week-one mail's stop link and its List-Unsubscribe header are the same URL. `sendMail`
+  also returns Resend's `status` on a refusal, which the week-one sender reads.
+  `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); a mail
+  without one keeps "Unsubscribe".
 - **`/api/notifications/unsubscribe?token=...&list=week-one`** (`routes/notifications.ts`). GET
   shows "Stop first-week mails?" with one button that posts back to the same URL, and changes
   nothing; once they are off it says so with no button. POST, from the button or an RFC 8058
@@ -1166,6 +1100,187 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
 - **Tests:** `guidanceBenchmarks.test.ts` (both lenders by name; every cushion derivation names
   each source it keeps, and no method).
 
+## [5.17.2] — 2026-10-30
+
+### Sign-in
+
+- **Labels inside the box and a password reveal, in the form kit.** Ported from MercuryPitch's
+  sign-in dialog (`AuthModal`), on Token Circles' own tokens. `Field`
+  (`frontend/src/components/form/Field.tsx`) takes two props, fixed for the field's life like its
+  form and name. `floating` renders the `<label for>` after the control, in a positioned box
+  (`.box.floating`, `Form.module.css`), and gives the control a blank `placeholder`. The label rests
+  at the box's middle and moves to its top edge on `:focus-within`, on `data-filled` (set from the
+  form's value by the field's name, so the address `form.reset` puts back after Back to sign in
+  floats it), on `:not(:placeholder-shown)` (a value written without an input event), and on
+  `:autofill` and `:-webkit-autofill`, each in a rule of its own because a selector list with a
+  pseudo-class the browser does not know drops the whole rule. The rules reach the label with `~`,
+  never `+`: a password manager can put its icon straight after the input. The box sets the field's
+  size whatever the page's input class says: 48px tall, 16px text (iOS zooms the page on focus
+  below 16px), and 20px above the text for the label. `reveal` adds a `<button type="button">` over
+  the box's right end, 44px wide and as tall as the field, with `aria-controls` and the eye from
+  the new `frontend/src/components/form/EyeGlyph.tsx` (Feather's eye and eye-off). Its
+  `aria-label`, "Show password" or "Hide password", is the state, as in GOV.UK's pattern: it has no
+  `aria-pressed`, since "Hide password, pressed" reads as a double negative, and no `title`, which
+  would have the name announced twice. The control takes its `type` from `control`, so the page sets
+  none, and gets 48px of right padding. The button cancels `mousedown`, so focus stays in the field,
+  and puts the caret back after the type changes, at once and again on the next frame: Chromium
+  moves the caret to the start once a mouse click that changed the type is over
+  (chrome-headless-shell 153; a scripted click, and Firefox 155, keep it). The field goes back to a
+  password on its form's `submit`, so the password manager finds a password field to save and the
+  value stays out of the browser's autocomplete history. That listener is on the form in the capture
+  phase, so it runs before the page's own submit handler; the form sends its values, not the field's
+  text, so the password still goes out. It is removed with the field, with the same capture flag,
+  and a field that comes back (Forgot password?, then Back to sign in) adds its own, so one submit
+  hides it once. A floating field's `tip` goes under the field (`.floatTip`, hidden while empty),
+  which is where Forgot password? now sits. Edge's own reveal (`::-ms-reveal`) is hidden in these
+  fields.
+- **Where it is used.** `LoginScreen.tsx` (the address, and the password with its reveal;
+  `.label` and `.labelRow` left `LoginScreen.module.css`), `LoginModal.tsx` (both fields; `.label`
+  left `LoginModal.module.css`), the request step of `EmailCodeLogin.tsx`, and both fields of
+  `ResetPassword.tsx`, each with a reveal of its own. The code fields (the emailed code and
+  `TwofaChallenge`) keep their label above them: a one-time code is centred digits with a hint.
+  Settings' passkey re-auth password (`PasskeySettings.tsx`) is not on the form kit and is
+  unchanged. Every id, `data-test-id`, label text and `autocomplete` token stays as it was.
+- **Measured** in headless Chromium at 375px and 1280px, light and dark, Sign in and Create account:
+  each field 48px (43px before); the label 14px below the field's top at rest (15px) and 6px below
+  it floated (12.5px, weight 600); label contrast 5.35:1 in light and 8.84:1 in dark, 16.7:1 while
+  the field has focus; the eye 44x48 and flush with the field, with the text ending 5px and the
+  label 4px before it. The fields and the submit button take 20px less height in Sign in and 45.5px
+  less in Create account. Tests: `frontend/src/components/form/__tests__/floatingField.test.tsx`
+  (18) and `frontend/src/components/__tests__/signInFields.test.tsx` (10).
+- **The sign-in steps and the sign-in dialog have history entries, so the back gesture leaves
+  them.** `LoginScreen`'s `stage` ('form' | 'inbox' | 'twofa' | 'email-code') and `LoginModal`
+  (opened from the profile menu) were signals with no history behind them, so in an installed PWA
+  on Android the back gesture had nothing to pop and closed the app; the email-code verify step had
+  no Back button either (now `emailcode-verify-back`). New `frontend/src/core/historyStep.ts`:
+  - `createHistoryStep({ active, back, below })` pushes one entry when `active` turns true
+    (`history.pushState`, same URL and hash), marked with its depth: `tcHistoryStep: 1` on top of an
+    unmarked entry, 2 on top of that. The dialog is one step (`active: () => true`, its pop calls
+    `props.onClose()`) and its stages a second one at depth 2; LoginScreen's stages are depth 1.
+    A step runs `back` only on a pop that lands below its own depth, so from a dialog stage the
+    gesture returns to the dialog's form and the next one closes the dialog. Moving between stages
+    (email-code to twofa) keeps `active` true and adds nothing.
+  - Leaving a step any other way takes its entries back: its own Back, and its unmount without
+    either (`onCleanup`, for a screen swapped out under it) go to depth `mine - 1`, the
+    `go(-above)` for the entries at or above it.
+  - Every traversal goes through `goTo(depth)`, one at a time. A request made while one is on its
+    way lowers its target and continues from the landing with another `go()`: browsers add up
+    `go()` calls made before the first lands, so a step's Back and a close in the same task went
+    back past the page (seen in headless Chromium). A one-second fallback finishes a traversal
+    that never lands; the waiting callbacks all run even when one throws.
+  - `afterHistoryStep(then)` is `goTo(0, then)`. A reload keeps the current entry, so every way the
+    sign-in screen and the dialog leave goes through it: `reloadIntoTheApp` (`signInForm.ts`, so
+    password, emailed code and second factor), both passkey paths, Continue with no account, and
+    Continue with Google (the dialog also closes itself first, so a page restored from the
+    back-forward cache shows no dialog without an entry). Cancel, Escape and a click outside the
+    dialog close through it, once (a `closing` flag). Steps ignore pops while it runs.
+  - A page reloaded on a step (or restored after Android discarded it) mounts on an entry nobody
+    owns. On its first run a step takes such an entry back, or claims it when it is active at
+    exactly the next depth: the second factor reloaded on `?twofa=1` keeps its one entry.
+  - No URL change means no `hashchange`, so App.tsx's hash routing and appVersion's reload never
+    see it. For the twofa step the Google callback lands on, `below` drops `?twofa=1` from the
+    entry under the step, and `TwofaChallenge`'s `stripTwofaMarker` keeps `history.state` instead
+    of writing `null`, which erased the mark.
+  - Needs a check on a real device: Chromium's history-manipulation intervention may skip an entry
+    pushed without a user activation, which is the `?twofa=1` landing (the step opens on load, not
+    on a tap). If it does, the gesture there leaves the app as before; headless runs cannot show it.
+  - Tests: `components/__tests__/loginScreen.backGesture.test.tsx` and
+    `loginModal.backGesture.test.tsx` (the real screen and dialog on jsdom's history: the gesture
+    from each step, each step's own Back, each way of closing, every sign-in and exit waiting for
+    the entry, a reload on a step, listener removal), `core/__tests__/historyStep.test.ts` (one
+    traversal for nested entries, joined calls, Back and close in one task, unmount, the
+    fallback, a throwing callback) and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code
+    step).
+- **Turnstile: a held press says what it waits for, a box waiting for a tick holds the form, and
+  each form re-arms its own widget.** On 5.17.1 the button read "Signing in…" while the line under
+  the widget said "Complete the verification above to continue.", and the check came back after a
+  wrong password and after a reset link was sent. Three causes:
+  - `captchaGate.next()` held for the token inside the form kit's `send`, so the button showed the
+    form's busy label during the wait, and LoginScreen and CheckInbox rendered
+    `captchaStatusMessage(status)` under it while `form.submitting()` (for `ready`, "Complete the
+    verification above to continue."), whether or not Cloudflare had drawn anything. Nothing told
+    the app when Cloudflare wanted a click: `render()` passed no `before-interactive-callback`, so a
+    box that came up during a hold left the button busy for up to 20 s, then "Verification didn't
+    go through".
+  - `spent()` ran in every send's `finally` and called a bare `turnstile.reset()`: a new check after
+    every send, a reset link that went out included. For a visitor Cloudflare asks to click, each
+    check is a new box. A bare `reset()` also resets one widget only, the one rendered last with
+    Cloudflare's script and test sitekey, which need not be the form's own.
+  - EmailCodeLogin and LoginModal rendered the widget with the default `appearance: 'always'`, drawn
+    for everyone (69 px with the always-passes test key), with the "Complete the verification
+    above" line under it whenever no token was held.
+    Also on 5.17.1, a send still holding for its token when the person moved on (another mode, the
+    sign-in code step, the support dialog closed) went out with the next token the gate saw: a
+    sign-in could land after "Forgot password?", and a cancelled support message was still sent.
+- **The fix is one mechanism** for LoginScreen (sign in, create account, reset link, confirm link),
+  LoginModal, CheckInbox, EmailCodeLogin and SupportContact:
+  - `CaptchaCheck.tsx` renders the widget `interaction-only`, and a `role="status"` line that is
+    always on the page, out of sight while empty, and says "Tick the box above first." only while
+    Cloudflare's box waits (status `interactive`: from `before-interactive-callback` until
+    `after-interactive-callback`, a `timeout-callback`, a token or an error). Each SubmitButton
+    takes `blocked={captcha.asking()}`, a new kit prop (`aria-disabled`, keeps its words and its
+    focus, `aria-describedby` the line), and `busyLabel={captcha.busyLabel(...)}`, which reads
+    "Checking you're human…" while a send holds for a token. Each form takes the kit's new
+    `blocked` option (`blocked: captcha.asking`, `form/createForm.ts`), so a submit that does not
+    come through the button does nothing at all and leaves the notice and the marks as they were;
+    LoginScreen's and LoginModal's own `onSubmit` wrappers return before clearing their notices.
+  - One send holds at a time. A newer send, `cancel()` (from `switchTo` in LoginScreen and
+    LoginModal, whose widget stays up through a mode switch, and from LoginModal's `close()`, whose
+    Cancel, Escape and click outside leave the dialog up until its history step lands) and the
+    widget unmounting (`onWidget(undefined)`: every step change, EmailCodeLogin's Back and
+    SupportContact's close) end a hold with the kit's new `NOT_SENT`, which ends a submit as if it
+    had not been pressed. A hold clears `holding` in its `finally` only while it is still the
+    current one. The box coming up during a hold ends it the same way; ticking sends nothing, and
+    the next press sends the fields as they are then.
+  - The next check starts when the widget's last token has gone out (status `solved`, no token
+    held) and something needs the next one: `explain(error, token)` when the send that took the
+    latest token fails, a press, or focus coming back into the form while it is not sending
+    (`wake`). Every send passes `explain` the token it took (`undefined` if none), and an older
+    send that fails late starts nothing: the check is a newer send's by then, and a reset would
+    bring Cloudflare's box up beside "Signing in…". A send that worked starts none, and a token
+    Cloudflare fetched by itself, after an expiry, is kept. `spent()` is gone. The gate resets its
+    own widget by id (Turnstile's new `onWidget`).
+  - Turnstile drops the token of a widget that unmounts, before it asks Cloudflare to remove the
+    widget and even when that throws, and draws and reports nothing for a form that left before
+    the script loaded or failed to. `after-interactive-callback` reports `ready` only while no
+    token is held: Cloudflare documents no order between it and the token. `render()` sets
+    `refresh-timeout: 'auto'` (Cloudflare's default) explicitly: with the test key that forces a
+    box, an unticked box timed out after 120 s, `timeout-callback` then `after-interactive`, and
+    with `auto` the box asked again 0.1 s later; with `manual` it did not within 90 s.
+  - A hold with no token after 20 s says so and leaves the running check alone, so a slow one
+    answers the next press; only a check that has run for 60 s without an answer is reset. A new
+    widget, a reset, a tick, a timeout and an expired token each start that clock again.
+  - `unsupported-callback` reports a new stuck status, `unsupported`, with its own words and no
+    Retry button. The status words nothing shows any more (`loading`, `ready`, `expired`) are gone.
+    SupportContact's own failure constant is `MESSAGE_NOT_SENT`, apart from the kit's `NOT_SENT`.
+  - The Worker is unchanged: register, login, forgot-password, verify-email/resend,
+    email-code/request and support/contact each still verify a fresh token with siteverify, once.
+- Tests: `components/__tests__/captchaForms.test.tsx` (60, every form against a stand-in
+  `window.turnstile` whose tick reports `after-interactive` before its token; 53 fail on main
+  before this change); `captchaGate.test.ts` (22, the gate alone: two holds, `cancel`, the widget
+  going, a slow, a stuck and an expired check, the re-arm rules and whose failure starts one);
+  `formKit.test.tsx` (the `blocked` option, `NOT_SENT`, the blocked button);
+  `Turnstile.blocked.test.tsx` (the status words, the token that beats the tick, a remove that
+  throws, a script that fails after the widget is gone); `loginScreen.captcha.test.tsx` (now with
+  a real `ready` status) and `EmailCodeLogin.test.tsx`. The stale `resetTurnstile` mocks are gone
+  from the sign-in tests.
+
+### Tests
+
+- **The sign-in tests wait for the history traversal instead of a timer.** A sign-in from the
+  dialog reloads only once `history.go(-1)` has landed, which jsdom does two `setImmediate` tasks
+  later, so a check after one `setTimeout(0)` failed whenever an event-loop turn took a millisecond
+  (CI run 40944962390, "reloads into the app when the passkey signs in"). Those checks now use
+  `vi.waitFor`, and `afterEach` awaits the new `frontend/src/components/__tests__/historySettled.ts`,
+  which joins the traversal an unmounted dialog or step starts through `afterHistoryStep`: before,
+  every test in `loginModal.refusals.test.tsx` but the first started on the previous test's entry.
+  Changed: `loginModal.refusals`, `loginScreen.refusals`, `signInFields`, `loginScreen.captcha`,
+  and both `backGesture` files, where the helper replaces a 30 ms sleep and `nextPop` waits 2 s
+  instead of 300 ms: in "a page reloaded while on a step" the wait spans a mount, which outlasted
+  300 ms in one of 16 parallel runs.
+
+## [5.17.1] — 2026-10-29
+
 ### Achievements
 
 - **Budget badges hold a month against that month's budgets only.** `heldMonths` in
@@ -1232,6 +1347,77 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
 
 ### Mail
 
+- **Every mail is on the engraved layout, extracted from #620 without the rest of it.**
+  `renderMail` in `worker/src/emailTemplates.ts` lays every mail out one way: the wordmark above the
+  card, the engraved art flush at its top (`frontend/public/email/hero-engraved-night-v1.jpg` on the
+  welcome, `banner-engraved-night-v1.jpg` on the rest), one headline, a paragraph or two, a button,
+  at most one list of steps or two tables, the footer under the card. Dark by default, paper in
+  light mode through `prefers-color-scheme`, dark colours repeated as `bgcolor` for classic Outlook,
+  a fixed 600 px column in an `<!--[if mso]>` table. `shell()` and the orbit GIF are gone from the
+  templates; `frontend/public/email/orbit.gif` stays for mails already sent. The images ship with
+  the frontend deploy and load from the sending Worker's app origin: every caller passes
+  `CORS_ORIGIN || APP_ORIGINS[0]` (prod: `https://tokencircles.com`), and the templates fall back to
+  the prod app. `frontend/public/_headers` serves `/email/*` immutable for a year, safe because a
+  file there is never overwritten (`docs/design/mail-art/README.md`).
+  Carried from #620: dddbdaee, 1ed7e7a8, c1fa0329, 0d314022, 9f16c834, 27fc69e3, e0edd76d,
+  2b34c45e (layout and renderers), e4ccd765, 58b448ca, 17907769 (sample script), the template half
+  of 3352878c (the fresh-link mail), and the `reminders.ts` comment of 2b34c45e. Left on #620: the
+  week-one mails (`renderWeekOneDay2/Day7`, `WEEK_ONE_UNSUB_LABEL`, `MailSpec.unsubLabel`,
+  `weekOne.ts`, migrations 0039/0040, the 08:30 cron, the Settings switch); the sign-up split
+  (`renderConfirmEmail`, `welcome.ts`, migration 0033 and the `email-link.ts`, `email-change.ts`,
+  `routes/email-code.ts`, `routes/auth.ts` changes), because it needs migration 0033 to mark existing
+  accounts as welcomed; Reset password in the account-exists mail, because main has no
+  `#forgot-password` route (fc27d908, f626e869 add it). So on this branch a password sign-up still
+  gets one mail, `renderWelcome({ verifyUrl })`: the hero art, the confirm button and paste line,
+  and the three steps with no page links, since a sign-in is refused until the address is
+  confirmed. `MailStep.link` is optional for that. The account-exists mail keeps one button, Sign
+  in, and says the reset is on the sign-in screen. Merging main into #620 afterwards: take #620's
+  side of `emailTemplates.ts`, `mail-samples.ts`, `mail-catalogue.test.ts`, `mail-layout.test.ts`,
+  `email-templates.test.ts`, `email-verification.test.ts` and `send-sample-mails.test.ts`, then
+  re-apply the footer commit below to #620's renderers and re-take the digests.
+  `worker/scripts/mail-samples.ts` renders every mail from fake data;
+  `node worker/scripts/send-sample-mails.ts --to <address> [--dry-run <folder>]` writes or mails
+  them. Tests: `worker/test/mail-layout.test.ts`, `mail-catalogue.test.ts` (every renderer has a
+  sample, subjects snapshotted, 102 KB Gmail limit, text twins, no em dash, the 584-input amount
+  grid in `test/helpers/amount-mail-grid.ts` pinned by digest), `send-sample-mails.test.ts`,
+  `email-templates.test.ts`, `email-verification.test.ts`, `frontend/src/__tests__/emailAssets.test.ts`.
+  `pnpm -C worker typecheck` now also checks `worker/scripts/`.
+- **The mail footer is centred and never breaks at a dot.** On a 375 px phone the link row wrapped
+  after a dot, the copyright line put "· hello@tokencircles.com" at the start of the next line, and
+  the reason ran into the copyright. `mailFooter` in `emailTemplates.ts` now follows MercuryPitch's
+  `footerHtml`: a centred cell of separate paragraphs, the tagline (14 px, each sentence `nowrap`),
+  About · GitHub · Terms · Privacy (13 px, joined by `&nbsp;&middot;&nbsp;` and `nowrap`, so it
+  cannot wrap), the copyright (`nowrap`), the address as a `mailto:` line of its own, and the reason
+  with its Unsubscribe link 18 px below. "Open the app" leaves the HTML row (the wordmark links the
+  app) and stays in the text twin, which follows the same order. Measured in headless Chromium
+  (Liberation Sans in place of the system font): the row is 187 px of the 264 px a 320 px viewport
+  leaves it, the copyright 177 px, and no line at 320 or 375 px starts or ends with a dot. The
+  amount-mail digests were taken again; all 464 mails differ from the old ones only in the footer
+  and the `.tc-sep` light-mode rule.
+- **The amount-mail digests survive New Year.** `amountMailDigests`
+  (`worker/test/helpers/amount-mail-grid.ts`) read the footer's year as YYYY in the HTML
+  (`&copy; 2026`) but not in the text twin (`© 2026`), so the four pins would have failed on
+  1 January 2027. It reads both; a test in `mail-catalogue.test.ts` renders the grid under a fake
+  clock in 2031 and expects the same digests.
+- **Every mail declares "light only", so the Gmail iPhone app keeps it dark.** Ported from
+  MercuryPitch's PR #1010 (probe mails of 2026-10-14): the Gmail apps ignore "dark", recolour a mail
+  that declares it (the page turned white), show a "light only" one as drawn, and fire neither
+  prefers-color-scheme query. `COLOR_SCHEME_META` and `:root` say "light only"; `AUTO_LINK_STYLE`
+  (`a[x-apple-data-detectors]`, `u + #body a`) and `<body id="body">` keep client-made links in the
+  colour around them; both pictures, the wordmark's link and the preheader carry an inline colour.
+  The paper variant stays, because a media query reads the reader's setting: in headless Chromium
+  over the 17 samples at 375 and 600 px under a dark and a light scheme, no shown element that
+  holds text changed colour, no background changed, and dark and light still differ for 17 of 17.
+  The images need no page colour: the two cuts are opaque JPEGs, and `icon-192.png` is an opaque
+  navy plate with only its rounded corners transparent. `worker/test/mail-color-scheme.test.ts`
+  (MercuryPitch's tokenizer) checks the head and that every line of text, link and picture has its
+  own colour, over the catalogue and the amount grid. Digests taken again for the head alone.
+- **A confirm mail links nowhere in the app.** A sign-in before the address is confirmed is
+  refused, as a wrong password, so `MailSpec.unconfirmed` drops the wordmark's link and the text
+  twin's "Open the app" from the password sign-up's welcome and the fresh confirm link; main's guard
+  in `email-verification.test.ts` is back, over the HTML and the text. The fresh link says the
+  sign-in only may come ("If it asks you to sign in"): opened in the session that asked for it,
+  it confirms at once.
 - **The unsubscribe token is minted in one statement.** `ensureUnsubToken` (`worker/src/reminders.ts`)
   read no token, made one and wrote it with a plain UPDATE, so two senders running at once (a cron
   that fires twice) each wrote their own and the mail that went out could carry the token that was
@@ -1298,11 +1484,6 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   `frontend/src/features/__tests__/settingsUnsubscribed.test.tsx` (the line and button show, are
   absent, stay after a save, go after the button, show a refusal, are absent on Free);
   `worker/test/notifications-settings.test.ts` expects the new field.
-
-- **Sample mails carry the List-Unsubscribe pair.** `worker/scripts/send-sample-mails.ts` sends
-  `listUnsubscribeHeaders(listUnsubscribe)` (`worker/src/email.ts`) with every sample whose
-  rendered mail has one, so a sample in Gmail shows the mail app's own unsubscribe button and its
-  DKIM coverage can be checked. Test: `worker/test/send-sample-mails.test.ts`.
 
 ### Tests
 

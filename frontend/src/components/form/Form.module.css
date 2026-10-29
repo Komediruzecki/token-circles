@@ -76,3 +76,160 @@
 .submit.unchanged[aria-disabled='true'] {
   cursor: default;
 }
+
+/* ---------- a label inside the box, and a password's reveal button ---------- */
+
+/*
+ * Field's `floating` and `reveal` put the control in a box of its own. The box sets the field's
+ * size, whatever the page's own input class says: 48px tall, with room above the text for the
+ * label, and 16px text, below which iOS zooms the page when the field takes focus. Block, so the
+ * box is exactly as tall as the field and the reveal button lines up with it.
+ */
+.box {
+  position: relative;
+}
+
+.box > input {
+  display: block;
+  box-sizing: border-box;
+}
+
+.floating > input {
+  min-height: 48px;
+  padding: 20px 12px 6px;
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/*
+ * The label stands where the value will go, in the middle of the box, until the field has focus
+ * or a value. It follows the input in the markup, and these rules reach it from the input's state
+ * as a later sibling (`~`), never as the next one (`+`): a password manager can put its own icon
+ * straight after the input, and a `+` rule then stops matching.
+ */
+.floatLabel {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  right: 13px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    top 0.15s ease,
+    transform 0.15s ease,
+    font-size 0.15s ease,
+    color 0.15s ease;
+}
+
+/* Up at the top edge: the field has focus, the form holds a value for it (`data-filled`), or the
+   box shows something other than its blank placeholder (a value written without an input event). */
+.floating:focus-within .floatLabel,
+.floating[data-filled='true'] .floatLabel,
+.floating > input:not(:placeholder-shown) ~ .floatLabel {
+  top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 14px;
+  transform: none;
+}
+
+/* Browser autofill, each spelling in a rule of its own: a selector list with a pseudo-class the
+   browser does not know drops the whole rule. A box filled before anyone types does not always
+   stop showing its placeholder. */
+.floating > input:autofill ~ .floatLabel {
+  top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 14px;
+  transform: none;
+}
+
+.floating > input:-webkit-autofill ~ .floatLabel {
+  top: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 14px;
+  transform: none;
+}
+
+.floating:focus-within .floatLabel {
+  color: var(--text);
+}
+
+/* The placeholder is blank unless the page gives the field a hint, and a hint shows only under a
+   focused, empty field, below the label: it never stands in for the label. */
+.floating > input::placeholder {
+  color: transparent;
+}
+
+.floating > input:focus::placeholder {
+  color: var(--text-secondary);
+}
+
+/* The reveal button covers the box's right end, so the text and the label stop short of it. */
+.revealable > input {
+  padding-right: 48px;
+}
+
+.revealable .floatLabel {
+  right: 48px;
+}
+
+/* Edge draws a reveal button of its own inside a password field. One is enough. */
+.revealable > input::-ms-reveal {
+  display: none;
+}
+
+/* Beside the label, never inside it: inside, "Show password" would become part of the field's
+   name. As tall as the field and 44px wide, a whole fingertip. */
+.reveal {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 0 8px 8px 0;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.reveal:hover {
+  color: var(--text);
+}
+
+.reveal:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -4px;
+  border-radius: 8px;
+}
+
+/* A floating field has no row above its box for a tip, so the tip goes under the field. */
+.floatTip {
+  display: flex;
+  justify-content: flex-end;
+  font-size: 13px;
+}
+
+.floatTip:empty {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floatLabel {
+    transition: none;
+  }
+}

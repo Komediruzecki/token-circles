@@ -1,6 +1,8 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
@@ -8,7 +10,6 @@ import { Field, FormNotice, SubmitButton } from './form'
 import styles from './LoginModal.module.css'
 import { createSignInForm, SIGN_IN_REFUSED } from './signInForm'
 import stepStyles from './SignInSteps.module.css'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
 import type { SignInMode, SignInOutcome } from './signInForm'
 
@@ -33,11 +34,30 @@ export default function LoginModal(props: LoginModalProps) {
   // extra sign-in steps.
   const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
   const [inbox, setInbox] = createSignal('')
-  // The send waits for the token rather than the button waiting for it (captchaGate.ts).
+  // The send holds for the token rather than the button waiting for it, and while Cloudflare's box
+  // waits for a tick the button waits too (captchaGate.ts).
   const captcha = createCaptchaGate()
 
+  // In an installed app the back gesture had no entry to pop and closed the app under the dialog.
+  // The dialog has one history entry while it is open, and popping it closes the dialog. Closing it
+  // any other way (Cancel, Escape, a click outside) takes that entry, and any step's, back first.
+  createHistoryStep({
+    active: () => true,
+    back: () => {
+      props.onClose()
+    },
+  })
+  let closing = false
   const close = () => {
-    props.onClose()
+    // Escape pressed twice, or Escape and a click outside, closes once.
+    if (closing) return
+    closing = true
+    // A send still holding for its token was for the dialog being closed: it must never go out.
+    // The dialog stays up until the history step lands, and a token could come in that time.
+    captcha.cancel()
+    afterHistoryStep(() => {
+      props.onClose()
+    })
   }
 
   // Document-level so Escape keeps working on the steps after the form, when the form (and with
@@ -62,12 +82,38 @@ export default function LoginModal(props: LoginModalProps) {
 
   const form = createSignInForm({ mode, captcha, saved })
 
-  /** Another mode: the values stay, and nothing from before is said. */
+  /** Another mode: the values stay, and nothing from before is said or sent. */
   const switchTo = (next: SignInMode) => {
+    // A send still holding for its token was for the mode left behind: it must never go out.
+    captcha.cancel()
     setMode(next)
     setElsewhere('')
     form.reset({ ...form.values })
   }
+
+  // Each step's way back to the form: its own Back button, and the back gesture, which pops the
+  // step's entry above the dialog's (as on the sign-in screen) before a second one closes it.
+  const leaveTwofa = () => {
+    setStage('form')
+    form.reset({ email: form.values.email, password: '' })
+  }
+  const leaveEmailCode = () => {
+    setStage('form')
+  }
+  const leaveInbox = () => {
+    switchTo('login')
+    form.reset({ email: inbox(), password: '' })
+    setStage('form')
+  }
+  createHistoryStep({
+    active: () => stage() !== 'form',
+    back: () => {
+      const now = stage()
+      if (now === 'twofa') leaveTwofa()
+      else if (now === 'email-code') leaveEmailCode()
+      else if (now === 'inbox') leaveInbox()
+    },
+  })
 
   /** From the refused sign-in: send the confirm link to the address in the form, signed out. */
   const sendConfirmLink = () => {
@@ -100,27 +146,15 @@ export default function LoginModal(props: LoginModalProps) {
           when={stage() === 'form'}
           fallback={
             stage() === 'twofa' ? (
-              <TwofaChallenge
-                onBack={() => {
-                  setStage('form')
-                  form.reset({ email: form.values.email, password: '' })
-                }}
-              />
+              <TwofaChallenge onBack={leaveTwofa} />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
                 email={form.values.email}
-                onBack={() => setStage('form')}
+                onBack={leaveEmailCode}
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <CheckInbox
-                email={inbox()}
-                onBack={() => {
-                  switchTo('login')
-                  form.reset({ email: inbox(), password: '' })
-                  setStage('form')
-                }}
-              />
+              <CheckInbox email={inbox()} onBack={leaveInbox} />
             )
           }
         >
@@ -150,6 +184,11 @@ export default function LoginModal(props: LoginModalProps) {
           <form
             {...form.attrs}
             onSubmit={(event) => {
+              // While Cloudflare's box waits for a tick there is no submit, so nothing is cleared.
+              if (captcha.asking()) {
+                event.preventDefault()
+                return
+              }
               setElsewhere('')
               void form.submit(event)
             }}
@@ -160,7 +199,7 @@ export default function LoginModal(props: LoginModalProps) {
               id="login-modal-email"
               label="Email address"
               class={styles.field}
-              labelClass={styles.label}
+              floating
             >
               {(control) => (
                 <input
@@ -181,12 +220,12 @@ export default function LoginModal(props: LoginModalProps) {
                 id="login-modal-password"
                 label="Password"
                 class={styles.field}
-                labelClass={styles.label}
+                floating
+                reveal
               >
                 {(control) => (
                   <input
                     {...control}
-                    type="password"
                     name="password"
                     value={form.values.password}
                     onInput={(e) => form.set('password', e.currentTarget.value)}
@@ -196,31 +235,18 @@ export default function LoginModal(props: LoginModalProps) {
                 )}
               </Field>
             </Show>
-            <Turnstile onToken={captcha.onToken} onStatus={captcha.onStatus} />
-            {/* Turnstile draws its own, actionable panel for the states the user has to fix
-                (blocked script, widget error); this is only the ordinary "not solved yet" hint,
-                which also says why a submit is waiting. */}
-            <Show when={turnstileEnabled && !captcha.token() && !captchaIsStuck(captcha.status())}>
-              <div
-                data-test-id="captcha-hint"
-                style={{
-                  color: 'var(--text-secondary)',
-                  'font-size': '12px',
-                  margin: '2px 0 10px',
-                }}
-              >
-                {captchaStatusMessage(captcha.status())}
-              </div>
-            </Show>
+            <CaptchaCheck gate={captcha} hintClass={stepStyles.hint} />
             <SubmitButton
               busy={form.submitting()}
-              busyLabel={
+              blocked={captcha.asking()}
+              aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+              busyLabel={captcha.busyLabel(
                 mode() === 'register'
                   ? 'Creating your account…'
                   : mode() === 'confirm'
                     ? 'Sending…'
                     : 'Signing in…'
-              }
+              )}
               class={styles.btnSubmit}
               style={{ width: '100%', 'justify-content': 'center' }}
             >
@@ -293,7 +319,13 @@ export default function LoginModal(props: LoginModalProps) {
               onClick={() => {
                 // Survives the OAuth round-trip in this tab; see LoginScreen's Google button.
                 markPasskeyNudgeAfterLogin()
-                api.loginWithGoogle()
+                // Off to Google with the dialog's entry gone, so coming back has none to pop.
+                afterHistoryStep(() => {
+                  // Closed first: a page the browser restores on the way back from Google shows
+                  // the app, not a dialog with no entry under it.
+                  props.onClose()
+                  api.loginWithGoogle()
+                })
               }}
               type="button"
             >
@@ -318,7 +350,10 @@ export default function LoginModal(props: LoginModalProps) {
                 onClick={() => {
                   setElsewhere('')
                   void signInWithPasskey().then((result) => {
-                    if (result.ok) window.location.reload()
+                    if (result.ok)
+                      afterHistoryStep(() => {
+                        window.location.reload()
+                      })
                     else if (!result.aborted) setElsewhere(result.error)
                   })
                 }}

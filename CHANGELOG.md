@@ -25,14 +25,33 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The streak says months in a row.** The badge rail on Dashboard and the record on Progress read "4 months in a row" where they said "4 months tracked": the number counts tracked months without a gap, up to this month or last. With no streak running, both say "Start a streak".
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
 - **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
-- **Every mail shares the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Budget alerts, spending reports, bill reminders and the failed-payment mail join them with the same amounts, under subjects that say what happened, such as "Budget alert: Groceries went over".
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
-- **The unsubscribe link in a reminder mail asks you to press Unsubscribe.** Opening the link alone no longer turns reminders off, so a link preview can't do it for you. Budget alerts, spending reports and bill reminders also tell Gmail and other mail apps where to unsubscribe, so their own button works.
 
 ### Fixed
 
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
+
+## [5.17.2] — 2026-10-30
+
+### Changed
+
+- **See the password you typed.** When you sign in, create an account or set a new password, the password box has an eye at its right end that shows what you typed and hides it again. The email and password labels now sit inside their boxes and move up when you click or tap into one, so the sign-in and create-account forms take less room.
+
+### Fixed
+
+- **Back to sign in from every sign-in step.** The screen where you type the code we emailed you now has Back to sign in, and the phone's back gesture takes you from the emailed code, the two-factor code or Check your inbox back to the sign-in form, and closes the Sign In window you open from the profile menu. In the installed app on Android it used to close the app instead.
+- **Cloudflare's check shows its box only when it needs a click.** After a wrong password the next check runs out of sight, a sent reset link no longer brings the box straight back, and Sign in waits for your tick instead of saying "Signing in…" next to a check you still have to do.
+
+## [5.17.1] — 2026-10-29
+
+### Changed
+
+- **Every mail shares the new design.** The welcome, a fresh confirm link, a new email address, a password reset, a sign-in code, a test mail, the note that your message reached support and the billing mails have the engraved art at the top and a centred footer that reads cleanly on a phone. They stay dark in the Gmail app on an iPhone in dark mode, where the page used to turn white. Budget alerts, spending reports, bill reminders and the failed-payment mail keep every amount, under subjects that say what happened, such as "Budget alert: Groceries went over".
+- **The unsubscribe link in a reminder mail asks you to press Unsubscribe.** Opening the link alone no longer turns reminders off, so a link preview can't do it for you. Budget alerts, spending reports and bill reminders also tell Gmail and other mail apps where to unsubscribe, so their own button works.
+
+### Fixed
+
 - **You can turn reminder mails back on after unsubscribing.** After you unsubscribe with the link in a reminder mail, the Email reminders card in Settings says so and offers Send me reminders again. Before, the switches still read on and no reminder was ever sent, with no way to start them again.
 - **Budget badges judge each month by its own budget.** Held the line, Six months under and Clean sweep also held a month to every earlier budget for the category, so a budget you raised still counted at its old amount; badges you already have stay yours.
 - **Allocate changes the budget Budgets shows.** When a month held two budgets for one category, the category's budget on Budgets, Allocate and Progress could each be a different one; those three now use the one saved last.

@@ -69,7 +69,7 @@ describe('the mail layout', () => {
     expect(firstRow![0]).toContain('banner-engraved-night-v1.jpg');
     expect(firstRow![0]).toContain('border-radius:18px 18px 0 0');
 
-    const footer = html.indexOf('Your money, in clear orbit. Open source and local-first.');
+    const footer = html.indexOf('Your money, in clear orbit.');
     expect(footer).toBeGreaterThan(card.end);
     expect(html.indexOf(SPEC.reason)).toBeGreaterThan(card.end);
     expect(card.inner).not.toContain('Your money, in clear orbit.');
@@ -120,8 +120,11 @@ describe('the mail layout', () => {
 
   it('is dark by default, with every colour of the page, the card and the button also set as an attribute', () => {
     const { html } = renderMail(SPEC);
-    expect(html).toContain('<meta name="color-scheme" content="dark light">');
-    expect(html).toMatch(/<body class="tc-page" bgcolor="#0b1020" style="[^"]*background:#0b1020/);
+    // Drawn dark, declared "light only" so the Gmail apps do not recolour it (mail-color-scheme.test.ts).
+    expect(html).toContain('<meta name="color-scheme" content="light only">');
+    expect(html).toMatch(
+      /<body id="body" class="tc-page" bgcolor="#0b1020" style="[^"]*background:#0b1020/
+    );
     expect(html).toMatch(/<table [^>]*class="tc-page"[^>]*bgcolor="#0b1020"/);
     expect(html).toMatch(/<td class="tc-card" bgcolor="#151d31" style="background:#151d31/);
     expect(html).toMatch(/<td class="tc-btn-td" bgcolor="#6e9bff" style="background:#6e9bff/);
@@ -271,6 +274,66 @@ describe('the mail layout', () => {
     );
   });
 
+  it('leaves a step without a link as its title and words, in the HTML and the text twin', () => {
+    // For a mail whose reader cannot open a page yet, as before an address is confirmed.
+    const { html, text } = renderMail({
+      ...SPEC,
+      steps: {
+        title: 'Once you are in',
+        items: [
+          { title: 'First', text: 'Do this first.' },
+          { title: 'Second', text: 'Then this.', link: { label: 'Open B', href: 'https://b/' } },
+        ],
+      },
+    });
+    const first = /<div class="tc-text"[^>]*>First<\/div>([\s\S]*?)<\/td><\/tr><\/table>/.exec(
+      html
+    );
+    expect(first).not.toBeNull();
+    expect(first![1]).not.toContain('<a ');
+    expect(html).toContain('>Open B →</a>');
+    expect(text).toContain('1. First\nDo this first.\n\n2. Second\nThen this.\nOpen B: https://b/');
+  });
+
+  it('centres the footer, one block a line, with the reason set apart at its foot', () => {
+    const unsubUrl = 'https://api.example/api/notifications/unsubscribe?token=t';
+    const { html, text } = renderMail({ ...SPEC, unsubUrl });
+    const footer = html.slice(cardOf(html).end);
+    expect(footer).toMatch(/^\s*<\/tr>\s*<tr><td align="center" style="[^"]*text-align:center">/);
+    const blocks = [...footer.matchAll(/<p [^>]*style="([^"]*)">(.*?)<\/p>/g)];
+    const words = blocks.map((b) => b[2]!.replace(/<[^>]+>/g, '').replaceAll('&nbsp;', ' '));
+    expect(words).toEqual([
+      'Your money, in clear orbit. Open source and local-first.',
+      'About · GitHub · Terms · Privacy'.replaceAll('·', '&middot;'),
+      `&copy; ${new Date().getUTCFullYear()} Token Circles &middot; AGPL-3.0`,
+      'hello@tokencircles.com',
+      `${SPEC.reason} Unsubscribe`,
+    ]);
+    // The row of links breaks nowhere: no-break spaces round each dot, and nowrap on the row.
+    expect(blocks[1]![1]).toContain('white-space:nowrap');
+    expect(blocks[1]![2]!.replace(/<[^>]+>/g, '')).not.toMatch(/ /);
+    expect(blocks[4]![1]).toMatch(/^margin:18px 0 0;/);
+    // The tagline breaks only between its sentences: "local-first." never splits at its hyphen.
+    expect(blocks[0]![2]).toBe(
+      '<span style="white-space:nowrap">Your money, in clear orbit.</span> <span style="white-space:nowrap">Open source and local-first.</span>'
+    );
+    expect(text.slice(text.indexOf('Your money, in clear orbit.'))).toBe(
+      [
+        'Your money, in clear orbit. Open source and local-first.',
+        'Open the app: https://tokencircles.com',
+        'About: https://about.tokencircles.com',
+        'GitHub: https://github.com/Komediruzecki/token-circles',
+        'Terms: https://about.tokencircles.com/terms',
+        'Privacy: https://about.tokencircles.com/privacy',
+        `© ${new Date().getUTCFullYear()} Token Circles · AGPL-3.0`,
+        'hello@tokencircles.com',
+        '',
+        SPEC.reason,
+        `Unsubscribe: ${unsubUrl}`,
+      ].join('\n')
+    );
+  });
+
   it('weighs a few kilobytes, far under the 102 KB at which Gmail clips a mail', () => {
     const { html } = renderMail(SPEC);
     expect(new TextEncoder().encode(html).length).toBeLessThan(12 * 1024);
@@ -333,7 +396,7 @@ describe('the mail layout', () => {
     );
     expect(link).toBeGreaterThan(card.end);
     expect(link).toBeGreaterThan(html.indexOf(SPEC.reason));
-    expect(text).toContain(`${SPEC.reason}\nUnsubscribe: ${unsubUrl}\n`);
+    expect(text.endsWith(`${SPEC.reason}\nUnsubscribe: ${unsubUrl}`)).toBe(true);
     expect(renderMail(SPEC).html).not.toContain('Unsubscribe');
   });
 
@@ -346,6 +409,6 @@ describe('the mail layout', () => {
     );
     expect(html).toMatch(/>Stop first-week mails<\/a>/);
     expect(html).not.toContain('>Unsubscribe<');
-    expect(text).toContain(`${SPEC.reason}\nStop first-week mails: ${unsubUrl}\n`);
+    expect(text.endsWith(`${SPEC.reason}\nStop first-week mails: ${unsubUrl}`)).toBe(true);
   });
 });

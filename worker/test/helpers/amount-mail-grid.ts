@@ -175,8 +175,9 @@ async function sha256(text: string): Promise<string> {
 
 /**
  * One digest per renderer: of every output its grid renders, in order (a mail's subject, HTML and
- * text, or null for no mail), with the footer's year read as YYYY so the pin does not expire with
- * the calendar. Also the number of inputs, so a grid that shrinks shows.
+ * text, or null for no mail), with the footer's year read as YYYY in the HTML and the text twin
+ * alike, so the pin does not expire with the calendar. Also the number of inputs, so a grid that
+ * shrinks shows.
  */
 export async function amountMailDigests(
   renderers: AmountRenderers
@@ -196,7 +197,13 @@ export async function amountMailDigests(
     });
     out[name] = {
       inputs: inputs.length,
-      digest: await sha256(rendered.join('\n').replaceAll(`&copy; ${year}`, '&copy; YYYY')),
+      // The footer's year, in the HTML (&copy;) and in the text twin (©).
+      digest: await sha256(
+        rendered
+          .join('\n')
+          .replaceAll(`&copy; ${year}`, '&copy; YYYY')
+          .replaceAll(`© ${year}`, '© YYYY')
+      ),
     };
   }
   return out;
