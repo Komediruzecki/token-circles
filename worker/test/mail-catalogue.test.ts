@@ -6,12 +6,32 @@
  * budget alert, the spending report, upcoming bills and the failed payment) kept the first shell
  * until maff's call of 2026-10-29 moved them too, with every amount kept.
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as templates from '../src/emailTemplates';
 import { mailSamples } from '../scripts/mail-samples';
 import { amountMailDigests, amountMailGrid } from './helpers/amount-mail-grid';
 
 const samples = mailSamples();
+
+/** The four amount mails, pinned over their grid: see the test that checks them. */
+const AMOUNT_MAIL_DIGESTS = {
+  renderBudgetAlert: {
+    inputs: 192,
+    digest: '5907bebb3ef5a9dfde3e09b78b2408c5c096553ca21f95a23c6a45ae744aadeb',
+  },
+  renderBillsReminder: {
+    inputs: 120,
+    digest: '54e6f2a55c4a6b64878b83027d1ac65ab6d9fc7f2ac175b056c3fa952481ca9a',
+  },
+  renderSpendingReport: {
+    inputs: 144,
+    digest: 'b576d0d2078f31a634b395000e672414d94d5c46ffcc6f87af0b5d82642250d9',
+  },
+  renderPaymentFailed: {
+    inputs: 128,
+    digest: 'eb0d57d277eec9c47563a3dbc26b20c81618986551ee1b8dc4bfa506c17d4f3c',
+  },
+};
 
 /** Gmail clips a mail whose HTML is past 102 KB, and hides the rest behind a link. */
 const GMAIL_CLIPS_AT = 102 * 1024;
@@ -235,23 +255,26 @@ describe('the mail catalogue', () => {
     // Taken again on 2026-10-29 for the centred footer (maff's call), the only change: every one
     // of the 464 mails differs from the digests before only in its footer and the one light-mode
     // rule for the footer's dots, checked by comparing both renderings up to the footer.
-    expect(await amountMailDigests(templates)).toEqual({
-      renderBudgetAlert: {
-        inputs: 192,
-        digest: '17e735bfabbafbbff780c86c504eea2c1e2f15b924bef2435b7909de136ce7e1',
-      },
-      renderBillsReminder: {
-        inputs: 120,
-        digest: '714feeb1acd9578fb832a640fdc3334266d729c6191b5bcfd88f5261092fe4bc',
-      },
-      renderSpendingReport: {
-        inputs: 144,
-        digest: 'c487a16a7b1c7b746c6cf0696c7d5213a82e0512120d11b93acf62fea68642fd',
-      },
-      renderPaymentFailed: {
-        inputs: 128,
-        digest: '1bbf51e9e68a637ba6e88090ff83755bfb732f5ec6224aabf7d8f348d2e4c74f',
-      },
+    // Taken again the same day when the helper began to read the text twin's year as YYYY too
+    // (before, the pin would have failed on 1 January 2027); the renderers did not change.
+    expect(await amountMailDigests(templates)).toEqual(AMOUNT_MAIL_DIGESTS);
+  });
+
+  describe('in another year', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('keeps the same digests, the footer year read as YYYY in the HTML and the text twin alike', async () => {
+      // The footer prints the current year in both parts (&copy; in the HTML, © in the text), so
+      // a pin that read only one of them as YYYY would fail every first of January.
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2031-06-15T12:00:00Z'));
+      expect(new Date().getUTCFullYear()).toBe(2031);
+      const mail = templates.renderTestBasic();
+      expect(mail.html).toContain('&copy; 2031 Token Circles');
+      expect(mail.text).toContain('© 2031 Token Circles');
+      expect(await amountMailDigests(templates)).toEqual(AMOUNT_MAIL_DIGESTS);
     });
   });
 });
