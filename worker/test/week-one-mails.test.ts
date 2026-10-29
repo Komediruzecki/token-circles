@@ -34,6 +34,8 @@ let mails: Mail[] = [];
 let resend: number | 'throw' = 200;
 /** Every request made to Resend for an account of this file, taken or not. */
 let attempts = 0;
+/** Runs while Resend takes a mail, before it answers: a change landing mid-run. */
+let whileSending: ((to: string) => Promise<void>) | null = null;
 let nextId = FIRST_ID;
 const mine: number[] = [];
 
@@ -143,6 +145,7 @@ beforeEach(async () => {
   mails = [];
   resend = 200;
   attempts = 0;
+  whileSending = null;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes('api.resend.com')) {
@@ -156,6 +159,7 @@ beforeEach(async () => {
       if (resend === 'throw') throw new Error('network down');
       if (resend !== 200) return new Response('{"message":"no"}', { status: resend });
       mails.push(body);
+      await whileSending?.(body.to);
       return new Response('{"id":"re_1"}', { headers: { 'Content-Type': 'application/json' } });
     }
     return realFetch(input as RequestInfo, init);
@@ -506,5 +510,74 @@ describe('the day-7 mail itself', () => {
       step: null,
     });
     expect(mail.html).toContain('Your first import brought in 2 entries.');
+  });
+});
+
+describe('a change that lands while a run is under way', () => {
+  // The run reads who is due once, then sends one by one. Each claim reads the account again, so a
+  // stop or an import that lands after the query and before that account's turn is seen.
+  async function dueTwo(): Promise<[{ id: number; email: string }, { id: number; email: string }]> {
+    const first = await account({ confirmedAgo: 4 * DAY });
+    const second = await account({ confirmedAgo: 3 * DAY });
+    return [first, second];
+  }
+
+  it('sends nothing to an account that switched them off meanwhile', async () => {
+    const [first, second] = await dueTwo();
+    whileSending = async (to) => {
+      if (to === first.email) {
+        await env.DB.prepare('UPDATE users SET week_one_mails = 0 WHERE id = ?')
+          .bind(second.id)
+          .run();
+      }
+    };
+    await run();
+    expect(mails.map((m) => m.to)).toEqual([first.email]);
+    expect(await claimed(second.id, WEEK_ONE.day2.key)).toBe(false);
+  });
+
+  it('sends nothing to an account that unsubscribed meanwhile', async () => {
+    const [first, second] = await dueTwo();
+    whileSending = async (to) => {
+      if (to === first.email) {
+        await env.DB.prepare('UPDATE users SET notifications_unsubscribed = 1 WHERE id = ?')
+          .bind(second.id)
+          .run();
+      }
+    };
+    await run();
+    expect(mails.map((m) => m.to)).toEqual([first.email]);
+  });
+
+  it('sends no day 2 to an account that imported meanwhile', async () => {
+    const [first, second] = await dueTwo();
+    whileSending = async (to) => {
+      if (to === first.email) await imported(second.id);
+    };
+    await run();
+    expect(mails.map((m) => m.to)).toEqual([first.email]);
+    expect(await claimed(second.id, WEEK_ONE.day2.key)).toBe(false);
+  });
+});
+
+describe('who the run picks', () => {
+  // With room for one, an account the mail cannot go to must not take the place of one it can.
+  it('passes over an older account that switched them off or unsubscribed', async () => {
+    await account({ confirmedAgo: 4 * DAY, weekOne: 0 });
+    await account({ confirmedAgo: 4 * DAY - HOUR, unsubscribed: 1 });
+    const due = await account({ confirmedAgo: 3 * DAY });
+    expect(await run(NOW, 1)).toEqual({ day2: 1, day7: 0 });
+    expect(mails.map((m) => m.to)).toEqual([due.email]);
+  });
+
+  it('passes over an older account whose condition does not hold, for each mail', async () => {
+    const importedOlder = await account({ confirmedAgo: 4 * DAY });
+    await imported(importedOlder.id);
+    const day2 = await account({ confirmedAgo: 3 * DAY });
+    await account({ confirmedAgo: 9 * DAY });
+    const day7 = await account({ confirmedAgo: 8 * DAY });
+    await imported(day7.id);
+    expect(await run(NOW, 1)).toEqual({ day2: 1, day7: 1 });
+    expect(mails.map((m) => m.to)).toEqual([day2.email, day7.email]);
   });
 });
