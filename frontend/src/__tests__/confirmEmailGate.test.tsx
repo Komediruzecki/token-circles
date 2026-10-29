@@ -12,9 +12,11 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { onboardingDecided } from '../../tests/onboarding-decided'
 import {
+  getIsAuthenticated,
   setCurrentProfile,
   setIsAuthenticated,
   setIsLoginModalOpen,
+  setLoading,
   setProfiles,
   setShowDropdown,
 } from '../core/appStore'
@@ -40,6 +42,8 @@ const GOOGLE = { ...WAITING, email: 'google@example.com', auth_provider: 'google
 const worker = vi.hoisted(() => ({
   me: null as Record<string, unknown> | null,
   sent: [] as string[],
+  /** When set, /api/auth/me answers only once this settles: a slow network. */
+  meHeld: null as Promise<void> | null,
 }))
 
 function workerStandIn() {
@@ -47,6 +51,7 @@ function workerStandIn() {
     const path = new URL(url, 'http://localhost').pathname
     const method = init.method ?? 'GET'
     if (path.startsWith('/api/')) worker.sent.push(`${method} ${path}`)
+    if (path === '/api/auth/me' && worker.meHeld) await worker.meHeld
     const me = worker.me
     if (path === '/api/auth/me') return me ? json(me) : json({ error: 'Unauthorized' }, 401)
     if (path === '/api/auth/logout') {
@@ -80,6 +85,7 @@ beforeEach(() => {
   sessionStorage.clear()
   worker.me = null
   worker.sent.length = 0
+  worker.meHeld = null
   setIsAuthenticated(false)
   setIsLoginModalOpen(false)
   setShowDropdown(false)
@@ -109,6 +115,12 @@ afterEach(() => {
 })
 
 async function mountApp(mode: StorageMode = 'self-hosted') {
+  // Every App boots from the loading screen, as on a page load. The flag is the store's, and the
+  // first boot in this file left it off: every later App then showed its shell before its boot had
+  // run, so a test could end with that boot still going. The local-first one was then still waiting
+  // on its first local request (which pays for the storage layer's import) when the next test signed
+  // out; landing then, it signed that test back in, and the sign-in screen never came.
+  setLoading(true)
   localStorage.setItem('finance_storage_mode', mode)
   // The stand-in Worker's account is id 1; local-first has its one local account.
   for (const [key, value] of onboardingDecided(['local', 1])) localStorage.setItem(key, value)
@@ -234,5 +246,28 @@ describe('whose setup decision the app reads', () => {
       expect(signInShown()).toBe(true)
     }, waitLong)
     expect(getOnboardingStatus()).toBeNull()
+  })
+})
+
+describe('an App closed before its start-up answers', () => {
+  it('leaves who is signed in to the App that is still open', async () => {
+    let answer!: () => void
+    worker.meHeld = new Promise<void>((resolve) => (answer = resolve))
+    worker.me = CONFIRMED
+    await mountApp()
+    await vi.waitFor(() => {
+      expect(worker.sent).toContain('GET /api/auth/me')
+    }, waitLong)
+    dispose?.()
+    dispose = undefined
+
+    answer()
+    // Ask /me again: this answer comes after the closed App's, so its start-up has run on by then.
+    const { api } = await import('../core/api')
+    await api.signedInAccount()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(getIsAuthenticated()).toBe(false)
+    expect(apiSent()).toEqual([])
   })
 })

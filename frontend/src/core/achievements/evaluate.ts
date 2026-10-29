@@ -7,6 +7,7 @@ import { flowsOf, savedOf } from '../../../../shared/guidance/flows'
 import { amortize, payoffDate } from '../../../../shared/loanSchedule'
 import { trackedMonthsOf } from '../../../../shared/trackedMonths'
 import { normalizedTransactionAmount } from '../transactionAmount'
+import { budgetsForMonth } from './budgets'
 import { ACHIEVEMENTS, VOLUME_STEPS } from './definitions'
 import { addMonths, currentStreak, monthOf, monthReaching, runs } from './months'
 import type { Budget, SavingsGoal, Transaction } from '../../types/models'
@@ -137,16 +138,13 @@ export function evaluateAchievements(input: EvaluateInput): Evaluation {
     if (!list.every((t) => t.category_id !== null || t.type === 'transfer')) return false
     return ['income', 'expense', 'transfer'].every((kind) => list.some((t) => t.type === kind))
   })
+  // A finished month is held against its own budgets, the rows the Budgets page shows for it
+  // (budgetsForMonth): one row per category, the one saved last. Every row without an end date
+  // used to count as still running, so a month also had to stay under each earlier month's budget.
+  // A badge already earned that way stays earned: the unlock records only ever add (records.ts).
   const heldMonths = tracked.filter((m) => {
     if (m >= nowMonth) return false // only finished months
-    const start = firstDay(m)
-    const end = `${m}-31`
-    const active = input.budgets.filter(
-      (b) =>
-        b.period === 'monthly' &&
-        b.start_date <= end &&
-        (b.end_date === null || b.end_date >= start)
-    )
+    const active = budgetsForMonth(input.budgets, m)
     if (active.length === 0) return false
     const list = inMonth(m)
     return active.every(

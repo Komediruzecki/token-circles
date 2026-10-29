@@ -347,6 +347,29 @@ describe('write tools', () => {
     expect(march.results).toEqual([{ id: created.id, amount: 350, start_date: '2026-03-15' }]);
   });
 
+  // Two rows for one month: the Budgets page shows the one saved last (the later created_at, then
+  // the higher id), and Allocate changes that one. The tool changed the first.
+  it('upsert_budget changes the row of the month saved last, the one the Budgets page shows', async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO categories (id, name, type, profile_id) VALUES (96021, 'Food', 'expense', ?)"
+    )
+      .bind(PROFILE_ID)
+      .run();
+    const ids: number[] = [];
+    for (const amount of [200, 250]) {
+      const res = await env.DB.prepare(
+        "INSERT INTO budgets (profile_id, category_id, amount, period, start_date, created_at) VALUES (?, 96021, ?, 'monthly', '2026-03-01', '2026-03-02 10:00:00')"
+      )
+        .bind(PROFILE_ID, amount)
+        .run();
+      ids.push(Number(res.meta.last_row_id));
+    }
+    const updated = unwrap(
+      await call('upsert_budget', { categoryId: 96021, amount: 350, startDate: '2026-03-01' })
+    );
+    expect(updated).toMatchObject({ id: ids[1], created: false, amount: 350 });
+  });
+
   it('upsert_tag_rule creates the tag if it does not exist', async () => {
     const out = unwrap(
       await call('upsert_tag_rule', {

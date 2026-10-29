@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { evaluateAchievements } from '../evaluate'
+import { diffUnlocks } from '../records'
 import { input, month, trackedRun, tx } from './fixtures'
 
 type Result = ReturnType<typeof evaluateAchievements>
@@ -103,22 +104,22 @@ describe('evaluateAchievements', () => {
   })
 
   it('held the line needs a finished month with every monthly budget held', () => {
-    const budgets = [
-      {
-        category_id: 1,
-        amount: 100,
-        period: 'monthly' as const,
-        start_date: '2026-01-01',
-        end_date: null,
-        created_at: '2026-01-01T00:00:00Z',
-      },
-    ]
+    // One row per month, as the app writes them: a budget for July and one for September.
+    const monthly = (start: string) => ({
+      category_id: 1,
+      amount: 100,
+      period: 'monthly' as const,
+      start_date: start,
+      end_date: null,
+      created_at: `${start}T00:00:00Z`,
+    })
+    const budgets = [monthly('2026-07-01'), monthly('2026-09-01')]
     const held = evaluateAchievements(
       input({ budgets, transactions: month('2026-07', 3, { amount: 20 }) })
     )
     expect(ids(held)).toContain('held-the-line')
     expect(on(held, 'held-the-line')).toBe('2026-07-01')
-    expect(on(held, 'first-budget')).toBe('2026-01-01')
+    expect(on(held, 'first-budget')).toBe('2026-07-01')
     const blown = evaluateAchievements(
       input({ budgets, transactions: month('2026-07', 3, { amount: 40 }) })
     )
@@ -341,9 +342,9 @@ describe('the chased set', () => {
         category_id: 1,
         amount: 1000,
         period: 'monthly' as const,
-        start_date: '2026-01-01',
+        start_date: '2026-03-01',
         end_date: null,
-        created_at: '2026-01-01',
+        created_at: '2026-03-01',
       },
     ]
     // Amounts are pinned: `tx` derives its default from a module-wide counter, so a test that
@@ -426,5 +427,91 @@ describe('debt free', () => {
       })
     )
     expect(on(r, 'debt-free')).toBe('2027-01-01')
+  })
+})
+
+/**
+ * Budgets are one row per month (start_date the month's first day, end_date empty), and the
+ * Budgets page reads a month's rows by start_date. A finished month is held against its own rows:
+ * judged against every earlier month's row too, a month had to stay under the smallest budget the
+ * category ever had.
+ */
+describe('which budget a finished month is held against', () => {
+  const row = (start: string, amount: number, created = `${start}T08:00:00Z`, category_id = 1) => ({
+    category_id,
+    amount,
+    period: 'monthly' as const,
+    start_date: start,
+    end_date: null,
+    created_at: created,
+  })
+
+  it("holds a month against that month's budget, not a smaller one set for an earlier month", () => {
+    const r = evaluateAchievements(
+      input({
+        budgets: [row('2026-01-01', 50), row('2026-07-01', 100)],
+        transactions: month('2026-07', 3, { amount: 20 }),
+      })
+    )
+    expect(on(r, 'held-the-line')).toBe('2026-07-01')
+  })
+
+  it('does not hold a month to a category budgeted only in an earlier month', () => {
+    // Food (1) had a budget in January only; July budgets Transport (2) and holds it.
+    const r = evaluateAchievements(
+      input({
+        budgets: [row('2026-01-01', 10), row('2026-07-01', 100, undefined, 2)],
+        transactions: [
+          ...month('2026-07', 3, { amount: 20 }),
+          tx('2026-07-20', { amount: 30, category_id: 2 }),
+        ],
+      })
+    )
+    expect(on(r, 'held-the-line')).toBe('2026-07-01')
+  })
+
+  it('takes the row saved last when a month has two for one category', () => {
+    const budgets = [
+      row('2026-07-01', 50, '2026-07-02T08:00:00Z'),
+      row('2026-07-01', 100, '2026-07-09T08:00:00Z'),
+    ]
+    const held = evaluateAchievements(
+      input({ budgets, transactions: month('2026-07', 3, { amount: 20 }) })
+    )
+    expect(on(held, 'held-the-line')).toBe('2026-07-01')
+    // The order the list arrives in does not matter.
+    const reversed = evaluateAchievements(
+      input({ budgets: [...budgets].reverse(), transactions: month('2026-07', 3, { amount: 20 }) })
+    )
+    expect(on(reversed, 'held-the-line')).toBe('2026-07-01')
+  })
+
+  it('earns Six months under on budgets raised month by month', () => {
+    // Budgets of 70, 80, ... 120, and spending of 66, 75, ... 111: every month under its own
+    // budget, every month after the first over February's.
+    const months = ['2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07']
+    const r = evaluateAchievements(
+      input({
+        budgets: months.map((m, i) => row(`${m}-01`, 70 + i * 10)),
+        transactions: months.flatMap((m, i) => month(m, 3, { amount: 22 + i * 3 })),
+      })
+    )
+    expect(on(r, 'under-budget-six')).toBe('2026-07-01')
+  })
+
+  it('a month with no budget of its own is not held, and a badge already stored stays', () => {
+    const r = evaluateAchievements(
+      input({
+        budgets: [row('2026-01-01', 100)],
+        transactions: month('2026-07', 3, { amount: 20 }),
+      })
+    )
+    expect(ids(r)).not.toContain('held-the-line')
+    const stored = [
+      { id: 'held-the-line' as const, earnedOn: '2026-07-01', unlockedAt: '2026-08-01T09:00:00Z' },
+    ]
+    const { newly, merged } = diffUnlocks(stored, r.earned, '2026-09-07T09:00:00Z')
+    expect(merged.map((u) => u.id)).toContain('held-the-line')
+    expect(newly.map((u) => u.id)).not.toContain('held-the-line')
   })
 })

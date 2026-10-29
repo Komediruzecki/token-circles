@@ -428,7 +428,16 @@ export function App() {
       for (const teardown of lateTeardowns.splice(0)) teardown()
     })
 
+    // An App closed before its start-up answers (a test that ends, a remount) must leave the
+    // shared stores to the App that is open: past each await below, a closed one stops. Its late
+    // answer once signed the next App's user back in after they had signed out.
+    let disposed = false
+    onCleanup(() => {
+      disposed = true
+    })
+
     const account = await api.signedInAccount()
+    if (disposed) return
     // A password account whose address is not confirmed gets Confirm your email and none of the
     // loads below, which the Worker would refuse (EMAIL_UNCONFIRMED). Local-first never waits.
     const waiting = serverMode && account !== null && waitsForConfirmLink(account)
@@ -453,10 +462,12 @@ export function App() {
     }
     if (loggedIn) {
       await loadProfiles(true)
+      if (disposed) return
       void loadBillingPlan()
     } else if (!serverMode) {
       // Client-only (serverless) mode: no login required — load local/demo profiles.
       await loadProfiles(false)
+      if (disposed) return
       if (profiles().length > 0) {
         setCurrentProfile({ ...profiles()[0] })
       }

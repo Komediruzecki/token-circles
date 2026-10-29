@@ -27,8 +27,8 @@ import type { KindedCategory } from '../../../shared/guidance/kinds'
 import type { OrientationFacts } from '../../../shared/orientation'
 import type { DetectableTransaction, ExistingBillLike } from '../features/subscriptionDetection'
 import type { Transaction } from '../types/models'
+import type { BudgetRow } from './achievements/budgets'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
-import type { BudgetRow } from './achievements/monthFacts'
 
 /** What the facts are read from: the parts of the achievements snapshot they need. */
 export interface OrientationSource {
@@ -41,8 +41,8 @@ export interface OrientationSource {
       DetectableTransaction &
       Partial<Pick<Transaction, 'account_id' | 'transfer_account_id'>>
   >
-  /** Which month each is for, so one that lapsed does not count (monthFacts' budgetsForMonth). */
-  budgets: readonly BudgetRow[]
+  /** Which month each is for, so one that lapsed does not count (achievements/budgets.ts). */
+  budgets: BudgetRow[]
   bills: Array<ExistingBillLike & { category_id?: number | null }>
   /** Whole rows: the scan reads the type and the kind of what charges are filed under. */
   categories: Array<{ id: number; name: string } & KindedCategory>

@@ -4,8 +4,9 @@
  * points at the page that shows it; none of it is computed anywhere but on this device.
  */
 import { isTrackedMonth, TRACKED_MONTH_MIN_TRANSACTIONS } from '../../../../shared/trackedMonths'
+import { budgetsForMonth } from './budgets'
 import { bucketByMonth, sumTypes } from './evaluate'
-import { biggestUnbudgeted, budgetsForMonth, monthInTheRed, uncategorisedIn } from './monthFacts'
+import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
 import type { EvaluateInput, Tx } from './evaluate'
 
@@ -72,6 +73,9 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
   const elapsed = monthElapsed(input.today)
   const cards: AdviceCard[] = []
   for (const b of budgetsForMonth(input.budgets, month)) {
+    // The amount the Budgets card shows (amount, and remaining as amount less spent). The summary
+    // also works out a budget with rollover (effective_budget, shared/budgetRollover.ts), but no
+    // page shows it, so advice judged by it would call a category fine that Budgets shows as over.
     if (b.amount <= 0) continue
     const spent = sumTypes(
       list.filter((t) => t.category_id === b.category_id),

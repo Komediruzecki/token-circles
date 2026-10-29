@@ -104,8 +104,10 @@ describe('the facts', () => {
       budgets: [
         {
           category_id: 9,
+          amount: 100,
           period: 'monthly',
           start_date: '2026-10-01',
+          end_date: null,
           created_at: '2026-10-01T08:00:00Z',
         },
       ],

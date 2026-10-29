@@ -31,6 +31,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **A category called Groceries shows a shopping cart, and one named for a meal shows a knife and fork** (Eating out, Restaurant, Dining, Breakfast, Lunch, Dinner, Meals), and an import that creates one gives it the same icon. Before, they showed a coffee mug, and Eating out a plain tick. An icon you picked stays, and so does the mug an earlier import gave a category while you were signed in. Coffee and Cafe keep the mug.
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
+- **Budget badges judge each month by its own budget.** Held the line, Six months under and Clean sweep also held a month to every earlier budget for the category, so a budget you raised still counted at its old amount; badges you already have stay yours.
+- **Allocate changes the budget Budgets shows.** When a month held two budgets for one category, the category's budget on Budgets, Allocate and Progress could each be a different one; those three now use the one saved last.
 
 ## [5.17.0] — 2026-10-28
 

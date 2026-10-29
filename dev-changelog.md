@@ -321,12 +321,12 @@ All notable changes to Token Circles are documented here. The format is based on
   saved on another page cost 1,452 to 1,456 ms; now nothing.
 - **A lapsed budget is no budget in Getting started either.** 5.17.0 made Progress's advice count
   a category as budgeted only with a budget row for this month (`budgetsForMonth`), while the
-  budget-top-category step still counted any budget ever set. `budgetsForMonth` moved from
-  advice.ts to `achievements/monthFacts.ts`, and `biggestUnbudgeted(list, month, budgets, bills)`
-  applies it, so both call it the same way: advice with this month's entries, the step with the
-  last full month's, both against this month's budgets, so setting the budget the step asks for
-  takes the step away. `OrientationSource.budgets` holds the rows' `period`, `start_date`,
-  `created_at` and `id`. `core/__tests__/orientationFacts.test.ts` checks that a category budgeted
+  budget-top-category step still counted any budget ever set. `biggestUnbudgeted(list, month,
+budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the one helper, in
+  `achievements/budgets.ts` since #647), so both call it the same way: advice with this month's
+  entries, the step with the last full month's, both against this month's budgets, so setting the
+  budget the step asks for takes the step away. `OrientationSource.budgets` holds whole budget rows
+  (`BudgetRow`). `core/__tests__/orientationFacts.test.ts` checks that a category budgeted
   only in an earlier month has no budget in both, and that this month's budget takes it off both.
 
 ### Guidance
@@ -1069,6 +1069,92 @@ All notable changes to Token Circles are documented here. The format is based on
   Reserve for the US.
 - **Tests:** `guidanceBenchmarks.test.ts` (both lenders by name; every cushion derivation names
   each source it keeps, and no method).
+
+### Achievements
+
+- **Budget badges hold a month against that month's budgets only.** `heldMonths` in
+  `frontend/src/core/achievements/evaluate.ts` took every monthly row with
+  `start_date <= end && (end_date === null || end_date >= start)` as active, and budgets are one row
+  per month with no `end_date`, so each finished month also had to stay under every earlier month's
+  row for the category, and under rows of categories budgeted only in an earlier month. It now reads
+  `budgetsForMonth`, the helper #641 added to advice, moved to
+  `frontend/src/core/achievements/budgets.ts` so badges and advice share it: the rows whose
+  `start_date` falls in the month, one per category, the one saved last. held-the-line,
+  under-budget-six and clean-sweep are built on it. A month with no budget row of its own is no
+  longer held. Badges already earned stay earned (`diffUnlocks` only adds). Tests:
+  `achievements/__tests__/evaluate.test.ts` ("which budget a finished month is held against"); three
+  fixtures that dated a budget months before the month they test now date it in that month.
+- **The rollover formula is written once, and advice keeps the card's amount.** The Worker's
+  `GET /api/budgets/summary` and local-first's `budgetsSummary` each worked out `effective_budget`
+  inline: the amount plus last month's unused budget (when both months have rollover on) plus
+  `rollover_amount`, less `rollover_used`. Both now call `budgetRollover` in
+  `shared/budgetRollover.ts`; the response is unchanged, and the contract suite's rollover scenario
+  (`shared/contract/scenarios/budgets.ts`) and `money-parity` pin it on both runtimes. The scenario
+  now also turns the previous month's rollover off and expects `auto_rollover` 0: before that, a
+  formula that ignored the previous month's switch passed both suites. Advice in
+  `frontend/src/core/achievements/advice.ts` deliberately still compares spending with the row's
+  `amount`: no page renders `effective_budget` or `effective_remaining`, and the Budgets card shows
+  the amount and amount less spent (`Budgets.tsx`, `Categories.tsx`), as the badges count it.
+  Judged by the rollover figure, advice called a category fine that Budgets showed as over. Tests:
+  `achievements/__tests__/advice.test.ts` ("a budget with rollover") pins the amount.
+
+### Budgets
+
+- **Every reader of a month's budget takes the row saved last.** A month can hold two rows for one
+  category (two `POST /api/budgets`, an import, a restore, an API client), and the readers each
+  picked their own: `GET /api/budgets/summary` and `/api/budgets/zero-based` had no `ORDER BY`, so
+  the Budgets page kept whichever row D1 or IndexedDB listed last for the category; Allocate and the
+  MCP `upsert_budget` tool changed the first (`ORDER BY start_date, id`); advice and badges took the
+  latest `start_date`, then `created_at`, then `id`. A new allocation could change a row the page
+  did not show. The rule is now one, in `shared/budgetSavedOrder.ts` (`bySavedOrder`): the later
+  `created_at`, then the higher `id`, whatever day the row starts. `created_at` is compared to the
+  second with the date and time separator read the same way: D1 writes `datetime('now')`
+  (`YYYY-MM-DD HH:MM:SS`, UTC) and local-first `toISOString()` (`YYYY-MM-DDTHH:MM:SS.sssZ`, UTC),
+  and a restore copies the value as the backup has it, so D1 can hold both. As text the space sorts
+  before `T`, so a D1 row counted as saved before a local one on the same day whatever the time. The
+  summary (this month's rows and the previous month's, which rollover reads) and zero-based list
+  `ORDER BY replace(substr(created_at, 1, 19), 'T', ' '), id`, so the row that counts comes last;
+  Allocate and `upsert_budget` take the same key `DESC, id DESC`. Local-first sorts with
+  `bySavedOrder` in `budgetsSummary`, `budgetsZeroBased` and `budgetsAllocate`, and
+  `budgetsForMonth` in achievements uses it too. No migration, no change to a response's shape.
+  Not yet on the rule, each reading every row of a month (or one row SQLite picks) where two exist:
+  `GET /api/budgets/alerts` (one alert per row); `GET /api/budgets/zero-based/summary` (the
+  Allocated card and the zero-based table: one line per row, `total_budget` and `already_budgeted`
+  their sum); `alreadyBudgeted`, `unassigned_budget` and `can_allocate` in
+  `GET /api/budgets/zero-based` (a `SUM(amount)` over the month); `GET /api/budgets/history`
+  (`GROUP BY start_date` with a bare `amount`); `GET /api/budgets/improvements`;
+  `GET /api/budgets/forecast`; the budget comparison in `worker/src/routes/analytics.ts`
+  (`GROUP BY category_id` with a bare `amount`); the monthly budget email in
+  `worker/src/reminders.ts`; the MCP `get_budgets_and_goals` tool. Their local-first mirrors in
+  `frontend/src/core/storage/handlers/budgets.ts` (`budgetsAlerts`, `budgetsZeroBasedSummary`,
+  `alreadyBudgeted` in `budgetsZeroBased`, `budgetsHistory`, `budgetsImprovements`,
+  `budgetsForecast`) and `handlers/analytics.ts` behave the same way. Tests:
+  `worker/test/budgets-one-row-per-month.test.ts` (which also pins D1's `created_at` as UTC),
+  `worker/test/mcp-tools-write.test.ts`, `frontend/src/core/__tests__/budgetSavedOrder.test.ts`,
+  `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
+  `achievements/__tests__/advice.test.ts`.
+
+### Tests
+
+- **An App closed before its start-up answers no longer signs anyone in.** `onMount` in
+  `frontend/src/App.tsx` awaited `api.signedInAccount()` and then `loadProfiles()`, and set the
+  shared auth, onboarding-owner and profile stores after each with no check that the App was still
+  open. It now sets `disposed` in an `onCleanup` registered before the first await and returns after
+  each await once it is set. Test: `confirmEmailGate.test.tsx` ("an App closed before its start-up
+  answers"), which holds `/api/auth/me`, closes the App, then lets it answer; before the change
+  `isAuthenticated` came back `true`.
+- **confirmEmailGate.test.tsx: each App boots from the loading screen.** "whose setup decision the
+  app reads" was reported to fail about once per loaded full run, waiting for the sign-in screen
+  (`expected false to be true`). It did not fail here in 10 runs of the file under load or 5 full
+  runs, so the cause below comes from reading the code, not from a reproduction of that failure. The
+  App's loading flag lives in `appStore`, and the first boot in the file turned it off for good, so
+  every later App showed its shell before its `onMount` boot had run, and a test could end with
+  that boot still going. A closed App's boot that answers late can then set `isAuthenticated` for
+  the next test. `mountApp` now sets the flag on before each render, so a test's wait for the app or
+  the gate is a wait for that boot to finish. What was observed: in a scratch copy with the local
+  `authMe` delayed 1.5 s, and an extra 2.5 s wait and sign-in check added at the end of that test,
+  the added check failed with `expected false to be true` before the change (one run) and passed
+  after it (one run).
 
 ## [5.17.0] — 2026-10-28
 
