@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.2] — 2026-10-30
+
 ### Sign-in
 
 - **Labels inside the box and a password reveal, in the form kit.** Ported from MercuryPitch's
