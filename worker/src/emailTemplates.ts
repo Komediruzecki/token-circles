@@ -31,9 +31,6 @@ const REPO_URL = 'https://github.com/Komediruzecki/token-circles';
 const TERMS_URL = `${ABOUT_URL}/terms`;
 const PRIVACY_URL = `${ABOUT_URL}/privacy`;
 const CONTACT_EMAIL = 'hello@tokencircles.com';
-// Mail assets load from the SENDING environment's app origin (dev mails must
-// not depend on a prod release shipping the asset); footer links stay
-// canonical. Defaults to the prod app for safety.
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
 export interface RenderedEmail {
@@ -267,6 +264,13 @@ export interface MailSpec {
   reason: string;
   /** The reminders' one-click unsubscribe link, in the footer after the reason. */
   unsubUrl?: string | null;
+  /**
+   * The mail goes to an address that is not confirmed yet, with the link that confirms it. It then
+   * carries no link into the app, the wordmark's and the text twin's "Open the app" included: a
+   * sign-in before the address is confirmed is refused, so such a link would end on a sign-in
+   * that answers as a wrong password (routes/auth.ts).
+   */
+  unconfirmed?: boolean;
   /** The origin that serves the wordmark and the art: the sending environment's app. */
   assetOrigin?: string;
 }
@@ -418,10 +422,10 @@ ${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: '
 }
 
 /** The text twin's last lines, the same for every mail on this layout, in the footer's order. */
-const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
+const mailTextFooter = (reason: string, unsubUrl?: string | null, unconfirmed = false) =>
   [
     TAGLINE,
-    `Open the app: ${APP_URL}`,
+    ...(unconfirmed ? [] : [`Open the app: ${APP_URL}`]),
     ...FOOTER_LINKS.map(({ label, href }) => `${label}: ${href}`),
     `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0`,
     CONTACT_EMAIL,
@@ -432,8 +436,12 @@ const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
 export function renderMail(spec: MailSpec): RenderedEmail {
+  // The wordmark and the art load from the SENDING environment's app origin, so a dev mail never
+  // depends on a prod release shipping the file; the links stay canonical. The prod app when the
+  // caller names none.
   const assets = spec.assetOrigin || APP_URL;
   const art = ART[spec.art];
+  const wordmark = `<img src="${assets}/icon-192.png" width="26" height="26" alt="" class="tc-text" style="vertical-align:middle;border:0;border-radius:7px;color:${INK.text}"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span>`;
   const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" class="tc-soft" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0;color:${INK.soft}">`;
   // The card's last row carries its bottom padding.
   const after = { steps: !!spec.steps, signOff: !!spec.signOff, aside: !!spec.aside };
@@ -479,7 +487,7 @@ ${mailStyle(!!spec.tables)}
 <table role="presentation" class="tc-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK.page}" style="background:${INK.page}"><tr><td align="center" style="padding:22px 12px 30px">
 <!--[if mso]><table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px"><tr><td><![endif]-->
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
-<tr><td style="padding:2px 6px 14px"><a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}"><img src="${assets}/icon-192.png" width="26" height="26" alt="" class="tc-text" style="vertical-align:middle;border:0;border-radius:7px;color:${INK.text}"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
+<tr><td style="padding:2px 6px 14px">${spec.unconfirmed ? wordmark : `<a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}">${wordmark}</a>`}</td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
 ${mailFooter(spec.reason, spec.unsubUrl)}
 </table>
@@ -509,7 +517,7 @@ ${mailFooter(spec.reason, spec.unsubUrl)}
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason, spec.unsubUrl),
+    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed),
   ].join('\n\n');
   // The footer's unsubscribe link is also the List-Unsubscribe header sendMail sends, so the two
   // can never name different links.
@@ -544,11 +552,11 @@ const SIGNED_UP = `You are getting this because this address was used to sign up
  * its link, which an inbox gets without having asked, so the mail says nothing of asking. Minting
  * it retires the links sent before it (createEmailVerification), and the mail says so.
  *
- * It says what the link does today. It spends itself only for its own account's session, which an
- * account waiting for its link does not have, so opening it asks for a sign-in, in any browser,
- * and that sign-in confirms the address (email-link.ts). It promises nothing more until the
- * same-browser sign-in ships, which is when a mail can say "One click" again (maff's call of
- * 2026-10-11).
+ * It says what the link does today. It spends itself at once where its own account is signed in
+ * (a link asked for from the Confirm your email screen, in that session); anywhere else it asks
+ * for a sign-in, in any browser, and that sign-in confirms the address (email-link.ts). So the
+ * sign-in is conditional here. It promises nothing more until the same-browser sign-in ships,
+ * which is when a mail can say "One click" again (maff's call of 2026-10-11).
  */
 export function renderEmailVerification(opts: {
   link: string;
@@ -562,7 +570,7 @@ export function renderEmailVerification(opts: {
     headline: "Here's a fresh link.",
     paragraphs: [
       'Use this link to confirm your address. It replaces the ones sent before.',
-      `Open it in any browser and sign in there, and your ${BRAND} account opens.`,
+      `If it asks you to sign in, sign in right there, in this browser or any other, and your ${BRAND} account opens.`,
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
     notes: [
@@ -570,6 +578,7 @@ export function renderEmailVerification(opts: {
     ],
     paste: opts.link,
     aside: NOT_YOU,
+    unconfirmed: true,
     reason: SIGNED_UP,
     assetOrigin: opts.assetOrigin,
   });
@@ -632,6 +641,7 @@ export function renderWelcome(
         items: WELCOME_STEPS.map(({ title, text }) => ({ title, text })),
       },
       aside: NOT_YOU,
+      unconfirmed: true,
       reason: SIGNED_UP,
       assetOrigin,
     });

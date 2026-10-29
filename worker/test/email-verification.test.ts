@@ -425,15 +425,15 @@ describe('the mail itself', () => {
   const fresh = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
   const welcome = renderWelcome({ appUrl: APP });
   /**
-   * What each confirm mail says the link does. Until the same-browser sign-in ships, opening the
-   * link asks a new sign-up for a sign-in, wherever it is opened (email-link.ts), and the mails
-   * say so.
+   * What each confirm mail says the link does. A new sign-up has no session, so its link always
+   * asks for a sign-in (email-link.ts). A fresh link can also be asked for from a session, where it
+   * confirms at once, so that mail says the sign-in only may come.
    */
   const CONFIRM_SAYS =
     'Open the link in any browser and sign in there. That confirms this address and opens your Token Circles account.';
   const FRESH_SAYS = [
     'Use this link to confirm your address. It replaces the ones sent before.',
-    'Open it in any browser and sign in there, and your Token Circles account opens.',
+    'If it asks you to sign in, sign in right there, in this browser or any other, and your Token Circles account opens.',
   ];
 
   it('gives a password sign-up one welcome: the confirm link as its button, and again as text to paste', () => {
@@ -446,11 +446,30 @@ describe('the mail itself', () => {
     expect(confirm.text.startsWith('Welcome to Token Circles\n')).toBe(true);
   });
 
-  it('says in both confirm mails, html and text, that the link asks for a sign-in, wherever it is opened', () => {
+  it('says in both confirm mails, html and text, how the sign-in the link may ask for confirms the address', () => {
     for (const part of [confirm.html, confirm.text]) expect(part).toContain(CONFIRM_SAYS);
     for (const part of [fresh.html, fresh.text]) {
       for (const words of FRESH_SAYS) expect(part).toContain(words);
     }
+  });
+
+  it('points neither confirm mail into the app, in the HTML or the text', () => {
+    // Main's guard (origin/main email-verification.test.ts): before its address is confirmed an
+    // account's sign-in is refused, as a wrong password, so a confirm mail links nowhere in the app.
+    // The wordmark, the text footer's "Open the app" and any page link would all end there.
+    // The app the mail is sent from, and the canonical one the wordmark and the footer name.
+    const appLink = /href="(?:http:\/\/localhost:3800|https:\/\/tokencircles\.com)(?:\/[^"]*)?"/;
+    for (const mail of [confirm, fresh]) {
+      expect(mail.html).not.toMatch(appLink);
+      for (const part of [mail.html, mail.text]) {
+        expect(part).not.toContain('Open the app');
+        expect(part).not.toContain('Open Token Circles');
+        expect(part).not.toMatch(/is ready/);
+      }
+    }
+    // The welcome a Google sign-up gets, already confirmed, keeps them.
+    expect(welcome.text).toContain(`Open the app: https://tokencircles.com`);
+    expect(welcome.html).toMatch(appLink);
   });
 
   it('promises no one-click confirm in either mail while the link asks for a sign-in', () => {

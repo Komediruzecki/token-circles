@@ -122,6 +122,30 @@ All notable changes to Token Circles are documented here. The format is based on
   leaves it, the copyright 177 px, and no line at 320 or 375 px starts or ends with a dot. The
   amount-mail digests were taken again; all 464 mails differ from the old ones only in the footer
   and the `.tc-sep` light-mode rule.
+- **The amount-mail digests survive New Year.** `amountMailDigests`
+  (`worker/test/helpers/amount-mail-grid.ts`) read the footer's year as YYYY in the HTML
+  (`&copy; 2026`) but not in the text twin (`© 2026`), so the four pins would have failed on
+  1 January 2027. It reads both; a test in `mail-catalogue.test.ts` renders the grid under a fake
+  clock in 2031 and expects the same digests.
+- **Every mail declares "light only", so the Gmail iPhone app keeps it dark.** Ported from
+  MercuryPitch's PR #1010 (probe mails of 2026-10-14): the Gmail apps ignore "dark", recolour a mail
+  that declares it (the page turned white), show a "light only" one as drawn, and fire neither
+  prefers-color-scheme query. `COLOR_SCHEME_META` and `:root` say "light only"; `AUTO_LINK_STYLE`
+  (`a[x-apple-data-detectors]`, `u + #body a`) and `<body id="body">` keep client-made links in the
+  colour around them; both pictures, the wordmark's link and the preheader carry an inline colour.
+  The paper variant stays, because a media query reads the reader's setting: in headless Chromium
+  over the 17 samples at 375 and 600 px under a dark and a light scheme, no shown element that
+  holds text changed colour, no background changed, and dark and light still differ for 17 of 17.
+  The images need no page colour: the two cuts are opaque JPEGs, and `icon-192.png` is an opaque
+  navy plate with only its rounded corners transparent. `worker/test/mail-color-scheme.test.ts`
+  (MercuryPitch's tokenizer) checks the head and that every line of text, link and picture has its
+  own colour, over the catalogue and the amount grid. Digests taken again for the head alone.
+- **A confirm mail links nowhere in the app.** A sign-in before the address is confirmed is
+  refused, as a wrong password, so `MailSpec.unconfirmed` drops the wordmark's link and the text
+  twin's "Open the app" from the password sign-up's welcome and the fresh confirm link; main's guard
+  in `email-verification.test.ts` is back, over the HTML and the text. The fresh link says the
+  sign-in only may come ("If it asks you to sign in"): opened in the session that asked for it,
+  it confirms at once.
 - **The unsubscribe token is minted in one statement.** `ensureUnsubToken` (`worker/src/reminders.ts`)
   read no token, made one and wrote it with a plain UPDATE, so two senders running at once (a cron
   that fires twice) each wrote their own and the mail that went out could carry the token that was
