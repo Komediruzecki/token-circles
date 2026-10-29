@@ -1203,7 +1203,7 @@ export function renderWeekOneDay7(opts: {
     ],
     tables: [
       {
-        title: 'Your first week',
+        // No title: the paragraph above introduces it, and the eyebrow already says "Your first week".
         rows: rows.map(([label, n]) => ({
           cells: [{ text: label }, { text: count(n), align: 'right', strong: true }],
           text: `${label}: ${count(n)}`,
