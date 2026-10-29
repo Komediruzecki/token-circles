@@ -6,14 +6,31 @@ import type { Env } from './index';
  */
 const MAIL_TIMEOUT_MS = 10_000;
 
+/**
+ * The headers that let a mail app show its own unsubscribe button: List-Unsubscribe (RFC 2369)
+ * names the URL, and List-Unsubscribe-Post (RFC 8058) says a form POST of
+ * `List-Unsubscribe=One-Click` to it unsubscribes, with no page in between. The URL must answer
+ * that POST (routes/notifications.ts); a GET of it only shows a page.
+ */
+export function listUnsubscribeHeaders(url: string): Record<string, string> {
+  return {
+    'List-Unsubscribe': `<${url}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+}
+
 // Outbound transactional email via Resend's HTTP API (Workers can't open SMTP sockets).
 // Dev parity with the legacy console-log mode: when RESEND_API_KEY is unset, log + skip.
+//
+// `listUnsubscribe` is the unsubscribe URL of the list this mail belongs to, the same one its
+// footer links to. Only mails with such a link pass it; sign-in, account and billing mails have
+// nothing to unsubscribe from and send no List-Unsubscribe header.
 export async function sendMail(
   env: Env,
   to: string,
   subject: string,
   html: string,
-  opts?: { replyTo?: string; text?: string }
+  opts?: { replyTo?: string; text?: string; listUnsubscribe?: string | null }
 ): Promise<{ sent: boolean; skipped?: boolean; error?: string; id?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
@@ -34,6 +51,7 @@ export async function sendMail(
       // Plain-text twin (deliverability + text-only clients).
       ...(opts?.text ? { text: opts.text } : {}),
       ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}),
+      ...(opts?.listUnsubscribe ? { headers: listUnsubscribeHeaders(opts.listUnsubscribe) } : {}),
     }),
     signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
   });

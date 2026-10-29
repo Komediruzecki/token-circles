@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import type { AppEnv } from '../index';
 import { requireAuth } from '../auth';
 import { getProfileId } from '../profile';
@@ -6,7 +6,7 @@ import { HttpError } from '../http';
 import * as db from '../db';
 import { sendMail } from '../email';
 import { pendingEmailChange, requestEmailChange } from '../email-change';
-import { renderTestBasic } from '../emailTemplates';
+import { escapeHtml, renderTestBasic } from '../emailTemplates';
 import {
   composeReminderPreview,
   sendBillsRemindersForUser,
@@ -138,7 +138,10 @@ notificationsRoutes.post('/api/notifications/test-email', requireAuth, async (c)
     );
   }
 
-  const r = await sendMail(c.env, user.email, mail.subject, mail.html, { text: mail.text });
+  const r = await sendMail(c.env, user.email, mail.subject, mail.html, {
+    text: mail.text,
+    listUnsubscribe: mail.listUnsubscribe,
+  });
   return c.json({ ok: true, type, ...r });
 });
 
@@ -166,40 +169,99 @@ notificationsRoutes.post('/api/notifications/trigger', requireAuth, async (c) =>
   return c.json({ ok: true, sent });
 });
 
-// GET — public one-click unsubscribe (clicked from an email footer; no auth).
-notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
+// ── Unsubscribe (public, no auth) ─────────────────────────────────────────────────────────────
+// The link in a reminder mail's footer, and the List-Unsubscribe header (email.ts), point here
+// with the account's unsubscribe token in the query string.
+//
+// GET only shows a page with one button and changes nothing: link scanners and previewers fetch
+// every link in a mail, and an unsubscribe that ran on GET turned people's reminders off without
+// them pressing anything. The button POSTs to the same URL, and so does a mail app's own
+// unsubscribe button (RFC 8058 one-click: a form-encoded `List-Unsubscribe=One-Click` body, no
+// cookie, from the mail provider's servers). The POST needs no session, CSRF token or CORS grant:
+// the token is the credential, and a cross-site form post or a server-side request never asks the
+// browser's CORS check. It is idempotent: a token whose account is already unsubscribed answers 200.
+
+type UnsubscribeContext = Context<AppEnv>;
+
+function unsubscribePage(
+  c: UnsubscribeContext,
+  title: string,
+  body: string,
+  opts: { status?: 200 | 400; action?: string } = {}
+) {
   const appUrl = c.env.CORS_ORIGIN || '';
-  const page = (title: string, body: string, status: 200 | 400 = 200) =>
-    c.html(
-      `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+  const button = opts.action
+    ? `<form method="post" action="${escapeHtml(opts.action)}">
+<button type="submit" style="font:inherit;font-size:14px;font-weight:600;background:#4f6ef7;color:#fff;border:0;border-radius:8px;padding:10px 20px;cursor:pointer">Unsubscribe</button>
+</form>`
+    : appUrl
+      ? `<a href="${escapeHtml(appUrl)}" style="display:inline-block;background:#4f6ef7;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Back to the app</a>`
+      : '';
+  return c.html(
+    `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} — Token Circles</title></head>
+<title>${title} | Token Circles</title></head>
 <body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#0b1020;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px">
 <div style="max-width:420px;width:100%;background:#131a2e;border:1px solid #26304d;border-radius:12px;padding:32px;text-align:center">
 <div style="font-weight:700;font-size:18px;margin-bottom:16px">Token Circles</div>
 <h1 style="font-size:20px;margin:0 0 12px">${title}</h1>
 <p style="color:#94a3b8;font-size:14px;line-height:1.6;margin:0 0 20px">${body}</p>
-${appUrl ? `<a href="${appUrl}" style="display:inline-block;background:#4f6ef7;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:14px">Back to the app</a>` : ''}
+${button}
 </div></body></html>`,
-      status
-    );
+    opts.status ?? 200
+  );
+}
 
+const STILL_ARRIVES = 'Sign-in codes, password resets and billing mail still arrive.';
+
+const missingToken = (c: UnsubscribeContext) =>
+  unsubscribePage(c, 'Invalid link', 'This unsubscribe link is missing its token.', {
+    status: 400,
+  });
+
+const unknownToken = (c: UnsubscribeContext) =>
+  unsubscribePage(
+    c,
+    'Link not recognized',
+    'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, disable reminders under Settings, Notifications.',
+    { status: 400 }
+  );
+
+const unsubscribedPage = (c: UnsubscribeContext) =>
+  unsubscribePage(
+    c,
+    'You are unsubscribed',
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES}`
+  );
+
+notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
   const token = c.req.query('token');
-  if (!token) return page('Invalid link', 'This unsubscribe link is missing its token.', 400);
+  if (!token) return missingToken(c);
+  const user = await db.first<{ notifications_unsubscribed: number | null }>(
+    c.env.DB,
+    'SELECT notifications_unsubscribed FROM users WHERE unsubscribe_token = ?',
+    token
+  );
+  if (!user) return unknownToken(c);
+  if (user.notifications_unsubscribed) return unsubscribedPage(c);
+  return unsubscribePage(
+    c,
+    'Stop reminder mails?',
+    `Press Unsubscribe to stop budget alerts, spending reports and bill reminders to this address. ${STILL_ARRIVES}`,
+    { action: `/api/notifications/unsubscribe?token=${encodeURIComponent(token)}` }
+  );
+});
+
+notificationsRoutes.post('/api/notifications/unsubscribe', async (c) => {
+  const token = c.req.query('token');
+  if (!token) return missingToken(c);
+  // SQLite counts a row the WHERE matched as changed even when the flag was already 1, so an
+  // account that is already unsubscribed still answers with the done page.
   const res = await db.run(
     c.env.DB,
     'UPDATE users SET notifications_unsubscribed = 1 WHERE unsubscribe_token = ?',
     token
   );
-  if (!res.meta.changes) {
-    return page(
-      'Link not recognized',
-      'This unsubscribe link is invalid or was already replaced. If you keep receiving emails, disable reminders under Settings, Notifications.',
-      400
-    );
-  }
-  return page(
-    'You are unsubscribed',
-    'You will no longer receive reminder emails (spending reports and budget alerts). You can turn them back on any time under Settings, Notifications in the app.'
-  );
+  if (!res.meta.changes) return unknownToken(c);
+  return unsubscribedPage(c);
 });
