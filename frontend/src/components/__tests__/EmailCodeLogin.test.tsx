@@ -19,6 +19,7 @@ let requestResponse: () => Promise<Response> = () => Promise.resolve(json({ ok: 
 let verifyResponse: () => Promise<Response> = () => Promise.resolve(json({ id: 1 }))
 let reloads = 0
 let twofaHandoffs = 0
+let backs = 0
 let toasts: () => unknown[]
 
 function json(body: unknown, status = 200): Response {
@@ -64,7 +65,9 @@ async function mount(email = 'user@example.com', captcha?: Captcha) {
     () => (
       <EmailCodeLogin
         email={email}
-        onBack={() => undefined}
+        onBack={() => {
+          backs += 1
+        }}
         onTwofa={() => {
           twofaHandoffs += 1
         }}
@@ -111,6 +114,7 @@ beforeEach(() => {
   requests.length = 0
   reloads = 0
   twofaHandoffs = 0
+  backs = 0
   requestResponse = () => Promise.resolve(json({ ok: true }))
   verifyResponse = () => Promise.resolve(json({ id: 1 }))
   vi.stubGlobal('location', {
@@ -226,6 +230,17 @@ describe('the ways out', () => {
     await requestCode()
 
     expect(byTestId('emailcode-resend')!.tagName).toBe('BUTTON')
+  })
+
+  it('offers "Back to sign in" on the code step too, and it goes back', async () => {
+    await mount()
+    await requestCode()
+    const back = byTestId('emailcode-verify-back')!
+
+    expect(back.tagName).toBe('BUTTON')
+    expect(back.textContent?.trim()).toBe('Back to sign in')
+    back.click()
+    expect(backs).toBe(1)
   })
 })
 

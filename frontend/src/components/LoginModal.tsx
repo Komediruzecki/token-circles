@@ -1,5 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
+import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
 import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
@@ -37,8 +38,23 @@ export default function LoginModal(props: LoginModalProps) {
   // waits for a tick the button waits too (captchaGate.ts).
   const captcha = createCaptchaGate()
 
+  // In an installed app the back gesture had no entry to pop and closed the app under the dialog.
+  // The dialog has one history entry while it is open, and popping it closes the dialog. Closing it
+  // any other way (Cancel, Escape, a click outside) takes that entry, and any step's, back first.
+  createHistoryStep({
+    active: () => true,
+    back: () => {
+      props.onClose()
+    },
+  })
+  let closing = false
   const close = () => {
-    props.onClose()
+    // Escape pressed twice, or Escape and a click outside, closes once.
+    if (closing) return
+    closing = true
+    afterHistoryStep(() => {
+      props.onClose()
+    })
   }
 
   // Document-level so Escape keeps working on the steps after the form, when the form (and with
@@ -69,6 +85,30 @@ export default function LoginModal(props: LoginModalProps) {
     setElsewhere('')
     form.reset({ ...form.values })
   }
+
+  // Each step's way back to the form: its own Back button, and the back gesture, which pops the
+  // step's entry above the dialog's (as on the sign-in screen) before a second one closes it.
+  const leaveTwofa = () => {
+    setStage('form')
+    form.reset({ email: form.values.email, password: '' })
+  }
+  const leaveEmailCode = () => {
+    setStage('form')
+  }
+  const leaveInbox = () => {
+    switchTo('login')
+    form.reset({ email: inbox(), password: '' })
+    setStage('form')
+  }
+  createHistoryStep({
+    active: () => stage() !== 'form',
+    back: () => {
+      const now = stage()
+      if (now === 'twofa') leaveTwofa()
+      else if (now === 'email-code') leaveEmailCode()
+      else if (now === 'inbox') leaveInbox()
+    },
+  })
 
   /** From the refused sign-in: send the confirm link to the address in the form, signed out. */
   const sendConfirmLink = () => {
@@ -101,27 +141,15 @@ export default function LoginModal(props: LoginModalProps) {
           when={stage() === 'form'}
           fallback={
             stage() === 'twofa' ? (
-              <TwofaChallenge
-                onBack={() => {
-                  setStage('form')
-                  form.reset({ email: form.values.email, password: '' })
-                }}
-              />
+              <TwofaChallenge onBack={leaveTwofa} />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
                 email={form.values.email}
-                onBack={() => setStage('form')}
+                onBack={leaveEmailCode}
                 onTwofa={() => setStage('twofa')}
               />
             ) : (
-              <CheckInbox
-                email={inbox()}
-                onBack={() => {
-                  switchTo('login')
-                  form.reset({ email: inbox(), password: '' })
-                  setStage('form')
-                }}
-              />
+              <CheckInbox email={inbox()} onBack={leaveInbox} />
             )
           }
         >
@@ -281,7 +309,13 @@ export default function LoginModal(props: LoginModalProps) {
               onClick={() => {
                 // Survives the OAuth round-trip in this tab; see LoginScreen's Google button.
                 markPasskeyNudgeAfterLogin()
-                api.loginWithGoogle()
+                // Off to Google with the dialog's entry gone, so coming back has none to pop.
+                afterHistoryStep(() => {
+                  // Closed first: a page the browser restores on the way back from Google shows
+                  // the app, not a dialog with no entry under it.
+                  props.onClose()
+                  api.loginWithGoogle()
+                })
               }}
               type="button"
             >
@@ -306,7 +340,10 @@ export default function LoginModal(props: LoginModalProps) {
                 onClick={() => {
                   setElsewhere('')
                   void signInWithPasskey().then((result) => {
-                    if (result.ok) window.location.reload()
+                    if (result.ok)
+                      afterHistoryStep(() => {
+                        window.location.reload()
+                      })
                     else if (!result.aborted) setElsewhere(result.error)
                   })
                 }}

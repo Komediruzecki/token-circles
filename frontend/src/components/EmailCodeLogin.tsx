@@ -183,6 +183,18 @@ export default function EmailCodeLogin(props: {
             Send another
           </button>
         </p>
+        <p class={styles.links}>
+          <button
+            type="button"
+            data-test-id="emailcode-verify-back"
+            class={`${styles.link} ${styles.linkQuiet}`}
+            onClick={() => {
+              props.onBack()
+            }}
+          >
+            Back to sign in
+          </button>
+        </p>
       </form>
     </Show>
   )
