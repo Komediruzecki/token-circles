@@ -72,13 +72,23 @@ export interface UserRow {
   unsubscribe_token: string | null;
 }
 
-// Lazily mint a per-user unsubscribe token (used in email footers) and persist it.
-async function ensureUnsubToken(env: Env, u: UserRow): Promise<string> {
+// Lazily mint a per-user unsubscribe token (used in email footers) and persist it. One statement
+// keeps whichever token is stored first: two runs that both read no token (a cron that fires twice)
+// would otherwise each write their own, and the mail that went out could carry the one that lost.
+export async function ensureUnsubToken(
+  env: Env,
+  u: Pick<UserRow, 'id' | 'unsubscribe_token'>
+): Promise<string> {
   if (u.unsubscribe_token) return u.unsubscribe_token;
-  const token = crypto.randomUUID();
-  await db.run(env.DB, 'UPDATE users SET unsubscribe_token = ? WHERE id = ?', token, u.id);
-  u.unsubscribe_token = token;
-  return token;
+  const row = await db.first<{ unsubscribe_token: string }>(
+    env.DB,
+    'UPDATE users SET unsubscribe_token = COALESCE(unsubscribe_token, ?) WHERE id = ? RETURNING unsubscribe_token',
+    crypto.randomUUID(),
+    u.id
+  );
+  if (!row) throw new Error(`no user ${u.id} to give an unsubscribe token`);
+  u.unsubscribe_token = row.unsubscribe_token;
+  return row.unsubscribe_token;
 }
 
 // ── Budget alerts ────────────────────────────────────────────────────────────
