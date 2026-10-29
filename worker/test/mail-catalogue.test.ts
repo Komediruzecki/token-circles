@@ -23,10 +23,7 @@ const RENDERERS = Object.keys(templates).filter(
 
 /** The card of a mail on the layout: from the card to the footer that follows it. */
 const cardOf = (html: string) =>
-  html.slice(
-    html.indexOf('class="tc-card"'),
-    html.indexOf('Your money, in clear orbit. Open source and local-first.')
-  );
+  html.slice(html.indexOf('class="tc-card"'), html.indexOf('Your money, in clear orbit.'));
 
 describe('the mail catalogue', () => {
   it('has a sample of every mail the Worker can send, each under its own name', () => {
@@ -108,12 +105,23 @@ describe('the mail catalogue', () => {
     }
   });
 
-  it('keeps the contact address on the line of the dot before it, in every footer on the layout', () => {
-    // On a phone the copyright line ended in a stray dot, with the address alone below it.
+  it('gives the copyright and the contact address a line each, and the reason a paragraph of its own, in every footer', () => {
+    // On a 375 px phone the copyright line wrapped to start the next line with "· hello@...",
+    // and the reason ran into it with no gap.
     for (const sample of samples) {
-      expect(sample.render().html, sample.name).toContain(
-        'AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:hello@tokencircles.com"'
-      );
+      const html = sample.render().html;
+      const footer = html.slice(html.lastIndexOf('<tr><td align="center"'));
+      const lines = [...footer.matchAll(/<p class="tc-muted" style="([^"]*)">(.*?)<\/p>/g)];
+      expect(
+        lines.map((line) => line[2]!.replace(/<[^>]+>/g, '')).slice(2, 4),
+        sample.name
+      ).toEqual([
+        `&copy; ${new Date().getUTCFullYear()} Token Circles &middot; AGPL-3.0`,
+        'hello@tokencircles.com',
+      ]);
+      expect(lines[2]![1], sample.name).toContain('white-space:nowrap');
+      expect(lines[4]![1], sample.name).toMatch(/^margin:18px 0 0;/);
+      expect(lines[4]![2], sample.name).toContain('You are getting this because');
     }
   });
 
@@ -122,12 +130,14 @@ describe('the mail catalogue', () => {
     for (const sample of samples) {
       const { html, text } = sample.render();
       expect(text, sample.name).toContain(line);
-      const footer = html.slice(html.indexOf(line));
+      // In the HTML each sentence of the line is a span of its own.
+      const footer = html.slice(html.indexOf('Your money, in clear orbit.'));
       // An href holds & as &amp;, should a link carry two query parameters.
       const links = [...footer.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) =>
         m[1]!.replace(/^mailto:/, '').replaceAll('&amp;', '&')
       );
-      expect(links.length, sample.name).toBeGreaterThan(5);
+      // About, GitHub, Terms, Privacy and the address, and a reminder's Unsubscribe.
+      expect(links.length, sample.name).toBeGreaterThanOrEqual(5);
       for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);
     }
   });
@@ -222,22 +232,25 @@ describe('the mail catalogue', () => {
     // The same lines against `git show c010b74c:worker/src/emailTemplates.ts` give the digests the
     // first shell was pinned to, so the method is the one those were taken with. A change to any of
     // the four shows here, and is taken again only on purpose. The input counts guard the grid.
+    // Taken again on 2026-10-29 for the centred footer (maff's call), the only change: every one
+    // of the 464 mails differs from the digests before only in its footer and the one light-mode
+    // rule for the footer's dots, checked by comparing both renderings up to the footer.
     expect(await amountMailDigests(templates)).toEqual({
       renderBudgetAlert: {
         inputs: 192,
-        digest: '19a9c71789cd92459985cd9f4c50f39bf4972e339056394ab9bec2810fb4d3fd',
+        digest: '17e735bfabbafbbff780c86c504eea2c1e2f15b924bef2435b7909de136ce7e1',
       },
       renderBillsReminder: {
         inputs: 120,
-        digest: '0701d570920a07fd2f3a5867b503567110dd3f64d7ec398a26a27c065196a5a8',
+        digest: '714feeb1acd9578fb832a640fdc3334266d729c6191b5bcfd88f5261092fe4bc',
       },
       renderSpendingReport: {
         inputs: 144,
-        digest: '12df033e32a0cb08018e1bd050ac0d4d687ec124a9860f59a91ca52b5b691571',
+        digest: 'c487a16a7b1c7b746c6cf0696c7d5213a82e0512120d11b93acf62fea68642fd',
       },
       renderPaymentFailed: {
         inputs: 128,
-        digest: 'cd34d4bf087425b3ee3727023c63152224ff2450a9a21f702cc447fd9180cd98',
+        digest: '1bbf51e9e68a637ba6e88090ff83755bfb732f5ec6224aabf7d8f348d2e4c74f',
       },
     });
   });

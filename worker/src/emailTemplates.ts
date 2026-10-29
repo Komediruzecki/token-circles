@@ -135,6 +135,7 @@ const mailStyle = (tables: boolean) => `<style>
   .tc-muted { color:#525c79 !important; }
   .tc-link { color:#2f5cc4 !important; }
   .tc-rule { border-color:#ddd8cc !important; }
+  .tc-sep { color:#c4beb1 !important; }
   .tc-btn-td { background:#2f5cc4 !important; }
   .tc-btn { color:#ffffff !important; }
   .tc-btn2-td { border-color:#2f5cc4 !important; }
@@ -348,19 +349,60 @@ const mailTableText = (table: MailTable) =>
     ...(table.rows.length ? table.rows.map((row) => row.text) : [table.empty ?? '']),
   ].join('\n');
 
-/** The text twin's last lines, the same for every mail on this layout. */
+/** The footer's first line. */
+const TAGLINE = 'Your money, in clear orbit. Open source and local-first.';
+
+/**
+ * The footer's row of links. Four short words joined by no-break spaces, so the row never wraps
+ * and no line starts or ends with a dot: about 200 px at 13 px, which fits the 264 px a 320 px
+ * phone leaves it. The app is the wordmark's link; the contact address has a line of its own.
+ */
+const FOOTER_LINKS: MailLink[] = [
+  { label: 'About', href: ABOUT_URL },
+  { label: 'GitHub', href: REPO_URL },
+  { label: 'Terms', href: TERMS_URL },
+  { label: 'Privacy', href: PRIVACY_URL },
+];
+
+const footerLink = ({ label, href }: MailLink, color: string = INK.link, cls = 'tc-link') =>
+  `<a class="${cls}" href="${escapeHtml(href)}" style="color:${color};text-decoration:none">${escapeHtml(label)}</a>`;
+
+/**
+ * The footer, centred under the card, one block a line: the tagline, the links, the copyright,
+ * the contact address, and then, set apart, why this mail came with its unsubscribe link.
+ */
+function mailFooter(reason: string, unsubUrl?: string | null): string {
+  // Each sentence of the tagline holds together, so a phone breaks it between them and never
+  // after "local-", which left "first." alone on a line at 375 px.
+  const taglineHtml = TAGLINE.split('. ')
+    .map(
+      (sentence, i, all) =>
+        `<span style="white-space:nowrap">${escapeHtml(i < all.length - 1 ? `${sentence}.` : sentence)}</span>`
+    )
+    .join(' ');
+  const dot = `<span class="tc-sep" style="color:${INK.rule}">&nbsp;&middot;&nbsp;</span>`;
+  const p = (margin: string, size: number, html: string, extra = '') =>
+    `<p class="tc-muted" style="margin:${margin};font:${size}px/1.6 ${FONT};color:${INK.muted};${extra}">${html}</p>`;
+  return `<tr><td align="center" style="padding:24px 16px 8px;text-align:center">
+${p('0 0 12px', 14, taglineHtml)}
+${p('0 0 14px', 13, FOOTER_LINKS.map((link) => footerLink(link)).join(dot), 'white-space:nowrap')}
+${p('0 0 4px', 12, `&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0`, 'white-space:nowrap')}
+${p('0', 12, footerLink({ label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` }, INK.muted, 'tc-muted'))}
+${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: 'Unsubscribe', href: unsubUrl })}` : ''}`)}
+</td></tr>`;
+}
+
+/** The text twin's last lines, the same for every mail on this layout, in the footer's order. */
 const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
   [
-    'Your money, in clear orbit. Open source and local-first.',
+    TAGLINE,
     `Open the app: ${APP_URL}`,
-    `About: ${ABOUT_URL}`,
-    `GitHub: ${REPO_URL}`,
-    `Terms: ${TERMS_URL}`,
-    `Privacy: ${PRIVACY_URL}`,
+    ...FOOTER_LINKS.map(({ label, href }) => `${label}: ${href}`),
+    `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0`,
+    CONTACT_EMAIL,
     '',
     reason,
     ...(unsubUrl ? [`Unsubscribe: ${unsubUrl}`] : []),
-    `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0 · ${CONTACT_EMAIL}`,
   ].join('\n');
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
@@ -396,15 +438,6 @@ export function renderMail(spec: MailSpec): RenderedEmail {
       ? `<tr><td class="tc-pad" style="padding:8px 36px 30px"><div class="tc-rule" style="border-top:1px solid ${INK.rule};padding-top:16px">${mailSmall(escapeHtml(spec.aside), 0)}</div></td></tr>`
       : '',
   ].join('');
-  const footerLinks = [
-    { label: 'Open the app', href: APP_URL },
-    { label: 'About', href: ABOUT_URL },
-    { label: 'GitHub', href: REPO_URL },
-    { label: 'Terms', href: TERMS_URL },
-    { label: 'Privacy', href: PRIVACY_URL },
-  ]
-    .map(mailLink)
-    .join(' &nbsp;&middot;&nbsp; ');
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -423,10 +456,7 @@ ${mailStyle(!!spec.tables)}
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
 <tr><td style="padding:2px 6px 14px"><a href="${APP_URL}" style="text-decoration:none"><img src="${assets}/icon-192.png" width="26" height="26" alt="" style="vertical-align:middle;border:0;border-radius:7px"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
-<tr><td class="tc-pad" style="padding:22px 36px 4px">
-<p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
-<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}${spec.unsubUrl ? ` ${mailLink({ label: 'Unsubscribe', href: spec.unsubUrl })}` : ''}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
-</td></tr>
+${mailFooter(spec.reason, spec.unsubUrl)}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
