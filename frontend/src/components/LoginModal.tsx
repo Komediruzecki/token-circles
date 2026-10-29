@@ -21,8 +21,15 @@ export interface LoginModalProps {
 }
 
 /**
- * The sign-in dialog, for someone using the app with no account who wants to sign in or create
- * one. The password form is the sign-in screen's (signInForm.ts), and so is what follows it:
+ * The sign-in dialog, over the app. Only someone already signed in to a cloud account sees it.
+ * App.tsx renders it inside the session gate, so without a session the full-page LoginScreen shows
+ * instead, and in local-first mode Sign In switches to the cloud and reloads into that LoginScreen
+ * rather than open this (App.handleLogin). It opens from the profile menu and the sidebar: Manage
+ * Account, and Sign In or Login while no profile is selected or the account has none. A sign-in
+ * here reloads the app as whichever account signed in. A write refused with a 401
+ * (`auth:required`) also sets it open, but App marks the session ended first, so the gate's
+ * LoginScreen is what shows.
+ * The password form is the sign-in screen's (signInForm.ts), and so is what follows it:
  * creating an account, or asking for the confirm link again, ends on Check your inbox
  * (CheckInbox), and a refused sign-in offers to send the confirm link again.
  */
