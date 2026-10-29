@@ -8,6 +8,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { historySettled } from './historySettled'
 import type * as TurnstileModule from '../Turnstile'
 
 let host: HTMLDivElement
@@ -65,13 +66,17 @@ const settle = async () => {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-/** The next popstate, or false when none comes. jsdom traverses history on a later task. */
+/**
+ * The next popstate, or false when none comes. jsdom traverses history on a later task. The limit
+ * only stops a missing pop from hanging the test: a pop that comes resolves at once, and on a loaded
+ * runner a mount (fresh module imports) inside the wait can take longer than 300 ms on its own.
+ */
 function nextPop(): Promise<boolean> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       window.removeEventListener('popstate', popped)
       resolve(false)
-    }, 300)
+    }, 2000)
     const popped = () => {
       clearTimeout(timer)
       resolve(true)
@@ -151,7 +156,7 @@ afterEach(async () => {
   dispose = undefined
   host?.remove()
   // A screen unmounted on a step takes its entry back: let that land before the next test.
-  await new Promise((resolve) => setTimeout(resolve, 30))
+  await historySettled()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   passkeys = false

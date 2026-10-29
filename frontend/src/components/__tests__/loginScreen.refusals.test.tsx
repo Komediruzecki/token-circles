@@ -13,6 +13,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
+import { historySettled } from './historySettled'
 import type * as TurnstileModule from '../Turnstile'
 import type { TurnstileStatus } from '../Turnstile'
 
@@ -158,9 +159,11 @@ beforeEach(() => {
   } as unknown as Location)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   host.remove()
+  // A screen unmounted on a step takes its entry back: let that land before the next test.
+  await historySettled()
   vi.unstubAllGlobals()
 })
 
@@ -191,7 +194,9 @@ describe('signing in', () => {
         body: { email: 'name@example.com', password: 'the-password', turnstileToken: '' },
       },
     ])
-    expect(reloads).toBe(1)
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
     expect(submitButton().getAttribute('aria-disabled')).toBe('true')
     expect(submitButton().textContent).toBe('Signing in…')
   })
@@ -271,7 +276,9 @@ describe('signing in', () => {
     type(password(), 'the-password')
     await submit()
 
-    expect(reloads).toBe(1)
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
     expect(sessionStorage.getItem('tc:email-confirmed')).toBe('1')
   })
 
@@ -282,7 +289,9 @@ describe('signing in', () => {
     type(password(), 'the-password')
     await submit()
 
-    expect(reloads).toBe(1)
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
     expect(sessionStorage.getItem('tc:email-confirmed')).toBeNull()
   })
 
@@ -583,9 +592,10 @@ describe('a passkey', () => {
     passkeyAnswer = { ok: true }
     await mount()
     button('Sign in with a passkey').click()
-    await settle()
 
-    expect(reloads).toBe(1)
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
     expect(sent).toEqual([])
   })
 })
