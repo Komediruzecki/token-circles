@@ -1201,6 +1201,41 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
   `achievements/__tests__/advice.test.ts`.
 
+### Mail
+
+- **Unsubscribe is a POST; GET only shows the button.** `GET /api/notifications/unsubscribe?token=`
+  set `users.notifications_unsubscribed = 1` on a plain visit, so anything that fetches the links in
+  a mail (security scanners, link previewers) could turn someone's reminders off without them
+  pressing anything. GET now looks the token up read-only and renders a page with one form button
+  that POSTs to the same URL; an already-unsubscribed token gets the done page with no button, and a
+  missing or unknown token gets the same 400 pages as before. The new
+  `POST /api/notifications/unsubscribe?token=` does the update and answers 200 with the done page,
+  also for a token that is already unsubscribed (SQLite counts the matched row as changed). It
+  takes an RFC 8058 one-click request as is: form-encoded `List-Unsubscribe=One-Click` body, no
+  cookie, no CSRF token, any origin. No middleware needed a change for that: the Worker has no
+  origin or CSRF check, and `cors()` only decides which origins may read a response, which neither
+  a mail provider's server-side POST nor a form navigation asks for. The route had no rate limit
+  before and has none now; the token is a random UUID. The done page no longer says reminders can
+  be turned back on under Settings: nothing in the app clears `notifications_unsubscribed`. Files:
+  `worker/src/routes/notifications.ts`, `shared/contract/routes.ts` (the POST is Worker-only).
+- **Reminder mails send List-Unsubscribe and List-Unsubscribe-Post.** `sendMail`
+  (`worker/src/email.ts`) takes `listUnsubscribe`, a URL, and sends Resend's `headers` field with
+  `List-Unsubscribe: <url>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
+  (`listUnsubscribeHeaders`); without it the request has no `headers` field, as before.
+  `RenderedEmail` gained an optional `listUnsubscribe`, which `renderBudgetAlert`,
+  `renderSpendingReport` and `renderBillsReminder` set to the same `unsubUrl` their footer links,
+  so the header and the footer cannot disagree. `sendClaimed` in `worker/src/reminders.ts` and the
+  Settings preview (`POST /api/notifications/test-email`) pass it on. A later mail list passes its
+  own URL the same way. Sign-in, welcome, account and billing mails have no unsubscribe link and
+  send no header.
+- Tests: `worker/test/unsubscribe.test.ts` (GET and HEAD change nothing, POST from the page and
+  one-click from a foreign origin unsubscribe, idempotent 200, bad and missing tokens, the token is
+  escaped in the form action, and the CORS answer for a foreign origin is unchanged on
+  `/api/notifications/settings` and on the POST), `worker/test/list-unsubscribe-headers.test.ts`
+  (both headers on the three scheduled reminders and the three previews, naming the footer's link;
+  none on the sign-in code, welcome and subscription-ended mails). `worker/test/email-change.test.ts`
+  checks the old address's token with a POST, since a GET no longer unsubscribes anyone.
+
 ### Tests
 
 - **An App closed before its start-up answers no longer signs anyone in.** `onMount` in

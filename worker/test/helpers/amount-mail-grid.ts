@@ -185,7 +185,12 @@ export async function amountMailDigests(
   const out: Record<string, { inputs: number; digest: string }> = {};
   for (const [name, inputs] of Object.entries(amountMailGrid())) {
     const render = renderers[name as keyof AmountRenderers] as (input: unknown) => unknown;
-    const rendered = inputs.map((input) => JSON.stringify(render(input)));
+    // The words maff reviewed: subject, HTML and text. listUnsubscribe (#648) repeats the footer's
+    // link for the List-Unsubscribe header, and list-unsubscribe-headers.test.ts holds it.
+    const rendered = inputs.map((input) => {
+      const mail = render(input) as { subject: string; html: string; text: string } | null;
+      return JSON.stringify(mail && { subject: mail.subject, html: mail.html, text: mail.text });
+    });
     out[name] = {
       inputs: inputs.length,
       digest: await sha256(rendered.join('\n').replaceAll(`&copy; ${year}`, '&copy; YYYY')),

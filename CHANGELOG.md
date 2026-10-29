@@ -27,6 +27,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
 - **Every mail shares the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Budget alerts, spending reports, bill reminders and the failed-payment mail join them with the same amounts, under subjects that say what happened, such as "Budget alert: Groceries went over".
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
+- **The unsubscribe link in a reminder mail asks you to press Unsubscribe.** Opening the link alone no longer turns reminders off, so a link preview can't do it for you. Budget alerts, spending reports and bill reminders also tell Gmail and other mail apps where to unsubscribe, so their own button works.
 
 ### Fixed
 

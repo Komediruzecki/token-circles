@@ -40,6 +40,11 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
+  /**
+   * The unsubscribe URL the footer links to, on a mail that has one. sendMail sends it as the
+   * List-Unsubscribe header, so the header and the footer can never name different links.
+   */
+  listUnsubscribe?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -452,7 +457,14 @@ ${mailStyle(!!spec.tables)}
     ...(spec.aside ? [spec.aside] : []),
     mailTextFooter(spec.reason, spec.unsubUrl, spec.unsubLabel),
   ].join('\n\n');
-  return { subject: spec.subject, html, text };
+  // The footer's unsubscribe link is also the List-Unsubscribe header sendMail sends, so the two
+  // can never name different links.
+  return {
+    subject: spec.subject,
+    html,
+    text,
+    ...(spec.unsubUrl ? { listUnsubscribe: spec.unsubUrl } : {}),
+  };
 }
 
 // ── Renderers ─────────────────────────────────────────────────────────────────

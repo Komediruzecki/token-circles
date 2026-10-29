@@ -32,7 +32,7 @@
 import type { Env } from './index';
 import { notWaitingForConfirmLinkSql } from './auth';
 import * as db from './db';
-import { oneClickUnsubscribeHeaders, sendMail } from './email';
+import { sendMail } from './email';
 import { renderWeekOneDay2, renderWeekOneDay7 } from './emailTemplates';
 import type { RenderedEmail, WeekOneCounts, WeekOneStep } from './emailTemplates';
 import { appOrigin, ensureUnsubToken, unsubscribeUrl } from './reminders';
@@ -256,14 +256,13 @@ async function sendClaimedOnce(
   mail: WeekOneMail,
   userId: number,
   to: string,
-  rendered: RenderedEmail,
-  stopUrl: string | null
+  rendered: RenderedEmail
 ): Promise<Outcome> {
   let result: Awaited<ReturnType<typeof sendMail>>;
   try {
     result = await sendMail(env, to, rendered.subject, rendered.html, {
       text: rendered.text,
-      headers: stopUrl ? oneClickUnsubscribeHeaders(stopUrl) : undefined,
+      listUnsubscribe: rendered.listUnsubscribe,
     });
   } catch (e) {
     // Timed out or the network failed: Resend may have taken it. Keep the claim.
@@ -303,14 +302,7 @@ async function sendDue(
         rendered = renderWeekOneDay7({ ...content, appUrl, unsubUrl: stopUrl });
       }
       if (!(await claim(env, mail, account.id))) continue;
-      const outcome = await sendClaimedOnce(
-        env,
-        mail,
-        account.id,
-        account.email,
-        rendered,
-        stopUrl
-      );
+      const outcome = await sendClaimedOnce(env, mail, account.id, account.email, rendered);
       if (outcome === 'sent') sent += 1;
       if (outcome === 'stop') return { sent, stopped: true };
     } catch (e) {
