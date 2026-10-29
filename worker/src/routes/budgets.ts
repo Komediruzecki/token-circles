@@ -109,7 +109,7 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
      WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
-     ORDER BY b.created_at, b.id`,
+     ORDER BY replace(substr(b.created_at, 1, 19), 'T', ' '), b.id`,
     ...pids,
     startDate,
     endDate
@@ -146,7 +146,7 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
     `SELECT b.category_id, b.amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
        FROM budgets b
        WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
-       ORDER BY b.created_at, b.id`,
+       ORDER BY replace(substr(b.created_at, 1, 19), 'T', ' '), b.id`,
     ...pids,
     prevStart,
     prevEnd
@@ -509,7 +509,7 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'
-      ORDER BY created_at, id`,
+      ORDER BY replace(substr(created_at, 1, 19), 'T', ' '), id`,
     ...pids,
     startOfMonth,
     endOfMonth
@@ -782,7 +782,7 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
     c.env.DB,
     `SELECT * FROM budgets
       WHERE category_id = ? AND profile_id = ? AND period = ? AND start_date >= ? AND start_date < ?
-      ORDER BY created_at DESC, id DESC`,
+      ORDER BY replace(substr(created_at, 1, 19), 'T', ' ') DESC, id DESC`,
     category_id,
     pid,
     budgetPeriod,

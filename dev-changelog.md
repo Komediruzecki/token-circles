@@ -45,14 +45,20 @@ All notable changes to Token Circles are documented here. The format is based on
   MCP `upsert_budget` tool changed the first (`ORDER BY start_date, id`); advice and badges took the
   latest `start_date`, then `created_at`, then `id`. A new allocation could change a row the page
   did not show. The rule is now one, in `shared/budgetSavedOrder.ts` (`bySavedOrder`): the later
-  `created_at`, then the higher `id`, whatever day the row starts. The summary (this month's rows
-  and the previous month's, which rollover reads) and zero-based list `ORDER BY created_at, id`, so
-  the row that counts comes last; Allocate and `upsert_budget` take `ORDER BY created_at DESC, id
-DESC`. Local-first sorts with `bySavedOrder` in `budgetsSummary`, `budgetsZeroBased` and
-  `budgetsAllocate`, and `budgetsForMonth` in achievements uses it too. No migration, no change to
-  a response's shape. `/api/budgets/alerts`, `/api/budgets/zero-based/summary` and the MCP
-  `get_budgets_and_goals` tool still list every row of the month. Tests:
-  `worker/test/budgets-one-row-per-month.test.ts`, `worker/test/mcp-tools-write.test.ts`,
+  `created_at`, then the higher `id`, whatever day the row starts. `created_at` is compared to the
+  second with the date and time separator read the same way: D1 writes `datetime('now')`
+  (`YYYY-MM-DD HH:MM:SS`, UTC) and local-first `toISOString()` (`YYYY-MM-DDTHH:MM:SS.sssZ`, UTC),
+  and a restore copies the value as the backup has it, so D1 can hold both. As text the space sorts
+  before `T`, so a D1 row counted as saved before a local one on the same day whatever the time. The
+  summary (this month's rows and the previous month's, which rollover reads) and zero-based list
+  `ORDER BY replace(substr(created_at, 1, 19), 'T', ' '), id`, so the row that counts comes last;
+  Allocate and `upsert_budget` take the same key `DESC, id DESC`. Local-first sorts with
+  `bySavedOrder` in `budgetsSummary`, `budgetsZeroBased` and `budgetsAllocate`, and
+  `budgetsForMonth` in achievements uses it too. No migration, no change to a response's shape.
+  `/api/budgets/alerts`, `/api/budgets/zero-based/summary` and the MCP `get_budgets_and_goals`
+  tool still list every row of the month. Tests:
+  `worker/test/budgets-one-row-per-month.test.ts` (which also pins D1's `created_at` as UTC),
+  `worker/test/mcp-tools-write.test.ts`, `frontend/src/core/__tests__/budgetSavedOrder.test.ts`,
   `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
   `achievements/__tests__/advice.test.ts`.
 

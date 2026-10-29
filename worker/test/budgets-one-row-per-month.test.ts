@@ -86,6 +86,16 @@ describe('two budget rows for one category and month', () => {
     expect(await readers()).toEqual({ summary: last, zeroBased: last, allocate: last });
   });
 
+  // A restore copies created_at as the backup has it, so a local-first backup brings ISO times
+  // ('...T08:00:00.000Z') next to D1's own ('... 18:00:00'). As text, the space sorts first.
+  it('compares a restored ISO time with a D1 time by the time they name', async () => {
+    const [later] = await seed([
+      { amount: 400, created_at: '2026-05-02 18:00:00' },
+      { amount: 250, created_at: '2026-05-02T08:00:00.000Z' },
+    ]);
+    expect(await readers()).toEqual({ summary: later, zeroBased: later, allocate: later });
+  });
+
   it("carries last month's rollover from the row saved last", async () => {
     // April: two rows with rollover on, the one saved later budgets 300. Nothing spent, so all 300
     // carries into May, not the other row's 100.
@@ -109,5 +119,21 @@ describe('two budget rows for one category and month', () => {
     ).json()) as Array<{ auto_rollover: number; effective_budget: number }>;
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ auto_rollover: 300, effective_budget: 350 });
+  });
+
+  // shared/budgetSavedOrder.ts compares D1's created_at with local-first's toISOString() (UTC) as
+  // one clock, which holds only while D1's datetime('now') is UTC too.
+  it("stores created_at as UTC, in D1's own format", async () => {
+    const before = Date.now();
+    const [id] = await seed([{ amount: 10, created_at: '' }]);
+    await env.DB.prepare("UPDATE budgets SET created_at = datetime('now') WHERE id = ?")
+      .bind(id)
+      .run();
+    const row = await env.DB.prepare('SELECT created_at FROM budgets WHERE id = ?')
+      .bind(id)
+      .first<{ created_at: string }>();
+    expect(row!.created_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    const at = Date.parse(`${row!.created_at.replace(' ', 'T')}Z`);
+    expect(Math.abs(at - before)).toBeLessThan(60_000);
   });
 });

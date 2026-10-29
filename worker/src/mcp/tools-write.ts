@@ -375,7 +375,7 @@ defineTool({
       c.env.DB,
       `SELECT id FROM budgets
         WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date >= ? AND start_date < ?
-        ORDER BY created_at DESC, id DESC`,
+        ORDER BY replace(substr(created_at, 1, 19), 'T', ' ') DESC, id DESC`,
       profileId,
       budget.category_id,
       budget.period,
