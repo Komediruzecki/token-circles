@@ -34,14 +34,13 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   const resend = createForm<{ email: string }>({
     initial: { email: props.email },
     check: () => ({}),
+    blocked: captcha.asking,
     send: async (values) => {
       setSentAgain(false)
       try {
         await api.resendConfirmLink(values.email, await captcha.next())
       } catch (error) {
         throw captcha.explain(error)
-      } finally {
-        captcha.spent()
       }
     },
     saved: () => setSentAgain(true),

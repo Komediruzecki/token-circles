@@ -52,7 +52,6 @@ async function open(captcha?: Captcha) {
       return null
     },
     turnstileEnabled: captcha !== undefined,
-    resetTurnstile: () => undefined,
     waitForTurnstileToken: () =>
       captcha?.token === undefined
         ? Promise.reject(new Error('Verification timed out'))

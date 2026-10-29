@@ -14,6 +14,8 @@
  * - `send` throws `NOT_SENT` to step back before it has sent anything: the submit ends as if it
  *   had not been pressed, with nothing marked and nothing said. The captcha does this when
  *   Cloudflare stops to ask the person for a tick (captchaGate.ts).
+ * - While `blocked` says so, a submit does nothing at all, not even clear the notice: the person
+ *   has something to do first (Cloudflare's box waits for a tick).
  * - A marked field that is not on the page (one inside a closed "Show advanced options", or one
  *   this form has no field for) is said in the notice instead. Its words move under the field when
  *   the field appears, so they are never said twice, and they leave the notice when the field is
@@ -67,6 +69,12 @@ export interface FormOptions<T extends FormValues, R = unknown> {
   check?: (values: T) => FieldErrors
   /** Sends the values. Throw to refuse; it gets a plain copy, never the store. */
   send: (values: T) => R | Promise<R>
+  /**
+   * While true, a submit does nothing at all: nothing is checked, cleared or sent. The person has
+   * something to do first, such as tick Cloudflare's box. Give the `SubmitButton` the same as its
+   * `blocked`, so the button says it.
+   */
+  blocked?: () => boolean
   /**
    * After `send` succeeds, with what it returned: close the dialog. Not run when the form was reset
    * while it sent: the dialog in front of the person by then is not the one that sent.
@@ -312,7 +320,8 @@ export function createForm<T extends FormValues, R = unknown>(options: FormOptio
 
   const submit: Form<T>['submit'] = async (event) => {
     event?.preventDefault()
-    if (submitting()) return
+    // Before anything changes: a blocked submit leaves the notice and the marks as they were.
+    if (submitting() || options.blocked?.()) return
     const found = messages(check())
     if (found.length > 0) {
       for (const [name] of found) watched.add(name)

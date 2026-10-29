@@ -12,7 +12,8 @@
  *
  * `blocked` is the same while something beside the button has to be done first, like ticking the
  * captcha's box: the button keeps its words, and the line that says what to do describes it
- * (pass its id as `aria-describedby`).
+ * (pass its id as `aria-describedby`). Give the form the same as its `blocked` option, so a submit
+ * that does not come through the button (Enter in a field) does nothing either.
  */
 import { splitProps } from 'solid-js'
 import styles from './Form.module.css'

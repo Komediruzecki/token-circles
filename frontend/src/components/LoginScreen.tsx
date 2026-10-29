@@ -172,8 +172,10 @@ export default function LoginScreen() {
     },
   })
 
-  /** Another mode, or another way in: the values stay, and nothing from before is said. */
+  /** Another mode, or another way in: the values stay, and nothing from before is said or sent. */
   const switchTo = (next: SignInMode) => {
+    // A send still holding for its token was for the mode left behind: it must never go out.
+    captcha.cancel()
     setMode(next)
     setNotice('')
     setElsewhere('')
@@ -289,6 +291,11 @@ export default function LoginScreen() {
             class={styles.form}
             {...form.attrs}
             onSubmit={(event) => {
+              // While Cloudflare's box waits for a tick there is no submit, so nothing is cleared.
+              if (captcha.asking()) {
+                event.preventDefault()
+                return
+              }
               setNotice('')
               setElsewhere('')
               void form.submit(event)

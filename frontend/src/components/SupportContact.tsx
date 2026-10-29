@@ -33,7 +33,7 @@ function LifebuoyIcon() {
 }
 
 /** The notice for a send that failed in a way the Worker did not put into words. */
-const NOT_SENT = "Your message didn't send. Try again in a moment."
+const MESSAGE_NOT_SENT = "Your message didn't send. Try again in a moment."
 
 /**
  * "Contact support" link + modal. Posts to the worker's /api/support/contact, which relays the
@@ -56,6 +56,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
   const form = createForm<{ email: string; message: string }, string>({
     initial: { email: props.prefillEmail ?? '', message: '' },
     check: (values) => supportProblems(values),
+    blocked: captcha.asking,
     send: async (values) => {
       try {
         const turnstileToken = await captcha.next()
@@ -78,16 +79,21 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
         return typeof data.ticketId === 'string' ? data.ticketId : ''
       } catch (error) {
         throw captcha.explain(error)
-      } finally {
-        captcha.spent()
       }
     },
     saved: (ticket) => {
       setTicketId(ticket)
       setStatus('sent')
     },
-    failure: NOT_SENT,
+    failure: MESSAGE_NOT_SENT,
   })
+
+  // A send still holding for its token is left behind with the dialog: it must never go out, as
+  // it would with the token of the widget the dialog draws when it opens again.
+  const close = () => {
+    captcha.cancel()
+    setOpen(false)
+  }
 
   return (
     <>
@@ -113,7 +119,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
       <Show when={open()}>
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false)
+            if (e.target === e.currentTarget) close()
           }}
           style={{
             position: 'fixed',
@@ -161,7 +167,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                   <div style={{ display: 'flex', 'justify-content': 'flex-end' }}>
                     <button
                       type="button"
-                      onClick={() => setOpen(false)}
+                      onClick={close}
                       style={{
                         padding: '9px 16px',
                         'border-radius': '8px',
@@ -234,7 +240,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"
-                    onClick={() => setOpen(false)}
+                    onClick={close}
                     style={{
                       padding: '9px 16px',
                       'border-radius': '8px',

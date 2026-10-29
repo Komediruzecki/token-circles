@@ -48,13 +48,15 @@ afterEach(() => {
 function mount(
   send: (values: Values) => unknown = () => undefined,
   busyLabel?: string,
-  saved?: (result: unknown) => void
+  saved?: (result: unknown) => void,
+  blocked?: () => boolean
 ) {
   const form = createForm<Values>({
     initial: INITIAL,
     check,
     send,
     saved,
+    blocked,
     failure: "Couldn't save it. Try again.",
   })
   host = document.createElement('div')
@@ -328,6 +330,35 @@ describe('while the form sends', () => {
     expect(labelled('Name').getAttribute('aria-invalid')).not.toBe('true')
     expect(saved).not.toHaveBeenCalled()
     expect(logged).not.toHaveBeenCalled()
+  })
+})
+
+describe('a form with something to do first', () => {
+  it('takes no submit: nothing is checked, cleared or sent until it is done', async () => {
+    // The sign-in forms, while Cloudflare's box waits for a tick: Enter in a field, or a password
+    // manager, submits the form without the button.
+    const [blocked, setBlocked] = createSignal(false)
+    const { send, fail } = pending()
+    mount(send, undefined, undefined, blocked)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    await submit()
+    fail(new ApiError(503, 'The server is busy. Try again in a minute.'))
+    await tick()
+    expect(notice().textContent).toBe('The server is busy. Try again in a minute.')
+
+    setBlocked(true)
+    type(labelled('Name'), '')
+    await submit()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(notice().textContent).toBe('The server is busy. Try again in a minute.')
+    expect(labelled('Name').getAttribute('aria-invalid')).not.toBe('true')
+    expect(formEl().hasAttribute('aria-busy')).toBe(false)
+
+    setBlocked(false)
+    await submit()
+    expect(labelled('Name').getAttribute('aria-invalid')).toBe('true')
+    expect(send).toHaveBeenCalledTimes(1)
   })
 })
 

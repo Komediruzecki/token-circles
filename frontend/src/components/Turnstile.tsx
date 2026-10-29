@@ -8,26 +8,28 @@ const CHALLENGE_HOST = 'challenges.cloudflare.com'
 const SCRIPT_SRC = `https://${CHALLENGE_HOST}/turnstile/v0/api.js?render=explicit`
 // A refused connection fires onerror in milliseconds; a null-routed or silently-dropped host
 // (the shape most DNS filters and corporate proxies take) fires nothing at all. Without this the
-// widget sits in 'loading' forever and the form's submit button stays disabled with no
-// explanation — indistinguishable, from the user's side, from an app that is simply broken.
+// widget sits in 'loading' forever and every send holds for a token that never comes, with
+// nothing to say why: from the person's side, an app that is simply broken.
 const SCRIPT_TIMEOUT_MS = 12000
 
 export const turnstileEnabled = !!SITE_KEY
 
 /**
  * What the captcha is doing right now. The distinction that matters is `unreachable` vs `ready`:
- * both leave us without a token and both disable the submit button, but only one of them is
- * something the person in front of the screen can do anything about.
+ * both leave us without a token, but only one of them clears up on its own. A stuck widget
+ * (`captchaIsStuck`) gets a panel that says what to fix, and a send refuses at once in the same
+ * words instead of holding for a token.
  */
 export type TurnstileStatus =
   | 'disabled' // no site key in this build — the gate is off, forms submit unguarded
   | 'loading' // fetching the widget script
-  | 'ready' // rendered, waiting for the challenge to pass
+  | 'ready' // the check is running: just drawn, reset, ticked, or started over after a timeout
   | 'interactive' // Cloudflare drew a box and waits for the person to tick it
-  | 'solved' // we hold a token
+  | 'solved' // the widget handed over a token (the gate may have sent it since)
   | 'unreachable' // the script never loaded: blocked, filtered, or offline
   | 'failed' // the widget loaded and then errored
-  | 'expired' // the token aged out before it was used
+  | 'unsupported' // Cloudflare cannot run its check in this browser
+  | 'expired' // the token aged out unused, and Cloudflare is fetching the next one
 
 interface TurnstileApi {
   render: (el: HTMLElement, opts: Record<string, unknown>) => string
@@ -131,14 +133,12 @@ export function captchaStatusMessage(status: TurnstileStatus): string {
       return `The verification step could not load. It comes from ${CHALLENGE_HOST} — an ad blocker, a privacy extension, or a network filter is almost always the reason. Allow that domain for this site, or try a different network, then retry.`
     case 'failed':
       return 'Verification could not run. That is usually a blocked third-party request, or a temporary problem at Cloudflare. Retry, or try a different network.'
-    case 'expired':
-      return 'Verification expired before it was used. Complete it again to continue.'
-    case 'loading':
-      return 'Loading the verification step…'
-    case 'ready':
-      return 'Complete the verification above to continue.'
+    case 'unsupported':
+      return "This browser can't run Cloudflare's verification. Update it, or try another browser."
     case 'interactive':
       return 'Tick the box above first.'
+    // The rest have nothing to say: the check is on its way, and a send that holds for it says
+    // so on its button (captchaGate.ts).
     default:
       return ''
   }
@@ -146,7 +146,7 @@ export function captchaStatusMessage(status: TurnstileStatus): string {
 
 /** Is this a state the user cannot clear by waiting, or by clicking the widget? */
 export function captchaIsStuck(status: TurnstileStatus): boolean {
-  return status === 'unreachable' || status === 'failed'
+  return status === 'unreachable' || status === 'failed' || status === 'unsupported'
 }
 
 export default function Turnstile(props: {
@@ -154,9 +154,9 @@ export default function Turnstile(props: {
   onStatus?: (status: TurnstileStatus) => void
   /**
    * Hands over a way to start this widget's check over, for the next token, and `undefined` once
-   * the widget is gone. Reset by its id: a bare `turnstile.reset()` resets the widget rendered last
-   * (measured with Cloudflare's test keys, 2026-10-29), which is not this one while the support
-   * form's widget is open over the sign-in form's.
+   * the widget is gone. It resets by the widget's id, as Cloudflare documents `reset(widgetId)`: a
+   * bare `turnstile.reset()` resets one widget, not every widget on the page, and while the support
+   * form's widget is open over the sign-in form's that one need not be this one.
    */
   onWidget?: (reset: (() => void) | undefined) => void
   /**
@@ -176,6 +176,8 @@ export default function Turnstile(props: {
 }) {
   let el: HTMLDivElement | undefined
   let widgetId: string | undefined
+  /** Unmounted: a script that loads after this draws nothing and reports nothing. */
+  let disposed = false
   const [status, setStatus] = createSignal<TurnstileStatus>(SITE_KEY ? 'loading' : 'disabled')
 
   const report = (next: TurnstileStatus) => {
@@ -188,6 +190,8 @@ export default function Turnstile(props: {
     report('loading')
     loadScript()
       .then(() => {
+        // The form left before the script came: the widget the next form draws is its own.
+        if (disposed) return
         if (!window.turnstile || !el) {
           report('unreachable')
           return
@@ -221,6 +225,16 @@ export default function Turnstile(props: {
           'after-interactive-callback': () => {
             report('ready')
           },
+          // The box waited too long for a tick. Cloudflare starts the check over by itself and
+          // asks again if it still wants a click, so the form waits for the box no longer.
+          'timeout-callback': () => {
+            props.onToken('')
+            report('ready')
+          },
+          'unsupported-callback': () => {
+            props.onToken('')
+            report('unsupported')
+          },
         })
         widgetId = id
         // The callbacks above come later, from Cloudflare's frame, so this is the first word.
@@ -236,6 +250,7 @@ export default function Turnstile(props: {
         })
       })
       .catch((err: unknown) => {
+        if (disposed) return
         console.warn(`Turnstile script did not load: ${String(err)}`)
         props.onToken('')
         report('unreachable')
@@ -259,6 +274,7 @@ export default function Turnstile(props: {
   onMount(mountWidget)
 
   onCleanup(() => {
+    disposed = true
     if (widgetId && window.turnstile) window.turnstile.remove(widgetId)
     widgetId = undefined
     // The form can outlive its widget (the sign-in screen's other steps): a token from a widget
@@ -318,23 +334,26 @@ export default function Turnstile(props: {
           </svg>
           <div>
             <div>{captchaStatusMessage(status())}</div>
-            <button
-              type="button"
-              data-test-id="captcha-retry"
-              onClick={retry}
-              style={{
-                'margin-top': '8px',
-                background: 'transparent',
-                border: '1px solid var(--border, rgba(255,255,255,0.18))',
-                'border-radius': '8px',
-                padding: '4px 10px',
-                color: 'var(--text, #e6e8eb)',
-                'font-size': '12px',
-                cursor: 'pointer',
-              }}
-            >
-              Retry verification
-            </button>
+            {/* Loading the script again cannot help a browser Cloudflare does not support. */}
+            <Show when={status() !== 'unsupported'}>
+              <button
+                type="button"
+                data-test-id="captcha-retry"
+                onClick={retry}
+                style={{
+                  'margin-top': '8px',
+                  background: 'transparent',
+                  border: '1px solid var(--border, rgba(255,255,255,0.18))',
+                  'border-radius': '8px',
+                  padding: '4px 10px',
+                  color: 'var(--text, #e6e8eb)',
+                  'font-size': '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Retry verification
+              </button>
+            </Show>
           </div>
         </div>
       </Show>

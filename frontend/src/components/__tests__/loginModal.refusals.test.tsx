@@ -43,7 +43,6 @@ async function mount(captcha = false) {
     ...(await vi.importActual<typeof TurnstileModule>('../Turnstile')),
     default: () => null,
     turnstileEnabled: captcha,
-    resetTurnstile: () => undefined,
     waitForTurnstileToken: () => token,
   }))
   vi.doMock('../../core/webauthn', () => ({

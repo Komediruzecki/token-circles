@@ -77,16 +77,24 @@ describe('captchaStatusMessage', () => {
     expect(msg.toLowerCase()).toContain('blocker')
   })
 
-  it('says nothing when there is nothing to say', async () => {
+  it('says nothing while the check is on its way: the held button says it instead', async () => {
     const { captchaStatusMessage } = await loadModule()
-    expect(captchaStatusMessage('solved')).toBe('')
-    expect(captchaStatusMessage('disabled')).toBe('')
+    for (const s of ['disabled', 'loading', 'ready', 'solved', 'expired'] as const) {
+      expect(captchaStatusMessage(s), s).toBe('')
+    }
   })
 
-  it('keeps the ordinary not-yet-solved hint distinct from the blocked one', async () => {
+  it('says to tick the box only while Cloudflare waits for one', async () => {
     const { captchaStatusMessage } = await loadModule()
-    expect(captchaStatusMessage('ready')).toBe('Complete the verification above to continue.')
-    expect(captchaStatusMessage('ready')).not.toContain(CHALLENGE_HOST)
+    expect(captchaStatusMessage('interactive')).toBe('Tick the box above first.')
+    expect(captchaStatusMessage('interactive')).not.toContain(CHALLENGE_HOST)
+  })
+
+  it('says what to do about a browser Cloudflare cannot run in', async () => {
+    const { captchaStatusMessage } = await loadModule()
+    expect(captchaStatusMessage('unsupported')).toBe(
+      "This browser can't run Cloudflare's verification. Update it, or try another browser."
+    )
   })
 })
 
@@ -95,8 +103,9 @@ describe('captchaIsStuck', () => {
     const { captchaIsStuck } = await loadModule()
     expect(captchaIsStuck('unreachable')).toBe(true)
     expect(captchaIsStuck('failed')).toBe(true)
+    expect(captchaIsStuck('unsupported')).toBe(true)
     // 'expired' is NOT stuck: the widget re-arms itself and issues a fresh token.
-    for (const s of ['disabled', 'loading', 'ready', 'solved', 'expired'] as const) {
+    for (const s of ['disabled', 'loading', 'ready', 'interactive', 'solved', 'expired'] as const) {
       expect(captchaIsStuck(s)).toBe(false)
     }
   })

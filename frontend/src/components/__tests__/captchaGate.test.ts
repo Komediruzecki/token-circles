@@ -2,7 +2,7 @@
  * The captcha gate on its own (captchaGate.ts): when a send gets its token, when it holds and when
  * it steps back, and when the widget is asked for the next token. The forms' side of the same
  * rules is in captchaForms.test.tsx; this file covers what no screen shows, such as the 20 seconds
- * with no token at all.
+ * with no token at all, or two presses holding at once.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,14 +19,31 @@ async function makeGate() {
   const { captchaStatusMessage } = await import('../Turnstile')
   const gate = gateModule.createCaptchaGate()
   let resets = 0
-  // What Turnstile hands over once it has drawn the widget: a reset starts the check over.
-  gate.onWidget(() => {
-    resets += 1
-    gate.onStatus('ready')
-  })
-  gate.onStatus('ready')
+  /** What Turnstile.tsx tells the gate, as Cloudflare's frame drives it. */
+  const widget = {
+    drawn: () => {
+      gate.onWidget(() => {
+        resets += 1
+        gate.onStatus('ready')
+      })
+      gate.onStatus('ready')
+    },
+    pass: (token: string) => {
+      gate.onToken(token)
+      gate.onStatus('solved')
+    },
+    ask: () => {
+      gate.onStatus('interactive')
+    },
+    gone: () => {
+      gate.onWidget(undefined)
+      gate.onToken('')
+    },
+  }
+  widget.drawn()
   return {
     gate,
+    widget,
     NOT_SENT,
     CAPTCHA_REFUSED: gateModule.CAPTCHA_REFUSED,
     CHECKING: gateModule.CHECKING_YOU_ARE_HUMAN,
@@ -42,44 +59,53 @@ const outcome = (p: Promise<string>) =>
     (error: unknown) => ({ token: undefined, error })
   )
 
+/** Whether a promise has settled once the work already queued has run. */
+async function settled(p: Promise<unknown>): Promise<boolean> {
+  let done = false
+  void p.then(() => {
+    done = true
+  })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  return done
+}
+
 describe('a send', () => {
   it('takes the token in hand, once', async () => {
-    const { gate } = await makeGate()
-    gate.onToken('token-1')
+    const { gate, widget } = await makeGate()
+    widget.pass('token-1')
 
     expect(await gate.next()).toBe('token-1')
     expect(gate.token()).toBe('')
   })
 
   it('holds for the next token, and the button says it is checking', async () => {
-    const { gate, CHECKING } = await makeGate()
+    const { gate, widget, CHECKING } = await makeGate()
     const sent = outcome(gate.next())
     expect(gate.holding()).toBe(true)
     expect(gate.busyLabel('Signing in…')).toBe(CHECKING)
 
-    gate.onToken('token-1')
+    widget.pass('token-1')
     expect(await sent).toEqual({ token: 'token-1', error: undefined })
     expect(gate.holding()).toBe(false)
     expect(gate.busyLabel('Signing in…')).toBe('Signing in…')
   })
 
   it('steps back without a word when the box comes up during the hold', async () => {
-    const { gate, NOT_SENT, resets } = await makeGate()
+    const { gate, widget, NOT_SENT, resets } = await makeGate()
     const sent = outcome(gate.next())
 
-    gate.onStatus('interactive')
+    widget.ask()
     expect((await sent).error).toBe(NOT_SENT)
     expect(gate.holding()).toBe(false)
     expect(gate.asking()).toBe(true)
     // Resetting a box that waits for a tick would only draw it again.
     gate.explain(NOT_SENT)
-    gate.spent()
     expect(resets()).toBe(0)
   })
 
   it('steps back at once while the box waits, whatever started it', async () => {
-    const { gate, NOT_SENT } = await makeGate()
-    gate.onStatus('interactive')
+    const { gate, widget, NOT_SENT } = await makeGate()
+    widget.ask()
 
     expect((await outcome(gate.next())).error).toBe(NOT_SENT)
     expect(gate.holding()).toBe(false)
@@ -94,37 +120,129 @@ describe('a send', () => {
     expect(error).toMatchObject({ status: 403, message: captchaStatusMessage('failed') })
   })
 
-  it('says so after 20 seconds with no token, and starts the check over', async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
-    const { gate, CAPTCHA_REFUSED, resets } = await makeGate()
+  it('says what to fix when Cloudflare cannot run in this browser', async () => {
+    const { gate, captchaStatusMessage } = await makeGate()
     const sent = outcome(gate.next())
 
-    await vi.advanceTimersByTimeAsync(19000)
-    expect(gate.holding()).toBe(true)
-    await vi.advanceTimersByTimeAsync(1500)
+    gate.onStatus('unsupported')
+    expect((await sent).error).toMatchObject({
+      status: 403,
+      message: captchaStatusMessage('unsupported'),
+    })
+    expect((await outcome(gate.next())).error).toMatchObject({ status: 403 })
+  })
+})
 
-    expect((await sent).error).toMatchObject({ status: 403, message: CAPTCHA_REFUSED })
+describe('one send holds at a time', () => {
+  it('ends the earlier hold when a newer send starts, and gives the token to the newer one', async () => {
+    const { gate, widget, NOT_SENT } = await makeGate()
+    const first = outcome(gate.next())
+    const second = outcome(gate.next())
+
+    // The earlier press is over the moment the newer one holds: it can never send.
+    expect(await settled(first)).toBe(true)
+    expect((await first).error).toBe(NOT_SENT)
+    expect(gate.holding()).toBe(true)
+
+    widget.pass('token-1')
+    expect((await second).token).toBe('token-1')
     expect(gate.holding()).toBe(false)
+  })
+
+  it('still steps the newer hold back when the box comes up after the earlier one ended', async () => {
+    const { gate, widget, NOT_SENT } = await makeGate()
+    void outcome(gate.next())
+    const second = outcome(gate.next())
+    await Promise.resolve()
+
+    widget.ask()
+    expect((await second).error).toBe(NOT_SENT)
+    expect(gate.holding()).toBe(false)
+  })
+
+  it('ends on cancel, as when the form switches to another mode', async () => {
+    const { gate, widget, NOT_SENT } = await makeGate()
+    const sent = outcome(gate.next())
+
+    gate.cancel()
+    expect((await sent).error).toBe(NOT_SENT)
+    expect(gate.holding()).toBe(false)
+    // The token that comes next is for the next press, not the cancelled one.
+    widget.pass('token-1')
+    expect(gate.token()).toBe('token-1')
+  })
+
+  it('ends when the widget goes, so the next widget cannot send what was left behind', async () => {
+    const { gate, widget, NOT_SENT } = await makeGate()
+    const sent = outcome(gate.next())
+
+    widget.gone()
+    expect((await sent).error).toBe(NOT_SENT)
+    expect(gate.holding()).toBe(false)
+
+    widget.drawn()
+    widget.pass('token-from-the-new-widget')
+    expect(gate.token()).toBe('token-from-the-new-widget')
+  })
+})
+
+describe('a hold with no token', () => {
+  it('says so after 20 seconds, and leaves a check that is only slow to finish', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] })
+    const { gate, widget, CAPTCHA_REFUSED, resets } = await makeGate()
+    // Cloudflare's check takes 25 seconds from the moment the widget is drawn.
+    const answer = setTimeout(() => {
+      widget.pass('token-1')
+    }, 25000)
+
+    const first = outcome(gate.next())
+    await vi.advanceTimersByTimeAsync(20500)
+    expect((await first).error).toMatchObject({ status: 403, message: CAPTCHA_REFUSED })
+    expect(gate.holding()).toBe(false)
+    expect(resets()).toBe(0)
+
+    // Pressed again a few seconds later: the same check answers, and that press sends.
+    await vi.advanceTimersByTimeAsync(3000)
+    const second = outcome(gate.next())
+    await vi.advanceTimersByTimeAsync(2000)
+    expect((await second).token).toBe('token-1')
+    expect(resets()).toBe(0)
+    clearTimeout(answer)
+  })
+
+  it('starts over a check that has run for a minute with no answer', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] })
+    const { gate, resets } = await makeGate()
+
+    for (const press of [1, 2]) {
+      const held = outcome(gate.next())
+      await vi.advanceTimersByTimeAsync(20500)
+      expect((await held).error, `press ${press}`).toMatchObject({ status: 403 })
+      expect(resets(), `press ${press}`).toBe(0)
+      await vi.advanceTimersByTimeAsync(3000)
+    }
+    // The third press times out 68 seconds into the same check: it is stuck, not slow.
+    const third = outcome(gate.next())
+    await vi.advanceTimersByTimeAsync(20500)
+    expect((await third).error).toMatchObject({ status: 403 })
     expect(resets()).toBe(1)
   })
 })
 
 describe('the next check', () => {
   it('starts at once after a send that failed', async () => {
-    const { gate, resets } = await makeGate()
-    gate.onToken('token-1')
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
     await gate.next()
 
     gate.explain(new Error('401'))
-    gate.spent()
     expect(resets()).toBe(1)
   })
 
   it('waits for the person after a send that worked: back in the form, or the next press', async () => {
-    const { gate, resets } = await makeGate()
-    gate.onToken('token-1')
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
     await gate.next()
-    gate.spent()
     expect(resets()).toBe(0)
 
     gate.wake()
@@ -132,14 +250,40 @@ describe('the next check', () => {
     gate.wake()
     expect(resets()).toBe(1)
 
-    gate.onToken('token-2')
+    widget.pass('token-2')
     await gate.next()
-    gate.spent()
     const sent = outcome(gate.next())
     expect(resets()).toBe(2)
     expect(gate.holding()).toBe(true)
-    gate.onToken('token-3')
+    widget.pass('token-3')
     expect((await sent).token).toBe('token-3')
+  })
+
+  it('starts at once for a press made while an earlier send is still out', async () => {
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
+    await gate.next()
+
+    // The reset link is still on its way when the person signs in instead.
+    const sent = outcome(gate.next())
+    expect(resets()).toBe(1)
+    expect(gate.holding()).toBe(true)
+    widget.pass('token-2')
+    expect((await sent).token).toBe('token-2')
+  })
+
+  it('is not started over by a late failure while the next check is running', async () => {
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
+    await gate.next()
+    const sent = outcome(gate.next())
+    expect(resets()).toBe(1)
+
+    // The earlier send fails while the press after it holds: its check is the one it waits on.
+    gate.explain(new Error('503'))
+    expect(resets()).toBe(1)
+    widget.pass('token-2')
+    expect((await sent).token).toBe('token-2')
   })
 
   it('is not asked for when no token went out', async () => {
@@ -147,23 +291,34 @@ describe('the next check', () => {
     gate.onStatus('unreachable')
     await outcome(gate.next())
     gate.explain(new Error('blocked'))
-    gate.spent()
 
     expect(resets()).toBe(0)
   })
 
-  it('is left to a widget drawn anew, which runs its own', async () => {
-    const { gate, resets } = await makeGate()
-    gate.onToken('token-1')
+  it('is not asked for when a token came by itself, as after an expired one', async () => {
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
     await gate.next()
-    gate.spent()
+
+    gate.onStatus('expired')
+    widget.pass('token-2')
+    gate.wake()
+    expect(await gate.next()).toBe('token-2')
+    expect(resets()).toBe(0)
+  })
+
+  it('is left to a widget drawn anew, which runs its own', async () => {
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
+    await gate.next()
 
     // The sign-in screen's other steps unmount the widget; coming back draws a new one.
+    widget.gone()
     let newResets = 0
-    gate.onWidget(undefined)
     gate.onWidget(() => {
       newResets += 1
     })
+    gate.onStatus('loading')
     gate.wake()
     expect(resets()).toBe(0)
     expect(newResets).toBe(0)

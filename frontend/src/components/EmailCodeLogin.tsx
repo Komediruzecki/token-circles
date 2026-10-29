@@ -35,13 +35,12 @@ export default function EmailCodeLogin(props: {
     // The address the screen had when this step opened.
     initial: { email: props.email ?? '' },
     check: (values) => addressProblems(values),
+    blocked: captcha.asking,
     send: async (values) => {
       try {
         await api.requestEmailCode(values.email.trim(), await captcha.next())
       } catch (error) {
         throw captcha.explain(error)
-      } finally {
-        captcha.spent()
       }
     },
     saved: () => {
@@ -122,6 +121,8 @@ export default function EmailCodeLogin(props: {
                 data-test-id="emailcode-back"
                 class={`${styles.link} ${styles.linkQuiet}`}
                 onClick={() => {
+                  // A send still holding for its token is left behind: it must never go out.
+                  captcha.cancel()
                   props.onBack()
                 }}
               >

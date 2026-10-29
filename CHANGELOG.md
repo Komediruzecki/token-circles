@@ -11,7 +11,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Back to sign in from every sign-in step.** The screen where you type the code we emailed you now has Back to sign in, and the phone's back gesture takes you from the emailed code, the two-factor code or Check your inbox back to the sign-in form, and closes the Sign In window you open from the profile menu. In the installed app on Android it used to close the app instead.
-- **Cloudflare's check shows up only when it needs a click, on every sign-in form.** After a wrong password the next check starts at once, out of sight unless Cloudflare wants another click, and sending a reset link no longer brings the box straight back. While the box waits for a tick the button waits too, so it never says "Signing in…" next to a check you still have to do.
+- **Cloudflare's check shows up only when it needs a click, on every sign-in form.** After a wrong password the next check starts at once, out of sight unless Cloudflare wants another click, and sending a reset link no longer brings the box straight back. A press that beats the check reads "Checking you're human…", and while the box waits for a tick the button waits too, so it never says "Signing in…" next to a check you still have to do. Switching forms or closing Contact support while the check runs no longer sends what you left behind.
 
 ## [5.17.1] — 2026-10-29
 

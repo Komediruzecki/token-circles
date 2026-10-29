@@ -6,19 +6,24 @@
  * Cloudflare's siteverify takes each token once, so every request needs a fresh one:
  * - A send takes the token in hand, or holds until the widget hands one over. While it holds, the
  *   button says CHECKING_YOU_ARE_HUMAN, never "Signing in…": nothing has gone out yet.
+ * - One send holds at a time. A newer one ends the older one without a word (NOT_SENT), and so do
+ *   `cancel()` (the form switched to another mode or step) and the widget going away: a hold that
+ *   outlived its form would send what the person left behind, with the next form's token.
  * - While Cloudflare shows its box and waits for a tick, the form waits for the person too. The
- *   button keeps its words and is inactive (`blocked`), and the line under the box says to tick
- *   it. A send that was holding steps back without a word (NOT_SENT), so the button is never busy
- *   while the box waits, and the next press sends what the fields say then.
- * - After a send that failed, the widget starts the next check at once: the token is usually back
- *   before the password is retyped, and a box Cloudflare wants ticked is there before the press.
- *   After one that worked, it waits until the person is back in the form (`wake`, or a press). A
- *   reset link on its way needs no new check, and someone Cloudflare asks to click would
- *   otherwise get a box for nothing.
+ *   button keeps its words and the form takes no submit (`blocked`), and the line under the box
+ *   says to tick it. A send that was holding steps back without a word, so the button is never
+ *   busy while the box waits, and the next press sends what the fields say then.
+ * - The next check starts when the last token has gone out and something needs the next one: at
+ *   once when a send fails (`explain`), on a press, or when the person is back in the form
+ *   (`wake`). A send that worked starts none: a reset link on its way needs no new check, and
+ *   someone Cloudflare asks to click would otherwise get a box for nothing.
+ * - A hold with no token after 20 seconds says so and leaves a check that is still running alone,
+ *   so the next press gets its token; only a check that has run for a minute is started over.
  * - A token that expires unused is dropped, and Cloudflare fetches the next one (Turnstile.tsx).
  *
  * The captcha's refusals mark no field. They are said in the form's notice:
- * - a widget that cannot run (blocked, failed) says what to fix, before anything is sent;
+ * - a widget that cannot run (blocked, failed, an unsupported browser) says what to fix, before
+ *   anything is sent;
  * - no token within 20 seconds, or a token the Worker refused (its 403), says to try again and to
  *   complete the check if one appears.
  */
@@ -43,6 +48,9 @@ export const CHECKING_YOU_ARE_HUMAN = "Checking you're human…"
 /** How long a send waits for a token before it says so. */
 const TOKEN_WAIT_MS = 20000
 
+/** How long a check may run without an answer before a hold that times out starts it over. */
+const STALE_CHECK_MS = 60000
+
 export interface CaptchaGate {
   /** The token held now, '' when there is none. */
   token: () => string
@@ -59,20 +67,21 @@ export interface CaptchaGate {
   onToken: (token: string) => void
   /** For the widget's `onStatus`. */
   onStatus: (status: TurnstileStatus) => void
-  /** For the widget's `onWidget`: how to start this form's check over. */
+  /** For the widget's `onWidget`: how to start this form's check over, `undefined` once it is gone. */
   onWidget: (reset: (() => void) | undefined) => void
-  /** The person is back in the form: a check put off after a send that worked starts now. */
+  /** The person is back in the form: if the last token has gone out, the next check starts now. */
   wake: () => void
+  /** Ends a send that holds for its token without a word: the form moved on (another mode, step). */
+  cancel: () => void
   /**
    * The token for the next request: the one held, or the next one. Throws the refusal to show, or
-   * NOT_SENT when Cloudflare asks for a tick first.
+   * NOT_SENT when the send should end without a word (Cloudflare asks for a tick, a newer send, a
+   * cancel, the widget gone).
    */
   next: () => Promise<string>
-  /** After each send, in `finally`: a token went out, so get the widget ready for the next one. */
-  spent: () => void
   /**
    * A send's failure as the form says it: a 403 is the captcha's, in its words. Call it in the
-   * send's `catch`: it is also how the gate knows the send failed and the next check starts now.
+   * send's `catch`: a send that failed after its token went out starts the next check at once.
    */
   explain: (error: unknown) => unknown
 }
@@ -84,24 +93,23 @@ export function createCaptchaGate(): CaptchaGate {
   )
   const [holding, setHolding] = createSignal(false)
   let resetWidget: (() => void) | undefined
-  /** Ends a send's hold before its token comes: Cloudflare wants a tick, or cannot run. */
-  let interrupt: ((reason: unknown) => void) | undefined
-  /** A token went out with the send in progress. */
-  let sent = false
-  /** That send failed. */
-  let failed = false
-  /** The last token went out with a send that worked, and the next check waits for the person. */
-  let putOff = false
+  /** The send holding for its token now, and how to end it before the token comes. */
+  let hold: { end: (reason: unknown) => void } | undefined
+  /** When the widget's current check started: drawn, reset, ticked, or fetching after expiry. */
+  let checkStartedAt = Date.now()
 
   const asking = () => status() === 'interactive'
+
+  /** The widget handed over a token and it went out with a send: a new check is due. */
+  const lastTokenSpent = () => token() === '' && status() === 'solved'
 
   const refusal = () =>
     new ApiError(403, captchaIsStuck(status()) ? captchaStatusMessage(status()) : CAPTCHA_REFUSED)
 
   /** Starts the widget's check over, for the next request's token. */
   const rearm = () => {
-    putOff = false
     setToken('')
+    checkStartedAt = Date.now()
     if (resetWidget) resetWidget()
     // No widget to reset (it is not drawn yet, or gone): the next one brings its own token.
     else setStatus((s) => (captchaIsStuck(s) ? s : 'ready'))
@@ -117,59 +125,67 @@ export function createCaptchaGate(): CaptchaGate {
     onToken: setToken,
     onStatus: (next) => {
       setStatus(next)
-      if (next === 'interactive') interrupt?.(NOT_SENT)
-      else if (captchaIsStuck(next)) interrupt?.(refusal())
+      if (next === 'loading' || next === 'ready' || next === 'expired') checkStartedAt = Date.now()
+      if (next === 'interactive') hold?.end(NOT_SENT)
+      else if (captchaIsStuck(next)) hold?.end(refusal())
     },
     onWidget: (reset) => {
       resetWidget = reset
-      // A widget drawn anew runs its own check: nothing is put off any more.
-      putOff = false
+      if (reset) checkStartedAt = Date.now()
+      // The widget is gone, and with it the form the hold was for: the next widget's token must
+      // not send what was left behind.
+      else hold?.end(NOT_SENT)
     },
     wake: () => {
-      if (putOff) rearm()
+      if (lastTokenSpent()) rearm()
+    },
+    cancel: () => {
+      hold?.end(NOT_SENT)
     },
     next: async () => {
       if (!turnstileEnabled) return ''
-      // The button is inactive while the box waits; this covers a send started some other way.
+      // One hold at a time: the person pressed again, so the earlier press is over.
+      hold?.end(NOT_SENT)
+      // The form takes no submit while the box waits; this covers a send started some other way.
       if (asking()) throw NOT_SENT
       if (captchaIsStuck(status())) throw refusal()
-      if (putOff) rearm()
+      if (lastTokenSpent()) rearm()
       let issued = token()
       if (!issued) {
         const stop = new AbortController()
+        let end: (reason: unknown) => void = () => undefined
+        const ended = new Promise<never>((_, reject) => {
+          end = reject
+        })
+        const mine = { end }
+        hold = mine
         setHolding(true)
         try {
           issued = await Promise.race([
             waitForTurnstileToken(token, TOKEN_WAIT_MS, stop.signal),
-            new Promise<never>((_, reject) => {
-              interrupt = reject
-            }),
+            ended,
           ])
         } catch (error) {
           if (error === NOT_SENT || error instanceof ApiError) throw error
-          // No token, and no word from Cloudflare why: start the check over for the next press.
-          rearm()
+          // No token, and no word from Cloudflare why. A check that is only slow is left to
+          // finish, so the next press gets its token; one that has run for a minute is stuck.
+          if (Date.now() - checkStartedAt > STALE_CHECK_MS) rearm()
           throw refusal()
         } finally {
-          interrupt = undefined
           stop.abort()
-          setHolding(false)
+          // A newer send may hold by now: what is left to clear is its, not this one's.
+          if (hold === mine) {
+            hold = undefined
+            setHolding(false)
+          }
         }
       }
       // A token is good for one request: this one is going, so the form holds none until the next.
       setToken('')
-      sent = true
-      failed = false
       return issued
     },
-    spent: () => {
-      if (!sent) return
-      sent = false
-      if (failed) rearm()
-      else putOff = true
-    },
     explain: (error) => {
-      failed = true
+      if (error !== NOT_SENT && lastTokenSpent()) rearm()
       return error instanceof ApiError && error.status === 403 ? refusal() : error
     },
   }

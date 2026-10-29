@@ -53,7 +53,6 @@ async function mount(email = 'user@example.com', captcha?: Captcha) {
       return null
     },
     turnstileEnabled: captcha !== undefined,
-    resetTurnstile: () => undefined,
     waitForTurnstileToken: () =>
       captcha?.token === undefined ? new Promise(() => {}) : Promise.resolve(captcha.token),
   }))
@@ -181,7 +180,7 @@ describe('requesting with the captcha enabled', () => {
     const send = byTestId('emailcode-send') as HTMLButtonElement
     expect(send.disabled).toBe(false)
     // The check runs out of sight: there is no box to point at, so nothing to say yet.
-    expect(byTestId('captcha-hint')).toBeNull()
+    expect(byTestId('captcha-hint')?.textContent).toBe('')
 
     await requestCode()
     // Parked on the token: nothing has gone out, and the button says what it is waiting for.

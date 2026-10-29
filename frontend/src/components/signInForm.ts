@@ -98,6 +98,8 @@ export function createSignInForm(options: {
   return createForm<SignInValues, SignInOutcome>({
     initial: { email: '', password: '' },
     check: (values) => signInChecks(options.mode(), values),
+    // Cloudflare's box waits for a tick: a submit changes nothing until it is ticked.
+    blocked: options.captcha.asking,
     send: async (values) => {
       const mode = options.mode()
       const email = values.email.trim()
@@ -125,8 +127,6 @@ export function createSignInForm(options: {
         return await reloadIntoTheApp()
       } catch (error) {
         throw forTheWholeForm(options.captcha.explain(error))
-      } finally {
-        options.captcha.spent()
       }
     },
     saved: options.saved,
