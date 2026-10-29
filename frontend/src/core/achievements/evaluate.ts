@@ -20,16 +20,10 @@ export interface EvaluateInput {
     Pick<Transaction, 'date' | 'type' | 'amount' | 'category_id' | 'reconciled'> &
       Partial<Pick<Transaction, 'amount_local'>>
   >
-  /**
-   * `id` breaks a tie between two rows of one month saved in the same second. The rollover fields
-   * are what advice adds to a budget, as the Budgets page does; the Worker sends rollover_enabled
-   * as 0 or 1 when a row skips the API schema.
-   */
+  /** `id` breaks a tie between two rows of one month saved in the same second. */
   budgets: Array<
     Pick<Budget, 'category_id' | 'amount' | 'period' | 'start_date' | 'end_date' | 'created_at'> &
-      Partial<Pick<Budget, 'id' | 'rollover_amount' | 'rollover_used'>> & {
-        rollover_enabled?: boolean | number | null
-      }
+      Partial<Pick<Budget, 'id'>>
   >
   goals: Array<
     Pick<SavingsGoal, 'target_amount' | 'current_amount' | 'created_at' | 'deadline' | 'name'>

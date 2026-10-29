@@ -23,18 +23,17 @@ All notable changes to Token Circles are documented here. The format is based on
   longer held. Badges already earned stay earned (`diffUnlocks` only adds). Tests:
   `achievements/__tests__/evaluate.test.ts` ("which budget a finished month is held against"); three
   fixtures that dated a budget months before the month they test now date it in that month.
-- **Advice judges spending against the budget with its rollover.** `budgetDrift` in
-  `frontend/src/core/achievements/advice.ts` compared a category's spending with `b.amount`, while
-  the Budgets page shows `effective_budget`: the amount plus last month's unused budget (when both
-  months have rollover on) plus `rollover_amount`, less `rollover_used`. The rule moved out of the
-  Worker's `GET /api/budgets/summary` and local-first's `budgetsSummary` into
-  `shared/budgetRollover.ts` (`budgetRollover`), which both summaries and advice now call. Advice
-  reads last month's row through `budgetsForMonth` and last month's spending from the transactions it
-  already has, so no new request. The card's figure and weight use the effective budget. The
-  summary's response is unchanged; the contract suite's rollover scenario
-  (`shared/contract/scenarios/budgets.ts`) and `money-parity` pin it on both runtimes.
-  `EvaluateInput.budgets` takes the optional rollover fields, `rollover_enabled` as a boolean or
-  0/1. Tests: `achievements/__tests__/advice.test.ts` ("a budget with rollover").
+- **The rollover formula is written once, and advice keeps the card's amount.** The Worker's
+  `GET /api/budgets/summary` and local-first's `budgetsSummary` each worked out `effective_budget`
+  inline: the amount plus last month's unused budget (when both months have rollover on) plus
+  `rollover_amount`, less `rollover_used`. Both now call `budgetRollover` in
+  `shared/budgetRollover.ts`; the response is unchanged, and the contract suite's rollover scenario
+  (`shared/contract/scenarios/budgets.ts`) and `money-parity` pin it on both runtimes. Advice in
+  `frontend/src/core/achievements/advice.ts` deliberately still compares spending with the row's
+  `amount`: no page renders `effective_budget` or `effective_remaining`, and the Budgets card shows
+  the amount and amount less spent (`Budgets.tsx`, `Categories.tsx`), as the badges count it.
+  Judged by the rollover figure, advice called a category fine that Budgets showed as over. Tests:
+  `achievements/__tests__/advice.test.ts` ("a budget with rollover") pins the amount.
 
 ### Budgets
 

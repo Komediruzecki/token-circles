@@ -348,10 +348,9 @@ describe('buildAdvice: one card per thing to say', () => {
 })
 
 /**
- * A budget with rollover on is worth its amount plus what carried in: last month's unused budget
- * when last month's had rollover on too, plus a manual adjustment, minus what was used of it. The
- * Budgets page shows that figure (effective_budget, GET /api/budgets/summary and the local-first
- * budgetsSummary), so advice judges spending against it as well.
+ * The Budgets card shows a budget's amount, and what is left as the amount less what was spent. The
+ * summary also works out a budget with rollover (effective_budget), but no page shows it, so advice
+ * judges by the amount, as the card does: Food at 350 of 300 reads as over on Budgets, and here.
  */
 describe('buildAdvice: a budget with rollover', () => {
   const row = (start: string, amount: number, over: Record<string, unknown> = {}) => ({
@@ -369,47 +368,25 @@ describe('buildAdvice: a budget with rollover', () => {
         today: '2026-09-28',
         budgets,
         transactions: [
-          tx('2026-08-10', { amount: 40 }),
+          tx('2026-08-10', { amount: 200 }),
           tx('2026-09-10', { amount: spentInSeptember }),
         ],
       })
     ).filter((c) => c.kind === 'budget-drift')
 
-  it("counts last month's unused budget carried in", () => {
-    // August: 100 budgeted, 40 spent, so 60 carries into September's 100.
+  it('judges spending against the amount the Budgets card shows, not what rolled over', () => {
+    // August: 300 budgeted, 200 spent, so 100 would roll into September's 300.
     const budgets = [
-      row('2026-08-01', 100, { rollover_enabled: true }),
-      row('2026-09-01', 100, { rollover_enabled: true }),
+      row('2026-08-01', 300, { rollover_enabled: true }),
+      row('2026-09-01', 300, { rollover_enabled: true }),
     ]
-    expect(drift(budgets, 140)).toEqual([])
-    expect(drift(budgets, 170).map((c) => c.figure)).toEqual(['170 of 160'])
+    expect(drift(budgets, 350).map((c) => c.figure)).toEqual(['350 of 300'])
   })
 
-  it('reads the Worker rows, where rollover_enabled is 0 or 1', () => {
+  it('leaves out a manual rollover too', () => {
     const budgets = [
-      row('2026-08-01', 100, { rollover_enabled: 1 }),
-      row('2026-09-01', 100, { rollover_enabled: 1 }),
+      row('2026-09-01', 100, { rollover_enabled: 1, rollover_amount: 25, rollover_used: 10 }),
     ]
-    expect(drift(budgets, 170).map((c) => c.figure)).toEqual(['170 of 160'])
-  })
-
-  it('adds a manual rollover and takes off what was used of it', () => {
-    const budgets = [
-      row('2026-09-01', 100, { rollover_enabled: true, rollover_amount: 25, rollover_used: 10 }),
-    ]
-    expect(drift(budgets, 120).map((c) => c.figure)).toEqual(['120 of 115'])
-  })
-
-  it('carries nothing when last month had rollover off, or this month has', () => {
-    const lastOff = [
-      row('2026-08-01', 100, { rollover_enabled: false }),
-      row('2026-09-01', 100, { rollover_enabled: true }),
-    ]
-    expect(drift(lastOff, 120).map((c) => c.figure)).toEqual(['120 of 100'])
-    const thisOff = [
-      row('2026-08-01', 100, { rollover_enabled: true }),
-      row('2026-09-01', 100, { rollover_enabled: false, rollover_amount: 25 }),
-    ]
-    expect(drift(thisOff, 120).map((c) => c.figure)).toEqual(['120 of 100'])
+    expect(drift(budgets, 110).map((c) => c.figure)).toEqual(['110 of 100'])
   })
 })
