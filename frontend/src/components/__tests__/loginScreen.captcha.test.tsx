@@ -8,6 +8,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { historySettled } from './historySettled'
 
 const loginWithPassword = vi.fn()
 const register = vi.fn()
@@ -62,9 +63,11 @@ beforeEach(() => {
   document.body.appendChild(host)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   host.remove()
+  // A screen unmounted on a step takes its entry back: let that land before the next test.
+  await historySettled()
 })
 
 const flush = () => new Promise((r) => setTimeout(r, 0))

@@ -99,6 +99,20 @@ All notable changes to Token Circles are documented here. The format is based on
     fallback, a throwing callback) and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code
     step).
 
+### Tests
+
+- **The sign-in tests wait for the history traversal instead of a timer.** A sign-in from the
+  dialog reloads only once `history.go(-1)` has landed, which jsdom does two `setImmediate` tasks
+  later, so a check after one `setTimeout(0)` failed whenever an event-loop turn took a millisecond
+  (CI run 40944962390, "reloads into the app when the passkey signs in"). Those checks now use
+  `vi.waitFor`, and `afterEach` awaits the new `frontend/src/components/__tests__/historySettled.ts`,
+  which joins the traversal an unmounted dialog or step starts through `afterHistoryStep`: before,
+  every test in `loginModal.refusals.test.tsx` but the first started on the previous test's entry.
+  Changed: `loginModal.refusals`, `loginScreen.refusals`, `signInFields`, `loginScreen.captcha`,
+  and both `backGesture` files, where the helper replaces a 30 ms sleep and `nextPop` waits 2 s
+  instead of 300 ms: in "a page reloaded while on a step" the wait spans a mount, which outlasted
+  300 ms in one of 16 parallel runs.
+
 ## [5.17.1] — 2026-10-29
 
 ### Achievements

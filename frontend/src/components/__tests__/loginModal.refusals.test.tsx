@@ -8,6 +8,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SIGN_IN_MESSAGES as SAY } from '../../../../shared/signInSchema'
+import { historySettled } from './historySettled'
 import type * as TurnstileModule from '../Turnstile'
 
 let host: HTMLDivElement
@@ -112,9 +113,11 @@ beforeEach(() => {
   } as unknown as Location)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   host.remove()
+  // The dialog unmounts on its own history entry and takes it back: let that land first.
+  await historySettled()
   vi.unstubAllGlobals()
 })
 
@@ -246,9 +249,11 @@ describe('the sign-in dialog with passkeys', () => {
     passkeyAnswer = { ok: true }
     await mount()
     host.querySelector<HTMLElement>('[data-test-id="passkey-signin"]')!.click()
-    await settle()
 
-    expect(reloads).toBe(1)
+    // The reload waits for the dialog's history entry to go, which jsdom lands two tasks later.
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
     expect(sent).toEqual([])
   })
 })
