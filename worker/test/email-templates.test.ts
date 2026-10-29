@@ -7,8 +7,12 @@ import {
   renderBudgetAlert,
   renderEmailChange,
   renderEmailChangeNotice,
+  renderLoginCode,
   renderPasswordReset,
+  renderPaymentActionRequired,
+  renderPaymentFailed,
   renderSpendingReport,
+  renderSubscriptionEnded,
   renderSupportAck,
   renderTestBasic,
   renderWelcome,
@@ -25,7 +29,8 @@ const FOOTER_LINKS = [
 
 /** Every mail must carry the branded shell: dark scheme, logo, footer links, text twin. */
 function expectBrandedShell(mail: { subject: string; html: string; text: string }) {
-  expect(mail.subject).toContain('Token Circles');
+  // The wordmark. A subject need not say Token Circles: the From name does.
+  expect(mail.html).toContain('Token Circles');
   expect(mail.html).toContain('color-scheme');
   expect(mail.html).toContain('icon-192.png');
   for (const link of FOOTER_LINKS) expect(mail.html).toContain(link);
@@ -37,17 +42,20 @@ function expectBrandedShell(mail: { subject: string; html: string; text: string 
 }
 
 describe('email templates', () => {
-  it('welcome mail is branded, links the app, and mentions the orbit GIF', () => {
+  it('welcome mail is branded, tops the card with the engraved art, and links the pages its steps name', () => {
     const mail = renderWelcome({ appUrl: 'https://tokencircles.com' });
     expectBrandedShell(mail);
-    expect(mail.html).toContain('email/orbit.gif');
-    expect(mail.html).toContain('Open Token Circles');
-    expect(mail.text).toContain("If you didn't create this account");
+    expect(mail.html).toContain('email/hero-engraved-night-v1.jpg');
+    expect(mail.html).not.toContain('email/orbit.gif');
+    for (const page of ['import', 'bills', 'progress']) {
+      expect(mail.html).toContain(`href="https://tokencircles.com/#${page}"`);
+    }
+    expect(mail.text).toContain("Questions, or a bank file that won't import? Reply to this mail.");
   });
 
   it('mail assets load from the sending environment origin, defaulting to prod', () => {
     const dev = renderWelcome({ appUrl: 'https://dev.tokencircles.com' });
-    expect(dev.html).toContain('https://dev.tokencircles.com/email/orbit.gif');
+    expect(dev.html).toContain('https://dev.tokencircles.com/email/hero-engraved-night-v1.jpg');
     expect(dev.html).toContain('https://dev.tokencircles.com/icon-192.png');
     const fallback = renderTestBasic();
     expect(fallback.html).toContain('https://tokencircles.com/icon-192.png');
@@ -59,12 +67,38 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
+  it('account-exists notice offers Sign in, and says where the reset is', () => {
+    // One button: main has no link that opens the reset form (#620 adds #forgot-password).
+    const mail = renderAccountExists({ appUrl: 'https://tokencircles.com' });
+    expect(mail.html).toMatch(
+      /<a class="tc-btn" href="https:\/\/tokencircles\.com"[^>]*>Sign in<\/a>/
+    );
+    expect([...mail.html.matchAll(/class="tc-btn2?"/g)]).toHaveLength(1);
+    expect(mail.html).not.toContain('forgot-password');
+    expect(mail.text).toContain('Sign in: https://tokencircles.com');
+    expect(mail.text).toContain('reset your password from the sign-in screen');
+  });
+
   it('password reset carries the link in html AND text, with ttl wording', () => {
     const mail = renderPasswordReset({ link: 'https://t.co/x?token=abc123', ttlHours: 2 });
     expectBrandedShell(mail);
     expect(mail.html).toContain('https://t.co/x?token=abc123');
-    expect(mail.text).toContain('https://t.co/x?token=abc123');
-    expect(mail.html).toContain('2 hours');
+    expect(mail.text).toContain('Reset password: https://t.co/x?token=abc123');
+    expect(mail.html).toContain('The link works once, for 2&nbsp;hours.');
+    expect(mail.text).toContain(
+      "Didn't ask for a reset? Ignore this mail. Your password stays as it is."
+    );
+  });
+
+  it('sign-in code puts the code first in the subject, and large and monospaced in the mail', () => {
+    const mail = renderLoginCode({ code: '482913', ttlMinutes: 10 });
+    expectBrandedShell(mail);
+    expect(mail.subject).toBe('482913 is your Token Circles sign-in code');
+    expect(mail.html).toMatch(
+      /<td class="tc-code"[^>]*><span class="tc-text" style="font:700 36px\/1\.2 ui-monospace,[^"]*">482913<\/span>/
+    );
+    expect(mail.text).toContain('482913');
+    expect(mail.text).toContain('It works once, for 10 minutes.');
   });
 
   it('email change carries its link in html AND text, says when it expires and that nothing changes until then', () => {
@@ -72,9 +106,9 @@ describe('email templates', () => {
     const mail = renderEmailChange({ link, ttlHours: 24 });
     expectBrandedShell(mail);
     expect(mail.subject).toMatch(/confirm your new/i);
-    expect(mail.html).toContain(`href="${link}"`);
+    expect(mail.html).toContain(`href="${link.replaceAll('&', '&amp;')}"`);
     expect(mail.text).toContain(link);
-    expect(mail.html).toContain('24 hours');
+    expect(mail.html).toContain('The link works once, for 24&nbsp;hours.');
     expect(mail.text).toContain('nothing changes');
     expect(mail.html).not.toContain('email/orbit.gif');
   });
@@ -82,12 +116,10 @@ describe('email templates', () => {
   it('email change says a sign-in finishes it, with the address the account signs in with now', () => {
     const link = 'https://api.example.com/verify';
     const mail = renderEmailChange({ link, ttlHours: 24 });
-    expect(mail.html).toContain(
-      "The link works once and expires in 24 hours. If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes."
-    );
-    expect(mail.text).toContain(
-      `(it expires in 24 hours). If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do:\n${link}`
-    );
+    const signIn =
+      "If you're asked to sign in first, use the address you sign in with now. The change is made as soon as you do. Until then, nothing changes.";
+    expect(mail.html).toContain(signIn.replaceAll("'", '&#39;'));
+    expect(mail.text).toContain(`${signIn}\n\nConfirm my new email: ${link}`);
   });
 
   it('email change link says only what is true for every account, Google ones included', () => {
@@ -114,7 +146,9 @@ describe('email templates', () => {
   it('email change notice can leave the new address out', () => {
     const mail = renderEmailChangeNotice({ newEmail: null, appUrl: 'https://tokencircles.com' });
     expectBrandedShell(mail);
-    expect(mail.text).toMatch(/asked to change its email address\./i);
+    expect(mail.text).toContain(
+      'asked to change its email address, and nothing changes unless the new address confirms it'
+    );
     expect(mail.html).not.toContain('@example.com');
     expect(mail.text).not.toContain('@example.com');
     expect(mail.html).not.toContain('null');
@@ -182,9 +216,27 @@ describe('email templates', () => {
     expectBrandedShell(mail!);
     expect(mail!.html).toContain('Due today');
     expect(mail!.html).toContain('Overdue');
-    expect(mail!.html).toContain('In 4 days');
+    // A number keeps its unit on one line in the HTML; the text twin has a plain space.
+    expect(mail!.html).toContain('In 4&nbsp;days');
+    expect(mail!.text).toContain('In 4 days');
     expect(mail!.html).toContain('€13.99');
     expect(renderBillsReminder({ bills: [] })).toBeNull();
+  });
+
+  it('email change notice says what was asked in one sentence, and the one thing to do', () => {
+    const mail = renderEmailChangeNotice({
+      newEmail: 'new@example.com',
+      appUrl: 'https://tokencircles.com',
+    });
+    const paragraphs = [...mail.html.matchAll(/<p class="tc-soft"[^>]*>(.*?)<\/p>/g)].map(
+      (m) => m[1]
+    );
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]).toContain('asked to change its email to');
+    expect(paragraphs[0]).toContain('new@example.com</strong>');
+    expect(paragraphs[0]!.match(/\. |\.$/g)).toHaveLength(1);
+    expect(paragraphs[1]).toContain('open Settings, cancel the change');
+    expect([...mail.html.matchAll(/class="tc-btn2?"/g)]).toHaveLength(1);
   });
 
   it('test-basic and support-ack render branded', () => {
@@ -192,7 +244,15 @@ describe('email templates', () => {
     const ack = renderSupportAck({ ticketId: 'TC-1A2B3C' });
     expectBrandedShell(ack);
     expect(ack.html).toContain('TC-1A2B3C');
-    expect(ack.subject).toContain('TC-1A2B3C');
+    expect(ack.subject).toBe('We got your message (TC-1A2B3C)');
+  });
+
+  it('test mail says delivery works, and never that the reminders look like it', () => {
+    // It checks delivery only; the previews beside it in Settings send the real reminders.
+    const mail = renderTestBasic();
+    expect(mail.subject).toBe('Test mail from Token Circles');
+    for (const part of [mail.html, mail.text]) expect(part).not.toMatch(/look like this/i);
+    expect(mail.text).toContain('mail from Token Circles reaches this address');
   });
 
   it('subjects mark test previews', () => {
@@ -218,5 +278,83 @@ describe('email templates', () => {
     expect(formatMoney(10, 'EUR')).toBe('€10.00');
     expect(formatMoney(10, 'NOPE!')).toContain('10.00');
     expect(escapeHtml(`<a "b" 'c'>`)).toBe('&lt;a &quot;b&quot; &#39;c&#39;&gt;');
+  });
+});
+
+describe('the billing mails', () => {
+  // On the mail layout with every fact of their first-shell version kept: the two that show no
+  // amount since 2026-10-11, the failed payment since 2026-10-29 (maff's call), amount and all.
+  const APP = 'https://tokencircles.com';
+
+  it('says on the layout that a payment failed: the amount, the plan, the retry, and that nothing changed yet', () => {
+    const mail = renderPaymentFailed({
+      planName: 'Basic',
+      amountDue: 4.99,
+      currency: 'EUR',
+      nextAttempt: new Date('2026-11-02T00:00:00Z'),
+      payUrl: 'https://invoice.stripe.com/i/EXAMPLE',
+      appUrl: APP,
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe("Your Token Circles payment didn't go through");
+    for (const words of [
+      'Your bank declined the €4.99 payment for Token Circles Basic.',
+      "Nothing has changed yet. Your plan is still active and we'll try the card again on 2 November 2026.",
+      'Update your card: https://invoice.stripe.com/i/EXAMPLE',
+      'If the retries run out, the account moves to Free. Nothing is deleted',
+    ]) {
+      expect(mail.text).toContain(words);
+    }
+    expect(mail.html).toContain('the €4.99 payment for Token Circles Basic');
+    expect(mail.html).toContain('<strong class="tc-text"');
+    // No amount and no date from Stripe: the sentences close without them, and the button opens
+    // Settings.
+    const bare = renderPaymentFailed({ planName: 'Basic', appUrl: APP });
+    expect(bare.text).toContain('Your bank declined the payment for Token Circles Basic.');
+    expect(bare.text).toContain("we'll try the card again. Updating");
+    expect(bare.text).toContain(`Update your card: ${APP}/#settings`);
+  });
+
+  it("asks for the bank's confirmation on the layout, as a step to take and not a failure", () => {
+    const mail = renderPaymentActionRequired({
+      planName: 'Basic',
+      payUrl: 'https://invoice.stripe.com/i/EXAMPLE',
+      appUrl: APP,
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe('Your bank needs you to confirm a Token Circles payment');
+    for (const words of [
+      'Your bank wants you to confirm the payment for Token Circles Basic before it goes through.',
+      "It's the usual card verification, not a problem with your card.",
+      'Confirm the payment: https://invoice.stripe.com/i/EXAMPLE',
+      "Your plan stays active while this is outstanding. If it isn't confirmed, the payment is treated as failed and we retry it.",
+    ]) {
+      expect(mail.text).toContain(words);
+    }
+    expect(mail.html).toMatch(
+      /<a class="tc-btn" href="https:\/\/invoice\.stripe\.com\/i\/EXAMPLE"[^>]*>Confirm the payment<\/a>/
+    );
+    // Without Stripe's page, the button opens Settings.
+    expect(renderPaymentActionRequired({ planName: 'Basic', appUrl: APP }).text).toContain(
+      `Confirm the payment: ${APP}/#settings`
+    );
+  });
+
+  it('says on the layout that a plan ended: on Free, nothing deleted, and how to pick it back up', () => {
+    const mail = renderSubscriptionEnded({ planName: 'Basic', appUrl: APP });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe('Your Token Circles Basic plan has ended');
+    for (const words of [
+      'Your Token Circles Basic plan has ended, and your account is on Free now.',
+      'Nothing has been deleted: you can open everything, and export all of it from Settings at any time.',
+      'Choosing a plan again brings the paid features back straight away, with nothing to restore or re-import.',
+      "If you didn't mean to end it (a card that expired, say), choosing the plan again is all it takes.",
+      `Open Settings: ${APP}/#settings`,
+    ]) {
+      expect(mail.text).toContain(words);
+    }
   });
 });

@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    // The scripts run under plain Node, which strips types and needs each relative import to
+    // name its file, extension and all.
+    "allowImportingTsExtensions": true
+  },
+  "include": ["./**/*.ts"]
+}
