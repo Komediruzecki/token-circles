@@ -3,7 +3,7 @@ import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
-import { createHistoryStep } from '../core/historyStep'
+import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
   conditionalMediationAvailable,
@@ -35,6 +35,16 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * account whose address is not confirmed yet, and offers to send the confirm link again. Creating
  * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
  */
+/**
+ * Every way out of the screen reloads, and a reload keeps the current history entry: a step's entry
+ * (historyStep.ts) still on its way back goes first, or the app would start on it.
+ */
+function reloadPage() {
+  afterHistoryStep(() => {
+    window.location.reload()
+  })
+}
+
 export default function LoginScreen() {
   const [mode, setMode] = createSignal<SignInMode>('login')
   // What the screen says that is not a problem with the form: a reset link on its way, or a link
@@ -97,7 +107,7 @@ export default function LoginScreen() {
         conditionalAbort = new AbortController()
         return signInWithPasskey({ conditional: true, signal: conditionalAbort.signal }).then(
           (result) => {
-            if (result.ok) window.location.reload()
+            if (result.ok) reloadPage()
             // Quiet otherwise: an aborted or failed autofill request must not paint the form red —
             // the explicit button is the path that reports errors.
           }
@@ -180,7 +190,7 @@ export default function LoginScreen() {
   // serverless and reload; the gate won't render in that mode. Switch back in Settings.
   const tryDemo = () => {
     setStorageMode('serverless')
-    window.location.reload()
+    reloadPage()
   }
 
   return (
@@ -401,7 +411,10 @@ export default function LoginScreen() {
                   // passkey nudge works for Google sign-ins too. A failed sign-in wastes the
                   // flag harmlessly — the nudge only renders for an authenticated session.
                   markPasskeyNudgeAfterLogin()
-                  api.loginWithGoogle()
+                  // Off to Google from the entry under any step's, so coming back has none to pop.
+                  afterHistoryStep(() => {
+                    api.loginWithGoogle()
+                  })
                 }}
                 type="button"
               >
@@ -426,7 +439,7 @@ export default function LoginScreen() {
                     setElsewhere('')
                     stopConditional()
                     void signInWithPasskey().then((result) => {
-                      if (result.ok) window.location.reload()
+                      if (result.ok) reloadPage()
                       else if (!result.aborted) setElsewhere(result.error)
                     })
                   }}

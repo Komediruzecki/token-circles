@@ -13,6 +13,9 @@ import type * as TurnstileModule from '../Turnstile'
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
 let answers: Record<string, () => Response>
+/** Whether the browser offers passkeys, and whether autofill offers one that signs in. */
+let passkeys = false
+let conditional = false
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -37,10 +40,13 @@ async function mount() {
     resetTurnstile: () => undefined,
   }))
   vi.doMock('../../core/webauthn', () => ({
-    conditionalMediationAvailable: () => Promise.resolve(false),
+    conditionalMediationAvailable: () => Promise.resolve(conditional),
     markPasskeyNudgeAfterLogin: () => undefined,
-    passkeysSupported: () => false,
-    signInWithPasskey: () => Promise.resolve({ ok: false, error: 'x', aborted: true }),
+    passkeysSupported: () => passkeys,
+    signInWithPasskey: () =>
+      Promise.resolve(
+        passkeys || conditional ? { ok: true } : { ok: false, error: 'x', aborted: true }
+      ),
   }))
   vi.doMock('../../core/appVersion', () => ({ displayVersion: () => '9.9.9' }))
   vi.doMock('../../core/storage/storageFactory', () => ({
@@ -141,11 +147,16 @@ beforeEach(() => {
   length = history.length
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   dispose = undefined
   host?.remove()
+  // A screen unmounted on a step takes its entry back: let that land before the next test.
+  await new Promise((resolve) => setTimeout(resolve, 30))
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+  passkeys = false
+  conditional = false
 })
 
 describe('the back gesture returns to the form', () => {
@@ -323,5 +334,116 @@ describe('once the screen is gone', () => {
     expect(stopped).toEqual(expect.arrayContaining(listening))
     added.mockRestore()
     removed.mockRestore()
+  })
+})
+
+describe('a page reloaded while on a step', () => {
+  it('lands on the form and takes the entry it reloaded on back, so the gesture is not swallowed', async () => {
+    history.pushState({ ...BEFORE, tcHistoryStep: 1 }, '')
+    const popped = nextPop()
+    await mount()
+    expect(await popped).toBe(true)
+    await settle()
+
+    expect(onTheForm()).toBe(true)
+    expect(history.state).toEqual(BEFORE)
+  })
+
+  it('on the second factor the Google callback landed on, stays on it and keeps its one entry', async () => {
+    history.replaceState(BEFORE, '', '/')
+    history.pushState({ ...BEFORE, tcHistoryStep: 1 }, '', '/?twofa=1')
+    const reloadedAt = history.length
+    await mount()
+    expect(byTestId('twofa-code')).not.toBeNull()
+    expect(history.length).toBe(reloadedAt)
+    expect(window.location.search).toBe('?twofa=1')
+
+    await backGesture()
+
+    expect(onTheForm()).toBe(true)
+    expect(window.location.search).toBe('')
+    expect(history.state).toEqual(BEFORE)
+  })
+})
+
+describe('leaving the screen while a step entry is still on its way back', () => {
+  /**
+   * Mounted on an entry a reload left behind, with the traversal that takes it back held until the
+   * test lets it go: whatever leaves the screen meanwhile must wait for it.
+   */
+  async function mountWhileUnwinding(): Promise<() => Promise<void>> {
+    history.pushState({ ...BEFORE, tcHistoryStep: 1 }, '')
+    let held: number | undefined
+    const go = vi.spyOn(history, 'go').mockImplementation((delta?: number) => {
+      held = delta
+    })
+    await mount()
+    expect(held).toBe(-1)
+    return async () => {
+      go.mockRestore()
+      const popped = nextPop()
+      history.go(held)
+      expect(await popped).toBe(true)
+      for (let i = 0; i < 4; i += 1) await settle()
+    }
+  }
+
+  let gone: { how: string; state: unknown }[]
+  beforeEach(() => {
+    gone = []
+    const real = window.location
+    vi.stubGlobal('location', {
+      get href() {
+        return real.href
+      },
+      set href(url: string) {
+        gone.push({ how: url, state: history.state })
+      },
+      get search() {
+        return real.search
+      },
+      reload: () => {
+        gone.push({ how: 'reload', state: history.state })
+      },
+    } as unknown as Location)
+  })
+
+  it('Continue with no account', async () => {
+    const release = await mountWhileUnwinding()
+    byTestId('try-no-account')!.click()
+    expect(gone).toEqual([])
+
+    await release()
+    expect(gone).toEqual([{ how: 'reload', state: BEFORE }])
+  })
+
+  it('Continue with Google', async () => {
+    const release = await mountWhileUnwinding()
+    button('Continue with Google').click()
+    expect(gone).toEqual([])
+
+    await release()
+    expect(gone).toEqual([{ how: '/api/auth/google/start', state: BEFORE }])
+  })
+
+  it('Sign in with a passkey', async () => {
+    passkeys = true
+    const release = await mountWhileUnwinding()
+    byTestId('passkey-signin')!.click()
+    await settle()
+    expect(gone).toEqual([])
+
+    await release()
+    expect(gone).toEqual([{ how: 'reload', state: BEFORE }])
+  })
+
+  it('a passkey picked from autofill', async () => {
+    conditional = true
+    const release = await mountWhileUnwinding()
+    await settle()
+    expect(gone).toEqual([])
+
+    await release()
+    expect(gone).toEqual([{ how: 'reload', state: BEFORE }])
   })
 })

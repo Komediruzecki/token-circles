@@ -11,42 +11,49 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Sign-in
 
-- **The sign-in steps after the form have a history entry, so the back gesture leaves them.**
-  `LoginScreen`'s `stage` ('form' | 'inbox' | 'twofa' | 'email-code') was a signal with no history
-  behind it, so in an installed PWA on Android the back gesture had nothing to pop and closed the
-  app; the email-code verify step had no Back button either. New `frontend/src/core/historyStep.ts`:
-  `createHistoryStep({ active, back, below })` pushes one entry (`history.pushState`, same URL and
-  hash, `tcHistoryStep: true` in the state) when `active` turns true, and on `popstate` to an entry
-  without the mark runs `back`, the step's own Back. Leaving by the step's Back takes the entry with
-  `history.back()` when the current entry is still marked, so history does not grow and the next
-  gesture is not swallowed; moving between steps (email-code to twofa) keeps `active` true and adds
-  nothing. No URL change means no `hashchange`, so App.tsx's hash routing and appVersion's reload
-  never see it. A sign-in reloads, and a reload keeps the current entry, so `reloadIntoTheApp`
-  (`signInForm.ts`) now goes through `afterHistoryStep`, which pops the entry first (the step stays
-  on screen meanwhile; a one-second fallback reloads anyway). For the twofa step the Google
-  callback lands on, `below` drops `?twofa=1` from the entry under the step, and
-  `TwofaChallenge`'s `stripTwofaMarker` keeps `history.state` instead of writing `null`, which would
-  have erased the mark. `EmailCodeLogin`'s verify step gets Back to sign in
-  (`emailcode-verify-back`).
-- **The sign-in dialog has a history entry too, so the back gesture closes it.** `LoginModal` (the
-  dialog for using the app with no account) had the same in-memory stages and no entry of its own.
-  It now calls `createHistoryStep` twice: once with `active: () => true`, whose pop calls
-  `props.onClose()`, and once for its stages as LoginScreen does. Entries carry their depth
-  (`tcHistoryStep: 1` for the dialog, `2` for a step on it); a step handles a pop only below its own
-  depth, so the gesture takes a step back to the dialog's form and the next one closes the dialog.
-  Leaving a step by its Back calls `history.go()` for the entries at or above its depth.
-  `afterHistoryStep` now goes back by the current depth in one `history.go(-depth)`, and a second
-  call while one is on its way joins it instead of traversing again: browsers count a second
-  `go()` from where the first has not landed yet, which would leave the app. Cancel, Escape and a
-  click outside close through `afterHistoryStep`, once (a `closing` flag). Every sign-in from the
-  dialog reloads, so it goes through it as well: password and emailed code via `reloadIntoTheApp`,
-  the passkey link and Continue with Google wrapped directly. App never closes the dialog on its
-  own (`onSuccess` is not called by the dialog). Tests: `loginModal.backGesture.test.tsx` (the
-  gesture, each way of closing, double Escape, sign-in by password, code, passkey and Google) and
-  `core/__tests__/historyStep.test.ts` (one traversal for nested entries, the joined second call).
-  Tests: `components/__tests__/loginScreen.backGesture.test.tsx` (real screen and steps on jsdom's
-  history: the gesture from each step, own Back from each step, the sign-in pop, listener removal)
-  and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code step).
+- **The sign-in steps and the sign-in dialog have history entries, so the back gesture leaves
+  them.** `LoginScreen`'s `stage` ('form' | 'inbox' | 'twofa' | 'email-code') and `LoginModal`
+  (opened from the profile menu) were signals with no history behind them, so in an installed PWA
+  on Android the back gesture had nothing to pop and closed the app; the email-code verify step had
+  no Back button either (now `emailcode-verify-back`). New `frontend/src/core/historyStep.ts`:
+  - `createHistoryStep({ active, back, below })` pushes one entry when `active` turns true
+    (`history.pushState`, same URL and hash), marked with its depth: `tcHistoryStep: 1` on top of an
+    unmarked entry, 2 on top of that. The dialog is one step (`active: () => true`, its pop calls
+    `props.onClose()`) and its stages a second one at depth 2; LoginScreen's stages are depth 1.
+    A step runs `back` only on a pop that lands below its own depth, so from a dialog stage the
+    gesture returns to the dialog's form and the next one closes the dialog. Moving between stages
+    (email-code to twofa) keeps `active` true and adds nothing.
+  - Leaving a step any other way takes its entries back: its own Back, and its unmount without
+    either (`onCleanup`, for a screen swapped out under it) go to depth `mine - 1`, the
+    `go(-above)` for the entries at or above it.
+  - Every traversal goes through `goTo(depth)`, one at a time. A request made while one is on its
+    way lowers its target and continues from the landing with another `go()`: browsers add up
+    `go()` calls made before the first lands, so a step's Back and a close in the same task went
+    back past the page (seen in headless Chromium). A one-second fallback finishes a traversal
+    that never lands; the waiting callbacks all run even when one throws.
+  - `afterHistoryStep(then)` is `goTo(0, then)`. A reload keeps the current entry, so every way the
+    sign-in screen and the dialog leave goes through it: `reloadIntoTheApp` (`signInForm.ts`, so
+    password, emailed code and second factor), both passkey paths, Continue with no account, and
+    Continue with Google (the dialog also closes itself first, so a page restored from the
+    back-forward cache shows no dialog without an entry). Cancel, Escape and a click outside the
+    dialog close through it, once (a `closing` flag). Steps ignore pops while it runs.
+  - A page reloaded on a step (or restored after Android discarded it) mounts on an entry nobody
+    owns. On its first run a step takes such an entry back, or claims it when it is active at
+    exactly the next depth: the second factor reloaded on `?twofa=1` keeps its one entry.
+  - No URL change means no `hashchange`, so App.tsx's hash routing and appVersion's reload never
+    see it. For the twofa step the Google callback lands on, `below` drops `?twofa=1` from the
+    entry under the step, and `TwofaChallenge`'s `stripTwofaMarker` keeps `history.state` instead
+    of writing `null`, which erased the mark.
+  - Needs a check on a real device: Chromium's history-manipulation intervention may skip an entry
+    pushed without a user activation, which is the `?twofa=1` landing (the step opens on load, not
+    on a tap). If it does, the gesture there leaves the app as before; headless runs cannot show it.
+  - Tests: `components/__tests__/loginScreen.backGesture.test.tsx` and
+    `loginModal.backGesture.test.tsx` (the real screen and dialog on jsdom's history: the gesture
+    from each step, each step's own Back, each way of closing, every sign-in and exit waiting for
+    the entry, a reload on a step, listener removal), `core/__tests__/historyStep.test.ts` (one
+    traversal for nested entries, joined calls, Back and close in one task, unmount, the
+    fallback, a throwing callback) and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code
+    step).
 
 ## [5.17.1] — 2026-10-29
 

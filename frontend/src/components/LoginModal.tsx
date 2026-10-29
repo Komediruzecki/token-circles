@@ -323,6 +323,9 @@ export default function LoginModal(props: LoginModalProps) {
                 markPasskeyNudgeAfterLogin()
                 // Off to Google with the dialog's entry gone, so coming back has none to pop.
                 afterHistoryStep(() => {
+                  // Closed first: a page the browser restores on the way back from Google shows
+                  // the app, not a dialog with no entry under it.
+                  props.onClose()
                   api.loginWithGoogle()
                 })
               }}

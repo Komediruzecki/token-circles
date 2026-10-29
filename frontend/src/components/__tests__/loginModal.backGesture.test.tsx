@@ -20,7 +20,7 @@ let passkeys: boolean
 /** What the screen looked like when the page reloaded; undefined until it does. */
 let atReload: { state: unknown; open: boolean } | undefined
 /** Where the page went, and the history state it left from; undefined until it goes. */
-let leftFor: { url: string; state: unknown } | undefined
+let leftFor: { url: string; state: unknown; open: boolean } | undefined
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -158,7 +158,7 @@ beforeEach(() => {
       return real.href
     },
     set href(url: string) {
-      leftFor = { url, state: history.state }
+      leftFor = { url, state: history.state, open: isOpen() !== null }
     },
     get search() {
       return real.search
@@ -169,10 +169,12 @@ beforeEach(() => {
   } as unknown as Location)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   dispose = undefined
   host?.remove()
+  // A dialog unmounted on its entry takes it back: let that land before the next test's history.
+  await new Promise((resolve) => setTimeout(resolve, 30))
   vi.unstubAllGlobals()
 })
 
@@ -324,6 +326,8 @@ describe('signing in from the dialog reloads with no entry of its own left', () 
     google.click()
     for (let i = 0; i < 20 && leftFor === undefined; i += 1) await settle()
 
-    expect(leftFor).toEqual({ url: '/api/auth/google/start', state: BEFORE })
+    // Closed before leaving: a page the browser restores on the way back shows no dialog.
+    expect(leftFor).toEqual({ url: '/api/auth/google/start', state: BEFORE, open: false })
+    expect(closes).toBe(1)
   })
 })
