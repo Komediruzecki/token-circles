@@ -82,10 +82,12 @@ import { createBaseCurrencyForm } from './baseCurrencyForm'
 import { createNotificationsForm, notificationValues } from './notificationsForm'
 import { createProfileRenameForm } from './profileForm'
 import styles from './SettingsPage.module.css'
+import WeekOneMails from './WeekOneMails'
 import type { JSX } from 'solid-js'
 import type { SettingsTab } from '../core/settingsStore'
 import type { ExportData } from '../types/storage'
 import type { ChartExportSettings } from '../utils/chartExportSettings'
+import type { WeekOneSettings } from './WeekOneMails'
 
 // Account self-deletion is dev-only for now: visible on the dev domain + local builds, hidden on the
 // production build (the worker also 501s DELETE /api/account in production). On prod, users delete
@@ -680,16 +682,19 @@ export default function Settings() {
   }
 
   // ── Email reminders (server mode only; the worker exposes /api/notifications/*) ──
-  const [notif, setNotif] = createSignal<{
-    email: string
-    // A new address waiting for the link mailed to it to be opened. Until then the account keeps
-    // `email`, and saving a different address only starts this wait.
-    pendingEmail?: string | null
-    emailNotifications: boolean
-    budgetAlerts: boolean
-    spendingReport: boolean
-    billsReminders: boolean
-  } | null>(null)
+  const [notif, setNotif] = createSignal<
+    | ({
+        email: string
+        // A new address waiting for the link mailed to it to be opened. Until then the account keeps
+        // `email`, and saving a different address only starts this wait.
+        pendingEmail?: string | null
+        emailNotifications: boolean
+        budgetAlerts: boolean
+        spendingReport: boolean
+        billsReminders: boolean
+      } & WeekOneSettings)
+    | null
+  >(null)
   // The account's address as last loaded; the field can hold an edit that is not saved yet.
   const [accountEmail, setAccountEmail] = createSignal('')
   const [notifBusy, setNotifBusy] = createSignal(false)
@@ -1560,6 +1565,11 @@ export default function Settings() {
                         )}
                       </Show>
                     </div>
+                    {/* Outside the plan lock: every account gets the week-one mails. */}
+                    <WeekOneMails
+                      loaded={notif()!}
+                      onSaved={(on) => setNotif((n) => (n ? { ...n, weekOneMails: on } : n))}
+                    />
                     <div class={styles.row}>
                       <span class={styles.rowLabel}>Enable email notifications</span>
                       <Toggle

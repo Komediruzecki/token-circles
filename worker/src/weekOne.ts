@@ -228,6 +228,26 @@ export async function weekOneDay7Content(
   };
 }
 
+/**
+ * Whether a week-one mail can still come to account `userId`: its address was confirmed less than
+ * the last window's end ago, and not both mails have gone. Settings shows the switch only then.
+ */
+export async function weekOneAhead(env: Env, userId: number, now = new Date()): Promise<boolean> {
+  const row = await db.first<{ ahead: number }>(
+    env.DB,
+    `SELECT 1 AS ahead FROM reminder_dedup w
+      WHERE w.user_id = ? AND w.dedup_key = '${WELCOME_KEY}' AND w.sent_at > datetime(?, ?)
+        AND (SELECT COUNT(*) FROM reminder_dedup d
+              WHERE d.user_id = w.user_id AND d.dedup_key IN (?, ?)) < 2`,
+    userId,
+    sqliteInstant(now),
+    `-${WEEK_ONE.day7.toDays} days`,
+    WEEK_ONE.day2.key,
+    WEEK_ONE.day7.key
+  );
+  return row !== null;
+}
+
 type Outcome = 'sent' | 'kept' | 'released' | 'stop';
 
 /** Sends a claimed mail, and gives the claim back only when Resend certainly refused it. */

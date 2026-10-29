@@ -17,6 +17,7 @@ import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
 import { requireFeature } from '../plan';
 import { localNow } from '../local-date';
+import { weekOneAhead } from '../weekOne';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -28,9 +29,13 @@ export const notificationsRoutes = new Hono<AppEnv>();
 notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
-  const user = await db.first<{ email: string | null }>(
+  const user = await db.first<{
+    email: string | null;
+    week_one_mails: number;
+    notifications_unsubscribed: number;
+  }>(
     c.env.DB,
-    'SELECT email FROM users WHERE id = ?',
+    'SELECT email, week_one_mails, notifications_unsubscribed FROM users WHERE id = ?',
     userId
   );
   const rows = await db.all<{ key: string; value: string }>(
@@ -47,6 +52,12 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
     budgetAlerts: flag('email_budget_alerts'),
     spendingReport: flag('email_spending_report'),
     billsReminders: flag('email_bills_reminders'),
+    // The week-one mails (weekOne.ts): the account's own switch, whether one of them can still
+    // come, and the general unsubscribe, which stops them whatever the switch says. Settings shows
+    // the switch only while a mail can still come.
+    weekOneMails: user?.week_one_mails !== 0,
+    weekOneAhead: await weekOneAhead(c.env, userId),
+    unsubscribed: !!user?.notifications_unsubscribed,
   });
 });
 
@@ -87,6 +98,15 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
+  // The week-one switch belongs to the account, and no plan gates it: Free gets these mails.
+  if (typeof b.weekOneMails === 'boolean') {
+    await db.run(
+      c.env.DB,
+      'UPDATE users SET week_one_mails = ? WHERE id = ?',
+      b.weekOneMails ? 1 : 0,
+      userId
+    );
+  }
   return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
 });
 
