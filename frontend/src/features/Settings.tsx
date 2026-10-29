@@ -692,6 +692,9 @@ export default function Settings() {
         budgetAlerts: boolean
         spendingReport: boolean
         billsReminders: boolean
+        // The account pressed Unsubscribe on the link in a reminder mail. No reminder is sent until
+        // "Send me reminders again" lifts it (POST /api/notifications/resubscribe); a save does not.
+        unsubscribed?: boolean
       } & WeekOneSettings)
     | null
   >(null)
@@ -745,6 +748,27 @@ export default function Settings() {
       toast(plainMessage(e, 'Could not send the link. Try again.'), 'error')
     } finally {
       setEmailChangeBusy(false)
+    }
+  }
+  // "Send me reminders again": the one way to lift an unsubscribe by link. The Worker refuses it
+  // while the saved switches would send nothing, and that refusal shows in the line.
+  const [resubscribeBusy, setResubscribeBusy] = createSignal(false)
+  const [resubscribeError, setResubscribeError] = createSignal<string | null>(null)
+  const resubscribe = async () => {
+    setResubscribeBusy(true)
+    setResubscribeError(null)
+    try {
+      const res = await apiFetch('/api/notifications/resubscribe', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      if (!res.ok) throw await apiErrorFrom(res)
+      setNotif((n) => (n ? { ...n, unsubscribed: false } : n))
+      toast('Reminder mails are back on.', 'success')
+    } catch (e) {
+      setResubscribeError(plainMessage(e, "Couldn't turn reminder mails back on. Try again."))
+    } finally {
+      setResubscribeBusy(false)
     }
   }
   const cancelEmailChange = async () => {
@@ -1565,6 +1589,32 @@ export default function Settings() {
                         )}
                       </Show>
                     </div>
+                    <Show when={notif()?.unsubscribed && !emailAlertsLocked()}>
+                      <div
+                        class={styles.remindersUnsubscribed}
+                        data-test-id="settings-reminders-unsubscribed"
+                      >
+                        <p>
+                          You turned reminder mails off with the unsubscribe link in one of them.
+                        </p>
+                        <Show when={resubscribeError()}>
+                          {(message) => <p role="alert">{message()}</p>}
+                        </Show>
+                        <div class={styles.pendingEmailActions}>
+                          <button
+                            type="button"
+                            class={styles.iconAction}
+                            data-test-id="settings-reminders-resubscribe"
+                            onclick={() => void resubscribe()}
+                            disabled={resubscribeBusy()}
+                            title="Start budget alerts, spending reports and bill reminders again, as your switches are saved"
+                          >
+                            <IconMail />
+                            Send me reminders again
+                          </button>
+                        </div>
+                      </div>
+                    </Show>
                     {/* Outside the plan lock: every account gets the week-one mails. */}
                     <WeekOneMails
                       loaded={notif()!}
