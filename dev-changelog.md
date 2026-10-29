@@ -75,16 +75,25 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Tests
 
-- **confirmEmailGate.test.tsx no longer signs a test back in from the test before it.** About once
-  per loaded full run, "whose setup decision the app reads" failed waiting for the sign-in screen
-  (`expected false to be true`). The App's loading flag lives in `appStore` and the first boot in the
-  file turned it off for good, so every later App showed its shell before its `onMount` boot had
-  run, and a test could end with that boot still going. The local-first test ended while its boot
-  still waited on `GET /auth/me`, the file's first local request, which pays for the storage layer's
-  import; when that landed after the next test's Logout, it set `isAuthenticated` back to true.
-  `mountApp` now sets the flag on before each render, so a test's wait for the app or the gate is a
-  wait for that boot to finish, as on a page load. Shown by delaying the local `authMe` by 1.5 s in a
-  scratch copy: the test failed with the same message every run before the change and passed after.
+- **An App closed before its start-up answers no longer signs anyone in.** `onMount` in
+  `frontend/src/App.tsx` awaited `api.signedInAccount()` and then `loadProfiles()`, and set the
+  shared auth, onboarding-owner and profile stores after each with no check that the App was still
+  open. It now sets `disposed` in an `onCleanup` registered before the first await and returns after
+  each await once it is set. Test: `confirmEmailGate.test.tsx` ("an App closed before its start-up
+  answers"), which holds `/api/auth/me`, closes the App, then lets it answer; before the change
+  `isAuthenticated` came back `true`.
+- **confirmEmailGate.test.tsx: each App boots from the loading screen.** "whose setup decision the
+  app reads" was reported to fail about once per loaded full run, waiting for the sign-in screen
+  (`expected false to be true`). It did not fail here in 10 runs of the file under load or 5 full
+  runs, so the cause below comes from reading the code, not from a reproduction of that failure. The
+  App's loading flag lives in `appStore`, and the first boot in the file turned it off for good, so
+  every later App showed its shell before its `onMount` boot had run, and a test could end with
+  that boot still going. A closed App's boot that answers late can then set `isAuthenticated` for
+  the next test. `mountApp` now sets the flag on before each render, so a test's wait for the app or
+  the gate is a wait for that boot to finish. What was observed: in a scratch copy with the local
+  `authMe` delayed 1.5 s, and an extra 2.5 s wait and sign-in check added at the end of that test,
+  the added check failed with `expected false to be true` before the change (one run) and passed
+  after it (one run).
 
 ## [5.17.0] — 2026-10-28
 

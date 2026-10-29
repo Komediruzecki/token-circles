@@ -12,6 +12,7 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { onboardingDecided } from '../../tests/onboarding-decided'
 import {
+  getIsAuthenticated,
   setCurrentProfile,
   setIsAuthenticated,
   setIsLoginModalOpen,
@@ -41,6 +42,8 @@ const GOOGLE = { ...WAITING, email: 'google@example.com', auth_provider: 'google
 const worker = vi.hoisted(() => ({
   me: null as Record<string, unknown> | null,
   sent: [] as string[],
+  /** When set, /api/auth/me answers only once this settles: a slow network. */
+  meHeld: null as Promise<void> | null,
 }))
 
 function workerStandIn() {
@@ -48,6 +51,7 @@ function workerStandIn() {
     const path = new URL(url, 'http://localhost').pathname
     const method = init.method ?? 'GET'
     if (path.startsWith('/api/')) worker.sent.push(`${method} ${path}`)
+    if (path === '/api/auth/me' && worker.meHeld) await worker.meHeld
     const me = worker.me
     if (path === '/api/auth/me') return me ? json(me) : json({ error: 'Unauthorized' }, 401)
     if (path === '/api/auth/logout') {
@@ -81,6 +85,7 @@ beforeEach(() => {
   sessionStorage.clear()
   worker.me = null
   worker.sent.length = 0
+  worker.meHeld = null
   setIsAuthenticated(false)
   setIsLoginModalOpen(false)
   setShowDropdown(false)
@@ -241,5 +246,28 @@ describe('whose setup decision the app reads', () => {
       expect(signInShown()).toBe(true)
     }, waitLong)
     expect(getOnboardingStatus()).toBeNull()
+  })
+})
+
+describe('an App closed before its start-up answers', () => {
+  it('leaves who is signed in to the App that is still open', async () => {
+    let answer!: () => void
+    worker.meHeld = new Promise<void>((resolve) => (answer = resolve))
+    worker.me = CONFIRMED
+    await mountApp()
+    await vi.waitFor(() => {
+      expect(worker.sent).toContain('GET /api/auth/me')
+    }, waitLong)
+    dispose?.()
+    dispose = undefined
+
+    answer()
+    // Ask /me again: this answer comes after the closed App's, so its start-up has run on by then.
+    const { api } = await import('../core/api')
+    await api.signedInAccount()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(getIsAuthenticated()).toBe(false)
+    expect(apiSent()).toEqual([])
   })
 })
