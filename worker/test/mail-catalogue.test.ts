@@ -55,6 +55,8 @@ describe('the mail catalogue', () => {
         "subscription-ended": "Your Token Circles Basic plan has ended",
         "support-ack": "We got your message (TC-SAMPLE)",
         "test-basic": "Test mail from Token Circles",
+        "week-one-day-2": "How to get a year of statements out of your bank",
+        "week-one-day-7": "Your first week in Token Circles",
         "welcome": "Token Circles is ready for your first statement",
       }
     `);
@@ -123,8 +125,9 @@ describe('the mail catalogue', () => {
       const { html, text } = sample.render();
       expect(text, sample.name).toContain(line);
       const footer = html.slice(html.indexOf(line));
+      // An href holds & as &amp;: the week-one stop link has two query parameters.
       const links = [...footer.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) =>
-        m[1]!.replace(/^mailto:/, '')
+        m[1]!.replace(/^mailto:/, '').replaceAll('&amp;', '&')
       );
       expect(links.length, sample.name).toBeGreaterThan(5);
       for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);

@@ -13,8 +13,8 @@ export async function sendMail(
   to: string,
   subject: string,
   html: string,
-  opts?: { replyTo?: string; text?: string }
-): Promise<{ sent: boolean; skipped?: boolean; error?: string; id?: string }> {
+  opts?: { replyTo?: string; text?: string; headers?: Record<string, string> }
+): Promise<{ sent: boolean; skipped?: boolean; error?: string; status?: number; id?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
     console.log(`[email] DEV (no RESEND_API_KEY) -> to=${to} subject=${subject}`);
@@ -34,13 +34,15 @@ export async function sendMail(
       // Plain-text twin (deliverability + text-only clients).
       ...(opts?.text ? { text: opts.text } : {}),
       ...(opts?.replyTo ? { reply_to: opts.replyTo } : {}),
+      // Extra mail headers, such as a list's one-click unsubscribe (oneClickUnsubscribeHeaders).
+      ...(opts?.headers && Object.keys(opts.headers).length > 0 ? { headers: opts.headers } : {}),
     }),
     signal: AbortSignal.timeout(MAIL_TIMEOUT_MS),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     console.error(`[email] Resend ${res.status}: ${body}`);
-    return { sent: false, error: `Resend ${res.status}` };
+    return { sent: false, error: `Resend ${res.status}`, status: res.status };
   }
   // `sent` means Resend ACCEPTED the message, not that anyone received it. A recipient on the
   // account's suppression list — anything that has hard-bounced or complained before — is accepted
@@ -53,4 +55,15 @@ export async function sendMail(
   const id = ((await res.json().catch(() => ({}))) as { id?: string }).id;
   console.log(`[email] Resend accepted id=${id ?? 'unknown'} to=${to} subject=${subject}`);
   return { sent: true, id };
+}
+
+/**
+ * The headers that let a mail app offer its own unsubscribe button for a mail that carries a stop
+ * link (RFC 2369 List-Unsubscribe, and RFC 8058's one-click POST to the same URL).
+ */
+export function oneClickUnsubscribeHeaders(url: string): Record<string, string> {
+  return {
+    'List-Unsubscribe': `<${url}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
 }

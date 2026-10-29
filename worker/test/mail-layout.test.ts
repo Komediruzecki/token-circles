@@ -336,4 +336,16 @@ describe('the mail layout', () => {
     expect(text).toContain(`${SPEC.reason}\nUnsubscribe: ${unsubUrl}\n`);
     expect(renderMail(SPEC).html).not.toContain('Unsubscribe');
   });
+
+  it('words the unsubscribe link as the mail asks, in the footer and in the text twin', () => {
+    // The week-one mails' link stops those two mails only, and says so.
+    const unsubUrl = 'https://api.example/api/notifications/unsubscribe?token=t&list=week-one';
+    const { html, text } = renderMail({ ...SPEC, unsubUrl, unsubLabel: 'Stop first-week mails' });
+    expect(html).toContain(
+      'href="https://api.example/api/notifications/unsubscribe?token=t&amp;list=week-one" style="color:#'
+    );
+    expect(html).toMatch(/>Stop first-week mails<\/a>/);
+    expect(html).not.toContain('>Unsubscribe<');
+    expect(text).toContain(`${SPEC.reason}\nStop first-week mails: ${unsubUrl}\n`);
+  });
 });

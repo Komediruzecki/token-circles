@@ -235,6 +235,8 @@ export interface MailSpec {
   reason: string;
   /** The reminders' one-click unsubscribe link, in the footer after the reason. */
   unsubUrl?: string | null;
+  /** The words of that link, where it stops less than every mail: "Stop first-week mails". */
+  unsubLabel?: string;
   /** The origin that serves the wordmark and the art: the sending environment's app. */
   assetOrigin?: string;
 }
@@ -343,7 +345,7 @@ const mailTableText = (table: MailTable) =>
   ].join('\n');
 
 /** The text twin's last lines, the same for every mail on this layout. */
-const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
+const mailTextFooter = (reason: string, unsubUrl?: string | null, unsubLabel = 'Unsubscribe') =>
   [
     'Your money, in clear orbit. Open source and local-first.',
     `Open the app: ${APP_URL}`,
@@ -353,7 +355,7 @@ const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
     `Privacy: ${PRIVACY_URL}`,
     '',
     reason,
-    ...(unsubUrl ? [`Unsubscribe: ${unsubUrl}`] : []),
+    ...(unsubUrl ? [`${unsubLabel}: ${unsubUrl}`] : []),
     `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0 · ${CONTACT_EMAIL}`,
   ].join('\n');
 
@@ -419,7 +421,7 @@ ${mailStyle(!!spec.tables)}
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
 <tr><td class="tc-pad" style="padding:22px 36px 4px">
 <p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
-<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}${spec.unsubUrl ? ` ${mailLink({ label: 'Unsubscribe', href: spec.unsubUrl })}` : ''}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
+<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}${spec.unsubUrl ? ` ${mailLink({ label: spec.unsubLabel ?? 'Unsubscribe', href: spec.unsubUrl })}` : ''}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
@@ -448,7 +450,7 @@ ${mailStyle(!!spec.tables)}
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason, spec.unsubUrl),
+    mailTextFooter(spec.reason, spec.unsubUrl, spec.unsubLabel),
   ].join('\n\n');
   return { subject: spec.subject, html, text };
 }
@@ -1100,5 +1102,132 @@ export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string 
     aside: "Didn't write to us? Ignore this mail.",
     reason: `You are getting this because this address was given with a message to ${BRAND} support.`,
     assetOrigin: opts.assetOrigin,
+  });
+}
+
+// ── Week one ──────────────────────────────────────────────────────────────────
+//
+// Two mails at most in an account's first week (weekOne.ts decides who gets which): day 2, only
+// while nothing is imported, on getting a year of statements out of the bank; day 7, only after an
+// import, with what the week found. Day 7 holds counts and never an amount: amounts stay in the app.
+// Each carries a stop link for these two mails alone, which weekOne.ts also sends as one-click
+// List-Unsubscribe headers.
+
+/** The footer link of the week-one mails: it stops these two and nothing else. */
+export const WEEK_ONE_UNSUB_LABEL = 'Stop first-week mails';
+
+/** Day 2: how to get a year of statements out of the bank, for an account with no import yet. */
+export function renderWeekOneDay2(
+  opts: { appUrl?: string; assetOrigin?: string; unsubUrl?: string | null } = {}
+): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  return renderMail({
+    subject: 'How to get a year of statements out of your bank',
+    preheader: 'Most banks hand over a year of transactions as one CSV or Excel file.',
+    art: 'banner',
+    artHref: `${app}/#import`,
+    eyebrow: 'Your first week',
+    headline: 'Your bank already has your year.',
+    paragraphs: [
+      "Most banks let you download your transactions as a CSV or Excel file. In online banking, open the account's transactions, look for Export or Download, and choose the last 12 months. A PDF statement won't import, so pick CSV or Excel.",
+      'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
+    ],
+    buttons: [{ label: 'Import statements', href: `${app}/#import` }],
+    signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",
+    reason: `You are getting this because your ${BRAND} account is new and has no import yet. There are two first-week mails at most.`,
+    unsubUrl: opts.unsubUrl,
+    unsubLabel: WEEK_ONE_UNSUB_LABEL,
+    assetOrigin: opts.assetOrigin || opts.appUrl,
+  });
+}
+
+/** What the day-7 mail counts, from the profile that holds the account's imports. */
+export interface WeekOneCounts {
+  /** Transactions that came in by an import. */
+  entriesImported: number;
+  /** Tracked months in the year window (shared/trackedMonths.ts trackedMonthsInYearWindow). */
+  monthsTracked: number;
+  /** The year window's length in months, as that count reads it. */
+  windowMonths: number;
+  /** Active subscriptions on Bills. */
+  subscriptions: number;
+  /** Active bills on Bills. */
+  bills: number;
+  /** Entries other than transfers with no category. */
+  uncategorised: number;
+}
+
+/** One next step, as Getting started words it (shared/orientation.ts), and the page it opens. */
+export interface WeekOneStep {
+  title: string;
+  reason: string;
+  /** The page's hash route, `#import`. */
+  hash: string;
+  /** The page's name, `Import`. */
+  label: string;
+}
+
+const count = (n: number) => n.toLocaleString('en-US');
+
+/** Day 7: what the first week found, in counts, for an account with an import. */
+export function renderWeekOneDay7(opts: {
+  counts: WeekOneCounts;
+  step: WeekOneStep | null;
+  appUrl?: string;
+  assetOrigin?: string;
+  unsubUrl?: string | null;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const c = opts.counts;
+  const monthsLabel = `Months tracked of the last ${c.windowMonths}`;
+  const rows: Array<[string, number]> = [
+    ['Entries imported', c.entriesImported],
+    [monthsLabel, c.monthsTracked],
+  ];
+  if (c.subscriptions > 0) rows.push(['Subscriptions you track', c.subscriptions]);
+  if (c.bills > 0) rows.push(['Bills you track', c.bills]);
+  if (c.uncategorised > 0) rows.push(['Entries without a category', c.uncategorised]);
+  const preheader =
+    c.monthsTracked > 0
+      ? `${count(c.monthsTracked)} of the last ${c.windowMonths} months ${plural(c.monthsTracked, 'is', 'are')} tracked, from ${count(c.entriesImported)} imported ${plural(c.entriesImported, 'entry', 'entries')}.`
+      : `Your first import brought in ${count(c.entriesImported)} ${plural(c.entriesImported, 'entry', 'entries')}.`;
+  return renderMail({
+    subject: `Your first week in ${BRAND}`,
+    preheader,
+    art: 'banner',
+    artHref: `${app}/#progress`,
+    eyebrow: 'Your first week',
+    headline: "Here's what your first week found.",
+    paragraphs: [
+      'Your first import is in. Here is the week in counts; the amounts stay in the app.',
+    ],
+    tables: [
+      {
+        title: 'Your first week',
+        rows: rows.map(([label, n]) => ({
+          cells: [{ text: label }, { text: count(n), align: 'right', strong: true }],
+          text: `${label}: ${count(n)}`,
+        })),
+      },
+    ],
+    buttons: [{ label: 'Open Progress', href: `${app}/#progress` }],
+    ...(opts.step
+      ? {
+          steps: {
+            title: 'One next step',
+            items: [
+              {
+                title: opts.step.title,
+                text: opts.step.reason,
+                link: { label: `Open ${opts.step.label}`, href: `${app}/${opts.step.hash}` },
+              },
+            ],
+          },
+        }
+      : {}),
+    reason: `You are getting this because your ${BRAND} account is a week old and has its first import. This is the last first-week mail.`,
+    unsubUrl: opts.unsubUrl,
+    unsubLabel: WEEK_ONE_UNSUB_LABEL,
+    assetOrigin: opts.assetOrigin || opts.appUrl,
   });
 }
