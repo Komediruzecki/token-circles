@@ -36,4 +36,10 @@ describe('the unsubscribe token', () => {
     expect(await ensureUnsubToken(env, { id: 95, unsubscribe_token: null })).toBe('tok-kept');
     expect(await stored(95)).toBe('tok-kept');
   });
+
+  it('refuses an account that is gone, rather than handing out a token nobody stored', async () => {
+    await expect(ensureUnsubToken(env, { id: 4242, unsubscribe_token: null })).rejects.toThrow(
+      /no user 4242/
+    );
+  });
 });

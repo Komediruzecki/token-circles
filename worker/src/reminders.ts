@@ -80,6 +80,8 @@ export async function ensureUnsubToken(
   u: Pick<UserRow, 'id' | 'unsubscribe_token'>
 ): Promise<string> {
   if (u.unsubscribe_token) return u.unsubscribe_token;
+  // db.first retries on a lost connection, possibly after the write committed: the COALESCE keeps
+  // that safe, so never let this statement replace a stored token.
   const row = await db.first<{ unsubscribe_token: string }>(
     env.DB,
     'UPDATE users SET unsubscribe_token = COALESCE(unsubscribe_token, ?) WHERE id = ? RETURNING unsubscribe_token',
