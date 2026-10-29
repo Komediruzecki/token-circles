@@ -365,7 +365,8 @@ defineTool({
     }
 
     // The budget its month (a yearly one, its year) already has, whatever day that one starts, as
-    // the app's Allocate finds it: matched on the exact date, a second budget was added.
+    // the app's Allocate finds it: matched on the exact date, a second budget was added. Of two, the
+    // one saved last, which the Budgets page shows (shared/budgetSavedOrder.ts).
     const from =
       budget.period === 'yearly'
         ? `${budget.start_date.slice(0, 4)}-01-01`
@@ -374,7 +375,7 @@ defineTool({
       c.env.DB,
       `SELECT id FROM budgets
         WHERE profile_id = ? AND category_id = ? AND period = ? AND start_date >= ? AND start_date < ?
-        ORDER BY start_date, id`,
+        ORDER BY replace(substr(created_at, 1, 19), 'T', ' ') DESC, id DESC`,
       profileId,
       budget.category_id,
       budget.period,

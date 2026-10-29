@@ -230,6 +230,19 @@ describe('buildAdvice: which budget a month is judged against', () => {
     expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
   })
 
+  it('takes the row saved last even when the other starts later in the month', () => {
+    // The Budgets page and Allocate take the row saved last for the month, whatever day it starts.
+    const drift = buildAdvice(
+      apartment({
+        budgets: [
+          row('2026-10-15', 400, '2026-10-02T08:00:00Z'),
+          row('2026-10-01', 310, '2026-10-09T08:00:00Z'),
+        ],
+      })
+    ).filter((c) => c.kind === 'budget-drift')
+    expect(drift.map((c) => c.figure)).toEqual(['918.81 of 310'])
+  })
+
   it('names a category whose budget lapsed as having none this month', () => {
     const cards = buildAdvice(apartment({ budgets: [row('2026-06-01', 94.9)] }))
     const card = cards.find((c) => c.kind === 'unbudgeted-subscription')
@@ -331,5 +344,49 @@ describe('buildAdvice: one card per thing to say', () => {
     )
     expect(cards.find((c) => c.kind === 'budget-drift')!.figure).toBe('EUR 180.00 of EUR 100.00')
     expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
+  })
+})
+
+/**
+ * The Budgets card shows a budget's amount, and what is left as the amount less what was spent. The
+ * summary also works out a budget with rollover (effective_budget), but no page shows it, so advice
+ * judges by the amount, as the card does: Food at 350 of 300 reads as over on Budgets, and here.
+ */
+describe('buildAdvice: a budget with rollover', () => {
+  const row = (start: string, amount: number, over: Record<string, unknown> = {}) => ({
+    category_id: 1,
+    amount,
+    period: 'monthly' as const,
+    start_date: start,
+    end_date: null,
+    created_at: `${start}T08:00:00Z`,
+    ...over,
+  })
+  const drift = (budgets: unknown[], spentInSeptember: number) =>
+    buildAdvice(
+      make({
+        today: '2026-09-28',
+        budgets,
+        transactions: [
+          tx('2026-08-10', { amount: 200 }),
+          tx('2026-09-10', { amount: spentInSeptember }),
+        ],
+      })
+    ).filter((c) => c.kind === 'budget-drift')
+
+  it('judges spending against the amount the Budgets card shows, not what rolled over', () => {
+    // August: 300 budgeted, 200 spent, so 100 would roll into September's 300.
+    const budgets = [
+      row('2026-08-01', 300, { rollover_enabled: true }),
+      row('2026-09-01', 300, { rollover_enabled: true }),
+    ]
+    expect(drift(budgets, 350).map((c) => c.figure)).toEqual(['350 of 300'])
+  })
+
+  it('leaves out a manual rollover too', () => {
+    const budgets = [
+      row('2026-09-01', 100, { rollover_enabled: 1, rollover_amount: 25, rollover_used: 10 }),
+    ]
+    expect(drift(budgets, 110).map((c) => c.figure)).toEqual(['110 of 100'])
   })
 })

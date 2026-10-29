@@ -7,6 +7,7 @@ import {
   checkBudgetMonth,
   checkRollover,
 } from '../../../shared/budgetSchema';
+import { budgetRollover } from '../../../shared/budgetRollover';
 import { addCalendarMonths } from '../../../shared/calendarMonths';
 import { toCents } from '../../../shared/money';
 import type { AppEnv } from '../index';
@@ -99,13 +100,16 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
   // D13: budgetsAllocate writes one row per month with no end_date, so the old
   // `end_date IS NULL OR end_date >= ?` filter stacked every prior month's row for
   // a category. Restrict to budgets whose start_date falls in the queried month
-  // (mirrors zero-based) — exactly one row per category per month.
+  // (mirrors zero-based) — exactly one row per category per month. A month that holds two
+  // anyway lists the one saved last after the other, which is the one the page keeps
+  // (shared/budgetSavedOrder.ts); without an ORDER BY it kept whichever D1 listed last.
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
     `SELECT b.*, c.name as category_name, c.color as category_color, c.icon as category_icon
      FROM budgets b
      JOIN categories c ON b.category_id = c.id AND c.profile_id = b.profile_id
-     WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+     WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
+     ORDER BY replace(substr(b.created_at, 1, 19), 'T', ' '), b.id`,
     ...pids,
     startDate,
     endDate
@@ -133,15 +137,16 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
 
   const prevBudgets = await db.all<{
     category_id: number;
-    budget_amount: number;
+    amount: number;
     rollover_enabled: number;
     rollover_amount: number;
     rollover_used: number;
   }>(
     c.env.DB,
-    `SELECT b.category_id, b.amount as budget_amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
+    `SELECT b.category_id, b.amount, b.rollover_enabled, b.rollover_amount, b.rollover_used
        FROM budgets b
-       WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?`,
+       WHERE b.profile_id IN (${inClause}) AND b.start_date >= ? AND b.start_date < ?
+       ORDER BY replace(substr(b.created_at, 1, 19), 'T', ' '), b.id`,
     ...pids,
     prevStart,
     prevEnd
@@ -160,40 +165,27 @@ budgetsRoutes.get('/api/budgets/summary', requireAuth, async (c) => {
   const prevSpentMap: Record<number, number> = {};
   for (const s of prevSpent) prevSpentMap[s.category_id] = toCents(s.total);
 
-  const prevUnusedMap: Record<number, { unused: number; rollover_enabled: number }> = {};
-  for (const pb of prevBudgets) {
-    const unused = Math.max(0, toCents(pb.budget_amount - (prevSpentMap[pb.category_id] || 0)));
-    prevUnusedMap[pb.category_id] = { unused, rollover_enabled: pb.rollover_enabled };
-  }
+  const prevByCategory: Record<number, (typeof prevBudgets)[number]> = {};
+  for (const pb of prevBudgets) prevByCategory[pb.category_id] = pb;
 
+  // The rollover rule is shared/budgetRollover.ts, which local-first and Progress's advice run too.
   const summary = budgets.map((b) => {
     const spentAmt = spentMap[b.category_id] || 0;
     const baseRemaining = toCents(b.amount - spentAmt);
-
-    let rollover_contribution = 0;
-    let auto_rollover = 0;
-
-    if (b.rollover_enabled) {
-      const prevInfo = prevUnusedMap[b.category_id];
-      if (prevInfo && prevInfo.rollover_enabled) {
-        auto_rollover = prevInfo.unused;
-      }
-      rollover_contribution = toCents(
-        (b.rollover_amount || 0) + auto_rollover - (b.rollover_used || 0)
-      );
-    }
-
-    const effective_budget = toCents(b.amount + Math.max(0, rollover_contribution));
-    const effective_remaining = toCents(effective_budget - spentAmt);
+    const prev = prevByCategory[b.category_id];
+    const rollover = budgetRollover(
+      b,
+      prev ? { budget: prev, spent: prevSpentMap[b.category_id] || 0 } : undefined
+    );
 
     return {
       ...b,
       spent: spentAmt,
       remaining: baseRemaining,
-      effective_budget,
-      effective_remaining,
-      rollover_contribution: Math.max(0, rollover_contribution),
-      auto_rollover,
+      effective_budget: rollover.effective_budget,
+      effective_remaining: toCents(rollover.effective_budget - spentAmt),
+      rollover_contribution: rollover.rollover_contribution,
+      auto_rollover: rollover.auto_rollover,
       percentage: b.amount > 0 ? Math.min(100, (spentAmt / b.amount) * 100) : 0,
     };
   });
@@ -516,11 +508,14 @@ budgetsRoutes.get('/api/budgets/zero-based', requireAuth, async (c) => {
 
   const budgets = await db.all<BudgetRow>(
     c.env.DB,
-    `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'`,
+    `SELECT * FROM budgets WHERE profile_id IN (${inClause}) AND start_date >= ? AND start_date < ? AND period = 'monthly'
+      ORDER BY replace(substr(created_at, 1, 19), 'T', ' '), id`,
     ...pids,
     startOfMonth,
     endOfMonth
   );
+  // The row saved last for a category is listed last and so is the one kept, as on the summary
+  // and the row Allocate changes (shared/budgetSavedOrder.ts).
   const budgetMap: Record<number, BudgetRow> = {};
   budgets.forEach((b) => (budgetMap[b.category_id] = b));
 
@@ -781,12 +776,13 @@ budgetsRoutes.post('/api/budgets/allocate', requireAuth, async (c) => {
 
   // The month's budget for the category, whatever day it starts: one an API client, an import or
   // an MCP agent started mid-month is still the month's, and allocating changes it rather than
-  // adding a second one that the month would count as well.
+  // adding a second one that the month would count as well. Of two, the one saved last, which is
+  // the one the Budgets page shows (shared/budgetSavedOrder.ts); it changed the first.
   const existing = await db.first<{ id: number; start_date: string }>(
     c.env.DB,
     `SELECT * FROM budgets
       WHERE category_id = ? AND profile_id = ? AND period = ? AND start_date >= ? AND start_date < ?
-      ORDER BY start_date, id`,
+      ORDER BY replace(substr(created_at, 1, 19), 'T', ' ') DESC, id DESC`,
     category_id,
     pid,
     budgetPeriod,

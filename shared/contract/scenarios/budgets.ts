@@ -214,7 +214,7 @@ export const budgets = [
   scenario(
     "the month summary counts spending, last month's unused budget and what is left",
     async (api, expect) => {
-      const { food, fun, foodMar } = await twoMonths(api, expect);
+      const { food, fun, foodFeb, foodMar } = await twoMonths(api, expect);
 
       const summary = async () => {
         const reply = await api.get('/api/budgets/summary?year=2026&month=3');
@@ -251,6 +251,14 @@ export const budgets = [
       expectMoney(expect, byCategory(rows, food).rollover_contribution, 65, 'Food rollover');
       expectMoney(expect, byCategory(rows, food).effective_budget, 365, 'Food effective');
       expectMoney(expect, byCategory(rows, food).effective_remaining, 185, 'Food left');
+
+      // February's unused budget rolls in only while February's budget has rollover on too.
+      const febOff = await rollover(api, expect, foodFeb, { rollover_enabled: false });
+      expect(Boolean(febOff.budget.rollover_enabled)).toBe(false);
+      rows = await summary();
+      expectMoney(expect, byCategory(rows, food).auto_rollover, 0, 'Food auto rollover');
+      expectMoney(expect, byCategory(rows, food).rollover_contribution, 15, 'Food rollover');
+      expectMoney(expect, byCategory(rows, food).effective_budget, 315, 'Food effective');
 
       // Switched off, the budget is its own amount again.
       const off = await rollover(api, expect, foodMar, { rollover_enabled: false });
