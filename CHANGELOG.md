@@ -12,6 +12,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **See the password you typed.** Every password field has an eye at its right end that shows the password and hides it again. The email and password labels now sit inside their boxes and move up when you click or tap into one, so the sign-in and create-account forms take less room.
 
+### Fixed
+
+- **Back to sign in from every sign-in step.** The screen where you type the code we emailed you now has Back to sign in, and the phone's back gesture takes you from the emailed code, the two-factor code or Check your inbox back to the sign-in form, and closes the Sign In window you open from the profile menu. In the installed app on Android it used to close the app instead.
+
 ## [5.17.1] — 2026-10-29
 
 ### Changed
