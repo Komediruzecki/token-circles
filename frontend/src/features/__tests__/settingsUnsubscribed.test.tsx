@@ -1,11 +1,11 @@
 /**
  * Settings > Email reminders after an unsubscribe by the link in a reminder mail.
  *
- * The Worker's GET answers `unsubscribed: true` while that link's stop is in force. The switches
- * can all read on and still nothing is sent, so the card says why, and that a save with a reminder
- * on turns reminder mails back on (the Worker clears the stop on that save). Once the save is in,
- * the card reloads and the line goes. A plan without email reminders cannot save here, so it is
- * not told to.
+ * The Worker's GET answers `unsubscribed: true` while that unsubscribe is in force. The switches
+ * can all read on and still nothing is sent, so the card says why and offers "Send me reminders
+ * again", which posts to /api/notifications/resubscribe. Saving the form does not lift it (the
+ * Worker ignores the switches for that), so the line stays after a save. A refusal is shown in the
+ * line. A plan without email reminders cannot use the button, so it is not offered.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -14,7 +14,7 @@ import { setSettingsTab } from '../../core/settingsStore'
 import { removeToast, toasts } from '../../core/toastStore'
 
 const { server, calls } = vi.hoisted(() => ({
-  server: { unsubscribed: false, plan: 'advanced' },
+  server: { unsubscribed: false, plan: 'advanced', resubscribeStatus: 200 },
   calls: [] as { url: string; method: string; body?: Record<string, unknown> }[],
 }))
 
@@ -31,15 +31,17 @@ vi.mock('../../core/apiFetch', () => ({
         status,
         headers: { 'content-type': 'application/json' },
       })
-    if (url === '/api/notifications/settings' && method === 'PUT') {
-      // What the Worker does: a save with a reminder on lifts the stop.
-      if (
-        body?.emailNotifications &&
-        (body.budgetAlerts || body.spendingReport || body.billsReminders)
-      ) {
-        server.unsubscribed = false
+    // A save never lifts the unsubscribe; only the button's request does.
+    if (url === '/api/notifications/settings' && method === 'PUT') return reply({ ok: true })
+    if (url === '/api/notifications/resubscribe' && method === 'POST') {
+      if (server.resubscribeStatus === 400) {
+        return reply(
+          { error: 'Turn on email notifications and at least one reminder, save, then try again.' },
+          400
+        )
       }
-      return reply({ ok: true })
+      server.unsubscribed = false
+      return reply({ ok: true, unsubscribed: false })
     }
     if (url === '/api/notifications/settings') {
       return reply({
@@ -69,6 +71,7 @@ let dispose: (() => void) | undefined
 beforeEach(() => {
   server.unsubscribed = false
   server.plan = 'advanced'
+  server.resubscribeStatus = 200
   setCurrentPlan(null)
   calls.length = 0
   for (const t of toasts()) removeToast(t.id)
@@ -109,14 +112,19 @@ const line = () =>
 const save = () =>
   host.querySelector<HTMLButtonElement>('[data-test-id="settings-notifications-save"]')!
 
+const resubscribeButton = () =>
+  host.querySelector<HTMLButtonElement>('[data-test-id="settings-reminders-resubscribe"]')
+const posts = () =>
+  calls.filter((c) => c.url === '/api/notifications/resubscribe' && c.method === 'POST')
+
 describe('the unsubscribed line in Email reminders', () => {
-  it('shows while the account is unsubscribed by link, and says how to turn reminders back on', async () => {
+  it('shows while the account is unsubscribed by link, with the button', async () => {
     server.unsubscribed = true
     await openSettings()
 
     expect(line()).not.toBeNull()
     expect(line()!.textContent).toContain('unsubscribe link')
-    expect(line()!.textContent).toContain('save')
+    expect(resubscribeButton()!.textContent).toContain('Send me reminders again')
   })
 
   it('is not shown for an account that never unsubscribed', async () => {
@@ -126,10 +134,9 @@ describe('the unsubscribed line in Email reminders', () => {
     expect(line()).toBeNull()
   })
 
-  it('goes once a save with a reminder on is in', async () => {
+  it('stays after a save, which does not turn reminder mails back on', async () => {
     server.unsubscribed = true
     await openSettings()
-    expect(line()).not.toBeNull()
 
     save().click()
     await settle()
@@ -137,10 +144,36 @@ describe('the unsubscribed line in Email reminders', () => {
     expect(
       calls.filter((c) => c.url === '/api/notifications/settings' && c.method === 'PUT')
     ).toHaveLength(1)
-    expect(line()).toBeNull()
+    expect(posts()).toEqual([])
+    expect(line()).not.toBeNull()
   })
 
-  it('is not shown on a plan without email reminders, which cannot save here', async () => {
+  it('goes once the button is pressed and the Worker lifts it', async () => {
+    server.unsubscribed = true
+    await openSettings()
+
+    resubscribeButton()!.click()
+    await settle()
+
+    expect(posts()).toHaveLength(1)
+    expect(line()).toBeNull()
+    expect(toasts().at(-1)).toMatchObject({ type: 'success' })
+  })
+
+  it('shows a refusal in the line, in the words of the answer, and keeps the button', async () => {
+    server.unsubscribed = true
+    server.resubscribeStatus = 400
+    await openSettings()
+
+    resubscribeButton()!.click()
+    await settle()
+
+    expect(line()).not.toBeNull()
+    expect(line()!.querySelector('[role="alert"]')!.textContent).toContain('at least one reminder')
+    expect(resubscribeButton()).not.toBeNull()
+  })
+
+  it('is not shown on a plan without email reminders, which cannot use the button', async () => {
     server.unsubscribed = true
     server.plan = 'free'
     await openSettings()

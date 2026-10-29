@@ -236,6 +236,7 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'GET /robots.txt': 'Served to crawlers and uptime checks, not to the app.',
   'GET /api/notifications/settings': 'Email notifications are sent by the Worker.',
   'PUT /api/notifications/settings': 'Email notifications are sent by the Worker.',
+  'POST /api/notifications/resubscribe': 'Email notifications are sent by the Worker.',
   'POST /api/notifications/test-email': 'Email notifications are sent by the Worker.',
   'POST /api/notifications/trigger': 'Email notifications are sent by the Worker.',
   'GET /api/notifications/unsubscribe': 'Email notifications are sent by the Worker.',

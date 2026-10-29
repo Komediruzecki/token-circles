@@ -107,29 +107,34 @@ All notable changes to Token Circles are documented here. The format is based on
   (both headers on the three scheduled reminders and the three previews, naming the footer's link;
   none on the sign-in code, welcome and subscription-ended mails). `worker/test/email-change.test.ts`
   checks the old address's token with a POST, since a GET no longer unsubscribes anyone.
-- **A save with a reminder on lifts an unsubscribe by link.** Nothing cleared
+- **"Send me reminders again" lifts an unsubscribe by link.** Nothing cleared
   `users.notifications_unsubscribed` once the unsubscribe POST set it, so `eligible()` in
   `worker/src/reminders.ts` skipped the account for good while Settings still showed every switch
-  on. `PUT /api/notifications/settings` now sets it back to 0 for the signed-in account when the
-  body has `emailNotifications` and at least one of `budgetAlerts`, `spendingReport`,
-  `billsReminders` truthy, which is what the scheduler needs to send anything, and the plan has
-  `emailReminders` (`getUserPlan` + `planHasFeature`). The PUT itself stays ungated, as before; a
-  Free account's Settings cannot save there, and its save never lifts the flag. A save with every
-  reminder off, or with the master switch off, leaves it as it is. The decision reads the switches
-  this save sends, not the stored ones, so an address-only PUT changes nothing. `GET
-/api/notifications/settings` adds `unsubscribed: boolean` (the name PR #620 uses too). Settings
-  (`frontend/src/features/Settings.tsx`) shows one line in the Email reminders card while it is true
-  and the plan is not Free (`data-test-id="settings-reminders-unsubscribed"`, style
-  `.reminders-unsubscribed` in `SettingsPage.module.css`), and reloads the card after a save while
-  it shows, so the line goes once the Worker has lifted it. The done page after unsubscribing says
-  again where to turn reminders back on, since now it is true. Tests:
-  `worker/test/resubscribe-reminders.test.ts` (unsubscribe, a save with a reminder on, the
-  scheduled bills reminder mails the account again; one kind is enough; all off, master off and
-  master on with no kind keep the flag; another account's flag stays; a Free account cannot lift
-  it; GET reports it; the done page names the place),
-  `frontend/src/features/__tests__/settingsUnsubscribed.test.tsx` (the line shows, is absent,
-  goes after a save, is absent on Free); `worker/test/notifications-settings.test.ts` expects the
-  new field.
+  on. The new `POST /api/notifications/resubscribe` (signed in, `requireFeature('emailReminders')`
+  so Free gets 402) sets it back to 0 for that account, and nothing else does. It lifts it only
+  when the active profile's saved switches would send something, read as the scheduler reads them
+  (stored `'true'`): `email_notifications` and at least one of `email_budget_alerts`,
+  `email_spending_report`, `email_bills_reminders`; otherwise a 400 whose message the card shows.
+  It answers 200 for an account that is not unsubscribed. `PUT /api/notifications/settings` does
+  not touch the flag: the switches still read on after an unsubscribe and `notificationsForm.ts`
+  sends all five values on every save, so lifting it from a save turned reminders back on for a
+  save that only changed the address, and the next cron mailed the address that had unsubscribed.
+  `GET /api/notifications/settings` adds `unsubscribed: boolean` (the name PR #620 uses too).
+  Settings (`frontend/src/features/Settings.tsx`) shows a line with the button in the Email
+  reminders card while it is true and the plan is not Free (`settings-reminders-unsubscribed`,
+  `settings-reminders-resubscribe`, style `.reminders-unsubscribed` in `SettingsPage.module.css`);
+  a refusal shows in the line. The done page after unsubscribing names the button again, and the
+  unrecognized-link page names the Email reminders card instead of "Notifications". The route is
+  listed Worker-only in `shared/contract/routes.ts`. Known and backlogged, not changed here: the
+  switches the card saves and this route reads belong to the active profile, while the scheduler
+  reads the account's first profile only (`pids[0]`), so switches saved on a second profile send
+  nothing. Tests: `worker/test/resubscribe-reminders.test.ts` (an address-only save, a switch
+  change and an all-on save keep the flag and the cron skips the address; the button lifts it and
+  the cron mails again; refused with the master switch off, with no kind on, on Free, and with no
+  session; another account's flag stays; GET reports it; the done page names the button),
+  `frontend/src/features/__tests__/settingsUnsubscribed.test.tsx` (the line and button show, are
+  absent, stay after a save, go after the button, show a refusal, are absent on Free);
+  `worker/test/notifications-settings.test.ts` expects the new field.
 
 ### Tests
 

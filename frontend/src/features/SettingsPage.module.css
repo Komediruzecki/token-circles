@@ -289,12 +289,21 @@
 .reminders-unsubscribed {
   margin: 0 0 12px;
   max-width: 520px;
-  padding: 10px 14px;
+  padding: 12px 14px;
   border: 1px solid color-mix(in oklab, var(--primary) 35%, transparent);
   border-radius: var(--radius);
   background: color-mix(in oklab, var(--primary) 6%, transparent);
+}
+
+.reminders-unsubscribed p {
+  margin: 0;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.reminders-unsubscribed p[role='alert'] {
+  margin-top: 8px;
+  color: var(--danger);
 }
 
 .pending-email-actions {

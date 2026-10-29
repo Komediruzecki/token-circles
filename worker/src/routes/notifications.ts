@@ -15,8 +15,7 @@ import {
 } from '../reminders';
 import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
-import { getUserPlan, requireFeature } from '../plan';
-import { planHasFeature } from '../plans';
+import { requireFeature } from '../plan';
 import { localNow } from '../local-date';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
@@ -58,10 +57,9 @@ notificationsRoutes.get('/api/notifications/settings', requireAuth, async (c) =>
 // (email-change.ts), and the answer names it as `pendingEmail`. An address another account has is
 // a 409, and a refused address refuses the whole save.
 //
-// A save with a reminder on (the master switch and at least one kind) also clears the account's
-// unsubscribe by link: turning a reminder on in Settings is asking for reminder mails again. A save
-// with every reminder off leaves it as it is, and so does a plan without email reminders, whose
-// Settings page cannot save here.
+// A save never lifts an unsubscribe by link (users.notifications_unsubscribed): the switches still
+// read on after one, and the form sends all of them on every save, so a save that only changed the
+// address would have turned reminder mails back on. POST /api/notifications/resubscribe does that.
 notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) => {
   const userId = c.get('userId');
   const pid = await getProfileId(c);
@@ -95,12 +93,44 @@ notificationsRoutes.put('/api/notifications/settings', requireAuth, async (c) =>
   if ('budgetAlerts' in b) await set('email_budget_alerts', b.budgetAlerts);
   if ('spendingReport' in b) await set('email_spending_report', b.spendingReport);
   if ('billsReminders' in b) await set('email_bills_reminders', b.billsReminders);
-  const remindersOn =
-    !!b.emailNotifications && (!!b.budgetAlerts || !!b.spendingReport || !!b.billsReminders);
-  if (remindersOn && planHasFeature(await getUserPlan(c), 'emailReminders')) {
-    await db.run(c.env.DB, 'UPDATE users SET notifications_unsubscribed = 0 WHERE id = ?', userId);
-  }
   return c.json(pendingEmail ? { ok: true, pendingEmail } : { ok: true });
+});
+
+// POST — "Send me reminders again" in Settings, Email reminders: lifts the account's unsubscribe
+// by link (users.notifications_unsubscribed), and nothing else does. It lifts it only when the
+// active profile's saved switches would send something, the master switch and at least one kind,
+// read the way the scheduler reads them (reminders.ts notifEnabled: stored 'true'); otherwise a 400
+// the card shows. Idempotent: an account that is not unsubscribed answers 200 too.
+notificationsRoutes.post('/api/notifications/resubscribe', requireAuth, async (c) => {
+  await requireFeature(
+    c,
+    'emailReminders',
+    'Email alerts are a premium feature. Upgrade to get reminder mails.'
+  );
+  const pid = await getProfileId(c);
+  const rows = await db.all<{ key: string; value: string }>(
+    c.env.DB,
+    "SELECT key, value FROM settings WHERE profile_id = ? AND key LIKE 'email_%'",
+    pid
+  );
+  const on = new Set(rows.filter((r) => r.value === 'true').map((r) => r.key));
+  const sendsSomething =
+    on.has('email_notifications') &&
+    (on.has('email_budget_alerts') ||
+      on.has('email_spending_report') ||
+      on.has('email_bills_reminders'));
+  if (!sendsSomething) {
+    throw new HttpError(
+      400,
+      'Turn on email notifications and at least one reminder, save, then try again.'
+    );
+  }
+  await db.run(
+    c.env.DB,
+    'UPDATE users SET notifications_unsubscribed = 0 WHERE id = ?',
+    c.get('userId')
+  );
+  return c.json({ ok: true, unsubscribed: false });
 });
 
 // POST — send a test email to the user's own address. Optional body { type }:
@@ -244,7 +274,7 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'You are unsubscribed',
-    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES} To get reminders again, turn one on in Settings, Email reminders, and save.`
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES} To get them again, press Send me reminders again in Settings, Email reminders.`
   );
 
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {

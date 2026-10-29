@@ -1,12 +1,16 @@
 /**
- * An account that unsubscribed by the link in a reminder mail gets reminders again once it saves
- * its Email reminders settings with a reminder on. Before this, nothing ever cleared
- * users.notifications_unsubscribed: the scheduler skipped the account for good while Settings still
- * showed every switch on.
+ * An account that unsubscribed by the link in a reminder mail gets reminders again only when it
+ * asks for them: "Send me reminders again" in Settings, Email reminders, which posts to
+ * /api/notifications/resubscribe. Before, nothing ever cleared users.notifications_unsubscribed:
+ * the scheduler skipped the account for good while Settings still showed every switch on.
  *
- * "A reminder on" is the master switch plus at least one of the three kinds, which is what the
- * scheduler needs to send anything. A save with every reminder off leaves the flag alone, and so
- * does a plan without email reminders, which the Settings page does not let save here at all.
+ * Saving the Email reminders form does not lift it. The switches still read on after an
+ * unsubscribe, and the form sends all of them on every save, so a save that only changed the
+ * address would have turned reminders back on without anyone asking.
+ *
+ * The button lifts it only when the saved switches would send something (the master switch and at
+ * least one kind) and the plan includes email reminders. Otherwise it answers an error the card
+ * shows.
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -90,6 +94,28 @@ async function settings(
   return { status: res.status, json: (await res.json()) as Record<string, unknown> };
 }
 
+/** Press "Send me reminders again"; `id` null sends no session. */
+async function resubscribe(
+  id: number | null
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const cookie = id === null ? '' : (await sessionCookie(id, 'password', env)).split(';')[0];
+  const res = await SELF.fetch('https://example.com/api/notifications/resubscribe', {
+    method: 'POST',
+    headers: {
+      ...(cookie ? { Cookie: cookie } : {}),
+      ...(id === null ? {} : { 'X-Profile-Id': String(id) }),
+    },
+  });
+  return { status: res.status, json: (await res.json()) as Record<string, unknown> };
+}
+
+/** Store one switch the way a save does. */
+async function saved(id: number, key: string, on: boolean): Promise<void> {
+  await env.DB.prepare('INSERT OR REPLACE INTO settings (key, value, profile_id) VALUES (?, ?, ?)')
+    .bind(key, on ? 'true' : 'false', id)
+    .run();
+}
+
 beforeEach(async () => {
   await removeAccounts();
   const due = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
@@ -133,49 +159,87 @@ afterEach(async () => {
   await removeAccounts();
 });
 
-describe('turning reminders back on after unsubscribing by link', () => {
-  it('a save with a reminder on clears the flag, and the scheduler mails the account again', async () => {
+describe('saving the Email reminders form does not lift an unsubscribe', () => {
+  it('a save that only changes the address keeps it, and the old address gets no reminder', async () => {
     await unsubscribeByLink(`resub-token-${ME}`);
+
+    // What the form sends: the new address with all five values, every switch still reading on.
+    const res = await settings(ME, 'PUT', { ...ALL_ON, email: 'resub-new@example.com' });
+    expect(res.status).toBe(200);
+
     expect(await unsubscribed(ME)).toBe(1);
+    // The change itself mails both addresses (the link, and a notice to the current one).
+    mailed = [];
+    await runScheduledReminders(BILLS_CRON, env);
+    expect(mailed).not.toContain(ADDRESS);
+  });
+
+  it('a save that changes a switch keeps it', async () => {
+    await unsubscribeByLink(`resub-token-${ME}`);
+
+    expect((await settings(ME, 'PUT', { ...ALL_ON, spendingReport: false })).status).toBe(200);
+
+    expect(await unsubscribed(ME)).toBe(1);
+  });
+
+  it('a save with every switch on keeps it', async () => {
+    await unsubscribeByLink(`resub-token-${ME}`);
+
+    await settings(ME, 'PUT', ALL_ON);
+
+    expect(await unsubscribed(ME)).toBe(1);
+  });
+});
+
+describe('POST /api/notifications/resubscribe', () => {
+  it('lifts it when the saved switches would send something, and the scheduler mails again', async () => {
+    await unsubscribeByLink(`resub-token-${ME}`);
     await runScheduledReminders(BILLS_CRON, env);
     expect(mailed).not.toContain(ADDRESS);
 
-    const saved = await settings(ME, 'PUT', ALL_ON);
-    expect(saved.status).toBe(200);
+    const res = await resubscribe(ME);
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({ ok: true, unsubscribed: false });
 
     expect(await unsubscribed(ME)).toBe(0);
     await runScheduledReminders(BILLS_CRON, env);
     expect(mailed).toContain(ADDRESS);
   });
 
-  it('a save with one kind on is enough', async () => {
+  it('refuses with the master switch off, even with every kind on', async () => {
     await unsubscribeByLink(`resub-token-${ME}`);
+    await saved(ME, 'email_notifications', false);
+    await saved(ME, 'email_budget_alerts', true);
+    await saved(ME, 'email_spending_report', true);
 
-    await settings(ME, 'PUT', { ...ALL_OFF, emailNotifications: true, billsReminders: true });
-
-    expect(await unsubscribed(ME)).toBe(0);
-  });
-
-  it('a save with every reminder off leaves the flag as it is', async () => {
-    await unsubscribeByLink(`resub-token-${ME}`);
-
-    expect((await settings(ME, 'PUT', ALL_OFF)).status).toBe(200);
+    const res = await resubscribe(ME);
+    expect(res.status).toBe(400);
+    expect(String(res.json.error)).toContain('save');
 
     expect(await unsubscribed(ME)).toBe(1);
   });
 
-  it('the master switch off leaves the flag, even with every kind on', async () => {
+  it('refuses with the master switch on and no kind on', async () => {
     await unsubscribeByLink(`resub-token-${ME}`);
+    await saved(ME, 'email_bills_reminders', false);
 
-    await settings(ME, 'PUT', { ...ALL_ON, emailNotifications: false });
+    expect((await resubscribe(ME)).status).toBe(400);
 
     expect(await unsubscribed(ME)).toBe(1);
   });
 
-  it('the master switch on with no kind on leaves the flag', async () => {
+  it('refuses a plan without email reminders', async () => {
+    await unsubscribeByLink(`resub-token-${FREE}`);
+
+    expect((await resubscribe(FREE)).status).toBe(402);
+
+    expect(await unsubscribed(FREE)).toBe(1);
+  });
+
+  it('refuses a request with no session', async () => {
     await unsubscribeByLink(`resub-token-${ME}`);
 
-    await settings(ME, 'PUT', { ...ALL_OFF, emailNotifications: true });
+    expect((await resubscribe(null)).status).toBe(401);
 
     expect(await unsubscribed(ME)).toBe(1);
   });
@@ -184,18 +248,16 @@ describe('turning reminders back on after unsubscribing by link', () => {
     await unsubscribeByLink(`resub-token-${ME}`);
     await unsubscribeByLink(`resub-token-${OTHER}`);
 
-    await settings(ME, 'PUT', ALL_ON);
+    await resubscribe(ME);
 
     expect(await unsubscribed(ME)).toBe(0);
     expect(await unsubscribed(OTHER)).toBe(1);
   });
 
-  it('a plan without email reminders cannot clear it', async () => {
-    await unsubscribeByLink(`resub-token-${FREE}`);
-
-    await settings(FREE, 'PUT', { ...ALL_ON, email: 'resub-free@example.com' });
-
-    expect(await unsubscribed(FREE)).toBe(1);
+  it('answers 200 for an account that never unsubscribed', async () => {
+    const res = await resubscribe(ME);
+    expect(res.status).toBe(200);
+    expect(await unsubscribed(ME)).toBe(0);
   });
 });
 
@@ -206,24 +268,25 @@ describe('GET /api/notifications/settings reports the unsubscribe', () => {
     expect(json.unsubscribed).toBe(false);
   });
 
-  it('says unsubscribed: true after the link, and false again after a save with a reminder on', async () => {
+  it('says unsubscribed: true after the link, and false again after the button', async () => {
     await unsubscribeByLink(`resub-token-${ME}`);
     expect((await settings(ME, 'GET')).json.unsubscribed).toBe(true);
 
-    await settings(ME, 'PUT', ALL_ON);
+    await resubscribe(ME);
 
     expect((await settings(ME, 'GET')).json.unsubscribed).toBe(false);
   });
 });
 
 describe('the page after unsubscribing', () => {
-  it('says where to turn reminders back on', async () => {
+  it('names the button that turns reminders back on, and where it is', async () => {
     const res = await SELF.fetch(
       `https://example.com/api/notifications/unsubscribe?token=resub-token-${ME}`,
       { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
     const html = await res.text();
     expect(html).toContain('You are unsubscribed');
+    expect(html).toContain('Send me reminders again');
     expect(html).toContain('Settings, Email reminders');
   });
 });
