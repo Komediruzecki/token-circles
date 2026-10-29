@@ -9,6 +9,48 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Sign-in
+
+- **Labels inside the box and a password reveal, in the form kit.** Ported from MercuryPitch's
+  sign-in dialog (`AuthModal`), on Token Circles' own tokens. `Field`
+  (`frontend/src/components/form/Field.tsx`) takes two props, fixed for the field's life like its
+  form and name. `floating` renders the `<label for>` after the control, in a positioned box
+  (`.box.floating`, `Form.module.css`), and gives the control a blank `placeholder`. The label rests
+  at the box's middle and moves to its top edge on `:focus-within`, on `data-filled` (set from the
+  form's value by the field's name, so the address `form.reset` puts back after Back to sign in
+  floats it), on `:not(:placeholder-shown)` (a value written without an input event), and on
+  `:autofill` and `:-webkit-autofill`, each in a rule of its own because a selector list with a
+  pseudo-class the browser does not know drops the whole rule. The rules reach the label with `~`,
+  never `+`: a password manager can put its icon straight after the input. The box sets the field's
+  size whatever the page's input class says: 48px tall, 16px text (iOS zooms the page on focus
+  below 16px), and 20px above the text for the label. `reveal` adds a `<button type="button">` over
+  the box's right end, 44px wide and as tall as the field, with `aria-label` "Show password" or
+  "Hide password", `aria-pressed` and `aria-controls`, and the eye from the new
+  `frontend/src/components/form/EyeGlyph.tsx` (Feather's eye and eye-off). The control takes its
+  `type` from `control`, so the page sets none, and gets 48px of right padding. The button cancels
+  `mousedown`, so focus stays in the field, and puts the caret back after the type changes, at once
+  and again on the next frame: Chromium moves the caret to the start once a mouse click that
+  changed the type is over (chrome-headless-shell 153; a scripted click, and Firefox 155, keep it).
+  The field goes back to a password on its form's `submit`, so the password manager finds a
+  password field to save and the value stays out of the browser's autocomplete history. A floating
+  field's `tip` goes under the field (`.floatTip`, hidden while empty), which is where Forgot
+  password? now sits. Edge's own reveal (`::-ms-reveal`) is hidden in these fields.
+- **Where it is used.** `LoginScreen.tsx` (the address, and the password with its reveal;
+  `.label` and `.labelRow` left `LoginScreen.module.css`), `LoginModal.tsx` (both fields; `.label`
+  left `LoginModal.module.css`), the request step of `EmailCodeLogin.tsx`, and both fields of
+  `ResetPassword.tsx`, each with a reveal of its own. The code fields (the emailed code and
+  `TwofaChallenge`) keep their label above them: a one-time code is centred digits with a hint, and
+  the emailed code's step is being changed on `fix/sign-in-back`. Settings' passkey re-auth password
+  (`PasskeySettings.tsx`) is not on the form kit and is unchanged. Every id, `data-test-id`, label
+  text and `autocomplete` token stays as it was.
+- **Measured** in headless Chromium at 375px and 1280px, light and dark, Sign in and Create account:
+  each field 48px (43px before); the label 14px below the field's top at rest (15px) and 6px below
+  it floated (12.5px, weight 600); label contrast 5.35:1 in light and 8.84:1 in dark, 16.7:1 while
+  the field has focus; the eye 44x48 and flush with the field, with the text ending 5px and the
+  label 4px before it. The fields and the submit button take 20px less height in Sign in and 45.5px
+  less in Create account. Tests: `frontend/src/components/form/__tests__/floatingField.test.tsx`
+  (17) and `frontend/src/components/__tests__/signInFields.test.tsx` (9).
+
 ## [5.17.1] — 2026-10-29
 
 ### Achievements

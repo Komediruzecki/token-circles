@@ -160,7 +160,7 @@ export default function LoginModal(props: LoginModalProps) {
               id="login-modal-email"
               label="Email address"
               class={styles.field}
-              labelClass={styles.label}
+              floating
             >
               {(control) => (
                 <input
@@ -181,12 +181,12 @@ export default function LoginModal(props: LoginModalProps) {
                 id="login-modal-password"
                 label="Password"
                 class={styles.field}
-                labelClass={styles.label}
+                floating
+                reveal
               >
                 {(control) => (
                   <input
                     {...control}
-                    type="password"
                     name="password"
                     value={form.values.password}
                     onInput={(e) => form.set('password', e.currentTarget.value)}

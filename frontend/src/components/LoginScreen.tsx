@@ -262,7 +262,7 @@ export default function LoginScreen() {
               id="login-email"
               label="Email address"
               class={styles.field}
-              labelClass={styles.label}
+              floating
             >
               {(control) => (
                 <input
@@ -286,9 +286,10 @@ export default function LoginScreen() {
                 form={form}
                 name="password"
                 id="login-password"
-                label={<span class={styles.label}>Password</span>}
+                label="Password"
                 class={styles.field}
-                labelClass={styles.labelRow}
+                floating
+                reveal
                 tip={
                   <Show when={mode() === 'login'}>
                     <button
@@ -306,7 +307,6 @@ export default function LoginScreen() {
                 {(control) => (
                   <input
                     {...control}
-                    type="password"
                     name="password"
                     value={form.values.password}
                     onInput={(e) => form.set('password', e.currentTarget.value)}
