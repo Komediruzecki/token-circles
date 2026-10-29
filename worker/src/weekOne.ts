@@ -14,7 +14,7 @@
  * Day 0 is the instant the address was confirmed. Nothing else records it: the Welcome claim does,
  * the reminder_dedup row (user_id, 'welcome') that every way of confirming an address writes in the
  * same batch as the confirmation, and a Google sign-up at once (welcome.ts). Its sent_at is UTC,
- * and so is the window: the account stores no time zone, and the daily job at 08:00 UTC is morning
+ * and so is the window: the account stores no time zone, and the daily job at 08:30 UTC is morning
  * in Europe. An account with no Welcome claim, such as a Google account stored with no confirmed
  * address, has no day 0 and gets nothing.
  *
@@ -44,8 +44,11 @@ import {
   YEAR_WINDOW_MONTHS,
 } from '../../shared/trackedMonths';
 
-/** The daily cron the mails go out on (wrangler.jsonc triggers.crons). */
-export const WEEK_ONE_CRON = '0 8 * * *';
+/**
+ * The daily cron the mails go out on, 08:30 UTC (wrangler.jsonc triggers.crons). Their own, so a
+ * run never shares an invocation's D1 query budget with the 08:00 reminders (index.ts scheduled).
+ */
+export const WEEK_ONE_CRON = '30 8 * * *';
 
 /** The `list` the stop link names, so the unsubscribe route stops these mails only. */
 export const WEEK_ONE_LIST = 'week-one';
@@ -64,7 +67,12 @@ export const WEEK_ONE: Record<
   day7: { key: 'week-one:day7', fromDays: 7, toDays: 10, imported: true },
 };
 
-/** The most mails of each kind one run sends. The rest wait for the next run, oldest first. */
+/**
+ * The most mails of each kind one run sends. The rest wait for the next run, oldest first. A day-2
+ * mail costs at most 3 D1 queries (a token, the claim, a release) and a day-7 mail at most 8 (a
+ * token, five counts, the claim, a release), so a full run is about 50 x 3 + 50 x 8 + 2 = 552,
+ * inside the 1,000 an invocation may make on Workers Paid.
+ */
 export const WEEK_ONE_BATCH = 50;
 
 /** An instant as SQLite's datetime('now') writes it: 'YYYY-MM-DD HH:MM:SS', UTC. */
@@ -230,19 +238,19 @@ export async function weekOneDay7Content(
 
 /**
  * Whether a week-one mail can still come to account `userId`: its address was confirmed less than
- * the last window's end ago, and not both mails have gone. Settings shows the switch only then.
+ * the last window's end ago, and day 7 has not gone. Day 7 is always the last mail there can be, so
+ * its record alone says the week is over. Settings shows the switch only while one can come.
  */
 export async function weekOneAhead(env: Env, userId: number, now = new Date()): Promise<boolean> {
   const row = await db.first<{ ahead: number }>(
     env.DB,
     `SELECT 1 AS ahead FROM reminder_dedup w
       WHERE w.user_id = ? AND w.dedup_key = '${WELCOME_KEY}' AND w.sent_at > datetime(?, ?)
-        AND (SELECT COUNT(*) FROM reminder_dedup d
-              WHERE d.user_id = w.user_id AND d.dedup_key IN (?, ?)) < 2`,
+        AND NOT EXISTS (SELECT 1 FROM reminder_dedup d
+                         WHERE d.user_id = w.user_id AND d.dedup_key = ?)`,
     userId,
     sqliteInstant(now),
     `-${WEEK_ONE.day7.toDays} days`,
-    WEEK_ONE.day2.key,
     WEEK_ONE.day7.key
   );
   return row !== null;

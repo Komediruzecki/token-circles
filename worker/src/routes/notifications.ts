@@ -251,7 +251,7 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
   unsubscribePage(
     c,
     'You are unsubscribed',
-    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES}`
+    `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports, bill reminders or first-week mails. ${STILL_ARRIVES}`
   );
 
 // `&list=week-one` is the stop link of the week-one mails (weekOne.ts): it turns off those two
@@ -298,7 +298,7 @@ notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
   return unsubscribePage(
     c,
     'Stop reminder mails?',
-    `Press Unsubscribe to stop budget alerts, spending reports and bill reminders to this address. ${STILL_ARRIVES}`,
+    `Press Unsubscribe to stop budget alerts, spending reports, bill reminders and first-week mails to this address. ${STILL_ARRIVES}`,
     { action: `/api/notifications/unsubscribe?token=${encodeURIComponent(token)}` }
   );
 });

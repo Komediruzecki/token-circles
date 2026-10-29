@@ -11,6 +11,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runScheduledReminders } from '../src/reminders';
 import { runWeekOneMails, WEEK_ONE_CRON } from '../src/weekOne';
 
+/** The 08:00 cron, which sends the bills reminder (wrangler.jsonc). */
+const BILLS_CRON = '0 8 * * *';
+
 const ID = 97400;
 const OTHER = 97401;
 const TOKEN = 'tok-week-one-97400';
@@ -159,7 +162,7 @@ describe('POST with list=week-one', () => {
 
   it('stops the week-one mail and leaves the reminders coming', async () => {
     await SELF.fetch(WEEK_ONE_URL, ONE_CLICK);
-    await runScheduledReminders(WEEK_ONE_CRON, env);
+    await runScheduledReminders(BILLS_CRON, env);
     await runWeekOneMails(WEEK_ONE_CRON, env);
     expect(weekOneMails()).toHaveLength(0);
     expect(billsReminders()).toHaveLength(1);
@@ -179,14 +182,19 @@ describe('the link without a list', () => {
   it('stops every reminder mail as before, the week-one mails included', async () => {
     expect((await SELF.fetch(GENERAL_URL, ONE_CLICK)).status).toBe(200);
     expect(await flags()).toEqual({ weekOne: 1, unsubscribed: 1 });
-    await runScheduledReminders(WEEK_ONE_CRON, env);
+    await runScheduledReminders(BILLS_CRON, env);
     await runWeekOneMails(WEEK_ONE_CRON, env);
     expect(mailed).toHaveLength(0);
   });
 
-  it('still words its page as reminder mails', async () => {
+  it('words its pages as reminder mails, first-week mails among them', async () => {
     const html = await (await SELF.fetch(GENERAL_URL)).text();
     expect(html).toContain('Stop reminder mails?');
+    expect(html).toContain('bill reminders and first-week mails');
     expect(html).toContain(`action="/api/notifications/unsubscribe?token=${TOKEN}"`);
+    await SELF.fetch(GENERAL_URL, ONE_CLICK);
+    expect(await (await SELF.fetch(GENERAL_URL)).text()).toContain(
+      'bill reminders or first-week mails'
+    );
   });
 });

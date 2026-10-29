@@ -106,18 +106,26 @@ describe('the week-one switch', () => {
     expect(await column(UID)).toBe(1);
   });
 
-  it('says no mail can come once the last window has closed, or both have gone', async () => {
+  it('says no mail can come once the last window has closed, or day 7 has gone', async () => {
     await confirmedDaysAgo(UID, WEEK_ONE.day7.toDays + 1);
     expect(await read()).toMatchObject({ weekOneAhead: false });
 
     await confirmedDaysAgo(UID, 3);
-    await env.DB.prepare('INSERT INTO reminder_dedup (user_id, dedup_key) VALUES (?, ?)')
-      .bind(UID, WEEK_ONE.day2.key)
-      .run();
+    const mark = (key: string) =>
+      env.DB.prepare('INSERT INTO reminder_dedup (user_id, dedup_key) VALUES (?, ?)')
+        .bind(UID, key)
+        .run();
+    const unmark = (key: string) =>
+      env.DB.prepare('DELETE FROM reminder_dedup WHERE user_id = ? AND dedup_key = ?')
+        .bind(UID, key)
+        .run();
+    // Day 2 gone: day 7 can still come, once something is imported.
+    await mark(WEEK_ONE.day2.key);
     expect(await read()).toMatchObject({ weekOneAhead: true });
-    await env.DB.prepare('INSERT INTO reminder_dedup (user_id, dedup_key) VALUES (?, ?)')
-      .bind(UID, WEEK_ONE.day7.key)
-      .run();
+    // Day 7 gone, with or without day 2 before it: nothing more can come.
+    await mark(WEEK_ONE.day7.key);
+    expect(await read()).toMatchObject({ weekOneAhead: false });
+    await unmark(WEEK_ONE.day2.key);
     expect(await read()).toMatchObject({ weekOneAhead: false });
   });
 

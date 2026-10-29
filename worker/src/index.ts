@@ -40,7 +40,7 @@ import { apiTokensRoutes } from './routes/api-tokens';
 import { v1Routes } from './routes/v1';
 import { mcpRoutes } from './mcp';
 import { runScheduledReminders } from './reminders';
-import { runWeekOneMails } from './weekOne';
+import { runWeekOneMails, WEEK_ONE_CRON } from './weekOne';
 import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
@@ -218,13 +218,17 @@ app.onError(errorResponse);
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    // The week-one mails have a trigger of their own (WEEK_ONE_CRON, 08:30 UTC) and run alone on
+    // it: an invocation has a budget of D1 queries (1,000 on Workers Paid), and the reminders and
+    // sheet syncs of the 08:00 run spend from the same one. Half an hour apart, the two senders
+    // never call Resend at the same time either.
+    if (event.cron === WEEK_ONE_CRON) {
+      ctx.waitUntil(runWeekOneMails(event.cron, env));
+      return;
+    }
     ctx.waitUntil(
       Promise.all([
-        // The week-one mails go after the reminders, never beside them, so the two senders never
-        // call Resend at the same time.
-        runScheduledReminders(event.cron, env)
-          .catch((e) => console.error('[reminder] run failed:', (e as Error).message))
-          .then(() => runWeekOneMails(event.cron, env)),
+        runScheduledReminders(event.cron, env),
         sweepRateLimits(env),
         sweepExpiredSessions(env),
         sweepAuthLogs(env),
