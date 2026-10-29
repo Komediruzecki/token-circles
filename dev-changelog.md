@@ -28,7 +28,9 @@ All notable changes to Token Circles are documented here. The format is based on
   inline: the amount plus last month's unused budget (when both months have rollover on) plus
   `rollover_amount`, less `rollover_used`. Both now call `budgetRollover` in
   `shared/budgetRollover.ts`; the response is unchanged, and the contract suite's rollover scenario
-  (`shared/contract/scenarios/budgets.ts`) and `money-parity` pin it on both runtimes. Advice in
+  (`shared/contract/scenarios/budgets.ts`) and `money-parity` pin it on both runtimes. The scenario
+  now also turns the previous month's rollover off and expects `auto_rollover` 0: before that, a
+  formula that ignored the previous month's switch passed both suites. Advice in
   `frontend/src/core/achievements/advice.ts` deliberately still compares spending with the row's
   `amount`: no page renders `effective_budget` or `effective_remaining`, and the Budgets card shows
   the amount and amount less spent (`Budgets.tsx`, `Categories.tsx`), as the badges count it.
@@ -60,9 +62,9 @@ All notable changes to Token Circles are documented here. The format is based on
   their sum); `alreadyBudgeted`, `unassigned_budget` and `can_allocate` in
   `GET /api/budgets/zero-based` (a `SUM(amount)` over the month); `GET /api/budgets/history`
   (`GROUP BY start_date` with a bare `amount`); `GET /api/budgets/improvements`;
-  `GET /api/budgets/forecast`; the budget comparison in `worker/src/routes/analytics.ts` (`GROUP BY
-category_id` with a bare `amount`); the monthly budget email in `worker/src/reminders.ts`; the MCP
-  `get_budgets_and_goals` tool. Their local-first mirrors in
+  `GET /api/budgets/forecast`; the budget comparison in `worker/src/routes/analytics.ts`
+  (`GROUP BY category_id` with a bare `amount`); the monthly budget email in
+  `worker/src/reminders.ts`; the MCP `get_budgets_and_goals` tool. Their local-first mirrors in
   `frontend/src/core/storage/handlers/budgets.ts` (`budgetsAlerts`, `budgetsZeroBasedSummary`,
   `alreadyBudgeted` in `budgetsZeroBased`, `budgetsHistory`, `budgetsImprovements`,
   `budgetsForecast`) and `handlers/analytics.ts` behave the same way. Tests:
