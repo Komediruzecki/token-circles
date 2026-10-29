@@ -10,6 +10,7 @@ import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runScheduledReminders } from '../src/reminders';
 import { runWeekOneMails, WEEK_ONE_CRON } from '../src/weekOne';
+import { sessionCookie } from './helpers/session';
 
 /** The 08:00 cron, which sends the bills reminder (wrangler.jsonc). */
 const BILLS_CRON = '0 8 * * *';
@@ -191,10 +192,29 @@ describe('the link without a list', () => {
     const html = await (await SELF.fetch(GENERAL_URL)).text();
     expect(html).toContain('Stop reminder mails?');
     expect(html).toContain('bill reminders and first-week mails');
+    expect(html).toContain('Send me reminders again in Settings, Email reminders');
     expect(html).toContain(`action="/api/notifications/unsubscribe?token=${TOKEN}"`);
     await SELF.fetch(GENERAL_URL, ONE_CLICK);
-    expect(await (await SELF.fetch(GENERAL_URL)).text()).toContain(
-      'bill reminders or first-week mails'
-    );
+    const done = await (await SELF.fetch(GENERAL_URL)).text();
+    expect(done).toContain('bill reminders or first-week mails');
+    expect(done).toContain('Send me reminders again in Settings, Email reminders');
+  });
+});
+
+describe('Send me reminders again', () => {
+  it('lifts the general unsubscribe only: a week-one stop stays', async () => {
+    await SELF.fetch(WEEK_ONE_URL, ONE_CLICK);
+    await SELF.fetch(GENERAL_URL, ONE_CLICK);
+    expect(await flags()).toEqual({ weekOne: 0, unsubscribed: 1 });
+
+    const cookie = (await sessionCookie(ID, 'password', env)).split(';')[0]!;
+    const res = await SELF.fetch('https://example.com/api/notifications/resubscribe', {
+      method: 'POST',
+      headers: { Cookie: cookie, 'X-Profile-Id': String(ID) },
+    });
+    expect(res.status).toBe(200);
+    expect(await flags()).toEqual({ weekOne: 0, unsubscribed: 0 });
+    await runWeekOneMails(WEEK_ONE_CRON, env);
+    expect(weekOneMails()).toHaveLength(0);
   });
 });

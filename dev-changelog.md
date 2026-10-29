@@ -198,7 +198,16 @@ All notable changes to Token Circles are documented here. The format is based on
   so a paid plan's reminders keep coming; it is idempotent and answers an unknown token 400. The
   link without `list`, or with any other value, is the general unsubscribe as #648 made it, and
   that stops the week-one mails too; its page and its done page now name first-week mails among
-  what it stops. `worker/test/week-one-unsubscribe.test.ts`.
+  what it stops, and both say Send me reminders again in Settings turns them back on.
+  `worker/test/week-one-unsubscribe.test.ts`.
+- **Send me reminders again (#649) and the week-one stop.** `POST /api/notifications/resubscribe`
+  lifts `notifications_unsubscribed` only. A week-one stop (`week_one_mails = 0`, from the
+  `list=week-one` link or the Settings switch) is not undone by it; the week-one switch in
+  Settings turns it back on while a mail can still come. Both rows of the Email reminders card read
+  the same `unsubscribed` from `GET /api/notifications/settings`, so after a resubscribe the
+  week-one switch leaves its disabled state at once. The resubscribe route needs a plan with
+  reminders and #649 hides its button on Free, so a Free account that used the general unsubscribe
+  keeps its week-one mails off.
 - **The week-one switch in Settings** (`frontend/src/features/WeekOneMails.tsx`). `GET
 /api/notifications/settings` adds `weekOneMails`, `weekOneAhead` (the Welcome claim is under 10
   days old and day 7, always the last, has not gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no

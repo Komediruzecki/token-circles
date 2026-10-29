@@ -42,6 +42,10 @@ vi.mock('../../core/apiFetch', () => ({
       if (typeof body?.weekOneMails === 'boolean') server.weekOneMails = body.weekOneMails
       return reply({ ok: true })
     }
+    if (url === '/api/notifications/resubscribe' && method === 'POST') {
+      server.unsubscribed = false
+      return reply({ ok: true })
+    }
     if (url === '/api/notifications/settings') {
       return reply({
         email: 'me@example.com',
@@ -167,6 +171,25 @@ describe('the week-one switch', () => {
     expect(toggle()!.getAttribute('aria-checked')).toBe('false')
     expect(toggle()!.disabled).toBe(true)
     expect(row()!.textContent).toContain(WEEK_ONE_UNSUBSCRIBED)
+  })
+
+  it('comes back on with Send me reminders again, which lifts the same unsubscribe', async () => {
+    server.plan = 'advanced'
+    server.unsubscribed = true
+    setCurrentPlan('advanced')
+    await openSettings()
+    expect(toggle()!.disabled).toBe(true)
+
+    host
+      .querySelector<HTMLButtonElement>('[data-test-id="settings-reminders-resubscribe"]')!
+      .click()
+    await settle()
+
+    expect(calls.some((c) => c.url === '/api/notifications/resubscribe')).toBe(true)
+    expect(toggle()!.disabled).toBe(false)
+    expect(toggle()!.getAttribute('aria-checked')).toBe('true')
+    expect(row()!.textContent).toContain(WEEK_ONE_DESCRIPTION)
+    expect(row()!.textContent).not.toContain(WEEK_ONE_UNSUBSCRIBED)
   })
 
   it('is never shown in local-first, which asks no server about it', async () => {
