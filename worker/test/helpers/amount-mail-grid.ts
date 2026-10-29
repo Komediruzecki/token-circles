@@ -1,7 +1,8 @@
 /**
- * A grid of inputs for the four mails that show an amount of money (the first shell in
- * emailTemplates.ts), covering each renderer's branches, and one digest per renderer over every
- * output of its grid. mail-catalogue.test.ts pins those digests.
+ * A grid of inputs for the four mails that show an amount of money in emailTemplates.ts (the
+ * budget alert, the spending report, upcoming bills and the failed payment), covering each
+ * renderer's branches, and one digest per renderer over every output of its grid.
+ * mail-catalogue.test.ts pins those digests, and checks every amount of every input in both parts.
  *
  * It takes the renderers as an argument and imports nothing, so a plain Node script can run the
  * same grid against another copy of emailTemplates.ts (Node strips the types).

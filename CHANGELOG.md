@@ -24,7 +24,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The streak says months in a row.** The badge rail on Dashboard and the record on Progress read "4 months in a row" where they said "4 months tracked": the number counts tracked months without a gap, up to this month or last. With no streak running, both say "Start a streak".
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
 - **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
-- **Account mails share the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Reminders and the failed-payment mail, which show amounts, stay as they were.
+- **Every mail shares the new design.** A new email address, a password reset, a sign-in code, a test mail, a support reply, your bank asking you to confirm a payment and a plan that ended look like the sign-up mails, with the engraved art at the top. Budget alerts, spending reports, bill reminders and the failed-payment mail join them with the same amounts, under subjects that say what happened, such as "Budget alert: Groceries went over".
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
 
 ### Fixed

@@ -12,13 +12,13 @@
  *    previewed; callers pass links/currency in. This module imports nothing, so
  *    worker/scripts/ can load it under plain Node as well.
  *
- * Two layouts live here: the mail layout of 2026-10-11 (renderMail), with the engraved art, dark
- * by default and paper in light mode; and the first shell (`shell`), dark only, with the orbit GIF.
- *
- * The sign-up, account and billing mails are on the new layout. The four mails that show an
- * amount of money (the budget alert, the spending report, upcoming bills and the failed payment)
- * stay on the first shell, word for word: maff's call of 2026-10-11.
- * worker/test/mail-catalogue.test.ts pins those four.
+ * Every mail is on one layout, the mail layout of 2026-10-11 (renderMail): the engraved art, dark
+ * by default and paper in light mode. The four mails that show an amount of money (the budget
+ * alert, the spending report, upcoming bills and the failed payment) joined it last, by maff's
+ * call of 2026-10-29, with every amount kept; they are the ones with tables. The first shell they
+ * left, dark only and topped by the animated orbit GIF, is gone. frontend/public/email/orbit.gif
+ * stays, because mails already sent still point at it. worker/test/mail-catalogue.test.ts pins
+ * the four over a grid of inputs.
  */
 
 // ── Brand constants ───────────────────────────────────────────────────────────
@@ -34,27 +34,7 @@ const CONTACT_EMAIL = 'hello@tokencircles.com';
 // Mail assets load from the SENDING environment's app origin (dev mails must
 // not depend on a prod release shipping the asset); footer links stay
 // canonical. Defaults to the prod app for safety.
-const logoUrl = (origin: string) => `${origin}/icon-192.png`;
-const orbitGifUrl = (origin: string) => `${origin}/email/orbit.gif`;
-
-// Orbital Observatory palette (mirrors frontend orbit-dark.css tokens).
-const C = {
-  page: '#0a0e1c',
-  card: '#131c39',
-  panel: '#0e1430',
-  border: '#26324f',
-  text: '#eaf0ff',
-  muted: '#9fb0d6',
-  faint: '#6b7a9e',
-  primary: '#6e9bff',
-  primaryStrong: '#3b6fe0',
-  warm: '#f0a860',
-  income: '#7dffb0',
-  expense: '#ff9d9d',
-} as const;
-
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const SERIF = "Georgia,'Times New Roman',serif";
 
 export interface RenderedEmail {
   subject: string;
@@ -74,7 +54,7 @@ export function escapeHtml(str: unknown): string {
 }
 
 export function sanitizeColor(color: unknown): string {
-  return /^#[0-9a-fA-F]{6}$/.test(String(color ?? '')) ? String(color) : C.faint;
+  return /^#[0-9a-fA-F]{6}$/.test(String(color ?? '')) ? String(color) : INK.muted;
 }
 
 /** Currency-aware money formatting; tolerates unknown ISO codes. */
@@ -109,7 +89,7 @@ export function formatMoney(amount: number, currency?: string | null): string {
 // frontend/public/email/ under versioned names and are never overwritten, because a mail already
 // sent points at its image for as long as it is kept: new art gets a new name.
 
-/** The dark palette. Its light counterpart is in MAIL_STYLE. */
+/** The dark palette. Its light counterpart is in mailStyle. */
 const INK = {
   page: '#0b1020',
   card: '#151d31',
@@ -124,14 +104,23 @@ const INK = {
 
 const MONO = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
 
+/**
+ * The colours of a figure's status in a table, on the dark card: over a limit or overdue, close to
+ * it, and money kept. Their light counterparts are in TABLE_STYLE.
+ */
+const TONE = { over: '#ff9d9d', warn: '#f0a860', good: '#7dffb0' } as const;
+
 /** The engraved art: the hero tops the welcome, the banner every other mail. */
 const ART = {
   hero: { path: '/email/hero-engraved-night-v1.jpg', width: 600, height: 280 },
   banner: { path: '/email/banner-engraved-night-v1.jpg', width: 600, height: 180 },
 } as const;
 
-/** The light scheme and the phone width: the only rules that cannot be inline. */
-const MAIL_STYLE = `<style>
+/**
+ * The light scheme and the phone width: the only rules that cannot be inline. `tables` adds the
+ * rules only a mail with a table needs, so a mail without one carries none of them.
+ */
+const mailStyle = (tables: boolean) => `<style>
 :root { color-scheme: dark light; supported-color-schemes: dark light; }
 @media (prefers-color-scheme: light) {
   .tc-page { background:#eeeae1 !important; }
@@ -146,7 +135,7 @@ const MAIL_STYLE = `<style>
   .tc-btn2-td { border-color:#2f5cc4 !important; }
   .tc-btn2 { color:#2f5cc4 !important; }
   .tc-code { background:#eeeae1 !important; border-color:#ddd8cc !important; }
-}
+${tables ? TABLE_STYLE.light : ''}}
 @media (max-width: 480px) {
   .tc-pad { padding-left:22px !important; padding-right:22px !important; }
   .tc-h1 { font-size:24px !important; }
@@ -154,8 +143,19 @@ const MAIL_STYLE = `<style>
   .tc-btn-table td { display:block !important; width:auto !important; }
   .tc-btn-gap { height:10px !important; }
   .tc-btn, .tc-btn2 { display:block !important; text-align:center !important; }
-}
+${tables ? TABLE_STYLE.phone : ''}}
 </style>`;
+
+/** A table's rules: its status colours on paper, and a smaller figure and gap on a phone. */
+const TABLE_STYLE = {
+  light: `  .tc-over { color:#b42318 !important; }
+  .tc-warn { color:#8a5300 !important; }
+  .tc-good { color:#1d7a46 !important; }
+`,
+  phone: `  .tc-cell { font-size:14px !important; }
+  .tc-cell-gap { padding-left:8px !important; }
+`,
+};
 
 /** A run of words in a paragraph: plain, or in bold (an address the reader should check). */
 export type MailRun = string | { strong: string };
@@ -174,10 +174,36 @@ export interface MailStep {
   link: MailLink;
 }
 
+/** One cell of a table: its words, plain text, and how they read. */
+export interface MailCell {
+  text: string;
+  /** A coloured dot before the words: a category's own colour. Anything but #rrggbb reads grey. */
+  dot?: string | null;
+  /** `soft` for a figure that matters less; `over`, `warn` and `good` colour a status. */
+  tone?: 'soft' | 'over' | 'warn' | 'good';
+  strong?: boolean;
+  /** Its side, when the table has no column heads to take it from. */
+  align?: 'left' | 'right';
+}
+
+/**
+ * A table of figures, under the paragraphs. Each row also says itself as one line, for the text
+ * twin, because columns do not survive plain text.
+ */
+export interface MailTable {
+  /** A short label above the table. */
+  title?: string;
+  /** The column heads, which also set each column's side. None for a list of labelled figures. */
+  columns?: { label: string; align?: 'left' | 'right' }[];
+  rows: { cells: MailCell[]; text: string }[];
+  /** What the table says when it has no rows. */
+  empty?: string;
+}
+
 /**
  * What one mail says, in the order the layout shows it. The types hold the layout's limits: one
- * headline, one or two paragraphs, one button or a button and a quieter second one, and at most
- * one list of steps. Every string is plain text; renderMail escapes it.
+ * headline, one or two paragraphs, at most two tables, one button or a button and a quieter second
+ * one, and at most one list of steps. Every string is plain text; renderMail escapes it.
  */
 export interface MailSpec {
   subject: string;
@@ -193,6 +219,8 @@ export interface MailSpec {
   /** A one-time code, large and monospaced, right under the headline. */
   code?: string;
   paragraphs: [MailParagraph] | [MailParagraph, MailParagraph];
+  /** Tables of figures, under the paragraphs: the mails that show an amount of money. */
+  tables?: [MailTable] | [MailTable, MailTable];
   buttons?: [MailLink] | [MailLink, MailLink];
   /** Small print under the button. */
   notes?: string[];
@@ -205,6 +233,8 @@ export interface MailSpec {
   aside?: string;
   /** Why this mail came, in the footer. */
   reason: string;
+  /** The reminders' one-click unsubscribe link, in the footer after the reason. */
+  unsubUrl?: string | null;
   /** The origin that serves the wordmark and the art: the sending environment's app. */
   assetOrigin?: string;
 }
@@ -263,8 +293,57 @@ function mailSteps({ title, items }: NonNullable<MailSpec['steps']>, bottom: num
   return `<tr><td class="tc-pad" style="padding:26px 36px ${bottom}px"><div class="tc-muted" style="font:600 14px/1.4 ${FONT};letter-spacing:0.2px;color:${INK.muted};margin:0 0 6px">${escapeHtml(title)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>`;
 }
 
+const TONE_COLOUR = {
+  soft: INK.soft,
+  over: TONE.over,
+  warn: TONE.warn,
+  good: TONE.good,
+} as const;
+
+/**
+ * A table: its title, a row of column heads, then a row per entry over a hairline. Figures sit
+ * right and never break; a name sits left and wraps. Every cell after the first keeps a gap from
+ * the one before it, which a phone narrows.
+ */
+function mailTable(table: MailTable): string {
+  const title = table.title
+    ? `<div class="tc-text" style="margin:26px 0 2px;font:600 14px/1.4 ${FONT};color:${INK.text}">${escapeHtml(table.title)}</div>`
+    : '';
+  const gap = (i: number) => (i === 0 ? '' : 'padding-left:12px;');
+  const head = table.columns
+    ? `<tr>${table.columns
+        .map(
+          (col, i) =>
+            `<th class="tc-muted tc-rule${i ? ' tc-cell-gap' : ''}" align="${col.align ?? 'left'}" style="${gap(i)}padding-top:0;padding-bottom:8px;border-bottom:1px solid ${INK.rule};font:600 12px/1.4 ${FONT};letter-spacing:0.3px;color:${INK.muted};text-align:${col.align ?? 'left'}">${escapeHtml(col.label)}</th>`
+        )
+        .join('')}</tr>`
+    : '';
+  const cell = (c: MailCell, i: number) => {
+    const align = c.align ?? table.columns?.[i]?.align ?? 'left';
+    const tone = c.tone ? `tc-${c.tone}` : 'tc-text';
+    const color = c.tone ? TONE_COLOUR[c.tone] : INK.text;
+    const dot =
+      c.dot !== undefined
+        ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${sanitizeColor(c.dot)};margin-right:8px;vertical-align:middle"></span>`
+        : '';
+    const words = keepTogether(escapeHtml(c.text));
+    return `<td class="${tone} tc-rule tc-cell${i ? ' tc-cell-gap' : ''}" align="${align}" style="${gap(i)}padding-top:11px;padding-bottom:11px;border-bottom:1px solid ${INK.rule};font:${c.strong ? '600 ' : ''}15px/1.45 ${FONT};color:${color};text-align:${align};${align === 'right' ? 'white-space:nowrap' : 'word-break:break-word'}">${dot}${words}</td>`;
+  };
+  const rows = table.rows.length
+    ? table.rows.map((row) => `<tr>${row.cells.map(cell).join('')}</tr>`).join('')
+    : `<tr>${cell({ text: table.empty ?? '', tone: 'soft' }, 0)}</tr>`;
+  return `${title}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:${title ? 8 : 22}px 0 4px;border-collapse:collapse">${head}${rows}</table>`;
+}
+
+/** A table in the text twin: its title, then a line for each row. */
+const mailTableText = (table: MailTable) =>
+  [
+    ...(table.title ? [table.title] : []),
+    ...(table.rows.length ? table.rows.map((row) => row.text) : [table.empty ?? '']),
+  ].join('\n');
+
 /** The text twin's last lines, the same for every mail on this layout. */
-const mailTextFooter = (reason: string) =>
+const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
   [
     'Your money, in clear orbit. Open source and local-first.',
     `Open the app: ${APP_URL}`,
@@ -274,6 +353,7 @@ const mailTextFooter = (reason: string) =>
     `Privacy: ${PRIVACY_URL}`,
     '',
     reason,
+    ...(unsubUrl ? [`Unsubscribe: ${unsubUrl}`] : []),
     `© ${new Date().getUTCFullYear()} ${BRAND} · AGPL-3.0 · ${CONTACT_EMAIL}`,
   ].join('\n');
 
@@ -293,6 +373,7 @@ export function renderMail(spec: MailSpec): RenderedEmail {
       `<h1 class="tc-text tc-h1" style="margin:0;font:600 32px/1.15 ${FONT};letter-spacing:-0.4px;color:${INK.text}">${headlineHtml(spec.headline)}</h1>` +
       (spec.code ? mailCode(spec.code) : '') +
       spec.paragraphs.map((paragraph) => mailParagraph(paragraphHtml(paragraph))).join('') +
+      (spec.tables ?? []).map(mailTable).join('') +
       (spec.buttons ? mailButtons(spec.buttons) : '') +
       (spec.notes ?? []).map((note, i) => mailSmall(escapeHtml(note), i === 0 ? 16 : 14)).join('') +
       (spec.paste
@@ -327,7 +408,7 @@ export function renderMail(spec: MailSpec): RenderedEmail {
 <meta name="color-scheme" content="dark light">
 <meta name="supported-color-schemes" content="dark light">
 <title>${escapeHtml(spec.subject)}</title>
-${MAIL_STYLE}
+${mailStyle(!!spec.tables)}
 </head>
 <body class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
@@ -338,7 +419,7 @@ ${MAIL_STYLE}
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
 <tr><td class="tc-pad" style="padding:22px 36px 4px">
 <p class="tc-muted" style="margin:0;font:12px/1.7 ${FONT};color:${INK.muted}">Your money, in clear orbit. Open source and local-first.<br>${footerLinks}</p>
-<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
+<p class="tc-muted" style="margin:10px 0 0;font:12px/1.6 ${FONT};color:${INK.muted}">${escapeHtml(spec.reason)}${spec.unsubUrl ? ` ${mailLink({ label: 'Unsubscribe', href: spec.unsubUrl })}` : ''}<br>&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0 &middot;&nbsp;<a class="tc-muted" href="mailto:${CONTACT_EMAIL}" style="color:${INK.muted};text-decoration:none">${CONTACT_EMAIL}</a></p>
 </td></tr>
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
@@ -351,6 +432,7 @@ ${MAIL_STYLE}
     spec.headline,
     ...(spec.code ? [spec.code] : []),
     ...spec.paragraphs.map(paragraphText),
+    ...(spec.tables ?? []).map(mailTableText),
     ...(spec.buttons
       ? [spec.buttons.map(({ label, href }) => `${label}: ${href}`).join('\n')]
       : []),
@@ -366,98 +448,10 @@ ${MAIL_STYLE}
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason),
+    mailTextFooter(spec.reason, spec.unsubUrl),
   ].join('\n\n');
   return { subject: spec.subject, html, text };
 }
-
-// ── The first shell ───────────────────────────────────────────────────────────
-
-const btn = (href: string, label: string, testId?: string) =>
-  `<a href="${href}" ${testId ? `data-tid="${testId}"` : ''}style="display:inline-block;background:${C.primaryStrong};color:#ffffff;text-decoration:none;font-family:${FONT};font-size:15px;font-weight:600;padding:12px 26px;border-radius:10px">${escapeHtml(label)}</a>`;
-
-/**
- * The shared shell: dark page, centered 600px card, orbit-GIF masthead with
- * the logo + serif wordmark, body content, and the branded footer.
- */
-function shell(opts: {
-  title: string;
-  preheader: string;
-  body: string;
-  footerReason: string;
-  unsubUrl?: string | null;
-  /** Show the animated orbit ornament under the masthead (default true). */
-  orbit?: boolean;
-  /** Origin serving the logo/GIF assets (the sending env's app origin). */
-  assetOrigin?: string;
-}): string {
-  const unsub = opts.unsubUrl
-    ? ` &nbsp;&middot;&nbsp; <a href="${opts.unsubUrl}" style="color:${C.faint};text-decoration:underline">Unsubscribe</a>`
-    : '';
-  const assets = opts.assetOrigin || APP_URL;
-  const orbit =
-    opts.orbit === false
-      ? ''
-      : `<tr><td align="center" style="padding:2px 0 14px">
-          <img src="${orbitGifUrl(assets)}" width="72" height="72" alt="" style="display:block;border:0;outline:none" />
-        </td></tr>`;
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="color-scheme" content="dark" />
-<meta name="supported-color-schemes" content="dark" />
-<title>${escapeHtml(opts.title)}</title>
-</head>
-<body style="margin:0;padding:0;background:${C.page}">
-  <!-- preheader: shows next to the subject in inbox lists, invisible in the mail -->
-  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all">${escapeHtml(opts.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}">
-    <tr><td align="center" style="padding:28px 12px">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">
-        <!-- masthead -->
-        <tr><td align="center" style="padding:6px 0 16px">
-          <a href="${APP_URL}" style="text-decoration:none">
-            <img src="${logoUrl(assets)}" width="34" height="34" alt="${BRAND}" style="vertical-align:middle;border:0;border-radius:9px" />
-            <span style="font-family:${SERIF};font-size:22px;font-weight:700;color:${C.text};letter-spacing:0.3px;vertical-align:middle">&nbsp;Token&nbsp;Circles</span>
-          </a>
-        </td></tr>
-        ${orbit}
-        <!-- card -->
-        <tr><td style="background:${C.card};border:1px solid ${C.border};border-radius:16px;padding:30px 30px 26px">
-          ${opts.body}
-        </td></tr>
-        <!-- footer -->
-        <tr><td align="center" style="padding:22px 16px 6px">
-          <div style="font-family:${FONT};font-size:12px;line-height:1.7;color:${C.faint}">
-            Your money, in clear orbit. Open source and local-first.<br />
-            <a href="${APP_URL}" style="color:${C.muted};text-decoration:none">Open the app</a> &nbsp;&middot;&nbsp;
-            <a href="${ABOUT_URL}" style="color:${C.muted};text-decoration:none">About</a> &nbsp;&middot;&nbsp;
-            <a href="${REPO_URL}" style="color:${C.muted};text-decoration:none">GitHub</a> &nbsp;&middot;&nbsp;
-            <a href="${TERMS_URL}" style="color:${C.muted};text-decoration:none">Terms</a> &nbsp;&middot;&nbsp;
-            <a href="${PRIVACY_URL}" style="color:${C.muted};text-decoration:none">Privacy</a> &nbsp;&middot;&nbsp;
-            <a href="mailto:${CONTACT_EMAIL}" style="color:${C.muted};text-decoration:none">Contact</a>
-          </div>
-          <div style="font-family:${FONT};font-size:11.5px;line-height:1.7;color:${C.faint};margin-top:8px">
-            ${escapeHtml(opts.footerReason)}${unsub}<br />
-            &copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0
-          </div>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
-}
-
-const h1 = (text: string) =>
-  `<h1 style="font-family:${SERIF};font-size:24px;font-weight:700;color:${C.text};margin:0 0 12px">${text}</h1>`;
-const p = (text: string, extra = '') =>
-  `<p style="font-family:${FONT};font-size:14.5px;line-height:1.65;color:${C.muted};margin:0 0 14px;${extra}">${text}</p>`;
-
-const textFooter = (reason: string, unsubUrl?: string | null) =>
-  `\n—\n${BRAND} — your money, in clear orbit.\nApp: ${APP_URL}\nAbout: ${ABOUT_URL}\nGitHub: ${REPO_URL}\nTerms: ${TERMS_URL} · Privacy: ${PRIVACY_URL} · Contact: ${CONTACT_EMAIL}\n${reason}${unsubUrl ? `\nUnsubscribe: ${unsubUrl}` : ''}`;
 
 // ── Renderers ─────────────────────────────────────────────────────────────────
 //
@@ -730,7 +724,10 @@ export function renderLoginCode(opts: {
 // must never fail the request: an unacked webhook is retried, and a retry that re-sends mail is
 // worse than a mail that never arrived.
 
-/** A card was declined and Stripe is retrying. The subscription is still live meanwhile. */
+/**
+ * A card was declined and Stripe is retrying. The subscription is still live meanwhile. It shows
+ * the amount due, when Stripe gave one.
+ */
 export function renderPaymentFailed(opts: {
   planName: string;
   amountDue?: number | null;
@@ -740,7 +737,6 @@ export function renderPaymentFailed(opts: {
   appUrl?: string;
 }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const pay = opts.payUrl || `${app}/#settings`;
   const amount =
     typeof opts.amountDue === 'number' && opts.amountDue > 0
       ? formatMoney(opts.amountDue, opts.currency)
@@ -753,33 +749,31 @@ export function renderPaymentFailed(opts: {
         timeZone: 'UTC',
       })
     : null;
-  const subject = `Your ${BRAND} payment didn't go through`;
-  const body = `
-    ${h1("Your payment didn't go through")}
-    ${p(`Your bank declined the ${amount ? `${escapeHtml(amount)} ` : ''}payment for ${BRAND} ${escapeHtml(opts.planName)}. It happens — an expired card, a new number, or the bank simply asking questions.`)}
-    ${p(`<strong>Nothing has changed yet.</strong> Your plan is still active and we will try the card again${retry ? ` on ${escapeHtml(retry)}` : ''}. Updating it now is the quickest way to end this.`)}
-    <div style="padding:8px 0 12px">${btn(pay, 'Update your card')}</div>
-    ${p(`If the retries run out, the account moves to Free. Nothing is deleted — your data stays where it is and you can pick the plan back up whenever you like.`, `font-size:12.5px;color:${C.faint}`)}
-  `;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Your card was declined${retry ? ` — we retry on ${retry}` : ''}. Your plan is still active.`,
-      body,
-      footerReason: 'Sent because a payment for your subscription could not be collected.',
-      orbit: false,
-      assetOrigin: opts.appUrl,
-    }),
-    text: `Your ${BRAND} payment didn't go through\n\nYour bank declined the ${amount ? `${amount} ` : ''}payment for ${BRAND} ${opts.planName}.\n\nNothing has changed yet — your plan is still active and we will try again${retry ? ` on ${retry}` : ''}.\n\nUpdate your card: ${pay}\n\nIf the retries run out the account moves to Free. Nothing is deleted.${textFooter('Sent because a payment for your subscription could not be collected.')}`,
-  };
+  return renderMail({
+    subject: `Your ${BRAND} payment didn't go through`,
+    preheader: `Your card was declined. Your plan is still active${retry ? `, and we try the card again on ${retry}` : ''}.`,
+    art: 'banner',
+    headline: "Your payment didn't go through.",
+    paragraphs: [
+      `Your bank declined the ${amount ? `${amount} ` : ''}payment for ${BRAND} ${opts.planName}. An expired card, a new card number or a bank with questions are the usual reasons.`,
+      [
+        { strong: 'Nothing has changed yet.' },
+        ` Your plan is still active and we'll try the card again${retry ? ` on ${retry}` : ''}. Updating it now is the quickest way to settle this.`,
+      ],
+    ],
+    buttons: [{ label: 'Update your card', href: opts.payUrl || `${app}/#settings` }],
+    notes: [
+      'If the retries run out, the account moves to Free. Nothing is deleted: your data stays where it is, and you can pick the plan back up whenever you like.',
+    ],
+    reason: `You are getting this because a payment for your ${BRAND} subscription could not be collected.`,
+    assetOrigin: opts.appUrl,
+  });
 }
 
 /**
  * The bank wants the cardholder to confirm (3-D Secure / SCA). Deliberately not the same mail as a
  * decline: nothing is wrong, and the only thing that fixes it is the user opening a page, which a
- * "your payment failed" subject line makes them less likely to do, not more. It shows no amount,
- * so it is on the mail layout.
+ * "your payment failed" subject line makes them less likely to do, not more. It shows no amount.
  */
 export function renderPaymentActionRequired(opts: {
   planName: string;
@@ -805,8 +799,7 @@ export function renderPaymentActionRequired(opts: {
 }
 
 /**
- * The subscription is over: cancelled, or dunning ran out. Says what happens to the data. It
- * shows no amount, so it is on the mail layout.
+ * The subscription is over: cancelled, or dunning ran out. Says what happens to the data.
  */
 export function renderSubscriptionEnded(opts: {
   planName: string;
@@ -842,20 +835,19 @@ export interface BudgetAlertRow {
   status: 'over' | 'warning';
 }
 
-const tableHead = (cols: { label: string; align?: 'left' | 'right' }[]) =>
-  `<tr>${cols
-    .map(
-      (col) =>
-        `<th style="font-family:${FONT};font-size:11px;letter-spacing:0.6px;text-transform:uppercase;color:${C.faint};text-align:${col.align ?? 'left'};padding:0 10px 8px;border-bottom:1px solid ${C.border}">${escapeHtml(col.label)}</th>`
-    )
-    .join('')}</tr>`;
+/** Why a reminder came: the toggle that sends it, or the preview the reader sent themselves. */
+const reminderReason = (what: string, test?: boolean) =>
+  test
+    ? 'You are getting this because you sent yourself a preview from Email reminders in Settings.'
+    : `You are getting this because ${what} are on under Email reminders in Settings.`;
 
-const cell = (content: string, align: 'left' | 'right' = 'left', color: string = C.text) =>
-  `<td style="font-family:${FONT};font-size:13.5px;color:${color};text-align:${align};padding:10px;border-bottom:1px solid ${C.border}">${content}</td>`;
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
-const dot = (color: string) =>
-  `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${sanitizeColor(color)};margin-right:8px;vertical-align:middle"></span>`;
-
+/**
+ * The budgets over their limit or close to it this month, each with its budget, what was spent
+ * and where it stands. The scheduled send lists those at 80% or more; the preview from Settings
+ * lists every budget, so its headline claims "close" only when every one is.
+ */
 export function renderBudgetAlert(opts: {
   alerts: BudgetAlertRow[];
   currency?: string | null;
@@ -865,53 +857,54 @@ export function renderBudgetAlert(opts: {
   assetOrigin?: string;
 }): RenderedEmail | null {
   if (opts.alerts.length === 0) return null;
-  const anyOver = opts.alerts.some((a) => a.status === 'over');
-  const subject = `${opts.test ? '[Test] ' : ''}Budget alert${opts.periodLabel ? ` (${opts.periodLabel})` : ''} — ${BRAND}`;
-  const rows = opts.alerts
-    .map((a) => {
-      const statusColor = a.status === 'over' ? C.expense : C.warm;
-      const status = a.status === 'over' ? 'OVER' : `${a.percentage}%`;
-      return `<tr>${cell(`${dot(a.categoryColor)}${escapeHtml(a.categoryName)}`)}${cell(formatMoney(a.budgetAmount, opts.currency), 'right', C.muted)}${cell(formatMoney(a.spent, opts.currency), 'right')}${cell(`<strong>${status}</strong>`, 'right', statusColor)}</tr>`;
-    })
-    .join('');
-  const body = `
-    ${h1('Budget alert')}
-    ${p(
-      anyOver
-        ? 'These budgets have gone over their limit this month:'
-        : 'These budgets are approaching their limit (80%+ used):'
-    )}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 14px">
-      ${tableHead([{ label: 'Category' }, { label: 'Budget', align: 'right' }, { label: 'Spent', align: 'right' }, { label: 'Status', align: 'right' }])}
-      ${rows}
-    </table>
-    <div style="padding:2px 0 4px">${btn(`${APP_URL}/#budgets`, 'Review budgets')}</div>
-  `;
-  const text = `Budget alert — ${BRAND}\n\n${
-    anyOver ? 'Budgets over their limit:' : 'Budgets approaching their limit (80%+):'
-  }\n${opts.alerts
-    .map(
-      (a) =>
-        `- ${a.categoryName}: ${formatMoney(a.spent, opts.currency)} of ${formatMoney(a.budgetAmount, opts.currency)} (${a.status === 'over' ? 'OVER' : `${a.percentage}%`})`
-    )
-    .join(
-      '\n'
-    )}\n\nReview budgets: ${APP_URL}/#budgets${textFooter('You get budget alerts because email reminders are enabled in Settings → Notifications.', opts.unsubUrl)}`;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: anyOver
-        ? 'One or more budgets went over their limit.'
-        : 'One or more budgets crossed 80% of their limit.',
-      body,
-      footerReason:
-        'You get budget alerts because email reminders are enabled in Settings → Notifications.',
-      unsubUrl: opts.unsubUrl,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text,
-  };
+  const money = (amount: number) => formatMoney(amount, opts.currency);
+  const over = opts.alerts.filter((a) => a.status === 'over').length;
+  const close = opts.alerts.length - over;
+  const headline = over
+    ? over === 1
+      ? 'A budget went over its limit.'
+      : `${over} budgets went over their limit.`
+    : opts.alerts.every((a) => a.percentage >= 80)
+      ? close === 1
+        ? 'A budget is close to its limit.'
+        : `${close} budgets are close to their limit.`
+      : 'Where your budgets stand.';
+  const status = (a: BudgetAlertRow) => (a.status === 'over' ? 'Over' : `${a.percentage}%`);
+  // The subject names the budget furthest along; the table lists them all.
+  const top = opts.alerts.reduce((a, b) => (b.percentage > a.percentage ? b : a));
+  const more = opts.alerts.length - 1;
+  return renderMail({
+    subject: `${opts.test ? '[Test] ' : ''}Budget alert${opts.periodLabel ? ` for ${opts.periodLabel}` : ''}: ${top.categoryName} ${top.status === 'over' ? 'went over' : `is at ${top.percentage}%`}`,
+    preheader: `${top.categoryName}: ${money(top.spent)} of ${money(top.budgetAmount)}${more ? `, and ${more} more` : ''}.`,
+    art: 'banner',
+    headline,
+    paragraphs: [
+      `Here's what you've spent ${opts.periodLabel ? `in ${opts.periodLabel}` : 'so far this month'}, against the budget you set for each category.`,
+    ],
+    tables: [
+      {
+        columns: [
+          { label: 'Category' },
+          { label: 'Budget', align: 'right' },
+          { label: 'Spent', align: 'right' },
+          { label: 'Status', align: 'right' },
+        ],
+        rows: opts.alerts.map((a) => ({
+          cells: [
+            { text: a.categoryName, dot: a.categoryColor },
+            { text: money(a.budgetAmount), tone: 'soft' },
+            { text: money(a.spent) },
+            { text: status(a), tone: a.status === 'over' ? 'over' : 'warn', strong: true },
+          ],
+          text: `- ${a.categoryName}: ${money(a.spent)} of ${money(a.budgetAmount)} (${status(a).toLowerCase()})`,
+        })),
+      },
+    ],
+    buttons: [{ label: 'Review budgets', href: `${APP_URL}/#budgets` }],
+    reason: reminderReason('budget alerts', opts.test),
+    unsubUrl: opts.unsubUrl,
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
 export interface SpendingReportData {
@@ -924,6 +917,7 @@ export interface SpendingReportData {
   endDate: string;
 }
 
+/** A period's income, spending and what was left, then the categories it went to. */
 export function renderSpendingReport(opts: {
   report: SpendingReportData;
   currency?: string | null;
@@ -934,47 +928,54 @@ export function renderSpendingReport(opts: {
 }): RenderedEmail | null {
   const r = opts.report;
   if (r.transactionCount === 0) return null;
-  const subject = `${opts.test ? '[Test] ' : ''}Your spending report${opts.periodLabel ? ` (${opts.periodLabel})` : ''} — ${BRAND}`;
+  const money = (amount: number) => formatMoney(amount, opts.currency);
   const net = r.netBalance;
-  const stat = (label: string, value: string, color: string) =>
-    `<td width="33%" style="background:${C.panel};border:1px solid ${C.border};border-radius:10px;padding:12px 8px;text-align:center">
-      <div style="font-family:${FONT};font-size:10.5px;letter-spacing:0.6px;text-transform:uppercase;color:${C.faint};margin-bottom:4px">${escapeHtml(label)}</div>
-      <div style="font-family:${FONT};font-size:16px;font-weight:700;color:${color}">${value}</div>
-    </td>`;
-  const cats = r.categoryBreakdown
-    .map(
-      (cat) =>
-        `<tr>${cell(`${dot(cat.color || C.faint)}${escapeHtml(cat.name || 'Uncategorized')}`)}${cell(formatMoney(cat.total, opts.currency), 'right')}</tr>`
-    )
-    .join('');
-  const body = `
-    ${h1('Your spending report')}
-    ${p(`${escapeHtml(r.startDate)} to ${escapeHtml(r.endDate)} &middot; ${r.transactionCount} transactions`)}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="4" style="border-collapse:separate;margin:0 0 14px"><tr>
-      ${stat('Income', formatMoney(r.totalIncome, opts.currency), C.income)}
-      ${stat('Expenses', formatMoney(r.totalExpenses, opts.currency), C.expense)}
-      ${stat('Net', formatMoney(net, opts.currency), net >= 0 ? C.income : C.expense)}
-    </tr></table>
-    <div style="font-family:${FONT};font-size:13px;font-weight:600;color:${C.text};margin:0 0 6px">Top spending categories</div>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 14px">
-      ${cats || `<tr>${cell('No spending recorded', 'left', C.faint)}</tr>`}
-    </table>
-    <div style="padding:2px 0 4px">${btn(`${APP_URL}/#analytics`, 'Open analytics')}</div>
-  `;
-  const text = `Your spending report — ${BRAND}\n${r.startDate} to ${r.endDate} · ${r.transactionCount} transactions\n\nIncome:   ${formatMoney(r.totalIncome, opts.currency)}\nExpenses: ${formatMoney(r.totalExpenses, opts.currency)}\nNet:      ${formatMoney(net, opts.currency)}\n\nTop spending categories:\n${r.categoryBreakdown.map((cat) => `- ${cat.name || 'Uncategorized'}: ${formatMoney(cat.total, opts.currency)}`).join('\n') || '- No spending recorded'}\n\nOpen analytics: ${APP_URL}/#analytics${textFooter('You get spending reports because email reminders are enabled in Settings → Notifications.', opts.unsubUrl)}`;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `Income ${formatMoney(r.totalIncome, opts.currency)}, expenses ${formatMoney(r.totalExpenses, opts.currency)}, net ${formatMoney(net, opts.currency)}.`,
-      body,
-      footerReason:
-        'You get spending reports because email reminders are enabled in Settings → Notifications.',
-      unsubUrl: opts.unsubUrl,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text,
-  };
+  const headline =
+    net > 0
+      ? `You kept ${money(net)}.`
+      : net < 0
+        ? `You spent ${money(-net)} more than came in.`
+        : 'Income and spending came out even.';
+  const figure = (label: string, amount: number, tone: MailCell['tone']) => ({
+    cells: [
+      { text: label, tone: 'soft' as const },
+      { text: money(amount), tone, strong: true, align: 'right' as const },
+    ],
+    text: `${label}: ${money(amount)}`,
+  });
+  return renderMail({
+    subject: `${opts.test ? '[Test] ' : ''}Your spending report${opts.periodLabel ? ` for ${opts.periodLabel}` : `, ${r.startDate} to ${r.endDate}`}`,
+    preheader: `Income ${money(r.totalIncome)}, expenses ${money(r.totalExpenses)}, net ${money(net)}.`,
+    art: 'banner',
+    headline,
+    paragraphs: [
+      `From ${r.startDate} to ${r.endDate}, across ${r.transactionCount} ${plural(r.transactionCount, 'transaction', 'transactions')}.`,
+    ],
+    tables: [
+      {
+        rows: [
+          figure('Income', r.totalIncome, 'good'),
+          figure('Expenses', r.totalExpenses, 'over'),
+          figure('Net', net, net >= 0 ? 'good' : 'over'),
+        ],
+      },
+      {
+        title: 'Top spending categories',
+        rows: r.categoryBreakdown.map((cat) => ({
+          cells: [
+            { text: cat.name || 'Uncategorized', dot: cat.color },
+            { text: money(cat.total), align: 'right' },
+          ],
+          text: `- ${cat.name || 'Uncategorized'}: ${money(cat.total)}`,
+        })),
+        empty: 'No spending in this period.',
+      },
+    ],
+    buttons: [{ label: 'Open analytics', href: `${APP_URL}/#analytics` }],
+    reason: reminderReason('spending reports', opts.test),
+    unsubUrl: opts.unsubUrl,
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
 export interface UpcomingBillRow {
@@ -985,6 +986,7 @@ export interface UpcomingBillRow {
   overdue: boolean;
 }
 
+/** The bills overdue or due within a week, each with its amount, due date and how soon. */
 export function renderBillsReminder(opts: {
   bills: UpcomingBillRow[];
   currency?: string | null;
@@ -993,7 +995,7 @@ export function renderBillsReminder(opts: {
   assetOrigin?: string;
 }): RenderedEmail | null {
   if (opts.bills.length === 0) return null;
-  const subject = `${opts.test ? '[Test] ' : ''}Upcoming bills — ${BRAND}`;
+  const money = (amount: number) => formatMoney(amount, opts.currency);
   const when = (b: UpcomingBillRow) =>
     b.overdue
       ? 'Overdue'
@@ -1002,54 +1004,71 @@ export function renderBillsReminder(opts: {
         : b.daysUntilDue === 1
           ? 'Tomorrow'
           : `In ${b.daysUntilDue} days`;
-  const whenColor = (b: UpcomingBillRow) =>
-    b.overdue || b.daysUntilDue === 0 ? C.expense : b.daysUntilDue <= 2 ? C.warm : C.muted;
-  const rows = opts.bills
-    .map(
-      (b) =>
-        `<tr>${cell(escapeHtml(b.name))}${cell(formatMoney(b.amount, opts.currency), 'right')}${cell(escapeHtml(b.due_date || '—'), 'right', C.muted)}${cell(`<strong>${when(b)}</strong>`, 'right', whenColor(b))}</tr>`
-    )
-    .join('');
-  const overdueCount = opts.bills.filter((b) => b.overdue).length;
-  const body = `
-    ${h1('Upcoming bills')}
-    ${p(
-      `${opts.bills.length} bill${opts.bills.length === 1 ? ' is' : 's are'} due within a week${overdueCount > 0 ? ` — ${overdueCount} ${overdueCount === 1 ? 'is' : 'are'} overdue` : ''}.`
-    )}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 14px">
-      ${tableHead([{ label: 'Bill' }, { label: 'Amount', align: 'right' }, { label: 'Due', align: 'right' }, { label: 'When', align: 'right' }])}
-      ${rows}
-    </table>
-    <div style="padding:2px 0 4px">${btn(`${APP_URL}/#bills`, 'Open bills')}</div>
-  `;
-  const text = `Upcoming bills — ${BRAND}\n\n${opts.bills
-    .map(
-      (b) =>
-        `- ${b.name}: ${formatMoney(b.amount, opts.currency)} · ${b.due_date || '—'} · ${when(b)}`
-    )
-    .join(
-      '\n'
-    )}\n\nOpen bills: ${APP_URL}/#bills${textFooter('You get bill reminders because email reminders are enabled in Settings → Notifications.', opts.unsubUrl)}`;
-  return {
-    subject,
-    html: shell({
-      title: subject,
-      preheader: `${opts.bills.length} bill${opts.bills.length === 1 ? '' : 's'} due within a week${overdueCount ? `, ${overdueCount} overdue` : ''}.`,
-      body,
-      footerReason:
-        'You get bill reminders because email reminders are enabled in Settings → Notifications.',
-      unsubUrl: opts.unsubUrl,
-      assetOrigin: opts.assetOrigin,
-    }),
-    text,
-  };
+  const tone = (b: UpcomingBillRow): MailCell['tone'] =>
+    b.overdue || b.daysUntilDue === 0 ? 'over' : b.daysUntilDue <= 2 ? 'warn' : 'soft';
+  const overdue = opts.bills.filter((b) => b.overdue).length;
+  const soon = opts.bills.length - overdue;
+  const bills = (n: number) => `${n} ${plural(n, 'bill', 'bills')}`;
+  const summary =
+    overdue && soon
+      ? `${bills(overdue)} overdue, ${soon} due within a week`
+      : overdue
+        ? `${bills(overdue)} overdue`
+        : `${bills(soon)} due within a week`;
+  const headline =
+    overdue && soon
+      ? `${bills(overdue)} ${plural(overdue, 'is', 'are')} overdue, and ${soon} more ${plural(soon, 'is', 'are')} due within a week.`
+      : overdue
+        ? `${overdue === 1 ? 'A bill is' : `${overdue} bills are`} overdue.`
+        : `${soon === 1 ? 'A bill is' : `${soon} bills are`} due within a week.`;
+  const [first] = opts.bills;
+  const firstWhen = first!.overdue
+    ? 'overdue'
+    : first!.daysUntilDue === 0
+      ? 'due today'
+      : first!.daysUntilDue === 1
+        ? 'due tomorrow'
+        : `due in ${first!.daysUntilDue} days`;
+  const more = opts.bills.length - 1;
+  return renderMail({
+    subject: `${opts.test ? '[Test] ' : ''}${summary}`,
+    preheader: `${first!.name}: ${money(first!.amount)}, ${firstWhen}.${more ? ` And ${more} more.` : ''}`,
+    art: 'banner',
+    headline,
+    paragraphs: [
+      "Here's what each one costs and when it falls due. Paid one already? Mark it paid in Bills.",
+    ],
+    tables: [
+      {
+        columns: [
+          { label: 'Bill' },
+          { label: 'Amount', align: 'right' },
+          { label: 'Due', align: 'right' },
+          { label: 'When', align: 'right' },
+        ],
+        rows: opts.bills.map((b) => ({
+          cells: [
+            { text: b.name },
+            { text: money(b.amount) },
+            { text: b.due_date || 'No date', tone: 'soft' },
+            { text: when(b), tone: tone(b), strong: true },
+          ],
+          text: `- ${b.name}: ${money(b.amount)}. ${when(b)}${b.due_date ? ` (${b.due_date})` : ''}.`,
+        })),
+      },
+    ],
+    buttons: [{ label: 'Open bills', href: `${APP_URL}/#bills` }],
+    reason: reminderReason('reminders for upcoming bills', opts.test),
+    unsubUrl: opts.unsubUrl,
+    assetOrigin: opts.assetOrigin,
+  });
 }
 
 // ── Small utility mails ───────────────────────────────────────────────────────
 
 /**
- * Settings, Email reminders, Test: checks that mail reaches the account's address. It does not
- * say the reminders look like it: they keep the first shell (see the reminder mails above).
+ * Settings, Email reminders, Test: checks that mail reaches the account's address. It says nothing
+ * of how the reminders look: the previews beside it send the real ones.
  */
 export function renderTestBasic(opts: { assetOrigin?: string } = {}): RenderedEmail {
   return renderMail({

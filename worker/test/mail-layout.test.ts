@@ -275,4 +275,65 @@ describe('the mail layout', () => {
     const { html } = renderMail(SPEC);
     expect(new TextEncoder().encode(html).length).toBeLessThan(12 * 1024);
   });
+
+  it('takes tables of figures: escaped, aligned, each row a line of the text twin', () => {
+    const { html, text } = renderMail({
+      ...SPEC,
+      tables: [
+        {
+          title: 'Where it <went>',
+          columns: [{ label: 'Name' }, { label: 'Amount', align: 'right' }],
+          rows: [
+            {
+              cells: [{ text: 'Rent & <b>more</b>', dot: '#6e9bff' }, { text: '€950.00' }],
+              text: '- Rent & <b>more</b>: €950.00',
+            },
+            {
+              cells: [
+                { text: 'Odd', dot: 'url(javascript:x)' },
+                { text: 'In 3 days', tone: 'over' },
+              ],
+              text: '- Odd: in 3 days',
+            },
+          ],
+        },
+        { rows: [], empty: 'Nothing here.' },
+      ],
+    });
+    const { inner } = cardOf(html);
+    expect(inner).toContain('Where it &lt;went&gt;');
+    expect(inner).toContain('Rent &amp; &lt;b&gt;more&lt;/b&gt;');
+    expect(inner).not.toContain('<b>more</b>');
+    expect(inner).toMatch(
+      /<td class="tc-text tc-rule tc-cell tc-cell-gap" align="right"[^>]*white-space:nowrap[^>]*>€950\.00<\/td>/
+    );
+    // A colour that is not #rrggbb never reaches a style; a number keeps its unit.
+    expect(inner).toContain('background:#6e9bff');
+    expect(inner).not.toContain('javascript');
+    expect(inner).toMatch(/<td class="tc-over [^>]*color:#ff9d9d[^>]*>In 3&nbsp;days<\/td>/);
+    expect(inner).toContain('Nothing here.');
+    // Under the paragraphs, above the button.
+    expect(inner.indexOf('The second paragraph.')).toBeLessThan(inner.indexOf('Where it'));
+    expect(inner.indexOf('Nothing here.')).toBeLessThan(inner.indexOf('>Do the thing</a>'));
+    expect(text).toContain(
+      'The second paragraph.\n\nWhere it <went>\n- Rent & <b>more</b>: €950.00\n- Odd: in 3 days\n\nNothing here.\n\nDo the thing:'
+    );
+    // The status colours turn darker on paper, and only a mail with a table carries their rules.
+    const light = /@media \(prefers-color-scheme: light\) \{([\s\S]*?)\n\}/.exec(html)![1]!;
+    expect(light).toContain('.tc-over { color:#b42318 !important; }');
+    expect(renderMail(SPEC).html).not.toContain('.tc-over');
+  });
+
+  it("puts a reminder's unsubscribe link in the footer, after the reason, and in the text twin", () => {
+    const unsubUrl = 'https://api.example/api/notifications/unsubscribe?token=t&x=1';
+    const { html, text } = renderMail({ ...SPEC, unsubUrl });
+    const card = cardOf(html);
+    const link = html.indexOf(
+      'href="https://api.example/api/notifications/unsubscribe?token=t&amp;x=1"'
+    );
+    expect(link).toBeGreaterThan(card.end);
+    expect(link).toBeGreaterThan(html.indexOf(SPEC.reason));
+    expect(text).toContain(`${SPEC.reason}\nUnsubscribe: ${unsubUrl}\n`);
+    expect(renderMail(SPEC).html).not.toContain('Unsubscribe');
+  });
 });

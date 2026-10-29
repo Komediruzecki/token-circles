@@ -13,7 +13,7 @@ The mails load their cuts from the app, out of `frontend/public/email/`:
 | ------------------------------ | ---------- | --------- | ----------------------------------------- |
 | `hero-engraved-night-v1.jpg`   | 1200 x 560 | 600 x 280 | the welcome                               |
 | `banner-engraved-night-v1.jpg` | 1199 x 360 | 600 x 180 | every other mail on the 2026-10-11 layout |
-| `orbit.gif`                    | 144 x 144  | 72 x 72   | the mails that keep the first layout      |
+| `orbit.gif`                    | 144 x 144  | 72 x 72   | no mail now; kept for mails already sent  |
 
 Both cuts are centre crops of the master scaled to their width: the hero is the middle 560 rows at
 1200 wide, the banner the middle 360 rows at 1199 wide. How they were compressed was not recorded.

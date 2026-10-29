@@ -22,7 +22,7 @@ import { comingUp, type ScheduledBill } from '../../shared/billSchedule';
 
 // The unsubscribe endpoint lives on the API worker, NOT the SPA host — a link to
 // the app origin lands on the static-asset fallback and never unsubscribes anyone.
-// The app origin of THIS deployment — mail assets (logo, orbit GIF) load from
+// The app origin of THIS deployment — mail assets (logo, engraved art) load from
 // here so a dev-sent mail never depends on a prod release shipping the asset.
 function appOrigin(env: Env): string {
   return env.CORS_ORIGIN || env.APP_ORIGINS?.split(',')[0] || 'https://tokencircles.com';

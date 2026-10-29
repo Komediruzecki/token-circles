@@ -10,6 +10,7 @@ import {
   renderLoginCode,
   renderPasswordReset,
   renderPaymentActionRequired,
+  renderPaymentFailed,
   renderSpendingReport,
   renderSubscriptionEnded,
   renderSupportAck,
@@ -218,7 +219,9 @@ describe('email templates', () => {
     expectBrandedShell(mail!);
     expect(mail!.html).toContain('Due today');
     expect(mail!.html).toContain('Overdue');
-    expect(mail!.html).toContain('In 4 days');
+    // A number keeps its unit on one line in the HTML; the text twin has a plain space.
+    expect(mail!.html).toContain('In 4&nbsp;days');
+    expect(mail!.text).toContain('In 4 days');
     expect(mail!.html).toContain('€13.99');
     expect(renderBillsReminder({ bills: [] })).toBeNull();
   });
@@ -248,7 +251,7 @@ describe('email templates', () => {
   });
 
   it('test mail says delivery works, and never that the reminders look like it', () => {
-    // The reminders keep the first shell (maff's call of 2026-10-11), so they do not.
+    // It checks delivery only; the previews beside it in Settings send the real reminders.
     const mail = renderTestBasic();
     expect(mail.subject).toBe('Test mail from Token Circles');
     for (const part of [mail.html, mail.text]) expect(part).not.toMatch(/look like this/i);
@@ -281,11 +284,40 @@ describe('email templates', () => {
   });
 });
 
-describe('the billing mails that show no amount', () => {
-  // On the mail layout since 2026-10-11, with every fact of their first-shell version kept. The
-  // failed payment shows the amount due, so it stays on the first shell word for word, with the
-  // reminders (mail-catalogue.test.ts).
+describe('the billing mails', () => {
+  // On the mail layout with every fact of their first-shell version kept: the two that show no
+  // amount since 2026-10-11, the failed payment since 2026-10-29 (maff's call), amount and all.
   const APP = 'https://tokencircles.com';
+
+  it('says on the layout that a payment failed: the amount, the plan, the retry, and that nothing changed yet', () => {
+    const mail = renderPaymentFailed({
+      planName: 'Basic',
+      amountDue: 4.99,
+      currency: 'EUR',
+      nextAttempt: new Date('2026-11-02T00:00:00Z'),
+      payUrl: 'https://invoice.stripe.com/i/EXAMPLE',
+      appUrl: APP,
+    });
+    expectBrandedShell(mail);
+    expect(mail.html).toContain('<td class="tc-card"');
+    expect(mail.subject).toBe("Your Token Circles payment didn't go through");
+    for (const words of [
+      'Your bank declined the €4.99 payment for Token Circles Basic.',
+      "Nothing has changed yet. Your plan is still active and we'll try the card again on 2 November 2026.",
+      'Update your card: https://invoice.stripe.com/i/EXAMPLE',
+      'If the retries run out, the account moves to Free. Nothing is deleted',
+    ]) {
+      expect(mail.text).toContain(words);
+    }
+    expect(mail.html).toContain('the €4.99 payment for Token Circles Basic');
+    expect(mail.html).toContain('<strong class="tc-text"');
+    // No amount and no date from Stripe: the sentences close without them, and the button opens
+    // Settings.
+    const bare = renderPaymentFailed({ planName: 'Basic', appUrl: APP });
+    expect(bare.text).toContain('Your bank declined the payment for Token Circles Basic.');
+    expect(bare.text).toContain("we'll try the card again. Updating");
+    expect(bare.text).toContain(`Update your card: ${APP}/#settings`);
+  });
 
   it("asks for the bank's confirmation on the layout, as a step to take and not a failure", () => {
     const mail = renderPaymentActionRequired({

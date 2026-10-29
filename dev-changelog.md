@@ -91,7 +91,7 @@ All notable changes to Token Circles are documented here. The format is based on
   send throws) and is not retried; the claim stays. `resolveGoogleUser` returns `welcome`; `spendLink`
   and `confirmWithOwnLink` take the route's welcomer. Step 3 of the Welcome is the version for
   before finance prints ship: Progress, and the A year badge.
-- **The account mails moved to the new layout; the mails that show money did not**
+- **The account mails moved to the new layout**
   (`worker/src/emailTemplates.ts`). On the layout now, with their facts kept and their em dashes
   gone: the link to a new address (`renderEmailChange`); the notice to the old address
   (`renderEmailChangeNotice`), one sentence of what was asked and the one thing to do, in Settings;
@@ -100,16 +100,40 @@ All notable changes to Token Circles are documented here. The format is based on
   mail ("Test mail from Token Circles"), which no longer says the reminders look like it; and the
   support reply ("We got your message (TC-...)"); and the two billing mails that show no amount,
   the bank asking to confirm a payment (`renderPaymentActionRequired`) and a plan that ended
-  (`renderSubscriptionEnded`), which lost the old shell's `card` helper, their last user. Left
-  exactly as they were, by maff's call of 2026-10-11: the budget alert, the spending report,
-  upcoming bills and the failed payment, which show an amount. `worker/scripts/mail-samples.ts`
-  renders every mail from plainly fake data, and `worker/test/mail-catalogue.test.ts` holds every
-  one to the rules (a sample of every renderer, a snapshot of every subject, under 102 KB, a text
-  twin with the card's links, no em dash on the new layout) and pins the four unchanged mails to
-  digests taken before the change: their samples, and a grid of 584 inputs over every branch
-  (`worker/test/helpers/amount-mail-grid.ts`, one digest per renderer, equal to what the renderers
-  at `9bd2661a` give for the same grid). The worker's `typecheck` also checks `worker/scripts/`, which
-  has its own tsconfig.
+  (`renderSubscriptionEnded`), which lost the old shell's `card` helper, their last user. The four
+  that show an amount stayed on the first shell until maff's call of 2026-10-29 (next entry).
+  `worker/scripts/mail-samples.ts` renders every mail from plainly fake data, and
+  `worker/test/mail-catalogue.test.ts` holds every one to the rules (a sample of every renderer, a
+  snapshot of every subject, under 102 KB, a text twin with the card's links, no em dash) and pins
+  the four amount mails over a grid of 584 inputs (`worker/test/helpers/amount-mail-grid.ts`, one
+  digest per renderer). The worker's `typecheck` also checks `worker/scripts/`, which has its own
+  tsconfig.
+- **The four mails that show an amount moved to the new layout, amounts kept**
+  (`worker/src/emailTemplates.ts`, maff's call of 2026-10-29). The budget alert
+  (`renderBudgetAlert`), the spending report (`renderSpendingReport`), upcoming bills
+  (`renderBillsReminder`) and the failed payment (`renderPaymentFailed`) are on `renderMail` now:
+  the banner art, paper in light mode, the shared footer and text twin, and no animated
+  `/email/orbit.gif` and no em dash in any subject or body. Every amount still goes through
+  `formatMoney` in the profile's currency, in the HTML and in the text. `MailSpec` takes up to two
+  `tables` (column heads or none, a category's colour as a dot through `sanitizeColor`, status
+  tones `over`, `warn` and `good` with darker colours on paper, figures right-aligned and never
+  broken, each row also one line of the text twin) and an `unsubUrl`: an Unsubscribe link after the
+  footer's reason and an `Unsubscribe:` line in the text. A mail without a table carries none of
+  the table rules, and the samples of every other mail render byte for byte as before. Subjects lose
+  " — Token Circles" and say what happened: "Budget alert: Groceries went over" or "Budget alert:
+  Fuel is at 92%" (the budget furthest along; a preview adds "for October 2026"), "2 bills due
+  within a week" or "1 bill overdue, 3 due within a week", "Your spending report, 2026-10-01 to
+  2026-10-15" ("for <period>" on a preview); the failed payment's subject is unchanged. Headlines
+  carry the outcome ("A budget went over its limit.", "You kept €701.25."); the budget headline
+  says "close to its limit" only when every budget listed is at 80% or more, because the preview
+  lists them all. The footer reason names the toggle under Email reminders, or the preview. A bill
+  with no due date reads "No date", and one transaction is "1 transaction". `shell()` and
+  everything only it used (`btn`, `h1`, `p`, `textFooter`, the old table helpers, the first
+  palette, the serif and the GIF's URL) are gone; `frontend/public/email/orbit.gif` stays, because
+  mails already sent point at it. The grid of 584 inputs keeps its inputs and pinned counts and
+  gets new digests on purpose, taken under plain Node as the old ones were (the same lines give the
+  old digests from `c010b74c`'s templates), and a new test walks it: every mail on the layout, no
+  orbit GIF, no em dash in subject, HTML or text, and every amount of its input in both parts.
 - **`worker/scripts/send-sample-mails.ts` mails a sample of every mail to one inbox**, through
   Resend's REST API, from `mail-samples.ts`. It needs `--to`, reads `RESEND_API_KEY` and
   `EMAIL_FROM` from the environment under the Worker's names, and prints one line per sample: its

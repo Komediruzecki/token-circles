@@ -34,11 +34,6 @@ export interface MailSample {
   name: string;
   /** The renderer that makes it. */
   template: string;
-  /**
-   * `mail` is the layout of 2026-10-11. `first` is the first shell, which the mails that show an
-   * amount of money keep (maff's call of 2026-10-11).
-   */
-  layout: 'mail' | 'first';
   render: () => RenderedEmail;
 }
 
@@ -66,7 +61,6 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'confirm-email',
       template: 'renderConfirmEmail',
-      layout: 'mail',
       render: () =>
         renderConfirmEmail({
           link: sampleLink('/api/auth/verify-email'),
@@ -77,7 +71,6 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'confirm-email-fresh-link',
       template: 'renderEmailVerification',
-      layout: 'mail',
       render: () =>
         renderEmailVerification({
           link: sampleLink('/api/auth/verify-email'),
@@ -88,13 +81,11 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'welcome',
       template: 'renderWelcome',
-      layout: 'mail',
       render: () => renderWelcome({ appUrl, assetOrigin }),
     },
     {
       name: 'email-change',
       template: 'renderEmailChange',
-      layout: 'mail',
       render: () =>
         renderEmailChange({
           link: sampleLink('/api/auth/verify-email'),
@@ -105,25 +96,21 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'email-change-notice',
       template: 'renderEmailChangeNotice',
-      layout: 'mail',
       render: () => renderEmailChangeNotice({ newEmail: 'new.address@example.com', appUrl }),
     },
     {
       name: 'email-change-notice-unnamed',
       template: 'renderEmailChangeNotice',
-      layout: 'mail',
       render: () => renderEmailChangeNotice({ newEmail: null, appUrl }),
     },
     {
       name: 'account-exists',
       template: 'renderAccountExists',
-      layout: 'mail',
       render: () => renderAccountExists({ appUrl }),
     },
     {
       name: 'password-reset',
       template: 'renderPasswordReset',
-      layout: 'mail',
       render: () =>
         renderPasswordReset({
           link: `${appUrl}/#reset-password?token=EXAMPLE-ONLY`,
@@ -134,25 +121,21 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'login-code',
       template: 'renderLoginCode',
-      layout: 'mail',
       render: () => renderLoginCode({ code: '123456', ttlMinutes: 10, assetOrigin }),
     },
     {
       name: 'test-basic',
       template: 'renderTestBasic',
-      layout: 'mail',
       render: () => renderTestBasic({ assetOrigin }),
     },
     {
       name: 'support-ack',
       template: 'renderSupportAck',
-      layout: 'mail',
       render: () => renderSupportAck({ ticketId: 'TC-SAMPLE', assetOrigin }),
     },
     {
       name: 'payment-failed',
       template: 'renderPaymentFailed',
-      layout: 'first',
       render: () =>
         renderPaymentFailed({
           planName: 'Basic',
@@ -165,19 +148,16 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'payment-action-required',
       template: 'renderPaymentActionRequired',
-      layout: 'mail',
       render: () => renderPaymentActionRequired({ planName: 'Basic', appUrl }),
     },
     {
       name: 'subscription-ended',
       template: 'renderSubscriptionEnded',
-      layout: 'mail',
       render: () => renderSubscriptionEnded({ planName: 'Basic', appUrl }),
     },
     {
       name: 'budget-alert',
       template: 'renderBudgetAlert',
-      layout: 'first',
       render: () =>
         rendered(
           renderBudgetAlert({
@@ -210,7 +190,6 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'spending-report',
       template: 'renderSpendingReport',
-      layout: 'first',
       render: () =>
         rendered(
           renderSpendingReport({
@@ -237,7 +216,6 @@ export function mailSamples(opts: SampleOptions = {}): MailSample[] {
     {
       name: 'bills-reminder',
       template: 'renderBillsReminder',
-      layout: 'first',
       render: () =>
         rendered(
           renderBillsReminder({
