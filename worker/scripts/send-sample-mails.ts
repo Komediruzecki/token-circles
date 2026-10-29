@@ -29,6 +29,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { listUnsubscribeHeaders } from '../src/email.ts';
 import { mailSamples, type MailSample } from './mail-samples.ts';
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -95,12 +96,14 @@ async function send(
   from: string,
   fetch: typeof globalThis.fetch
 ): Promise<{ id: string } | { error: string }> {
-  const { subject, html, text } = sample.render();
+  const { subject, html, text, listUnsubscribe } = sample.render();
+  // The same List-Unsubscribe pair the Worker sends, so a sample shows the mail app's own button.
+  const headers = listUnsubscribe ? listUnsubscribeHeaders(listUnsubscribe) : undefined;
   try {
     const res = await fetch(RESEND_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to, subject, html, text }),
+      body: JSON.stringify({ from, to, subject, html, text, headers }),
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
     const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };

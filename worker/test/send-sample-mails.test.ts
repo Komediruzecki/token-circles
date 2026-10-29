@@ -131,3 +131,42 @@ describe('send-sample-mails, the key', () => {
     expect(out).toBe('welcome error: Resend 401: API key [key] is invalid\n');
   });
 });
+
+describe('send-sample-mails, the headers', () => {
+  /** The Resend request body for each named sample, from a stub fetch. */
+  async function bodies(only: string): Promise<Record<string, unknown>[]> {
+    const sent: Record<string, unknown>[] = [];
+    const code = await main({
+      argv: ['--to', 'sample@example.com', '--only', only],
+      env: { RESEND_API_KEY: 're_FAKE_headers' },
+      out: () => {},
+      err: () => {},
+      fetch: (async (_input: RequestInfo | URL, init?: RequestInit) => {
+        sent.push(JSON.parse(String(init?.body)));
+        return Response.json({ id: 'msg_1' });
+      }) as typeof fetch,
+    });
+    expect(code).toBe(0);
+    return sent;
+  }
+
+  it('sends the List-Unsubscribe pair with a mail that has an unsubscribe link, as the Worker does', async () => {
+    const [budget, dayTwo] = await bodies('budget-alert,week-one-day-2');
+
+    expect(budget.headers).toEqual({
+      'List-Unsubscribe': expect.stringMatching(
+        /^<https:\/\/.+\/api\/notifications\/unsubscribe\?token=/
+      ),
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+    expect((dayTwo.headers as Record<string, string>)['List-Unsubscribe']).toContain(
+      'list=week-one'
+    );
+  });
+
+  it('sends no headers with a mail that has none', async () => {
+    const [welcome] = await bodies('welcome');
+
+    expect(welcome).not.toHaveProperty('headers');
+  });
+});

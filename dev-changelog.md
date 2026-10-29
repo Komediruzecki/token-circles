@@ -1246,6 +1246,11 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   none on the sign-in code, welcome and subscription-ended mails). `worker/test/email-change.test.ts`
   checks the old address's token with a POST, since a GET no longer unsubscribes anyone.
 
+- **Sample mails carry the List-Unsubscribe pair.** `worker/scripts/send-sample-mails.ts` sends
+  `listUnsubscribeHeaders(listUnsubscribe)` (`worker/src/email.ts`) with every sample whose
+  rendered mail has one, so a sample in Gmail shows the mail app's own unsubscribe button and its
+  DKIM coverage can be checked. Test: `worker/test/send-sample-mails.test.ts`.
+
 ### Tests
 
 - **An App closed before its start-up answers no longer signs anyone in.** `onMount` in
