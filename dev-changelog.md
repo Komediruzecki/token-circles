@@ -38,6 +38,15 @@ All notable changes to Token Circles are documented here. The format is based on
 - `0038_import_bank_formats.sql` adds one nullable column to `import_logs`, `bank_formats TEXT`,
   with no default and no rewrite: every existing log reads NULL. Safe to apply before the code: the
   Worker before it names its columns on every insert.
+- `0039_week_one_mails.sql` adds `users.week_one_mails INTEGER NOT NULL DEFAULT 1` and the index
+  `idx_reminder_dedup_key_sent ON reminder_dedup(dedup_key, sent_at)`. Safe to apply before the
+  code: nothing before it reads either.
+- `0040_week_one_existing_accounts.sql` is data only: it adds `reminder_dedup` rows
+  `(user_id, 'week-one:day2')` and `(user_id, 'week-one:day7')` for every account, so no account
+  that exists before the week-one mails gets one. It must ship with 0033 or after it, never
+  before: 0033 dates every existing account's Welcome claim to the day it runs, and the week-one
+  windows count from that claim. An account that signs up between the migrations and the deploy
+  gets no Welcome claim from the old code, so it gets no week-one mail either.
 
 ### Account email and sign-in
 
@@ -142,6 +151,40 @@ All notable changes to Token Circles are documented here. The format is based on
   an error it prints has `[key]` wherever it quoted the key. `--dry-run <folder>` writes each mail as `.html` and
   `.txt` instead of sending, and needs no key; `--only`, `--app-url` and `--asset-origin` pick the
   samples and the origins. It runs on a Node that strips types by default, with no build step.
+- **The week-one mails** (`worker/src/weekOne.ts`, renderers `renderWeekOneDay2` and
+  `renderWeekOneDay7` in `emailTemplates.ts`). Day 2 goes only while no transaction in any of the
+  account's profiles has an `import_id`; day 7 only once one does. Day 0 is the account's Welcome
+  claim, the `reminder_dedup (user_id, 'welcome')` row every confirm path writes in the batch that
+  confirms the address, so no new column records when an address was confirmed; its `sent_at` is
+  UTC, as are the windows: day 2 in `[2, 5)` days, day 7 in `[7, 10)` (`WEEK_ONE`). They run on the
+  daily `0 8 * * *` cron, after the reminders rather than beside them (`index.ts` `scheduled`), so
+  two senders never call Resend at once; a window of days instead of a day catches up a missed run.
+  Every confirmed account is eligible whatever its plan; they skip `withinQuota`/`recordSend`, so
+  Free's `remindersPerMonth` of 0 does not stop them and they do not count against a paid plan's.
+  `users.week_one_mails = 0` or `notifications_unsubscribed = 1` stops them. Each send claims
+  `week-one:day2` or `week-one:day7` first, with the mail's condition, the switch and the
+  unsubscribe in the same `INSERT OR IGNORE ... SELECT`, so a re-fired cron or an import between
+  the query and the send is seen. A claim is given back only when Resend certainly refused the
+  mail (a 4xx, or no API key); a timeout, a network error or a 5xx keeps it, because a duplicate
+  is worse than a miss, and a 429 ends the run. At most 50 of each per run (`WEEK_ONE_BATCH`),
+  oldest day 0 first. Day 7 counts, from the profile with the most imported transactions:
+  entries imported, tracked months in the 13-month window (`shared/trackedMonths.ts`), active
+  subscriptions and bills, and entries other than transfers without a category; its next step is
+  the first of `shared/orientation.ts` `nextSteps` with the facts the Worker can count (the
+  subscription scan, the month in the red, the top category without a budget and the cushion read
+  as "does not apply"). No amount, category or merchant name reaches the mail.
+- **Mail headers and a named stop link.** `sendMail` takes `headers` (Resend's `headers` field)
+  and returns Resend's `status` on a refusal; `oneClickUnsubscribeHeaders(url)` gives
+  `List-Unsubscribe: <url>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. The week-one
+  mails send them with their stop link, `/api/notifications/unsubscribe?token=...&list=week-one`.
+  `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); the
+  catalogue's footer check now reads `&amp;` in an href as `&`.
+- **The week-one switch in Settings** (`frontend/src/features/WeekOneMails.tsx`). `GET
+/api/notifications/settings` adds `weekOneMails`, `weekOneAhead` (the Welcome claim is under 10
+  days old and not both mails have gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no
+  plan gate. The switch sits in the Email reminders card outside the plan lock, shows only while
+  `weekOneAhead`, and saves by itself when flipped. After a general unsubscribe it shows off and
+  disabled. `ToggleField` takes `disabled`.
 
 ### Onboarding
 
