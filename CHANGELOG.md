@@ -10,7 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Unsubscribing from reminder mails takes one press, and mail apps can show their own unsubscribe button.** The link in a reminder mail opens a page with an Unsubscribe button, and budget alerts, spending reports and bill reminders now tell Gmail and other mail apps where to unsubscribe.
+- **The unsubscribe link in a reminder mail asks you to press Unsubscribe.** Opening the link alone no longer turns reminders off, so a link preview can't do it for you. Budget alerts, spending reports and bill reminders also tell Gmail and other mail apps where to unsubscribe, so their own button works.
 
 ### Fixed
 
