@@ -85,13 +85,7 @@ export default function EmailCodeLogin(props: {
           </p>
           <FormNotice form={request} testId="emailcode-error" />
           <form {...request.attrs}>
-            <Field
-              form={request}
-              name="email"
-              label="Email address"
-              class={styles.field}
-              labelClass={styles.label}
-            >
+            <Field form={request} name="email" label="Email address" class={styles.field} floating>
               {(control) => (
                 <input
                   {...control}

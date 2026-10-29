@@ -16,9 +16,25 @@
  * A `tip` (an InfoTip) sits beside the label, outside it. Inside a `<label>` its whole explanation
  * would become part of the control's name, and a screen reader would read a paragraph where the
  * field's name belongs.
+ *
+ * `floating` puts the label inside the box, where the value will go, and moves it to the box's top
+ * edge once the field has focus or a value (Form.module.css). It is still a `<label for>`; it
+ * follows the control in the markup only so the stylesheet can move it from the control's state.
+ * The control gets a blank placeholder for that, unless the page gives it a hint of its own, which
+ * shows only while the field has focus and is empty. A floating field's tip goes under it.
+ *
+ * `reveal` is for a password: a button at the box's right end shows it and hides it again, and
+ * the field goes back to a password whenever its form is sent, so a password manager still finds
+ * a password field to save. The control takes its `type` from `control`, so the page sets none.
+ * The button's name says what a press does, Show password or Hide password, as GOV.UK's does. It
+ * has no pressed state, since "Hide password, pressed" reads as a double negative, and no tooltip,
+ * which would have a screen reader say the name twice.
+ *
+ * `floating` and `reveal` are fixed for the field's life, like its form and name.
  */
-import { createUniqueId, onCleanup, Show } from 'solid-js'
+import { createSignal, createUniqueId, onCleanup, onMount, Show } from 'solid-js'
 import ErrorGlyph from './ErrorGlyph'
+import EyeGlyph from './EyeGlyph'
 import styles from './Form.module.css'
 import type { JSX } from 'solid-js'
 import type { FieldName, Form, FormValues } from './createForm'
@@ -30,6 +46,10 @@ export interface FieldControl {
   readonly 'aria-describedby': string | undefined
   readonly role?: 'group'
   readonly 'aria-labelledby'?: string
+  /** A floating field's: blank, so the stylesheet can tell an empty box (`:placeholder-shown`). */
+  readonly placeholder?: string
+  /** A field with `reveal`: `password`, or `text` while the password is shown. */
+  readonly type?: 'password' | 'text'
 }
 
 export interface FieldProps<T extends FormValues> {
@@ -43,6 +63,10 @@ export interface FieldProps<T extends FormValues> {
   tip?: JSX.Element
   /** The control is a set of controls (a row of buttons), labelled as a group. */
   group?: boolean
+  /** The label sits inside the box until the field has focus or a value. */
+  floating?: boolean
+  /** A password, with a button that shows it. The control must not set its own `type`. */
+  reveal?: boolean
   /**
    * The control's id, when something outside the form names it: a password manager or a test that
    * finds the sign-in fields by theirs. Unique otherwise, which is almost always what is wanted.
@@ -55,12 +79,17 @@ export interface FieldProps<T extends FormValues> {
   children: (control: FieldControl) => JSX.Element
 }
 
+/** Both classes, or the one that is set. */
+const both = (first: string, second: string | undefined) => (second ? `${first} ${second}` : first)
+
 export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.Element {
   // Fixed for the field's life, like its form and name: the id is what it registers.
   const controlId = props.id ?? `field-${createUniqueId()}`
   const labelId = `${controlId}-label`
   const errorId = `${controlId}-error`
   const hintId = `${controlId}-hint`
+  const floating = props.floating === true
+  const revealable = props.reveal === true
 
   // A Field's form and name are fixed for its life, so it registers once.
   onCleanup(props.form.register(props.name, controlId))
@@ -68,6 +97,25 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
   const message = () => props.form.error(props.name)
   const describedBy = () =>
     [message() ? errorId : null, props.hint ? hintId : null].filter(Boolean).join(' ') || undefined
+
+  /** The field's value in the form, by its name: `email`, or `<list>.<index>.<field>`. */
+  const value = () =>
+    props.name
+      .split('.')
+      .reduce<unknown>(
+        (at, key) =>
+          at !== null && typeof at === 'object' ? (at as Record<string, unknown>)[key] : undefined,
+        props.form.values
+      )
+  const filled = () => {
+    const now = value()
+    return now !== undefined && now !== null && now !== ''
+  }
+
+  // Whether a revealable password is shown as text.
+  const [shown, setShown] = createSignal(false)
+  let box: HTMLDivElement | undefined
+  const input = () => box?.querySelector('input') ?? undefined
 
   const control: FieldControl = {
     id: controlId,
@@ -83,7 +131,52 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
     get 'aria-labelledby'() {
       return props.group ? labelId : undefined
     },
+    get placeholder() {
+      return floating ? ' ' : undefined
+    },
+    get type() {
+      if (!revealable) return undefined
+      return shown() ? 'text' : 'password'
+    },
   }
+
+  /** Show the password, or hide it again, with the caret where it was. */
+  const toggle = () => {
+    const field = input()
+    const focused = field !== undefined && field === document.activeElement
+    const start = field?.selectionStart ?? null
+    const end = field?.selectionEnd ?? null
+    const direction = field?.selectionDirection ?? undefined
+    setShown(!shown())
+    if (!field || !focused || start === null || end === null) return
+    // A new type can move the caret, and someone halfway through typing wants it where it was.
+    // Chromium moves it to the start once a mouse click that changed the type is over, so it goes
+    // back on the next frame too, unless the person has typed since.
+    const putBack = () => {
+      field.setSelectionRange(start, end, direction)
+    }
+    putBack()
+    const typed = field.value
+    requestAnimationFrame(() => {
+      if (field === document.activeElement && field.value === typed) putBack()
+    })
+  }
+
+  // A form sent with the password showing sends it as a password: the password manager looks for
+  // one to save, and a text field's value can go into the browser's autocomplete history. In the
+  // capture phase, so it runs before any submit handler the page gave the form. What the form
+  // sends is its values, not the field's text, so hiding it first takes nothing from them.
+  // The listener goes with the field, and a field that comes back adds its own. Removing it needs
+  // the same capture flag: without the flag the remove matches nothing and the old one stays on.
+  onMount(() => {
+    const owner = revealable ? input()?.form : null
+    if (!owner) return
+    const hide = () => setShown(false)
+    owner.addEventListener('submit', hide, { capture: true })
+    onCleanup(() => {
+      owner.removeEventListener('submit', hide, { capture: true })
+    })
+  })
 
   /** The label, with the page's class unless a wrapper beside a tip carries it. */
   const label = (labelClass: string | undefined) => (
@@ -101,15 +194,51 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
     </Show>
   )
 
+  /** The control in a box of its own, with the label inside it, the reveal button, or both. */
+  const boxed = () => {
+    const classes = [
+      styles.box,
+      floating ? styles.floating : '',
+      revealable ? styles.revealable : '',
+    ]
+    return (
+      <div
+        ref={box}
+        class={classes.filter(Boolean).join(' ')}
+        data-filled={floating && filled() ? 'true' : undefined}
+      >
+        {props.children(control)}
+        {floating ? label(both(styles.floatLabel, props.labelClass)) : null}
+        {revealable ? (
+          <button
+            type="button"
+            class={styles.reveal}
+            aria-controls={controlId}
+            aria-label={shown() ? 'Hide password' : 'Show password'}
+            // A press would take focus from the field, and the caret with it.
+            onMouseDown={(event) => {
+              event.preventDefault()
+            }}
+            onClick={toggle}
+          >
+            <EyeGlyph crossed={shown()} />
+          </button>
+        ) : null}
+      </div>
+    )
+  }
+
   return (
     <div class={props.class ? `${styles.field} ${props.class}` : styles.field}>
-      <Show when={props.tip} fallback={label(props.labelClass)}>
-        <div class={props.labelClass}>
-          {label(undefined)}
-          {props.tip}
-        </div>
-      </Show>
-      {props.children(control)}
+      {floating ? null : (
+        <Show when={props.tip} fallback={label(props.labelClass)}>
+          <div class={props.labelClass}>
+            {label(undefined)}
+            {props.tip}
+          </div>
+        </Show>
+      )}
+      {floating || revealable ? boxed() : props.children(control)}
       <Show when={message()}>
         {(text) => (
           <p id={errorId} class={styles.error}>
@@ -122,6 +251,9 @@ export default function Field<T extends FormValues>(props: FieldProps<T>): JSX.E
         <span id={hintId} class={props.hintClass ?? styles.hint}>
           {props.hint}
         </span>
+      </Show>
+      <Show when={floating && props.tip}>
+        <div class={styles.floatTip}>{props.tip}</div>
       </Show>
     </div>
   )
