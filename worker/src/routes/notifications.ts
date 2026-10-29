@@ -17,7 +17,7 @@ import type { UserRow } from '../reminders';
 import { enforce } from '../ratelimit';
 import { requireFeature } from '../plan';
 import { localNow } from '../local-date';
-import { weekOneAhead } from '../weekOne';
+import { WEEK_ONE_LIST, weekOneAhead } from '../weekOne';
 
 // Email/reminder preferences + test/trigger/unsubscribe. Per-type prefs live in `settings`
 // (email_notifications, email_budget_alerts, email_spending_report) on the active profile;
@@ -254,9 +254,40 @@ const unsubscribedPage = (c: UnsubscribeContext) =>
     `Token Circles will not send this address any more reminder mails: no budget alerts, spending reports or bill reminders. ${STILL_ARRIVES}`
   );
 
+// `&list=week-one` is the stop link of the week-one mails (weekOne.ts): it turns off those two
+// mails only (users.week_one_mails), and leaves every other mail as it is. Without a list, the
+// link stops every reminder mail, the week-one mails included, as it always has.
+
+const weekOneStoppedPage = (c: UnsubscribeContext) =>
+  unsubscribePage(
+    c,
+    'First-week mails are off',
+    `Token Circles will not send this address its first-week mails. Budget alerts, spending reports and bill reminders keep their own settings. ${STILL_ARRIVES}`
+  );
+
+/** The page of a week-one stop link: one button, and nothing changes until it is pressed. */
+async function weekOneUnsubscribePage(c: UnsubscribeContext, token: string) {
+  const user = await db.first<{ week_one_mails: number; notifications_unsubscribed: number }>(
+    c.env.DB,
+    'SELECT week_one_mails, notifications_unsubscribed FROM users WHERE unsubscribe_token = ?',
+    token
+  );
+  if (!user) return unknownToken(c);
+  if (!user.week_one_mails || user.notifications_unsubscribed) return weekOneStoppedPage(c);
+  return unsubscribePage(
+    c,
+    'Stop first-week mails?',
+    `Press Unsubscribe to stop the two mails Token Circles sends in a new account's first week. Budget alerts, spending reports and bill reminders keep their own settings. ${STILL_ARRIVES}`,
+    {
+      action: `/api/notifications/unsubscribe?token=${encodeURIComponent(token)}&list=${WEEK_ONE_LIST}`,
+    }
+  );
+}
+
 notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
   const token = c.req.query('token');
   if (!token) return missingToken(c);
+  if (c.req.query('list') === WEEK_ONE_LIST) return weekOneUnsubscribePage(c, token);
   const user = await db.first<{ notifications_unsubscribed: number | null }>(
     c.env.DB,
     'SELECT notifications_unsubscribed FROM users WHERE unsubscribe_token = ?',
@@ -275,6 +306,16 @@ notificationsRoutes.get('/api/notifications/unsubscribe', async (c) => {
 notificationsRoutes.post('/api/notifications/unsubscribe', async (c) => {
   const token = c.req.query('token');
   if (!token) return missingToken(c);
+  if (c.req.query('list') === WEEK_ONE_LIST) {
+    // The week-one switch only. notifications_unsubscribed is left as it is.
+    const res = await db.run(
+      c.env.DB,
+      'UPDATE users SET week_one_mails = 0 WHERE unsubscribe_token = ?',
+      token
+    );
+    if (!res.meta.changes) return unknownToken(c);
+    return weekOneStoppedPage(c);
+  }
   // SQLite counts a row the WHERE matched as changed even when the flag was already 1, so an
   // account that is already unsubscribed still answers with the done page.
   const res = await db.run(

@@ -173,12 +173,22 @@ All notable changes to Token Circles are documented here. The format is based on
   the first of `shared/orientation.ts` `nextSteps` with the facts the Worker can count (the
   subscription scan, the month in the red, the top category without a budget and the cushion read
   as "does not apply"). No amount, category or merchant name reaches the mail.
-- **Mail headers and a named stop link.** `sendMail` takes `headers` (Resend's `headers` field)
-  and returns Resend's `status` on a refusal; `oneClickUnsubscribeHeaders(url)` gives
-  `List-Unsubscribe: <url>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. The week-one
-  mails send them with their stop link, `/api/notifications/unsubscribe?token=...&list=week-one`.
+- **The week-one stop link and its headers.** `renderMail` now sets `RenderedEmail.listUnsubscribe`
+  from `MailSpec.unsubUrl`, so every mail on the layout with a footer unsubscribe link (the three
+  reminders and the two week-one mails) sends that same URL as List-Unsubscribe through
+  `sendMail`'s `listUnsubscribe` (#648); the week-one sender passes `rendered.listUnsubscribe`.
+  `sendMail` also returns Resend's `status` on a refusal, which the week-one sender reads.
   `MailSpec.unsubLabel` words the footer link and its text line ("Stop first-week mails"); the
-  catalogue's footer check now reads `&amp;` in an href as `&`.
+  catalogue's footer check now reads `&amp;` in an href as `&`, and the amount-mail digests hash
+  subject, HTML and text only, so they still pin the reviewed output byte for byte (unchanged
+  digests) while `listUnsubscribe` is held by `list-unsubscribe-headers.test.ts`.
+- **`/api/notifications/unsubscribe?token=...&list=week-one`** (`routes/notifications.ts`). GET
+  shows "Stop first-week mails?" with one button that posts back to the same URL, and changes
+  nothing; once they are off it says so with no button. POST, from the button or an RFC 8058
+  one-click request, sets `users.week_one_mails = 0` and leaves `notifications_unsubscribed` alone,
+  so a paid plan's reminders keep coming; it is idempotent and answers an unknown token 400. The
+  link without `list`, or with any other value, is the general unsubscribe as #648 left it, and
+  that stops the week-one mails too. `worker/test/week-one-unsubscribe.test.ts`.
 - **The week-one switch in Settings** (`frontend/src/features/WeekOneMails.tsx`). `GET
 /api/notifications/settings` adds `weekOneMails`, `weekOneAhead` (the Welcome claim is under 10
   days old and not both mails have gone) and `unsubscribed`; `PUT` takes `weekOneMails` with no
