@@ -9,6 +9,7 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { historySettled } from './historySettled'
 import type { JSX } from 'solid-js'
 import type * as TurnstileModule from '../Turnstile'
 
@@ -104,9 +105,11 @@ beforeEach(() => {
   } as unknown as Location)
 })
 
-afterEach(() => {
+afterEach(async () => {
   dispose?.()
   host.remove()
+  // The dialog, or a screen on a step, takes its history entry back: let that land first.
+  await historySettled()
   vi.unstubAllGlobals()
 })
 
