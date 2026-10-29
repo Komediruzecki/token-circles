@@ -54,8 +54,18 @@ All notable changes to Token Circles are documented here. The format is based on
   Allocate and `upsert_budget` take the same key `DESC, id DESC`. Local-first sorts with
   `bySavedOrder` in `budgetsSummary`, `budgetsZeroBased` and `budgetsAllocate`, and
   `budgetsForMonth` in achievements uses it too. No migration, no change to a response's shape.
-  `/api/budgets/alerts`, `/api/budgets/zero-based/summary` and the MCP `get_budgets_and_goals`
-  tool still list every row of the month. Tests:
+  Not yet on the rule, each reading every row of a month (or one row SQLite picks) where two exist:
+  `GET /api/budgets/alerts` (one alert per row); `GET /api/budgets/zero-based/summary` (the
+  Allocated card and the zero-based table: one line per row, `total_budget` and `already_budgeted`
+  their sum); `alreadyBudgeted`, `unassigned_budget` and `can_allocate` in
+  `GET /api/budgets/zero-based` (a `SUM(amount)` over the month); `GET /api/budgets/history`
+  (`GROUP BY start_date` with a bare `amount`); `GET /api/budgets/improvements`;
+  `GET /api/budgets/forecast`; the budget comparison in `worker/src/routes/analytics.ts` (`GROUP BY
+category_id` with a bare `amount`); the monthly budget email in `worker/src/reminders.ts`; the MCP
+  `get_budgets_and_goals` tool. Their local-first mirrors in
+  `frontend/src/core/storage/handlers/budgets.ts` (`budgetsAlerts`, `budgetsZeroBasedSummary`,
+  `alreadyBudgeted` in `budgetsZeroBased`, `budgetsHistory`, `budgetsImprovements`,
+  `budgetsForecast`) and `handlers/analytics.ts` behave the same way. Tests:
   `worker/test/budgets-one-row-per-month.test.ts` (which also pins D1's `created_at` as UTC),
   `worker/test/mcp-tools-write.test.ts`, `frontend/src/core/__tests__/budgetSavedOrder.test.ts`,
   `frontend/src/core/storage/__tests__/localHandlers.budgetRows.test.ts`,
