@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.1] — 2026-10-29
+
 ### Achievements
 
 - **Budget badges hold a month against that month's budgets only.** `heldMonths` in
