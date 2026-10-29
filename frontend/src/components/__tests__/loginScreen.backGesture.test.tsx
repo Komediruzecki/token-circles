@@ -406,6 +406,10 @@ describe('leaving the screen while a step entry is still on its way back', () =>
       get search() {
         return real.search
       },
+      // The screen reads the fragment as it mounts: #forgot-password opens it on the reset form.
+      get hash() {
+        return real.hash
+      },
       reload: () => {
         gone.push({ how: 'reload', state: history.state })
       },
