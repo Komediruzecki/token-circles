@@ -75,6 +75,53 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Mail
 
+- **Every mail is on the engraved layout, extracted from #620 without the rest of it.**
+  `renderMail` in `worker/src/emailTemplates.ts` lays every mail out one way: the wordmark above the
+  card, the engraved art flush at its top (`frontend/public/email/hero-engraved-night-v1.jpg` on the
+  welcome, `banner-engraved-night-v1.jpg` on the rest), one headline, a paragraph or two, a button,
+  at most one list of steps or two tables, the footer under the card. Dark by default, paper in
+  light mode through `prefers-color-scheme`, dark colours repeated as `bgcolor` for classic Outlook,
+  a fixed 600 px column in an `<!--[if mso]>` table. `shell()` and the orbit GIF are gone from the
+  templates; `frontend/public/email/orbit.gif` stays for mails already sent. The images ship with
+  the frontend deploy and load from the sending Worker's app origin: every caller passes
+  `CORS_ORIGIN || APP_ORIGINS[0]` (prod: `https://tokencircles.com`), and the templates fall back to
+  the prod app. `frontend/public/_headers` serves `/email/*` immutable for a year, safe because a
+  file there is never overwritten (`docs/design/mail-art/README.md`).
+  Carried from #620: dddbdaee, 1ed7e7a8, c1fa0329, 0d314022, 9f16c834, 27fc69e3, e0edd76d,
+  2b34c45e (layout and renderers), e4ccd765, 58b448ca, 17907769 (sample script), the template half
+  of 3352878c (the fresh-link mail), and the `reminders.ts` comment of 2b34c45e. Left on #620: the
+  week-one mails (`renderWeekOneDay2/Day7`, `WEEK_ONE_UNSUB_LABEL`, `MailSpec.unsubLabel`,
+  `weekOne.ts`, migrations 0039/0040, the 08:30 cron, the Settings switch); the sign-up split
+  (`renderConfirmEmail`, `welcome.ts`, migration 0033 and the `email-link.ts`, `email-change.ts`,
+  `routes/email-code.ts`, `routes/auth.ts` changes), because it needs migration 0033 to mark existing
+  accounts as welcomed; Reset password in the account-exists mail, because main has no
+  `#forgot-password` route (fc27d908, f626e869 add it). So on this branch a password sign-up still
+  gets one mail, `renderWelcome({ verifyUrl })`: the hero art, the confirm button and paste line,
+  and the three steps with no page links, since a sign-in is refused until the address is
+  confirmed. `MailStep.link` is optional for that. The account-exists mail keeps one button, Sign
+  in, and says the reset is on the sign-in screen. Merging main into #620 afterwards: take #620's
+  side of `emailTemplates.ts`, `mail-samples.ts`, `mail-catalogue.test.ts`, `mail-layout.test.ts`,
+  `email-templates.test.ts`, `email-verification.test.ts` and `send-sample-mails.test.ts`, then
+  re-apply the footer commit below to #620's renderers and re-take the digests.
+  `worker/scripts/mail-samples.ts` renders every mail from fake data;
+  `node worker/scripts/send-sample-mails.ts --to <address> [--dry-run <folder>]` writes or mails
+  them. Tests: `worker/test/mail-layout.test.ts`, `mail-catalogue.test.ts` (every renderer has a
+  sample, subjects snapshotted, 102 KB Gmail limit, text twins, no em dash, the 584-input amount
+  grid in `test/helpers/amount-mail-grid.ts` pinned by digest), `send-sample-mails.test.ts`,
+  `email-templates.test.ts`, `email-verification.test.ts`, `frontend/src/__tests__/emailAssets.test.ts`.
+  `pnpm -C worker typecheck` now also checks `worker/scripts/`.
+- **The mail footer is centred and never breaks at a dot.** On a 375 px phone the link row wrapped
+  after a dot, the copyright line put "· hello@tokencircles.com" at the start of the next line, and
+  the reason ran into the copyright. `mailFooter` in `emailTemplates.ts` now follows MercuryPitch's
+  `footerHtml`: a centred cell of separate paragraphs, the tagline (14 px, each sentence `nowrap`),
+  About · GitHub · Terms · Privacy (13 px, joined by `&nbsp;&middot;&nbsp;` and `nowrap`, so it
+  cannot wrap), the copyright (`nowrap`), the address as a `mailto:` line of its own, and the reason
+  with its Unsubscribe link 18 px below. "Open the app" leaves the HTML row (the wordmark links the
+  app) and stays in the text twin, which follows the same order. Measured in headless Chromium
+  (Liberation Sans in place of the system font): the row is 187 px of the 264 px a 320 px viewport
+  leaves it, the copyright 177 px, and no line at 320 or 375 px starts or ends with a dot. The
+  amount-mail digests were taken again; all 464 mails differ from the old ones only in the footer
+  and the `.tc-sep` light-mode rule.
 - **The unsubscribe token is minted in one statement.** `ensureUnsubToken` (`worker/src/reminders.ts`)
   read no token, made one and wrote it with a plain UPDATE, so two senders running at once (a cron
   that fires twice) each wrote their own and the mail that went out could carry the token that was
