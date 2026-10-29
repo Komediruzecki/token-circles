@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.2] — 2026-10-30
+
 ### Changed
 
 - **See the password you typed.** When you sign in, create an account or set a new password, the password box has an eye at its right end that shows what you typed and hides it again. The email and password labels now sit inside their boxes and move up when you click or tap into one, so the sign-in and create-account forms take less room.
