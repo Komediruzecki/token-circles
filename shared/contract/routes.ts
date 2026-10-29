@@ -239,6 +239,7 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'POST /api/notifications/test-email': 'Email notifications are sent by the Worker.',
   'POST /api/notifications/trigger': 'Email notifications are sent by the Worker.',
   'GET /api/notifications/unsubscribe': 'Email notifications are sent by the Worker.',
+  'POST /api/notifications/unsubscribe': 'Email notifications are sent by the Worker.',
   'GET /api/auth/passkeys': 'Signing in. Local-first has no account to sign in to.',
   'DELETE /api/auth/passkeys/:id': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/passkeys/login/options': 'Signing in. Local-first has no account to sign in to.',

@@ -285,7 +285,12 @@ async function sendClaimed(
 ): Promise<boolean> {
   let sent = false;
   try {
-    sent = (await sendMail(env, to, mail.subject, mail.html, { text: mail.text })).sent;
+    sent = (
+      await sendMail(env, to, mail.subject, mail.html, {
+        text: mail.text,
+        listUnsubscribe: mail.listUnsubscribe,
+      })
+    ).sent;
   } catch {
     sent = false;
   }

@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Unsubscribing from reminder mails takes one press, and mail apps can show their own unsubscribe button.** The link in a reminder mail opens a page with an Unsubscribe button, and budget alerts, spending reports and bill reminders now tell Gmail and other mail apps where to unsubscribe.
+
 ### Fixed
 
 - **Budget badges judge each month by its own budget.** Held the line, Six months under and Clean sweep also held a month to every earlier budget for the category, so a budget you raised still counted at its old amount; badges you already have stay yours.

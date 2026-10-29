@@ -55,6 +55,11 @@ export interface RenderedEmail {
   subject: string;
   html: string;
   text: string;
+  /**
+   * The unsubscribe URL the footer links to, on a mail that has one. sendMail sends it as the
+   * List-Unsubscribe header, so the header and the footer can never name different links.
+   */
+  listUnsubscribe?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -634,6 +639,7 @@ export function renderBudgetAlert(opts: {
       assetOrigin: opts.assetOrigin,
     }),
     text,
+    ...(opts.unsubUrl ? { listUnsubscribe: opts.unsubUrl } : {}),
   };
 }
 
@@ -697,6 +703,7 @@ export function renderSpendingReport(opts: {
       assetOrigin: opts.assetOrigin,
     }),
     text,
+    ...(opts.unsubUrl ? { listUnsubscribe: opts.unsubUrl } : {}),
   };
 }
 
@@ -765,6 +772,7 @@ export function renderBillsReminder(opts: {
       assetOrigin: opts.assetOrigin,
     }),
     text,
+    ...(opts.unsubUrl ? { listUnsubscribe: opts.unsubUrl } : {}),
   };
 }
 

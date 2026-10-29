@@ -662,8 +662,9 @@ describe('opening the link', () => {
 
     await open(latestLinkTo(NEW));
 
+    // POST is what unsubscribes (GET only shows the button).
     const unsubscribe = await call(
-      'GET',
+      'POST',
       '/api/notifications/unsubscribe?token=given-to-the-old-address',
       undefined,
       false
