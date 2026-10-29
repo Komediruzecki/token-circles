@@ -88,13 +88,6 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
     failure: MESSAGE_NOT_SENT,
   })
 
-  // A send still holding for its token is left behind with the dialog: it must never go out, as
-  // it would with the token of the widget the dialog draws when it opens again.
-  const close = () => {
-    captcha.cancel()
-    setOpen(false)
-  }
-
   return (
     <>
       <a
@@ -119,7 +112,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
       <Show when={open()}>
         <div
           onClick={(e) => {
-            if (e.target === e.currentTarget) close()
+            if (e.target === e.currentTarget) setOpen(false)
           }}
           style={{
             position: 'fixed',
@@ -167,7 +160,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                   <div style={{ display: 'flex', 'justify-content': 'flex-end' }}>
                     <button
                       type="button"
-                      onClick={close}
+                      onClick={() => setOpen(false)}
                       style={{
                         padding: '9px 16px',
                         'border-radius': '8px',
@@ -240,7 +233,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"
-                    onClick={close}
+                    onClick={() => setOpen(false)}
                     style={{
                       padding: '9px 16px',
                       'border-radius': '8px',

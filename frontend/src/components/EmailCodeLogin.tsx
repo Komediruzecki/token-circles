@@ -115,8 +115,6 @@ export default function EmailCodeLogin(props: {
                 data-test-id="emailcode-back"
                 class={`${styles.link} ${styles.linkQuiet}`}
                 onClick={() => {
-                  // A send still holding for its token is left behind: it must never go out.
-                  captcha.cancel()
                   props.onBack()
                 }}
               >

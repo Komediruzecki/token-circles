@@ -132,11 +132,12 @@ All notable changes to Token Circles are documented here. The format is based on
     come through the button does nothing at all and leaves the notice and the marks as they were;
     LoginScreen's and LoginModal's own `onSubmit` wrappers return before clearing their notices.
   - One send holds at a time. A newer send, `cancel()` (from `switchTo` in LoginScreen and
-    LoginModal, EmailCodeLogin's Back and SupportContact's close) and the widget unmounting
-    (`onWidget(undefined)`, which also covers every step change) end a hold with the kit's new
-    `NOT_SENT`, which ends a submit as if it had not been pressed. A hold clears `holding` in its
-    `finally` only while it is still the current one. The box coming up during a hold ends it the
-    same way; ticking sends nothing, and the next press sends the fields as they are then.
+    LoginModal, whose widget stays up through a mode switch) and the widget unmounting
+    (`onWidget(undefined)`: every step change, EmailCodeLogin's Back and SupportContact's close)
+    end a hold with the kit's new `NOT_SENT`, which ends a submit as if it had not been pressed. A
+    hold clears `holding` in its `finally` only while it is still the current one. The box coming
+    up during a hold ends it the same way; ticking sends nothing, and the next press sends the
+    fields as they are then.
   - The next check starts when the widget's last token has gone out (status `solved`, no token
     held) and something needs the next one: `explain()` when a send fails, a press, or focus
     coming back into the form while it is not sending (`wake`). A send that worked starts none,

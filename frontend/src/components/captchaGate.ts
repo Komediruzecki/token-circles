@@ -7,8 +7,9 @@
  * - A send takes the token in hand, or holds until the widget hands one over. While it holds, the
  *   button says CHECKING_YOU_ARE_HUMAN, never "Signing in…": nothing has gone out yet.
  * - One send holds at a time. A newer one ends the older one without a word (NOT_SENT), and so do
- *   `cancel()` (the form switched to another mode or step) and the widget going away: a hold that
- *   outlived its form would send what the person left behind, with the next form's token.
+ *   `cancel()` (the form switched to another mode, its widget still up) and the widget going away
+ *   (a step or a dialog left behind): a hold that outlived its form would send what the person
+ *   left behind, with the next form's token.
  * - While Cloudflare shows its box and waits for a tick, the form waits for the person too. The
  *   button keeps its words and the form takes no submit (`blocked`), and the line under the box
  *   says to tick it. A send that was holding steps back without a word, so the button is never
@@ -71,7 +72,7 @@ export interface CaptchaGate {
   onWidget: (reset: (() => void) | undefined) => void
   /** The person is back in the form: if the last token has gone out, the next check starts now. */
   wake: () => void
-  /** Ends a send that holds for its token without a word: the form moved on (another mode, step). */
+  /** Ends a send that holds for its token without a word: the form switched to another mode. */
   cancel: () => void
   /**
    * The token for the next request: the one held, or the next one. Throws the refusal to show, or
