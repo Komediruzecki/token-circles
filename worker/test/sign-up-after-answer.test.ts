@@ -212,7 +212,7 @@ describe('signing up again with the address of an account waiting for its confir
     await signUp(WAITING, 'another-new-password');
 
     expect(mailed.map(({ to, subject }) => ({ to, subject }))).toEqual([
-      { to: WAITING, subject: 'Confirm your Token Circles email address' },
+      { to: WAITING, subject: 'Your new confirm link for Token Circles' },
     ]);
     expect(mailed[0]!.text).toMatch(/\/api\/auth\/verify-email\?token=[0-9a-f]+/);
   });

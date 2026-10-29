@@ -155,8 +155,8 @@ describe('the bills reminder', () => {
     const preview = await composeReminderPreview(env, 50, 'bills', OCTOBER_8);
     expect(preview).not.toBeNull();
     expect(listed(preview!.text)).toEqual([
-      '- Power: €60.00 · 2026-10-03 · Overdue',
-      '- Water: €40.00 · 2026-10-10 · In 2 days',
+      '- Power: €60.00. Overdue (2026-10-03).',
+      '- Water: €40.00. In 2 days (2026-10-10).',
     ]);
   });
 });
