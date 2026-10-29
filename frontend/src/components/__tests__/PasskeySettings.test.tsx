@@ -189,6 +189,72 @@ describe('re-authentication', () => {
   })
 })
 
+/**
+ * The control a `<label>` with exactly this text names, as Testing Library's getByLabelText finds
+ * it (that library is not installed here). A placeholder is not a label, so it finds nothing then.
+ */
+function byLabelText(text: string): HTMLInputElement {
+  const label = [...host.querySelectorAll('label')].find((l) => l.textContent?.trim() === text)
+  if (!label) throw new Error(`no label reading "${text}"`)
+  const control = label.control
+  if (!(control instanceof HTMLInputElement)) throw new Error(`"${text}" labels no input`)
+  return control
+}
+
+describe('the re-authentication field', () => {
+  async function askForProof() {
+    optionsResponseOverride = () =>
+      Promise.resolve(
+        json({ error: 'Confirm your password (or a 2FA code) to add a passkey', reauth: true }, 401)
+      )
+    await mount()
+    host.querySelector<HTMLButtonElement>('[data-test-id="passkey-add"]')!.click()
+    await flush()
+  }
+
+  it('is found by its label, and keeps it once it holds a value', async () => {
+    await askForProof()
+    const field = byLabelText('Password or 2FA code')
+    expect(field.getAttribute('data-test-id')).toBe('passkey-reauth-input')
+    // No placeholder stands in for the label: it would go as the person types.
+    expect(field.getAttribute('placeholder')?.trim() ?? '').toBe('')
+
+    field.focus()
+    field.value = 'a-long-password'
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    await flush()
+
+    expect(byLabelText('Password or 2FA code')).toBe(field)
+    expect(field.value).toBe('a-long-password')
+  })
+
+  it('is a password field with a button that shows what was typed', async () => {
+    await askForProof()
+    const field = byLabelText('Password or 2FA code')
+    expect(field.type).toBe('password')
+    expect(field.autocomplete).toBe('current-password')
+
+    const reveal = field.parentElement!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show password"]'
+    )!
+    reveal.click()
+    expect(field.type).toBe('text')
+    reveal.click()
+    expect(field.type).toBe('password')
+  })
+
+  it('asks for the proof in a sentence with no em dash', async () => {
+    await askForProof()
+    const prompt = [...host.querySelectorAll('p')].find((p) =>
+      p.textContent?.includes('since you signed in')
+    )!
+    expect(prompt.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+      'It has been a while since you signed in. Confirm your password (or a 2FA code) to add a passkey.'
+    )
+    expect(prompt.textContent).not.toContain('\u2014')
+  })
+})
+
 describe('deleting', () => {
   it('confirms, then DELETEs the credential', async () => {
     listResponse = () =>
