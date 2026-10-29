@@ -171,19 +171,32 @@ describe('requesting', () => {
 })
 
 describe('requesting with the captcha enabled', () => {
-  it('keeps the button usable, and the hint says why the send waits', async () => {
+  it('keeps the button usable while the check runs, and says it is checking once pressed', async () => {
     await mount('user@example.com', { status: 'ready' })
 
     const send = byTestId('emailcode-send') as HTMLButtonElement
     expect(send.disabled).toBe(false)
-    expect(byTestId('captcha-hint')?.textContent).toBe(
-      'Complete the verification above to continue.'
-    )
+    // The check runs out of sight: there is no box to point at, so nothing to say yet.
+    expect(byTestId('captcha-hint')).toBeNull()
 
     await requestCode()
-    // Parked on the token: nothing has gone out, and the button says the form is busy.
+    // Parked on the token: nothing has gone out, and the button says what it is waiting for.
     expect(requests).toEqual([])
     expect(send.getAttribute('aria-disabled')).toBe('true')
+    expect(send.textContent).toBe("Checking you're human…")
+  })
+
+  it('waits for the box to be ticked: a press sends nothing, and the button keeps its words', async () => {
+    await mount('user@example.com', { status: 'interactive' })
+
+    const send = byTestId('emailcode-send') as HTMLButtonElement
+    expect(byTestId('captcha-hint')?.textContent).toBe('Tick the box above first.')
+    expect(describedBy(send)).toEqual(['Tick the box above first.'])
+
+    await requestCode()
+    expect(requests).toEqual([])
+    expect(send.getAttribute('aria-disabled')).toBe('true')
+    expect(send.textContent).toBe('Email me a code')
   })
 
   it('says what to do when the Worker refuses the token, with no field marked', async () => {

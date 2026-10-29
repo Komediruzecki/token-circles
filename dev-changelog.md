@@ -9,6 +9,52 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Sign-in
+
+- **Turnstile: a held press says what it waits for, a box waiting for a tick holds the button, and
+  each form re-arms its own widget.** On 5.17.1 the button read "Signing in…" while the line under
+  the widget said "Complete the verification above to continue.", and the check came back after a
+  wrong password and after a reset link was sent. Three causes:
+  - `captchaGate.next()` held for the token inside the form kit's `send`, so the button showed the
+    form's busy label during the wait, and LoginScreen and CheckInbox rendered
+    `captchaStatusMessage(status)` under it while `form.submitting()` (for `ready`, "Complete the
+    verification above to continue."), whether or not Cloudflare had drawn anything. Nothing told
+    the app when Cloudflare wanted a click: `render()` passed no `before-interactive-callback`, so a
+    box that came up during a hold left the button busy for up to 20 s, then "Verification didn't
+    go through".
+  - `spent()` ran in every send's `finally` and called a bare `turnstile.reset()`: a new check after
+    every send, a reset link that went out included. For a visitor Cloudflare asks to click, each
+    check is a new box. A bare `reset()` also resets the widget rendered last, not necessarily the
+    form's own (measured with Cloudflare's test sitekeys).
+  - EmailCodeLogin and LoginModal rendered the widget with the default `appearance: 'always'`, drawn
+    for everyone (69 px with the always-passes test key), with the "Complete the verification
+    above" line under it whenever no token was held.
+- **The fix is one mechanism** for LoginScreen (sign in, create account, reset link, confirm link),
+  LoginModal, CheckInbox, EmailCodeLogin and SupportContact:
+  - `CaptchaCheck.tsx` renders the widget `interaction-only` and, only while Cloudflare's box waits
+    (status `interactive`, from `before-interactive-callback` until `after-interactive-callback`, a
+    token or an error), the line "Tick the box above first." Each SubmitButton takes
+    `blocked={captcha.asking()}`, a new kit prop (`aria-disabled`, keeps its words and its focus,
+    `aria-describedby` the line), and `busyLabel={captcha.busyLabel(...)}`, which reads "Checking
+    you're human…" while a send holds for a token.
+  - A send held for a token steps back without a word when the box comes up: the kit gained
+    `NOT_SENT` (`form/createForm.ts`), which ends a submit as if it had not been pressed. `next()`
+    also throws it while the box waits, for a submit that did not come through the button. Ticking
+    sends nothing; the next press does, with the fields as they are then.
+  - The gate re-arms only after a token went out: at once after a failed send (`explain()` marks
+    it), and after one that worked only when focus comes back into the form or on the next press
+    (`wake`). It resets its own widget by id (Turnstile's new `onWidget`), and drops the token of a
+    widget that unmounts. An expired token is dropped and Cloudflare's `refresh-expired: 'auto'`,
+    now explicit, fetches the next. A widget that fails or cannot load during a hold ends it at once
+    with the existing message.
+  - The Worker is unchanged: register, login, forgot-password, verify-email/resend,
+    email-code/request and support/contact each still verify a fresh token with siteverify, once.
+- Tests: `components/__tests__/captchaForms.test.tsx` (33, every form against a stand-in
+  `window.turnstile`; 27 fail on 5.17.1, and the other six pin what already held: the forms that
+  were already `interaction-only`, and the captcha-off path); `formKit.test.tsx` (`NOT_SENT`,
+  `blocked`); the `loginScreen.captcha` and `EmailCodeLogin` tests, which had pinned the hint beside
+  a busy button, now pin the held label.
+
 ## [5.17.1] — 2026-10-29
 
 ### Achievements

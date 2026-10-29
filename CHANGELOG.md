@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cloudflare's check shows up only when it needs a click, on every sign-in form.** After a wrong password the next check starts at once, out of sight unless Cloudflare wants another click, and sending a reset link no longer brings the box straight back. While the box waits for a tick the button waits too, so it never says "Signing in…" next to a check you still have to do.
+
 ## [5.17.1] — 2026-10-29
 
 ### Changed

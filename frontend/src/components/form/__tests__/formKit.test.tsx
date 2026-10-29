@@ -13,7 +13,7 @@ import { createSignal, Index, Show } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../../core/apiError'
-import { createForm, Field, FormNotice, SAVING, SubmitButton } from '..'
+import { createForm, Field, FormNotice, NOT_SENT, SAVING, SubmitButton } from '..'
 import type { FieldErrors } from '../../../../../shared/refusal'
 import type { Form } from '..'
 
@@ -306,6 +306,72 @@ describe('while the form sends', () => {
     expect(submitButton().hasAttribute('aria-disabled')).toBe(false)
     expect(formEl().hasAttribute('aria-busy')).toBe(false)
     expect(document.activeElement).toBe(labelled('Name'))
+  })
+
+  it('steps back without a word when send throws NOT_SENT', async () => {
+    // The captcha does this when Cloudflare stops to ask for a tick before anything was sent.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { send, fail } = pending()
+    const saved = vi.fn()
+    mount(send, undefined, saved)
+    type(labelled('Name'), 'Coffee')
+    type(labelled('Amount'), '3')
+    await submit()
+    expect(submitButton().textContent).toBe(SAVING)
+
+    fail(NOT_SENT)
+    await tick()
+
+    expect(submitButton().textContent).toBe('Save')
+    expect(formEl().hasAttribute('aria-busy')).toBe(false)
+    expect(notice().textContent).toBe('')
+    expect(labelled('Name').getAttribute('aria-invalid')).not.toBe('true')
+    expect(saved).not.toHaveBeenCalled()
+    expect(logged).not.toHaveBeenCalled()
+  })
+})
+
+describe('a submit button with something to do first', () => {
+  it('keeps its words and focus, says what to do, and a click on it submits nothing', async () => {
+    // The sign-in forms, while Cloudflare's box waits for a tick (CaptchaCheck).
+    const [blocked, setBlocked] = createSignal(true)
+    const submits = vi.fn((event: Event) => {
+      event.preventDefault()
+    })
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(
+      () => (
+        <form onSubmit={submits}>
+          <p id="what-first">Tick the box above first.</p>
+          <SubmitButton
+            busy={false}
+            blocked={blocked()}
+            aria-describedby={blocked() ? 'what-first' : undefined}
+          >
+            Sign in
+          </SubmitButton>
+        </form>
+      ),
+      host
+    )
+    const button = host.querySelector('button')!
+    button.focus()
+    button.click()
+    await tick()
+
+    expect(submits).not.toHaveBeenCalled()
+    expect(button.textContent).toBe('Sign in')
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.disabled).toBe(false)
+    expect(document.activeElement).toBe(button)
+    expect(describedBy(button)).toEqual(['Tick the box above first.'])
+
+    setBlocked(false)
+    expect(button.hasAttribute('aria-disabled')).toBe(false)
+    button.click()
+    await tick()
+    expect(submits).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -122,7 +122,7 @@ describe('the sign-in form while the captcha is invisible', () => {
     )
   })
 
-  it('explains the wait only once a submit is actually blocked on it', async () => {
+  it('says it is checking, not signing in, while a submit waits on the token', async () => {
     loginWithPassword.mockResolvedValue({ twofaRequired: true })
     await mount()
     const hint = () => host.querySelector('[data-test-id="captcha-hint"]')
@@ -132,7 +132,11 @@ describe('the sign-in form while the captcha is invisible', () => {
     type(emailInput(), 'someone@example.com')
     type(passwordInput(), 'a-long-enough-password')
     submitBtn().click()
-    await waitFor(() => hint() !== null, 'the captcha hint once submit is waiting')
+    await waitFor(() => submitBtn().textContent === "Checking you're human…", 'the held label')
+    // Nothing has gone out, so nothing says it is signing in, and there is no box to point at:
+    // the line under the widget is only for a box that waits for a tick (captchaForms.test.tsx).
+    expect(loginWithPassword).not.toHaveBeenCalled()
+    expect(hint()).toBeNull()
 
     releaseToken('token-from-cloudflare')
     await waitFor(() => loginWithPassword.mock.calls.length > 0, 'the sign-in request')

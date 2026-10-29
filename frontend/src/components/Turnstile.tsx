@@ -23,6 +23,7 @@ export type TurnstileStatus =
   | 'disabled' // no site key in this build — the gate is off, forms submit unguarded
   | 'loading' // fetching the widget script
   | 'ready' // rendered, waiting for the challenge to pass
+  | 'interactive' // Cloudflare drew a box and waits for the person to tick it
   | 'solved' // we hold a token
   | 'unreachable' // the script never loaded: blocked, filtered, or offline
   | 'failed' // the widget loaded and then errored
@@ -82,37 +83,40 @@ export function resetTurnstileScriptCache(): void {
   scriptPromise = null
 }
 
-/** Reset every Turnstile widget on the page (tokens are single-use — call after a failed submit). */
-export function resetTurnstile(): void {
-  try {
-    window.turnstile?.reset()
-  } catch {
-    /* ignore */
-  }
-}
-
 /**
- * Wait for the widget to auto-issue a fresh token after resetTurnstile() —
- * used by the register → auto-sign-in flow, where the register call consumed
- * the previous single-use token. Resolves '' immediately when the captcha is
- * disabled; rejects when no token arrives within the timeout.
+ * Wait for the widget to hand over a token: the one held now, or the next one. Resolves ''
+ * immediately when the captcha is disabled; rejects when no token arrives within the timeout, or
+ * when the signal stops the wait.
  */
-export function waitForTurnstileToken(getToken: () => string, timeoutMs = 8000): Promise<string> {
+export function waitForTurnstileToken(
+  getToken: () => string,
+  timeoutMs = 8000,
+  signal?: AbortSignal
+): Promise<string> {
   if (!turnstileEnabled) return Promise.resolve('')
   const existing = getToken()
   if (existing) return Promise.resolve(existing)
   return new Promise((resolve, reject) => {
     const started = Date.now()
+    const stop = () => {
+      clearInterval(poll)
+      signal?.removeEventListener('abort', aborted)
+    }
+    const aborted = () => {
+      stop()
+      reject(new Error('Verification wait stopped'))
+    }
     const poll = setInterval(() => {
       const t = getToken()
       if (t) {
-        clearInterval(poll)
+        stop()
         resolve(t)
       } else if (Date.now() - started > timeoutMs) {
-        clearInterval(poll)
+        stop()
         reject(new Error('Verification timed out'))
       }
     }, 150)
+    signal?.addEventListener('abort', aborted, { once: true })
   })
 }
 
@@ -133,6 +137,8 @@ export function captchaStatusMessage(status: TurnstileStatus): string {
       return 'Loading the verification step…'
     case 'ready':
       return 'Complete the verification above to continue.'
+    case 'interactive':
+      return 'Tick the box above first.'
     default:
       return ''
   }
@@ -147,16 +153,24 @@ export default function Turnstile(props: {
   onToken: (token: string) => void
   onStatus?: (status: TurnstileStatus) => void
   /**
+   * Hands over a way to start this widget's check over, for the next token, and `undefined` once
+   * the widget is gone. Reset by its id: a bare `turnstile.reset()` resets the widget rendered last
+   * (measured with Cloudflare's test keys, 2026-10-29), which is not this one while the support
+   * form's widget is open over the sign-in form's.
+   */
+  onWidget?: (reset: (() => void) | undefined) => void
+  /**
    * `interaction-only` renders nothing while the challenge passes silently — which is almost
    * always — and shows the widget only when Cloudflare actually wants a click. Use it wherever the
    * captcha guards a form the user came to fill in; a permanent checkbox above a sign-in button
    * asks people to prove themselves before they have done anything.
    *
    * Callers that use it must not gate their submit button on the token, since there may be no
-   * visible widget to explain the wait — await `waitForTurnstileToken` on submit instead.
+   * visible widget to explain the wait. The kit forms go through CaptchaCheck and captchaGate.ts.
    *
-   * Cloudflare only decides visibility on a widget's FIRST execution, so a later `reset()` cannot
-   * make a hidden widget appear. `retry()` below removes and re-renders for that reason.
+   * A reset runs the check again, and Cloudflare decides again whether it needs a click: with the
+   * test key that forces one, the box came back after each reset (measured 2026-10-29). `retry()`
+   * below removes and re-renders, for a script that never loaded.
    */
   appearance?: 'always' | 'interaction-only'
 }) {
@@ -178,9 +192,12 @@ export default function Turnstile(props: {
           report('unreachable')
           return
         }
-        widgetId = window.turnstile.render(el, {
+        const id = window.turnstile.render(el, {
           sitekey: SITE_KEY,
           appearance: props.appearance ?? 'always',
+          // An unused token expires after 300 seconds. Cloudflare then fetches the next one by
+          // itself; the expired-callback below only drops the old one, so it is never sent.
+          'refresh-expired': 'auto',
           callback: (token: string) => {
             props.onToken(token)
             report('solved')
@@ -196,8 +213,27 @@ export default function Turnstile(props: {
             props.onToken('')
             report('expired')
           },
+          // Cloudflare wants a click. In interaction-only mode this is when the widget appears.
+          'before-interactive-callback': () => {
+            report('interactive')
+          },
+          // Ticked: the check carries on, and a token (or an error) follows.
+          'after-interactive-callback': () => {
+            report('ready')
+          },
         })
-        report('ready')
+        widgetId = id
+        // The callbacks above come later, from Cloudflare's frame, so this is the first word.
+        if (status() === 'loading') report('ready')
+        props.onWidget?.(() => {
+          if (widgetId !== id || !window.turnstile) return
+          try {
+            window.turnstile.reset(id)
+          } catch {
+            /* the widget may already be gone */
+          }
+          report('ready')
+        })
       })
       .catch((err: unknown) => {
         console.warn(`Turnstile script did not load: ${String(err)}`)
@@ -224,6 +260,11 @@ export default function Turnstile(props: {
 
   onCleanup(() => {
     if (widgetId && window.turnstile) window.turnstile.remove(widgetId)
+    widgetId = undefined
+    // The form can outlive its widget (the sign-in screen's other steps): a token from a widget
+    // that is gone, and a way to reset it, are no use to it. The next widget brings its own.
+    props.onWidget?.(undefined)
+    props.onToken('')
   })
 
   return (

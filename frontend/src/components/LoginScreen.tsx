@@ -10,6 +10,7 @@ import {
   passkeysSupported,
   signInWithPasskey,
 } from '../core/webauthn'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
@@ -20,7 +21,6 @@ import styles from './LoginScreen.module.css'
 import { LogoMark } from './Logo'
 import { createSignInForm, RESET_LINK_SENT, SIGN_IN_REFUSED } from './signInForm'
 import SupportContact from './SupportContact'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
 import type { SignInMode, SignInOutcome } from './signInForm'
 
@@ -108,7 +108,8 @@ export default function LoginScreen() {
   })
   onCleanup(stopConditional)
   // The widget is invisible until Cloudflare wants a click, so the submit button is never gated
-  // on a token: the send waits for one instead (captchaGate.ts).
+  // on a token: the send holds for one instead. While Cloudflare's box waits for a tick, the
+  // button waits too (captchaGate.ts).
   const captcha = createCaptchaGate()
 
   const saved = (outcome: SignInOutcome) => {
@@ -319,38 +320,19 @@ export default function LoginScreen() {
 
             {/* Invisible unless Cloudflare wants a click. It sits directly above the button so
                 that, on the rare occasion it does appear, it reads as part of submitting. */}
-            <div class={styles.captchaSlot}>
-              <Turnstile
-                appearance="interaction-only"
-                onToken={captcha.onToken}
-                onStatus={captcha.onStatus}
-              />
-            </div>
-            {/* Only while a submit is actually waiting on the token. Before that there is nothing
-                to explain — the button is live and the challenge resolves on its own. Turnstile
-                draws its own actionable panel for the states the user has to fix. */}
-            <Show
-              when={
-                turnstileEnabled &&
-                form.submitting() &&
-                !captcha.token() &&
-                !captchaIsStuck(captcha.status())
-              }
-            >
-              <div data-test-id="captcha-hint" class={styles.captchaHint}>
-                {captchaStatusMessage(captcha.status())}
-              </div>
-            </Show>
+            <CaptchaCheck gate={captcha} hintClass={styles.captchaHint} />
 
             <SubmitButton
               busy={form.submitting()}
-              busyLabel={
+              blocked={captcha.asking()}
+              aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+              busyLabel={captcha.busyLabel(
                 mode() === 'register'
                   ? 'Creating your account…'
                   : mode() === 'forgot' || mode() === 'confirm'
                     ? 'Sending…'
                     : 'Signing in…'
-              }
+              )}
               class={`${layoutStyles.btn} ${layoutStyles.btnPrimary} ${styles.submit}`}
             >
               {mode() === 'register'
