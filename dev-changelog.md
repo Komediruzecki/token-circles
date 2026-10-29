@@ -27,7 +27,23 @@ All notable changes to Token Circles are documented here. The format is based on
   callback lands on, `below` drops `?twofa=1` from the entry under the step, and
   `TwofaChallenge`'s `stripTwofaMarker` keeps `history.state` instead of writing `null`, which would
   have erased the mark. `EmailCodeLogin`'s verify step gets Back to sign in
-  (`emailcode-verify-back`). `LoginModal` has the same in-memory stages and is not changed here.
+  (`emailcode-verify-back`).
+- **The sign-in dialog has a history entry too, so the back gesture closes it.** `LoginModal` (the
+  dialog for using the app with no account) had the same in-memory stages and no entry of its own.
+  It now calls `createHistoryStep` twice: once with `active: () => true`, whose pop calls
+  `props.onClose()`, and once for its stages as LoginScreen does. Entries carry their depth
+  (`tcHistoryStep: 1` for the dialog, `2` for a step on it); a step handles a pop only below its own
+  depth, so the gesture takes a step back to the dialog's form and the next one closes the dialog.
+  Leaving a step by its Back calls `history.go()` for the entries at or above its depth.
+  `afterHistoryStep` now goes back by the current depth in one `history.go(-depth)`, and a second
+  call while one is on its way joins it instead of traversing again: browsers count a second
+  `go()` from where the first has not landed yet, which would leave the app. Cancel, Escape and a
+  click outside close through `afterHistoryStep`, once (a `closing` flag). Every sign-in from the
+  dialog reloads, so it goes through it as well: password and emailed code via `reloadIntoTheApp`,
+  the passkey link and Continue with Google wrapped directly. App never closes the dialog on its
+  own (`onSuccess` is not called by the dialog). Tests: `loginModal.backGesture.test.tsx` (the
+  gesture, each way of closing, double Escape, sign-in by password, code, passkey and Google) and
+  `core/__tests__/historyStep.test.ts` (one traversal for nested entries, the joined second call).
   Tests: `components/__tests__/loginScreen.backGesture.test.tsx` (real screen and steps on jsdom's
   history: the gesture from each step, own Back from each step, the sign-in pop, listener removal)
   and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code step).
