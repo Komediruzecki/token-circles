@@ -28,6 +28,7 @@ import {
 import { api } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { noteAddressConfirmed } from '../core/emailVerification'
+import { afterHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin } from '../core/webauthn'
 import { createForm } from './form'
 import type { FieldErrors } from '../../../shared/refusal'
@@ -75,7 +76,10 @@ export function signInChecks(mode: SignInMode, values: SignInValues): FieldError
 /** The page reloads into the signed-in app. The form waits on it, so its button stays busy. */
 export function reloadIntoTheApp(): Promise<never> {
   markPasskeyNudgeAfterLogin()
-  window.location.reload()
+  // From a step after the form, its history entry goes first: a reload keeps the current entry.
+  afterHistoryStep(() => {
+    window.location.reload()
+  })
   return new Promise<never>(() => {})
 }
 

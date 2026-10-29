@@ -26,7 +26,9 @@ function stripTwofaMarker(): void {
     const url = new URL(window.location.href)
     if (url.searchParams.has('twofa')) {
       url.searchParams.delete('twofa')
-      window.history.replaceState(null, '', url.toString())
+      // The state stays: it marks the step's history entry (historyStep.ts), which Back and a
+      // sign-in take back by that mark.
+      window.history.replaceState(window.history.state, '', url.toString())
     }
   } catch {
     // Nothing to clean when the URL isn't available (tests stub location).
