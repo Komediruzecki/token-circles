@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.1] — 2026-10-29
+
 ### Changed
 
 - **Every mail shares the new design.** The welcome, a fresh confirm link, a new email address, a password reset, a sign-in code, a test mail, the note that your message reached support and the billing mails have the engraved art at the top and a centred footer that reads cleanly on a phone. They stay dark in the Gmail app on an iPhone in dark mode, where the page used to turn white. Budget alerts, spending reports, bill reminders and the failed-payment mail keep every amount, under subjects that say what happened, such as "Budget alert: Groceries went over".
