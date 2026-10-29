@@ -257,4 +257,69 @@ describe('Turnstile widget', () => {
     })
     expect(host.querySelector('[data-test-id="captcha-blocked"]')).toBeNull()
   })
+
+  it('keeps a token that came before the word that the tick is done', async () => {
+    const mod = await loadModule()
+    const seen: string[] = []
+    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    const rendered = installTurnstileApi()
+    turnstileScripts()[0].onload?.(new Event('load'))
+    await vi.waitFor(() => {
+      expect(rendered).toHaveLength(1)
+    })
+    ;(rendered[0]['before-interactive-callback'] as () => void)()
+    ;(rendered[0].callback as (t: string) => void)('token-abc')
+    ;(rendered[0]['after-interactive-callback'] as () => void)()
+
+    expect(seen.at(-1)).toBe('solved')
+  })
+
+  it('lets go of the form when it unmounts, even if Cloudflare cannot remove its widget', async () => {
+    const mod = await loadModule()
+    const widgets: ((() => void) | undefined)[] = []
+    const tokens: string[] = []
+    dispose = render(
+      () => (
+        <mod.default onToken={(t) => tokens.push(t)} onWidget={(reset) => widgets.push(reset)} />
+      ),
+      host
+    )
+    installTurnstileApi()
+    turnstileScripts()[0].onload?.(new Event('load'))
+    await vi.waitFor(() => {
+      expect(widgets).toHaveLength(1)
+    })
+    window.turnstile!.remove = () => {
+      throw new Error('Cloudflare has no widget by that id')
+    }
+
+    const unmount = dispose
+    dispose = undefined
+    expect(() => {
+      unmount()
+    }).not.toThrow()
+    expect(widgets).toHaveLength(2)
+    expect(widgets.at(-1)).toBeUndefined()
+    expect(tokens.at(-1)).toBe('')
+  })
+
+  it('says nothing when the script fails after the widget is gone', async () => {
+    const mod = await loadModule()
+    const seen: string[] = []
+    const tokens: string[] = []
+    const first = render(
+      () => <mod.default onToken={(t) => tokens.push(t)} onStatus={(s) => seen.push(s)} />,
+      host
+    )
+    first()
+    const said = [...seen]
+    const handed = [...tokens]
+
+    turnstileScripts()[0].onerror?.(new Event('error'))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    // The form it belonged to may still be on screen with a newer widget: no word from this one.
+    expect(seen).toEqual(said)
+    expect(tokens).toEqual(handed)
+    expect(console.warn).not.toHaveBeenCalled()
+  })
 })

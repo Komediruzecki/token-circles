@@ -37,10 +37,12 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
     blocked: captcha.asking,
     send: async (values) => {
       setSentAgain(false)
+      let token: string | undefined
       try {
-        await api.resendConfirmLink(values.email, await captcha.next())
+        token = await captcha.next()
+        await api.resendConfirmLink(values.email, token)
       } catch (error) {
-        throw captcha.explain(error)
+        throw captcha.explain(error, token)
       }
     },
     saved: () => setSentAgain(true),

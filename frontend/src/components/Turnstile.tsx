@@ -202,6 +202,11 @@ export default function Turnstile(props: {
           // An unused token expires after 300 seconds. Cloudflare then fetches the next one by
           // itself; the expired-callback below only drops the old one, so it is never sent.
           'refresh-expired': 'auto',
+          // A box left unticked times out (after 120 s with the test key that forces one). With
+          // 'auto' Cloudflare starts the check over by itself and asks again within a moment; with
+          // 'manual' it waited for a click on its own refresh link (both measured 2026-10-29).
+          // 'auto' is Cloudflare's default, set here so the timeout-callback below can rely on it.
+          'refresh-timeout': 'auto',
           callback: (token: string) => {
             props.onToken(token)
             report('solved')
@@ -221,9 +226,11 @@ export default function Turnstile(props: {
           'before-interactive-callback': () => {
             report('interactive')
           },
-          // Ticked: the check carries on, and a token (or an error) follows.
+          // Ticked: the check carries on, and a token (or an error) follows. Cloudflare does not
+          // say which of this and the token comes first: a token already here stays 'solved', or
+          // the gate could never tell that it went out (captchaGate.ts, lastTokenSpent).
           'after-interactive-callback': () => {
-            report('ready')
+            if (status() !== 'solved') report('ready')
           },
           // The box waited too long for a tick. Cloudflare starts the check over by itself and
           // asks again if it still wants a click, so the form waits for the box no longer.
@@ -275,12 +282,19 @@ export default function Turnstile(props: {
 
   onCleanup(() => {
     disposed = true
-    if (widgetId && window.turnstile) window.turnstile.remove(widgetId)
-    widgetId = undefined
     // The form can outlive its widget (the sign-in screen's other steps): a token from a widget
-    // that is gone, and a way to reset it, are no use to it. The next widget brings its own.
+    // that is gone, and a way to reset it, are no use to it. The next widget brings its own. This
+    // comes before the remove, so a hold ends even when Cloudflare cannot remove its widget.
     props.onWidget?.(undefined)
     props.onToken('')
+    if (widgetId && window.turnstile) {
+      try {
+        window.turnstile.remove(widgetId)
+      } catch {
+        /* the widget may already be gone */
+      }
+    }
+    widgetId = undefined
   })
 
   return (

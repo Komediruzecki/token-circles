@@ -15,9 +15,10 @@
  *   says to tick it. A send that was holding steps back without a word, so the button is never
  *   busy while the box waits, and the next press sends what the fields say then.
  * - The next check starts when the last token has gone out and something needs the next one: at
- *   once when a send fails (`explain`), on a press, or when the person is back in the form
- *   (`wake`). A send that worked starts none: a reset link on its way needs no new check, and
- *   someone Cloudflare asks to click would otherwise get a box for nothing.
+ *   once when the send that took it fails (`explain`), on a press, or when the person is back in
+ *   the form (`wake`). A send that worked starts none: a reset link on its way needs no new check,
+ *   and someone Cloudflare asks to click would otherwise get a box for nothing. An older send that
+ *   fails late starts none either: the check is a newer send's by then.
  * - A hold with no token after 20 seconds says so and leaves a check that is still running alone,
  *   so the next press gets its token; only a check that has run for a minute is started over.
  * - A token that expires unused is dropped, and Cloudflare fetches the next one (Turnstile.tsx).
@@ -82,9 +83,11 @@ export interface CaptchaGate {
   next: () => Promise<string>
   /**
    * A send's failure as the form says it: a 403 is the captcha's, in its words. Call it in the
-   * send's `catch`: a send that failed after its token went out starts the next check at once.
+   * send's `catch` with the token that send took from `next()`, or `undefined` if it took none.
+   * The send that took the last token starts the next check at once when it fails; an older one
+   * that fails late leaves the widget to the newer send that used it or holds for it.
    */
-  explain: (error: unknown) => unknown
+  explain: (error: unknown, token: string | undefined) => unknown
 }
 
 export function createCaptchaGate(): CaptchaGate {
@@ -98,6 +101,8 @@ export function createCaptchaGate(): CaptchaGate {
   let hold: { end: (reason: unknown) => void } | undefined
   /** When the widget's current check started: drawn, reset, ticked, or fetching after expiry. */
   let checkStartedAt = Date.now()
+  /** The token the latest send took: only that send's failure starts the next check. */
+  let lastIssued: string | undefined
 
   const asking = () => status() === 'interactive'
 
@@ -183,10 +188,15 @@ export function createCaptchaGate(): CaptchaGate {
       }
       // A token is good for one request: this one is going, so the form holds none until the next.
       setToken('')
+      lastIssued = issued
       return issued
     },
-    explain: (error) => {
-      if (error !== NOT_SENT && lastTokenSpent()) rearm()
+    explain: (error, sent) => {
+      // A send that stepped back sent nothing, so its token proves nothing. One that sent an older
+      // token than the latest is not the widget's news: a newer send has used the check since, or
+      // holds for the one it started, and a reset would bring Cloudflare's box up beside it.
+      const last = sent !== undefined && sent === lastIssued
+      if (error !== NOT_SENT && last && lastTokenSpent()) rearm()
       return error instanceof ApiError && error.status === 403 ? refusal() : error
     },
   }

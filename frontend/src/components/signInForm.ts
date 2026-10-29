@@ -103,30 +103,29 @@ export function createSignInForm(options: {
     send: async (values) => {
       const mode = options.mode()
       const email = values.email.trim()
+      // The token this send takes: the captcha tells its failure from an older send's by it.
+      let token: string | undefined
       try {
+        token = await options.captcha.next()
         if (mode === 'forgot') {
-          await api.forgotPassword(email, await options.captcha.next())
+          await api.forgotPassword(email, token)
           return { kind: 'reset-link-sent' }
         }
         if (mode === 'confirm') {
-          await api.resendConfirmLink(email, await options.captcha.next())
+          await api.resendConfirmLink(email, token)
           return { kind: 'check-inbox', email }
         }
         if (mode === 'register') {
-          await api.register(email, values.password, await options.captcha.next())
+          await api.register(email, values.password, token)
           return { kind: 'check-inbox', email }
         }
-        const login = await api.loginWithPassword(
-          email,
-          values.password,
-          await options.captcha.next()
-        )
+        const login = await api.loginWithPassword(email, values.password, token)
         if (login?.emailConfirmed) noteAddressConfirmed()
         // The password was right; the session waits behind the second factor.
         if (login?.twofaRequired) return { kind: 'second-factor' }
         return await reloadIntoTheApp()
       } catch (error) {
-        throw forTheWholeForm(options.captcha.explain(error))
+        throw forTheWholeForm(options.captcha.explain(error, token))
       }
     },
     saved: options.saved,

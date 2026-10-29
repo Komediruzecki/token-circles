@@ -37,10 +37,12 @@ export default function EmailCodeLogin(props: {
     check: (values) => addressProblems(values),
     blocked: captcha.asking,
     send: async (values) => {
+      let token: string | undefined
       try {
-        await api.requestEmailCode(values.email.trim(), await captcha.next())
+        token = await captcha.next()
+        await api.requestEmailCode(values.email.trim(), token)
       } catch (error) {
-        throw captcha.explain(error)
+        throw captcha.explain(error, token)
       }
     },
     saved: () => {

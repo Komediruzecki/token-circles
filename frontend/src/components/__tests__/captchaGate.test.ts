@@ -99,7 +99,7 @@ describe('a send', () => {
     expect(gate.holding()).toBe(false)
     expect(gate.asking()).toBe(true)
     // Resetting a box that waits for a tick would only draw it again.
-    gate.explain(NOT_SENT)
+    gate.explain(NOT_SENT, undefined)
     expect(resets()).toBe(0)
   })
 
@@ -151,9 +151,13 @@ describe('one send holds at a time', () => {
 
   it('still steps the newer hold back when the box comes up after the earlier one ended', async () => {
     const { gate, widget, NOT_SENT } = await makeGate()
-    void outcome(gate.next())
+    const first = outcome(gate.next())
     const second = outcome(gate.next())
-    await Promise.resolve()
+    // The earlier send has wound up completely, its `finally` included: what it left must still
+    // be the newer send's hold.
+    expect((await first).error).toBe(NOT_SENT)
+    expect(gate.holding()).toBe(true)
+    expect(gate.busyLabel('Signing in…')).not.toBe('Signing in…')
 
     widget.ask()
     expect((await second).error).toBe(NOT_SENT)
@@ -227,16 +231,42 @@ describe('a hold with no token', () => {
     expect((await third).error).toMatchObject({ status: 403 })
     expect(resets()).toBe(1)
   })
+
+  it('leaves the check Cloudflare starts after a token expires, as a check of its own', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'Date'] })
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
+    await vi.advanceTimersByTimeAsync(300000)
+    // Five minutes on the token expires unused, and Cloudflare starts fetching the next one, slowly.
+    gate.onToken('')
+    gate.onStatus('expired')
+
+    const held = outcome(gate.next())
+    await vi.advanceTimersByTimeAsync(20500)
+    expect((await held).error).toMatchObject({ status: 403 })
+    // Twenty seconds into Cloudflare's own check, not five minutes: it is left to finish.
+    expect(resets()).toBe(0)
+  })
 })
 
 describe('the next check', () => {
   it('starts at once after a send that failed', async () => {
     const { gate, widget, resets } = await makeGate()
     widget.pass('token-1')
-    await gate.next()
+    const sent = await gate.next()
 
-    gate.explain(new Error('401'))
+    gate.explain(new Error('401'), sent)
     expect(resets()).toBe(1)
+  })
+
+  it('is not started by a send that stepped back, even with its token in hand', async () => {
+    const { gate, widget, NOT_SENT, resets } = await makeGate()
+    widget.pass('token-1')
+    const taken = await gate.next()
+
+    // The form took the token and then sent nothing: nothing is news to Cloudflare's widget.
+    gate.explain(NOT_SENT, taken)
+    expect(resets()).toBe(0)
   })
 
   it('waits for the person after a send that worked: back in the form, or the next press', async () => {
@@ -275,22 +305,40 @@ describe('the next check', () => {
   it('is not started over by a late failure while the next check is running', async () => {
     const { gate, widget, resets } = await makeGate()
     widget.pass('token-1')
-    await gate.next()
+    const first = await gate.next()
     const sent = outcome(gate.next())
     expect(resets()).toBe(1)
 
     // The earlier send fails while the press after it holds: its check is the one it waits on.
-    gate.explain(new Error('503'))
+    gate.explain(new Error('503'), first)
     expect(resets()).toBe(1)
     widget.pass('token-2')
     expect((await sent).token).toBe('token-2')
+  })
+
+  it('is not started over by a late failure once a newer send has taken its token', async () => {
+    const { gate, widget, resets } = await makeGate()
+    widget.pass('token-1')
+    const first = await gate.next()
+    const second = outcome(gate.next())
+    widget.pass('token-2')
+    expect((await second).token).toBe('token-2')
+    expect(resets()).toBe(1)
+
+    // The reset link fails while the sign-in after it is out: a reset now would bring Cloudflare's
+    // box up beside "Signing in…".
+    gate.explain(new Error('429'), first)
+    expect(resets()).toBe(1)
+    // The newer send's own failure is the widget's news.
+    gate.explain(new Error('401'), 'token-2')
+    expect(resets()).toBe(2)
   })
 
   it('is not asked for when no token went out', async () => {
     const { gate, resets } = await makeGate()
     gate.onStatus('unreachable')
     await outcome(gate.next())
-    gate.explain(new Error('blocked'))
+    gate.explain(new Error('blocked'), undefined)
 
     expect(resets()).toBe(0)
   })

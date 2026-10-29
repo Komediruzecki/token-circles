@@ -15,12 +15,15 @@
  * - a press the person left behind (another mode, another step, a closed dialog) never goes out;
  * - an expired token is never sent, and the one Cloudflare fetches next is.
  */
+import { createSignal, Show } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
 
 const CHECKING = "Checking you're human…"
 const TICK = 'Tick the box above first.'
+/** A refusal any of the forms says in its notice, as the Worker words it. */
+const SLOW_DOWN = 'Too many tries from here. Wait a minute.'
 
 interface Widget {
   id: string
@@ -34,7 +37,7 @@ let widgets: Widget[]
 let resets: string[]
 let sent: { url: string; body: Record<string, unknown> }[]
 /** What answers each request; a request with no answer waits for good. */
-let answers: Record<string, () => Response>
+let answers: Record<string, () => Response | Promise<Response>>
 /** While set, Cloudflare's script waits here to load, until the test lets it. */
 let scriptLoads: (() => void)[] | undefined
 let appendSpy: { mockRestore: () => void }
@@ -90,6 +93,10 @@ const cf = {
       const fn = widget.opts.callback
       if (typeof fn === 'function') (fn as (t: string) => void)(token)
     }, AFTER_TICK_MS)
+  },
+  /** The box was ticked, and the token is still on its way: the test hands it over with `pass`. */
+  ticked: () => {
+    cf.call('after-interactive-callback')
   },
   expire: () => {
     cf.call('expired-callback')
@@ -379,15 +386,48 @@ describe.each(screens)('the captcha when $name', (screen) => {
     neverBusyBesideTheBox(screen.idle)
 
     // Ticked: the box lets the form go at once, before the token is there.
-    cf.tick('token-1')
+    cf.ticked()
     await settle()
     expect(hintText()).toBe('')
     expect(button().hasAttribute('aria-disabled')).toBe(false)
 
     await press()
     expect(button().textContent).toBe(CHECKING)
+    cf.pass('token-1')
     await until(() => sent.length > 0, 'the request')
     expect(tokens(screen.url)).toEqual(['token-1'])
+  })
+
+  it('takes no submit while the box waits: the notice and the marks stay as they are', async () => {
+    answers[screen.url] = () => json({ error: SLOW_DOWN }, 429)
+    await screen.open()
+    const email = host.querySelector<HTMLInputElement>('input[type="email"]')
+    const address = email?.value ?? ''
+    if (email) {
+      // A field the form has marked once is checked as it is typed in, from then on.
+      type(email, 'not-an-address')
+      await press()
+      type(email, address)
+    }
+    cf.pass('token-1')
+    await press()
+    await until(() => host.textContent?.includes(SLOW_DOWN) ?? false, 'the refusal')
+    if (email) type(email, 'not-an-address')
+    const marked = () =>
+      [...host.querySelectorAll('[aria-invalid="true"]')].map((control) => control.id)
+    if (email) expect(marked()).toEqual([email.id])
+
+    cf.ask()
+    await settle()
+    const said = host.textContent
+    const marks = marked()
+    await submitTheForm()
+    await press()
+
+    expect(sent).toHaveLength(1)
+    expect(host.textContent).toBe(said)
+    expect(marked()).toEqual(marks)
+    neverBusyBesideTheBox(screen.idle)
   })
 
   it('steps back from a held press when the box comes up, and is never busy beside it', async () => {
@@ -514,10 +554,58 @@ describe('the sign-in screen after a send', () => {
     expect(tokens('/api/auth/forgot-password')).toEqual(['token-1', 'token-2'])
   })
 
+  it('starts the next check after a refused send whose token came before the tick was over', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    await signInScreen('login')
+    cf.ask()
+    await settle()
+    // Cloudflare does not say which comes first after a tick: here the token beats the word that
+    // the box is done with.
+    cf.pass('token-1')
+    cf.ticked()
+    await settle()
+    await press()
+    await until(() => host.textContent?.includes("don't match") ?? false, 'the refusal')
+
+    expect(tokens('/api/auth/login')).toEqual(['token-1'])
+    expect(resets).toEqual([cf.widget().id])
+  })
+
+  it('leaves the widget alone when an older send fails while a newer one is out', async () => {
+    const resetLink: { answer?: (answer: Response) => void } = {}
+    answers['/api/auth/forgot-password'] = () =>
+      new Promise<Response>((resolve) => {
+        resetLink.answer = resolve
+      })
+    await signInScreen('forgot')
+    cf.pass('token-1')
+    await press()
+    await until(() => sent.length === 1, 'the reset link request')
+    byText('Back to sign in').click()
+    await settle()
+    type(field('#login-password'), 'a-long-enough-password')
+    await press()
+    cf.pass('token-2')
+    await until(() => sent.length === 2, 'the sign-in')
+    expect(button().textContent).toBe('Signing in…')
+    expect(resets).toHaveLength(1)
+
+    // The reset link fails while the sign-in is out: a reset now would ask Cloudflare again, and
+    // bring its box up beside "Signing in…" for someone it asks to click.
+    expect(resetLink.answer).toBeDefined()
+    resetLink.answer?.(json({ error: SLOW_DOWN }, 429))
+    await settle()
+    await sleep(50)
+    expect(resets).toHaveLength(1)
+    expect(button().textContent).toBe('Signing in…')
+  })
+
   it('never sends an expired token, and sends the one Cloudflare fetches next', async () => {
     await signInScreen('login')
-    // Cloudflare fetches the next token by itself when one expires unused.
+    // Cloudflare fetches the next token by itself when one expires unused, and starts the check
+    // over by itself when its box waited too long for a tick.
     expect(cf.widget().opts['refresh-expired']).toBe('auto')
+    expect(cf.widget().opts['refresh-timeout']).toBe('auto')
     cf.pass('token-1')
     cf.expire()
     await press()
@@ -588,6 +676,33 @@ describe('a submit while the box waits', () => {
     await submitTheForm()
     expect(said()).toBe(noPasskey)
     expect(sent).toEqual([])
+  })
+
+  it('asks for nothing when the confirm link is asked for while the box waits', async () => {
+    answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    const offer = () => host.querySelector<HTMLButtonElement>('[data-test-id="send-confirm-link"]')
+    await until(() => offer() !== null, 'the offer of the confirm link')
+    cf.ask()
+    await settle()
+
+    // The link's own submit does not come through the form's button: watch for the busy state
+    // however briefly it is set.
+    let busyChanges = 0
+    const watch = new MutationObserver((records) => {
+      busyChanges += records.length
+    })
+    watch.observe(host, { attributes: true, attributeFilter: ['aria-busy'], subtree: true })
+    offer()!.click()
+    await settle()
+    watch.disconnect()
+
+    expect(busyChanges).toBe(0)
+    expect(sent).toHaveLength(1)
+    expect(hintText()).toBe(TICK)
+    expect(button().getAttribute('aria-disabled')).toBe('true')
   })
 
   it('lets the form go when the box gives up waiting for a tick', async () => {
@@ -688,6 +803,34 @@ describe('a press left behind', () => {
     expect(urls()).toEqual(['/api/auth/register'])
   })
 
+  it('never goes out when the dialog is closed, even while its history step takes a moment', async () => {
+    const realGo = history.go.bind(history)
+    vi.spyOn(history, 'go').mockImplementation((delta?: number) => {
+      setTimeout(() => {
+        realGo(delta)
+      }, 300)
+    })
+    vi.doMock('../EmailCodeLogin', () => ({ default: () => null }))
+    const { default: LoginModal } = await import('../LoginModal')
+    const [open, setOpen] = createSignal(true)
+    await show(() => (
+      <Show when={open()}>
+        <LoginModal onClose={() => setOpen(false)} onSuccess={() => undefined} />
+      </Show>
+    ))
+    type(field('#login-modal-email'), 'someone@example.com')
+    type(field('#login-modal-password'), 'a-long-enough-password')
+    await press()
+    expect(button().textContent).toBe(CHECKING)
+
+    // Cancel, Escape and a click outside all close through the same history step.
+    byText('Cancel').click()
+    cf.pass('token-1')
+    await sleep(LONG_ENOUGH_MS)
+    expect(open()).toBe(false)
+    expect(sent).toEqual([])
+  })
+
   it('never goes out after the sign-in code step and back', async () => {
     await signInScreen('login', { emailCode: true })
     const drawn = widgets.length
@@ -712,6 +855,7 @@ describe('a press left behind', () => {
     await press()
     expect(button().textContent).toBe(CHECKING)
 
+    // Closing does nothing to the hold itself: the widget unmounting with the dialog ends it.
     byText('Cancel').click()
     await settle()
     await openSupport()

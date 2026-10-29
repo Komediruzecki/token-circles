@@ -58,8 +58,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
     check: (values) => supportProblems(values),
     blocked: captcha.asking,
     send: async (values) => {
+      let turnstileToken: string | undefined
       try {
-        const turnstileToken = await captcha.next()
+        turnstileToken = await captcha.next()
         let response: Response
         try {
           response = await fetch(`${API}/api/support/contact`, {
@@ -78,7 +79,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
         const data = (await response.json().catch(() => ({}))) as { ticketId?: unknown }
         return typeof data.ticketId === 'string' ? data.ticketId : ''
       } catch (error) {
-        throw captcha.explain(error)
+        throw captcha.explain(error, turnstileToken)
       }
     },
     saved: (ticket) => {

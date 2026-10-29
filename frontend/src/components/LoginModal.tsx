@@ -52,6 +52,9 @@ export default function LoginModal(props: LoginModalProps) {
     // Escape pressed twice, or Escape and a click outside, closes once.
     if (closing) return
     closing = true
+    // A send still holding for its token was for the dialog being closed: it must never go out.
+    // The dialog stays up until the history step lands, and a token could come in that time.
+    captcha.cancel()
     afterHistoryStep(() => {
       props.onClose()
     })
