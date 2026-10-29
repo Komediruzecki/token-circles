@@ -120,8 +120,11 @@ describe('the mail layout', () => {
 
   it('is dark by default, with every colour of the page, the card and the button also set as an attribute', () => {
     const { html } = renderMail(SPEC);
-    expect(html).toContain('<meta name="color-scheme" content="dark light">');
-    expect(html).toMatch(/<body class="tc-page" bgcolor="#0b1020" style="[^"]*background:#0b1020/);
+    // Drawn dark, declared "light only" so the Gmail apps do not recolour it (mail-color-scheme.test.ts).
+    expect(html).toContain('<meta name="color-scheme" content="light only">');
+    expect(html).toMatch(
+      /<body id="body" class="tc-page" bgcolor="#0b1020" style="[^"]*background:#0b1020/
+    );
     expect(html).toMatch(/<table [^>]*class="tc-page"[^>]*bgcolor="#0b1020"/);
     expect(html).toMatch(/<td class="tc-card" bgcolor="#151d31" style="background:#151d31/);
     expect(html).toMatch(/<td class="tc-btn-td" bgcolor="#6e9bff" style="background:#6e9bff/);

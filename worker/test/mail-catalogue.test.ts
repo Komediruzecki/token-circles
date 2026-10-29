@@ -17,19 +17,19 @@ const samples = mailSamples();
 const AMOUNT_MAIL_DIGESTS = {
   renderBudgetAlert: {
     inputs: 192,
-    digest: '5907bebb3ef5a9dfde3e09b78b2408c5c096553ca21f95a23c6a45ae744aadeb',
+    digest: 'af91f97174ac10a156554eb7c986a309ad605e2d95fb0d7399a06862d17b1160',
   },
   renderBillsReminder: {
     inputs: 120,
-    digest: '54e6f2a55c4a6b64878b83027d1ac65ab6d9fc7f2ac175b056c3fa952481ca9a',
+    digest: '5a4ad05f0855173251fe1aebb3c08a91611c2c1a08cf43b47a43d4a39ee37233',
   },
   renderSpendingReport: {
     inputs: 144,
-    digest: 'b576d0d2078f31a634b395000e672414d94d5c46ffcc6f87af0b5d82642250d9',
+    digest: '0df87207d43369816171068a9206bb1c16f8772ce1155579abd6c0b4d1cf58fd',
   },
   renderPaymentFailed: {
     inputs: 128,
-    digest: 'eb0d57d277eec9c47563a3dbc26b20c81618986551ee1b8dc4bfa506c17d4f3c',
+    digest: '15b05f67fb121631342860aa29272862823d5e420ba43a4459e686c730a956fb',
   },
 };
 
@@ -257,6 +257,9 @@ describe('the mail catalogue', () => {
     // rule for the footer's dots, checked by comparing both renderings up to the footer.
     // Taken again the same day when the helper began to read the text twin's year as YYYY too
     // (before, the pin would have failed on 1 January 2027); the renderers did not change.
+    // Taken again for the "light only" head (mail-color-scheme.test.ts): every one of the 464 mails
+    // differs only in its head, <body id="body">, and the inline colours of the preheader, the
+    // wordmark's link and the two pictures; subjects and text twins are unchanged.
     expect(await amountMailDigests(templates)).toEqual(AMOUNT_MAIL_DIGESTS);
   });
 

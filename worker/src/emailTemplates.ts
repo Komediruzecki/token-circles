@@ -87,7 +87,9 @@ export function formatMoney(amount: number, currency?: string | null): string {
 // Dark by default, which is what Gmail and classic Outlook show; paper in light mode through
 // prefers-color-scheme, which Apple Mail reads. Every dark colour of the page, the card and the
 // button is also a bgcolor attribute, which classic Outlook reads where it ignores CSS. The
-// system font stack, as the app uses: no web fonts, no serif.
+// system font stack, as the app uses: no web fonts, no serif. The head declares "light only"
+// (COLOR_SCHEME_META), which stops the Gmail apps recolouring the mail, and every line of text
+// carries its own colour.
 //
 // The art is a real <img> above live text, never a CSS background: Gmail's desktop webmail draws
 // background images badly and classic Outlook needs VML for them. Its files sit in
@@ -122,11 +124,34 @@ const ART = {
 } as const;
 
 /**
+ * The color-scheme lines of every mail's head. The mail is drawn dark, with a paper variant for
+ * clients that fire prefers-color-scheme: light, but it declares "light only". MercuryPitch's probe
+ * mails of 2026-10-14 (its PR #1010) found that the Gmail app on the iPhone, in dark mode, recolours
+ * a mail that declares "dark" (here "dark light" turned the page white) and shows one that declares
+ * "light only" as drawn; it ignores "dark", and neither prefers-color-scheme query fires there.
+ * Proton on the iPhone fires the query either way, and a media query reads the reader's setting,
+ * not the declaration, so the paper variant still comes where it did. A client that honours "light
+ * only" gives text with no colour of its own the light defaults, black and link blue, so every
+ * line of text, link and picture carries its own: worker/test/mail-color-scheme.test.ts.
+ */
+const COLOR_SCHEME_META = `<meta name="color-scheme" content="light only">
+<meta name="supported-color-schemes" content="light only">`;
+
+/**
+ * Text a client turns into a link takes the colour of the words around it. Apple Mail's data
+ * detectors, and possibly the Gmail apps, link dates and addresses; under "light only" such a link
+ * would be link blue. The Gmail apps keep a head <style> and match `u + #body` (MercuryPitch's
+ * probe), which is why <body> has id="body". The Gmail rule sets the colour alone and is not
+ * !important, so the mail's own links keep their inline colours.
+ */
+const AUTO_LINK_STYLE = `<style>a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important;}u + #body a{color:inherit;}</style>`;
+
+/**
  * The light scheme and the phone width: the only rules that cannot be inline. `tables` adds the
  * rules only a mail with a table needs, so a mail without one carries none of them.
  */
 const mailStyle = (tables: boolean) => `<style>
-:root { color-scheme: dark light; supported-color-schemes: dark light; }
+:root { color-scheme: light only; supported-color-schemes: light only; }
 @media (prefers-color-scheme: light) {
   .tc-page { background:#eeeae1 !important; }
   .tc-card { background:#fbf9f4 !important; }
@@ -409,7 +434,7 @@ const mailTextFooter = (reason: string, unsubUrl?: string | null) =>
 export function renderMail(spec: MailSpec): RenderedEmail {
   const assets = spec.assetOrigin || APP_URL;
   const art = ART[spec.art];
-  const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0">`;
+  const img = `<img src="${assets}${art.path}" width="${art.width}" height="${art.height}" alt="" class="tc-soft" style="display:block;width:100%;height:auto;border:0;border-radius:18px 18px 0 0;color:${INK.soft}">`;
   // The card's last row carries its bottom padding.
   const after = { steps: !!spec.steps, signOff: !!spec.signOff, aside: !!spec.aside };
   const rows = [
@@ -444,17 +469,17 @@ export function renderMail(spec: MailSpec): RenderedEmail {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="x-apple-disable-message-reformatting">
-<meta name="color-scheme" content="dark light">
-<meta name="supported-color-schemes" content="dark light">
+${COLOR_SCHEME_META}
 <title>${escapeHtml(spec.subject)}</title>
+${AUTO_LINK_STYLE}
 ${mailStyle(!!spec.tables)}
 </head>
-<body class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
+<body id="body" class="tc-page" bgcolor="${INK.page}" style="margin:0;padding:0;background:${INK.page};-webkit-text-size-adjust:100%">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;color:${INK.page}">${escapeHtml(spec.preheader)}&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;&#8199;&#847;</div>
 <table role="presentation" class="tc-page" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK.page}" style="background:${INK.page}"><tr><td align="center" style="padding:22px 12px 30px">
 <!--[if mso]><table role="presentation" align="center" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px"><tr><td><![endif]-->
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
-<tr><td style="padding:2px 6px 14px"><a href="${APP_URL}" style="text-decoration:none"><img src="${assets}/icon-192.png" width="26" height="26" alt="" style="vertical-align:middle;border:0;border-radius:7px"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
+<tr><td style="padding:2px 6px 14px"><a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}"><img src="${assets}/icon-192.png" width="26" height="26" alt="" class="tc-text" style="vertical-align:middle;border:0;border-radius:7px;color:${INK.text}"><span class="tc-text" style="font:600 16px/1 ${FONT};color:${INK.text};vertical-align:middle;letter-spacing:-0.1px">&nbsp;&nbsp;${BRAND}</span></a></td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
 ${mailFooter(spec.reason, spec.unsubUrl)}
 </table>
