@@ -75,6 +75,12 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Mail
 
+- **The unsubscribe token is minted in one statement.** `ensureUnsubToken` (`worker/src/reminders.ts`)
+  read no token, made one and wrote it with a plain UPDATE, so two senders running at once (a cron
+  that fires twice) each wrote their own and the mail that went out could carry the token that was
+  overwritten: its unsubscribe link and List-Unsubscribe answered "Link not recognized". It now
+  runs `UPDATE ... SET unsubscribe_token = COALESCE(unsubscribe_token, ?) ... RETURNING`, so every
+  sender gets the token that is stored. Test: `worker/test/unsubscribe-token.test.ts`.
 - **Unsubscribe is a POST; GET only shows the button.** `GET /api/notifications/unsubscribe?token=`
   set `users.notifications_unsubscribed = 1` on a plain visit, so anything that fetches the links in
   a mail (security scanners, link previewers) could turn someone's reminders off without them
