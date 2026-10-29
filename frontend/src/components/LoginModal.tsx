@@ -2,6 +2,7 @@ import { createSignal, onCleanup, onMount, Show } from 'solid-js'
 import { api } from '../core/api'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
@@ -9,7 +10,6 @@ import { Field, FormNotice, SubmitButton } from './form'
 import styles from './LoginModal.module.css'
 import { createSignInForm, SIGN_IN_REFUSED } from './signInForm'
 import stepStyles from './SignInSteps.module.css'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import TwofaChallenge from './TwofaChallenge'
 import type { SignInMode, SignInOutcome } from './signInForm'
 
@@ -34,7 +34,8 @@ export default function LoginModal(props: LoginModalProps) {
   // extra sign-in steps.
   const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
   const [inbox, setInbox] = createSignal('')
-  // The send waits for the token rather than the button waiting for it (captchaGate.ts).
+  // The send holds for the token rather than the button waiting for it, and while Cloudflare's box
+  // waits for a tick the button waits too (captchaGate.ts).
   const captcha = createCaptchaGate()
 
   // In an installed app the back gesture had no entry to pop and closed the app under the dialog.
@@ -51,6 +52,9 @@ export default function LoginModal(props: LoginModalProps) {
     // Escape pressed twice, or Escape and a click outside, closes once.
     if (closing) return
     closing = true
+    // A send still holding for its token was for the dialog being closed: it must never go out.
+    // The dialog stays up until the history step lands, and a token could come in that time.
+    captcha.cancel()
     afterHistoryStep(() => {
       props.onClose()
     })
@@ -78,8 +82,10 @@ export default function LoginModal(props: LoginModalProps) {
 
   const form = createSignInForm({ mode, captcha, saved })
 
-  /** Another mode: the values stay, and nothing from before is said. */
+  /** Another mode: the values stay, and nothing from before is said or sent. */
   const switchTo = (next: SignInMode) => {
+    // A send still holding for its token was for the mode left behind: it must never go out.
+    captcha.cancel()
     setMode(next)
     setElsewhere('')
     form.reset({ ...form.values })
@@ -178,6 +184,11 @@ export default function LoginModal(props: LoginModalProps) {
           <form
             {...form.attrs}
             onSubmit={(event) => {
+              // While Cloudflare's box waits for a tick there is no submit, so nothing is cleared.
+              if (captcha.asking()) {
+                event.preventDefault()
+                return
+              }
               setElsewhere('')
               void form.submit(event)
             }}
@@ -224,31 +235,18 @@ export default function LoginModal(props: LoginModalProps) {
                 )}
               </Field>
             </Show>
-            <Turnstile onToken={captcha.onToken} onStatus={captcha.onStatus} />
-            {/* Turnstile draws its own, actionable panel for the states the user has to fix
-                (blocked script, widget error); this is only the ordinary "not solved yet" hint,
-                which also says why a submit is waiting. */}
-            <Show when={turnstileEnabled && !captcha.token() && !captchaIsStuck(captcha.status())}>
-              <div
-                data-test-id="captcha-hint"
-                style={{
-                  color: 'var(--text-secondary)',
-                  'font-size': '12px',
-                  margin: '2px 0 10px',
-                }}
-              >
-                {captchaStatusMessage(captcha.status())}
-              </div>
-            </Show>
+            <CaptchaCheck gate={captcha} hintClass={stepStyles.hint} />
             <SubmitButton
               busy={form.submitting()}
-              busyLabel={
+              blocked={captcha.asking()}
+              aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+              busyLabel={captcha.busyLabel(
                 mode() === 'register'
                   ? 'Creating your account…'
                   : mode() === 'confirm'
                     ? 'Sending…'
                     : 'Signing in…'
-              }
+              )}
               class={styles.btnSubmit}
               style={{ width: '100%', 'justify-content': 'center' }}
             >

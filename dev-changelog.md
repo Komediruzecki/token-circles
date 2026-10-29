@@ -98,6 +98,79 @@ All notable changes to Token Circles are documented here. The format is based on
     traversal for nested entries, joined calls, Back and close in one task, unmount, the
     fallback, a throwing callback) and `EmailCodeLogin.test.tsx` ("Back to sign in" on the code
     step).
+- **Turnstile: a held press says what it waits for, a box waiting for a tick holds the form, and
+  each form re-arms its own widget.** On 5.17.1 the button read "Signing in…" while the line under
+  the widget said "Complete the verification above to continue.", and the check came back after a
+  wrong password and after a reset link was sent. Three causes:
+  - `captchaGate.next()` held for the token inside the form kit's `send`, so the button showed the
+    form's busy label during the wait, and LoginScreen and CheckInbox rendered
+    `captchaStatusMessage(status)` under it while `form.submitting()` (for `ready`, "Complete the
+    verification above to continue."), whether or not Cloudflare had drawn anything. Nothing told
+    the app when Cloudflare wanted a click: `render()` passed no `before-interactive-callback`, so a
+    box that came up during a hold left the button busy for up to 20 s, then "Verification didn't
+    go through".
+  - `spent()` ran in every send's `finally` and called a bare `turnstile.reset()`: a new check after
+    every send, a reset link that went out included. For a visitor Cloudflare asks to click, each
+    check is a new box. A bare `reset()` also resets one widget only, the one rendered last with
+    Cloudflare's script and test sitekey, which need not be the form's own.
+  - EmailCodeLogin and LoginModal rendered the widget with the default `appearance: 'always'`, drawn
+    for everyone (69 px with the always-passes test key), with the "Complete the verification
+    above" line under it whenever no token was held.
+    Also on 5.17.1, a send still holding for its token when the person moved on (another mode, the
+    sign-in code step, the support dialog closed) went out with the next token the gate saw: a
+    sign-in could land after "Forgot password?", and a cancelled support message was still sent.
+- **The fix is one mechanism** for LoginScreen (sign in, create account, reset link, confirm link),
+  LoginModal, CheckInbox, EmailCodeLogin and SupportContact:
+  - `CaptchaCheck.tsx` renders the widget `interaction-only`, and a `role="status"` line that is
+    always on the page, out of sight while empty, and says "Tick the box above first." only while
+    Cloudflare's box waits (status `interactive`: from `before-interactive-callback` until
+    `after-interactive-callback`, a `timeout-callback`, a token or an error). Each SubmitButton
+    takes `blocked={captcha.asking()}`, a new kit prop (`aria-disabled`, keeps its words and its
+    focus, `aria-describedby` the line), and `busyLabel={captcha.busyLabel(...)}`, which reads
+    "Checking you're human…" while a send holds for a token. Each form takes the kit's new
+    `blocked` option (`blocked: captcha.asking`, `form/createForm.ts`), so a submit that does not
+    come through the button does nothing at all and leaves the notice and the marks as they were;
+    LoginScreen's and LoginModal's own `onSubmit` wrappers return before clearing their notices.
+  - One send holds at a time. A newer send, `cancel()` (from `switchTo` in LoginScreen and
+    LoginModal, whose widget stays up through a mode switch, and from LoginModal's `close()`, whose
+    Cancel, Escape and click outside leave the dialog up until its history step lands) and the
+    widget unmounting (`onWidget(undefined)`: every step change, EmailCodeLogin's Back and
+    SupportContact's close) end a hold with the kit's new `NOT_SENT`, which ends a submit as if it
+    had not been pressed. A hold clears `holding` in its `finally` only while it is still the
+    current one. The box coming up during a hold ends it the same way; ticking sends nothing, and
+    the next press sends the fields as they are then.
+  - The next check starts when the widget's last token has gone out (status `solved`, no token
+    held) and something needs the next one: `explain(error, token)` when the send that took the
+    latest token fails, a press, or focus coming back into the form while it is not sending
+    (`wake`). Every send passes `explain` the token it took (`undefined` if none), and an older
+    send that fails late starts nothing: the check is a newer send's by then, and a reset would
+    bring Cloudflare's box up beside "Signing in…". A send that worked starts none, and a token
+    Cloudflare fetched by itself, after an expiry, is kept. `spent()` is gone. The gate resets its
+    own widget by id (Turnstile's new `onWidget`).
+  - Turnstile drops the token of a widget that unmounts, before it asks Cloudflare to remove the
+    widget and even when that throws, and draws and reports nothing for a form that left before
+    the script loaded or failed to. `after-interactive-callback` reports `ready` only while no
+    token is held: Cloudflare documents no order between it and the token. `render()` sets
+    `refresh-timeout: 'auto'` (Cloudflare's default) explicitly: with the test key that forces a
+    box, an unticked box timed out after 120 s, `timeout-callback` then `after-interactive`, and
+    with `auto` the box asked again 0.1 s later; with `manual` it did not within 90 s.
+  - A hold with no token after 20 s says so and leaves the running check alone, so a slow one
+    answers the next press; only a check that has run for 60 s without an answer is reset. A new
+    widget, a reset, a tick, a timeout and an expired token each start that clock again.
+  - `unsupported-callback` reports a new stuck status, `unsupported`, with its own words and no
+    Retry button. The status words nothing shows any more (`loading`, `ready`, `expired`) are gone.
+    SupportContact's own failure constant is `MESSAGE_NOT_SENT`, apart from the kit's `NOT_SENT`.
+  - The Worker is unchanged: register, login, forgot-password, verify-email/resend,
+    email-code/request and support/contact each still verify a fresh token with siteverify, once.
+- Tests: `components/__tests__/captchaForms.test.tsx` (60, every form against a stand-in
+  `window.turnstile` whose tick reports `after-interactive` before its token; 53 fail on main
+  before this change); `captchaGate.test.ts` (22, the gate alone: two holds, `cancel`, the widget
+  going, a slow, a stuck and an expired check, the re-arm rules and whose failure starts one);
+  `formKit.test.tsx` (the `blocked` option, `NOT_SENT`, the blocked button);
+  `Turnstile.blocked.test.tsx` (the status words, the token that beats the tick, a remove that
+  throws, a script that fails after the widget is gone); `loginScreen.captcha.test.tsx` (now with
+  a real `ready` status) and `EmailCodeLogin.test.tsx`. The stale `resetTurnstile` mocks are gone
+  from the sign-in tests.
 
 ### Tests
 

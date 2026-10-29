@@ -50,7 +50,6 @@ function mockTheWorld() {
     ...(await vi.importActual<typeof TurnstileModule>('../Turnstile')),
     default: () => null,
     turnstileEnabled: false,
-    resetTurnstile: () => undefined,
   }))
   vi.doMock('../../core/webauthn', () => ({
     conditionalMediationAvailable: () => Promise.resolve(false),

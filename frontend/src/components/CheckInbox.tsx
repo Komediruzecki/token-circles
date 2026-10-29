@@ -1,11 +1,11 @@
 import { createSignal, Show } from 'solid-js'
 import { api } from '../core/api'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import { createForm, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import { SIGN_IN_FAILED } from './signInForm'
 import styles from './SignInSteps.module.css'
-import Turnstile, { captchaIsStuck, captchaStatusMessage, turnstileEnabled } from './Turnstile'
 
 /**
  * Check your inbox: what the sign-in screen and the sign-in dialog show once an account is
@@ -34,14 +34,15 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   const resend = createForm<{ email: string }>({
     initial: { email: props.email },
     check: () => ({}),
+    blocked: captcha.asking,
     send: async (values) => {
       setSentAgain(false)
+      let token: string | undefined
       try {
-        await api.resendConfirmLink(values.email, await captcha.next())
+        token = await captcha.next()
+        await api.resendConfirmLink(values.email, token)
       } catch (error) {
-        throw captcha.explain(error)
-      } finally {
-        captcha.spent()
+        throw captcha.explain(error, token)
       }
     },
     saved: () => setSentAgain(true),
@@ -63,27 +64,13 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
         </p>
       </Show>
       <form {...resend.attrs}>
-        <Turnstile
-          appearance="interaction-only"
-          onToken={captcha.onToken}
-          onStatus={captcha.onStatus}
-        />
-        <Show
-          when={
-            turnstileEnabled &&
-            resend.submitting() &&
-            !captcha.token() &&
-            !captchaIsStuck(captcha.status())
-          }
-        >
-          <div data-test-id="captcha-hint" class={styles.hint}>
-            {captchaStatusMessage(captcha.status())}
-          </div>
-        </Show>
+        <CaptchaCheck gate={captcha} hintClass={styles.hint} />
         <SubmitButton
           data-test-id="check-inbox-resend"
           busy={resend.submitting()}
-          busyLabel="Sending…"
+          blocked={captcha.asking()}
+          aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+          busyLabel={captcha.busyLabel('Sending…')}
           class={`${layoutStyles.btn} ${layoutStyles.btnSecondary} ${styles.submit}`}
         >
           Send the link again

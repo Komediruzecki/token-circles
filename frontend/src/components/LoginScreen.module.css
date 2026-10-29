@@ -127,14 +127,7 @@
   outline-offset: 1px;
 }
 
-/*
- * Turnstile in interaction-only mode renders nothing at all when it passes silently, so this slot
- * collapses to zero height rather than reserving a gap for a widget that usually never appears.
- */
-.captchaSlot:empty {
-  display: none;
-}
-
+/* Under Cloudflare's box, while it waits for a tick. */
 .captchaHint {
   color: var(--text-secondary);
   font-size: 12px;

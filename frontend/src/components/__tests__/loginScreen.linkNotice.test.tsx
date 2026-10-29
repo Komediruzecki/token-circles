@@ -28,7 +28,6 @@ vi.mock('../Turnstile', () => ({
   default: () => null,
   captchaIsStuck: () => false,
   captchaStatusMessage: () => '',
-  resetTurnstile: vi.fn(),
   turnstileEnabled: false,
   waitForTurnstileToken: () => Promise.resolve(''),
 }))

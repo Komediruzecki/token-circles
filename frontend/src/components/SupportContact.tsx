@@ -1,10 +1,10 @@
 import { createSignal, Show } from 'solid-js'
 import { supportProblems } from '../../../shared/signInSchema'
 import { apiErrorFrom, networkError } from '../core/apiError'
+import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import { createForm, Field, FormNotice, SubmitButton } from './form'
 import styles from './SignInSteps.module.css'
-import Turnstile from './Turnstile'
 
 // Hits the worker directly (not apiFetch) so it works in any storage mode and while signed out.
 const API = (import.meta.env.VITE_API_URL ?? '') as string
@@ -33,7 +33,7 @@ function LifebuoyIcon() {
 }
 
 /** The notice for a send that failed in a way the Worker did not put into words. */
-const NOT_SENT = "Your message didn't send. Try again in a moment."
+const MESSAGE_NOT_SENT = "Your message didn't send. Try again in a moment."
 
 /**
  * "Contact support" link + modal. Posts to the worker's /api/support/contact, which relays the
@@ -56,9 +56,11 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
   const form = createForm<{ email: string; message: string }, string>({
     initial: { email: props.prefillEmail ?? '', message: '' },
     check: (values) => supportProblems(values),
+    blocked: captcha.asking,
     send: async (values) => {
+      let turnstileToken: string | undefined
       try {
-        const turnstileToken = await captcha.next()
+        turnstileToken = await captcha.next()
         let response: Response
         try {
           response = await fetch(`${API}/api/support/contact`, {
@@ -77,16 +79,14 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
         const data = (await response.json().catch(() => ({}))) as { ticketId?: unknown }
         return typeof data.ticketId === 'string' ? data.ticketId : ''
       } catch (error) {
-        throw captcha.explain(error)
-      } finally {
-        captcha.spent()
+        throw captcha.explain(error, turnstileToken)
       }
     },
     saved: (ticket) => {
       setTicketId(ticket)
       setStatus('sent')
     },
-    failure: NOT_SENT,
+    failure: MESSAGE_NOT_SENT,
   })
 
   return (
@@ -228,12 +228,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                   )}
                 </Field>
                 {/* Invisible unless Cloudflare wants a click. It has to be rendered for a token to
-                    exist at all — the send button waits on one rather than being disabled by it. */}
-                <Turnstile
-                  appearance="interaction-only"
-                  onToken={captcha.onToken}
-                  onStatus={captcha.onStatus}
-                />
+                    exist at all — the send holds for one rather than the button being disabled by
+                    it, and only a box waiting for a tick holds the button. */}
+                <CaptchaCheck gate={captcha} hintClass={styles.hint} />
                 <div style={{ display: 'flex', gap: '8px', 'justify-content': 'flex-end' }}>
                   <button
                     type="button"
@@ -252,7 +249,9 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                   </button>
                   <SubmitButton
                     busy={form.submitting()}
-                    busyLabel="Sending…"
+                    blocked={captcha.asking()}
+                    aria-describedby={captcha.asking() ? captcha.hintId : undefined}
+                    busyLabel={captcha.busyLabel('Sending…')}
                     style={{
                       padding: '9px 16px',
                       'border-radius': '8px',

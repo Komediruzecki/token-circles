@@ -3,7 +3,7 @@
  * problem. Usage and the rules it keeps: docs/plans/2026-10-07-form-errors.md, and rule 5 in
  * .claude/skills/solid-forms/SKILL.md.
  */
-export { createForm } from './createForm'
+export { createForm, NOT_SENT } from './createForm'
 export type { FieldName, Form, FormAttributes, FormOptions, FormValues } from './createForm'
 export { default as Field } from './Field'
 export type { FieldControl, FieldProps } from './Field'

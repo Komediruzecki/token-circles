@@ -66,7 +66,6 @@ async function mount(captcha?: Captcha, opened?: string) {
       return null
     },
     turnstileEnabled: captcha !== undefined,
-    resetTurnstile: () => undefined,
     waitForTurnstileToken: () =>
       captcha?.token === undefined
         ? Promise.reject(new Error('Verification timed out'))
