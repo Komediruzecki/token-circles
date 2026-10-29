@@ -209,12 +209,12 @@ export default function ResetPassword() {
               name="password"
               label="New password"
               class={styles.field}
-              labelClass={styles.label}
+              floating
+              reveal
             >
               {(control) => (
                 <input
                   {...control}
-                  type="password"
                   value={form.values.password}
                   onInput={(e) => form.set('password', e.currentTarget.value)}
                   autocomplete="new-password"
@@ -227,12 +227,12 @@ export default function ResetPassword() {
               name="confirm"
               label="Confirm new password"
               class={styles.field}
-              labelClass={styles.label}
+              floating
+              reveal
             >
               {(control) => (
                 <input
                   {...control}
-                  type="password"
                   value={form.values.confirm}
                   onInput={(e) => form.set('confirm', e.currentTarget.value)}
                   autocomplete="new-password"
