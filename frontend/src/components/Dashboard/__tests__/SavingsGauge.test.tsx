@@ -220,11 +220,11 @@ describe('behind the benchmarks gate', () => {
     expect(q(c, 'svg[role="img"]').getAttribute('aria-label')).toBe(
       'Savings rate 16.7% over the last 12 months; typical range 9.3% to 19.3%'
     )
-    expect(c.textContent).toContain('Typical in the EU: 9.3% to 19.3%')
+    // The legend says the band, once: the goal line doesn't say it again.
+    expect(c.textContent!.split('Typical in the EU: 9.3% to 19.3%')).toHaveLength(2)
     expect(text(c, 'savings-gauge-compare')).toMatch(/^Close to the EU average of /)
-    expect(text(c, 'savings-gauge-goal')).toBe(
-      'No goal of your own yet. Typical in the EU: 9.3% to 19.3%.'
-    )
+    expect(text(c, 'savings-gauge-goal')).toBe('No goal of your own yet.')
+    expect(text(c, 'savings-gauge-set-goal')).toBe('Set a goal')
     // The band is the target: no goal on the ring.
     expect(c.querySelector('[data-test-id="gauge-goal"]')).toBeNull()
     expect(text(c, 'savings-gauge-region')).toBe(

@@ -662,12 +662,14 @@ export function debtPaymentsCard(
   const line = bands.find((one) => one.band === 'typical')?.max ?? null;
   const borrowed = bands.find((one) => one.borrowedFrom !== undefined)?.borrowedFrom;
   const quoted = referencesFor('debt.serviceShare', region);
-  const tags: CardTag[] = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
-  if (borrowed) {
+  // With nothing paid there is nothing to place on a line: no band, no bar, and no line to miss.
+  const placed = payments > 0;
+  const tags: CardTag[] = placed && band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
+  if (placed && borrowed) {
     tags.push({ kind: 'borrowed', text: `${capital(regionName(borrowed))}'s figures` });
   }
   let note: string | null = null;
-  if (bands.length === 0) {
+  if (placed && bands.length === 0) {
     tags.push({ kind: 'missing', text: `No ${REGION_ADJECTIVE[region]} line` });
     note = `${capital(name)} has no official line for debt payments against income.`;
   }
@@ -675,7 +677,8 @@ export function debtPaymentsCard(
   let title = `Debt payments take ${shareText}% of your take-home pay`;
   let body: string[] = [];
   let step: BenchmarkCard['step'] = { label: 'See payoff dates', hash: '#loans' };
-  if (payments <= 0) {
+  if (!placed) {
+    // The title and the households' figure say it all; no step fits a debt that isn't there.
     title = 'No debt payments';
     const repaying = quoted.find((ref) => ref.value !== null);
     body = repaying
@@ -683,7 +686,7 @@ export function debtPaymentsCard(
           `${figureText(repaying.value ?? 0)}% of households in ${name} repay a loan other than a mortgage (${repaying.year}).`,
         ]
       : [];
-    step = { label: 'Plan your next goal', hash: '#goals' };
+    step = null;
   } else if (band?.band === 'high' && line !== null) {
     step = { label: 'See which loan ends first', hash: '#loans' };
     if (region === 'HR') {
@@ -717,7 +720,7 @@ export function debtPaymentsCard(
     title,
     body,
     bar:
-      line === null
+      !placed || line === null
         ? null
         : barOf(
             bands,

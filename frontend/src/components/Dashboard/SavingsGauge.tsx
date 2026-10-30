@@ -178,8 +178,8 @@ export default function SavingsGauge(props: { view: GuidanceView | null }): JSX.
                   <p class={styles.goal} data-test-id="savings-gauge-goal">
                     {(() => {
                       const g = goal()
-                      const b = band()
-                      if (g === null) return b ? `No goal of your own yet. ${b.legend}.` : ''
+                      // The band is the target, and the legend above already says it.
+                      if (g === null) return 'No goal of your own yet.'
                       const rate = shown()!
                       const lead =
                         own() === undefined

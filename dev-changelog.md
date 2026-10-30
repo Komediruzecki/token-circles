@@ -1360,6 +1360,16 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   their lines by their own line height, with Change at least 48 by 48; in both themes the pill is
   opaque, 4.5:1 or more and warm). `tests/circles-fixture.ts` holds the workspace it shares with
   `circles-phone.spec.ts`.
+- **Behind the benchmarks gate: the gauge says the band once, and no debt payments compares
+  nothing** (`SavingsGauge.tsx`, `shared/guidance/cards.ts`). With no goal of their own, the
+  gauge's goal line read "No goal of your own yet. Typical in the EU: 9.3% to 19.3%." under a
+  legend that already says the band; it reads "No goal of your own yet.", with Set a goal under it.
+  `debtPaymentsCard` with payments at 0 kept its band tag ("Below typical"), its bar at 0% and a
+  "Plan your next goal" step; it now has no tag (band, borrowed or missing line), no note, no bar
+  and no step, and the title "No debt payments" and the households' figure say it.
+- **Tests:** `SavingsGauge.test.tsx` (the band's words appear once, the goal line is the sentence
+  alone, Set a goal follows), `guidanceCards.test.ts` (nothing paid: no tags, bar, step or note,
+  in the EU, the UK and Germany).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

@@ -388,13 +388,24 @@ describe('debt payments', () => {
     expect(shown.note).toBe('The UK has no official line for debt payments against income.')
   })
 
-  it('says how many households repay a loan when there are no payments', () => {
+  it('says how many households repay a loan when there are no payments, and compares nothing', () => {
     const shown = debtPaymentsCard(facts(), words, at('EU27'))!
     expect(shown.title).toBe('No debt payments')
     expect(shown.body).toEqual([
       '24.1% of households in the EU repay a loan other than a mortgage (2020).',
     ])
-    expect(shown.step).toEqual({ label: 'Plan your next goal', hash: '#goals' })
+    // Nothing to place on a line: no band, no bar, and no step that would not fit.
+    expect(shown.tags).toEqual([])
+    expect(shown.bar).toBeNull()
+    expect(shown.step).toBeNull()
+    // Nor a missing line, or a borrowed one, where the region has no line of its own.
+    for (const region of ['UK', 'DE'] as const) {
+      const none = debtPaymentsCard(facts(), words, at(region))!
+      expect(none.title, region).toBe('No debt payments')
+      expect(none.tags, region).toEqual([])
+      expect(none.note, region).toBeNull()
+      expect(none.bar, region).toBeNull()
+    }
   })
 })
 
