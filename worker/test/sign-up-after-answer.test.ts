@@ -200,12 +200,18 @@ async function unusedLinks(email: string): Promise<string[]> {
   return results.map((row) => row.token_hash);
 }
 
-/** Every header of an answer but Date, sorted, with its status and body. */
+/**
+ * Every header of an answer but Date, sorted, with its status and body. The sign-up marker's value
+ * is written as V: it is new on every sign-up (confirm-link-sign-in.test.ts).
+ */
 async function read(res: Response) {
   const headers: string[] = [];
   res.headers.forEach((value, name) => {
-    if (name !== 'date') headers.push(`${name}: ${value}`);
+    if (name !== 'date' && name !== 'set-cookie') headers.push(`${name}: ${value}`);
   });
+  for (const cookie of res.headers.getSetCookie()) {
+    headers.push(`set-cookie: ${cookie.replace(/^fm_signup=[^;]*/, 'fm_signup=V')}`);
+  }
   return { status: res.status, headers: headers.sort(), body: await res.text() };
 }
 

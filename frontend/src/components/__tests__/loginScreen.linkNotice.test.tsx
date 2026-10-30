@@ -4,6 +4,8 @@
  * An email link opened before signing in is left unspent by the worker, which sends the browser
  * back with #everified_error=signin_required, and the app notes the link as waiting. The sign-in
  * screen is what the person sees then, so it says what signing in here does: it finishes the link.
+ * A confirm link opens the screen on Finish signing up instead (finishSignUp.test.tsx), and the
+ * notice is what the form says when the Worker cannot say which address the link waits for.
  *
  * A reset that confirmed the address and cleared the account ends here too, so its words do.
  */
@@ -11,10 +13,15 @@ import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let waiting: { change: boolean } | null = null
+/** What the Worker says the opened confirm link waits for; a rejection is no answer. */
+let waitingFor: () => Promise<{ email: string } | null> = () =>
+  Promise.reject(new Error('no answer'))
 
 vi.mock('../../core/emailVerification', () => ({
   linkWaiting: () => waiting,
   takeConfirmLinkProblem: () => null,
+  clearLinkWaiting: () => undefined,
+  noteAddressConfirmed: () => undefined,
 }))
 vi.mock('../../core/api', () => ({
   api: {
@@ -22,6 +29,7 @@ vi.mock('../../core/api', () => ({
     register: vi.fn(),
     forgotPassword: vi.fn(),
     loginWithGoogle: vi.fn(),
+    confirmLinkWaiting: () => waitingFor(),
   },
 }))
 vi.mock('../Turnstile', () => ({
@@ -48,6 +56,7 @@ let dispose: (() => void) | undefined
 
 beforeEach(() => {
   waiting = null
+  waitingFor = () => Promise.reject(new Error('no answer'))
   sessionStorage.clear()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -67,10 +76,22 @@ async function mount() {
 const notice = () => host.querySelector('[data-test-id="auth-notice"]')?.textContent ?? null
 
 describe('the sign-in screen after an email link was opened signed out', () => {
-  it('says signing in confirms the address', async () => {
+  it('opens on Finish signing up for a confirm link whose address the Worker names', async () => {
+    waiting = { change: false }
+    waitingFor = () => Promise.resolve({ email: 'name@example.com' })
+    await mount()
+
+    expect(host.querySelector('[data-test-id="finish-signup-address"]')?.textContent).toBe(
+      'name@example.com'
+    )
+    expect(notice()).toBeNull()
+  })
+
+  it('says signing in confirms the address when the Worker cannot say what the link waits for', async () => {
     waiting = { change: false }
     await mount()
 
+    expect(host.querySelector('[data-test-id="finish-signup"]')).toBeNull()
     expect(notice()).toBe('Sign in to confirm your address.')
   })
 

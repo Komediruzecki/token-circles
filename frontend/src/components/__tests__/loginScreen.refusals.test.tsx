@@ -101,9 +101,12 @@ async function mount(captcha?: Captcha, opened?: string) {
   await settle()
 }
 
-/** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
+/**
+ * What a refused password sign-in says, for a wrong password and an address not confirmed yet,
+ * with where the confirm link signs in by itself (shared/confirmLinkSignIn.ts).
+ */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you in this browser, then sign in. Opened it in another browser or on another device? Sign in there first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
 
 const settle = async () => {
   for (let i = 0; i < 8; i += 1) await Promise.resolve()
@@ -393,7 +396,7 @@ describe('creating an account', () => {
     expect(sent).toEqual([])
   })
 
-  it('says on Check your inbox to sign in with the password in the browser that opens the link', async () => {
+  it('says on Check your inbox where the link signs in by itself, and where it asks for the password', async () => {
     answers['/api/auth/register'] = () => json({ ok: true })
     await mount()
     button('Create one').click()
@@ -403,7 +406,7 @@ describe('creating an account', () => {
     await submit()
 
     expect(host.querySelector('[data-test-id="check-inbox-lead"]')?.textContent).toBe(
-      'We sent a link to name@example.com. Open it in this browser, then sign in with your password. Opening it in another browser or on another device? Sign in there first.'
+      "We sent a link to name@example.com. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
     )
   })
 

@@ -180,6 +180,46 @@ describe('a link that needs a sign-in first', () => {
   })
 })
 
+describe('a confirm link that signed this browser in', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('moves a local-first device to account mode, so the app opens in the account', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified=1&signed_in=1')
+    const { consumeEmailVerifyRedirect, linkWaiting, takeEmailVerifyResult } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(localStorage.getItem('finance_storage_mode')).toBe('self-hosted')
+    expect(window.location.hash).toBe('')
+    expect(linkWaiting()).toBeNull()
+    // The app says the address is confirmed once it is up.
+    expect(takeEmailVerifyResult()).toEqual({ ok: true })
+  })
+
+  it('moves nothing when the answer says only that the address is confirmed', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified=1&signed_in=0')
+    const { consumeEmailVerifyRedirect } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  })
+
+  it('moves nothing for a change link that failed, whatever else the answer says', async () => {
+    localStorage.setItem('finance_storage_mode', 'serverless')
+    history.replaceState(null, '', '/#everified_error=expired&change=1&signed_in=1')
+    const { consumeEmailVerifyRedirect } = await load()
+
+    consumeEmailVerifyRedirect()
+
+    expect(localStorage.getItem('finance_storage_mode')).toBe('serverless')
+  })
+})
+
 describe('a confirm link that did not confirm, opened in a fresh browser', () => {
   beforeEach(() => {
     localStorage.clear()
