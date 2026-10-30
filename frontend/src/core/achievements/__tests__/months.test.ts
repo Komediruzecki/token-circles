@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, currentStreak, monthOf, monthReaching, runs } from '../months'
+import { addMonths, currentStreak, monthOf, monthReaching, runs, streakStrip } from '../months'
 
 describe('month arithmetic', () => {
   it('monthOf takes the YYYY-MM of an ISO date', () => {
@@ -30,5 +30,19 @@ describe('month arithmetic', () => {
     expect(currentStreak(tracked, '2026-09')).toBe(3)
     expect(currentStreak(tracked, '2026-10')).toBe(0)
     expect(currentStreak(new Set(), '2026-09')).toBe(0)
+  })
+
+  it('streakStrip ends where the streak counts from, so the run it names is lit', () => {
+    // Twelve full months, nothing tracked this month: the strip ends last month, all twelve lit.
+    const year = new Set(Array.from({ length: 12 }, (_, i) => addMonths('2026-10', -1 - i)))
+    const strip = streakStrip(year, '2026-10')
+    expect(strip).toHaveLength(12)
+    expect(strip[0]).toBe('2025-10')
+    expect(strip[11]).toBe('2026-09')
+    expect(strip.filter((m) => year.has(m))).toHaveLength(currentStreak(year, '2026-10'))
+    // This month tracked: the strip ends this month, as before.
+    const withNow = new Set([...year, '2026-10'])
+    expect(streakStrip(withNow, '2026-10').at(-1)).toBe('2026-10')
+    expect(streakStrip(withNow, '2026-10')[0]).toBe('2025-11')
   })
 })

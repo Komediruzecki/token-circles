@@ -17,7 +17,7 @@ import OrbitalDivider, { OrbitalAction } from '../components/OrbitalDivider'
 import { buildAdvice } from '../core/achievements/advice'
 import { ACHIEVEMENTS, BANDS } from '../core/achievements/definitions'
 import { monthsTo } from '../core/achievements/evaluate'
-import { addMonths, monthOf } from '../core/achievements/months'
+import { monthOf, streakStrip } from '../core/achievements/months'
 import { buildYearReview } from '../core/achievements/review'
 import { shareBadge } from '../core/achievements/shareCard'
 import {
@@ -115,7 +115,10 @@ export default function Progress(): JSX.Element {
   const tracked = createMemo(() => new Set(snap()?.evaluation.trackedMonths ?? []))
   const earned = createMemo(() => new Map(unlocks().map((u) => [u.id, u])))
 
-  /** The last twelve months, oldest first, each with the entries it holds. */
+  /**
+   * Twelve months, oldest first, each with the entries it holds: ending this month once it is
+   * tracked, else last month, where the streak counts from (`streakStrip`).
+   */
   const strip = createMemo(() => {
     const today = snap()?.today ?? localToday()
     const counts = new Map<string, number>()
@@ -123,11 +126,11 @@ export default function Progress(): JSX.Element {
       const m = monthOf(t.date)
       counts.set(m, (counts.get(m) ?? 0) + 1)
     }
-    const now = monthOf(today)
-    return Array.from({ length: 12 }, (_, i) => {
-      const month = addMonths(now, i - 11)
-      return { month, entries: counts.get(month) ?? 0, tracked: tracked().has(month) }
-    })
+    return streakStrip(tracked(), monthOf(today)).map((month) => ({
+      month,
+      entries: counts.get(month) ?? 0,
+      tracked: tracked().has(month),
+    }))
   })
 
   const advice = createMemo<AdviceCard[]>(() => {
@@ -241,6 +244,7 @@ export default function Progress(): JSX.Element {
                 <li
                   class={styles.cell}
                   data-month-cell
+                  data-month={cell.month}
                   data-tracked={cell.tracked ? 'true' : 'false'}
                   title={`${monthLabel(cell.month)}: ${cell.entries} ${cell.entries === 1 ? 'entry' : 'entries'}`}
                 >

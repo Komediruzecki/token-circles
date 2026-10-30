@@ -1803,6 +1803,16 @@ Changed:
   (through the same `plural()` as the streak card), and one entry gets the title "One entry has no
   category" instead of "Some entries have no category". The card's id is unchanged, so a dismissal
   still holds. Tests: `frontend/src/core/achievements/__tests__/advice.test.ts` (2 new, 2 updated).
+- **Progress's month strip ends where the streak counts from** (`frontend/src/core/achievements/months.ts`
+  `streakStrip`, `Progress.tsx`). The streak counts back from this month once it is tracked, else
+  from last month; the strip always ended this month. With twelve full months and nothing yet this
+  month, "12 months tracked" sat over 11 lit tiles and an empty one. The strip now ends at the
+  streak's month: last month until this one is tracked, this month after. A run longer than the
+  strip lights every tile, with the count higher, as before. It is the only place that draws the
+  strip (the badge rail shows the count alone); twelve tiles as before, so no tour anchor moves.
+  Each cell carries `data-month`. Tests: `months.test.ts` (`streakStrip`) and
+  `progressPage.test.tsx` (twelve full months and nothing this month: 12 lit tiles ending last
+  month; this month tracked: ends this month). They fail before the change (3 tests).
 
 ## [5.17.2] — 2026-10-30
 
