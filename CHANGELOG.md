@@ -13,6 +13,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Passing Cloudflare's check once covers your next few sign-in tries.** For five minutes after you pass it, a wrong password no longer brings the box back, so you can fix a typo and press Sign in again.
 - **Imports into a new local workspace show up.** Entries added after choosing to keep your data on this device and skipping setup were saved but never shown; they now appear in your profile, or in one called Recovered entries if you've used another profile since.
 - **The password box for adding a passkey keeps its label while you type**, and has the eye from the sign-in screens.
+- **The setup wizard has the screen to itself on an iPhone.** The Dashboard no longer shows under Safari's status bar and toolbar, or scrolls under your finger, while you set up. Close the wizard and the page is where you left it.
 - **Progress's month strip lights the whole run its count names.** With a year of entries and nothing yet this month, "12 months tracked" sat over 11 lit months. Until this month counts, the strip now ends last month.
 
 ## [5.17.2] — 2026-10-30
