@@ -1838,6 +1838,43 @@ Changed:
   `progressPage.test.tsx` (twelve full months and nothing this month: 12 lit tiles ending last
   month; this month tracked: ends this month). They fail before the change (3 tests).
 
+### Setup wizard
+
+- **The page behind the wizard holds still, unpainted and inert.** Reported from iOS Safari on dev:
+  with the wizard open, the Dashboard showed under the status bar and the floating toolbar (the
+  spending heatmap, the orbit gauge, a badge line) and scrolled under a finger. The wizard is a
+  `position: fixed; inset: 0` layer mounted beside the shell inside `#root`; the document stayed
+  the scroller (`<body>` grows with the page, nothing set `overflow` on the root), the shell stayed
+  focusable and in the accessibility tree, and iOS Safari draws page content under its bars,
+  outside the fixed layer's box. Measured with Chromium and an iPhone 13 profile on the empty
+  Dashboard (2041 px tall in a 664 px viewport): a wheel turn on the wizard's ground moved
+  `scrollY` 0 to 600, a CDP touch drag 0 to 834, touch drags on the panel 0 to 1328, wheels on the
+  panel 0 to 1377, and 37 of 40 Tab presses landed in the shell. After: 0, 0, 0, 0 and 0 of 40.
+  - **Fix**: App wraps the shell (sidebar, page host, floating button and their overlays) in a
+    `display: contents` div, `.shell` in `Layout.module.css`, with `inert={onboardingOpen()}`;
+    `.shell[inert]` is `visibility: hidden`. The wizard and `ConfirmDialog` (its Skip asks through
+    it) sit outside the wrapper; toasts were already outside `App`. A `createEffect` in App holds
+    `lockDocumentScroll()` (`core/scrollLock.ts`: `overflow: hidden` on `<html>`, restoring the
+    previous inline value) while the wizard is open, and its `onCleanup` lets go on close or on an
+    App unmount. The shell stays mounted, so pages keep their state and the tours that follow
+    onboarding find their anchors; `scrollY` is untouched, so a wizard relaunched from a scrolled
+    Settings page closes onto the same place.
+  - Solid sets `inert` as a property. Browsers reflect it to the attribute `.shell[inert]` keys on;
+    jsdom keeps a plain property, so the unit test reads both.
+  - **Tests**: `src/__tests__/onboardingHoldsPageBehind.test.tsx` (the lock and `inert` while open,
+    both gone on Skip, on close the previous inline overflow restored, release on unmount) and
+    `tests/onboarding-page-behind.spec.ts` (@smoke, iPhone 13 emulation in Chromium: `scrollY`
+    under wheel and touch, shell hidden, Tab stays in the wizard, relaunch from scrolled Settings
+    closes onto the same `scrollY`, a 320x568 phone still scrolls the panel). WebKit could not run
+    on this host (Playwright's webkit build needs ICU 74), and emulation cannot show Safari's bars;
+    the paint check is the shell being hidden, which holds wherever Safari draws.
+  - `tests/quick-entry-phone.spec.ts` read the sidebar toggle's class while the wizard was still
+    up, which worked only because the shell behind it stayed in the role tree. `sidebarWanted` now
+    waits for the toggle to be visible first; that auto-waiting assertion runs the spec's locator
+    handler, which leaves the wizard.
+  - **Same pattern elsewhere, not changed here**: no other overlay locks the document or makes the
+    shell inert. See the report for the list.
+
 ### API
 
 - **Requests that change data are taken from the app's own pages, with a JSON body.** A
