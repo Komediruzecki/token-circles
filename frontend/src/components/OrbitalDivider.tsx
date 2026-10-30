@@ -73,25 +73,29 @@ export default function OrbitalDivider(props: OrbitalDividerProps) {
 
   return (
     <div id={props.id} ref={rootRef} class={styles.divider} data-test-id={props.testId}>
-      <div class={styles.labelWrap}>
-        <span class={styles.sun} aria-hidden="true" />
-        <h2 class={styles.label}>{props.label}</h2>
-        <Show when={props.info}>
-          <InfoTip text={props.info!} />
-        </Show>
-        <Show when={props.meta}>
-          <span class={styles.meta}>{props.meta}</span>
-        </Show>
-      </div>
-      {/* The orbit: a gently bowed arc (viewBox height is fixed, width stretches) with
-          planets absolutely positioned ON the curve — y(t) = 17 - 28·t·(1-t). */}
-      <div class={styles.orbit} aria-hidden="true">
-        <svg class={styles.arc} viewBox="0 0 100 24" preserveAspectRatio="none">
-          <path pathLength="1" d="M0,17 Q50,3 100,17" />
-        </svg>
-        <span class={`${styles.planet} ${styles.p1}`} />
-        <span class={`${styles.planet} ${styles.p2}`} />
-        <span class={`${styles.planet} ${styles.p3}`} />
+      {/* The label and its orbit share one row that never wraps: the orbit takes what the label
+          leaves, and only the actions move to a row of their own. */}
+      <div class={styles.head}>
+        <div class={styles.labelWrap}>
+          <span class={styles.sun} aria-hidden="true" />
+          <h2 class={styles.label}>{props.label}</h2>
+          <Show when={props.info}>
+            <InfoTip text={props.info!} />
+          </Show>
+          <Show when={props.meta}>
+            <span class={styles.meta}>{props.meta}</span>
+          </Show>
+        </div>
+        {/* The orbit: a gently bowed arc (viewBox height is fixed, width stretches) with
+            planets absolutely positioned ON the curve — y(t) = 17 - 28·t·(1-t). */}
+        <div class={styles.orbit} aria-hidden="true">
+          <svg class={styles.arc} viewBox="0 0 100 24" preserveAspectRatio="none">
+            <path d="M0,17 Q50,3 100,17" />
+          </svg>
+          <span class={`${styles.planet} ${styles.p1}`} />
+          <span class={`${styles.planet} ${styles.p2}`} />
+          <span class={`${styles.planet} ${styles.p3}`} />
+        </div>
       </div>
       <Show when={props.actions}>
         <div class={styles.actions}>{props.actions}</div>
