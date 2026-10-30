@@ -729,6 +729,17 @@ describe('what a circle checks, and the questions it asks', () => {
     })
   })
 
+  it('says an amount was given in another currency only when there is an amount', () => {
+    guidance.set!(viewOf(facts(), false, { savedElsewhere: { amount: 12000, currency: 'USD' } }))
+    const view = open(5)
+    expect(q(view, '[data-test-id="circle-saved-elsewhere"]').textContent).toContain(
+      'You gave $12,000. Your circles count it again once you save it in EUR, your base currency now.'
+    )
+    // "No" saves 0 in the currency of the day: nothing to count again, so no note.
+    guidance.set!(viewOf(facts(), false, { savedElsewhere: { amount: 0, currency: 'USD' } }))
+    expect(q(view, '[data-test-id="circle-saved-elsewhere"]').textContent).not.toContain('You gave')
+  })
+
   it('asks for the own number only once More than enough is the circle worked on', () => {
     guidance.set!(viewOf(facts()))
     const view = open(7)

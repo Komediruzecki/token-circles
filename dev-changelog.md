@@ -1475,6 +1475,18 @@ check')` first, as the cushion and debt cases do.
   sentences, the US and UK free-money questions, a cushion under a month, Solid ground and Room to
   choose): no region named, no "typical", "average", "median", "households", "adults" or "people
   in". A why that quotes the EU's households, names the US or gives a typical figure fails it.
+- **Three small things in the circles' words** (`CircleQuestions.tsx`, `shared/guidance/circleView.ts`,
+  `core/api.ts`). The note "You gave $0. Your circles count it again once you save it in EUR" showed
+  for a "No" (saved as 0) in another currency; it now needs an amount above 0. A check row not met
+  could read "€2,000 in, €2,000 out a month." beside Not yet, as two figures rounded to the same
+  whole unit: own income, a month of essentials, two years, work optional and your own number now
+  say the gap instead ("€1 a month short of covering what you spend.", "29 days: €1 to a month of
+  essentials.", "€1 to go"), and keep both figures when met. `formatWholeCurrency` printed "-€0"
+  for anything from -0.5 to 0; what rounds to nothing is now "€0" (Intl keeps the sign of a
+  negative that rounds to zero; half and more still rounds away from zero).
+- **Tests:** `progressCircles.test.tsx` (the note for 12,000 dollars, none for 0),
+  `guidanceCircleView.test.ts` (each of the five rows at a figure that rounds the same, and two
+  years met), `currencies.test.ts` (-0.4, -0 and 0.4 read "€0"; -0.5 reads "-€1").
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

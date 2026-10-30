@@ -136,6 +136,12 @@ function rowFor(
     needed: null as string | null,
   };
   const money = (amount: number) => words.money(Math.round(amount));
+  /**
+   * Two figures that read the same beside Not yet ("€2,000 in, €2,000 out") say nothing about
+   * why: the row says the gap instead, which is never €0.
+   */
+  const readTheSame = (a: number, b: number) => check.met === false && money(a) === money(b);
+  const gap = (target: number, value: number) => words.money(gapOf(target, value));
   const essentials = facts.essentials;
   const liquid = facts.liquid;
   switch (check.id) {
@@ -170,7 +176,9 @@ function rowFor(
             ? 'Your investments could cover what you spend, which counts as paying your way.'
             : facts.income === null || facts.spending === null
               ? null
-              : `${money(facts.ownIncome ?? facts.income)} in, ${money(facts.spending)} out a month.`,
+              : readTheSame(facts.ownIncome ?? facts.income, facts.spending)
+                ? `${gap(facts.spending, facts.ownIncome ?? facts.income)} a month short of covering what you spend.`
+                : `${money(facts.ownIncome ?? facts.income)} in, ${money(facts.spending)} out a month.`,
       };
     case 'first-cushion': {
       let detail: string | null = null;
@@ -178,7 +186,10 @@ function rowFor(
         detail = 'Nothing is marked as needed every month.';
       } else if (facts.cushionMonths !== null && liquid !== null && essentials !== null) {
         const days = Math.floor(facts.cushionMonths * DAYS_IN_A_MONTH);
-        detail = `${days} ${days === 1 ? 'day' : 'days'}: ${money(liquid)} you can reach, against ${money(essentials)} needed a month.`;
+        const counted = `${days} ${days === 1 ? 'day' : 'days'}`;
+        detail = readTheSame(liquid, essentials)
+          ? `${counted}: ${gap(essentials, liquid)} to a month of essentials.`
+          : `${counted}: ${money(liquid)} you can reach, against ${money(essentials)} needed a month.`;
       } else if (facts.accountsKnown && liquid === null) {
         detail = NO_ACCOUNT;
       }
@@ -249,7 +260,7 @@ function rowFor(
         detail:
           check.value === null || check.target === null
             ? null
-            : `${money(check.value)} of ${money(check.target)}: invested, plus money in reach beyond six months of essentials.`,
+            : `${readTheSame(check.value, check.target) ? `${gap(check.target, check.value)} to go` : `${money(check.value)} of ${money(check.target)}`}: invested, plus money in reach beyond six months of essentials.`,
       };
     case 'work-optional':
       return {
@@ -258,7 +269,7 @@ function rowFor(
         detail:
           check.value === null || check.target === null
             ? null
-            : `${money(check.value)} of ${money(check.target)}. At ${rateText(facts.withdrawalRatePct)}% a year, ${money(check.target)} covers what you spend.`,
+            : `${readTheSame(check.value, check.target) ? `${gap(check.target, check.value)} to go` : `${money(check.value)} of ${money(check.target)}`}. At ${rateText(facts.withdrawalRatePct)}% a year, ${money(check.target)} covers what you spend.`,
       };
     case 'enough':
       return {
@@ -267,7 +278,9 @@ function rowFor(
         detail:
           check.value === null || check.target === null
             ? null
-            : `${money(check.value)} of ${money(check.target)}.`,
+            : readTheSame(check.value, check.target)
+              ? `${gap(check.target, check.value)} to go.`
+              : `${money(check.value)} of ${money(check.target)}.`,
       };
   }
 }

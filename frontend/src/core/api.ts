@@ -1320,18 +1320,21 @@ export const formatCurrency = (
 
 /**
  * Money in whole units, as the circles write it: "€1,000". Callers round first, each the way its
- * figure needs (a gap up, so "€0 to go" never shows beside a check not met).
+ * figure needs (a gap up, so "€0 to go" never shows beside a check not met). What rounds to
+ * nothing is "€0", never "-€0": Intl keeps the sign of a negative that rounds to zero.
  */
 export const formatWholeCurrency = (
   amount: number,
   currency: Models.Currency = getLocalCurrency()
 ): string => {
+  // Intl rounds half away from zero, so under half either way is zero, and -0 is too.
+  const whole = Math.abs(amount) < 0.5 ? 0 : amount
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount)
+  }).format(whole)
 }
 
 export const formatDate = (dateStr: string): string => {

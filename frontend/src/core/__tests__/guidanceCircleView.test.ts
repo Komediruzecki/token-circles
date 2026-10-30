@@ -150,6 +150,49 @@ describe('what a circle checks', () => {
     expect(row(full, 4, 'full-cushion')?.detail).toBe('6.5 months put by.')
   })
 
+  it('says the gap where two figures would read the same beside Not yet', () => {
+    // 1,999.60 against 2,000.40 rounds to "€2,000 in, €2,000 out": not met, so the gap says it.
+    const close = facts({ ownIncome: 1999.6, income: 1999.6, spending: 2000.4 })
+    expect(row(close, 2, 'own-income')).toMatchObject({
+      state: 'not-yet',
+      detail: '€1 a month short of covering what you spend.',
+    })
+    expect(
+      row(facts({ ownIncome: 1500, income: 1500, spending: 2000 }), 2, 'own-income')?.detail
+    ).toBe('€1,500 in, €2,000 out a month.')
+    const nearlyAMonth = facts({
+      liquid: 1999.6,
+      essentials: 2000.4,
+      cushionMonths: 1999.6 / 2000.4,
+    })
+    expect(row(nearlyAMonth, 3, 'first-cushion')).toMatchObject({
+      state: 'not-yet',
+      detail: '29 days: €1 to a month of essentials.',
+    })
+    // Two years is 60,000; 59,999.60 invested reads as 60,000.
+    const twoYears = facts({ cushionMonths: 4, liquid: 8000, invested: 59999.6 })
+    expect(row(twoYears, 5, 'two-years')).toMatchObject({
+      state: 'not-yet',
+      detail: '€1 to go: invested, plus money in reach beyond six months of essentials.',
+    })
+    const workOptional = facts({ cushionMonths: 4, liquid: 8000, invested: 749999.6 })
+    expect(row(workOptional, 6, 'work-optional')).toMatchObject({
+      state: 'not-yet',
+      detail: '€1 to go. At 4% a year, €750,000 covers what you spend.',
+    })
+    const enough = facts({
+      cushionMonths: 4,
+      liquid: 8000,
+      invested: 999999.6,
+      enoughPerYear: 40000,
+    })
+    expect(row(enough, 7, 'enough', 7)).toMatchObject({ state: 'not-yet', detail: '€1 to go.' })
+    // Met, the two figures stand: they are what met it.
+    expect(
+      row(facts({ cushionMonths: 4, liquid: 8000, invested: 60000 }), 5, 'two-years')?.detail
+    ).toBe('€60,000 of €60,000: invested, plus money in reach beyond six months of essentials.')
+  })
+
   it('names the expensive debt, and the card it waits on an answer for', () => {
     expect(row(facts({ debts: [loan] }), 4, 'no-expensive-debt')).toMatchObject({
       state: 'not-yet',

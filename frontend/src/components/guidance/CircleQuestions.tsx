@@ -58,10 +58,19 @@ export function AnswerChips<T>(props: {
   )
 }
 
-/** "You gave this in USD: …", for an amount the circles leave out while the base currency differs. */
+/**
+ * "You gave $12,000. …", for an amount the circles leave out while the base currency differs. Only
+ * for an amount above 0: a "No" saved as 0 has nothing to count again.
+ */
 function OtherCurrency(props: { given: AnswerAmount | undefined; currency: string }): JSX.Element {
   return (
-    <Show when={props.given && props.given.currency !== props.currency ? props.given : null}>
+    <Show
+      when={
+        props.given && props.given.amount > 0 && props.given.currency !== props.currency
+          ? props.given
+          : null
+      }
+    >
       {(given) => (
         <p class={styles.hint}>
           You gave {formatWholeCurrency(given().amount, given().currency)}. Your circles count it
