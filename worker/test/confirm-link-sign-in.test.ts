@@ -873,20 +873,24 @@ describe('GET /api/auth/email-link', () => {
     }
   });
 
-  it('says nothing waits for a change link', async () => {
+  it('says nothing waits for a change link, to a new address or to the one the account has', async () => {
     await signedUp(at('read-change'));
     const account = await accountAt(at('read-change'));
-    const token = `planted-change-${crypto.randomUUID()}`;
-    await realDb
-      .prepare(
-        "INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, datetime('now', '+1 day'), 'change')"
-      )
-      .bind(account.id, at('read-change-new'), await sha256(token))
-      .run();
-    const res = await open(token);
-    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required&change=1`);
+    // The second names the address the waiting account has, so only the link's purpose tells it
+    // from the account's confirm link.
+    for (const address of [at('read-change-new'), at('read-change')]) {
+      const token = `planted-change-${crypto.randomUUID()}`;
+      await realDb
+        .prepare(
+          "INSERT INTO email_verifications (user_id, email, token_hash, expires_at, purpose) VALUES (?, ?, ?, datetime('now', '+1 day'), 'change')"
+        )
+        .bind(account.id, address, await sha256(token))
+        .run();
+      const res = await open(token);
+      expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required&change=1`);
 
-    expect(await waiting(cookieSet(res, 'fm_email_link')!)).toEqual({ waiting: null });
+      expect(await waiting(cookieSet(res, 'fm_email_link')!)).toEqual({ waiting: null });
+    }
   });
 
   it('says nothing waits when the account goes while the read runs', async () => {
