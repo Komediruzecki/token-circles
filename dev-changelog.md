@@ -1437,6 +1437,17 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `guidanceNextStep.test.ts` (the review's P2 case: the step is Reload your accounts,
   "They didn't load, so the income check is waiting.", with no meter; read and with nothing
   invested, the gap is the step).
+- **About this space: every Remove answer brings its question back** (`CircleAnswers.tsx`). The
+  list says "Remove an answer and its circle asks again.", which the essentials row did not do:
+  the essentials question asks while some spending counts as needed only because nothing says
+  otherwise, and its Save writes a choice to every such category, so clearing `kindsAsked` left
+  nothing to ask about (the review's P5). That row now has no Remove answer, only its line and
+  Open Categories, where the choices are kept; `Answered`'s `remove` is optional.
+- **Tests:** `progressCircles.test.tsx` (every Remove in the list, pressed: the essentials row has
+  none and links to `#categories`; each other answer, removed, is asked again by its circle for
+  someone it applies to, in the circle's list or its next step, with nothing chosen or typed: the
+  card, yearly bills, free money, how the household lives, support, savings elsewhere and the own
+  number; a new row with Remove has to join the list).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

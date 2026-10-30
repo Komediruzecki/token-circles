@@ -3,8 +3,9 @@
  * Each answered question is listed with its answer, changeable here, and "Remove answer", after
  * which its circle asks again. The support and essentials answers change where they were given:
  * Paying your way ticks the support, and each category keeps whether it is needed every month.
- * The free-money and tenure answers show only while the benchmarks gate is open, as their questions
- * do.
+ * The essentials have no Remove answer: their choices stay on the categories, so the question
+ * would not come back, and the row links to Categories instead. The free-money and tenure answers
+ * show only while the benchmarks gate is open, as their questions do.
  */
 import { createUniqueId, Show } from 'solid-js'
 import {
@@ -69,12 +70,15 @@ function RemoveAnswer(props: {
   )
 }
 
-/** One listed answer: its question, the answer as it can be changed, and Remove answer. */
+/**
+ * One listed answer: its question, the answer as it can be changed, and Remove answer, which only
+ * an answer whose circle asks again once it is gone has.
+ */
 function Answered(props: {
   question: string
   name: string
   disabled: boolean
-  remove: AnswerChanges
+  remove?: AnswerChanges
   onSave: SaveAnswer
   children: JSX.Element
   link?: { hash: string; label: string }
@@ -91,12 +95,16 @@ function Answered(props: {
             </a>
           )}
         </Show>
-        <RemoveAnswer
-          describedBy={id}
-          testId={`settings-answer-${props.name}-remove`}
-          disabled={props.disabled}
-          onRemove={() => void props.onSave(props.remove)}
-        />
+        <Show when={props.remove}>
+          {(remove) => (
+            <RemoveAnswer
+              describedBy={id}
+              testId={`settings-answer-${props.name}-remove`}
+              disabled={props.disabled}
+              onRemove={() => void props.onSave(remove())}
+            />
+          )}
+        </Show>
       </div>
     </Question>
   )
@@ -257,11 +265,12 @@ export function CircleAnswers(props: CircleAnswersProps): JSX.Element {
       </Show>
 
       <Show when={a().kindsAsked !== undefined}>
+        {/* No Remove answer: the choices stay on the categories, so the question would not
+            come back. They change on Categories. */}
         <Answered
           question={ESSENTIALS_QUESTION}
           name="essentials"
           disabled={props.disabled}
-          remove={{ kindsAsked: null }}
           onSave={props.onSave}
           link={{ hash: '#categories', label: 'Open Categories' }}
         >

@@ -5,12 +5,13 @@
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mergeAnswers, readAnswers } from '../../../../shared/guidance/answers'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { ledgerRows, ledgerStatus } from '../../../../shared/guidance/ledger'
 import { nextStepOf } from '../../../../shared/guidance/nextStep'
 import { facts, words } from '../../core/__tests__/guidanceFixtures'
 import type { JSX } from 'solid-js'
-import type { Answers } from '../../../../shared/guidance/answers'
+import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { GuidanceFacts, WindowCategory } from '../../../../shared/guidance/facts'
 import type * as ApiModule from '../../core/api'
 import type { GuidanceView } from '../../core/guidance'
@@ -52,6 +53,7 @@ vi.mock('../../core/achievementsStore', () => ({
   refreshAchievements: vi.fn(async () => []),
 }))
 
+import { CircleAnswers } from '../../components/guidance/CircleAnswers'
 import { refreshAchievements } from '../../core/achievementsStore'
 import { apiPut } from '../../core/api'
 import { takeAnswers } from '../../core/guidance'
@@ -921,5 +923,138 @@ describe('How you compare', () => {
     await tick()
     await tick()
     expect(c.querySelector('[data-test-id="circle-compare"]')).toBeNull()
+  })
+})
+
+describe('What your circles asked, in Settings', () => {
+  it('asks each question again once Settings removes its answer; the essentials live on Categories', async () => {
+    const all: Answers = {
+      carriesCardBalance: false,
+      setsAsideYearly: true,
+      freeMoney: { region: 'DE', answer: 'taken' },
+      tenure: 'mortgage',
+      supportCategoryIds: [12],
+      kindsAsked: true,
+      savedElsewhere: { amount: 12000, currency: 'EUR' },
+      enoughPerYear: { amount: 48000, currency: 'EUR' },
+    }
+    // Every Remove answer in Settings, pressed, with what each sends.
+    const removed: AnswerChanges[] = []
+    const settings = document.createElement('div')
+    document.body.appendChild(settings)
+    const disposeSettings = render(
+      () => (
+        <CircleAnswers
+          answers={all}
+          currency="EUR"
+          categoryNames={new Map([[12, 'Family help']])}
+          gate
+          region="DE"
+          disabled={false}
+          onSave={async (changes) => {
+            removed.push(changes)
+            return true
+          }}
+        />
+      ),
+      settings
+    )
+    try {
+      // Each essentials choice is kept on its category: nothing here to remove, and the way there.
+      const essentials = q(settings, '[data-test-id="settings-answer-essentials"]')
+      expect(essentials.querySelector('button')).toBeNull()
+      expect(q(essentials, 'a').getAttribute('href')).toBe('#categories')
+      for (const button of settings.querySelectorAll<HTMLButtonElement>(
+        '[data-test-id$="-remove"]'
+      ))
+        button.click()
+    } finally {
+      disposeSettings()
+      settings.remove()
+    }
+
+    /** A card whose entries can't show whether its balance is carried. */
+    const visa = { kind: 'card' as const, id: 3, name: 'Visa', owed: 400, rate: null }
+    const unknownCard = { ...visa, payment: null, carried: null, expensive: null }
+    const family = {
+      id: 12,
+      name: 'Family help',
+      type: 'income' as const,
+      perMonth: 500,
+      essential: false,
+      via: null,
+    }
+    /** Where each answer's question is asked, for someone it applies to: in the list, or the step. */
+    const askedIn: Record<
+      string,
+      { circle: number; f: GuidanceFacts; list: string; step?: string }
+    > = {
+      carriesCardBalance: {
+        circle: 4,
+        f: facts({ debts: [unknownCard], belowZero: 1 }),
+        list: 'circle-question-card',
+        step: 'no-expensive-debt',
+      },
+      setsAsideYearly: {
+        circle: 4,
+        f: facts({ yearlyBills: { count: 1, perYear: 600, perMonth: 50 } }),
+        list: 'circle-question-yearly-bills',
+        step: 'yearly-bills',
+      },
+      freeMoney: {
+        circle: 4,
+        f: facts({ region: 'DE' }),
+        list: 'circle-question-free-money',
+        step: 'free-money',
+      },
+      tenure: {
+        circle: 2,
+        f: facts({ spendingByKind: { housing: 900 } }),
+        list: 'circle-question-tenure',
+      },
+      supportCategoryIds: {
+        circle: 2,
+        f: facts({ windowCategories: [family] }),
+        list: 'circle-question-support',
+      },
+      savedElsewhere: { circle: 5, f: facts(), list: 'circle-saved-elsewhere' },
+      enoughPerYear: {
+        circle: 7,
+        f: facts({ cushionMonths: 4, liquid: 8000, invested: 800000 }),
+        list: 'circle-question-enough',
+        step: 'enough',
+      },
+    }
+    // Every answer with a Remove is one a circle asks again: none left out of this list.
+    expect(
+      removed
+        .map((change) => Object.keys(change))
+        .flat()
+        .sort()
+    ).toEqual(Object.keys(askedIn).sort())
+
+    const c = mount(() => <Progress />)
+    for (const change of removed) {
+      const [field] = Object.keys(change)
+      const where = askedIn[field]
+      const answers = readAnswers(mergeAnswers(all, change))
+      expect(Object.prototype.hasOwnProperty.call(answers, field), field).toBe(false)
+      guidance.set!(viewOf(where.f, true, answers))
+      go(`#progress/${where.circle}`)
+      await vi.waitFor(() => {
+        const view = q(c, '[data-test-id="circle-view"]')
+        expect(view.getAttribute('data-circle'), field).toBe(String(where.circle))
+        const asked =
+          view.querySelector(`[data-test-id="${where.list}"]`) ??
+          (where.step
+            ? view.querySelector(`[data-test-id="next-step-card"][data-step="${where.step}"]`)
+            : null)
+        expect(asked, field).not.toBeNull()
+        // Asked again: nothing chosen, nothing typed.
+        expect(asked!.querySelectorAll('input:checked'), field).toHaveLength(0)
+        for (const input of asked!.querySelectorAll<HTMLInputElement>('input:not([type])'))
+          expect(input.value, field).toBe('')
+      })
+    }
   })
 })
