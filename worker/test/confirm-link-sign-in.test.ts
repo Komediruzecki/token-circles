@@ -378,6 +378,25 @@ describe('the confirm link, opened in the browser that signed up', () => {
     expect(((await me.json()) as { email: string }).email).toBe(at('fresh-session'));
   });
 
+  it("ends the other account's session it replaces, as signing out ends one, and leaves that account's other sessions", async () => {
+    await signedUp(at('replaced'));
+    const other = await accountAt(at('replaced'));
+    const here = (await sessionCookie(other.id)).split(';')[0]!;
+    const elsewhere = (await sessionCookie(other.id)).split(';')[0]!;
+    expect(await sessionsOf(other.id)).toBe(2);
+    const { marker, token } = await signedUp(at('replacing'));
+
+    const res = await open(token, `${here}; ${marker}`);
+
+    expect(res.headers.get('Location')).toBe(SIGNED_IN);
+    expect(cookieSet(res, 'fm_session')).not.toBeNull();
+    expect(await sessionsOf(other.id)).toBe(1);
+    const me = (cookie: string) =>
+      fetchSettled(`${BASE}/api/auth/me`, { headers: { Cookie: cookie } });
+    expect((await me(here)).status).toBe(401);
+    expect((await me(elsewhere)).status).toBe(200);
+  });
+
   it('signs in with a marker made the way the Worker makes one', async () => {
     const { token } = await signedUp(at('made-right'));
     const account = await accountAt(at('made-right'));

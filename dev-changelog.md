@@ -1817,7 +1817,9 @@ Changed:
     as on every other path. On `confirmed` the route calls `issueSessionCookie` with the
     `token_version` it read before the spend, logs `login ok confirm_link`, and answers
     `302 #everified=1&signed_in=1` with the session cookie and the marker cleared (`Max-Age=0`).
-    When the bound insert writes no session (the account signed out everywhere in between), the
+    A session of another account that the request carried ends first, since the new cookie takes
+    its place: its `auth_sessions` row is deleted by id and account, as `POST /api/auth/logout`
+    deletes it, and that account's other sessions stay. When the bound insert writes no session (the account signed out everywhere in between), the
     answer is `#everified=1`: the address is confirmed and the person signs in as usual. Any other
     case keeps the answer it had: `signin_required` with the `fm_email_link` marker, or the link's
     own outcome.
@@ -1862,7 +1864,7 @@ Changed:
     answer from the route the screen goes back to the sign-in form and "Sign in to confirm your
     address.". The second factor, Forgot your password? and the back gesture lead where the form's
     do, with the address kept. A change link keeps the form and its notice.
-  - Tests: `worker/test/confirm-link-sign-in.test.ts` (42 new); the mail tests in
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (43 new); the mail tests in
     `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
     `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
     and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for

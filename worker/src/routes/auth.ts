@@ -29,6 +29,7 @@ import {
   boundTo,
   TOKEN_TTL_SECONDS,
   TRY_AGAIN,
+  type AuthUser,
 } from '../auth';
 import { sendMail } from '../email';
 import { cancelEmailChange, pendingEmailChange, sendEmailChangeLink } from '../email-change';
@@ -681,10 +682,15 @@ authRoutes.post('/api/auth/reset-password', async (c) => {
  * Spending the link is the claim, as on every other path (spendLink). The session is bound to
  * the token_version read before it (issueSessionCookie), so one that moved on in between gets the
  * confirmed address and no session: the person signs in as usual.
+ *
+ * `replacing` is this browser's session of another account, if the request carried one. The new
+ * session cookie takes its place, so that session ends first, by its row, as signing out ends it
+ * (POST /api/auth/logout). That account's sessions elsewhere stay as they are.
  */
 async function signInFromSignUp(
   c: Context<AppEnv>,
-  link: EmailLink
+  link: EmailLink,
+  replacing: AuthUser | null
 ): Promise<{ spent: SpentLink; session: string | null } | null> {
   if (link.purpose !== 'confirm' || !carriesSignupMarker(c.req.raw)) return null;
   const account = await c.env.DB.prepare(
@@ -704,6 +710,11 @@ async function signInFromSignUp(
   if (!(await signupMarkerFor(c.req.raw, c.env, link.email, account.password_hash))) return null;
   const spent = await spendLink(c.env.DB, link, welcomeAfterAnswer(c));
   if (spent !== 'confirmed') return { spent, session: null };
+  if (replacing?.sessionId !== undefined) {
+    await c.env.DB.prepare('DELETE FROM auth_sessions WHERE id = ? AND user_id = ?')
+      .bind(replacing.sessionId, replacing.userId)
+      .run();
+  }
   const session = await issueSessionCookie(
     c.env,
     { userId: link.user_id, provider: 'password', tokenVersion: account.token_version },
@@ -770,7 +781,7 @@ authRoutes.get('/api/auth/verify-email', async (c) => {
       .first();
     if (!owner || link.used_at !== null) return fail('invalid_or_used');
     if (linkExpired(link)) return fail('expired', change);
-    const fromSignUp = await signInFromSignUp(c, link);
+    const fromSignUp = await signInFromSignUp(c, link, auth.user);
     if (fromSignUp?.spent === 'confirmed') {
       const signedIn = back(fromSignUp.session ? 'everified=1&signed_in=1' : 'everified=1');
       if (fromSignUp.session) signedIn.headers.append('Set-Cookie', fromSignUp.session);
