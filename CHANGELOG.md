@@ -14,7 +14,6 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Getting started can suggest a one-month cushion** when the money you can reach covers less than a month of what you need.
 - **Categories say what they hold.** Each expense category has a kind, like groceries or eating out, and a "Needed every month" tick, both guessed from its name until you pick. The default categories have Groceries and Eating out instead of Food, and resetting your categories turns Food into Groceries, entries and all.
 - **Credit cards are an account type.** A card, and a Giro account's overdraft, can carry a limit and an interest rate.
-- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
 - **Two mails for your first week.** On day 2, if nothing is imported yet, how to get a year of statements out of your bank; on day 7, after an import, what your first week found, in counts and never amounts. Both carry a stop link that stops these two mails, and Settings has a switch for them while they can still come.
 - **The subscription scan finds regular payments it has no name for**, like the rent or a local gym, and adds each as a bill or a subscription. It leaves cash withdrawals out, and lists what you pay every week or two unticked.
 

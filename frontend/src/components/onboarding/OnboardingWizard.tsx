@@ -22,6 +22,7 @@ import {
 } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
 import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
+import { benchmarksShown } from '../../core/guidanceGate'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
@@ -206,7 +207,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   // What it checks and says is onboardingForms.ts; a refused name is said under the name.
   // Where the person lives and who the space covers are asked here too (guidance.md 5.5): the
   // answers the record holds, and the ones chosen on this visit to the step, which are what the
-  // step saves. Both questions can be left unanswered.
+  // step saves. Both questions can be left unanswered. The production build asks neither until
+  // the benchmarks they choose figures for are shown (core/guidanceGate.ts), and saves no answer.
   const [storedAnswers, setStoredAnswers] = createSignal<Answers>({})
   const [chosenAnswers, setChosenAnswers] = createSignal<AnswerChanges>({})
   const spaceAnswers = (): Answers => ({ ...storedAnswers(), ...chosenAnswers() }) as Answers
@@ -235,11 +237,13 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       // space is saved by now, so a failure here does not hold the step: it says so and moves on,
       // and the answers can be given in Settings. Kept as chosen, they show if the person comes
       // back to the step, whose save tries them again.
-      try {
-        setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
-        setChosenAnswers({})
-      } catch {
-        showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
+      if (benchmarksShown()) {
+        try {
+          setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
+          setChosenAnswers({})
+        } catch {
+          showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
+        }
       }
     },
     onSaved: () => {
@@ -327,7 +331,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         setChosenAnswers({})
         // Asked again when the step opens again: what the record holds now. A workspace with no
         // profile yet holds none.
-        if (state.currentProfile) {
+        if (state.currentProfile && benchmarksShown()) {
           loadAnswers()
             .then(setStoredAnswers)
             .catch(() => setStoredAnswers({}))
@@ -612,18 +616,20 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             )}
           </Field>
         </div>
-        <p
-          class={`${styles.fieldHint} ${styles.questionsLead}`}
-          data-test-id="onboarding-space-questions-lead"
-        >
-          Both questions are optional. Change them later in Settings.
-        </p>
-        <SpaceQuestions
-          idPrefix="onboarding-space"
-          answers={spaceAnswers()}
-          disabled={spaceForm.submitting()}
-          onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
-        />
+        <Show when={benchmarksShown()}>
+          <p
+            class={`${styles.fieldHint} ${styles.questionsLead}`}
+            data-test-id="onboarding-space-questions-lead"
+          >
+            Both questions are optional. Change them later in Settings.
+          </p>
+          <SpaceQuestions
+            idPrefix="onboarding-space"
+            answers={spaceAnswers()}
+            disabled={spaceForm.submitting()}
+            onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
+          />
+        </Show>
       </form>
     </div>
   )

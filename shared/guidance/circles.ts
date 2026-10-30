@@ -313,12 +313,23 @@ export const CIRCLES: ReadonlyArray<{
   },
 ];
 
+/** What the placement leaves out. */
+export interface PlaceOptions {
+  /**
+   * False leaves the free-money check out of Solid ground, as the production build does until its
+   * question has had a lawyer's read (frontend/src/core/guidanceGate.ts). It is never required, so
+   * no circle moves. Default true.
+   */
+  freeMoney?: boolean;
+}
+
 /** Where the facts put a person in the seven circles, and their next step. */
-export function placeCircle(facts: GuidanceFacts): Placement {
+export function placeCircle(facts: GuidanceFacts, options: PlaceOptions = {}): Placement {
   const circles: CirclePlace[] = [];
   let inside = true;
+  const kept = (check: Check) => options.freeMoney !== false || check.id !== 'free-money';
   for (const { circle, checks: checksOf } of CIRCLES) {
-    const checks = checksOf(facts);
+    const checks = checksOf(facts).filter(kept);
     const reached: boolean =
       inside && checks.every((check) => !check.required || check.met === true);
     circles.push({ circle, name: CIRCLE_NAMES[circle], reached, checks });

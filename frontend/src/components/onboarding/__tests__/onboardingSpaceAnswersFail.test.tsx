@@ -4,7 +4,10 @@
  * not hold the step: it moves on and says the space is saved and where the answers can be given.
  * It used to say "Couldn't save your space. Try again." about a space that was saved.
  *
- * Run against the real local-first router on fake-indexeddb, with the answers' save failing.
+ * The production build asks neither question while the benchmarks are held back
+ * (core/guidanceGate.ts), and saves no answer.
+ *
+ * Run against the real local-first router on fake-indexeddb, with the answers' save mocked.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
@@ -52,6 +55,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   dispose?.()
   dispose = undefined
   host.remove()
@@ -90,4 +94,45 @@ it('moves on with the space saved when its answers fail to save, and says where 
   expect(SPACE_ANSWERS_NOT_SAVED).toMatch(/space is saved/)
   expect(SPACE_ANSWERS_NOT_SAVED).toMatch(/Settings, under About this space/)
   expect(host.querySelector('[data-test-id="onboarding-space-notice"]')?.textContent ?? '').toBe('')
+})
+
+it('asks neither question in the production build, and saves no answer', async () => {
+  vi.stubEnv('MODE', 'production')
+  startOnboarding('space')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+
+  const name = await vi.waitFor(() => {
+    const input = host.querySelector<HTMLInputElement>('[data-test-id="onboarding-profile-name"]')
+    expect(input).not.toBeNull()
+    return input!
+  })
+  expect(host.querySelector('[data-test-id="onboarding-space-questions-lead"]')).toBeNull()
+  expect(host.querySelector('[data-test-id="onboarding-space-region"]')).toBeNull()
+  expect(host.querySelector('[data-test-id="onboarding-space-household"]')).toBeNull()
+  expect(host.textContent).not.toContain('Where do you live?')
+
+  name.value = 'Our flat'
+  name.dispatchEvent(new Event('input', { bubbles: true }))
+  host
+    .querySelector<HTMLFormElement>('[data-test-id="onboarding-space-form"]')!
+    .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => {
+    expect(onboardingStep()).not.toBe('space')
+  })
+  expect(await (await getDB()).get('profiles', 1)).toMatchObject({ name: 'Our flat' })
+  // No `skipped` region either: the question was never asked.
+  expect(saveAnswers).not.toHaveBeenCalled()
+  expect(await (await getDB()).get('settings', 'guidance:1')).toBeUndefined()
+})
+
+it('asks both in every other build', async () => {
+  vi.stubEnv('MODE', 'dev')
+  startOnboarding('space')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-space-region"]')).not.toBeNull()
+  })
+  expect(host.querySelector('[data-test-id="onboarding-space-household"]')).not.toBeNull()
 })

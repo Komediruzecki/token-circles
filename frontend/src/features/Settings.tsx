@@ -62,6 +62,7 @@ import { emailAlertsLocked, setCurrentPlan } from '../core/billingStore'
 import { showConfirm } from '../core/confirmStore'
 import { CURRENCY_OPTIONS } from '../core/currencies'
 import { entityVersion } from '../core/dataVersions'
+import { benchmarksShown } from '../core/guidanceGate'
 import { startOnboarding } from '../core/onboardingStore'
 import { refetchOnActive } from '../core/pageVisibility'
 import { period } from '../core/periodStore'
@@ -1376,14 +1377,18 @@ export default function Settings() {
                 </form>
               </div>
 
-              <div class={styles.card} data-test-id="settings-about-space">
-                <CardHead
-                  icon={<IconPin />}
-                  title="About this space"
-                  desc="Each space keeps its own answers."
-                />
-                <AboutThisSpace />
-              </div>
+              {/* Setup's region and household questions, held back with the benchmarks they
+                  choose figures for (core/guidanceGate.ts). */}
+              <Show when={benchmarksShown()}>
+                <div class={styles.card} data-test-id="settings-about-space">
+                  <CardHead
+                    icon={<IconPin />}
+                    title="About this space"
+                    desc="Each space keeps its own answers."
+                  />
+                  <AboutThisSpace />
+                </div>
+              </Show>
 
               <div class={styles.card} data-tour="settings-storage">
                 <CardHead

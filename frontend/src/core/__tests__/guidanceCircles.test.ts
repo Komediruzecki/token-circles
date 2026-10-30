@@ -186,6 +186,40 @@ describe('Solid ground', () => {
     expect(placeCircle(facts({ freeMoney: 'not-taken' })).circles[3].reached).toBe(true)
   })
 
+  it('leaves free money out while the production build holds it back, and moves no circle', () => {
+    const held = { freeMoney: false }
+    const unanswered = facts({ freeMoney: null, cushionMonths: 2.9, liquid: 5800 })
+    const without = placeCircle(unanswered, held)
+    expect(check(without, 4, 'free-money')).toBeUndefined()
+    expect(without.circles[3].checks.map((c) => c.id)).toEqual([
+      'no-expensive-debt',
+      'solid-cushion',
+      'full-cushion',
+    ])
+    // The next step goes on to the cushion, where free money would have come first.
+    expect(without.next).toEqual({ circle: 4, check: 'solid-cushion', unknown: null })
+    // Never required: across every answer and cushion, no one's circle moves.
+    for (const freeMoney of [
+      null,
+      'taken',
+      'partly',
+      'not-taken',
+      'not-offered',
+      'not-sure',
+    ] as const) {
+      for (const cushionMonths of [0.5, 2.9, 3, 6.5]) {
+        const these = facts({ freeMoney, cushionMonths, liquid: cushionMonths * 2000 })
+        const shown = placeCircle(these)
+        const hidden = placeCircle(these, held)
+        expect(hidden.current).toBe(shown.current)
+        expect(hidden.circles.map((c) => c.reached)).toEqual(shown.circles.map((c) => c.reached))
+        expect(hidden.provisional).toBe(shown.provisional)
+      }
+    }
+    // Shown is the default, and says so when asked.
+    expect(check(placeCircle(unanswered, { freeMoney: true }), 4, 'free-money')).toBeDefined()
+  })
+
   it('is reached at three months, and keeps six on its checklist', () => {
     const three = placeCircle(facts({ cushionMonths: 3, liquid: 6000, invested: 0 }))
     expect(three.circles[3].reached).toBe(true)

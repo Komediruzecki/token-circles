@@ -1112,6 +1112,30 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   across new ids), `guidanceCircles.test.ts` (`partly` not met), and the contract scenarios in both
   runtimes (`settings`: the record with every field, one refusal per field; `backup`: the support
   answer on the categories it named after a restore).
+- **Benchmarks gate** (`frontend/src/core/guidanceGate.ts`): `benchmarksShown()` is false in the
+  production build unless `VITE_ENABLE_BENCHMARKS=true`, as account deletion's gate. The free-money
+  check, setup's region and household questions and the cards that follow are built behind it.
+  CHANGELOG lines for gated pieces are kept below until it opens. With the gate closed,
+  `placeCircle(facts, { freeMoney: false })` leaves the free-money check out of Solid ground (never
+  required, so no circle moves), "Name your space" asks neither question and saves no answer (no
+  `skipped` region), and Settings has no About this space card until the circles' own questions
+  join it. A function, not a module constant, so a test can `vi.stubEnv('MODE', 'production')`.
+- **Tests:** `guidanceGate.test.ts` (production, the override, every other mode),
+  `guidanceCircles.test.ts` (free money left out moves no circle, for every answer and cushion),
+  `onboardingSpaceAnswersFail.test.tsx` (production asks neither question and writes no record)
+  and `settingsAboutThisSpace.test.tsx` (no card in production).
+
+### Lines for CHANGELOG.md when the benchmarks gate opens
+
+The production build holds back the benchmarks and the questions that choose their figures
+(`frontend/src/core/guidanceGate.ts`). The app shows CHANGELOG.md in production
+(`ChangelogModal.tsx`), so a line for a held piece would announce it there. These lines are written
+and reviewed with their commits and wait here; the commit that opens the gate moves them into
+CHANGELOG.md's [Unreleased].
+
+Added:
+
+- **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
 
 ### Sign-in
 
