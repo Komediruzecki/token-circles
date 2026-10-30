@@ -54,6 +54,8 @@ test.use({ storageState: { cookies: [], origins: [] } })
 const sha256Hex = (s: string) => createHash('sha256').update(s).digest('hex')
 const runEmail = (what: string) =>
   `e2e-link-${what}-${randomBytes(6).toString('hex')}@tokencircles.test`
+/** An address as the finish step shows it: its first character, three dots and its domain. */
+const masked = (email: string) => `${email[0]}•••@${email.split('@')[1]}`
 
 /** Give the newest link of `purpose` mailed to `email` a token the spec knows; return its link. */
 async function plantLink(email: string, purpose: 'confirm' | 'change'): Promise<string> {
@@ -127,20 +129,28 @@ async function signUpHere(page: Page, boot: Boot, email: string): Promise<void> 
 }
 
 /**
- * Finish signing up on the step a confirm link opened signed out lands on: it names the address
- * the link waits for, and takes its password. Waits for the signed-in app.
+ * Finish signing up on the step a confirm link opened signed out lands on: it shows which address
+ * the link waits for (masked), and takes the address and its password. Waits for the signed-in
+ * app.
  */
 async function finishSignUp(page: Page, email: string): Promise<void> {
-  await expect(page.getByTestId('finish-signup-address')).toHaveText(email, { timeout: 30_000 })
+  await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+    timeout: 30_000,
+  })
   await expect(page.getByRole('button', { name: 'Logout' })).toHaveCount(0)
+  await expect(page.locator('#finish-signup-email')).toHaveValue('')
+  await page.locator('#finish-signup-email').fill(email)
   await page.locator('#finish-signup-password').fill(PASSWORD)
   await page.getByTestId('finish-signup-submit').click()
   await expect(page.getByRole('button', { name: 'Logout' })).toBeVisible({ timeout: 30_000 })
 }
 
-/** Send the password on the finish step, and see that the link can't finish there anymore. */
+/** Send the address and password on the finish step, and see that the link can't finish there. */
 async function cannotFinish(page: Page, email: string): Promise<void> {
-  await expect(page.getByTestId('finish-signup-address')).toHaveText(email, { timeout: 30_000 })
+  await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
+    timeout: 30_000,
+  })
+  await page.locator('#finish-signup-email').fill(email)
   await page.locator('#finish-signup-password').fill(PASSWORD)
   await page.getByTestId('finish-signup-submit').click()
   await expect(page.getByTestId('finish-signup-gone')).toHaveText(GONE, { timeout: 30_000 })
@@ -265,10 +275,16 @@ for (const boot of BOOTS) {
           sameSite: 'Lax',
         })
 
+        const told = page.waitForResponse(
+          (r) => r.url().endsWith('/api/auth/email-link') && r.request().method() === 'GET'
+        )
         await land(page, fragment)
-        await expect(page.getByTestId('finish-signup-address')).toHaveText(email, {
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
           timeout: 30_000,
         })
+        // The Worker says which address by its first character and its domain, and no more.
+        expect(await (await told).json()).toEqual({ waiting: 'confirm', email: masked(email) })
+        await expect(page.getByText(email)).toHaveCount(0)
         // A local-first browser moved to account mode to get here.
         expect(await storedMode(page)).toBe('self-hosted')
 
@@ -422,7 +438,7 @@ for (const boot of BOOTS) {
         await bootApp(context, boot, email)
 
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('finish-signup-address')).toHaveText(email, {
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
           timeout: 30_000,
         })
         // The marker was the browser's only record that it opened the link.
@@ -511,7 +527,7 @@ for (const boot of BOOTS) {
         const link = await plantLink(email, 'confirm')
         await bootApp(context, boot, email)
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('finish-signup-address')).toHaveText(email, {
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
           timeout: 30_000,
         })
         sql(
@@ -557,7 +573,7 @@ for (const boot of BOOTS) {
         const link = await plantLink(email, 'confirm')
         await bootApp(context, boot, email)
         await land(page, await openLink(page, link))
-        await expect(page.getByTestId('finish-signup-address')).toHaveText(email, {
+        await expect(page.getByTestId('finish-signup-address')).toHaveText(masked(email), {
           timeout: 30_000,
         })
         // The other device, where the account is signed in, opens the same link.

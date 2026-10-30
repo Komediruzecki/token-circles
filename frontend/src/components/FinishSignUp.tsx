@@ -1,5 +1,5 @@
 import { createSignal, Match, onMount, Switch } from 'solid-js'
-import { SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
+import { signInProblems } from '../../../shared/signInSchema'
 import { api } from '../core/api'
 import { ApiError } from '../core/apiError'
 import { clearLinkWaiting, linkWaiting, noteAddressConfirmed } from '../core/emailVerification'
@@ -12,8 +12,9 @@ import styles from './SignInSteps.module.css'
 import type { FieldErrors } from '../../../shared/refusal'
 import type { SignInMode } from './signInForm'
 
-/** Said when the password does not sign in to the account the link waits for. */
-export const FINISH_REFUSED = "That password didn't work. Try again, or reset it."
+/** Said when the address and password typed sign in to no account while the link still waits. */
+export const FINISH_REFUSED =
+  "That email and password don't match. Try again, or reset your password."
 
 /** Said when nothing waits for this page anymore: the link was used, replaced, or ran out here. */
 export const FINISH_GONE =
@@ -25,20 +26,23 @@ export const FINISH_GONE =
  * marker lasts; shared/confirmLinkSignIn.ts).
  *
  * The Worker left the link unspent, with a marker in this browser that scripts cannot read
- * (worker/src/email-link.ts), and says which address it waits for (GET /api/auth/email-link). The
- * page names that address and asks for its password. The sign-in it sends is the ordinary one
- * (POST /api/auth/login), which spends the link it finds in the marker: it confirms the address
- * and signs in, or asks for the second factor first (TwofaChallenge, through onTwofa).
+ * (worker/src/email-link.ts), and says which address it waits for (GET /api/auth/email-link) by
+ * its first character and its domain, as in k•••@example.com. The page shows that and asks for
+ * the address and its password, in fields a password manager fills. The sign-in it sends is the
+ * ordinary one (POST /api/auth/login) with the address typed, which spends the link it finds in
+ * the marker for that account: it confirms the address and signs in, or asks for the second
+ * factor first (TwofaChallenge, through onTwofa). Another account's address and password sign in
+ * to that account, and the app says the link is for another account, as after any sign-in.
  *
- * - A password the Worker does not take is said for the whole form, unless the link stopped
- *   waiting meanwhile (used in another browser, replaced by a newer one, run out): then the page
- *   says it can't finish here, with the way to a fresh link.
+ * - An address and password the Worker does not take are said for the whole form, unless the link
+ *   stopped waiting meanwhile (used in another browser, replaced by a newer one, run out): then
+ *   the page says it can't finish here, with the way to a fresh link.
  * - A page left open longer than the marker lasts sends nothing, and says the same.
  * - With no answer about the link (offline, a limit reached), the screen goes back to its sign-in
  *   form, which finishes the link as well (onUnavailable).
  */
 export default function FinishSignUp(props: {
-  /** The address the link waits for: the sign-in form keeps it for every way back. */
+  /** The address as typed here: the sign-in form keeps it for every way back. */
   onAddress: (email: string) => void
   /** Another way in, with the address kept: the sign-in, a reset link, or a fresh confirm link. */
   onLeave: (to: Extract<SignInMode, 'login' | 'forgot' | 'confirm'>) => void
@@ -46,6 +50,8 @@ export default function FinishSignUp(props: {
   onUnavailable: () => void
 }) {
   const [state, setState] = createSignal<'checking' | 'ready' | 'gone'>('checking')
+  /** The address the link waits for, as the Worker shows it: k•••@example.com. */
+  const [masked, setMasked] = createSignal('')
   // The check solved for a wrong password covers the next tries, as on the sign-in form.
   const captcha = createCaptchaGate({ signingIn: () => true })
 
@@ -65,8 +71,7 @@ export default function FinishSignUp(props: {
 
   const form = createForm<{ email: string; password: string }, 'second-factor'>({
     initial: { email: '', password: '' },
-    check: (values): FieldErrors =>
-      values.password === '' ? { password: SIGN_IN_MESSAGES.password } : {},
+    check: (values): FieldErrors => signInProblems(values),
     blocked: captcha.asking,
     send: async (values): Promise<'second-factor'> => {
       // The marker this page finishes the link with has run out: nothing it sends can finish it.
@@ -74,18 +79,19 @@ export default function FinishSignUp(props: {
         nothingWaits()
         throw NOT_SENT
       }
+      const email = values.email.trim()
       let token: string | undefined
       try {
         token = await captcha.next()
         let login: Awaited<ReturnType<typeof api.loginWithPassword>>
         try {
-          login = await api.loginWithPassword(values.email, values.password, token)
+          login = await api.loginWithPassword(email, values.password, token)
         } catch (error) {
           // As on the sign-in form (signInForm.ts): a try that went out on the cover alone goes
           // again with the next token when the Worker asks for the check.
           if (!captcha.checkAgain(error, token)) throw error
           token = await captcha.next()
-          login = await api.loginWithPassword(values.email, values.password, token)
+          login = await api.loginWithPassword(email, values.password, token)
         }
         captcha.signedIn()
         if (login?.emailConfirmed) noteAddressConfirmed()
@@ -116,8 +122,7 @@ export default function FinishSignUp(props: {
           nothingWaits()
           return
         }
-        form.reset({ email: waiting.email, password: '' })
-        props.onAddress(waiting.email)
+        setMasked(waiting.masked)
         setState('ready')
       })
       .catch(() => {
@@ -164,9 +169,8 @@ export default function FinishSignUp(props: {
         </Match>
         <Match when={state() === 'ready'}>
           <p class={styles.lead} data-test-id="finish-signup-lead">
-            Enter the password you chose for{' '}
-            <strong data-test-id="finish-signup-address">{form.values.email}</strong>. That confirms
-            the address and signs you in.
+            This link is for <strong data-test-id="finish-signup-address">{masked()}</strong>. Enter
+            that address and its password to confirm it and sign in.
           </p>
           <FormNotice form={form} testId="finish-signup-error" />
           <form
@@ -193,9 +197,12 @@ export default function FinishSignUp(props: {
                   {...control}
                   type="email"
                   name="email"
-                  readOnly
                   value={form.values.email}
-                  // The address the link waits for: a password manager pairs the password with it.
+                  onInput={(e) => {
+                    form.set('email', e.currentTarget.value)
+                    props.onAddress(e.currentTarget.value)
+                  }}
+                  // A password manager fills the address and the password together.
                   autocomplete="username"
                   class={styles.input}
                 />

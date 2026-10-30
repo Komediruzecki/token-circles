@@ -1835,9 +1835,12 @@ Changed:
     address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
     check for every address.
   - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
-    per IP). From the browser's `fm_email_link` marker it answers `{ waiting: 'confirm', email }`
-    for an unspent, unexpired confirm link whose account still waits at that address, and
-    `{ waiting: null }` for anything else. It spends nothing and checks no password.
+    per IP). From the browser's `fm_email_link` marker it answers
+    `{ waiting: 'confirm', email: '<masked>' }` for an unspent, unexpired confirm link whose
+    account still waits at that address, and `{ waiting: null }` for anything else. The address
+    goes out as `maskedAddress` writes it: the first character of the part before the last `@`,
+    then `•••` whatever that part's length, then `@` and the whole domain (`k•••@example.com`).
+    The full address is not in this answer. It spends nothing and checks no password.
   - The rule is in one place, `shared/confirmLinkSignIn.ts`:
     `CONFIRM_LINK_SIGN_IN = { sameBrowser: true, seconds: 3600 }`. With `sameBrowser: false` no
     sign-up sets a marker and no marker signs in, and `seconds` is the marker's `Max-Age` and its
@@ -1854,30 +1857,35 @@ Changed:
   - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
     `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in
     screen on Finish signing up (`frontend/src/components/FinishSignUp.tsx`, stage `finish` of
-    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`), names the
-    address in a read-only `username` field, and sends it with the password to
-    `POST /api/auth/login`, which spends the link it finds in the marker, as a sign-in from the
-    form does. A 401 asks the route again: while the link waits the form says "That password
-    didn't work. Try again, or reset it."; once it does not, the step says "This link can't finish
-    here anymore. Open the newest link in your email, or send a fresh one.", with Send the link
-    again. A page open longer than `LINK_WAITING_MS` sends nothing and says the same. With no
-    answer from the route the screen goes back to the sign-in form and "Sign in to confirm your
-    address.". The second factor, Forgot your password? and the back gesture lead where the form's
-    do, with the address kept. A change link keeps the form and its notice.
-  - Tests: `worker/test/confirm-link-sign-in.test.ts` (43 new); the mail tests in
+    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`, which returns
+    `{ masked }`), says "This link is for k•••@example.com. Enter that address and its password to
+    confirm it and sign in.", and takes the address in an empty, editable `username` field and the
+    password in a `current-password` one, so a password manager fills both. It sends them to
+    `POST /api/auth/login`, which spends the link it finds in the marker for that account, as a
+    sign-in from the form does. Another account's address and password sign in to that account,
+    and the app says the link is for another account, as after any sign-in. A 401 asks the route
+    again: while the link waits the form says "That email and password don't match. Try again, or
+    reset your password."; once it does not, the step says "This link can't finish here anymore.
+    Open the newest link in your email, or send a fresh one.", with Send the link again. A page
+    open longer than `LINK_WAITING_MS` sends nothing and says the same. With no answer from the
+    route the screen goes back to the sign-in form and "Sign in to confirm your address.". The
+    second factor, Forgot your password? and the back gesture lead where the form's do, with the
+    address typed kept. A change link keeps the form and its notice.
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (44 new); the mail tests in
     `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
     `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
     and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
     each kind of address (1 new);
-    `frontend/src/components/__tests__/finishSignUp.test.tsx` (14 new),
+    `frontend/src/components/__tests__/finishSignUp.test.tsx` (15 new),
     `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
     `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
     `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
     `frontend/tests/email-confirm-link.spec.ts`, with two new `@smoke` cases in both boots (the
     link in the browser that signed up signs in; in a second browser it asks for the password,
     signs in there, and leaves the first signed out). The cases that open a link in a browser that
-    did not sign up finish on the new step, and the two that sign up in the browser that opens
-    the link now land signed in.
+    did not sign up finish on the new step, typing the address and the password, and the first
+    of them checks that the route answers the masked address and the page shows no full one; the
+    two that sign up in the browser that opens the link now land signed in.
 
 ### Section headings
 

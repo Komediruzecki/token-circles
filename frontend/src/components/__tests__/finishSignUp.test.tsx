@@ -5,10 +5,10 @@
  * The real screen and the real client (the typed `api`, `ApiError`), with only the network
  * answered here. The link is opened as index.tsx reads it at boot: the Worker's
  * #everified_error=signin_required, which notes the link as waiting. The step asks the Worker which
- * address the link waits for, names it, and sends that address and the password typed to the
- * ordinary sign-in, which spends the link. It says a password that did not work for the whole
- * form, says the link can't finish here once it stops waiting, and sends nothing from a page left
- * open longer than the link waits.
+ * address the link waits for, shows it as the Worker writes it (n•••@example.com), and sends the
+ * address and the password typed to the ordinary sign-in, which spends the link. It says an
+ * address and password that did not work for the whole form, says the link can't finish here once
+ * it stops waiting, and sends nothing from a page left open longer than the link waits.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -29,8 +29,10 @@ let answers: Record<string, () => Response>
 let reloads: number
 
 const ADDRESS = 'name@example.com'
+/** The address as the Worker writes it for this page (maskedAddress in worker/src/routes/auth.ts). */
+const MASKED = 'n•••@example.com'
 const WAITING_KEY = 'tc:email-link-waiting'
-const REFUSED = "That password didn't work. Try again, or reset it."
+const REFUSED = "That email and password don't match. Try again, or reset your password."
 const GONE =
   "This link can't finish here anymore. Open the newest link in your email, or send a fresh one."
 
@@ -41,7 +43,7 @@ function json(body: unknown, status = 200): Response {
   })
 }
 
-const waits = () => json({ waiting: 'confirm', email: ADDRESS })
+const waits = () => json({ waiting: 'confirm', email: MASKED })
 const nothingWaits = () => json({ waiting: null })
 
 /** The screen as the app mounts it, after the link `opened` sent this browser back. */
@@ -119,6 +121,12 @@ async function submit() {
   await settle()
 }
 
+/** Type the address and the password on the step. */
+function fill(email = ADDRESS, pass = 'the-password') {
+  type(address()!, email)
+  type(password(), pass)
+}
+
 function button(label: string): HTMLButtonElement {
   const found = [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === label)
   if (!found) throw new Error(`no button "${label}"`)
@@ -153,16 +161,19 @@ afterEach(async () => {
 })
 
 describe('a confirm link opened in a browser it did not sign in', () => {
-  it('names the address the link waits for and asks for its password, with nothing else to choose', async () => {
+  it('shows which address the link waits for as the Worker writes it, and asks for the address and its password, with nothing else to choose', async () => {
     await mount()
 
     expect(reads()).toHaveLength(1)
     expect(subtitle()).toBe('Finish signing up.')
     expect(text('finish-signup-lead')).toBe(
-      `Enter the password you chose for ${ADDRESS}. That confirms the address and signs you in.`
+      `This link is for ${MASKED}. Enter that address and its password to confirm it and sign in.`
     )
-    expect(address()!.value).toBe(ADDRESS)
-    expect(address()!.readOnly).toBe(true)
+    expect(text('finish-signup-address')).toBe(MASKED)
+    // The address is typed in full, or filled by a password manager with the password.
+    expect(address()!.value).toBe('')
+    expect(address()!.readOnly).toBe(false)
+    expect(address()!.type).toBe('email')
     expect(address()!.getAttribute('autocomplete')).toBe('username')
     expect(password().getAttribute('autocomplete')).toBe('current-password')
     expect(text('finish-signup-submit')).toBe('Confirm and sign in')
@@ -174,10 +185,12 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     expect(byTestId('emailcode-open')).toBeNull()
   })
 
-  it('sends the address and the password to the sign-in, and reloads into the app with the address confirmed', async () => {
+  it('sends the address and the password typed to the sign-in, and reloads into the app with the address confirmed', async () => {
     answers['/api/auth/login'] = () => json({ id: 7, email: ADDRESS, emailConfirmed: true })
     await mount()
-    type(password(), 'the-password')
+    // Pasted with a non-breaking space after it: the email field drops ordinary spaces around an
+    // address itself, and keeps this one for the sign-in to drop.
+    fill(` ${ADDRESS}\u00a0`)
     await submit()
 
     expect(logins()).toEqual([
@@ -194,19 +207,33 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     expect(localStorage.getItem(WAITING_KEY)).toBeNull()
   })
 
-  it('marks a password left empty, and sends nothing', async () => {
+  it('marks an address and a password left empty, and sends nothing', async () => {
     await mount()
     await submit()
 
+    expect(marked(address()!)).toBe(true)
+    expect(describedBy(address()!)).toEqual([SAY.email])
     expect(marked(password())).toBe(true)
     expect(describedBy(password())).toEqual([SAY.password])
     expect(logins()).toEqual([])
   })
 
-  it('says a password that did not work for the whole form, while the link still waits', async () => {
+  it('sends an address the link is not for as typed, to the same sign-in', async () => {
+    answers['/api/auth/login'] = () => json({ id: 9, email: 'someone.else@example.com' })
+    await mount()
+    fill('someone.else@example.com')
+    await submit()
+
+    expect(logins().map((login) => login.body.email)).toEqual(['someone.else@example.com'])
+    await vi.waitFor(() => {
+      expect(reloads).toBe(1)
+    })
+  })
+
+  it('says an address and password that did not work for the whole form, while the link still waits', async () => {
     answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
     await mount()
-    type(password(), 'not-the-password')
+    fill(ADDRESS, 'not-the-password')
     await submit()
 
     expect(notice()).toBe(REFUSED)
@@ -216,12 +243,12 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     expect(reloads).toBe(0)
   })
 
-  it("says the link can't finish here once it stops waiting, with the way to a fresh one for the address", async () => {
+  it("says the link can't finish here once it stops waiting, with the way to a fresh one for the address typed", async () => {
     answers['/api/auth/login'] = () => json({ error: 'Invalid email or password' }, 401)
     answers['/api/auth/verify-email/resend'] = () => json({ ok: true })
     await mount()
     answers['/api/auth/email-link'] = nothingWaits
-    type(password(), 'the-password')
+    fill()
     await submit()
 
     expect(text('finish-signup-gone')).toBe(GONE)
@@ -245,7 +272,7 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     await mount()
     const note = JSON.parse(localStorage.getItem(WAITING_KEY)!) as { until: number }
     localStorage.setItem(WAITING_KEY, JSON.stringify({ ...note, until: Date.now() - 1 }))
-    type(password(), 'the-password')
+    fill()
     await submit()
 
     expect(logins()).toEqual([])
@@ -262,7 +289,7 @@ describe('a confirm link opened in a browser it did not sign in', () => {
 
   it('takes only a confirm link with an address as one that waits', async () => {
     for (const answer of [
-      { waiting: 'change', email: ADDRESS },
+      { waiting: 'change', email: MASKED },
       { waiting: 'confirm' },
       { waiting: 'confirm', email: 7 },
     ]) {
@@ -290,7 +317,7 @@ describe('a confirm link opened in a browser it did not sign in', () => {
   it('opens the second factor when the account has one', async () => {
     answers['/api/auth/login'] = () => json({ twofaRequired: true })
     await mount()
-    type(password(), 'the-password')
+    fill()
     await submit()
 
     expect(byTestId('second-factor')).not.toBeNull()
@@ -301,15 +328,16 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     answers['/api/auth/login'] = () =>
       json({ error: 'Too many attempts. Please try again in 15 minutes.' }, 429)
     await mount()
-    type(password(), 'the-password')
+    fill()
     await submit()
 
     expect(notice()).toBe('Too many attempts. Please try again in 15 minutes.')
     expect(reads()).toHaveLength(1)
   })
 
-  it('opens the reset form for the address from Forgot your password?', async () => {
+  it('opens the reset form for the address typed from Forgot your password?', async () => {
     await mount()
+    type(address()!, ADDRESS)
     button('Forgot your password?').click()
     await settle()
 

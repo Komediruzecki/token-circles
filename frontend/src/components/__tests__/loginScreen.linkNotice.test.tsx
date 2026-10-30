@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let waiting: { change: boolean } | null = null
 /** What the Worker says the opened confirm link waits for; a rejection is no answer. */
-let waitingFor: () => Promise<{ email: string } | null> = () =>
+let waitingFor: () => Promise<{ masked: string } | null> = () =>
   Promise.reject(new Error('no answer'))
 
 vi.mock('../../core/emailVerification', () => ({
@@ -78,11 +78,11 @@ const notice = () => host.querySelector('[data-test-id="auth-notice"]')?.textCon
 describe('the sign-in screen after an email link was opened signed out', () => {
   it('opens on Finish signing up for a confirm link whose address the Worker names', async () => {
     waiting = { change: false }
-    waitingFor = () => Promise.resolve({ email: 'name@example.com' })
+    waitingFor = () => Promise.resolve({ masked: 'n•••@example.com' })
     await mount()
 
     expect(host.querySelector('[data-test-id="finish-signup-address"]')?.textContent).toBe(
-      'name@example.com'
+      'n•••@example.com'
     )
     expect(notice()).toBeNull()
   })

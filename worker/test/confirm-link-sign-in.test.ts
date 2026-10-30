@@ -10,7 +10,8 @@
  * account, and an account that asks for a second factor.
  *
  * A sign-up answers the same for every address, marker and all. GET /api/auth/email-link tells the
- * page that finishes a sign-up elsewhere which address the link it opened waits for.
+ * page that finishes a sign-up elsewhere which address the link it opened waits for, by its first
+ * character and its domain.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +19,7 @@ import { CONFIRM_LINK_SIGN_IN } from '../../shared/confirmLinkSignIn';
 import { b64urlEncode, hashPassword, hmacKey, verifyPassword } from '../src/auth';
 import { derivedHmacKey } from '../src/derived-key';
 import { VERIFY_TOKEN_TTL_HOURS } from '../src/email-verification';
+import { maskedAddress } from '../src/routes/auth';
 import {
   SIGNUP_MARKER_COOKIE,
   SIGNUP_MARKER_PATH,
@@ -852,10 +854,28 @@ describe('GET /api/auth/email-link', () => {
     return { cookie: cookieSet(res, 'fm_email_link')!, token };
   }
 
-  it('names the address the confirm link this browser opened waits for', async () => {
+  it('names the address the confirm link this browser opened waits for by its first character and its domain', async () => {
     const { cookie } = await openedElsewhere(at('read'));
 
-    expect(await waiting(cookie)).toEqual({ waiting: 'confirm', email: at('read') });
+    const res = await read(cookie);
+    const body = await res.text();
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(body)).toEqual({ waiting: 'confirm', email: 'c•••@example.com' });
+    // Only that much of the address is in the answer.
+    expect(body).not.toContain(at('read').split('@')[0]);
+  });
+
+  it('writes an address as its first character, three dots and its whole domain, whatever its length', () => {
+    expect(maskedAddress('kate.smith@example.com')).toBe('k•••@example.com');
+    expect(maskedAddress('k@example.com')).toBe('k•••@example.com');
+    expect(maskedAddress('x@mail.example.co.uk')).toBe('x•••@mail.example.co.uk');
+    expect(maskedAddress('žana@example.hr')).toBe('ž•••@example.hr');
+    // A character written as two UTF-16 units is still one character, kept whole.
+    const astral = maskedAddress('𠮷野@example.jp');
+    expect(/\p{Cs}/u.test(astral)).toBe(false);
+    expect(astral).toBe('𠮷•••@example.jp');
+    expect(maskedAddress('"a@b"@example.com')).toBe('"•••@example.com');
   });
 
   it('says nothing waits with no link opened, or one that cannot be read', async () => {

@@ -832,11 +832,24 @@ authRoutes.post(EMAIL_LINK_FINISH_PATH, requireAuthEvenUnconfirmed, async (c) =>
   return done(spent, change);
 });
 
+/**
+ * An address as GET /api/auth/email-link names it: the first character of the part before the
+ * last `@`, three dots whatever that part's length, then `@` and the whole domain, as in
+ * `k•••@example.com`.
+ */
+export function maskedAddress(email: string): string {
+  const at = email.lastIndexOf('@');
+  const local = at === -1 ? email : email.slice(0, at);
+  const domain = at === -1 ? '' : email.slice(at + 1);
+  return `${Array.from(local)[0] ?? ''}•••@${domain}`;
+}
+
 // What the link this browser opened waits for, for the page that finishes a sign-up there: the
 // address of a confirm link, unspent and unexpired, whose account still waits for it, read from
-// the browser's marker (email-link.ts). `{ waiting: null }` for anything else. It checks no
-// password and spends nothing: the page asks for the password, and the sign-in it sends
-// (POST /api/auth/login) confirms the address as it always has.
+// the browser's marker (email-link.ts). `{ waiting: null }` for anything else. The address goes
+// out as maskedAddress writes it, enough for the person to tell which of their addresses it is;
+// the page asks for the address and its password. It checks no password and spends nothing: the
+// sign-in the page sends (POST /api/auth/login) confirms the address as it always has.
 authRoutes.get('/api/auth/email-link', async (c) => {
   const rl = await enforce(c, `email-link-read:${clientIp(c)}`, 30, 60);
   if (rl) return rl;
@@ -852,7 +865,7 @@ authRoutes.get('/api/auth/email-link', async (c) => {
     .first<{ email: string | null; email_verified: number; auth_provider: string }>();
   if (!account || !emailUnconfirmed(account)) return nothing();
   if ((account.email ?? '').toLowerCase() !== link.email.toLowerCase()) return nothing();
-  return c.json({ waiting: 'confirm', email: link.email });
+  return c.json({ waiting: 'confirm', email: maskedAddress(link.email) });
 });
 
 /**

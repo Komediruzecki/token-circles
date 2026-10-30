@@ -38,7 +38,8 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
  *
  * A confirm link opened here signed out, which did not sign in by itself, opens the screen on
- * Finish signing up (FinishSignUp): the address it waits for, and its password.
+ * Finish signing up (FinishSignUp): which address it waits for, as k•••@example.com, and fields
+ * for that address and its password.
  */
 /**
  * Every way out of the screen reloads, and a reload keeps the current history entry: a step's entry
@@ -94,7 +95,7 @@ export default function LoginScreen() {
 
   // A link from an email, opened in this browser before signing in: signing in here finishes it
   // (VerifyEmailBanner asks the worker once the app is signed in). A confirm link opens on the
-  // step that names its address and asks for the password (FinishSignUp).
+  // step that shows which address it is for and asks for the address and password (FinishSignUp).
   onMount(() => {
     const waiting = linkWaiting()
     if (!waiting) return
@@ -160,8 +161,9 @@ export default function LoginScreen() {
     form.reset({ email: inbox(), password: '' })
     setStage('form')
   }
-  // From Finish signing up, with its address in the form (FinishSignUp's onAddress). Back on the
-  // sign-in form, a link that still waits is finished by signing in there, which the notice says.
+  // From Finish signing up, with the address typed there in the form (FinishSignUp's onAddress).
+  // Back on the sign-in form, a link that still waits is finished by signing in there, which the
+  // notice says.
   const leaveFinish = (to: 'login' | 'forgot' | 'confirm' = 'login') => {
     switchTo(to)
     setStage('form')
@@ -269,7 +271,7 @@ export default function LoginScreen() {
             ) : stage() === 'finish' ? (
               <FinishSignUp
                 onAddress={(email) => {
-                  form.reset({ email, password: '' })
+                  form.set('email', email)
                 }}
                 onLeave={leaveFinish}
                 onTwofa={() => setStage('twofa')}
