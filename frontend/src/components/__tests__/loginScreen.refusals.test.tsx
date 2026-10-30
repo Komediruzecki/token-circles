@@ -106,7 +106,7 @@ async function mount(captcha?: Captcha, opened?: string) {
  * with where the confirm link signs in by itself (shared/confirmLinkSignIn.ts).
  */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
 
 const settle = async () => {
   for (let i = 0; i < 8; i += 1) await Promise.resolve()
@@ -406,7 +406,7 @@ describe('creating an account', () => {
     await submit()
 
     expect(host.querySelector('[data-test-id="check-inbox-lead"]')?.textContent).toBe(
-      "We sent a link to name@example.com. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+      "We sent a link to name@example.com. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
     )
   })
 

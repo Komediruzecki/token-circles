@@ -21,22 +21,22 @@ describe('the rule', () => {
 describe('the words', () => {
   it('say where and for how long the link signs in by itself, and what it does otherwise', () => {
     expect(whereTheLinkSignsIn()).toBe(
-      "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+      "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
     )
     expect(whereTheLinkSignsIn('the link we emailed you')).toBe(
-      "Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+      "Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
     )
   })
 
   it('follow a change to how long the link signs in', () => {
     expect(whereTheLinkSignsIn('it', { sameBrowser: true, seconds: 2 * 3600 })).toBe(
-      "Open it within 2 hours in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+      "Open it within 2 hours in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
     )
   })
 
   it('ask for the password everywhere with the same-browser sign-in off', () => {
     const off = { sameBrowser: false, seconds: 3600 }
-    expect(whereTheLinkSignsIn('it', off)).toBe('Open it, then enter your password where it opens.')
+    expect(whereTheLinkSignsIn('it', off)).toBe('Open it, then sign in where it opens.')
     expect(notYourSignUp('Token Circles', off)).toBe(
       "Didn't sign up for Token Circles? Ignore this mail."
     )

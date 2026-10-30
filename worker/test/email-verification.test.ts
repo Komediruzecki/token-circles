@@ -436,7 +436,7 @@ describe('the mail itself', () => {
    * later, it asks for the password, and that sign-in confirms the address (email-link.ts).
    */
   const WHERE =
-    "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first.";
+    "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.";
   const CONFIRM_SAYS = `This link confirms your address and opens your Token Circles account. ${WHERE}`;
   const FRESH_SAYS = [
     'Use this link to confirm your address. It replaces the ones sent before.',
@@ -494,7 +494,7 @@ describe('the mail itself', () => {
         for (const part of [mail.subject, mail.html, mail.text]) {
           expect(part).not.toMatch(/one click|one-click|single click|within an hour/i);
         }
-        expect(mail.text).toContain('Open it, then enter your password where it opens.');
+        expect(mail.text).toContain('Open it, then sign in where it opens.');
         expect(mail.text).toContain("Didn't sign up for Token Circles? Ignore this mail.");
       }
       expect(without[0]!.html).toContain('One link, one sign-in, and you&#39;re&nbsp;in.');

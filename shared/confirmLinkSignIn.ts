@@ -37,8 +37,8 @@ export function inWords(seconds: number): string {
  */
 export function whereTheLinkSignsIn(link = 'it', rule = CONFIRM_LINK_SIGN_IN): string {
   return rule.sameBrowser
-    ? `Open ${link} within ${inWords(rule.seconds)} in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first.`
-    : `Open ${link}, then enter your password where it opens.`;
+    ? `Open ${link} within ${inWords(rule.seconds)} in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.`
+    : `Open ${link}, then sign in where it opens.`;
 }
 
 /** What the confirm mails say first to someone who never signed up. */

@@ -1852,7 +1852,7 @@ Changed:
   - Mails: Confirm's headline is "One click and you're in." (maff's call of 2026-10-11, held back
     until the link did it) and its preheader "Confirm your address. The link works for 24 hours."
     Both confirm mails say "Open it within an hour in the browser you signed up in and you're
-    signed in. Later, or anywhere else, it asks for your password first.", and the line for
+    signed in. Later, or anywhere else, it asks you to sign in first.", and the line for
     someone who never signed up starts "Didn't sign up for Token Circles? Don't open the link."
   - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
     `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in

@@ -44,7 +44,7 @@ const CONFIRMED = 'Email confirmed. Your account is all set.'
 const CHANGED = 'Email changed. Your account uses the new address from now on.'
 /** What a refused password sign-in says, for a wrong password and an address not confirmed yet. */
 const REFUSED =
-  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first."
+  "That email and password don't match, or the email isn't confirmed yet. Just signed up? Open the link we emailed you within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first."
 /** What the step that finishes a sign-up says once the link it opened no longer waits. */
 const GONE =
   "This link can't finish here anymore. Open the newest link in your email, or send a fresh one."
@@ -614,7 +614,7 @@ for (const boot of BOOTS) {
         })
         // It says where the link signs in by itself, and where it asks for the password.
         await expect(page.getByTestId('check-inbox-lead')).toHaveText(
-          `We sent a link to ${email}. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks for your password first.`
+          `We sent a link to ${email}. Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.`
         )
         await accountMade(email)
         await expect.poll(() => accountState(email)?.waiting).toBe(1)
