@@ -122,8 +122,9 @@ test.describe('Getting started @smoke', () => {
   }) => {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
     // The space step makes the workspace's first profile; setup is left after it.
-    await page.getByTestId('onboarding-next').click()
     await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
     await page.getByTestId('onboarding-next').click()
     await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
     await page.getByTestId('onboarding-skip').click()
@@ -175,17 +176,16 @@ test.describe('Getting started @smoke', () => {
     page,
   }) => {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    await page.getByTestId('onboarding-next').click()
     await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
     await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
     await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
-    await page.getByTestId('onboarding-next').click()
-    await page.getByTestId('confirm-accept').click()
+    // Nothing typed and no statement chosen: each Skip goes on without asking, and with nothing
+    // imported there are no subscriptions to look for.
+    await page.getByTestId('onboarding-account-skip').click()
     await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
-    await page.getByTestId('onboarding-next').click()
-    await page.getByTestId('confirm-accept').click()
-    await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible()
-    await page.getByTestId('onboarding-next').click()
+    await page.getByTestId('onboarding-import-skip').click()
 
     await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
     await expect
@@ -209,7 +209,7 @@ test.describe('Getting started @smoke', () => {
     try {
       await bootSignedIn(ctx)
       await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
       const began = page.waitForResponse(
         (res) =>
           new URL(res.url()).pathname === '/api/account/state/getting_started' &&
@@ -386,8 +386,9 @@ async function moveBetweenCurrentAccounts(page: Page): Promise<void> {
 /** A local-first space with the setup wizard skipped, on Dashboard. */
 async function startLocalFirst(page: Page): Promise<void> {
   await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-  await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
   await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
   await page.getByTestId('onboarding-skip').click()
@@ -402,7 +403,7 @@ async function signedIn(page: Page, run: (page: Page) => Promise<void>): Promise
   try {
     await bootSignedIn(ctx)
     await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-    await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
     await page.getByTestId('onboarding-skip').click()
     await page.getByTestId('confirm-accept').click()
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)

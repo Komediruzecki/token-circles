@@ -42,8 +42,9 @@ export async function go(page: Page, hash: string): Promise<void> {
 /** A workspace with its first profile, and setup left after the space step. */
 export async function aSpaceOnly(page: Page): Promise<void> {
   await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-  await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
   await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
   await page.getByTestId('onboarding-skip').click()

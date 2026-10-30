@@ -54,22 +54,64 @@ test.describe('the setup wizard on the account @smoke', () => {
     const { email } = await signUpAndIn(ctx)
     try {
       await bootSignedIn(ctx)
-      const started = recordWrite(page, (sent) => sent.step === 'welcome')
+      const steps: string[] = []
+      page.on('request', (req) => {
+        if (new URL(req.url()).pathname !== '/api/account/state/onboarding') return
+        const sent = JSON.parse(req.postData() ?? '{}') as Partial<OnboardingRecord>
+        if (sent.step) steps.push(sent.step)
+      })
+      const started = recordWrite(page, (sent) => sent.step === 'space')
       await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
       await started
 
-      const reached = recordWrite(page, (sent) => sent.step === 'space')
+      // The space's second screen is the same step: nothing new to keep until the account.
       await page.getByTestId('onboarding-next').click()
-      await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      const reached = recordWrite(page, (sent) => sent.step === 'account')
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
       await reached
 
       await page.reload({ waitUntil: 'domcontentloaded' })
-      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
 
       const record = await recordOf(ctx)
-      expect(record).toMatchObject({ step: 'space', finished_at: null, outcome: null })
+      expect(record).toMatchObject({ step: 'account', finished_at: null, outcome: null })
       expect(record!.started_at).toMatch(TIME)
+      // The old first screen is never written: setup opens on the space.
+      expect(steps).toEqual(['space', 'account'])
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a record left at the old first screen reopens on the space, and moves on from there', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      // Left at welcome, as a build before the space opened setup kept it.
+      const left = await ctx.request.put(`${E2E_BASE}/api/account/state/onboarding`, {
+        data: { step: 'welcome' },
+      })
+      expect(left.ok(), `PUT /api/account/state/onboarding: ${String(left.status())}`).toBeTruthy()
+      const { started_at: startedAt } = (await recordOf(ctx))!
+      expect(startedAt).toMatch(TIME)
+
+      await bootSignedIn(ctx)
+      const moved = recordWrite(page, (sent) => sent.step === 'space')
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await moved
+
+      expect(await recordOf(ctx)).toMatchObject({
+        step: 'space',
+        started_at: startedAt,
+        finished_at: null,
+        outcome: null,
+      })
     } finally {
       await deleteAccount(ctx, email)
     }
@@ -90,9 +132,9 @@ test.describe('the setup wizard on the account @smoke', () => {
     try {
       await bootSignedIn(ctx)
       await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
       await page.getByTestId('onboarding-next').click()
-      await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
 
       await page.getByTestId('onboarding-space-region-UK').click()
       await page.getByTestId('onboarding-space-adults-1').click()
@@ -133,7 +175,7 @@ test.describe('the setup wizard on the account @smoke', () => {
     try {
       await bootSignedIn(ctx)
       await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
 
       const skipped = recordWrite(page, (sent) => sent.outcome === 'skipped')
       await page.getByTestId('onboarding-skip').click()
@@ -142,7 +184,7 @@ test.describe('the setup wizard on the account @smoke', () => {
       await skipped
 
       const record = await recordOf(ctx)
-      expect(record).toMatchObject({ step: 'welcome', outcome: 'skipped' })
+      expect(record).toMatchObject({ step: 'space', outcome: 'skipped' })
       expect(record!.finished_at).toMatch(TIME)
 
       // Another device: nothing in its storage, the same account signed in.
@@ -219,7 +261,7 @@ test.describe('the setup wizard on the account @smoke', () => {
         localStorage.removeItem('selectedProfileIds')
       })
       await page.reload({ waitUntil: 'domcontentloaded' })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
     } finally {
       await deleteAccount(ctx, email)
     }

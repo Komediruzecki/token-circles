@@ -1840,6 +1840,133 @@ Changed:
 
 ### Setup wizard
 
+- **The setup wizard on a phone: three counted steps, one footer row, a statement in one tap.**
+  Frontend only: no migration and no API change. Measured with the same script before and after,
+  at 30 cells (widths 320, 360, 375, 390 and 430; heights 568, 667 and 844; dark and light), every
+  screen of the wizard at each:
+  - **Before**: the footer wrapped to 3 rows and 170.5 px at 320 to 390 wide (Back, Skip setup,
+    Don't import and the primary) on the account, import and subscriptions steps; the header was
+    80 px; the import step's column mapping was 1,438 px taller than its screen at 320x568 (5.5
+    screens), with 16 inputs under 16 px, which iOS Safari zooms into on focus; one screen had 32
+    targets under 44 px; text went down to 10.5 px; and the core path took 12 taps from opening
+    setup to an imported statement.
+  - **After**: the footer is 70 px and one row at every cell, its buttons 48 px; the header 56 px,
+    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; one target under 44 px is left, Getting started's next-step link on Done (41 px tall, a shared component), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
+    setup to an imported statement (Continue, Continue, Add account, Choose a file, the file,
+    Import 7) and 8 to the dashboard (Track 2 subscriptions, Go to my dashboard).
+  - **Steps.** `ONBOARDING_STEPS` is unchanged. The wizard opens on `space`, whose first screen is
+    the name and base currency under "Welcome to Token Circles": the welcome screen (91 words, 5 em
+    dashes, nothing asked) is gone, and the local-only switch moved onto this screen in server
+    mode. While `benchmarksShown()`, `space` has a second screen, About this space
+    (`SpaceQuestions` with `compact`: the regions in two columns, each count on one row, every chip
+    44 px, `3+` for three or more via `short` in `regionWords.ts`). Account: "Add your main
+    account"; Enter in a field adds it, as the footer's Add account does, and adding one moves on
+    to the statement with no "created" toast. Back on the step it reads "Your accounts", lists them
+    and takes another. Statement: below. Subscriptions only after an import that brought
+    transactions in; with none, `import` goes to `done`. Done: one line of what was set up
+    ("Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.") and Getting
+    started's next steps. `SHOWN_ONBOARDING_STEPS` (every stored step but `welcome`) is what Back
+    and Continue walk, and `openingStep()` opens none and `welcome` on `space`.
+  - **Header and footer.** The header has Back (the logo on the first screen), "Step N of 3" in an
+    orbit ring (`onboarding-progress`), and Close (`aria-label="Leave setup"`). Close and Escape
+    ask once, naming what is left on that step (`leaveSetupQuestion`), with Leave setup and Stay.
+    The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
+    step's Skip asks only when it would drop something: an account with a name or balance typed
+    in, a statement ready to import. On a phone the panel is the screen, capped at `100dvh`
+    (`100vh` first, for a browser without `dvh`): at 320x568 About this space had pushed the footer
+    22 px under the bottom edge.
+  - **The statement** (`components/onboarding/FirstImport.tsx`, on `createImportFlow`). One file.
+    A bank the adapters detect is processed, mapped and previewed (the dry run) in the background,
+    with the defaults the Import page's tap-through took: the bank's own columns, every
+    transaction that is not a duplicate, every new category, no budgets from spending. The account
+    comes preselected: the one the bank names, else the one setup just created, else a new one
+    named for the bank. The screen shows the file, the bank, the account, how many transactions are
+    new and the categories it adds, and the footer says `Import N`. N is the ticked rows less the
+    rows the dry run found stored, by index: `existingDuplicateIndices` in `importFlow.ts`, from
+    the dry run's `duplicate_indices`. A statement's repeats of its own rows are unticked already
+    and in that list too, so subtracting the dry run's count took them off twice
+    (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
+    import (a bank the adapters do not know, a table of any other kind, a file that does not read)
+    offers Open in Import, which finishes setup and hands the file to the Import page
+    (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
+    Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
+  - **Badges wait for the wizard** (`core/achievementsStore.ts`). Badges earned while
+    `onboardingOpen()` are held and announced when it closes, for the profile still in use, as one
+    summary on a first run. Setup's own writes earn them (a first account, a first import); their
+    toasts stacked over the header's Back and Close, and See badges changed the page behind.
+  - **`SubscriptionScan`** takes `hideRescan` (setup scans once, right after its import) and `quiet`
+    (no "added" toast: setup's summary says it). Under `pointer: coarse` its rows, price field and
+    frequency are 44 px tall with 16 px text, and the merchant line wraps instead of being cut
+    short. That applies to the Bills scan on a phone as well.
+  - **`--on-primary`**, the text colour on a `--primary` fill, per theme: `#ffffff` in dawn-light
+    (white is 4.6:1 on its primary), `#0a0e1c` in orbit-dark (white is 2.7:1, this 7.1:1) and
+    `#0b0d10` in instrument-deck (white is 2.5:1, this 7.7:1). Setup's primary button uses it; a
+    chosen chip already had dark text on the dark themes (`var(--bg)`). `TagsPage.module.css`
+    (`.primaryButton`) and `ApiAccess.module.css` (`.primaryBtn`) already read
+    `var(--on-primary, #fff)`, so they get the dark text on the dark themes too. The app's other
+    primary fills still set white: a follow-up.
+  - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
+    "Run the Setup Wizard (accounts, imports, subscriptions)".
+  - **Tests**: unit `onboardingFirstImport.test.tsx` (12), `firstImportCount.test.ts` (3),
+    `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
+    in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
+    (`onboardingForms.test.tsx`, `onboardingOnTheAccount.test.ts`, `onboardingStore.test.ts`,
+    `onboardingSpaceAnswersFail.test.tsx`, `createdProfileIsSelected.test.tsx`,
+    `importRulesFollowProfile.test.tsx`). E2E: `onboarding.spec.ts` rewritten, with three `@smoke`
+    cases (the core path; a statement imported in one tap, through Track 2 subscriptions to the
+    summary; a file the defaults cannot read, opened in Import), contrast in both themes, and every
+    step on a touch screen at 390x844, 375x667 and 320x568 in both themes (header 56 px, its buttons
+    44x44, one footer row with 48 px buttons, 16 px fields, nothing under the screen's edge).
+    `onboarding-server.spec.ts`, `onboarding-form-errors.spec.ts`, `onboarding-page-behind.spec.ts`
+    (its short-phone case now scrolls About this space: the name screen fits 320x568),
+    `orientation.spec.ts`, `circles.spec.ts`, `dashboard-circles.spec.ts`, release `s04` 4.7 and
+    `s13` 13.3 follow the new steps. The specs that leave the wizard from a locator handler accept
+    its confirm by `confirm-accept`: its button reads Leave setup now, not Confirm.
+  - **Test ids.** Gone: `onboarding-step-welcome`, `onboarding-account-date`,
+    `onboarding-import-loading`, `onboarding-import-process-bank`, `onboarding-import-summary`,
+    `onboarding-import-to-mapping`, `onboarding-import-to-preview`. New: `onboarding-step-about`,
+    `onboarding-progress`, `onboarding-account-skip`, `onboarding-subs-skip`,
+    `onboarding-done-summary`, and on the statement `onboarding-import-` `choose`, `input`, `pick`,
+    `banks`, `file`, `meta`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
+    `done` and `another`. Same id, new place: `onboarding-skip` (the header's Close, still asking),
+    `onboarding-back` (the header's Back), `onboarding-account-create` (the footer's Add account),
+    `onboarding-import-skip` (the footer's Skip), `onboarding-import-selected` (`Import N`),
+    `onboarding-subs-add-continue` (`Track N subscriptions`).
+
+- **How old and new setup records compare.** The record's step names and its forward-only rule
+  are unchanged (`shared/accountStateKeys.ts` points here). What a name means moved with the new
+  steps:
+
+  | `step`          | Started before this build             | Started from this build                                  |
+  | --------------- | ------------------------------------- | -------------------------------------------------------- |
+  | `welcome`       | opened, nothing answered              | never written; an old record at it reopens on `space`    |
+  | `space`         | went past the welcome, on the name    | opened (the first write), on the name or About           |
+  | `account`       | the space saved                       | the space saved, and About answered where it shows       |
+  | `import`        | past the account step                 | past the account step                                    |
+  | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
+  | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
+
+  `outcome: completed` came only from Done. It now also comes from Open in Import, at step
+  `import`. So the comparable counts are: old `welcome` and `space` together against new `space`
+  (stopped before saving a space); `account` and `import` as they are; old `subscriptions` and
+  `done` against new `subscriptions` and `done` (got past the import step). New records say who
+  imported during setup only up to `subscriptions`: one at `done` may have come straight from the
+  statement step, so whether it imported is in its transactions, not its record. Split the cohorts
+  on `started_at` (UTC, `YYYY-MM-DD HH:MM:SS`) at this build's deploy time; a record started before
+  and taken up after it keeps an old name until it writes a new one. `existing` (migration 0035)
+  stays out of both:
+
+  ```sql
+  SELECT json_extract(value, '$.started_at') >= '<deploy time, UTC>' AS this_build,
+         json_extract(value, '$.outcome') AS outcome,
+         json_extract(value, '$.step') AS step,
+         COUNT(*) AS records
+  FROM user_state
+  WHERE key = 'onboarding' AND json_extract(value, '$.outcome') IS NOT 'existing'
+  GROUP BY 1, 2, 3
+  ORDER BY 1, 2, 3;
+  ```
+
 - **The page behind the wizard holds still, unpainted and inert.** Reported from iOS Safari on dev:
   with the wizard open, the Dashboard showed under the status bar and the floating toolbar (the
   spending heatmap, the orbit gauge, a badge line) and scrolled under a finger. The wizard is a

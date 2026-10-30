@@ -9,6 +9,9 @@
  * account once and the wizard stays closed. When the record cannot be read (the request failed, or
  * another build wrote it in a shape this one cannot read), nothing opens and nothing is sent.
  *
+ * The wizard opens on its space step. Its first screen used to be a welcome that asked nothing, and a
+ * record that stopped there (step `welcome`) reopens on the space step too (openingStep).
+ *
  * Local-first, the wizard opens once for a pristine workspace (no accounts, no transactions, no
  * bills). Finishing or skipping stamps the local account's localStorage flag (onboardingFlag.ts)
  * and mirrors it into the profile's settings.
@@ -39,6 +42,20 @@ import type { OnboardingDecision, OnboardingStep } from '../../../shared/account
 // live with the record's other names in shared/.
 export { ONBOARDING_STEPS }
 export type { OnboardingStep }
+
+/**
+ * The steps the wizard shows, in order: every stored step but `welcome`, which no build writes any
+ * more. Back and Continue walk these. The wizard itself goes past `subscriptions` when nothing
+ * was imported, so a record can go from `import` straight to `done`.
+ */
+export const SHOWN_ONBOARDING_STEPS: readonly OnboardingStep[] = ONBOARDING_STEPS.filter(
+  (step) => step !== 'welcome'
+)
+
+/** The step the wizard opens on for a stored or asked-for step: `welcome` and none open on `space`. */
+export function openingStep(step: OnboardingStep | null | undefined): OnboardingStep {
+  return step === null || step === undefined || step === 'welcome' ? 'space' : step
+}
 
 export type OnboardingStatus = OnboardingDecision | null
 
@@ -184,7 +201,7 @@ function recordStep(step: OnboardingStep): void {
 
 const store = createRoot(() => {
   const [onboardingOpen, setOnboardingOpen] = createSignal(false)
-  const [onboardingStep, setOnboardingStep] = createSignal<OnboardingStep>('welcome')
+  const [onboardingStep, setOnboardingStep] = createSignal<OnboardingStep>('space')
   return { onboardingOpen, setOnboardingOpen, onboardingStep, setOnboardingStep }
 })
 
@@ -197,26 +214,27 @@ function showStep(step: OnboardingStep): void {
   recordStep(step)
 }
 
-export function startOnboarding(step: OnboardingStep = 'welcome') {
+export function startOnboarding(step: OnboardingStep = 'space') {
+  const at = openingStep(step)
   // The step first: the wizard seeds the step it opens on, not the one it last showed.
-  store.setOnboardingStep(step)
+  store.setOnboardingStep(at)
   store.setOnboardingOpen(true)
-  recordStep(step)
+  recordStep(at)
 }
 
 export function goToOnboardingStep(step: OnboardingStep) {
-  showStep(step)
+  showStep(openingStep(step))
 }
 
 export function nextOnboardingStep() {
-  const order = ONBOARDING_STEPS
-  const idx = order.indexOf(store.onboardingStep())
+  const order = SHOWN_ONBOARDING_STEPS
+  const idx = order.indexOf(openingStep(store.onboardingStep()))
   if (idx >= 0 && idx < order.length - 1) showStep(order[idx + 1])
 }
 
 export function prevOnboardingStep() {
-  const order = ONBOARDING_STEPS
-  const idx = order.indexOf(store.onboardingStep())
+  const order = SHOWN_ONBOARDING_STEPS
+  const idx = order.indexOf(openingStep(store.onboardingStep()))
   if (idx > 0) showStep(order[idx - 1])
 }
 
@@ -281,11 +299,11 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
   const asking = owner
   if (asking === null) return null
   if (isServerAccount(asking)) return whereToOfferOnTheAccount(asking)
-  return (await shouldOfferLocally(asking)) ? 'welcome' : null
+  return (await shouldOfferLocally(asking)) ? 'space' : null
 }
 
 /**
- * Signed in: the step the account's record reached, unless the record is finished. A decision
+ * Signed in: the step the account's record reached (openingStep), unless the record is finished. A decision
  * kept from before the record existed, in this browser's flag or the profile's settings (the app
  * before this one wrote both), goes to the record instead, and the wizard stays closed. A record
  * this build cannot read may be finished: nothing opens, and this browser's flag stays unsent.
@@ -311,7 +329,7 @@ async function whereToOfferOnTheAccount(asking: string): Promise<OnboardingStep 
     await recordDecision(asking, kept, null)
     return null
   }
-  return record?.step ?? 'welcome'
+  return openingStep(record?.step)
 }
 
 /** Whether the wizard should auto-open, at whichever step (whereToOfferOnboarding). */

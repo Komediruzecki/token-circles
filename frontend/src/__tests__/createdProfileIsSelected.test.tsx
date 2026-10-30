@@ -405,6 +405,11 @@ describe.each(['serverless', 'self-hosted'] as const)(
       name.value = 'Home'
       name.dispatchEvent(new Event('input', { bubbles: true }))
       byTestId('onboarding-next')!.click()
+      // Saved with the name screen's Continue; About this space comes next, then the account.
+      await vi.waitFor(() => {
+        expect(byTestId('onboarding-step-about')).not.toBeNull()
+      }, waitLong)
+      byTestId('onboarding-next')!.click()
       await vi.waitFor(() => {
         expect(byTestId('onboarding-step-account')).not.toBeNull()
       }, waitLong)

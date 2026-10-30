@@ -142,7 +142,10 @@ test.describe('the page behind the setup wizard, on a phone', () => {
     test.setTimeout(90_000)
     await page.setViewportSize({ width: 320, height: 568 })
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    const body = page.getByTestId('onboarding-panel').locator('> div').first()
+    // The name screen fits a 568 px screen. About this space, with its two questions, does not.
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 15_000 })
+    const body = page.getByTestId('onboarding-body')
     const room = await body.evaluate((el) => el.scrollHeight - el.clientHeight)
     expect(room).toBeGreaterThan(0)
 

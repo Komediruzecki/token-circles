@@ -1,13 +1,13 @@
 # Onboarding Specification (Frontend)
 
 **Module:** Onboarding (UI)
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Active
 **Priority:** Should
 
 ## 1. Overview
 
-The Onboarding module greets brand-new users with a guided, orbital-themed setup wizard: name your profile space, create at least one account, bring existing data through the app's real import flow, and adopt auto-detected subscriptions. It only auto-opens for pristine profiles and every step can be skipped, so it can never trap a user.
+The Onboarding module greets brand-new users with a guided, orbital-themed setup wizard in three counted steps: name the profile's space, add a main account, and bring in one bank statement, read with the app's own import flow, with the subscriptions that statement shows offered after the import. It only auto-opens for pristine profiles and every step can be skipped, so it can never trap a user.
 
 ## 2. Functional Requirements
 
@@ -16,22 +16,24 @@ The Onboarding module greets brand-new users with a guided, orbital-themed setup
 - **REQ-ONB-001:** WHEN the app finishes bootstrapping an authenticated (or serverless) session AND the current profile has zero accounts AND zero transactions AND zero bills AND no completion/skip is recorded (locally or in the settings KV), THEN the system SHALL open the onboarding wizard.
 - **REQ-ONB-002:** WHEN the user finishes or skips the wizard, THEN the system SHALL stamp the decision (`completed` / `skipped`) in localStorage under its owner, `finance_onboarding:account-<id>` for a signed-in account or `finance_onboarding:local` in local-first (`core/onboardingFlag.ts`), AND mirror it into the profile's settings KV (`PUT /api/settings`), so logging in again — including from another device in server mode — SHALL NOT re-offer onboarding to that account, and another account on the same browser SHALL be offered its own. The older browser-wide `finance_onboarding` key SHALL move to the local account only; in server mode the settings KV and the pristine check decide. Specs mark the wizard decided with `onboardingDecided` (`frontend/tests/onboarding-decided.ts`).
 - **REQ-ONB-003:** WHEN the workspace already contains data (e.g. the serverless demo seed, or any account/transaction/bill), THEN the system SHALL NOT open the wizard.
-- **REQ-ONB-004:** WHEN the user picks "Run the Setup Wizard" in the tour-selection modal OR "Run setup wizard" in Settings → About, THEN the system SHALL open the wizard regardless of the flag.
+- **REQ-ONB-004:** WHEN the user picks "Run setup again" in the tour-selection modal OR "Run setup wizard" in Settings → About, THEN the system SHALL open the wizard regardless of the flag.
 - **REQ-ONB-005:** WHEN the settings KV records a completion/skip that this device has not seen, THEN the system SHALL cache it into localStorage during the trigger check.
 
 ### 2.2. Steps
 
-- **REQ-ONB-010 (Welcome):** The wizard SHALL present the app's premise and the setup outline, with a "Begin setup" primary action. In server mode it SHALL additionally offer a "Use local-only" switch that (after a confirm honest about any existing local workspace) suppresses the demo seed, clears the onboarding flag and server profile selection, flips storage to serverless, and relaunches setup.
-- **REQ-ONB-011 (Your space):** The wizard SHALL offer renaming the default profile (creating one when none exists) and picking the base display currency.
-- **REQ-ONB-012 (First account):** The wizard SHALL collect name, type, currency, opening balance, and optional tracking start date, SHALL allow creating multiple accounts, and SHALL list the created accounts.
-- **REQ-ONB-013 (Bring your data):** The wizard SHALL embed the app's import flow (Google Sheets, file upload, paste CSV, bank statements) with the bank tab preselected; bank statements SHALL support in-place account creation via the account picker. A disabled "Coming soon" tile SHALL reference budgeting-app migration.
-- **REQ-ONB-013a (Footer carries the import CTA):** On the import step the wizard footer SHALL surface the flow's true forward action per sub-step — mapping → "Continue to preview", preview → a live "Import selected (N)" (disabled at 0) — with a "Don't import" ghost escape beside "Skip setup", and Back SHALL walk the import sub-steps in reverse before leaving the step. The embedded mapping/preview components SHALL hide their in-body action rows (`embedded` prop); the standalone Import page keeps them. After a successful import the footer reverts to "Continue", and "Import more files" accumulates batch totals into one session summary.
-- **REQ-ONB-014 (Subscriptions):** WHEN the step opens, THEN the system SHALL scan the profile's recent transactions against the subscription catalogue/brand registry and SHALL propose matches with detected price and cadence, each editable (amount, period) and individually selectable before batch-adding as `type: 'subscription'` bills.
-- **REQ-ONB-015 (Done):** The wizard SHALL summarize what was set up and land the user on the dashboard.
+Three counted steps, Space, Account and Statement, then Done. The header carries Back (the logo on the first screen), "Step N of 3" in an orbit ring, and Close. The footer is one row: Skip on the optional steps, and the primary action filling the rest.
+
+- **REQ-ONB-010 (Your space):** The wizard SHALL open on the space's name and base currency, under "Welcome to Token Circles", renaming the default profile or creating one when none exists. In server mode it SHALL also offer keeping the data in this browser only, which (after a confirm honest about any existing local workspace) suppresses the demo seed, clears the onboarding flag and server profile selection, flips storage to serverless, and relaunches setup.
+- **REQ-ONB-011 (About this space):** WHILE the benchmarks gate shows (`benchmarksShown()`), the space step SHALL have a second screen that asks who the space covers and where it is (`SpaceQuestions`, compact).
+- **REQ-ONB-012 (Your main account):** The wizard SHALL collect name, type, currency and opening balance; Enter in a field SHALL add the account, as the footer's Add account does, and adding one SHALL move on to the statement. Back on the step, it SHALL list the profile's accounts ("Your accounts") and allow adding another.
+- **REQ-ONB-013 (Bring in a statement):** The wizard SHALL take one bank statement file and read it with the app's import flow (`importFlow.ts`), using the bank's own columns. It SHALL show the file, the bank, the account it goes to (the account the bank names, else the one just created, else a new one named for the bank), how many transactions are new and the categories it adds, with one "Import N" action. A statement whose transactions are all stored SHALL say so. A file it cannot import SHALL offer "Open in Import", which finishes setup and opens the Import page with that file (`importHandoff.ts`), or going on without it.
+- **REQ-ONB-014 (Subscriptions):** WHEN an import on the statement step brought transactions in, THEN the wizard SHALL scan the profile's transactions against the subscription catalogue/brand registry and SHALL propose matches with detected price and cadence, each editable (amount, period) and individually selectable before batch-adding as `type: 'subscription'` bills. With no import, the wizard SHALL go from the statement to Done.
+- **REQ-ONB-015 (Done):** The wizard SHALL summarize what was set up in one line (accounts, new transactions, tracked subscriptions), list Getting started's next steps, and land the user on the dashboard.
+- **REQ-ONB-016 (Badges):** Badges unlocked while the wizard is open SHALL be announced when it closes, not over it.
 
 ### 2.3. Skipping and safety
 
-- **REQ-ONB-020:** Every step SHALL be skippable; skipping the account or import step (and leaving the wizard entirely, including via Escape) SHALL require an "are you sure" confirmation.
+- **REQ-ONB-020:** Every step SHALL be skippable. Close and Escape SHALL ask once before leaving the wizard, naming what is left ("Leave setup" / "Stay"). A step's Skip SHALL ask only when it would drop what was typed or chosen: an account with a name or balance typed in, a statement ready to import.
 - **REQ-ONB-021:** IF any pristine-check request fails, THEN the system SHALL NOT open the wizard (a broken bootstrap must not trap the user).
 
 ### 2.4. Subscription detection
@@ -49,4 +51,4 @@ The Onboarding module greets brand-new users with a guided, orbital-themed setup
 
 ## 4. E2E coverage
 
-Implemented in `frontend/tests/onboarding.spec.ts` (zero-state boots via `gotoServerlessZeroState`, which suppresses the demo seed) and `frontend/tests/import.spec.ts` (refactored import flow + inline account creation). The core path is tagged `@smoke` and gates PRs.
+Implemented in `frontend/tests/onboarding.spec.ts` (zero-state boots via `gotoServerlessZeroState`, which suppresses the demo seed; the core path, a statement imported in one tap, and a file the defaults cannot read are tagged `@smoke` and gate PRs; on a touch screen, every step at 390x844, 375x667 and 320x568 in both themes), `frontend/tests/onboarding-server.spec.ts` (the record on the account), `frontend/tests/onboarding-form-errors.spec.ts` and `frontend/tests/onboarding-page-behind.spec.ts`.

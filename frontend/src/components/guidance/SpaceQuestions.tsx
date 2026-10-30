@@ -1,6 +1,6 @@
 /**
  * "Where do you live?" and "Who does this space cover?", as guidance.md section 5.5 asks them: in
- * setup's "Name your space" step, and in Settings, About this space. Each is a group of radio
+ * setup's About this space screen, and in Settings, About this space. Each is a group of radio
  * chips; choosing one calls `onChoose` with that answer. Both can be left unanswered.
  */
 import { For, Show } from 'solid-js'
@@ -32,11 +32,19 @@ export interface SpaceQuestionsProps {
   householdNote?: JSX.Element
   /** With it, an answered question offers "Remove answer", which clears its answer. */
   onAskAgain?: (question: 'region' | 'household') => void
+  /**
+   * Setup's screen on a phone: the regions in two columns, each count on one row with its label
+   * beside it, "3+" for "3 or more", and no line under the region question (the screen's lead
+   * says why it asks).
+   */
+  compact?: boolean
 }
 
 function Chip(props: {
   name: string
   label: string
+  /** Shown in place of the label, which stays the radio's name: "3+" for "3 or more". */
+  short?: string
   checked: boolean
   disabled?: boolean
   testId: string
@@ -50,11 +58,12 @@ function Chip(props: {
         name={props.name}
         checked={props.checked}
         disabled={props.disabled}
+        aria-label={props.short ? props.label : undefined}
         onChange={() => {
           props.onChoose()
         }}
       />
-      <span>{props.label}</span>
+      <span aria-hidden={props.short ? 'true' : undefined}>{props.short ?? props.label}</span>
     </label>
   )
 }
@@ -98,13 +107,19 @@ export function HouseholdQuestion(props: {
   note?: JSX.Element
   /** With it, an answered question offers "Remove answer". */
   onAskAgain?: () => void
+  /** Each count on one row, its label beside its chips, "3+" for "3 or more". */
+  compact?: boolean
 }): JSX.Element {
   const id = (part: string) => `${props.idPrefix}-${part}`
   const adults = () => countChoice(props.answers.adults)
   const children = () => countChoice(props.answers.children)
   const answered = () => adults() !== undefined || children() !== undefined
   return (
-    <fieldset class={styles.question} data-test-id={id('household')}>
+    <fieldset
+      class={styles.question}
+      classList={{ [styles.compact]: Boolean(props.compact) }}
+      data-test-id={id('household')}
+    >
       <legend id={id('household-question')} class={styles.legend}>
         {HOUSEHOLD_QUESTION}
       </legend>
@@ -117,6 +132,7 @@ export function HouseholdQuestion(props: {
                 <Chip
                   name={id('adults')}
                   label={choice.label}
+                  short={props.compact ? choice.short : undefined}
                   checked={adults() === choice.value}
                   disabled={props.disabled}
                   testId={id(`adults-${choice.value}`)}
@@ -136,6 +152,7 @@ export function HouseholdQuestion(props: {
                 <Chip
                   name={id('children')}
                   label={choice.label}
+                  short={props.compact ? choice.short : undefined}
                   checked={children() === choice.value}
                   disabled={props.disabled}
                   testId={id(`children-${choice.value}`)}
@@ -168,13 +185,15 @@ export function HouseholdQuestion(props: {
 export function SpaceQuestions(props: SpaceQuestionsProps) {
   const id = (part: string) => `${props.idPrefix}-${part}`
   return (
-    <div class={styles.questions}>
+    <div class={styles.questions} classList={{ [styles.compact]: Boolean(props.compact) }}>
       <fieldset class={styles.question} data-test-id={id('region')}>
         <legend id={id('region-question')} class={styles.legend}>
           {REGION_QUESTION}
         </legend>
-        <p class={styles.why}>{REGION_WHY}</p>
-        <div class={styles.chips}>
+        <Show when={!props.compact}>
+          <p class={styles.why}>{REGION_WHY}</p>
+        </Show>
+        <div class={styles.chips} classList={{ [styles.regionChips]: Boolean(props.compact) }}>
           <For each={REGION_CHOICES}>
             {(choice) => (
               <Chip
@@ -212,6 +231,7 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
         onChoose={props.onChoose}
         note={props.householdNote}
         onAskAgain={props.onAskAgain ? () => props.onAskAgain?.('household') : undefined}
+        compact={props.compact}
       />
     </div>
   )

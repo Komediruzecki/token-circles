@@ -50,7 +50,7 @@ async function enterLocalFirst(page: Page): Promise<void> {
 async function leaveSetupWheneverItOpens(page: Page): Promise<void> {
   await page.addLocatorHandler(page.getByTestId('onboarding-wizard'), async () => {
     await page.getByTestId('onboarding-skip').click()
-    const confirm = page.getByRole('button', { name: 'Confirm' })
+    const confirm = page.getByTestId('confirm-accept')
     if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
   })
 }

@@ -37,9 +37,14 @@ export function isUserStatePath(path: string): boolean {
 }
 
 /**
- * The setup wizard's steps, in the order it shows them. Stored by name and counted by the
- * first-week measurement (completion, and the last step reached by those who stop), so a step is
- * never renamed: a new one gets a new name.
+ * The setup wizard's steps, in order. Stored by name and counted by the first-week measurement
+ * (completion, and the last step reached by those who stop), so a step is never renamed: a new one
+ * gets a new name.
+ *
+ * `welcome` stays for the records that hold it. The wizard opens on `space` now and writes
+ * `welcome` no more, and `subscriptions` only follows an import that brought transactions in: with
+ * none, a record goes from `import` to `done`. How old and new records compare is in
+ * dev-changelog.md, under "The setup wizard on a phone".
  */
 export const ONBOARDING_STEPS = [
   'welcome',

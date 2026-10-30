@@ -1,14 +1,26 @@
 /**
- * OnboardingWizard — the first-run setup flow, in the app's orbital language.
+ * OnboardingWizard: the first-run setup, in the app's orbital language.
  *
- * A full-screen night-sky overlay with animated orbit rings behind a glass
- * panel; six steps: welcome → name your space → first account(s) → bring your
- * data (the real import flow, embedded) → detected subscriptions → orbit
- * complete. Every step can be skipped (with a confirm where data would be
- * lost), so nobody is ever stuck — and the whole thing can be relaunched from
- * the tour menu. Auto-opens via `maybeOfferOnboarding()`: signed in, for an
- * account whose setup record is not finished, at the step it reached;
- * local-first, for a pristine workspace (core/onboardingStore.ts).
+ * Three counted steps and a finish, one job to a screen:
+ *
+ * 1. Space (`space`): the profile's name and base currency, and on a signed-in account the way to
+ *    keep everything in this browser instead. Its second screen, About this space, asks where the
+ *    person lives and who the space covers while the benchmarks they choose figures for are shown
+ *    (core/guidanceGate.ts).
+ * 2. Account (`account`): the main account, with its balance today.
+ * 3. Statement (`import`): one bank statement, read and imported in a tap (FirstImport.tsx). The
+ *    subscriptions it shows (`subscriptions`) come only after an import that brought transactions.
+ *
+ * Then Done (`done`), with what the profile now holds and the next steps it calls for.
+ *
+ * On a phone the panel is the whole screen, over the night sky: Back and Close in a header with
+ * the progress between them, and one footer row, a quiet Skip where a step can be skipped and the
+ * primary action under the thumb. On a wider screen it is a card with the same parts.
+ *
+ * Every step can wait. Close asks once, naming what is left; a step's Skip asks only when it would
+ * drop something typed or chosen. Auto-opens via `maybeOfferOnboarding()`: signed in, for an
+ * account whose setup record is not finished, at the step it reached; local-first, for a pristine
+ * workspace (core/onboardingStore.ts). Settings and the tour menu run it again.
  */
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
 import { refreshAchievements } from '../../core/achievementsStore'
@@ -26,34 +38,39 @@ import { benchmarksShown } from '../../core/guidanceGate'
 import {
   completeOnboarding,
   forgetOnboardingStatus,
+  goToOnboardingStep,
   nextOnboardingStep,
-  ONBOARDING_STEPS,
   onboardingOpen,
   onboardingStep,
   prevOnboardingStep,
   skipOnboarding,
 } from '../../core/onboardingStore'
 import { getStorageMode, setStorageMode } from '../../core/storage/storageFactory'
-import importStyles from '../../features/Import.module.css'
-import { ImportDataEntry } from '../../features/import/ImportDataEntry'
-import { createImportFlow } from '../../features/import/importFlow'
-import { ImportMappingStep } from '../../features/import/ImportMappingStep'
-import { ImportPreviewStep } from '../../features/import/ImportPreviewStep'
-import { Field, FormNotice, SubmitButton } from '../form'
+import { handFileToImport } from '../../features/import/importHandoff'
+import { Field, FormNotice } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
 import { SpaceQuestions } from '../guidance/SpaceQuestions'
 import { LogoMark } from '../Logo'
-import { OrbitSpinner } from '../OrbitSpinner'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
+import { counted, createFirstImport, FirstImportPanel, listed } from './FirstImport'
 import styles from './Onboarding.module.css'
-import { createFirstAccountForm, createSpaceForm, spaceAnswerChanges } from './onboardingForms'
+import {
+  blankAccount,
+  createFirstAccountForm,
+  createSpaceForm,
+  spaceAnswerChanges,
+} from './onboardingForms'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
 
-const R = 26
-const CIRC = 2 * Math.PI * R
+/** The counted steps: Space, Account, Statement. Done is not one of them. */
+const COUNTED_STEPS = 3
+
+/** The progress ring: a 24 px glyph in the header, filled by the step's share of the three. */
+const RING_R = 9
+const RING_C = 2 * Math.PI * RING_R
 
 const ACCOUNT_TYPE_LABELS: { value: AccountType; label: string }[] = [
   { value: 'giro', label: 'Giro / Checking' },
@@ -93,84 +110,51 @@ function OrbitBackdrop() {
   )
 }
 
-/** Small feather-style icons for the welcome bullets (24x24, 2px stroke). */
-const icons = {
-  orbit: (
+/** Feather-style glyphs (24 x 24, 2 px stroke). */
+const glyph = {
+  back: (
     <svg
-      width="18"
-      height="18"
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
-      viewBox="0 0 24 24"
+      aria-hidden="true"
     >
-      <circle cx="12" cy="12" r="9" />
-      <circle cx="12" cy="12" r="2.6" />
-      <circle cx="19.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M15 18l-6-6 6-6" />
     </svg>
   ),
-  inbox: (
+  close: (
     <svg
-      width="18"
-      height="18"
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"
-      stroke-linejoin="round"
-      viewBox="0 0 24 24"
+      aria-hidden="true"
     >
-      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-      <path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z" />
+      <path d="M6 6l12 12M18 6L6 18" />
     </svg>
   ),
-  repeat: (
+  device: (
     <svg
       width="18"
       height="18"
+      viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
       stroke-width="2"
       stroke-linecap="round"
       stroke-linejoin="round"
-      viewBox="0 0 24 24"
+      aria-hidden="true"
     >
-      <path d="M17 1l4 4-4 4" />
-      <path d="M3 11V9a4 4 0 014-4h14" />
-      <path d="M7 23l-4-4 4-4" />
-      <path d="M21 13v2a4 4 0 01-4 4H3" />
-    </svg>
-  ),
-  shield: (
-    <svg
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      viewBox="0 0 24 24"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  ),
-  wallet: (
-    <svg
-      width="18"
-      height="18"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      viewBox="0 0 24 24"
-    >
-      <path d="M21 12V7H5a2 2 0 010-4h14v4" />
-      <path d="M3 5v14a2 2 0 002 2h16v-5" />
-      <path d="M18 12a2 2 0 000 4h4v-4h-4z" />
+      <rect x="7" y="2" width="10" height="20" rx="2" />
+      <path d="M11 18h2" />
     </svg>
   ),
 }
@@ -178,6 +162,22 @@ const icons = {
 /** What the space step says when the space is saved and its answers are not. */
 export const SPACE_ANSWERS_NOT_SAVED =
   "Your space is saved, but your answers didn't save. You can give them in Settings, under About this space."
+
+/** What Close asks, by where setup is: what is still to do, and where setup runs again. */
+export function leaveSetupQuestion(step: string, screen: 'name' | 'about'): string {
+  switch (step) {
+    case 'account':
+      return 'Leave setup? Your main account and a statement can wait. Settings can run setup again.'
+    case 'import':
+      return 'Leave setup? Your statement can wait: the Import page takes one any time, and Settings can run setup again.'
+    case 'subscriptions':
+      return 'Leave setup? Your import is saved, and Bills can scan for subscriptions any time.'
+    default:
+      return screen === 'about'
+        ? 'Leave setup? Your main account and a statement can wait. Settings can run setup again.'
+        : 'Leave setup? Your space, your main account and a statement can all wait. Settings can run setup again.'
+  }
+}
 
 export interface OnboardingWizardProps {
   /**
@@ -187,31 +187,40 @@ export interface OnboardingWizardProps {
   selectProfiles: (ids: number[]) => void
 }
 
+/** One footer action. `skip` is the quiet button before the primary, where a step can wait. */
+interface FooterAction {
+  label: string
+  run: () => void
+  disabled: boolean
+  /** The action is running: the button shows a spinner and this label. */
+  busy?: string | false
+  /** Defaults to onboarding-next, or onboarding-finish on Done. */
+  testId?: string
+  skip?: { label: string; run: () => void; disabled?: boolean; testId: string }
+}
+
 export function OnboardingWizard(props: OnboardingWizardProps) {
   const state = useAppState()
 
-  // ---- wizard-session results (feed the final summary) ----
+  // ---- what this visit did, for Done's summary ----
   const [createdAccounts, setCreatedAccounts] = createSignal<
     { name: string; type: AccountType; currency: string; balance: number }[]
   >([])
   const [importSummary, setImportSummary] = createSignal<ImportSummary | null>(null)
-  // True between "Import more files" and the next successful import: the
-  // summary is kept (so batch totals accumulate) but the embedded importer
-  // shows instead of the summary panel.
-  const [importingMore, setImportingMore] = createSignal(false)
   const [subsAdded, setSubsAdded] = createSignal(0)
-  // The summary panel replaces the importer only when we're not mid-"more files".
-  const showingSummary = () => importSummary() !== null && !importingMore()
 
   // ---- step: your space ----
-  // What it checks and says is onboardingForms.ts; a refused name is said under the name.
-  // Where the person lives and who the space covers are asked here too (guidance.md 5.5): the
-  // answers the record holds, and the ones chosen on this visit to the step, which are what the
-  // step saves. Both questions can be left unanswered. The production build asks neither until
-  // the benchmarks they choose figures for are shown (core/guidanceGate.ts), and saves no answer.
+  // Two screens: the name and currency, then About this space while the benchmarks gate shows it.
+  const [spaceScreen, setSpaceScreen] = createSignal<'name' | 'about'>('name')
+  // Where the person lives and who the space covers (guidance.md 5.5): the answers the record
+  // holds, and the ones chosen on this visit to the screen, which are what it saves. Both can be
+  // left unanswered. The production build asks neither until the benchmarks they choose figures
+  // for are shown (core/guidanceGate.ts), and saves no answer.
   const [storedAnswers, setStoredAnswers] = createSignal<Answers>({})
   const [chosenAnswers, setChosenAnswers] = createSignal<AnswerChanges>({})
+  const [savingAnswers, setSavingAnswers] = createSignal(false)
   const spaceAnswers = (): Answers => ({ ...storedAnswers(), ...chosenAnswers() }) as Answers
+  // What it checks and says is onboardingForms.ts; a refused name is said under the name.
   const spaceForm = createSpaceForm({
     current: () => state.currentProfile,
     save: async ({ name, currency }) => {
@@ -233,37 +242,34 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         setProfiles([...getProfiles(), created])
         props.selectProfiles([created.id])
       }
-      // Saved for the profile the app now writes to, as every other write of the step is. The
-      // space is saved by now, so a failure here does not hold the step: it says so and moves on,
-      // and the answers can be given in Settings. Kept as chosen, they show if the person comes
-      // back to the step, whose save tries them again.
-      if (benchmarksShown()) {
-        try {
-          setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
-          setChosenAnswers({})
-        } catch {
-          showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
-        }
-      }
     },
     onSaved: () => {
-      nextOnboardingStep()
+      if (benchmarksShown()) setSpaceScreen('about')
+      else nextOnboardingStep()
     },
   })
 
-  // ---- step: first account ----
-  // What it checks and says is onboardingForms.ts; a refusal is said under its field, or in the
-  // step's notice when no field is the reason.
-  const accountForm = createFirstAccountForm({
-    onCreated: async (account) => {
-      setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
-      showToast(`Account "${account.name}" created`, 'success')
-      bumpProfileVersion()
-      await refreshProfileAccounts()
-    },
-  })
-  // What the profile ALREADY has — a relaunched wizard must recognize existing
-  // accounts instead of pitching "your first account" at a five-account user.
+  // Saved for the profile the app now writes to, as every other write of setup is. The space is
+  // saved by now, so a failure here does not hold setup: it says so and moves on, and the answers
+  // can be given in Settings. Kept as chosen, they show if the person comes back to the screen,
+  // whose save tries them again.
+  const saveAnswersAndContinue = async () => {
+    if (savingAnswers()) return
+    setSavingAnswers(true)
+    try {
+      setStoredAnswers(await saveAnswers(spaceAnswerChanges(chosenAnswers())))
+      setChosenAnswers({})
+    } catch {
+      showToast(SPACE_ANSWERS_NOT_SAVED, 'warning')
+    } finally {
+      setSavingAnswers(false)
+    }
+    if (onboardingOpen() && onboardingStep() === 'space') nextOnboardingStep()
+  }
+
+  // ---- step: your main account ----
+  // What the profile ALREADY has: a wizard run again must recognise existing accounts instead of
+  // pitching "your main account" at a five-account user.
   const [profileAccounts, setProfileAccounts] = createSignal<
     { id: number; name: string; currency?: string | null; balance?: number | null }[]
   >([])
@@ -283,14 +289,37 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     }
   }
 
-  // ---- step: bring your data (the real import flow, embedded) ----
-  const importFlow = createImportFlow({
-    initialTab: 'bank-imports',
-    autoResetAfterImport: false,
+  // What it checks and says is onboardingForms.ts; a refusal is said under its field, or in the
+  // step's notice when no field is the reason. Adding the account is the step's one action: the
+  // next screen says it worked, so there is no toast.
+  const accountForm = createFirstAccountForm({
+    onCreated: async (account) => {
+      setCreatedAccounts((prev) => [...prev, { ...account, type: account.type as AccountType }])
+      bumpProfileVersion()
+      await refreshProfileAccounts()
+      if (onboardingOpen() && onboardingStep() === 'account') nextOnboardingStep()
+    },
+  })
+
+  /** Skip asks only when it would drop what was typed. */
+  const skipAccount = async () => {
+    const typed = accountForm.values.name.trim() !== '' || accountForm.values.balance.trim() !== ''
+    if (typed) {
+      const sure = await showConfirm('Leave this account out? What you typed is not saved.', {
+        confirmText: 'Leave it out',
+        cancelText: 'Keep it',
+      })
+      if (!sure) return
+      accountForm.reset(blankAccount(accountForm.values.currency))
+    }
+    nextOnboardingStep()
+  }
+
+  // ---- step: a statement ----
+  const firstImport = createFirstImport({
+    preferredAccount: () => createdAccounts().at(-1)?.name ?? null,
     onImported: (summary) => {
-      // Accumulate across "Import more files" batches — the summary is kept
-      // (not nulled) while the user is back in the flow, so `prev` carries the
-      // earlier batches' totals.
+      // Totals add up across statements: "Bring in another statement" keeps the earlier ones.
       setImportSummary((prev) =>
         prev
           ? {
@@ -301,10 +330,46 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             }
           : summary
       )
-      setImportingMore(false)
+      // On to what the import made possible. With nothing new, the step says so and stays.
+      if (summary.imported > 0) goToOnboardingStep('subscriptions')
     },
   })
+  const importFlow = firstImport.flow
   let importInitialized = false
+
+  /** Past the statement: its subscriptions when an import brought transactions in, else Done. */
+  const afterStatement = () => {
+    goToOnboardingStep((importSummary()?.imported ?? 0) > 0 ? 'subscriptions' : 'done')
+  }
+
+  /** Skip, with a statement ready: it asks, since the file would be dropped. */
+  const skipStatement = async () => {
+    if (firstImport.state() === 'ready') {
+      const sure = await showConfirm(
+        'Leave this statement out? Nothing from it is imported. The Import page can bring it in later.',
+        { confirmText: 'Leave it out', cancelText: 'Keep it' }
+      )
+      if (!sure) return
+    }
+    firstImport.clear()
+    afterStatement()
+  }
+
+  /** The way out for a file this step cannot import: setup finishes, and Import opens with it. */
+  const openInImport = () => {
+    const handed = firstImport.handOver()
+    if (!handed) return
+    handFileToImport(handed.file, handed.tab)
+    completeOnboarding()
+    window.location.hash = 'import'
+  }
+
+  // ---- step: subscriptions ----
+  const [subScan, setSubScan] = createSignal<{
+    chosenCount: () => number
+    submitting: () => boolean
+    addSelected: () => Promise<number>
+  } | null>(null)
 
   // ---- step: done, with the next steps from what the profile now holds ----
   const [nextUp, setNextUp] = createSignal<OrientationStep[]>([])
@@ -315,7 +380,29 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (onboardingOpen() && onboardingStep() === 'done') setNextUp(currentNextSteps())
   }
 
-  // Seed per-step state when the wizard opens / advances.
+  const accountsHeld = () =>
+    Math.max(
+      profileAccounts().length,
+      createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
+    )
+
+  /** "Personal has 1 account, 7 new transactions and 2 tracked subscriptions." */
+  const doneSummary = () => {
+    const name = state.currentProfile?.name ?? 'Your space'
+    const parts: string[] = []
+    if (accountsHeld() > 0) parts.push(counted(accountsHeld(), 'account'))
+    const imported = importSummary()?.imported ?? 0
+    if (imported > 0) parts.push(counted(imported, 'new transaction'))
+    if (subsAdded() > 0) parts.push(counted(subsAdded(), 'tracked subscription'))
+    return parts.length > 0 ? `${name} has ${listed(parts)}.` : `${name} is ready.`
+  }
+
+  const finish = () => {
+    completeOnboarding()
+    window.location.hash = 'dashboard'
+  }
+
+  // Seed per-step state when the wizard opens or moves.
   createEffect(() => {
     if (!onboardingOpen()) return
     const step = onboardingStep()
@@ -349,28 +436,43 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         importInitialized = true
         importFlow.init()
       } else {
-        // Accounts created on the previous step (or on a back-and-forth) must
-        // show up in the bank statements' target-account pickers.
+        // Accounts created on the step before (or on a back-and-forth) must be ones "Goes into"
+        // can offer.
         void importFlow.loadBankAccounts()
-        // The wizard stays mounted for the session and can be relaunched on another profile,
-        // so the rule drafts loaded on the first visit may be a different profile's.
         importFlow.reloadBankRulesIfProfileChanged()
       }
     }
     if (step === 'done') {
-      // The summary counts what's really on the profile (imports can create
-      // accounts too), not just what this step's form made.
+      // The summary counts what's really on the profile (imports can create accounts too), not
+      // just what this visit's form made.
       void refreshProfileAccounts()
       void untrack(loadNextSteps)
     }
   })
 
-  // Escape asks to leave (same as the Skip button); plain steps navigate back.
+  // Guarded so hammering Escape can't stack confirm dialogs.
+  let leavePromptOpen = false
+  const requestLeave = async () => {
+    if (leavePromptOpen) return
+    leavePromptOpen = true
+    try {
+      const sure = await showConfirm(leaveSetupQuestion(onboardingStep(), spaceScreen()), {
+        confirmText: 'Leave setup',
+        cancelText: 'Stay',
+      })
+      if (sure) skipOnboarding()
+    } finally {
+      leavePromptOpen = false
+    }
+  }
+
+  // Escape asks to leave, as Close does. On Done there is nothing left: it finishes.
   const handleKeydown = (e: KeyboardEvent) => {
     if (!onboardingOpen()) return
     if (e.key === 'Escape') {
       e.preventDefault()
-      void requestSkipAll()
+      if (onboardingStep() === 'done') completeOnboarding()
+      else void requestLeave()
     }
   }
   document.addEventListener('keydown', handleKeydown)
@@ -383,526 +485,47 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (onboardingOpen()) panelRef?.focus()
   })
 
-  const stepIndex = createMemo(() => ONBOARDING_STEPS.indexOf(onboardingStep()))
-  const progress = createMemo(() => (stepIndex() / (ONBOARDING_STEPS.length - 1)) * CIRC)
-
-  // Guarded so hammering Escape can't stack multiple confirm dialogs.
-  let skipPromptOpen = false
-  const requestSkipAll = async () => {
-    if (skipPromptOpen) return
-    skipPromptOpen = true
-    try {
-      const sure = await showConfirm(
-        'Leave setup? You can explore the app freely and relaunch this wizard any time from the sidebar tour menu.'
-      )
-      if (sure) skipOnboarding()
-    } finally {
-      skipPromptOpen = false
+  /** Which of the three counted steps this is: none on Done. */
+  const stepNumber = createMemo((): number | null => {
+    switch (onboardingStep()) {
+      case 'account':
+        return 2
+      case 'import':
+      case 'subscriptions':
+        return 3
+      case 'done':
+        return null
+      default:
+        return 1
     }
-  }
+  })
 
-  // ---- step actions ----
+  /** The import is running: nothing may move setup on until it settles. */
+  const holding = () => onboardingStep() === 'import' && importFlow.loading()
 
-  const continueFromAccounts = async () => {
-    // Any account counts — created here or already on the profile (relaunch).
-    if (profileAccounts().length > 0 || createdAccounts().length > 0) {
-      nextOnboardingStep()
-      return
-    }
-    const sure = await showConfirm(
-      'Skip creating an account? Most of the app orbits around at least one account — you can add it later on the Accounts page.'
-    )
-    if (sure) nextOnboardingStep()
-  }
-
-  const continueFromImport = async () => {
-    if (showingSummary()) {
-      nextOnboardingStep()
-      return
-    }
-    const midFlow = importFlow.activeStep() !== 'upload' || importFlow.bankFiles().length > 0
-    const sure = await showConfirm(
-      midFlow
-        ? 'Skip importing? The data you prepared here will be discarded — you can import any time from the Import page.'
-        : 'Skip importing for now? You can bring your history any time from the Import page.'
-    )
-    if (sure) {
-      importFlow.resetForm()
-      nextOnboardingStep()
-    }
-  }
-
-  // Wizard Back walks the import sub-steps in reverse (preview → mapping →
-  // upload) before leaving the step — non-destructive, and deliberately via
-  // setActiveStep rather than goToMapping(), which would re-run auto-detection
-  // and clobber a manual remap. Once the summary is showing, Back leaves the
-  // step; "Import more files" is the designed way back into the flow.
-  const backFromImport = () => {
-    if (showingSummary()) {
-      prevOnboardingStep()
-      return
-    }
-    const sub = importFlow.activeStep()
-    if (sub === 'preview') importFlow.setActiveStep('mapping')
-    else if (sub === 'mapping') importFlow.setActiveStep('upload')
-    else prevOnboardingStep()
-  }
-
-  const finish = () => {
-    completeOnboarding()
-    window.location.hash = 'dashboard'
-  }
-
-  // Welcome-step escape hatch (server mode only): run the app local-only.
-  // Fresh browser → mirror the pristine serverless state the E2E zero-state
-  // helper uses (suppress the example-data seed, flip the mode, reload — the
-  // pristine local workspace reopens this wizard). But this browser may
-  // already hold a local IndexedDB (the demo, or earlier local use) — then the
-  // switch continues with THAT workspace and the confirm must say so instead
-  // of promising a clean start.
-  const chooseLocalOnly = async () => {
-    let hasLocalData = false
-    try {
-      const dbs = await window.indexedDB.databases()
-      hasLocalData = dbs.some((d) => d.name === 'finance-manager')
-    } catch {
-      // indexedDB.databases() unsupported/blocked — keep the generic wording.
-    }
-    const sure = await showConfirm(
-      hasLocalData
-        ? 'Use Token Circles locally on this device? This browser already has a local workspace (e.g. from the demo) — you will continue with that data, and nothing syncs to the cloud. You can switch back any time in Settings.'
-        : 'Use Token Circles locally on this device? Your data stays in this browser and never syncs to the cloud — no account needed. You can switch back any time in Settings.'
-    )
-    if (!sure) return
-    try {
-      localStorage.setItem('finance_had_profiles', '1')
-      // A relaunched wizard may carry a completed/skipped flag; a fresh local
-      // workspace should offer setup again. (Harmless when local data exists —
-      // a non-pristine profile never auto-opens the wizard.)
-      forgetOnboardingStatus('local')
-      // Server-mode profile selection is meaningless against the local DB;
-      // stale ids would make the profile picker read empty or heal onto the
-      // wrong profile (mirrors handleLogout's cleanup).
-      localStorage.removeItem('currentProfileId')
-      localStorage.removeItem('selectedProfileIds')
-    } catch {
-      // Non-fatal: worst case the first init seeds the demo profiles.
-    }
-    setStorageMode('serverless')
-    window.location.reload()
-  }
-
-  // ---- step bodies ----
-
-  const welcomeStep = () => (
-    <div class={styles.step} data-test-id="onboarding-step-welcome">
-      <div class={styles.hero}>
-        <div class={styles.heroMark}>
-          <LogoMark size={72} />
-        </div>
-        <h1 class={styles.title} tabindex="-1" data-step-heading>
-          Welcome to Token Circles
-        </h1>
-        <p class={styles.lead}>
-          Your money, mapped as orbits: accounts circle your net worth, spending and income keep
-          them in motion. Let's set up your space — it takes about two minutes.
-        </p>
-      </div>
-      <ul class={styles.features}>
-        <li>
-          <span class={styles.featureIcon}>{icons.wallet}</span>
-          <span>
-            <b>Create your first account</b> — the home for your balance and transactions.
-          </span>
-        </li>
-        <li>
-          <span class={styles.featureIcon}>{icons.inbox}</span>
-          <span>
-            <b>Bring your history</b> — bank statements (Revolut, N26, Erste and more), CSV, or
-            Google Sheets.
-          </span>
-        </li>
-        <li>
-          <span class={styles.featureIcon}>{icons.repeat}</span>
-          <span>
-            <b>Auto-detect subscriptions</b> — we recognize Netflix, Spotify, Claude and 40+ more
-            from your imported charges.
-          </span>
-        </li>
-        <li>
-          <span class={styles.featureIcon}>{icons.shield}</span>
-          <span>
-            <b>Skip anything</b> — every step is optional, and the wizard can be relaunched from the
-            tour menu.
-          </span>
-        </li>
-      </ul>
-      <Show when={getStorageMode() === 'self-hosted'}>
-        <div class={styles.localOnly}>
-          <span class={styles.localOnlyText}>
-            <b>Prefer local-only?</b> Keep everything in this browser — your data never leaves this
-            device, and you can switch back in Settings.
-          </span>
-          <button
-            class={styles.secondaryAction}
-            data-test-id="onboarding-local-only"
-            onClick={() => void chooseLocalOnly()}
-          >
-            Use local-only
-          </button>
-        </div>
-      </Show>
-    </div>
-  )
-
-  const spaceStep = () => (
-    <div class={styles.step} data-test-id="onboarding-step-space">
-      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
-        Name your space
-      </h2>
-      <p class={styles.stepLead}>A profile is one space. You can add more later.</p>
-      {/* Enter in the name continues, as the footer's Continue does. */}
-      <form class={styles.stepForm} {...spaceForm.attrs} data-test-id="onboarding-space-form">
-        <FormNotice form={spaceForm} testId="onboarding-space-notice" />
-        <div class={styles.formGrid}>
-          <Field
-            form={spaceForm}
-            name="name"
-            label="Profile name"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-          >
-            {(control) => (
-              <input
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-profile-name"
-                value={spaceForm.values.name}
-                maxlength={60}
-                // Select the prefilled default on focus: typing replaces it outright,
-                // an arrow key keeps it and positions the caret for a tweak.
-                onFocus={(e) => {
-                  e.currentTarget.select()
-                }}
-                onInput={(e) => spaceForm.set('name', e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Field
-            form={spaceForm}
-            name="currency"
-            label="Base currency"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-            hint="Totals and charts use it. Accounts can still hold others."
-            hintClass={styles.fieldHint}
-          >
-            {(control) => (
-              <select
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-currency"
-                value={spaceForm.values.currency}
-                onInput={(e) => spaceForm.set('currency', e.currentTarget.value)}
-              >
-                <For each={CURRENCIES}>
-                  {(c) => (
-                    <option value={c} selected={c === spaceForm.values.currency}>
-                      {c}
-                    </option>
-                  )}
-                </For>
-              </select>
-            )}
-          </Field>
-        </div>
-        <Show when={benchmarksShown()}>
-          <p
-            class={`${styles.fieldHint} ${styles.questionsLead}`}
-            data-test-id="onboarding-space-questions-lead"
-          >
-            Both questions are optional. Change them later in Settings.
-          </p>
-          <SpaceQuestions
-            idPrefix="onboarding-space"
-            answers={spaceAnswers()}
-            disabled={spaceForm.submitting()}
-            onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
-          />
-        </Show>
-      </form>
-    </div>
-  )
-
-  const accountStep = () => (
-    <div class={styles.step} data-test-id="onboarding-step-account">
-      <Show
-        when={profileAccounts().length === 0}
-        fallback={
-          <>
-            <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
-              Your accounts
-            </h2>
-            <p class={styles.stepLead}>
-              You already have {profileAccounts().length} account
-              {profileAccounts().length === 1 ? '' : 's'} in orbit — add another below if you like,
-              then continue.
-            </p>
-          </>
+  /** Back, where there is somewhere to go back to. */
+  const backAction = (): (() => void) | null => {
+    switch (onboardingStep()) {
+      case 'space':
+      case 'welcome':
+        return spaceScreen() === 'about' ? () => setSpaceScreen('name') : null
+      case 'account':
+        return () => {
+          setSpaceScreen(benchmarksShown() ? 'about' : 'name')
+          prevOnboardingStep()
         }
-      >
-        <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
-          Create your first account
-        </h2>
-        <p class={styles.stepLead}>
-          An account is anything that holds money — a checking account, savings, cash in a drawer, a
-          brokerage. Add the one you use most; more can join the orbit any time.
-        </p>
-      </Show>
-      <Show when={profileAccounts().length > 0}>
-        <div class={styles.chips}>
-          <For each={profileAccounts()}>
-            {(a) => (
-              <span class={styles.chip} data-test-id="onboarding-account-chip">
-                <span class={styles.chipDot} />
-                {a.name}
-                <Show when={a.currency}>
-                  <span class={styles.chipMeta}>{a.currency}</span>
-                </Show>
-              </span>
-            )}
-          </For>
-        </div>
-      </Show>
-      <form class={styles.stepForm} {...accountForm.attrs} data-test-id="onboarding-account-form">
-        <FormNotice form={accountForm} testId="onboarding-account-notice" />
-        <div class={styles.formGrid}>
-          <Field
-            form={accountForm}
-            name="name"
-            label="Account name"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-          >
-            {(control) => (
-              <input
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-account-name"
-                placeholder="e.g. Main Checking"
-                value={accountForm.values.name}
-                onInput={(e) => accountForm.set('name', e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Field
-            form={accountForm}
-            name="type"
-            label="Type"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-          >
-            {(control) => (
-              <select
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-account-type"
-                value={accountForm.values.type}
-                onInput={(e) => accountForm.set('type', e.currentTarget.value)}
-              >
-                <For each={ACCOUNT_TYPE_LABELS}>
-                  {(t) => (
-                    <option value={t.value} selected={t.value === accountForm.values.type}>
-                      {t.label}
-                    </option>
-                  )}
-                </For>
-              </select>
-            )}
-          </Field>
-          <Field
-            form={accountForm}
-            name="currency"
-            label="Currency"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-          >
-            {(control) => (
-              <select
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-account-currency"
-                value={accountForm.values.currency}
-                onInput={(e) => accountForm.set('currency', e.currentTarget.value)}
-              >
-                <For each={CURRENCIES}>
-                  {(c) => (
-                    <option value={c} selected={c === accountForm.values.currency}>
-                      {c}
-                    </option>
-                  )}
-                </For>
-              </select>
-            )}
-          </Field>
-          <Field
-            form={accountForm}
-            name="balance"
-            label="Current balance"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-            hint="Used as the opening balance."
-            hintClass={styles.fieldHint}
-          >
-            {(control) => (
-              <input
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-account-balance"
-                type="text"
-                inputmode="decimal"
-                placeholder="0.00"
-                value={accountForm.values.balance}
-                onInput={(e) => accountForm.set('balance', e.currentTarget.value)}
-              />
-            )}
-          </Field>
-          <Field
-            form={accountForm}
-            name="starting_date"
-            label="Tracking since (optional)"
-            class={styles.field}
-            labelClass={styles.fieldLabel}
-          >
-            {(control) => (
-              <input
-                {...control}
-                class={styles.input}
-                data-test-id="onboarding-account-date"
-                type="date"
-                value={accountForm.values.starting_date}
-                onInput={(e) => accountForm.set('starting_date', e.currentTarget.value)}
-              />
-            )}
-          </Field>
-        </div>
-        <SubmitButton
-          class={styles.secondaryAction}
-          data-test-id="onboarding-account-create"
-          busy={accountForm.submitting()}
-          busyLabel="Creating…"
-        >
-          {profileAccounts().length > 0 ? 'Add another account' : 'Create account'}
-        </SubmitButton>
-      </form>
-    </div>
-  )
-
-  const importStep = () => (
-    <div class={styles.step} data-test-id="onboarding-step-import">
-      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
-        Bring your data
-      </h2>
-      <p class={styles.stepLead}>
-        This is the app's full importer. Drop bank statements and we detect the bank, or use CSV /
-        Google Sheets — everything lands as regular transactions you can refine later.
-      </p>
-      <div class={styles.comingSoon}>
-        <span class={styles.comingSoonBadge}>Coming soon</span>
-        Direct migration from Mint and other budgeting apps — YNAB CSV exports already import right
-        here.
-      </div>
-
-      <Show when={importFlow.error()}>
-        <div class={`${importStyles.resultMessage} ${importStyles.error}`}>
-          {importFlow.error()}
-        </div>
-      </Show>
-      <Show when={importFlow.resultMessage()}>
-        <div class={`${importStyles.resultMessage} ${importStyles.success}`}>
-          {importFlow.resultMessage()!.text}
-        </div>
-      </Show>
-      {/* dropProcessing has its own inline spinner in the dropzone — don't
-          stack the page-sized overlay on top of it. */}
-      <Show when={importFlow.loading() && !importFlow.dropProcessing()}>
-        <div class={importStyles.loadingOverlay} data-test-id="onboarding-import-loading">
-          <OrbitSpinner size={72} label="Processing your data…" />
-        </div>
-      </Show>
-
-      <Show
-        when={showingSummary()}
-        fallback={
-          <div class={styles.importEmbed}>
-            <Show when={importFlow.activeStep() === 'upload'}>
-              <ImportDataEntry flow={importFlow} compact />
-            </Show>
-            <Show when={importFlow.activeStep() === 'mapping'}>
-              <ImportMappingStep flow={importFlow} embedded />
-            </Show>
-            <Show when={importFlow.activeStep() === 'preview'}>
-              <ImportPreviewStep flow={importFlow} embedded />
-            </Show>
-          </div>
+      case 'import':
+      case 'subscriptions':
+        return () => {
+          prevOnboardingStep()
         }
-      >
-        <div class={styles.importDone} data-test-id="onboarding-import-summary">
-          <Show
-            when={importSummary()!.imported > 0}
-            fallback={
-              <p>
-                Nothing new to import —{' '}
-                {importSummary()!.duplicatesSkipped > 0
-                  ? `all ${importSummary()!.duplicatesSkipped} rows were already in your data (duplicates are skipped automatically).`
-                  : 'no rows could be imported from those files.'}
-              </p>
-            }
-          >
-            <p>
-              <b>{importSummary()!.imported}</b> transactions imported
-              {importSummary()!.duplicatesSkipped > 0
-                ? ` (${importSummary()!.duplicatesSkipped} duplicates skipped)`
-                : ''}
-              {importSummary()!.createdAccounts.length > 0
-                ? `, ${importSummary()!.createdAccounts.length} account${importSummary()!.createdAccounts.length === 1 ? '' : 's'} created`
-                : ''}
-              . Next: we scan them for subscriptions.
-            </p>
-          </Show>
-          <button
-            class={styles.secondaryAction}
-            onClick={() => {
-              importFlow.resetForm()
-              // Keep the summary — totals accumulate across batches; the flag
-              // swaps the panel back to the embedded importer.
-              setImportingMore(true)
-            }}
-          >
-            Import more files
-          </button>
-        </div>
-      </Show>
-    </div>
-  )
+      default:
+        return null
+    }
+  }
 
-  /*
-   * The scan panel's selection, surfaced so the footer's ONE primary button can carry the whole
-   * step: "Add 3 & continue" adds and then advances. Before this the panel had its own Add button
-   * mid-step while the footer's Continue silently did not add — the required order was add, wait,
-   * continue, and nothing said so.
-   */
-  /*
-   * The wizard's scrollable middle. A 5000-row preview puts the user deep inside it, and the
-   * footer button they then press swaps the content far above their viewport — processing
-   * spinner, then summary — while their scroll position stays where the table used to be.
-   * Every long-running footer action scrolls this back to the top so what happens next happens
-   * on screen.
-   */
+  // ---- the scrollable middle ----
   let bodyEl: HTMLDivElement | undefined
-  const showTheWork = () => {
-    bodyEl?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
 
   // Whether the step goes on below what shows: the middle's bottom then fades out. Read on scroll,
   // and whenever the middle or the step in it changes size. The step ends where the middle's bottom
@@ -920,6 +543,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     createEffect(() => {
       if (!onboardingOpen()) return
       onboardingStep()
+      spaceScreen()
       sizes.disconnect()
       if (!bodyEl) return
       sizes.observe(bodyEl)
@@ -931,15 +555,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     })
   }
 
-  // A new step opens at its top, not at the scroll position the last one was left at, and focus
-  // moves to its heading, so a screen reader announces the step and Tab starts from there. At once,
-  // not smooth: the old step's content is already gone. Not on open, where the panel takes focus.
+  // A new screen opens at its top, not at the scroll position the last one was left at, and focus
+  // moves to its heading, so a screen reader announces it and Tab starts from there. At once, not
+  // smooth: the old screen's content is already gone. Not on open, where the panel takes focus.
   createEffect(
     on(
-      onboardingStep,
+      [onboardingStep, spaceScreen],
       () => {
         if (!onboardingOpen() || !bodyEl) return
-        // scrollTop, not scrollTo: the middle sets no smooth scrolling, so this is at once.
         bodyEl.scrollTop = 0
         bodyEl.querySelector<HTMLElement>('[data-step-heading]')?.focus({ preventScroll: true })
       },
@@ -947,28 +570,313 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     )
   )
 
-  const [subScan, setSubScan] = createSignal<{
-    chosenCount: () => number
-    submitting: () => boolean
-    addSelected: () => Promise<number>
-  } | null>(null)
+  // Local-only, offered to a signed-in account on the first screen, before anything is saved to
+  // it: the switch reloads into a fresh local workspace, so later it would leave the space and the
+  // account behind in the cloud. A fresh browser mirrors the pristine serverless state the E2E
+  // zero-state helper uses (suppress the example-data seed, flip the mode, reload: the pristine
+  // local workspace reopens this wizard). But this browser may already hold a local IndexedDB (the
+  // demo, or earlier local use); then the switch continues with THAT workspace and the confirm
+  // must say so instead of promising a clean start.
+  const chooseLocalOnly = async () => {
+    let hasLocalData = false
+    try {
+      const dbs = await window.indexedDB.databases()
+      hasLocalData = dbs.some((d) => d.name === 'finance-manager')
+    } catch {
+      // indexedDB.databases() unsupported/blocked: keep the generic wording.
+    }
+    const sure = await showConfirm(
+      hasLocalData
+        ? 'Keep your data in this browser only? This browser already has a local workspace (from the demo, say). You carry on with that one, and nothing syncs to the cloud. Settings can switch back.'
+        : 'Keep your data in this browser only? It never leaves this device and no account is needed. Settings can switch back.',
+      { confirmText: 'Keep it here', cancelText: 'Cancel' }
+    )
+    if (!sure) return
+    try {
+      localStorage.setItem('finance_had_profiles', '1')
+      // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
+      // offer setup again. (Harmless when local data exists: a non-pristine profile never
+      // auto-opens the wizard.)
+      forgetOnboardingStatus('local')
+      // Server-mode profile selection is meaningless against the local DB; stale ids would make
+      // the profile picker read empty or heal onto the wrong profile (mirrors handleLogout's
+      // cleanup).
+      localStorage.removeItem('currentProfileId')
+      localStorage.removeItem('selectedProfileIds')
+    } catch {
+      // Non-fatal: worst case the first init seeds the demo profiles.
+    }
+    setStorageMode('serverless')
+    window.location.reload()
+  }
+
+  // ---- step bodies ----
+
+  const nameScreen = () => (
+    <div class={styles.step} data-test-id="onboarding-step-space">
+      <h1 class={`${styles.title} ${styles.welcomeTitle}`} tabindex="-1" data-step-heading>
+        Welcome to Token Circles
+      </h1>
+      <p class={styles.lead}>
+        Three steps: your space, your main account and a statement. Each one can wait.
+      </p>
+      {/* Enter in the name continues, as the footer's Continue does. */}
+      <form class={styles.stack} {...spaceForm.attrs} data-test-id="onboarding-space-form">
+        <FormNotice form={spaceForm} testId="onboarding-space-notice" />
+        <Field
+          form={spaceForm}
+          name="name"
+          label="Profile name"
+          class={styles.field}
+          labelClass={styles.fieldLabel}
+        >
+          {(control) => (
+            <input
+              {...control}
+              class={styles.input}
+              data-test-id="onboarding-profile-name"
+              value={spaceForm.values.name}
+              maxlength={60}
+              autocomplete="off"
+              // Select the prefilled default on focus: typing replaces it outright, an arrow key
+              // keeps it and positions the caret for a tweak.
+              onFocus={(e) => {
+                e.currentTarget.select()
+              }}
+              onInput={(e) => spaceForm.set('name', e.currentTarget.value)}
+            />
+          )}
+        </Field>
+        <Field
+          form={spaceForm}
+          name="currency"
+          label="Base currency"
+          class={styles.field}
+          labelClass={styles.fieldLabel}
+          hint="Totals and charts use it. Accounts can still hold others."
+          hintClass={styles.hint}
+        >
+          {(control) => (
+            <select
+              {...control}
+              class={styles.input}
+              data-test-id="onboarding-currency"
+              value={spaceForm.values.currency}
+              onInput={(e) => spaceForm.set('currency', e.currentTarget.value)}
+            >
+              <For each={CURRENCIES}>
+                {(c) => (
+                  <option value={c} selected={c === spaceForm.values.currency}>
+                    {c}
+                  </option>
+                )}
+              </For>
+            </select>
+          )}
+        </Field>
+        <Show when={getStorageMode() === 'self-hosted'}>
+          <button
+            type="button"
+            class={styles.linkBtn}
+            data-test-id="onboarding-local-only"
+            onClick={() => void chooseLocalOnly()}
+          >
+            {glyph.device}
+            Keep my data in this browser only
+          </button>
+        </Show>
+      </form>
+    </div>
+  )
+
+  const aboutScreen = () => (
+    <div class={styles.step} data-test-id="onboarding-step-about">
+      <h2 class={styles.title} tabindex="-1" data-step-heading>
+        About this space
+      </h2>
+      <p class={styles.lead} data-test-id="onboarding-space-questions-lead">
+        Both are optional. They pick the official figures we compare your numbers with.
+      </p>
+      <div class={styles.stack}>
+        <SpaceQuestions
+          idPrefix="onboarding-space"
+          answers={spaceAnswers()}
+          disabled={savingAnswers()}
+          compact
+          onChoose={(changes) => setChosenAnswers((chosen) => ({ ...chosen, ...changes }))}
+        />
+      </div>
+    </div>
+  )
+
+  const accountStep = () => (
+    <div class={styles.step} data-test-id="onboarding-step-account">
+      <Show
+        when={profileAccounts().length === 0}
+        fallback={
+          <>
+            <h2 class={styles.title} tabindex="-1" data-step-heading>
+              Your accounts
+            </h2>
+            <p class={styles.lead}>
+              {`You have ${counted(profileAccounts().length, 'account')}. Add another here, or skip.`}
+            </p>
+            <div class={styles.chips}>
+              <For each={profileAccounts()}>
+                {(a) => (
+                  <span class={styles.chip} data-test-id="onboarding-account-chip">
+                    <span class={styles.chipDot} />
+                    {a.name}
+                    <Show when={a.currency}>
+                      <span class={styles.chipMeta}>{a.currency}</span>
+                    </Show>
+                  </span>
+                )}
+              </For>
+            </div>
+          </>
+        }
+      >
+        <h2 class={styles.title} tabindex="-1" data-step-heading>
+          Add your main account
+        </h2>
+        <p class={styles.lead}>The one you pay from most. Add the rest from Accounts later.</p>
+      </Show>
+      <form
+        class={styles.stack}
+        {...accountForm.attrs}
+        data-test-id="onboarding-account-form"
+        // Two text fields stop the browser's own Enter-to-submit: Enter adds the account, as the
+        // footer's Add account does.
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+            e.preventDefault()
+            void accountForm.submit()
+          }
+        }}
+      >
+        <FormNotice form={accountForm} testId="onboarding-account-notice" />
+        <Field
+          form={accountForm}
+          name="name"
+          label="Account name"
+          class={styles.field}
+          labelClass={styles.fieldLabel}
+        >
+          {(control) => (
+            <input
+              {...control}
+              class={styles.input}
+              data-test-id="onboarding-account-name"
+              placeholder="e.g. Main checking"
+              autocomplete="off"
+              value={accountForm.values.name}
+              onInput={(e) => accountForm.set('name', e.currentTarget.value)}
+            />
+          )}
+        </Field>
+        <Field
+          form={accountForm}
+          name="type"
+          label="Type"
+          class={styles.field}
+          labelClass={styles.fieldLabel}
+        >
+          {(control) => (
+            <select
+              {...control}
+              class={styles.input}
+              data-test-id="onboarding-account-type"
+              value={accountForm.values.type}
+              onInput={(e) => accountForm.set('type', e.currentTarget.value)}
+            >
+              <For each={ACCOUNT_TYPE_LABELS}>
+                {(t) => (
+                  <option value={t.value} selected={t.value === accountForm.values.type}>
+                    {t.label}
+                  </option>
+                )}
+              </For>
+            </select>
+          )}
+        </Field>
+        <Field
+          form={accountForm}
+          name="balance"
+          label="Balance today"
+          class={styles.field}
+          labelClass={styles.fieldLabel}
+          hint="It becomes the account's opening balance."
+          hintClass={styles.hint}
+        >
+          {(control) => (
+            <div class={styles.row}>
+              <input
+                {...control}
+                class={styles.input}
+                data-test-id="onboarding-account-balance"
+                type="text"
+                inputmode="decimal"
+                placeholder="0.00"
+                autocomplete="off"
+                value={accountForm.values.balance}
+                onInput={(e) => accountForm.set('balance', e.currentTarget.value)}
+              />
+              <select
+                class={`${styles.input} ${styles.currencySelect}`}
+                aria-label="Account currency"
+                data-test-id="onboarding-account-currency"
+                value={accountForm.values.currency}
+                onInput={(e) => accountForm.set('currency', e.currentTarget.value)}
+              >
+                <For each={CURRENCIES}>
+                  {(c) => (
+                    <option value={c} selected={c === accountForm.values.currency}>
+                      {c}
+                    </option>
+                  )}
+                </For>
+              </select>
+            </div>
+          )}
+        </Field>
+      </form>
+    </div>
+  )
+
+  const importStep = () => (
+    <div class={styles.step} data-test-id="onboarding-step-import">
+      <h2 class={styles.title} tabindex="-1" data-step-heading>
+        Bring in a statement
+      </h2>
+      <p class={styles.lead}>
+        Export a CSV or Excel file from your bank's app, then choose it here.
+      </p>
+      <div class={styles.stack}>
+        <FirstImportPanel importer={firstImport} />
+      </div>
+    </div>
+  )
 
   const subscriptionsStep = () => (
     <div class={styles.step} data-test-id="onboarding-step-subscriptions">
-      <h2 class={styles.stepTitle} tabindex="-1" data-step-heading>
-        Your subscriptions, spotted
+      <h2 class={styles.title} tabindex="-1" data-step-heading>
+        Subscriptions we spotted
       </h2>
-      <p class={styles.stepLead}>
-        We scanned your transactions for recurring charges from known services — check the ones you
-        want tracked, and adjust a price or period where we guessed wrong.
+      <p class={styles.lead}>
+        Tick the ones to track. They go under Bills, where you can change them.
       </p>
-      <SubscriptionScanPanel
-        active={() => onboardingOpen() && onboardingStep() === 'subscriptions'}
-        onAdded={(n) => setSubsAdded((prev) => prev + n)}
-        emptyHint="You can always scan again later: Bills → Subscriptions → Scan transactions."
-        expose={setSubScan}
-        hideAddButton
-      />
+      <div class={`${styles.stack} ${styles.subscriptions}`}>
+        <SubscriptionScanPanel
+          active={() => onboardingOpen() && onboardingStep() === 'subscriptions'}
+          onAdded={(n) => setSubsAdded((prev) => prev + n)}
+          emptyHint="You can always scan again later: Bills → Subscriptions → Scan transactions."
+          expose={setSubScan}
+          hideAddButton
+          hideRescan
+          quiet
+        />
+      </div>
     </div>
   )
 
@@ -985,33 +893,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       <h2 class={styles.title} tabindex="-1" data-step-heading>
         Your orbit is set
       </h2>
-      <ul class={styles.summary}>
-        <li>
-          <b>{state.currentProfile?.name ?? 'Your space'}</b> is ready
-        </li>
-        <li>
-          {Math.max(
-            profileAccounts().length,
-            createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
-          )}{' '}
-          account
-          {Math.max(
-            profileAccounts().length,
-            createdAccounts().length + (importSummary()?.createdAccounts.length ?? 0)
-          ) === 1
-            ? ''
-            : 's'}{' '}
-          in orbit
-        </li>
-        <Show when={(importSummary()?.imported ?? 0) > 0}>
-          <li>{importSummary()!.imported} transactions imported</li>
-        </Show>
-        <Show when={subsAdded() > 0}>
-          <li>
-            {subsAdded()} subscription{subsAdded() === 1 ? '' : 's'} tracked
-          </li>
-        </Show>
-      </ul>
+      <p class={styles.doneSummary} data-test-id="onboarding-done-summary">
+        {doneSummary()}
+      </p>
       <Show when={nextUp().length > 0}>
         <section class={styles.nextSteps} data-test-id="onboarding-next-steps">
           <h3 class={styles.nextStepsTitle}>Next steps</h3>
@@ -1024,179 +908,138 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           />
         </section>
       </Show>
-      <p class={styles.stepLead}>
-        Tip: press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere for quick entry, and take a page tour any
+      {/* A keyboard shortcut, so only where there is a keyboard to press it: not on touch. */}
+      <p class={styles.tip}>
+        Press <kbd>Ctrl</kbd>+<kbd>K</kbd> anywhere to add a transaction, and take a page tour any
         time from the sidebar.
       </p>
     </div>
   )
 
-  // Footer primary action per step. `testId` overrides the default
-  // onboarding-next/onboarding-finish id; `secondary` is a low-prominence
-  // escape rendered as a ghost button beside the primary.
-  interface FooterAction {
-    label: string
-    run: () => void
-    disabled: boolean
-    /** The action is running: the button shows a spinner and the label switches to this. */
-    busy?: string | false
-    testId?: string
-    secondary?: { label: string; run: () => void; disabled?: boolean; testId: string }
+  // ---- the footer: a quiet Skip where a step can wait, and the step's one primary action ----
+
+  const statementAction = (): FooterAction => {
+    const skip = (disabled = false) => ({
+      label: 'Skip',
+      run: () => void skipStatement(),
+      disabled,
+      testId: 'onboarding-import-skip',
+    })
+    switch (firstImport.state()) {
+      case 'empty':
+        return {
+          label: 'Choose a file',
+          run: firstImport.openPicker,
+          disabled: false,
+          testId: 'onboarding-import-choose',
+          skip: skip(),
+        }
+      case 'reading':
+        return {
+          label: 'Choose a file',
+          run: () => undefined,
+          disabled: true,
+          busy: 'Reading…',
+          testId: 'onboarding-import-choose',
+          skip: skip(true),
+        }
+      case 'ready':
+        return {
+          label: `Import ${firstImport.newCount().toLocaleString('en-GB')}`,
+          run: () => void firstImport.importNow(),
+          disabled: firstImport.importing(),
+          busy: firstImport.importing() && 'Importing…',
+          testId: 'onboarding-import-selected',
+          skip: skip(firstImport.importing()),
+        }
+      case 'unreadable':
+        return {
+          label: 'Open in Import',
+          run: openInImport,
+          disabled: false,
+          testId: 'onboarding-import-open',
+          skip: skip(),
+        }
+      default:
+        // Nothing new in it, or imported already: on to what comes next.
+        return { label: 'Continue', run: afterStatement, disabled: false }
+    }
   }
 
-  const primaryAction = (): FooterAction | undefined => {
+  const primaryAction = (): FooterAction => {
     switch (onboardingStep()) {
-      case 'welcome':
-        return {
-          label: 'Begin setup',
-          run: () => {
-            nextOnboardingStep()
-          },
-          disabled: false,
-        }
-      case 'space':
-        return {
-          label: spaceForm.submitting() ? 'Saving…' : 'Continue',
-          run: () => void spaceForm.submit(),
-          disabled: spaceForm.submitting(),
-        }
       case 'account':
         return {
-          label: profileAccounts().length > 0 ? 'Continue' : 'Continue without an account',
-          run: () => void continueFromAccounts(),
+          label: 'Add account',
+          run: () => void accountForm.submit(),
           disabled: accountForm.submitting() || !accountsLoaded(),
+          busy: accountForm.submitting() && 'Adding…',
+          testId: 'onboarding-account-create',
+          skip: {
+            label: 'Skip',
+            run: () => void skipAccount(),
+            disabled: accountForm.submitting(),
+            testId: 'onboarding-account-skip',
+          },
         }
-      case 'import': {
-        // The footer carries the import flow's true forward action at each
-        // sub-step, so the user never has to hunt for it mid-scroll.
-        if (showingSummary()) {
-          return {
-            label: 'Continue',
-            run: () => {
-              nextOnboardingStep()
-            },
-            disabled: false,
-          }
-        }
-        const dontImport = {
-          label: "Don't import",
-          run: () => void continueFromImport(),
-          disabled: importFlow.loading(),
-          testId: 'onboarding-import-skip',
-        }
-        /**
-         * The forward action of the data-entry tab the user is on, once that tab has something
-         * to act on. Null before then — with no file chosen there is genuinely nothing to
-         * promote, and the footer should go on offering to move past the step.
-         *
-         * Mirrors the buttons `ImportDataEntry` renders inline. Those stay exactly where they
-         * are: the import PAGE uses the same component without this footer, and its flow was
-         * fine as it was.
-         */
-        const readyEntryAction = (): FooterAction | null => {
-          const go = (label: string, run: () => void, testId: string): FooterAction => ({
-            label,
-            run: () => {
-              showTheWork()
-              run()
-            },
-            disabled: importFlow.loading(),
-            busy: importFlow.loading() && 'Processing…',
-            testId,
-          })
-          switch (importFlow.activeImportTab()) {
-            case 'bank-imports':
-              return importFlow.bankFiles().length > 0
-                ? go(
-                    'Process & continue',
-                    () => void importFlow.processBankFiles(),
-                    'onboarding-import-process-bank'
-                  )
-                : null
-            case 'google-sheets':
-              return importFlow.sheetResult()
-                ? go('Continue to mapping', importFlow.goToMapping, 'onboarding-import-to-mapping')
-                : null
-            default:
-              // file-upload and paste-csv both land their parsed rows in uploadResult().
-              return importFlow.uploadResult()
-                ? go('Continue to mapping', importFlow.goToMapping, 'onboarding-import-to-mapping')
-                : null
-          }
-        }
-
-        switch (importFlow.activeStep()) {
-          case 'mapping':
-            return {
-              label: 'Continue to preview',
-              run: () => {
-                showTheWork()
-                void importFlow.goToPreview()
-              },
-              disabled: importFlow.loading(),
-              busy: importFlow.loading() && 'Building the preview…',
-              testId: 'onboarding-import-to-preview',
-              secondary: dontImport,
-            }
-          case 'preview':
-            return {
-              label: `Import selected (${importFlow.selectedRows().size})`,
-              run: () => {
-                showTheWork()
-                void importFlow.handleImport('selected')
-              },
-              disabled: importFlow.loading() || importFlow.selectedRows().size === 0,
-              busy: importFlow.loading() && 'Importing…',
-              testId: 'onboarding-import-selected',
-              secondary: dontImport,
-            }
-          default: {
-            // The tab's own forward button lives in the step body, below its inputs — under the
-            // account pickers, on the bank tab. On a phone that put it below the fold while the
-            // footer's big primary button said "Continue without importing": the one action the
-            // user came here to take was the small one they had to scroll for, and the one that
-            // abandons the flow was the one under their thumb.
-            //
-            // Promote it as soon as there is something to process, and demote skipping to the
-            // ghost button beside it — the same shape mapping and preview already use.
-            const ready = readyEntryAction()
-            if (ready) return { ...ready, secondary: dontImport }
-            return {
-              label: 'Continue without importing',
-              run: () => void continueFromImport(),
-              disabled: importFlow.loading(),
-            }
-          }
-        }
-      }
+      case 'import':
+        return statementAction()
       case 'subscriptions': {
         const scan = subScan()
         const picked = scan?.chosenCount() ?? 0
-        if (picked > 0) {
+        if (scan && picked > 0) {
           return {
-            label: `Add ${picked} subscription${picked === 1 ? '' : 's'} & continue`,
+            label: `Track ${counted(picked, 'subscription')}`,
             run: () => {
-              void scan!.addSelected().then(() => {
+              void scan.addSelected().then(() => {
                 // A subscription that was refused stays chosen, marked under its row or named in
                 // the panel's notice: the step stays until it is fixed or left out.
-                if (scan!.chosenCount() === 0) nextOnboardingStep()
+                if (scan.chosenCount() === 0) goToOnboardingStep('done')
               })
             },
-            disabled: scan!.submitting(),
-            busy: scan!.submitting() && 'Adding…',
+            disabled: scan.submitting(),
+            busy: scan.submitting() && 'Adding…',
             testId: 'onboarding-subs-add-continue',
+            skip: {
+              label: 'Skip',
+              run: () => {
+                goToOnboardingStep('done')
+              },
+              disabled: scan.submitting(),
+              testId: 'onboarding-subs-skip',
+            },
           }
         }
         return {
           label: 'Continue',
           run: () => {
-            nextOnboardingStep()
+            goToOnboardingStep('done')
           },
           disabled: scan?.submitting() ?? false,
         }
       }
       case 'done':
-        return { label: 'Go to my dashboard', run: finish, disabled: false }
+        return {
+          label: 'Go to my dashboard',
+          run: finish,
+          disabled: false,
+          testId: 'onboarding-finish',
+        }
+      default:
+        // The space step, either screen.
+        return spaceScreen() === 'about'
+          ? {
+              label: 'Continue',
+              run: () => void saveAnswersAndContinue(),
+              disabled: savingAnswers(),
+              busy: savingAnswers() && 'Saving…',
+            }
+          : {
+              label: 'Continue',
+              run: () => void spaceForm.submit(),
+              disabled: spaceForm.submitting(),
+              busy: spaceForm.submitting() && 'Saving…',
+            }
     }
   }
 
@@ -1214,29 +1057,65 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           data-test-id="onboarding-panel"
         >
           <header class={styles.header}>
-            <span class={styles.brand}>
-              <LogoMark size={26} />
-              <span class={styles.brandName}>Token Circles</span>
-            </span>
-            <span
-              class={styles.progressWrap}
-              aria-label={`Step ${stepIndex() + 1} of ${ONBOARDING_STEPS.length}`}
+            <Show
+              when={backAction()}
+              fallback={
+                <span class={styles.brandMark}>
+                  <LogoMark size={28} />
+                </span>
+              }
             >
-              <svg viewBox="0 0 64 64" class={styles.progressSvg} aria-hidden="true">
-                <circle class={styles.progressTrack} cx="32" cy="32" r={R} stroke-dasharray="1 5" />
-                <circle
-                  class={styles.progressArc}
-                  cx="32"
-                  cy="32"
-                  r={R}
-                  stroke-dasharray={`${progress()} ${CIRC}`}
-                  transform="rotate(-90 32 32)"
-                />
-              </svg>
-              <span class={styles.progressText}>
-                {stepIndex() + 1}/{ONBOARDING_STEPS.length}
-              </span>
-            </span>
+              <button
+                type="button"
+                class={styles.iconBtn}
+                aria-label="Back"
+                data-test-id="onboarding-back"
+                disabled={holding() || firstImport.state() === 'reading'}
+                onClick={() => {
+                  backAction()?.()
+                }}
+              >
+                {glyph.back}
+              </button>
+            </Show>
+            <Show when={stepNumber()} fallback={<span />}>
+              {(n) => (
+                <span class={styles.progress} data-test-id="onboarding-progress">
+                  <svg viewBox="0 0 24 24" class={styles.progressSvg} aria-hidden="true">
+                    <circle
+                      class={styles.progressTrack}
+                      cx="12"
+                      cy="12"
+                      r={RING_R}
+                      stroke-dasharray="1 3"
+                    />
+                    <circle
+                      class={styles.progressArc}
+                      cx="12"
+                      cy="12"
+                      r={RING_R}
+                      stroke-dasharray={`${(n() / COUNTED_STEPS) * RING_C} ${RING_C}`}
+                      transform="rotate(-90 12 12)"
+                    />
+                  </svg>
+                  <span>
+                    Step {n()} of {COUNTED_STEPS}
+                  </span>
+                </span>
+              )}
+            </Show>
+            <Show when={onboardingStep() !== 'done'} fallback={<span />}>
+              <button
+                type="button"
+                class={styles.iconBtn}
+                aria-label="Leave setup"
+                data-test-id="onboarding-skip"
+                disabled={holding()}
+                onClick={() => void requestLeave()}
+              >
+                {glyph.close}
+              </button>
+            </Show>
           </header>
 
           <div
@@ -1246,8 +1125,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             data-more-below={moreBelow() ? '' : undefined}
             onScroll={readMoreBelow}
           >
-            <Show when={onboardingStep() === 'welcome'}>{welcomeStep()}</Show>
-            <Show when={onboardingStep() === 'space'}>{spaceStep()}</Show>
+            <Show when={onboardingStep() === 'space' || onboardingStep() === 'welcome'}>
+              <Show when={spaceScreen() === 'about'} fallback={nameScreen()}>
+                {aboutScreen()}
+              </Show>
+            </Show>
             <Show when={onboardingStep() === 'account'}>{accountStep()}</Show>
             <Show when={onboardingStep() === 'import'}>{importStep()}</Show>
             <Show when={onboardingStep() === 'subscriptions'}>{subscriptionsStep()}</Show>
@@ -1255,65 +1137,40 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           </div>
 
           <footer class={styles.footer}>
-            <Show
-              when={onboardingStep() !== 'welcome' && onboardingStep() !== 'done'}
-              fallback={<span />}
-            >
-              <button
-                class={styles.ghostBtn}
-                data-test-id="onboarding-back"
-                disabled={onboardingStep() === 'import' && importFlow.loading()}
-                onClick={() => {
-                  if (onboardingStep() === 'import') backFromImport()
-                  else prevOnboardingStep()
-                }}
-              >
-                Back
-              </button>
-            </Show>
-            <span class={styles.footerRight}>
-              <Show when={onboardingStep() !== 'done'}>
+            <Show when={primaryAction().skip}>
+              {(skip) => (
                 <button
-                  class={styles.ghostBtn}
-                  data-test-id="onboarding-skip"
-                  disabled={onboardingStep() === 'import' && importFlow.loading()}
-                  onClick={() => void requestSkipAll()}
-                >
-                  Skip setup
-                </button>
-              </Show>
-              <Show when={primaryAction()!.secondary}>
-                <button
-                  class={styles.ghostBtn}
-                  data-test-id={primaryAction()!.secondary!.testId}
-                  disabled={primaryAction()!.secondary!.disabled}
+                  type="button"
+                  class={styles.quietBtn}
+                  data-test-id={skip().testId}
+                  disabled={skip().disabled}
                   onClick={() => {
-                    primaryAction()!.secondary!.run()
+                    skip().run()
                   }}
                 >
-                  {primaryAction()!.secondary!.label}
+                  {skip().label}
                 </button>
+              )}
+            </Show>
+            <button
+              type="button"
+              class={styles.primaryBtn}
+              data-test-id={
+                primaryAction().testId ??
+                (onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next')
+              }
+              disabled={primaryAction().disabled}
+              aria-busy={primaryAction().busy ? 'true' : undefined}
+              onClick={() => {
+                primaryAction().run()
+              }}
+            >
+              <Show when={primaryAction().busy} fallback={primaryAction().label}>
+                {/* The click's first feedback happens ON the button that was clicked. */}
+                <span class={styles.btnSpinner} aria-hidden="true" />
+                {primaryAction().busy}
               </Show>
-              <button
-                class={styles.primaryBtn}
-                data-test-id={
-                  primaryAction()!.testId ??
-                  (onboardingStep() === 'done' ? 'onboarding-finish' : 'onboarding-next')
-                }
-                disabled={primaryAction()!.disabled}
-                aria-busy={primaryAction()!.busy ? 'true' : undefined}
-                onClick={() => {
-                  primaryAction()!.run()
-                }}
-              >
-                <Show when={primaryAction()!.busy} fallback={primaryAction()!.label}>
-                  {/* The click's first feedback happens ON the button that was clicked — the
-                      spinner further up the panel can be a whole table above the viewport. */}
-                  <span class={styles.btnSpinner} aria-hidden="true" />
-                  {primaryAction()!.busy}
-                </Show>
-              </button>
-            </span>
+            </button>
           </footer>
         </div>
       </div>

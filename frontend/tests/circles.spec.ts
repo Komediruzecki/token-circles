@@ -88,8 +88,9 @@ async function rowsShown(page: Page) {
 /** Local-first, through setup's first two steps, which make the space, and skip the rest. */
 async function aSpaceOnly(page: Page): Promise<void> {
   await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-  await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
   await page.getByTestId('onboarding-next').click()
   await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
   await page.getByTestId('onboarding-skip').click()
@@ -237,7 +238,7 @@ test.describe('The seven circles @smoke', () => {
     try {
       await bootSignedIn(ctx)
       await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
       await page.getByTestId('onboarding-skip').click()
       await page.getByTestId('confirm-accept').click()
       await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)

@@ -32,17 +32,21 @@ export const REGION_CHOICES: readonly { value: Exclude<RegionAnswer, 'skipped'>;
       ]
     : []
 
-/** The answers to "Who does this space cover?": 3 stands for three or more. */
-export const ADULT_CHOICES: readonly { value: number; label: string }[] = [
+/**
+ * The answers to "Who does this space cover?": 3 stands for three or more. `short` is the chip's
+ * text where a row has no room for the label (setup's About this space on a phone); the label
+ * stays its accessible name.
+ */
+export const ADULT_CHOICES: readonly { value: number; label: string; short?: string }[] = [
   { value: 1, label: '1' },
   { value: 2, label: '2' },
-  { value: 3, label: '3 or more' },
+  { value: 3, label: '3 or more', short: '3+' },
 ]
-export const CHILD_CHOICES: readonly { value: number; label: string }[] = [
+export const CHILD_CHOICES: readonly { value: number; label: string; short?: string }[] = [
   { value: 0, label: '0' },
   { value: 1, label: '1' },
   { value: 2, label: '2' },
-  { value: 3, label: '3 or more' },
+  { value: 3, label: '3 or more', short: '3+' },
 ]
 
 /** The choice a stored count falls under: three and more are "3 or more". */
