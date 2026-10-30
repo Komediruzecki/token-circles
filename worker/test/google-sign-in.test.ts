@@ -5,7 +5,6 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { signState } from '../src/auth';
 import { pendingEmailChange } from '../src/email-change';
 import { sha256Hex } from '../src/email-verification';
 import {
@@ -24,6 +23,7 @@ import {
   sessionFrom,
   signIn,
 } from './helpers/account-access';
+import { googleSignInFromStart } from './helpers/google';
 
 const UID = 6600;
 const ADDRESS = 'household@example.com';
@@ -72,14 +72,8 @@ afterEach(async () => {
 const seed = (emailVerified: 0 | 1) => seedAccount(UID, ADDRESS, emailVerified);
 const account = () => accountRow(UID);
 
-/** Arrive at the callback the way Google's redirect does. */
-async function googleSignIn(): Promise<Response> {
-  const state = await signState({ returnTo: RETURN_TO, ts: Date.now() }, env.JWT_SECRET);
-  return SELF.fetch(
-    `https://example.com/api/auth/google/callback?code=test-code&state=${encodeURIComponent(state)}`,
-    { redirect: 'manual' }
-  );
-}
+/** Start a Google sign-in and arrive at the callback the way Google's redirect does. */
+const googleSignIn = () => googleSignInFromStart(RETURN_TO);
 
 describe('Google sign-in to an account whose address was never confirmed', () => {
   it('removes every way in that was set up before, then joins the account', async () => {
