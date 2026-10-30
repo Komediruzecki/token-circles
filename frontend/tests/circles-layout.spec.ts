@@ -143,6 +143,75 @@ test.describe('The circles as drawn', () => {
     expect(heading.width).toBeLessThanOrEqual(Math.ceil(words) + 1)
   })
 
+  test("a circle's head at every width: the pill beside the name while both fit, under it only when they don't", async ({
+    page,
+  }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    const seen: string[] = []
+    for (const width of [320, 360, 390, 1280]) {
+      await page.setViewportSize({ width, height: 844 })
+      for (const circle of [1, 2, 3, 4, 5, 6, 7]) {
+        await go(page, `progress/${circle}`)
+        const view = page.getByTestId('circle-view')
+        await expect(view.locator('header p').first()).toHaveText(`Circle ${circle} of 7`, {
+          timeout: 30_000,
+        })
+        await expect(view.locator('header span[data-state]')).toBeVisible()
+        const at = await view.locator('header').evaluate((head) => {
+          const title = head.querySelector<HTMLElement>('#circle-view-title')!
+          const pill = head.querySelector<HTMLElement>('span[data-state]')!
+          const line = [...head.querySelectorAll('p')].at(-1)!
+          // The name's width on one line, whatever the heading wraps it to now.
+          const style = title.getAttribute('style')
+          title.style.whiteSpace = 'nowrap'
+          title.style.width = 'max-content'
+          const name = title.getBoundingClientRect().width
+          if (style === null) title.removeAttribute('style')
+          else title.setAttribute('style', style)
+          const t = title.getBoundingClientRect()
+          const p = pill.getBoundingClientRect()
+          return {
+            room: head.getBoundingClientRect().right - t.left,
+            name,
+            pill: p.width,
+            title: { left: t.left, right: t.right, top: t.top, bottom: t.bottom },
+            box: { left: p.left, top: p.top, bottom: p.bottom, middle: (p.top + p.bottom) / 2 },
+            lineTop: line.getBoundingClientRect().top,
+            lineHeight: parseFloat(getComputedStyle(title).lineHeight),
+          }
+        })
+        const where = `circle ${circle} at ${width}: ${JSON.stringify(at)}`
+        // Never under the circle's line: the pill belongs to the name.
+        expect(at.box.bottom, where).toBeLessThanOrEqual(at.lineTop + 0.5)
+        const beside =
+          at.box.left >= at.title.right &&
+          at.box.middle >= at.title.top &&
+          at.box.middle <= at.title.top + at.lineHeight
+        // Under the name, at its start, before the circle's line.
+        const under =
+          at.box.top >= at.title.bottom - 0.5 && Math.abs(at.box.left - at.title.left) <= 0.5
+        if (at.name + at.pill + 24 <= at.room) {
+          expect(beside, `beside the name: ${where}`).toBe(true)
+          seen.push(`${circle}@${width} beside`)
+        } else if (at.name + at.pill > at.room) {
+          expect(under, `under the name: ${where}`).toBe(true)
+          seen.push(`${circle}@${width} under`)
+        } else {
+          // Within a gap of fitting: either place, never anywhere else.
+          expect(beside || under, `beside or under the name: ${where}`).toBe(true)
+        }
+      }
+    }
+    // Phone and desktop: every circle's name has room for its pill (circle 4 at 390 is the case
+    // that dropped "You're here" under the line, beside about 150 px free). At 320 some don't.
+    for (const width of [390, 1280]) {
+      for (const circle of [1, 2, 3, 4, 5, 6, 7])
+        expect(seen).toContain(`${circle}@${width} beside`)
+    }
+    expect(seen.filter((s) => s.endsWith('under')).length).toBeGreaterThan(0)
+  })
+
   test('a link inside running text at phone width: a 48 px Change, and the lines as the paragraph spaces them', async ({
     page,
   }) => {

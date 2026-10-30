@@ -1528,6 +1528,14 @@ check')` first, as the cushion and debt cases do.
   card now says "counts toward". The other "towards", the Goals page's subtitle, is not on Progress
   and stays.
 - **Tests:** `advice.test.ts` reads the card's detail. Fails before the change.
+- **A circle's pill sits beside its name on a phone** (`frontend/src/components/guidance/CircleView.tsx`
+  and its CSS). Below 400 px, "You're here" dropped to its own row under the circle's line, with
+  about 150 px free beside "Solid ground". The name and its pill now share a row at every width; only
+  a name too long for both pushes the pill under the name, above the line. From 360 up every
+  circle's pill sits beside its name; at 320, five of the seven drop under it.
+- **Tests:** `circles-layout.spec.ts`, every circle at 320, 360, 390 and 1280: beside the name
+  whenever name and pill fit with room to spare, under it at its start when they don't, never under
+  the circle's line. Fails before the change (circle 1 at 320, the pill under the line).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

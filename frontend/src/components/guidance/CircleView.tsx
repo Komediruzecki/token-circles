@@ -241,18 +241,21 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
         />
         <div class={styles.headText}>
           <p class={styles.eyebrow}>Circle {props.circle} of 7</p>
-          <h2 id="circle-view-title" class={styles.title} ref={heading} tabIndex={-1}>
-            {name()}
-          </h2>
+          {/* The name and its pill share a row; only a name too long for both pushes it down. */}
+          <div class={styles.titleRow}>
+            <h2 id="circle-view-title" class={styles.title} ref={heading} tabIndex={-1}>
+              {name()}
+            </h2>
+            <Show when={row()}>
+              {(r) => (
+                <span class={`${ledger.pill} ${styles.pill}`} data-state={r().state}>
+                  {r().pill}
+                </span>
+              )}
+            </Show>
+          </div>
           <p class={styles.line}>{CIRCLE_LINES[props.circle]}</p>
         </div>
-        <Show when={row()}>
-          {(r) => (
-            <span class={`${ledger.pill} ${styles.pill}`} data-state={r().state}>
-              {r().pill}
-            </span>
-          )}
-        </Show>
       </header>
       <Show when={row()?.key}>
         {(key) => (

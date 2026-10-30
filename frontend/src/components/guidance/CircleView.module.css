@@ -31,7 +31,7 @@
 
 .head {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: 52px minmax(0, 1fr);
   align-items: start;
   gap: 14px;
 }
@@ -54,10 +54,20 @@
   color: var(--text-secondary);
 }
 
+/* The name and its pill: one row while both fit, the pill under the name when they don't. */
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
 .title {
   width: fit-content;
   max-width: 100%;
-  margin: 4px 0 0;
+  margin: 0;
   font-family: var(--font-display, inherit);
   font-size: 24px;
   font-weight: 600;
@@ -82,7 +92,7 @@
 }
 
 .pill {
-  align-self: center;
+  flex: none;
 }
 
 .key {
@@ -111,18 +121,6 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
-}
-
-/* Below 400 px the pill moves under the name, so the name keeps its width. */
-@media (max-width: 400px) {
-  .head {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .pill {
-    grid-column: 2;
-    justify-self: start;
-  }
 }
 
 /* What the circle checks, and the person's numbers: each a part with its own heading. */
