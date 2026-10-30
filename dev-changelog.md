@@ -1396,6 +1396,14 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   The svg carries `data-track="solid"` or `"dotted"`.
 - **Tests:** `circleGlyph.test.tsx` (20 and 24 px: solid, no number; 25 and 36: dotted, with the
   number).
+- **Advice says "Counts toward {circle}", under its detail line** (`ProgressAdvice.tsx`,
+  `ProgressPage.module.css`). "Why: Paying your way" sat in the card's action row beside its
+  button; the same link now reads "Counts toward Paying your way" and sits on its own row under
+  the detail, a 48 px flex target as wide as its words and lined up with the detail, whose height
+  spaces the action row after it (`.why + .advice-foot { margin-top: 0 }`). Same `#progress/<n>`
+  address and `data-test-id="advice-why"`. CHANGELOG's line for it says "counts toward".
+- **Tests:** `progressAdvice.test.tsx` (the words and address per card, straight after the detail
+  line, and not in the row with the card's button).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

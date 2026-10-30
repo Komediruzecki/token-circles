@@ -166,7 +166,7 @@ describe('Worth a look list', () => {
     expect(onOpen).toHaveBeenCalledWith('budgets')
   })
 
-  it('says which circle each card serves, and its Why opens that circle', () => {
+  it('says which circle each card counts toward, under its detail, and the link opens that circle', () => {
     const c = mount(() => (
       <AdviceList
         cards={[card(1), { ...card(2), kind: 'goal-pace', circle: 3 }]}
@@ -174,13 +174,30 @@ describe('Worth a look list', () => {
         onDismiss={vi.fn()}
       />
     ))
-    const why = [...c.querySelectorAll<HTMLAnchorElement>('[data-advice-card] a')].map((a) => ({
-      text: a.textContent,
-      href: a.getAttribute('href'),
-    }))
-    expect(why).toEqual([
-      { text: 'Why: Paying your way', href: '#progress/2' },
-      { text: 'Why: Breathing room', href: '#progress/3' },
+    const links = [...c.querySelectorAll<HTMLAnchorElement>('[data-advice-card] a')]
+    expect(
+      links.map((a) => ({
+        text: a.textContent,
+        href: a.getAttribute('href'),
+        // Straight under the card's detail line, not in the row with its button.
+        after: a.previousElementSibling?.textContent,
+        inActionRow:
+          a.closest('[data-advice-card]')!.querySelector('button:not([data-dismiss])')!
+            .parentElement === a.parentElement,
+      }))
+    ).toEqual([
+      {
+        text: 'Counts toward Paying your way',
+        href: '#progress/2',
+        after: card(1).detail,
+        inActionRow: false,
+      },
+      {
+        text: 'Counts toward Breathing room',
+        href: '#progress/3',
+        after: card(2).detail,
+        inActionRow: false,
+      },
     ])
   })
 })
