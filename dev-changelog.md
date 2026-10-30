@@ -76,6 +76,27 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Sign-in
 
+- **Google sign-in finishes in the browser that started it.** `GET /api/auth/google/start` now
+  leaves a cookie, `fm_google_state`, holding a random 32-byte nonce (HttpOnly, SameSite=Lax,
+  host-only, `Path=/api/auth/google/callback`, `Max-Age=600`, the state's ten minutes, Secure
+  outside development), and the signed `state` carries the nonce's SHA-256 as `browser`
+  (`worker/src/auth.ts`: `newGoogleBrowserNonce`, `startedInThisBrowser`). The callback finishes a
+  sign-in only when the request carries the nonce that hashes to the state's `browser`, compared
+  without an early exit. Otherwise it answers 302 to the state's `returnTo`, so the app opens
+  signed out on its sign-in screen, before Google's code is exchanged: no account, session or mail
+  comes of it, and the auth log records `login` / `denied` / `google_started_elsewhere`. Every
+  callback answer clears the cookie (`Max-Age=0` at its Path), error answers included, through a
+  middleware on the callback's path. A state signed before this change has no `browser` and is
+  answered as an invalid state (400), so a Google sign-in in progress during the deploy starts
+  again. A second Google sign-in started in another tab of the same browser replaces the cookie,
+  so the first tab's callback lands signed out.
+- **`isAllowedReturnTo` takes the local app only in development.** `http://localhost:3800` and
+  `http://127.0.0.1:3800` count when `APP_ENV=development`; dev and prod take their own
+  `CORS_ORIGIN` and `APP_ORIGINS`. The same check picks the `returnTo` of the emailed confirm link
+  (`GET /api/auth/verify-email`), which falls back to the app's origin.
+- Tests: `worker/test/google-sign-in-browser.test.ts` (22 new). `google-sign-in.test.ts`,
+  `bound-writes.test.ts` and `email-link-finish.test.ts` now start the sign-in through the start
+  route and send its cookie back (`worker/test/helpers/google.ts`).
 - **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the
   field a stale session shows before adding a passkey was a bare `<input type="password">` whose
   only name was `placeholder="Password or 2FA code"`, which goes as soon as the person types and is

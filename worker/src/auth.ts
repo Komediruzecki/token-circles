@@ -496,6 +496,8 @@ export async function verifyGoogleIdToken(
 interface OAuthState {
   returnTo: string;
   ts: number;
+  /** SHA-256 (hex) of the nonce in the GOOGLE_STATE_COOKIE the start route left in the browser. */
+  browser: string;
 }
 export async function signState(state: OAuthState, secret: string): Promise<string> {
   const body = b64urlEncode(encoder.encode(JSON.stringify(state)));
@@ -514,7 +516,12 @@ export async function verifyState(raw: string, secret: string): Promise<OAuthSta
   if (!valid) return null;
   try {
     const state = JSON.parse(new TextDecoder().decode(b64urlDecode(body))) as OAuthState;
-    if (typeof state.returnTo !== 'string' || typeof state.ts !== 'number') return null;
+    if (
+      typeof state.returnTo !== 'string' ||
+      typeof state.ts !== 'number' ||
+      typeof state.browser !== 'string'
+    )
+      return null;
     if (Date.now() - state.ts > STATE_TTL_MS) return null;
     return state;
   } catch {
@@ -522,7 +529,68 @@ export async function verifyState(raw: string, secret: string): Promise<OAuthSta
   }
 }
 
-/** Allowlist for the post-login redirect target (open-redirect defense). */
+// ── The browser a Google sign-in started in ───────────────────────────────────
+//
+// The start route leaves a random nonce in this cookie and signs its hash into the `state`. Google
+// hands the state back, and the callback finishes the sign-in only when the request carries the
+// nonce that hashes to it, so a sign-in finishes in the browser that started it. Host-only and
+// limited to the callback's Path; SameSite=Lax still sends it on Google's top-level redirect.
+export const GOOGLE_STATE_COOKIE = 'fm_google_state';
+export const GOOGLE_CALLBACK_PATH = '/api/auth/google/callback';
+/** The cookie lives no longer than the state it belongs to. */
+export const GOOGLE_STATE_COOKIE_TTL_SECONDS = STATE_TTL_MS / 1000;
+
+export function googleStateCookie(value: string, maxAgeSeconds: number, env: Env): string {
+  const secure = env.APP_ENV !== 'development'; // local http dev can't send Secure cookies
+  return [
+    `${GOOGLE_STATE_COOKIE}=${value}`,
+    `Path=${GOOGLE_CALLBACK_PATH}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    `Max-Age=${maxAgeSeconds}`,
+    secure ? 'Secure' : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+}
+export function clearedGoogleStateCookie(env: Env): string {
+  return googleStateCookie('', 0, env);
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(input));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** A fresh nonce for the cookie, and the hash of it that goes in the state. */
+export async function newGoogleBrowserNonce(): Promise<{ nonce: string; hash: string }> {
+  const nonce = b64urlEncode(crypto.getRandomValues(new Uint8Array(32)));
+  return { nonce, hash: await sha256Hex(nonce) };
+}
+
+/** No early exit, so the time taken says nothing about where two values differ. */
+function sameText(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+/** True when `request` carries the nonce whose hash `state` was signed with. */
+export async function startedInThisBrowser(request: Request, state: OAuthState): Promise<boolean> {
+  let match = false;
+  for (const nonce of readCookies(request, GOOGLE_STATE_COOKIE)) {
+    if (!nonce) continue;
+    if (sameText(await sha256Hex(nonce), state.browser)) match = true;
+  }
+  return match;
+}
+
+/**
+ * Allowlist for the post-login redirect target (open-redirect defense). The local app's origins
+ * count only in development, like the other allowances local dev gets (no Secure on cookies, the
+ * captcha gate off).
+ */
 export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
   let origin: string;
   try {
@@ -531,8 +599,7 @@ export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
     return false;
   }
   const allowed = [
-    'http://localhost:3800',
-    'http://127.0.0.1:3800',
+    ...(env.APP_ENV === 'development' ? ['http://localhost:3800', 'http://127.0.0.1:3800'] : []),
     ...(env.CORS_ORIGIN ? [env.CORS_ORIGIN] : []),
     ...(env.APP_ORIGINS ?? '')
       .split(',')

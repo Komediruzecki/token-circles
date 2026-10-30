@@ -15,6 +15,12 @@ import {
   signState,
   verifyState,
   isAllowedReturnTo,
+  clearedGoogleStateCookie,
+  GOOGLE_CALLBACK_PATH,
+  GOOGLE_STATE_COOKIE_TTL_SECONDS,
+  googleStateCookie,
+  newGoogleBrowserNonce,
+  startedInThisBrowser,
   resolveGoogleUser,
   issueSessionCookie,
   clearedSessionCookie,
@@ -83,7 +89,8 @@ const RESET_TOKEN_TTL_HOURS = 2;
 // an httpOnly cookie, so the browser never handles it directly.
 export const authRoutes = new Hono<AppEnv>();
 
-// 1) Kick off login: redirect to Google with a signed state carrying returnTo.
+// 1) Kick off login: redirect to Google with a signed state carrying returnTo, and leave the
+// cookie that the callback checks against the state (GOOGLE_STATE_COOKIE in auth.ts).
 authRoutes.get('/api/auth/google/start', async (c) => {
   const { GOOGLE_CLIENT_ID, JWT_SECRET } = c.env;
   if (!GOOGLE_CLIENT_ID || !JWT_SECRET)
@@ -93,8 +100,9 @@ authRoutes.get('/api/auth/google/start', async (c) => {
   const returnTo = url.searchParams.get('returnTo') || c.env.CORS_ORIGIN || url.origin;
   if (!isAllowedReturnTo(returnTo, c.env)) return c.json({ error: 'Invalid returnTo' }, 400);
 
-  const state = await signState({ returnTo, ts: Date.now() }, JWT_SECRET);
-  const redirectUri = `${url.origin}/api/auth/google/callback`;
+  const browser = await newGoogleBrowserNonce();
+  const state = await signState({ returnTo, ts: Date.now(), browser: browser.hash }, JWT_SECRET);
+  const redirectUri = `${url.origin}${GOOGLE_CALLBACK_PATH}`;
   const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
   auth.searchParams.set('client_id', GOOGLE_CLIENT_ID);
   auth.searchParams.set('redirect_uri', redirectUri);
@@ -102,11 +110,24 @@ authRoutes.get('/api/auth/google/start', async (c) => {
   auth.searchParams.set('scope', 'openid email profile');
   auth.searchParams.set('state', state);
   auth.searchParams.set('prompt', 'select_account');
-  return c.redirect(auth.toString(), 302);
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: auth.toString(),
+      'Set-Cookie': googleStateCookie(browser.nonce, GOOGLE_STATE_COOKIE_TTL_SECONDS, c.env),
+    },
+  });
+});
+
+// The cookie the start route left is good for one callback: every answer clears it, an error
+// answer included.
+authRoutes.use(GOOGLE_CALLBACK_PATH, async (c, next) => {
+  await next();
+  c.res.headers.append('Set-Cookie', clearedGoogleStateCookie(c.env));
 });
 
 // 2) Google redirect target: exchange code, verify, set session cookie, go home.
-authRoutes.get('/api/auth/google/callback', async (c) => {
+authRoutes.get(GOOGLE_CALLBACK_PATH, async (c) => {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, JWT_SECRET } = c.env;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !JWT_SECRET) {
     return c.json({ error: 'Google login not configured' }, 500);
@@ -119,8 +140,15 @@ authRoutes.get('/api/auth/google/callback', async (c) => {
   const state = await verifyState(rawState, JWT_SECRET);
   if (!state || !isAllowedReturnTo(state.returnTo, c.env))
     return c.json({ error: 'Invalid state' }, 400);
+  // The sign-in finishes in the browser that started it. Any other gets the app back signed out,
+  // which shows sign-in, before Google is asked whose account this is: no account, session or
+  // mail comes of it.
+  if (!(await startedInThisBrowser(c.req.raw, state))) {
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'google_started_elsewhere' });
+    return new Response(null, { status: 302, headers: { Location: state.returnTo } });
+  }
 
-  const redirectUri = `${url.origin}/api/auth/google/callback`;
+  const redirectUri = `${url.origin}${GOOGLE_CALLBACK_PATH}`;
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
