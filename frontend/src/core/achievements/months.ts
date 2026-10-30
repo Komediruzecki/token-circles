@@ -40,3 +40,14 @@ export function currentStreak(months: Set<string>, nowMonth: string): number {
   }
   return n
 }
+
+/**
+ * The twelve months Progress's record strip draws, oldest first. It ends where `currentStreak`
+ * counts from: this month once it is tracked, else last month, so the run the count names is
+ * lit (twelve full months and nothing yet this month read "12 months tracked" over 12 lit
+ * tiles, not 11). A run longer than the strip lights every tile.
+ */
+export function streakStrip(months: Set<string>, nowMonth: string): string[] {
+  const end = months.has(nowMonth) ? nowMonth : addMonths(nowMonth, -1)
+  return Array.from({ length: 12 }, (_, i) => addMonths(end, i - 11))
+}
