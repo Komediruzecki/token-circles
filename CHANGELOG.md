@@ -11,7 +11,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - **Passing Cloudflare's check once covers your next few sign-in tries.** For five minutes after you pass it, a wrong password no longer brings the box back, so you can fix a typo and press Sign in again.
-- **What you import into a new local workspace shows up.** If you chose to keep your data on this device and left setup before naming your space, an import counted every transaction it brought in while Transactions and Progress stayed empty. Those rows now appear the next time you open the app, and anything you add lands where you can see it. If you had made a profile and used it since, the earlier rows wait in a profile of their own, Recovered entries, so nothing is counted twice.
+- **Imports into a new local workspace show up.** Entries added after choosing to keep your data on this device and skipping setup were saved but never shown; they now appear in your profile, or in one called Recovered entries if you've used another profile since.
 - **The password box for adding a passkey keeps its label while you type**, and has the eye from the sign-in screens.
 
 ## [5.17.2] — 2026-10-30

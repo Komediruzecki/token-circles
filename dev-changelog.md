@@ -13,47 +13,66 @@ All notable changes to Token Circles are documented here. The format is based on
 
 - **A write never lands on a profile that does not exist, and rows that did are filed.** A local
   workspace with no profile (the wizard's "Use local-only", then Skip before the "Name your space"
-  step; before 2026-10-09 also deleting every profile) wrote on profile 0:
-  `IndexedDBAdapter.getCurrentProfileId()` (`frontend/src/core/storage/idb.ts`) answered 0 when the
-  `profiles` store was empty and `finance_had_profiles` was set, and every writer that files a row
-  through it (`if (!data.profile_id)`, `writeProfileIdFromHeaders`, the import, category, tag and
-  goal handlers) stored that 0. Reads ask for `activeProfileId()` (`core/apiProfileScope.ts`), which
-  is 1 when `currentProfileId` is unset, so an import reported "Imported 48 transactions", left 48
-  rows on profile 0 and Transactions and Progress showed none; a reload could not help. The pieces
-  date from 9383fce7 (return 0 instead of creating "My Finances", when the last profile could still
-  be deleted), ca6e767c (Use local-only sets `finance_had_profiles`, so no demo seed) and 4e863bae
-  (#378, explicit profile scopes). `finance_had_profiles = "1"` before any profile exists is
-  `chooseLocalOnly` (`OnboardingWizard.tsx`), and in tests `gotoServerlessZeroState`.
+  step; possibly also deleting every profile, before the Danger Zone disabled deleting the last one
+  in 3685f239 on 2026-07-20) wrote on profile 0: `IndexedDBAdapter.getCurrentProfileId()`
+  (`frontend/src/core/storage/idb.ts`) answered 0 when the `profiles` store was empty and
+  `finance_had_profiles` was set, and every writer that files a row through it
+  (`if (!data.profile_id)`, `writeProfileIdFromHeaders`, the import, category, tag and goal
+  handlers) stored that 0. Reads ask for `activeProfileId()` (`core/apiProfileScope.ts`), which is 1
+  when `currentProfileId` is unset, so an import reported "Imported 48 transactions", left 48 rows
+  on profile 0 and Transactions and Progress showed none; a reload could not help. The pieces date
+  from 9383fce7 (return 0 instead of creating "My Finances"), ca6e767c (Use local-only sets
+  `finance_had_profiles`, so no example seed) and 4e863bae (#378, explicit profile scopes). Outside
+  tests, `chooseLocalOnly` (`OnboardingWizard.tsx`) is what sets `finance_had_profiles` before any
+  profile exists; "Continue with no account" does not (it seeds the examples).
   - **Guard**: with no profile at all, `getCurrentProfileId()` now makes one, as the Worker's
     `ensureProfile` does, under the same name ("Personal Profile"), and makes it the active profile
     (`currentProfileId`), so reads and writes name the same profile. `ensureAProfile()` reads and
-    adds in one read-write transaction, so the boot's parallel reads make one profile, not one each.
-    The last profile can no longer be deleted (ceb43bb3), so the "ghost profile" 9383fce7 avoided
-    cannot come back. The setup wizard opens as before (the workspace is still empty) and its "Name
-    your space" step renames the profile, as it does for a cloud signup.
+    adds in one read-write transaction that adds only to an empty store, so parallel requests, in
+    one tab or several, make one profile. The last profile can no longer be deleted (ceb43bb3), so
+    the "ghost profile" 9383fce7 avoided cannot come back. The setup wizard opens as before (the
+    workspace is still empty) and its "Name your space" step renames the profile, as it does for a
+    cloud signup.
+  - **The example seed and the guard agree.** `seedDemoProfiles()` used to set
+    `finance_had_profiles`, then add the three example profiles one transaction each, between other
+    writes. A request in that gap, from the same boot or a second tab, found the mark and an empty
+    store, and the guard made "Personal Profile" beside the examples; two tabs seeding at once each
+    added a set (main had that one too). The seed now adds the three profiles in one transaction
+    that runs only on an empty store (`claimExampleProfiles`), stops when the store already has a
+    profile, and sets the mark after that transaction. The seed's claim and the guard each decide
+    on an empty store inside one transaction, so the first to run wins and the other adds nothing.
+    The Danger Zone's reseed goes through the same claim.
   - **Repair**: `frontend/src/core/storage/unfiledProfileRows.ts`, `fileUnfiledRows(db)`, runs on
-    every open of the database in `getDB()`, before any read or write gets the connection. It looks
-    for rows on profile 0 in every store with a `by_profile` index (found from the schema, so a new
-    store is covered) and for the per-profile settings `achievements:0` and `retirement_settings:0`.
-    With nothing there it only counts (one read-only transaction). Otherwise, in one read-write
-    transaction aborted on any failure: no profile at all, it makes "Personal Profile" and makes it
-    active; profiles that are all empty, the lowest id; a profile with any row, a new one named
-    "Recovered entries" ("Recovered entries 2" when taken) and the active profile is left alone.
-    Only rows still on profile 0 are rewritten, with every other field and link kept (accounts,
-    categories and transactions move together, so their links stay within one profile). A setting
-    the receiving profile already has is kept, and the profile-0 one stays under its old key. A
-    failure is logged with `console.warn` and the database opens anyway; the next load tries again.
-    No IndexedDB version bump.
+    every open of the database in `getDB()`, before any read or write gets the connection. Rows
+    decide: it counts rows on profile 0 in every store with a `by_profile` index (found from the
+    schema, so a new store is covered), in one read-only transaction, and with none it does
+    nothing, whatever per-profile settings sit on profile 0. Otherwise, in one read-write
+    transaction aborted on any failure, it counts again (another tab may have filed them; then it
+    stops without making a profile) and picks the profile: with no profile at all, a new "Personal
+    Profile", made active; when no profile holds a row, the open one (`currentProfileId`), else the
+    lowest id, passing over any that has its own `retirement_settings` when one on profile 0 moves
+    too; when a profile holds rows, or every empty one was passed over, a new "Recovered entries"
+    ("Recovered entries 2" when taken), with the active profile left alone. Only rows still on
+    profile 0 are rewritten, every other field and link kept (accounts, categories and transactions
+    move together, so their links stay within one profile). The settings `retirement_settings:0` and
+    `achievements:0` follow the rows to the same profile; a badge record (`achievements`) the
+    profile already has is kept and the one on profile 0 deleted, since it is worked out from the
+    rows. One load leaves nothing on profile 0, so the next one only counts. A failure is logged
+    with `console.warn` and the database opens anyway; the next load tries again. No IndexedDB
+    version bump.
   - **Why a profile of their own when one is in use**: after an import showed nothing, the likely
     next step was to make a profile and import the same statement again. Filing the old rows there
     would count those transactions twice and put a second "Groceries" beside the first; a separate
     profile doubles nothing and can be deleted from the Danger Zone.
-  - Tests: `frontend/src/core/storage/__tests__/writesLandOnARealProfile.test.ts` (9: an import, a
-    hand-added transaction, an account, a category, the default categories, a goal and a tag from an
-    empty workspace are read back and leave no row on a missing profile; eight parallel reads make
-    one profile) and `frontend/src/core/storage/__tests__/unfiledProfileRows.test.ts` (11: no
-    profile, a profile in use, an empty profile, a taken name, a setting already present, a second
-    load changing nothing, no row lost, and a failing repair still opening the database).
+  - Tests, all in `frontend/src/core/storage/__tests__/`: `writesLandOnARealProfile.test.ts` (9: an
+    import, a hand-added transaction, an account, a category, the default categories, a goal and a
+    tag from an empty workspace are read back and leave no row on a missing profile; eight parallel
+    reads make one profile); `unfiledProfileRows.test.ts` (19: no profile, a profile in use, empty
+    profiles and the open one, a taken name, settings that never decide alone, follow the rows, never
+    replace a retirement plan and settle in one load, two tabs filing at once, a throw part way
+    through leaving everything as it was, no row lost, and a failing repair still opening the
+    database); `exampleSeedOnce.test.ts` (3: parallel requests in one tab, two tabs at once, and a
+    reseed under reads end with exactly the three example profiles).
 
 ### Sign-in
 

@@ -499,19 +499,18 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async getCurrentProfileId(): Promise<number> {
     const db = await getDB()
-    const profiles = await db.getAll('profiles')
+    let profiles = await db.getAll('profiles')
 
-    // No profiles exist — only seed demo on first init, never after user deletes all
-    if (profiles.length === 0) {
-      const hadProfiles = localStorage.getItem('finance_had_profiles')
-      if (!hadProfiles) {
-        localStorage.setItem('finance_had_profiles', '1')
-        await seedDemoProfiles()
-        const seeded = await db.getAll('profiles')
-        if (seeded.length > 0) {
-          return seeded[0].id
-        }
-      }
+    // No profiles: a browser that never had any gets the example profiles. The seed adds all three
+    // in one transaction that only runs on an empty store, and ensureAProfile below adds its one in
+    // one transaction that only runs on an empty store too, so whichever runs first, the other
+    // finds its profiles and adds none: two seeds make one set, and a seed and the guard never make
+    // "Personal Profile" beside the examples. The seed marks the browser (`finance_had_profiles`)
+    // only once its profiles are stored, so the guard cannot even start while a seed is starting.
+    if (profiles.length === 0 && !localStorage.getItem('finance_had_profiles')) {
+      await seedDemoProfiles()
+      profiles = await db.getAll('profiles')
+      if (profiles.length > 0) return profiles[0].id
     }
 
     const profileId = this.getProfileId()
@@ -1948,12 +1947,39 @@ const MONTHLY_EXPENSES = [
   { name: 'Subscriptions', description: 'Streaming services', pct: 0.05 },
 ]
 
+/**
+ * Add the example profiles, if the store is empty, in one transaction, and answer their ids in
+ * DEMO_PROFILES order, or null when the store already has a profile. Two tabs seeding at once used
+ * to add a set each, one profile per transaction; now the second finds the first's and stops.
+ */
+async function claimExampleProfiles(
+  db: Awaited<ReturnType<typeof getDB>>
+): Promise<number[] | null> {
+  const tx = db.transaction('profiles', 'readwrite')
+  if ((await tx.store.count()) > 0) {
+    await tx.done
+    return null
+  }
+  const ids: number[] = []
+  for (const profile of DEMO_PROFILES) {
+    ids.push(
+      (await tx.store.add({ name: profile.name, created_at: new Date().toISOString() })) as number
+    )
+  }
+  await tx.done
+  return ids
+}
+
+/**
+ * Seed the example profiles into an empty workspace. A workspace that has a profile, or gets one
+ * from another seed first, is left as it is.
+ */
 export async function seedDemoProfiles(): Promise<void> {
   const db = await getDB()
-  const existingProfiles = await db.getAll('profiles')
-  // Check if any demo profile name already exists (not just count)
-  const existingNames = new Set(existingProfiles.map((p: { name: string }) => p.name))
-  if (DEMO_PROFILES.some((dp) => existingNames.has(dp.name))) return
+  const claimed = await claimExampleProfiles(db)
+  if (!claimed) return
+  // Marked once the profiles are stored: a request that reads the mark finds them.
+  localStorage.setItem('finance_had_profiles', '1')
 
   // Inline seed helper so we don't need to import
   async function seedCats(profileId: number) {
@@ -1979,15 +2005,8 @@ export async function seedDemoProfiles(): Promise<void> {
     return Math.round(min + r * (max - min))
   }
 
-  let firstProfileId: number | null = null
-
-  for (const profile of DEMO_PROFILES) {
-    const profileId = (await db.add('profiles', {
-      name: profile.name,
-      created_at: new Date().toISOString(),
-    })) as number
-
-    if (firstProfileId === null) firstProfileId = profileId
+  for (const [index, profile] of DEMO_PROFILES.entries()) {
+    const profileId = claimed[index]
 
     // Seed categories
     await seedCats(profileId)
