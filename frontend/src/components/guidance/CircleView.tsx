@@ -212,6 +212,8 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
       data-circle={props.circle}
       onKeyDown={(e) => {
         if (e.key !== 'Escape' || e.defaultPrevented) return
+        // Inside a field, Escape is the field's (an amount being typed, a list open).
+        if (e.target instanceof Element && e.target.closest('input, textarea, select')) return
         e.preventDefault()
         props.onClose()
       }}

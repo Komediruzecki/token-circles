@@ -700,6 +700,35 @@ describe('what a circle checks, and the questions it asks', () => {
     expect(saves.calls[1]).toEqual({ savedElsewhere: { amount: 0, currency: 'EUR' } })
   })
 
+  it('leaves Escape to a field, and goes back to the list from anywhere else', async () => {
+    guidance.set!(viewOf(facts()))
+    const view = open(5)
+    const [, yes] = radios(
+      q(view, '[data-test-id="circle-saved-elsewhere"]'),
+      'circle-saved-elsewhere-choice'
+    )
+    yes.input.click()
+    const field = q(view, '[data-test-id="circle-saved-elsewhere-amount"]') as HTMLInputElement
+    // Inside an amount, a choice, a text area or a list, Escape is the field's.
+    const area = document.createElement('textarea')
+    const list = document.createElement('select')
+    view.append(area, list)
+    for (const target of [field, yes.input, area, list]) {
+      target.focus()
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      expect(window.location.hash, target.tagName).toBe('#progress/5')
+    }
+    area.remove()
+    list.remove()
+    // From the heading, as from anything else, it goes back to the list.
+    q(view, 'h2').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(window.location.hash).toBe('#progress')
+    // The address change lands in this test, not the next one.
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-test-id="circle-view"]')).toBeNull()
+    })
+  })
+
   it('asks for the own number only once More than enough is the circle worked on', () => {
     guidance.set!(viewOf(facts()))
     const view = open(7)

@@ -1456,6 +1456,13 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `savingsGoal.test.ts` (its `saveAnswers` stand-in now reads a stored record and works
   the function form out; new: the profile holds 30, the view shows none, the browser holds 15, and
   the profile keeps 30, the circles get 30 and the browser's copy goes).
+- **Escape inside a field stays with the field** (`CircleView.tsx`). The circle's view closed on
+  any Escape inside it, so Escape in the savings-elsewhere or own-number amount, on a choice, or in
+  a list went back to the seven circles. Escape whose target is in an `input`, `textarea` or
+  `select` is now left alone; from anywhere else it still goes back. Going back still pushes a
+  history entry, as Loans does.
+- **Tests:** `progressCircles.test.tsx` (Escape in an amount, on a choice, in a text area and in a
+  list keeps `#progress/5`; from the heading it goes back to `#progress`).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
