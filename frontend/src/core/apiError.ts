@@ -17,6 +17,12 @@ export class ApiError extends Error {
   readonly status: number
   /** Per body field, what is wrong with it. `{}` when the answer named none (or is older). */
   readonly fields: Readonly<FieldErrors>
+  /**
+   * A refused password sign-in only: for how many more seconds the check this browser solved
+   * covers its next try (`checkValidForSeconds`, worker/src/login-check.ts). The sign-in form's
+   * captcha reads it (components/captchaGate.ts). Undefined for every other answer.
+   */
+  checkValidFor?: number
   /** Logged or deliberately not logged already, so `request()` does not log it again. */
   __handled?: boolean
 
@@ -77,13 +83,18 @@ export async function apiErrorFrom(response: Response): Promise<ApiError> {
   const said = [data.error, data.message].find(
     (value): value is string => typeof value === 'string' && value.trim() !== ''
   )
-  return new ApiError(
+  const error = new ApiError(
     response.status,
     said === undefined || onlyTheStatus(response.status, said)
       ? statusMessage(response.status)
       : said,
     readFields(data.fields)
   )
+  const seconds = data.checkValidForSeconds
+  if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0) {
+    error.checkValidFor = seconds
+  }
+  return error
 }
 
 /** The ApiError for a request that got no answer: the network, not the server. */

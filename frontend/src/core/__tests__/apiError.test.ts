@@ -120,6 +120,46 @@ describe.each(SURFACES)('%s', (_name, send) => {
   })
 })
 
+// A wrong password says for how long the check the browser solved covers the next sign-in try
+// (worker/src/login-check.ts); the sign-in form's captcha reads it (captchaGate.ts).
+describe('a refused password sign-in', () => {
+  const signIn = () => api.loginWithPassword('a@example.com', 'not-it', 'token-1')
+
+  it('carries how many seconds the solved check still covers', async () => {
+    apiFetchMock.mockResolvedValue(
+      jsonResponse({ error: 'Invalid email or password', checkValidForSeconds: 240 }, 401)
+    )
+
+    const error = (await signIn().catch((e: unknown) => e)) as ApiError
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect(error.status).toBe(401)
+    expect(error.message).toBe('Invalid email or password')
+    expect(error.checkValidFor).toBe(240)
+  })
+
+  it.each([['240'], [0], [-5], [null], [true], [[300]], [{ seconds: 300 }]])(
+    'carries nothing for %j, which is not a number of seconds',
+    async (value) => {
+      apiFetchMock.mockResolvedValue(
+        jsonResponse({ error: 'Invalid email or password', checkValidForSeconds: value }, 401)
+      )
+
+      const error = (await signIn().catch((e: unknown) => e)) as ApiError
+
+      expect(error.checkValidFor).toBeUndefined()
+    }
+  )
+
+  it('carries nothing when the answer says nothing about it', async () => {
+    apiFetchMock.mockResolvedValue(jsonResponse({ error: 'Invalid email or password' }, 401))
+
+    const error = (await signIn().catch((e: unknown) => e)) as ApiError
+
+    expect(error.checkValidFor).toBeUndefined()
+  })
+})
+
 describe('a write the session ended under', () => {
   const asked = vi.fn()
   beforeEach(() => {

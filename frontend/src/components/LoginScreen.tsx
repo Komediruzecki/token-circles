@@ -120,8 +120,9 @@ export default function LoginScreen() {
   onCleanup(stopConditional)
   // The widget is invisible until Cloudflare wants a click, so the submit button is never gated
   // on a token: the send holds for one instead. While Cloudflare's box waits for a tick, the
-  // button waits too (captchaGate.ts).
-  const captcha = createCaptchaGate()
+  // button waits too (captchaGate.ts). After a wrong password the check solved for it covers the
+  // next sign-in tries, and only those.
+  const captcha = createCaptchaGate({ signingIn: () => mode() === 'login' })
 
   const saved = (outcome: SignInOutcome) => {
     if (outcome.kind === 'second-factor') setStage('twofa')
