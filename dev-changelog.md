@@ -1099,6 +1099,19 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   Reserve for the US.
 - **Tests:** `guidanceBenchmarks.test.ts` (both lenders by name; every cushion derivation names
   each source it keeps, and no method).
+- **The answers record holds the circles' questions** (`shared/guidance/answers.ts`): nine fields,
+  each checked on write in both runtimes; a field another build wrote is kept; free money keeps the
+  region it was asked for and the two amounts their currency, and the facts read each only while it
+  still applies. The fields are `supportCategoryIds`, `carriesCardBalance`, `freeMoney`,
+  `setsAsideYearly`, `savedElsewhere`, `enoughPerYear`, `tenure`, `kindsAsked` and `savingsGoal`;
+  `factsAnswersOf` gives the facts their part. Free money gains `partly`, the US match's "Some of
+  it", which is the step still to take. A Worker restore gives categories new ids, so it moves
+  `supportCategoryIds` with them (`withSupportCategoriesMoved`); local-first's restore keeps ids.
+- **Tests:** `guidanceAnswers.test.ts` (each field read, refused when malformed, merged and
+  cleared; free money only in its region, the amounts only in their currency; the support list
+  across new ids), `guidanceCircles.test.ts` (`partly` not met), and the contract scenarios in both
+  runtimes (`settings`: the record with every field, one refusal per field; `backup`: the support
+  answer on the categories it named after a restore).
 
 ### Sign-in
 

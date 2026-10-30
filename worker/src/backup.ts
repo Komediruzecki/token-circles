@@ -9,6 +9,7 @@ import {
   sourceJsonObject,
 } from '../../shared/importSourceSchema';
 import { distinctProfileNames } from '../../shared/profileSchema';
+import { withSupportCategoriesMoved } from '../../shared/guidance/answers';
 import { splitLocalProfileSettingKey } from '../../shared/profileSettings';
 
 export const BACKUP_VERSION = '3.0.0';
@@ -961,9 +962,12 @@ export async function restoreBackup(
         schedule: AUTOMATED_IMPORT_SCHEDULES.includes(schedule) && !automated ? 'manual' : schedule,
       };
     });
+    // The guidance answers name support categories by id, and the categories have new ones.
     await insertRows('settings', data.settingsRows, (row, index) => ({
       ...withProfile(row, `settingsRows[${index}]`),
-      value: settingValue(row.value),
+      value: settingValue(
+        row.key === 'guidance' ? withSupportCategoriesMoved(row.value, categoryMap) : row.value
+      ),
     }));
 
     const receiptRows: Row[] = [];

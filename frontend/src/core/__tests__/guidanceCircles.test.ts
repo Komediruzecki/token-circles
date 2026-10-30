@@ -177,6 +177,7 @@ describe('Solid ground', () => {
     expect(met('not-offered')).toBe(true)
     expect(met('not-taken')).toBe(false)
     expect(met('not-sure')).toBe(false)
+    expect(met('partly')).toBe(false)
     expect(met(null)).toBeNull()
     expect(check(placeCircle(facts({ freeMoney: null })), 4, 'free-money')!.unknown).toBe(
       'not-on-file'

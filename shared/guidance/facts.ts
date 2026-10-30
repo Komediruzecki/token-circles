@@ -44,6 +44,7 @@ import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
 import { categoryLookup, essentialOf, holdsTransfers } from './kinds';
 import type { LoanInput } from '../loanSchedule';
+import type { FreeMoneyAnswer } from './answers';
 import type { KindedCategory } from './kinds';
 import type { Region } from './region';
 
@@ -109,12 +110,17 @@ export interface FactsLoan extends LoanInput {
   name?: string | null;
 }
 
-/** The answer to the free-money question (guidance.md 5.5). */
-export type FreeMoney = 'taken' | 'not-taken' | 'not-offered' | 'not-sure';
+/**
+ * The answer to the free-money question (guidance.md 5.5): taken in full, in part (the US match,
+ * "some of it"), not taken, none on offer, or not sure. The answers record lists them
+ * (answers.ts `FREE_MONEY_ANSWERS`).
+ */
+export type FreeMoney = FreeMoneyAnswer;
 
 /**
  * The questions the circles ask once, each when it is first needed (guidance.md 5.5). Absent or
- * null is not answered yet. The answers record holds none of them yet.
+ * null is not answered yet. The app reads them from the answers record (answers.ts
+ * `factsAnswersOf`), each only while it still applies.
  */
 export interface FactsAnswers {
   /** Categories whose income is support the person expects to stop (circle 2). */

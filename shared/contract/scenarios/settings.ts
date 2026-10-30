@@ -18,12 +18,23 @@ export function answersKeyOf(api: ContractApi): string {
   return api.runtime === 'worker' ? 'guidance' : `guidance:${api.profile}`;
 }
 
-/** A record as a newer build writes it: the answers this one reads, and a question it never asks. */
+/**
+ * A record as a newer build writes it: setup's answers, the circles' (but the support categories,
+ * which name ids), and a question this build never asks.
+ */
 export const ANSWERS = JSON.stringify({
   region: 'HR',
   adults: 2,
   children: 0,
-  tenure: 'own_outright',
+  carriesCardBalance: false,
+  freeMoney: { region: 'HR', answer: 'not-sure' },
+  setsAsideYearly: true,
+  savedElsewhere: { amount: 2000, currency: 'EUR' },
+  enoughPerYear: { amount: 40000, currency: 'EUR' },
+  tenure: 'outright',
+  kindsAsked: true,
+  savingsGoal: 15,
+  allAccounts: true,
 });
 
 /** The record the achievements store saves (core/achievements/records.ts, serializeRecords). */
@@ -123,6 +134,15 @@ export const settings = [
         ['{"region":49}', ANSWERS_MESSAGES.region],
         ['{"adults":0}', ANSWERS_MESSAGES.adults],
         ['{"children":-1}', ANSWERS_MESSAGES.children],
+        ['{"supportCategoryIds":[0]}', ANSWERS_MESSAGES.supportCategoryIds],
+        ['{"carriesCardBalance":"no"}', ANSWERS_MESSAGES.carriesCardBalance],
+        ['{"freeMoney":"taken"}', ANSWERS_MESSAGES.freeMoney],
+        ['{"setsAsideYearly":1}', ANSWERS_MESSAGES.setsAsideYearly],
+        ['{"savedElsewhere":{"amount":-5,"currency":"EUR"}}', ANSWERS_MESSAGES.savedElsewhere],
+        ['{"enoughPerYear":{"amount":0,"currency":"EUR"}}', ANSWERS_MESSAGES.enoughPerYear],
+        ['{"tenure":"own outright"}', ANSWERS_MESSAGES.tenure],
+        ['{"kindsAsked":"yes"}', ANSWERS_MESSAGES.kindsAsked],
+        ['{"savingsGoal":150}', ANSWERS_MESSAGES.savingsGoal],
         [JSON.stringify({ note: 'a'.repeat(ANSWERS_MAX_BYTES) }), ANSWERS_MESSAGES.size],
       ];
       for (const [raw, message] of refusals) {

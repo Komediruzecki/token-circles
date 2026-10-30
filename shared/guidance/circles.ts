@@ -212,7 +212,10 @@ function ownIncome(facts: GuidanceFacts): Check {
   return own;
 }
 
-/** Free money: taken, or none on offer. Not taken, or not sure, is the step still to take. */
+/**
+ * Free money: taken, or none on offer. Taken in part, not taken, or not sure, is the step still to
+ * take.
+ */
 function freeMoneyMet(answer: FreeMoney | null): boolean | null {
   if (answer === null) return null;
   return answer === 'taken' || answer === 'not-offered';

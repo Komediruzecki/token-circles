@@ -7,6 +7,7 @@ import {
   listTransactions,
 } from '../helpers';
 import { EXPORT_MESSAGES } from '../../exportColumns';
+import { answersRecord } from '../../guidance/answers';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json, Owned } from '../types';
 import { account } from './accounts';
@@ -188,6 +189,30 @@ export const backup = [
     // Only under the restored profile: the replaced one's key is gone with it.
     if (api.runtime === 'local') expect(settings.body[answersKeyOf(api)]).toBeUndefined();
   }),
+
+  scenario(
+    'a backup keeps the support answer on the categories it named, whatever ids they come back with',
+    async (api, expect) => {
+      const family = await addCategory(api, expect, 'Help from family', 'income');
+      const grant = await addCategory(api, expect, 'Study grant', 'income');
+      const answers = JSON.stringify({ region: 'DE', supportCategoryIds: [grant, family] });
+      expectOk(
+        expect,
+        await api.put('/api/settings', { [answersKeyOf(api)]: answers }),
+        'PUT the answers'
+      );
+
+      const back = await restoredAsIs(api, expect);
+      const categories = (await back.get('/api/categories')).body as Json[];
+      const idOf = (name: string) => categories.find((c) => c.name === name)!.id as number;
+      const settings = await back.get('/api/settings');
+      expectOk(expect, settings, 'GET /api/settings');
+      const record = answersRecord(settings.body[answersKeyOf(back)]);
+      expect(record.region).toBe('DE');
+      // The two categories, in the order they were answered, under the ids they came back with.
+      expect(record.supportCategoryIds).toEqual([idOf('Study grant'), idOf('Help from family')]);
+    }
+  ),
 
   scenario('a restore leaves nothing behind of the profiles it replaced', async (api, expect) => {
     const { mine, theirs } = await backUpAndRestore(api, expect);
