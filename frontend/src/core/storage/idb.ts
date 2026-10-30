@@ -35,6 +35,7 @@ import {
   clearUpgradeBlocked,
 } from './connectionNotices'
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
+import { DEFAULT_PROFILE_NAME, fileUnfiledRows } from './unfiledProfileRows'
 import type { IDBPDatabase } from 'idb'
 import type {
   Account,
@@ -342,6 +343,7 @@ export function getDB() {
   if (releasedFor) announceConnectionReleased(releasedFor)
   if (upgradeBlocked) announceUpgradeBlocked()
   if (!dbPromise) {
+    let current: ReturnType<typeof openDB> | null = null
     const opening = openDB(DB_NAME, DB_VERSION, {
       upgrade: upgradeSchema,
       blocked() {
@@ -357,10 +359,22 @@ export function getDB() {
         announceConnectionReleased(releasedFor, true)
       },
       terminated() {
-        if (dbPromise === opening) dbPromise = null
+        if (dbPromise === current) dbPromise = null
       },
     })
-    dbPromise = opening
+    // Rows the old code filed on profile 0 go to a real profile before anything reads (see
+    // unfiledProfileRows.ts). A failure is logged and the database opens anyway: the rows stay
+    // where they were, and the next load tries again.
+    const ready = opening.then(async (db) => {
+      try {
+        await fileUnfiledRows(db as unknown as IDBPDatabase)
+      } catch (error) {
+        console.warn('Could not file rows saved without a profile', error)
+      }
+      return db
+    })
+    current = ready
+    dbPromise = ready
     void opening.then(
       () => {
         if (!upgradeBlocked) return
@@ -371,6 +385,26 @@ export function getDB() {
     )
   }
   return dbPromise
+}
+
+/**
+ * The workspace's first profile, made when there is none, or the first one there is. One
+ * read-write transaction: the boot sends many reads at once, and IndexedDB runs two such
+ * transactions in turn, so the second finds the profile the first made instead of adding another.
+ */
+async function ensureAProfile(): Promise<number> {
+  const db = await getDB()
+  const tx = db.transaction('profiles', 'readwrite')
+  const existing = (await tx.store.getAll()) as Array<{ id: number }>
+  const id =
+    existing.length > 0
+      ? existing[0].id
+      : ((await tx.store.add({
+          name: DEFAULT_PROFILE_NAME,
+          created_at: new Date().toISOString(),
+        })) as number)
+  await tx.done
+  return id
 }
 
 // ---- Seed Data ----
@@ -486,9 +520,13 @@ export class IndexedDBAdapter implements StorageAdapter {
       localStorage.setItem('currentProfileId', String(profiles[0].id))
       return profiles[0].id
     }
-    // If user deleted all profiles, don't force-create one — return 0 so UI can handle it
-    localStorage.removeItem('currentProfileId')
-    return 0
+    // No profile at all: make the one the workspace needs, as the Worker does for an account with
+    // none (ensureProfile). This used to answer 0, and every writer filed its rows on profile 0,
+    // which no read asks for: an import into a workspace that had left the setup wizard before
+    // naming its space reported every row imported and showed none of them.
+    const id = await ensureAProfile()
+    localStorage.setItem('currentProfileId', String(id))
+    return id
   }
 
   async createProfile(name: string): Promise<number> {

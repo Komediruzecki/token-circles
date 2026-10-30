@@ -9,6 +9,52 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Local-first
+
+- **A write never lands on a profile that does not exist, and rows that did are filed.** A local
+  workspace with no profile (the wizard's "Use local-only", then Skip before the "Name your space"
+  step; before 2026-10-09 also deleting every profile) wrote on profile 0:
+  `IndexedDBAdapter.getCurrentProfileId()` (`frontend/src/core/storage/idb.ts`) answered 0 when the
+  `profiles` store was empty and `finance_had_profiles` was set, and every writer that files a row
+  through it (`if (!data.profile_id)`, `writeProfileIdFromHeaders`, the import, category, tag and
+  goal handlers) stored that 0. Reads ask for `activeProfileId()` (`core/apiProfileScope.ts`), which
+  is 1 when `currentProfileId` is unset, so an import reported "Imported 48 transactions", left 48
+  rows on profile 0 and Transactions and Progress showed none; a reload could not help. The pieces
+  date from 9383fce7 (return 0 instead of creating "My Finances", when the last profile could still
+  be deleted), ca6e767c (Use local-only sets `finance_had_profiles`, so no demo seed) and 4e863bae
+  (#378, explicit profile scopes). `finance_had_profiles = "1"` before any profile exists is
+  `chooseLocalOnly` (`OnboardingWizard.tsx`), and in tests `gotoServerlessZeroState`.
+  - **Guard**: with no profile at all, `getCurrentProfileId()` now makes one, as the Worker's
+    `ensureProfile` does, under the same name ("Personal Profile"), and makes it the active profile
+    (`currentProfileId`), so reads and writes name the same profile. `ensureAProfile()` reads and
+    adds in one read-write transaction, so the boot's parallel reads make one profile, not one each.
+    The last profile can no longer be deleted (ceb43bb3), so the "ghost profile" 9383fce7 avoided
+    cannot come back. The setup wizard opens as before (the workspace is still empty) and its "Name
+    your space" step renames the profile, as it does for a cloud signup.
+  - **Repair**: `frontend/src/core/storage/unfiledProfileRows.ts`, `fileUnfiledRows(db)`, runs on
+    every open of the database in `getDB()`, before any read or write gets the connection. It looks
+    for rows on profile 0 in every store with a `by_profile` index (found from the schema, so a new
+    store is covered) and for the per-profile settings `achievements:0` and `retirement_settings:0`.
+    With nothing there it only counts (one read-only transaction). Otherwise, in one read-write
+    transaction aborted on any failure: no profile at all, it makes "Personal Profile" and makes it
+    active; profiles that are all empty, the lowest id; a profile with any row, a new one named
+    "Recovered entries" ("Recovered entries 2" when taken) and the active profile is left alone.
+    Only rows still on profile 0 are rewritten, with every other field and link kept (accounts,
+    categories and transactions move together, so their links stay within one profile). A setting
+    the receiving profile already has is kept, and the profile-0 one stays under its old key. A
+    failure is logged with `console.warn` and the database opens anyway; the next load tries again.
+    No IndexedDB version bump.
+  - **Why a profile of their own when one is in use**: after an import showed nothing, the likely
+    next step was to make a profile and import the same statement again. Filing the old rows there
+    would count those transactions twice and put a second "Groceries" beside the first; a separate
+    profile doubles nothing and can be deleted from the Danger Zone.
+  - Tests: `frontend/src/core/storage/__tests__/writesLandOnARealProfile.test.ts` (9: an import, a
+    hand-added transaction, an account, a category, the default categories, a goal and a tag from an
+    empty workspace are read back and leave no row on a missing profile; eight parallel reads make
+    one profile) and `frontend/src/core/storage/__tests__/unfiledProfileRows.test.ts` (11: no
+    profile, a profile in use, an empty profile, a taken name, a setting already present, a second
+    load changing nothing, no row lost, and a failing repair still opening the database).
+
 ### Sign-in
 
 - **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the
