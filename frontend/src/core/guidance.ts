@@ -1,6 +1,7 @@
 /**
  * The seven circles for the active profile, in both storage modes: the region compared with, the
- * person's numbers (shared/guidance/facts.ts) and where they place them (circles.ts).
+ * person's numbers (shared/guidance/facts.ts), where they place them (circles.ts), the ledger's
+ * rows and status (ledger.ts) and Your next step (nextStep.ts).
  *
  * What it reads:
  *
@@ -28,21 +29,27 @@ import { createEffect, createRoot, createSignal } from 'solid-js'
 import { factsAnswersOf } from '../../../shared/guidance/answers'
 import { placeCircle } from '../../../shared/guidance/circles'
 import { guidanceFacts } from '../../../shared/guidance/facts'
+import { ledgerRows, ledgerStatus } from '../../../shared/guidance/ledger'
+import { nextStepOf } from '../../../shared/guidance/nextStep'
 import { chooseRegion } from '../../../shared/guidance/region'
+import { orientationSteps } from '../../../shared/orientation'
 import { normalizeSettings } from '../../../shared/retirementSettings'
 import { snapshot } from './achievementsStore'
 import { afterPaint } from './afterPaint'
-import { api, apiGet, getLocalCurrency } from './api'
+import { api, apiGet, formatWholeCurrency, getLocalCurrency } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { getPage, getProfileVersion } from './appStore'
 import { entityVersion } from './dataVersions'
 import { answersIn } from './guidanceAnswers'
 import { benchmarksShown } from './guidanceGate'
+import { orientationFacts } from './orientation'
 import { refetchOnActive } from './pageVisibility'
 import { getStorageMode } from './storage/storageFactory'
 import type { Answers } from '../../../shared/guidance/answers'
 import type { Placement } from '../../../shared/guidance/circles'
 import type { GuidanceFacts, GuidanceInput } from '../../../shared/guidance/facts'
+import type { LedgerRow, LedgerStatus } from '../../../shared/guidance/ledger'
+import type { NextStep } from '../../../shared/guidance/nextStep'
 import type { RegionChoice } from '../../../shared/guidance/region'
 import type { AchievementsSnapshot } from './achievementsStore'
 
@@ -71,6 +78,11 @@ export interface GuidanceView {
   region: RegionChoice
   facts: GuidanceFacts
   placement: Placement
+  /** The ledger's seven rows, and the status over them. */
+  rows: LedgerRow[]
+  status: LedgerStatus
+  /** Your next step: Getting started's first while less than a year is on file. */
+  next: NextStep
 }
 
 const SETTINGS_KEY = 'retirement_settings'
@@ -184,6 +196,10 @@ export function workOut(
     answers: factsAnswersOf(inputs.answers, { region: region.region, currency: inputs.currency }),
     bills: snap.bills,
   })
+  const placement = placeCircle(facts, { freeMoney: gate })
+  const words = { money: (amount: number) => formatWholeCurrency(amount, inputs.currency) }
+  // Getting started's steps scan the entries for subscriptions: read only while they are the step.
+  const orientation = facts.firm ? null : orientationSteps(orientationFacts(snap, Date.now()))
   return {
     profileId: snap.profileId,
     snapshot: snap,
@@ -191,7 +207,10 @@ export function workOut(
     gate,
     region,
     facts,
-    placement: placeCircle(facts, { freeMoney: gate }),
+    placement,
+    rows: ledgerRows(placement, facts, words),
+    status: ledgerStatus(placement, facts, words),
+    next: nextStepOf({ placement, facts, orientation, words }),
   }
 }
 

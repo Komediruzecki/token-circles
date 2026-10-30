@@ -101,6 +101,16 @@
   --accent-warm: #f0a860;
   --glow-primary: 0 0 24px rgba(59, 111, 224, 0.35);
 
+  /* The seven circles: a reached ring runs from --ring-a to --ring-b, a ring not reached is a dotted
+     --ring-track, and the circle being worked on carries a dot in --circle-now. The bands are the
+     official ranges on the benchmark cards. */
+  --ring-a: #93b4ff;
+  --ring-b: #3b6fe0;
+  --ring-track: #33416a;
+  --band: rgba(159, 176, 214, 0.13);
+  --band-mid: rgba(159, 176, 214, 0.3);
+  --circle-now: var(--accent-warm);
+
   /* Misc */
   --shadow: 0 1px 3px rgba(2, 4, 12, 0.5), 0 1px 2px rgba(2, 4, 12, 0.4);
   --shadow-lg: 0 10px 24px -6px rgba(2, 4, 12, 0.6), 0 4px 8px -2px rgba(2, 4, 12, 0.4);

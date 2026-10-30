@@ -25,9 +25,10 @@ const HASH_ALIASES: Record<string, PageName> = {
 
 /**
  * Pages whose fragment can name a view below the page, as a path: `#loans/12/compare` is the
- * Loans page showing loan 12. The page reads the rest of the path itself.
+ * Loans page showing loan 12, and `#progress/4` is Progress showing the fourth circle. The page
+ * reads the rest of the path itself.
  */
-const PAGES_WITH_PATHS = new Set<string>(['loans'])
+const PAGES_WITH_PATHS = new Set<string>(['loans', 'progress'])
 
 /** The route a fragment names, with or without its '#' and query: `#reset-password?token=…`. */
 export function hashRouteName(rawHash: string): string {

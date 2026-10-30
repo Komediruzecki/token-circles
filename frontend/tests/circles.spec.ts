@@ -1,0 +1,198 @@
+/**
+ * The seven circles on Progress, in both storage modes: Your next step over the ledger, each
+ * circle's row with the person's own figure, and a circle's own view at `#progress/<n>`.
+ *
+ * The statement is generated here, relative to today: the last twelve full months, each with a
+ * salary of 3,000, a rent of 1,000 and two grocery runs of 200. So a year is on file, all of it
+ * sorted, own income covers the 1,400 spent a month, and with 2,800 in a savings account the money
+ * in reach covers two months of essentials: the fourth circle, Solid ground, is the one being
+ * worked on. Round invented values; nothing here is anyone's.
+ */
+import { expect, test } from '@playwright/test'
+import { viaApp } from './form-errors-helpers'
+import { bootSignedIn, deleteAccount, signUpAndIn } from './own-account'
+import { E2E_BASE, gotoServerlessZeroState } from './test-helpers'
+import type { Page } from '@playwright/test'
+
+/** 'YYYY-MM' `n` months before this one. */
+function monthsAgo(n: number): string {
+  const d = new Date()
+  d.setDate(1)
+  d.setMonth(d.getMonth() - n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+const YEAR = [
+  'Date,Description,Amount,Category,Type',
+  ...[12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].flatMap((n) => {
+    const m = monthsAgo(n)
+    return [
+      `${m}-01,Salary,3000.00,Salary,income`,
+      `${m}-02,Flat rent,-1000.00,Rent,expense`,
+      `${m}-10,Corner market,-200.00,Groceries,expense`,
+      `${m}-21,Corner market,-200.00,Groceries,expense`,
+    ]
+  }),
+].join('\n')
+
+/** The rows' figures, circle by circle, for the year above and 2,800 in reach. */
+const ROWS = [
+  { state: 'reached', key: '12 of 12 months on file' },
+  { state: 'reached', key: 'Own income covers 214% of spending' },
+  { state: 'reached', key: '2 months of essentials' },
+  { state: 'current', key: '2 of 3 months: €1,400 to go' },
+  { state: 'later', key: 'Two years of spending: €33,600' },
+  { state: 'later', key: '25 years of spending: €420,000' },
+  { state: 'later', key: 'Your own number' },
+]
+
+/** Import a generated statement on the Import page, as pasted CSV. */
+async function importStatement(page: Page, statement: string, rows: number): Promise<void> {
+  await page.evaluate(() => {
+    window.location.hash = 'import'
+  })
+  await expect(page.getByTestId('import-header')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('import-tab-paste-csv').click()
+  await page.getByTestId('import-paste-textarea').fill(statement)
+  await page.getByTestId('import-paste-parse').click()
+  await page.getByTestId('import-continue-mapping').click()
+  await page.getByTestId('import-continue-preview').click()
+  await expect(page.getByTestId('import-preview-total')).toHaveText(String(rows))
+  await page.getByTestId('import-execute-all').click()
+  await expect(page.getByTestId('import-result')).toContainText(`Imported ${rows}`, {
+    timeout: 30_000,
+  })
+}
+
+async function openProgress(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.location.hash = 'progress'
+  })
+  await expect(page.getByTestId('progress-header')).toBeVisible({ timeout: 30_000 })
+}
+
+/** The rows' states and figures, read off the page. */
+async function rowsShown(page: Page) {
+  const out: Array<{ state: string | null; key: string | null }> = []
+  for (const row of await page.locator('[data-circle-row]').all()) {
+    const key = row.getByTestId('circle-row-key')
+    out.push({
+      state: await row.getAttribute('data-state'),
+      key: (await key.count()) > 0 ? await key.textContent() : null,
+    })
+  }
+  return out
+}
+
+/** The year imported, 2,800 put in a savings account, and Progress open on the circles. */
+async function aYearInSolidGround(page: Page): Promise<void> {
+  await importStatement(page, YEAR, 48)
+  await viaApp(page, 'POST', '/api/accounts', {
+    name: 'Rainy day',
+    type: 'savings',
+    starting_balance: 2800,
+  })
+  await openProgress(page)
+  await expect.poll(() => rowsShown(page), { timeout: 30_000 }).toEqual(ROWS)
+
+  const circles = page.locator('[data-tour="progress-circles"]')
+  await expect(circles.getByTestId('progress-divider-circles')).toContainText('Circle 4 of 7')
+  await expect(circles.getByTestId('circles-status')).toHaveText(
+    "You're in the fourth circle: Solid ground.€1,400 to three months of essentials."
+  )
+  await expect(page.locator('[data-circle-row="4"] a')).toHaveAttribute(
+    'aria-label',
+    "Solid ground. You're here. 2 of 3 months: €1,400 to go."
+  )
+
+  const step = page.locator('[data-tour="progress-next-step"]').getByTestId('next-step-card')
+  await expect(step.getByTestId('next-step-title')).toHaveText('Grow your cushion to three months')
+  await expect(step.getByTestId('next-step-why')).toHaveText(
+    '€1,400 to go: €2,800 you can reach, against €1,400 needed a month.'
+  )
+  await expect(step.getByTestId('next-step-action')).toHaveAttribute('href', '#goals')
+  await expect(step.getByTestId('next-step-then')).toHaveText(
+    'Then: grow your cushion to six months, and raise your savings rate by one point.'
+  )
+}
+
+/** Open the fourth circle from its row, and go back to the list with Escape. */
+async function openAndCloseSolidGround(page: Page): Promise<void> {
+  await page.locator('[data-circle-row="4"] a').click()
+  await expect(page).toHaveURL(/#progress\/4/)
+  const view = page.getByTestId('circle-view')
+  await expect(view.getByRole('heading', { level: 2 })).toHaveText('Solid ground')
+  await expect(view.getByRole('heading', { level: 2 })).toBeFocused()
+  await expect(view).toContainText('Circle 4 of 7')
+  await expect(view.getByTestId('next-step-title')).toHaveText('Grow your cushion to three months')
+  await expect(page.getByTestId('progress-list')).toBeHidden()
+
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('circle-view')).toHaveCount(0)
+  await expect(page.locator('[data-circle-row="4"] a')).toBeFocused()
+}
+
+test.describe('The seven circles @smoke', () => {
+  test.beforeEach(() => {
+    test.setTimeout(150_000)
+  })
+
+  test('local-first: the ledger reads a year, and a circle opens from its row', async ({
+    page,
+  }) => {
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+    await page.getByTestId('onboarding-skip').click()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+    // Nothing on file yet: Getting started's first step, and the first circle "for now".
+    await openProgress(page)
+    const step = page.locator('[data-tour="progress-next-step"]').getByTestId('next-step-card')
+    await expect(step.getByTestId('next-step-title')).toHaveText('Import a year of statements', {
+      timeout: 30_000,
+    })
+    await expect(page.getByTestId('progress-divider-circles')).toContainText(
+      'For now: 0 of 12 months'
+    )
+    await expect(page.getByTestId('circles-waiting')).toHaveText(
+      'Your figures appear once 3 months are tracked.'
+    )
+
+    await aYearInSolidGround(page)
+    await openAndCloseSolidGround(page)
+  })
+
+  test("signed in: the ledger reads a year, and a circle's address survives a reload", async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+      await aYearInSolidGround(page)
+      await openAndCloseSolidGround(page)
+
+      await page.goto(`${E2E_BASE}/#progress/3`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      const view = page.getByTestId('circle-view')
+      await expect(view.getByRole('heading', { level: 2 })).toHaveText('Breathing room', {
+        timeout: 30_000,
+      })
+      await expect(view).toContainText('Reached')
+      await view.getByTestId('circle-back').click()
+      await expect(page).toHaveURL(/#progress(\?|$)/)
+      await expect(page.locator('[data-circle-row="3"] a')).toBeFocused()
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+})

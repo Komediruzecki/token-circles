@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JSX } from 'solid-js'
 
 vi.mock('../../core/appStore', () => ({ setPage: vi.fn() }))
+// The circles have tests of their own (progressCircles.test.tsx); here they are not worked out yet.
+vi.mock('../../core/guidance', () => ({ useGuidance: () => () => null, takeAnswers: vi.fn() }))
 const thisMonth = new Date().toISOString().slice(0, 7)
 const today = new Date().toISOString().slice(0, 10)
 const month = (m: string, n = 3, over: Record<string, unknown> = {}) =>
@@ -111,8 +113,8 @@ describe('Progress page', () => {
     // The one earned badge appears on the timeline too, dated to the month it was earned.
     const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
     expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
-    // The three section headings are the brand's orbit dividers, not plain rules.
-    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
+    // The four section headings are the brand's orbit dividers, not plain rules.
+    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(4)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })

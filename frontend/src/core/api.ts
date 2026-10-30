@@ -1318,6 +1318,22 @@ export const formatCurrency = (
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
 }
 
+/**
+ * Money in whole units, as the circles write it: "€1,000". Callers round first, each the way its
+ * figure needs (a gap up, so "€0 to go" never shows beside a check not met).
+ */
+export const formatWholeCurrency = (
+  amount: number,
+  currency: Models.Currency = getLocalCurrency()
+): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
 export const formatDate = (dateStr: string): string => {
   let date = new Date(dateStr)
   // Handle Google Viz Date(Y,M,D) format where month is 0-indexed

@@ -1,0 +1,124 @@
+/* One circle, opened from its row. One column; the back link is a 48 px target. */
+.view {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 14px 0 10px;
+  margin-left: -10px;
+  border-radius: 999px;
+  color: var(--primary-hover);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  background: var(--primary-bg);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+
+.glyph {
+  width: 52px;
+  height: 52px;
+}
+
+.head-text {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.title {
+  margin: 4px 0 0;
+  font-family: var(--font-display, inherit);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.title:focus {
+  outline: none;
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.line {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.pill {
+  align-self: center;
+}
+
+.key {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.detail {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.next {
+  margin-top: 4px;
+}
+
+.guide {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* Below 400 px the pill moves under the name, so the name keeps its width. */
+@media (max-width: 400px) {
+  .head {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+}

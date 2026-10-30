@@ -150,7 +150,9 @@ describe('when it works the circles out', () => {
     expect(view()).toBeNull()
 
     setPage('progress')
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     expect(counted.facts).toBe(1)
     // A year on file, own income covering spending, 3.3 months of essentials in reach.
     expect(view()!.placement.current).toBe(5)
@@ -162,14 +164,18 @@ describe('when it works the circles out', () => {
     expect(counted.facts).toBe(1)
     // ...and is worked out once Progress is on screen again.
     setPage('progress')
-    await vi.waitFor(() => { expect(counted.facts).toBe(2); })
+    await vi.waitFor(() => {
+      expect(counted.facts).toBe(2)
+    })
   })
 
   it('works nothing out for a page left before it painted', async () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     store.set!(snap(1))
     setPage('budgets')
     await settled()
@@ -181,7 +187,9 @@ describe('when it works the circles out', () => {
     mount('dashboard')
     const progress = use('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     setPage('progress')
     await painted()
     expect(progress()).toBe(view())
@@ -194,14 +202,18 @@ describe('what it follows', () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     const first = view()!
     expect(first.facts.invested).toBe(0)
 
     // An answer saved: the settings are read again, and the circles take it.
     net.settings = { guidance: JSON.stringify({ carriesCardBalance: true, setsAsideYearly: true }) }
     invalidateEntity('settings')
-    await vi.waitFor(() => { expect(view()!.inputs.answers.carriesCardBalance).toBe(true); })
+    await vi.waitFor(() => {
+      expect(view()!.inputs.answers.carriesCardBalance).toBe(true)
+    })
     expect(view()!.facts.setsAsideYearly).toBe(true)
 
     // A holding bought: invested money counts it, at what was paid.
@@ -210,23 +222,31 @@ describe('what it follows', () => {
       { profile_id: 2, marketValue: 99999 },
     ]
     invalidateEntity('portfolio')
-    await vi.waitFor(() => { expect(view()!.facts.invested).toBe(1200); })
+    await vi.waitFor(() => {
+      expect(view()!.facts.invested).toBe(1200)
+    })
 
     // A new evaluation, as after an import.
     const before = counted.facts
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(counted.facts).toBe(before + 1); })
+    await vi.waitFor(() => {
+      expect(counted.facts).toBe(before + 1)
+    })
   })
 
   it('works nothing out again for a settings write that changes none of its inputs', async () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     const first = view()
     const reads = net.settingsReads
     invalidateEntity('settings')
-    await vi.waitFor(() => { expect(net.settingsReads).toBe(reads + 1); })
+    await vi.waitFor(() => {
+      expect(net.settingsReads).toBe(reads + 1)
+    })
     await settled()
     expect(counted.facts).toBe(1)
     expect(view()).toBe(first)
@@ -237,7 +257,9 @@ describe('what it follows', () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()?.inputs.answers.carriesCardBalance).toBe(false); })
+    await vi.waitFor(() => {
+      expect(view()?.inputs.answers.carriesCardBalance).toBe(false)
+    })
     net.failSettings = true
     invalidateEntity('settings')
     await painted()
@@ -250,7 +272,9 @@ describe('one profile at a time', () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1))
-    await vi.waitFor(() => { expect(view()?.profileId).toBe(1); })
+    await vi.waitFor(() => {
+      expect(view()?.profileId).toBe(1)
+    })
 
     localStorage.setItem('currentProfileId', '2')
     bumpProfileVersion()
@@ -260,7 +284,9 @@ describe('one profile at a time', () => {
     expect(view()).toBeNull()
 
     store.set!(snap(2))
-    await vi.waitFor(() => { expect(view()?.profileId).toBe(2); })
+    await vi.waitFor(() => {
+      expect(view()?.profileId).toBe(2)
+    })
   })
 })
 
@@ -269,10 +295,51 @@ describe('what is not known', () => {
     setPage('progress')
     mount('progress')
     store.set!(snap(1, null))
-    await vi.waitFor(() => { expect(view()).not.toBeNull(); })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
     expect(view()!.facts.accountsKnown).toBe(false)
     const cushion = view()!.placement.circles[2].checks.find((c) => c.id === 'first-cushion')!
     expect(cushion).toMatchObject({ met: null, unknown: 'unread' })
+  })
+})
+
+describe('the ledger and the next step', () => {
+  it('words the rows, the status and the step in whole units of the base currency', async () => {
+    setPage('progress')
+    mount('progress')
+    store.set!(snap(1))
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    const { rows, status, next } = view()!
+    expect(rows.map((row) => row.state)).toEqual([
+      'reached',
+      'reached',
+      'reached',
+      'reached',
+      'current',
+      'later',
+      'later',
+    ])
+    expect(rows[2].detail).toBe('€6,000 you can reach, against €1,800 needed a month.')
+    expect(status.meta).toBe('Circle 5 of 7')
+    // A year on file: the step is the circles', not Getting started's.
+    expect(next).toMatchObject({ id: 'two-years', circle: 5 })
+  })
+
+  it("takes Getting started's first step while less than a year is on file", async () => {
+    setPage('progress')
+    mount('progress')
+    const full = snap(1)
+    const recent = full.transactions.filter((t) => t.date >= `${ago(5)}-01`)
+    store.set!({ ...full, transactions: recent })
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    expect(view()!.facts.firm).toBe(false)
+    expect(view()!.next).toMatchObject({ id: 'import-year', circle: 1 })
+    expect(view()!.status.meta).toBe('For now: 5 of 12 months')
   })
 })
 

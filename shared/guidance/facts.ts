@@ -204,6 +204,11 @@ export interface Debt {
    * card not known to be carried, unless its rate is below the line, which it is either way.
    */
   expensive: boolean | null;
+  /**
+   * A card's or an overdraft's first entry on file, YYYY-MM-DD: how long its entries have had to
+   * show whether its balance is carried. Null with none, and for a loan. Absent reads as null.
+   */
+  since?: string | null;
 }
 
 /** The money a person can reach against a month of what they need. */
@@ -613,6 +618,17 @@ function cardCarried(
   return since ? true : null;
 }
 
+/** The first entry that moves account `id`, YYYY-MM-DD, or null with none. */
+function firstEntryOn(id: number, transactions: readonly FactsEntry[]): string | null {
+  let first: string | null = null;
+  for (const entry of transactions) {
+    const date = entry.date.slice(0, 10);
+    if (first !== null && date >= first) continue;
+    if (balanceMoves(entry).some((move) => move.account === id)) first = date;
+  }
+  return first;
+}
+
 /** Whether a debt at `rate` is expensive: a loan from the line up, a card or overdraft unless set below it. */
 export function isExpensive(kind: Debt['kind'], rate: number | null): boolean {
   if (kind === 'loan') return rate !== null && rate >= EXPENSIVE_DEBT_RATE;
@@ -669,6 +685,7 @@ export function debtsOf(
       payment,
       carried,
       expensive: !isExpensive(kind, rate) ? false : carried ? true : null,
+      since: firstEntryOn(account.id, input.transactions),
     });
   }
   return debts;

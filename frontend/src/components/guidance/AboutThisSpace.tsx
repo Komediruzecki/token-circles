@@ -9,6 +9,7 @@
  */
 import { createSignal, Show } from 'solid-js'
 import { mergeAnswers, readAnswers } from '../../../../shared/guidance/answers'
+import { SAVE_FAILED } from '../../../../shared/guidance/questions'
 import { chooseRegion } from '../../../../shared/guidance/region'
 import { api, getLocalCurrency } from '../../core/api'
 import { activeProfileId } from '../../core/apiProfileScope'
@@ -22,7 +23,6 @@ import styles from './SpaceQuestions.module.css'
 import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { RegionImport } from '../../../../shared/guidance/region'
 
-const SAVE_FAILED = "Couldn't save your answer. Try again."
 const LOAD_FAILED = "Couldn't load your answers. Reload the page to try again."
 
 export function AboutThisSpace() {

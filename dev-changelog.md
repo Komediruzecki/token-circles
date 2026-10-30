@@ -1148,6 +1148,36 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   painted, once for both pages; a new evaluation, a settings write and a portfolio write each
   followed; a profile switch answers nothing until the new profile's inputs are in; accounts that
   did not load read as not known; the withdrawal rate where each runtime keeps the plan).
+- **The ledger** (`shared/guidance/ledger.ts`, `nextStep.ts`): row text per circle and state,
+  rounding that never shows a check as met early, and the next step: Getting started's first step
+  until a year is on file, then the current circle's first check not met. Shares floor below 100%
+  until met, gaps round up to a whole unit, months floor to one decimal and days to whole days;
+  nothing marked as needed reads as such, never Infinity. "Then:" names the next two steps, one
+  step for checks that wait on the same thing (accounts that did not load, an account to add), and
+  never the own-number question before Work optional is reached, as row 7 says. A check not known
+  is asked or read again: the card, yearly-bills, free-money (gate open) and own-number questions
+  are answered on the card, saved through `saveAnswers` and handed to the store with
+  `takeAnswers`; Reload runs the badge evaluation again. The store adds `rows`, `status` and
+  `next`, and reads Getting started's steps only while less than a year is on file (their
+  subscription scan reads every entry). `formatWholeCurrency` (`core/api.ts`) writes the whole
+  units; `CircleGlyph` draws each ring from the theme's new `--ring-a`, `--ring-b`, `--ring-track`,
+  `--band`, `--band-mid` and `--circle-now`. `#progress/<n>` (`PAGES_WITH_PATHS` gains `progress`,
+  `core/progressRoute.ts`) opens a circle in place of the page, with focus on its heading, and
+  Escape or "All seven circles" goes back with focus on its row; the list stays mounted under it.
+  ProgressPage.module.css's controls grow to 48 px (dismiss, Share, Show more) and its 10 px and
+  11.5 px text to 12 px.
+- **Tests:** `guidanceLedger.test.ts` (every row and state, 0, 1, 3, 11 and 12 months, not read,
+  no account, Infinity, via investments, circle 7 unset and set, all reached, the rounding),
+  `guidanceNextStep.test.ts` (Getting started's step until a year is on file, every check and kind
+  of not known once it is, free money only with the gate open, "Then:" without repeats),
+  `guidanceStore.test.ts` (rows, status and step in whole units; Getting started's step before a
+  year), `circleGlyph.test.tsx`, `circles-phone.spec.ts` (at 390 px each circle's number is 12 px
+  or more as drawn and each row a 48 px target; nothing scrolls sideways at 320 px),
+  `progressRoute.test.ts`, `hashRoute.test.ts`,
+  `progressCircles.test.tsx` (rows, links and their names, the card's questions saved and handed on,
+  a failed save, the amount refused at 0, Reload, the circle view's focus in and out) and
+  `circles.spec.ts` `@smoke` in both modes (a year in Solid ground; the circle view by its row,
+  Escape and a reload).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

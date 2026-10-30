@@ -16,6 +16,7 @@ const PAGES = new Set([
   'settings',
   'tags',
   'loans',
+  'progress',
   'notFound',
 ])
 const isPage = (name: string) => PAGES.has(name)
@@ -50,6 +51,13 @@ describe('resolvePageFromHash', () => {
     expect(resolve('#loans/')).toBe('loans')
     // An id the page does not know is the page's own not-found, not the app's 404.
     expect(resolve('#loans/abc/schedule')).toBe('loans')
+  })
+
+  it("selects Progress for a circle's own view", () => {
+    expect(resolve('#progress/4')).toBe('progress')
+    expect(resolve('#progress/4?period=2026-10')).toBe('progress')
+    // A circle that is not 1 to 7 is Progress's to show as the page.
+    expect(resolve('#progress/9')).toBe('progress')
   })
 
   it('sends a path under a page that has no views below it to the 404 page', () => {

@@ -92,7 +92,7 @@ const MONTH_NAMES = [
 ];
 
 /** 'September' for '2026-09'. English, and the same in every runtime and time zone. */
-function monthName(month: string): string {
+export function monthName(month: string): string {
   return MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? month;
 }
 
