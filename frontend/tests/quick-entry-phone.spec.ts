@@ -57,8 +57,15 @@ async function leaveSetupWheneverItOpens(page: Page): Promise<void> {
 
 const sidebarToggle = (page: Page) => page.getByRole('button', { name: 'Toggle sidebar' })
 
-/** Is the sidebar meant to be open? The toggle says so at once; the slide takes a moment. */
+/**
+ * Is the sidebar meant to be open? The toggle says so at once; the slide takes a moment.
+ *
+ * The toggle has to be on screen first. While the setup wizard is open the shell behind it is
+ * hidden and inert, so the toggle is in no role query; reading its class does not run the locator
+ * handler that leaves the wizard, and an auto-waiting assertion does.
+ */
 async function sidebarWanted(page: Page): Promise<boolean> {
+  await expect(sidebarToggle(page)).toBeVisible()
   return ((await sidebarToggle(page).getAttribute('class')) ?? '').includes('mobile-toggle-open')
 }
 

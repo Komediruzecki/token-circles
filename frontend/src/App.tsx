@@ -67,6 +67,7 @@ import {
 import { initPeriodSync, orbitOpen, stepPeriod } from './core/periodStore'
 import { clearPlanIntent, setHighlightedPlan, storedPlanIntent } from './core/planIntent'
 import { createQuickEntryList } from './core/quickEntryLists'
+import { lockDocumentScroll } from './core/scrollLock'
 import { setSettingsTab } from './core/settingsStore'
 import { setShowShortcuts, showShortcuts } from './core/shortcutsStore'
 import {
@@ -96,6 +97,12 @@ export function App() {
   // works regardless of storage mode or session.
   const isResetRoute = window.location.hash.slice(1).split('?')[0] === 'reset-password'
   const activePage = () => state.page
+  // The setup wizard covers the whole screen, and the document behind it would still scroll under
+  // a wheel or a finger on the wizard. Held for as long as it is open, and let go when the App
+  // closes with it open.
+  createEffect(() => {
+    if (onboardingOpen()) onCleanup(lockDocumentScroll())
+  })
   const setActivePage = (p: PageName) => {
     setPage(p)
   }
@@ -880,253 +887,275 @@ export function App() {
           }
         >
           <Suspense fallback={<OrbitBootScreen label="Loading…" />}>
-            <div
-              class={layoutStyles.sidebar}
-              classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
-            >
-              <div class={layoutStyles.sidebarLogo}>
-                <h1>
-                  <LogoMark size={26} />
-                  Token Circles
-                </h1>
-                <p>Your money, in clear orbit</p>
-              </div>
-              <div class={profileStyles.profileSelector}>
-                <div class={profileStyles.profileDropdown}>
-                  <button
-                    class={profileStyles.profileDropdownBtn}
-                    data-test-id="profile-dropdown-btn"
-                    onClick={toggleDropdown}
-                    style={{
-                      display: 'flex',
-                      'align-items': 'center',
-                      'justify-content': 'space-between',
-                      width: '100%',
-                    }}
-                  >
+            {/* The shell. While the setup wizard covers the screen it is inert and unpainted
+                (see .shell in Layout.module.css); the wizard and the confirm dialog it asks
+                through sit outside it. */}
+            <div class={layoutStyles.shell} inert={onboardingOpen()} data-test-id="app-shell">
+              <div
+                class={layoutStyles.sidebar}
+                classList={{ [layoutStyles.collapsed]: sidebarCollapsed() }}
+              >
+                <div class={layoutStyles.sidebarLogo}>
+                  <h1>
+                    <LogoMark size={26} />
+                    Token Circles
+                  </h1>
+                  <p>Your money, in clear orbit</p>
+                </div>
+                <div class={profileStyles.profileSelector}>
+                  <div class={profileStyles.profileDropdown}>
+                    <button
+                      class={profileStyles.profileDropdownBtn}
+                      data-test-id="profile-dropdown-btn"
+                      onClick={toggleDropdown}
+                      style={{
+                        display: 'flex',
+                        'align-items': 'center',
+                        'justify-content': 'space-between',
+                        width: '100%',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          'align-items': 'center',
+                          gap: '8px',
+                          'min-width': 0,
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            'border-radius': '50%',
+                            background: 'var(--primary)',
+                            color: 'white',
+                            display: 'flex',
+                            'align-items': 'center',
+                            'justify-content': 'center',
+                            'font-size': '12px',
+                            'font-weight': 'bold',
+                            'flex-shrink': 0,
+                          }}
+                        >
+                          {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <span
+                          style={{
+                            'font-weight': 600,
+                            overflow: 'hidden',
+                            'text-overflow': 'ellipsis',
+                            'white-space': 'nowrap',
+                          }}
+                        >
+                          {selectedProfileIds().length > 1
+                            ? profiles()
+                                .filter((p) => selectedProfileIds().includes(p.id))
+                                .map((p) => p.name)
+                                .join(' & ')
+                            : currentProfile()?.name || 'Not Logged In'}
+                        </span>
+                      </div>
+                      <svg
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          transition: 'transform 0.2s',
+                          transform: showDropdown() ? 'rotate(180deg)' : 'none',
+                        }}
+                      >
+                        <path d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div
+                      class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
+                    >
+                      <div class={profileStyles.profileDropdownHeader}>
+                        {uniqueProfiles().length === 0
+                          ? 'No profiles'
+                          : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
+                      </div>
+                      {uniqueProfiles().length > 0 ? (
+                        <For each={uniqueProfiles()}>
+                          {(profile) => (
+                            <div
+                              data-profile-id={profile.id}
+                              class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedProfileIds().includes(profile.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                }}
+                                onchange={() => {
+                                  toggleProfileSelection(profile.id)
+                                }}
+                                style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  'margin-right': '10px',
+                                  cursor: 'pointer',
+                                  'accent-color': 'var(--primary)',
+                                  'flex-shrink': 0,
+                                }}
+                              />
+                              <span
+                                style={{ flex: 1, cursor: 'pointer' }}
+                                onClick={() => {
+                                  selectProfile(profile.id)
+                                }}
+                                title="Set as primary profile"
+                              >
+                                {profile.name}
+                              </span>
+                              {currentProfile()?.id === profile.id && (
+                                <span
+                                  style={{
+                                    'font-size': '10px',
+                                    color: 'var(--primary)',
+                                    opacity: 0.7,
+                                  }}
+                                >
+                                  primary
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </For>
+                      ) : (
+                        <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
+                          Sign In
+                        </div>
+                      )}
+
+                      <div
+                        class={profileStyles.profileDropdownItem}
+                        data-test-id="profile-create-item"
+                        onClick={() => {
+                          setIsProfileModalOpen(true)
+                        }}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          style={{ 'margin-right': '8px' }}
+                        >
+                          <path d="M12 4v16m8-8H4" />
+                        </svg>
+                        Create Profile
+                      </div>
+
+                      {isAuthenticated() && currentProfile() ? (
+                        <>
+                          <div class={profileStyles.profileDropdownDivider}></div>
+                          <div
+                            class={profileStyles.profileDropdownItem}
+                            onClick={handleLogin}
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              style={{ 'margin-right': '8px' }}
+                            >
+                              <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                              <circle cx="12" cy="7" r="4" />
+                            </svg>
+                            Manage Account
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div class={profileStyles.profileDropdownDivider}></div>
+                          <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
+                            <svg
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              style={{ 'margin-right': '8px' }}
+                            >
+                              <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+                            </svg>
+                            Sign In
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ padding: '0 16px', 'margin-bottom': '12px' }}>
+                  {isAuthenticated() && currentProfile() ? (
                     <div
                       style={{
                         display: 'flex',
                         'align-items': 'center',
                         gap: '8px',
-                        'min-width': 0,
+                        padding: '6px 0',
                       }}
                     >
-                      <div
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          'border-radius': '50%',
-                          background: 'var(--primary)',
-                          color: 'white',
-                          display: 'flex',
-                          'align-items': 'center',
-                          'justify-content': 'center',
-                          'font-size': '12px',
-                          'font-weight': 'bold',
-                          'flex-shrink': 0,
-                        }}
+                      <svg
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        style={{ 'flex-shrink': 0 }}
                       >
-                        {currentProfile()?.name.charAt(0).toUpperCase() || '?'}
-                      </div>
+                        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                      </svg>
                       <span
                         style={{
-                          'font-weight': 600,
+                          flex: 1,
+                          'font-size': '13px',
+                          'font-weight': 500,
                           overflow: 'hidden',
                           'text-overflow': 'ellipsis',
                           'white-space': 'nowrap',
                         }}
                       >
-                        {selectedProfileIds().length > 1
-                          ? profiles()
-                              .filter((p) => selectedProfileIds().includes(p.id))
-                              .map((p) => p.name)
-                              .join(' & ')
-                          : currentProfile()?.name || 'Not Logged In'}
+                        {currentProfile()?.name}
                       </span>
-                    </div>
-                    <svg
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      style={{
-                        width: '16px',
-                        height: '16px',
-                        transition: 'transform 0.2s',
-                        transform: showDropdown() ? 'rotate(180deg)' : 'none',
-                      }}
-                    >
-                      <path d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  <div
-                    class={`${profileStyles.profileDropdownMenu} ${showDropdown() ? profileStyles.visible : ''}`}
-                  >
-                    <div class={profileStyles.profileDropdownHeader}>
-                      {uniqueProfiles().length === 0
-                        ? 'No profiles'
-                        : `Profiles (${selectedProfileIds().length} of ${uniqueProfiles().length} selected)`}
-                    </div>
-                    {uniqueProfiles().length > 0 ? (
-                      <For each={uniqueProfiles()}>
-                        {(profile) => (
-                          <div
-                            data-profile-id={profile.id}
-                            class={`${profileStyles.profileDropdownItem} ${currentProfile()?.id === profile.id ? profileStyles.active : ''}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={selectedProfileIds().includes(profile.id)}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                              }}
-                              onchange={() => {
-                                toggleProfileSelection(profile.id)
-                              }}
-                              style={{
-                                width: '16px',
-                                height: '16px',
-                                'margin-right': '10px',
-                                cursor: 'pointer',
-                                'accent-color': 'var(--primary)',
-                                'flex-shrink': 0,
-                              }}
-                            />
-                            <span
-                              style={{ flex: 1, cursor: 'pointer' }}
-                              onClick={() => {
-                                selectProfile(profile.id)
-                              }}
-                              title="Set as primary profile"
-                            >
-                              {profile.name}
-                            </span>
-                            {currentProfile()?.id === profile.id && (
-                              <span
-                                style={{
-                                  'font-size': '10px',
-                                  color: 'var(--primary)',
-                                  opacity: 0.7,
-                                }}
-                              >
-                                primary
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </For>
-                    ) : (
-                      <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
-                        Sign In
-                      </div>
-                    )}
-
-                    <div
-                      class={profileStyles.profileDropdownItem}
-                      data-test-id="profile-create-item"
-                      onClick={() => {
-                        setIsProfileModalOpen(true)
-                      }}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        style={{ 'margin-right': '8px' }}
+                      <button
+                        class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
+                        onClick={handleLogout}
+                        title="Logout"
+                        style={{ padding: '4px 6px', 'flex-shrink': 0 }}
                       >
-                        <path d="M12 4v16m8-8H4" />
-                      </svg>
-                      Create Profile
-                    </div>
-
-                    {isAuthenticated() && currentProfile() ? (
-                      <>
-                        <div class={profileStyles.profileDropdownDivider}></div>
-                        <div
-                          class={profileStyles.profileDropdownItem}
-                          onClick={handleLogin}
-                          style={{ color: 'var(--text-secondary)' }}
+                        <svg
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          viewBox="0 0 24 24"
                         >
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            style={{ 'margin-right': '8px' }}
-                          >
-                            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                          </svg>
-                          Manage Account
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div class={profileStyles.profileDropdownDivider}></div>
-                        <div class={profileStyles.profileDropdownItem} onClick={handleLogin}>
-                          <svg
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            style={{ 'margin-right': '8px' }}
-                          >
-                            <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
-                          </svg>
-                          Sign In
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div style={{ padding: '0 16px', 'margin-bottom': '12px' }}>
-                {isAuthenticated() && currentProfile() ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      'align-items': 'center',
-                      gap: '8px',
-                      padding: '6px 0',
-                    }}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      style={{ 'flex-shrink': 0 }}
-                    >
-                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                    <span
-                      style={{
-                        flex: 1,
-                        'font-size': '13px',
-                        'font-weight': 500,
-                        overflow: 'hidden',
-                        'text-overflow': 'ellipsis',
-                        'white-space': 'nowrap',
-                      }}
-                    >
-                      {currentProfile()?.name}
-                    </span>
+                          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                        </svg>
+                      </button>
+                    </div>
+                  ) : (
                     <button
-                      class={`${layoutStyles.btn} ${layoutStyles.btnGhost} ${layoutStyles.btnSm}`}
-                      onClick={handleLogout}
-                      title="Logout"
-                      style={{ padding: '4px 6px', 'flex-shrink': 0 }}
+                      class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
+                      style={{ width: '100%' }}
+                      onClick={handleLogin}
                     >
                       <svg
                         width="16"
@@ -1136,254 +1165,240 @@ export function App() {
                         stroke-width="2"
                         viewBox="0 0 24 24"
                       >
-                        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+                        <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
                       </svg>
+                      Login
                     </button>
-                  </div>
-                ) : (
+                  )}
+                </div>
+                <nav class={layoutStyles.sidebarNav}>
+                  <For each={navSections}>
+                    {(section) => (
+                      <Show
+                        when={section.group}
+                        fallback={<For each={section.items}>{(item) => navLink(item)}</For>}
+                      >
+                        <div class={layoutStyles.sidebarGroup}>
+                          <button
+                            type="button"
+                            class={`${layoutStyles.sidebarGroupHeader}${
+                              groupHasActive(section.items)
+                                ? ` ${layoutStyles.sidebarGroupActive}`
+                                : ''
+                            }`}
+                            aria-expanded={isGroupExpanded(section)}
+                            onClick={() => {
+                              toggleGroup(section.group!)
+                            }}
+                          >
+                            <span>{section.group}</span>
+                            <svg
+                              class={`${layoutStyles.sidebarChevron}${
+                                isGroupExpanded(section)
+                                  ? ` ${layoutStyles.sidebarChevronOpen}`
+                                  : ''
+                              }`}
+                              width="14"
+                              height="14"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              viewBox="0 0 24 24"
+                            >
+                              <path d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                          <Show when={isGroupExpanded(section)}>
+                            <div class={layoutStyles.sidebarGroupItems}>
+                              <For each={section.items}>{(item) => navLink(item)}</For>
+                            </div>
+                          </Show>
+                        </div>
+                      </Show>
+                    )}
+                  </For>
                   <button
-                    class={`${layoutStyles.btn} ${layoutStyles.btnPrimary}`}
-                    style={{ width: '100%' }}
-                    onClick={handleLogin}
+                    class={layoutStyles.sidebarNavLink}
+                    data-test-id="whats-new-btn"
+                    style={{
+                      'margin-top': '8px',
+                      'border-top': '1px solid rgba(255,255,255,0.08)',
+                      'padding-top': '16px',
+                    }}
+                    onClick={() => {
+                      setShowTourSelection(true)
+                      setSidebarCollapsed(true)
+                    }}
                   >
                     <svg
-                      width="16"
-                      height="16"
+                      width="18"
+                      height="18"
                       fill="none"
                       stroke="currentColor"
                       stroke-width="2"
                       viewBox="0 0 24 24"
                     >
-                      <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M13.8 12H3" />
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                     </svg>
-                    Login
+                    <span>What's New</span>
                   </button>
-                )}
+                </nav>
               </div>
-              <nav class={layoutStyles.sidebarNav}>
-                <For each={navSections}>
-                  {(section) => (
-                    <Show
-                      when={section.group}
-                      fallback={<For each={section.items}>{(item) => navLink(item)}</For>}
-                    >
-                      <div class={layoutStyles.sidebarGroup}>
-                        <button
-                          type="button"
-                          class={`${layoutStyles.sidebarGroupHeader}${
-                            groupHasActive(section.items)
-                              ? ` ${layoutStyles.sidebarGroupActive}`
-                              : ''
-                          }`}
-                          aria-expanded={isGroupExpanded(section)}
-                          onClick={() => {
-                            toggleGroup(section.group!)
-                          }}
-                        >
-                          <span>{section.group}</span>
-                          <svg
-                            class={`${layoutStyles.sidebarChevron}${
-                              isGroupExpanded(section) ? ` ${layoutStyles.sidebarChevronOpen}` : ''
-                            }`}
-                            width="14"
-                            height="14"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M9 5l7 7-7 7" />
-                          </svg>
-                        </button>
-                        <Show when={isGroupExpanded(section)}>
-                          <div class={layoutStyles.sidebarGroupItems}>
-                            <For each={section.items}>{(item) => navLink(item)}</For>
-                          </div>
-                        </Show>
-                      </div>
-                    </Show>
-                  )}
-                </For>
-                <button
-                  class={layoutStyles.sidebarNavLink}
-                  data-test-id="whats-new-btn"
-                  style={{
-                    'margin-top': '8px',
-                    'border-top': '1px solid rgba(255,255,255,0.08)',
-                    'padding-top': '16px',
-                  }}
+
+              <Show when={!sidebarCollapsed()}>
+                <div
+                  class={layoutStyles['sidebar-overlay']}
                   onClick={() => {
-                    setShowTourSelection(true)
                     setSidebarCollapsed(true)
                   }}
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.86L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-                  </svg>
-                  <span>What's New</span>
-                </button>
-              </nav>
-            </div>
+                />
+              </Show>
 
-            <Show when={!sidebarCollapsed()}>
-              <div
-                class={layoutStyles['sidebar-overlay']}
+              <button
+                class={layoutStyles['mobile-toggle']}
+                classList={{ [layoutStyles['mobile-toggle-open']]: !sidebarCollapsed() }}
                 onClick={() => {
-                  setSidebarCollapsed(true)
+                  setSidebarCollapsedStore(!state.sidebarCollapsed)
                 }}
-              />
-            </Show>
-
-            <button
-              class={layoutStyles['mobile-toggle']}
-              classList={{ [layoutStyles['mobile-toggle-open']]: !sidebarCollapsed() }}
-              onClick={() => {
-                setSidebarCollapsedStore(!state.sidebarCollapsed)
-              }}
-              aria-label="Toggle sidebar"
-            >
-              {/* Closed: hamburger at top-left. Open: back-chevron parked at the sidebar's
-                  top-right so it never covers the logo. */}
-              <svg
-                width="20"
-                height="20"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
+                aria-label="Toggle sidebar"
               >
-                <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M15 19l-7-7 7-7'} />
-              </svg>
-            </button>
+                {/* Closed: hamburger at top-left. Open: back-chevron parked at the sidebar's
+                  top-right so it never covers the logo. */}
+                <svg
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                >
+                  <path d={sidebarCollapsed() ? 'M4 6h16M4 12h16M4 18h16' : 'M15 19l-7-7 7-7'} />
+                </svg>
+              </button>
 
-            <main class={layoutStyles.main} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
-              {/* Above the page host, not inside it: the address is an account matter, and the
+              <main class={layoutStyles.main} onTouchStart={onSwipeStart} onTouchEnd={onSwipeEnd}>
+                {/* Above the page host, not inside it: the address is an account matter, and the
                   pages here stay mounted and hidden, so a per-page home would render it once
                   per page. */}
-              <VerifyEmailBanner />
-              <AchievementsHost />
-              {Object.entries(allPages).map(([name, page]) => (
-                <Show when={mountedPages().has(name)}>
-                  <div style={{ display: activePage() === name ? 'block' : 'none' }}>
-                    <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
-                      <ErrorBoundary
-                        fallback={(err) => (
-                          <div class={layoutStyles.pageError}>
-                            <h3>Page Error</h3>
-                            <p>{err.toString()}</p>
-                            <button
-                              onClick={() => {
-                                window.location.reload()
-                              }}
-                            >
-                              Reload
-                            </button>
-                          </div>
-                        )}
-                      >
-                        <Dynamic component={page} data-testid={`page-${name}`} />
-                      </ErrorBoundary>
-                    </Suspense>
-                  </div>
-                </Show>
-              ))}
-            </main>
+                <VerifyEmailBanner />
+                <AchievementsHost />
+                {Object.entries(allPages).map(([name, page]) => (
+                  <Show when={mountedPages().has(name)}>
+                    <div style={{ display: activePage() === name ? 'block' : 'none' }}>
+                      <Suspense fallback={<div class={layoutStyles.pageLoader}>Loading...</div>}>
+                        <ErrorBoundary
+                          fallback={(err) => (
+                            <div class={layoutStyles.pageError}>
+                              <h3>Page Error</h3>
+                              <p>{err.toString()}</p>
+                              <button
+                                onClick={() => {
+                                  window.location.reload()
+                                }}
+                              >
+                                Reload
+                              </button>
+                            </div>
+                          )}
+                        >
+                          <Dynamic component={page} data-testid={`page-${name}`} />
+                        </ErrorBoundary>
+                      </Suspense>
+                    </div>
+                  </Show>
+                ))}
+              </main>
 
-            <Show when={isLoginModalOpen()}>
-              <LoginModal
+              <Show when={isLoginModalOpen()}>
+                <LoginModal
+                  onClose={() => {
+                    setIsLoginModalOpen(false)
+                  }}
+                  onSuccess={handleLoginSuccess}
+                />
+              </Show>
+
+              <Show when={isProfileModalOpen()}>
+                <ProfileModal
+                  onClose={() => {
+                    setIsProfileModalOpen(false)
+                  }}
+                  onSuccess={async (created) => {
+                    setIsProfileModalOpen(false)
+                    // The list has to hold the new profile before it can be shown as active. When it
+                    // cannot be read just now, the created row is enough to show it by.
+                    await loadProfiles()
+                    if (!profiles().some((p) => p.id === created.id)) {
+                      setProfiles([...profiles(), { ...created }])
+                    }
+                    applyProfileSelection([created.id])
+                  }}
+                />
+              </Show>
+
+              <CommandBar
+                isOpen={isQuickAddOpen}
                 onClose={() => {
-                  setIsLoginModalOpen(false)
+                  setIsQuickAddOpen(false)
                 }}
-                onSuccess={handleLoginSuccess}
-              />
-            </Show>
-
-            <Show when={isProfileModalOpen()}>
-              <ProfileModal
-                onClose={() => {
-                  setIsProfileModalOpen(false)
-                }}
-                onSuccess={async (created) => {
-                  setIsProfileModalOpen(false)
-                  // The list has to hold the new profile before it can be shown as active. When it
-                  // cannot be read just now, the created row is enough to show it by.
-                  await loadProfiles()
-                  if (!profiles().some((p) => p.id === created.id)) {
-                    setProfiles([...profiles(), { ...created }])
-                  }
-                  applyProfileSelection([created.id])
+                categories={quickCategories}
+                accounts={quickAccounts}
+                onSave={() => {
+                  toast('Entry added', 'success')
+                  bumpProfileVersion()
                 }}
               />
-            </Show>
 
-            <CommandBar
-              isOpen={isQuickAddOpen}
-              onClose={() => {
-                setIsQuickAddOpen(false)
-              }}
-              categories={quickCategories}
-              accounts={quickAccounts}
-              onSave={() => {
-                toast('Entry added', 'success')
-                bumpProfileVersion()
-              }}
-            />
-
-            {/* Floating quick-add — the universal way in (works on touch, where
+              {/* Floating quick-add — the universal way in (works on touch, where
                 the ⌘K command bar has no shortcut). Opens the Guided Orbit. */}
-            <button
-              class={layoutStyles.fab}
-              onClick={() => setIsGuidedOpen(true)}
-              aria-label="Quick add entry"
-              title="Quick add (or ⌘K for the command bar)"
-            >
-              <svg
-                width="24"
-                height="24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                viewBox="0 0 24 24"
+              <button
+                class={layoutStyles.fab}
+                onClick={() => setIsGuidedOpen(true)}
+                aria-label="Quick add entry"
+                title="Quick add (or ⌘K for the command bar)"
               >
-                <path stroke-linecap="round" d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
+                <svg
+                  width="24"
+                  height="24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
 
-            <GuidedOrbit
-              isOpen={isGuidedOpen}
-              onClose={() => setIsGuidedOpen(false)}
-              categories={quickCategories}
-              accounts={quickAccounts}
-              onSave={() => {
-                toast('Entry added', 'success')
-                bumpProfileVersion()
-              }}
-            />
+              <GuidedOrbit
+                isOpen={isGuidedOpen}
+                onClose={() => setIsGuidedOpen(false)}
+                categories={quickCategories}
+                accounts={quickAccounts}
+                onSave={() => {
+                  toast('Entry added', 'success')
+                  bumpProfileVersion()
+                }}
+              />
 
-            <Show when={spotlightActive()}>
-              <Spotlight />
-            </Show>
+              <Show when={spotlightActive()}>
+                <Spotlight />
+              </Show>
 
-            <Show when={showShortcuts()}>
-              <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
-            </Show>
+              <Show when={showShortcuts()}>
+                <KeyboardShortcutsModal onClose={() => setShowShortcuts(false)} />
+              </Show>
 
-            <Show when={showTourSelection()}>
-              <TourSelectionModal />
-            </Show>
+              <Show when={showTourSelection()}>
+                <TourSelectionModal />
+              </Show>
+
+              <PasskeyNudge />
+            </div>
 
             <Show when={onboardingOpen()}>
               <OnboardingWizard selectProfiles={applyProfileSelection} />
             </Show>
 
-            <PasskeyNudge />
             <ConfirmDialog />
           </Suspense>
         </Show>
