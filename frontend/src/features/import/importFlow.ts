@@ -375,6 +375,9 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // already exist (stored earlier, or repeated within this import). null = the
   // dry-run didn't run / failed, so the preview makes no claim.
   const [existingDuplicates, setExistingDuplicates] = createSignal<number | null>(null)
+  // Which rows those are, so a count of what an import adds can leave them out once: a bank
+  // statement's repeats of its own rows are already unticked, and also in this list.
+  const [existingDuplicateIndices, setExistingDuplicateIndices] = createSignal<number[]>([])
   const [previewValidationIssues, setPreviewValidationIssues] = createSignal<
     ImportValidationIssue[]
   >([])
@@ -660,6 +663,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // same statement reads "nothing new here", not a silent 0.
   const fetchDryRunPreview = async () => {
     setExistingDuplicates(null)
+    setExistingDuplicateIndices([])
     try {
       // `dry_run` in the body is what the server reads. The same flag in the URL is for the
       // client: apiFetch never sees a body, and without it every preview counted as an import and
@@ -718,6 +722,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       setApprovedCategories(new Set(list))
       setNewAccounts(Array.isArray(data?.new_accounts) ? data.new_accounts : [])
       setExistingDuplicates(typeof data?.duplicates === 'number' ? data.duplicates : null)
+      setExistingDuplicateIndices(
+        Array.isArray(data?.duplicate_indices)
+          ? data.duplicate_indices.filter(
+              (index: unknown): index is number => typeof index === 'number'
+            )
+          : []
+      )
     } catch {
       // Non-fatal: fall back to auto-create-all (no approvedCategories sent on
       // import) and no duplicate claim.
@@ -749,6 +760,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setNewAccounts([])
     setApprovedCategories(new Set<string>())
     setExistingDuplicates(null)
+    setExistingDuplicateIndices([])
     setPreviewValidationIssues([])
     setRows([])
     setHeaders([])
@@ -842,6 +854,16 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
    * `file` field for a refusal, for the Import page's form to mark (uploadForm.ts).
    */
   const uploadFile = (file: File) => handleFileUpload(file, undefined, { rethrow: true })
+
+  /**
+   * Reads `file` as File Upload reads a chosen one, for a file that comes from elsewhere (the setup
+   * wizard hands over one it could not import): on to the mapping step when it reads, and in the
+   * page's error banner when it does not.
+   */
+  const readFile = (file: File) => {
+    clearUpload()
+    return handleFileUpload(file)
+  }
 
   /** Read another sheet of the uploaded workbook: the file goes up again, with the sheet named. */
   const chooseUploadedSheet = (sheetName: string) => {
@@ -1678,6 +1700,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     newAccounts,
     approvedCategories,
     existingDuplicates,
+    existingDuplicateIndices,
     previewValidationIssues,
     previewWarnings,
     invalidRowSet,
@@ -1720,6 +1743,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     addBankAccount,
     loadBankAccounts,
     loadBankCategories,
+    addBankFiles,
+    readFile,
     handleBankFileSelect,
     handleBankDrop,
     updateBankFile,
