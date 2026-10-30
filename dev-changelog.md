@@ -1312,6 +1312,15 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   it as a link, "Why: Paying your way", to `#progress/<n>`, a 48 px target.
 - **Tests:** `advice.test.ts` (each kind's circle, from cards `buildAdvice` makes) and
   `progressAdvice.test.tsx` (each card's Why names its circle and opens it).
+- **Progress tour** in `SPOTLIGHT_TOURS` (`frontend/src/core/spotlightStore.ts`), after Dashboard's:
+  `progress-header`, `progress-next-step` and `progress-circles`. Both new anchors render in every
+  state: Your next step has a pending state and a state for every case, and the ledger lists its
+  seven rows before the circles are worked out. A tour started on a circle's view goes back to the
+  list, as the Loans tour does from a loan, and leaves focus where it is.
+- **Tests:** `spotlightStore.test.ts` (the tour's three anchors in order, on Progress),
+  `progressCircles.test.tsx` (the tour takes a circle's view back to the list, a circle opened under
+  it closes again, and focus stays off the row's link) and `TourSelectionModal.account.test.tsx`
+  (sixteen tours).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

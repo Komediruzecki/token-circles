@@ -19,6 +19,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Seven circles on Progress.** Each circle, from Clear picture to More than enough, gets a row with your own figure, like months on file or the months of essentials your money covers. The row you're in is lit, with Your next step above it.
 - **Open a circle to see what it checks**: met, not yet or not known yet, with the numbers behind each. Where a check needs your answer, like whether you carry a balance on a card or set money aside for yearly bills, the circle asks once and Settings keeps it.
 - **Your next step on Dashboard.** Once Getting started is hidden or a full year is on file, Dashboard shows the one step your circles point to, with a link to all seven.
+- **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
 
 ### Changed
 

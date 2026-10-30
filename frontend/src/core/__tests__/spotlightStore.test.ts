@@ -136,6 +136,16 @@ describe('spotlight tours', () => {
     }
   })
 
+  it('Progress has a tour: the page, Your next step and the seven circles', () => {
+    const tour = SPOTLIGHT_TOURS.find((t) => t.id === 'progress')
+    expect(tour?.page).toBe('progress')
+    expect(tour?.steps.map((s) => [keyOf(s.targetSelector), s.requiredPage, s.title])).toEqual([
+      ['progress-header', 'progress', 'Progress'],
+      ['progress-next-step', 'progress', 'Your next step'],
+      ['progress-circles', 'progress', 'Your seven circles'],
+    ])
+  })
+
   it('no two steps in the same tour reuse the same anchor', () => {
     for (const tour of SPOTLIGHT_TOURS) {
       const keys = tour.steps.map((s) => keyOf(s.targetSelector))

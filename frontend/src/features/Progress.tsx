@@ -6,7 +6,7 @@
  * `#progress/<n>` opens circle n in place of everything under the header (design.md 1.8, circles
  * part 2); the list stays mounted under it, hidden, so going back puts focus on that circle's row.
  */
-import { createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from 'solid-js'
 import BadgeMedallion from '../components/BadgeMedallion'
 import { streakLabel } from '../components/BadgeRail'
 import BadgeTimeline from '../components/BadgeTimeline'
@@ -32,6 +32,7 @@ import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { useGuidance } from '../core/guidance'
 import { circleFromHash, circleHash, isProgressHash } from '../core/progressRoute'
+import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { addToast } from '../core/toastStore'
 import { localToday } from '../utils/period'
 import AdviceList from './ProgressAdvice'
@@ -73,8 +74,9 @@ export default function Progress(): JSX.Element {
       const before = opened()
       const next = circleFromHash(window.location.hash)
       setOpened(next)
-      if (before !== null && next === null) {
-        // Back on the list: focus the row of the circle that was open.
+      if (before !== null && next === null && !spotlightActive()) {
+        // Back on the list: focus the row of the circle that was open. Not under a tour, where
+        // the row's link would take Enter from the tour and open the circle again.
         queueMicrotask(() => {
           root
             ?.querySelector<HTMLAnchorElement>(`[data-circle-row="${before}"] a`)
@@ -90,6 +92,12 @@ export default function Progress(): JSX.Element {
   const closeCircle = () => {
     window.location.hash = circleHash(null)
   }
+  // A tour of this page points at the list: take it there from a circle's view.
+  createEffect(() => {
+    if (!spotlightActive()) return
+    const step = tourSteps()[spotlightStep()]
+    if (step?.requiredPage === 'progress' && opened() !== null) closeCircle()
+  })
   const tracked = createMemo(() => new Set(snap()?.evaluation.trackedMonths ?? []))
   const earned = createMemo(() => new Map(unlocks().map((u) => [u.id, u])))
 

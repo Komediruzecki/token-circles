@@ -56,6 +56,7 @@ import { refreshAchievements } from '../../core/achievementsStore'
 import { apiPut } from '../../core/api'
 import { takeAnswers } from '../../core/guidance'
 import { settingsTab } from '../../core/settingsStore'
+import { endSpotlight, startTour } from '../../core/spotlightStore'
 import Progress from '../Progress'
 
 /** The view the store would answer for `f`. */
@@ -329,6 +330,32 @@ describe("a circle's own view", () => {
     expect(view.querySelector('[data-test-id="next-step-card"]')).toBeNull()
     q(view, '[data-test-id="circle-back"]').click()
     expect(window.location.hash).toBe('#progress')
+  })
+
+  it("takes the Progress tour back to the list from a circle's view, leaving focus alone", async () => {
+    guidance.set!(viewOf(facts()))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    const heading = q(c, '[data-test-id="circle-view"] h2')
+    expect(document.activeElement).toBe(heading)
+    try {
+      startTour('progress')
+      expect(window.location.hash).toBe('#progress')
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      await tick()
+      expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
+      expect(q(c, '[data-tour="progress-circles"]').closest('[hidden]')).toBeNull()
+      // The row's link would take Enter from the tour, and open the circle again.
+      expect(document.activeElement).not.toBe(q(c, '[data-circle-row="4"] a'))
+
+      // While the tour points at the list, a circle opened under it closes again.
+      go('#progress/2')
+      expect(window.location.hash).toBe('#progress')
+    } finally {
+      endSpotlight()
+    }
+    go('#progress/2')
+    expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('2')
   })
 
   it('stays as it was while another page is on screen', () => {

@@ -94,6 +94,34 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     ],
   },
 
+  // ── Progress: the page, Your next step and the seven circles, each anchor shown in every state ──
+  {
+    id: 'progress',
+    label: 'Progress',
+    page: 'progress',
+    steps: [
+      step(
+        'progress-header',
+        'progress',
+        'Progress',
+        'Your seven circles, your record and your badges, all worked out from your own entries.'
+      ),
+      step(
+        'progress-next-step',
+        'progress',
+        'Your next step',
+        'The one step your circles point to now, with the reason in your own figures.'
+      ),
+      step(
+        'progress-circles',
+        'progress',
+        'Your seven circles',
+        'From Clear picture to More than enough, each row shows your own figure. Open a circle to see what it checks.',
+        'top'
+      ),
+    ],
+  },
+
   // ── Transactions ──
   {
     id: 'transactions',

@@ -60,5 +60,5 @@ it("marks the account's finished tours Done once its list arrives", async () => 
   })
   expect(badge('Loans')).toBe('Done')
   expect(badge('Budgets')).not.toBe('Done')
-  expect(host.textContent).toContain('2/15 tours completed')
+  expect(host.textContent).toContain('2/16 tours completed')
 })
