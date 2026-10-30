@@ -3,8 +3,12 @@
  * the first ADVICE_SHOWN, most useful first, and a button in the same container shows the rest.
  * Dismissing a card lets the next one move up: the list is always the first cards of what is left.
  * Focus follows the dismissal, so a keyboard user carries on from where the card was.
+ *
+ * Each card says which of the seven circles it serves, and its Why opens that circle's view.
  */
 import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js'
+import { CIRCLE_NAMES } from '../../../shared/guidance/circles'
+import { circleHash } from '../core/progressRoute'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
 import type { AdviceCard } from '../core/achievements/advice'
@@ -86,6 +90,14 @@ export default function AdviceList(props: {
                       </button>
                     )}
                   </Show>
+                  <a
+                    class={styles.why}
+                    href={circleHash(card.circle)}
+                    data-test-id="advice-why"
+                    data-circle={card.circle}
+                  >
+                    Why: {CIRCLE_NAMES[card.circle]}
+                  </a>
                 </div>
               </div>
               <button

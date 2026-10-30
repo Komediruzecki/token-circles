@@ -165,6 +165,55 @@ describe('buildAdvice', () => {
   })
 })
 
+describe('buildAdvice: the circle each card serves', () => {
+  it('names Clear picture, Paying your way or Breathing room for each kind', () => {
+    const goals = [
+      {
+        name: 'New bike',
+        target_amount: 1200,
+        current_amount: 200,
+        deadline: '2026-12-31',
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    const runs = [
+      buildAdvice(make({ budgets: [MONTHLY], transactions: month('2026-09', 3, { amount: 60 }) })),
+      buildAdvice(make({ goals })),
+      buildAdvice(
+        make({
+          transactions: [
+            ...month('2026-08', 3, { amount: 900 }),
+            tx('2026-08-25', { type: 'income', amount: 100 }),
+            ...month('2026-09', 3, { amount: 900 }),
+          ],
+        })
+      ),
+      buildAdvice(
+        make({ transactions: [...month('2026-09', 3), tx('2026-09-20', { category_id: null })] })
+      ),
+      buildAdvice(
+        make({
+          transactions: [...month('2026-07', 3), ...month('2026-08', 3), tx('2026-09-02')],
+          today: '2026-09-26',
+        }),
+        2
+      ),
+      buildAdvice(make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }) })),
+    ]
+    const circles = new Map<string, Set<number>>()
+    for (const c of runs.flat())
+      circles.set(c.kind, (circles.get(c.kind) ?? new Set()).add(c.circle))
+    expect(Object.fromEntries([...circles].map(([kind, set]) => [kind, [...set]]))).toEqual({
+      uncategorised: [1],
+      'streak-at-risk': [1],
+      'in-the-red': [2],
+      'budget-drift': [2],
+      'unbudgeted-category': [2],
+      'goal-pace': [3],
+    })
+  })
+})
+
 /**
  * Budgets are stored one row per month: Set Budget, Allocate and Copy last month each write a row
  * whose start_date is the month's first day and whose end_date is empty, in both runtimes. The

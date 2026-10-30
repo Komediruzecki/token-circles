@@ -1306,6 +1306,12 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   next step and its link to Progress; both modes: the gauge keeps to the year when the period
   changes, and a browser goal moves to the profile once) and `orientation.spec.ts` (Your next step
   after Getting started is hidden).
+- **Advice circles** (`frontend/src/core/achievements/advice.ts`, `ProgressAdvice.tsx`): each kind
+  maps to a circle (`ADVICE_CIRCLES`: uncategorised and streak-at-risk Clear picture; in-the-red,
+  budget-drift and unbudgeted-category Paying your way; goal-pace Breathing room). The card shows
+  it as a link, "Why: Paying your way", to `#progress/<n>`, a 48 px target.
+- **Tests:** `advice.test.ts` (each kind's circle, from cards `buildAdvice` makes) and
+  `progressAdvice.test.tsx` (each card's Why names its circle and opens it).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

@@ -12,6 +12,7 @@ import type { AdviceCard } from '../../core/achievements/advice'
 const card = (n: number): AdviceCard => ({
   id: `card-${n}`,
   kind: 'budget-drift',
+  circle: 2,
   tone: 'warn',
   title: `Card ${n}`,
   detail: `Detail ${n}`,
@@ -163,5 +164,23 @@ describe('Worth a look list', () => {
     const c = mount(() => <AdviceList cards={cards(1)} onOpen={onOpen} onDismiss={vi.fn()} />)
     ;(c.querySelector('[data-advice-card] button') as HTMLButtonElement).click()
     expect(onOpen).toHaveBeenCalledWith('budgets')
+  })
+
+  it('says which circle each card serves, and its Why opens that circle', () => {
+    const c = mount(() => (
+      <AdviceList
+        cards={[card(1), { ...card(2), kind: 'goal-pace', circle: 3 }]}
+        onOpen={vi.fn()}
+        onDismiss={vi.fn()}
+      />
+    ))
+    const why = [...c.querySelectorAll<HTMLAnchorElement>('[data-advice-card] a')].map((a) => ({
+      text: a.textContent,
+      href: a.getAttribute('href'),
+    }))
+    expect(why).toEqual([
+      { text: 'Why: Paying your way', href: '#progress/2' },
+      { text: 'Why: Breathing room', href: '#progress/3' },
+    ])
   })
 })

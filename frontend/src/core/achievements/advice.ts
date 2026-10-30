@@ -8,6 +8,7 @@ import { budgetsForMonth } from './budgets'
 import { bucketByMonth, sumTypes } from './evaluate'
 import { biggestUnbudgeted, monthInTheRed, uncategorisedIn } from './monthFacts'
 import { addMonths, monthOf } from './months'
+import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { EvaluateInput, Tx } from './evaluate'
 
 export type AdviceKind =
@@ -22,6 +23,8 @@ export interface AdviceCard {
   /** Stable across runs of the same data, so a dismissal sticks. */
   id: string
   kind: AdviceKind
+  /** The circle the advice serves (ADVICE_CIRCLES); the card's Why opens it. */
+  circle: CircleNumber
   tone: 'warn' | 'info'
   title: string
   detail: string
@@ -33,6 +36,23 @@ export interface AdviceCard {
   /** About a month already finished. Ranked after what is still happening this month. */
   past?: boolean
 }
+
+/**
+ * The circle each kind of advice serves (circles part 2, design.md commit 11): sorting and keeping
+ * the months going build Clear picture; a month in the red and spending past a budget, or with
+ * none, are Paying your way; a goal's pace is Breathing room, where money is first put by.
+ */
+export const ADVICE_CIRCLES: Readonly<Record<AdviceKind, CircleNumber>> = {
+  uncategorised: 1,
+  'streak-at-risk': 1,
+  'in-the-red': 2,
+  'budget-drift': 2,
+  'unbudgeted-category': 2,
+  'goal-pace': 3,
+}
+
+/** A card as each kind words it, before the circle it serves is added. */
+type Advice = Omit<AdviceCard, 'circle'>
 
 export interface AdviceInput extends EvaluateInput {
   categories: Array<{ id: number; name: string }>
@@ -65,13 +85,13 @@ function categoryName(input: AdviceInput, id: number | null): string {
   return input.categories.find((c) => c.id === id)?.name ?? 'an uncategorised category'
 }
 
-function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
   const list = byMonth.get(month) ?? []
   if (list.length === 0) return []
   const money = input.money ?? round
   const elapsed = monthElapsed(input.today)
-  const cards: AdviceCard[] = []
+  const cards: Advice[] = []
   for (const b of budgetsForMonth(input.budgets, month)) {
     // The amount the Budgets card shows (amount, and remaining as amount less spent). The summary
     // also works out a budget with rollover (effective_budget, shared/budgetRollover.ts), but no
@@ -102,9 +122,9 @@ function budgetDrift(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard
   return cards
 }
 
-function goalPace(input: AdviceInput): AdviceCard[] {
+function goalPace(input: AdviceInput): Advice[] {
   const money = input.money ?? round
-  const cards: AdviceCard[] = []
+  const cards: Advice[] = []
   for (const g of input.goals) {
     if (!g.deadline || g.target_amount <= 0) continue
     const remaining = g.target_amount - g.current_amount
@@ -141,7 +161,7 @@ function monthsBetween(from: string, to: string): number {
   return n
 }
 
-function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const last = addMonths(monthOf(input.today), -1)
   const red = monthInTheRed(byMonth.get(last))
   if (!red) return []
@@ -162,7 +182,7 @@ function inTheRed(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] 
   ]
 }
 
-function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
   const n = uncategorisedIn(byMonth.get(month) ?? [])
   if (n === 0) return []
@@ -185,7 +205,7 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCa
  * `unbudgeted-category` for what it flags; it was `unbudgeted-subscription`, and a dismissal
  * stored under that name still applies (parseDismissed in records.ts).
  */
-function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): AdviceCard[] {
+function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[] {
   const month = monthOf(input.today)
   const top = biggestUnbudgeted(byMonth.get(month) ?? [], month, input.budgets, input.bills)
   if (!top) return []
@@ -206,11 +226,7 @@ function unbudgetedCategory(input: AdviceInput, byMonth: Map<string, Tx[]>): Adv
 
 const LATE_IN_MONTH_DAYS = 8
 
-function streakAtRisk(
-  input: AdviceInput,
-  byMonth: Map<string, Tx[]>,
-  streak: number
-): AdviceCard[] {
+function streakAtRisk(input: AdviceInput, byMonth: Map<string, Tx[]>, streak: number): Advice[] {
   if (streak < 2) return []
   const month = monthOf(input.today)
   const have = (byMonth.get(month) ?? []).length
@@ -266,4 +282,5 @@ export function buildAdvice(input: AdviceInput, streak = 0): AdviceCard[] {
       return true
     })
     .filter((c) => !dismissed.has(c.id))
+    .map((c) => ({ ...c, circle: ADVICE_CIRCLES[c.kind] }))
 }
