@@ -42,9 +42,10 @@ All notable changes to Token Circles are documented here. The format is based on
   `challenge_ts` as `solvedAt`, capped at now, and the route uses now without it. That keeps the
   check's end with the token's own expiry, when the widget fetches its next token anyway. `id` is
   16 random bytes. `mac` is HMAC-SHA256 over `login-check.v1.<exp>.<id>.<CF-Connecting-IP>` with a
-  key derived from `JWT_SECRET` by HKDF-SHA256 under the label `token-circles login-check v1`, so
-  no session, OAuth state, email-link marker or capability verifies as one. The address is signed,
-  not stored. A try that carries a good check and no token (or one Cloudflare refused) is counted
+  key derived from `JWT_SECRET` by HKDF-SHA256 under the label
+  `token-circles login-check v1 env=<APP_ENV>`, so no session, OAuth state, email-link marker or
+  capability verifies as one, and a check left on dev never verifies on prod, even if the two were
+  ever given the same `JWT_SECRET`. The address is signed, not stored. A try that carries a good check and no token (or one Cloudflare refused) is counted
   in `rate_limits` under `login-check:<id>` by one statement,
   `INSERT ... ON CONFLICT DO UPDATE ... WHERE count < 4 RETURNING count`, which caps one solved
   check at `LOGIN_CHECK_TRIES` (5) tries, its token's try included, across every tab sharing the

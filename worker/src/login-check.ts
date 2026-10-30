@@ -19,6 +19,8 @@
  *   another one. A request that names no address neither leaves a check nor has one taken.
  * - It is signed with a key of its own, derived from JWT_SECRET with HKDF under its own label, so
  *   a session, an OAuth state, an email-link marker or a capability cannot pass for a login check.
+ *   The label names the deployment (APP_ENV), so a check left on one deployment covers nothing on
+ *   another, even one given the same JWT_SECRET.
  * - Everything else fails closed: a check that ran out, was changed, comes from another address,
  *   is used up or cannot be read covers nothing, and the try needs a token as it always did. The
  *   answer clears such a check, so the browser stops sending it.
@@ -78,12 +80,20 @@ export function loginCheckBytes(exp: number, id: string, ip: string) {
   return encoder.encode(`login-check.${FORMAT}.${exp}.${id}.${ip}`);
 }
 
-async function loginCheckKey(secret: string): Promise<CryptoKey> {
+/** The key that signs this deployment's login checks. Callers check that JWT_SECRET is set. */
+async function loginCheckKey(secret: string, appEnv: string | undefined): Promise<CryptoKey> {
   const material = await crypto.subtle.importKey('raw', encoder.encode(secret), 'HKDF', false, [
     'deriveKey',
   ]);
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: encoder.encode(KEY_LABEL) },
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: new Uint8Array(0),
+      // The deployment is part of the label: a check left on dev never verifies on prod, even if
+      // the two were ever given the same JWT_SECRET.
+      info: encoder.encode(`${KEY_LABEL} env=${appEnv ?? ''}`),
+    },
     material,
     { name: 'HMAC', hash: 'SHA-256', length: 256 },
     false,
@@ -123,7 +133,7 @@ async function carriedCheck(request: Request, env: Env, ip: string): Promise<Log
   if (!ip || !env.JWT_SECRET) return null;
   const values = readCookies(request, LOGIN_CHECK_COOKIE).filter((v) => v !== '');
   if (values.length === 0) return null;
-  const key = await loginCheckKey(env.JWT_SECRET);
+  const key = await loginCheckKey(env.JWT_SECRET, env.APP_ENV);
   const now = nowSeconds();
   for (const value of values.slice(0, LOGIN_CHECKS_READ)) {
     const [format, expPart, id, macPart, ...rest] = value.split('.');
@@ -226,7 +236,7 @@ export async function coverNextTry(
   const id = b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
   const mac = await crypto.subtle.sign(
     'HMAC',
-    await loginCheckKey(c.env.JWT_SECRET),
+    await loginCheckKey(c.env.JWT_SECRET, c.env.APP_ENV),
     loginCheckBytes(exp, id, ip)
   );
   c.header(

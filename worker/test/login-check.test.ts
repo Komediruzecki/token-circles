@@ -438,6 +438,19 @@ describe('what one solved check covers', () => {
 
     expect(res.status).toBe(403);
   });
+
+  it('is signed for one deployment: a check left under another APP_ENV covers nothing', async () => {
+    // The same JWT_SECRET on both, so the deployment is the only difference.
+    const production: Env = { ...CHECKED, APP_ENV: 'production' };
+    const cookie = await earnCheck({ e: production });
+
+    const res = await signIn({ cookie });
+
+    expect(res.status).toBe(403);
+    expect(checkCleared(res)).toBe(true);
+    // Where it was left, it covers the next try.
+    expect((await signIn({ cookie, e: production })).status).toBe(401);
+  });
 });
 
 describe('only a password sign-in takes a check', () => {
