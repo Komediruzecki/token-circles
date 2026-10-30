@@ -540,3 +540,17 @@
     transition: none;
   }
 }
+
+/* The app shell: sidebar, pages, floating button and the overlays that belong to them. It has no
+   box of its own (display: contents), so the layout is exactly what it was without it.
+
+   App makes it inert while the setup wizard is open, and then nothing of it is painted either. A
+   fixed layer cannot be trusted to hide it: iOS Safari draws the page under its status bar and its
+   floating toolbar, outside the layer's box, and that is where the Dashboard showed through. */
+.shell {
+  display: contents;
+}
+
+.shell[inert] {
+  visibility: hidden;
+}
