@@ -31,6 +31,8 @@ const EMAIL = 'login-check@example.com';
 const WAITING = 'login-check-waiting@example.com';
 /** An account with a second factor. */
 const TWOFA = 'login-check-twofa@example.com';
+/** An address with no account. */
+const NOBODY = 'login-check-nobody@example.com';
 const PASSWORD = 'the-right-password';
 const WRONG = 'not-the-password';
 const HOME = '198.51.100.7';
@@ -272,6 +274,24 @@ describe('a wrong password after a check Cloudflare passed', () => {
     expect(await body(waiting)).toEqual(await body(wrong));
     const shape = (line: string | null) => line?.replace(/^[^=]+=[^;]*/, 'V');
     expect(shape(checkLine(waiting))).toBe(shape(checkLine(wrong)));
+  });
+
+  it('is answered for an address with no account exactly as for a wrong password', async () => {
+    await env.DB.prepare('DELETE FROM users WHERE email = ?').bind(NOBODY).run();
+    // One instant for both, so the seconds left are the same number.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.parse('2026-10-30T11:00:00Z'));
+    const wrong = await signIn({ token: 'good-1' });
+    const nobody = await signIn({ email: NOBODY, token: 'good-2' });
+
+    expect(nobody.status).toBe(401);
+    expect(await body(nobody)).toEqual(await body(wrong));
+    expect((await body(nobody)).checkValidForSeconds).toEqual(expect.any(Number));
+    const shape = (line: string | null) => line?.replace(/^[^=]+=[^;]*/, 'V');
+    expect(checkLine(nobody)).not.toBeNull();
+    expect(shape(checkLine(nobody))).toBe(shape(checkLine(wrong)));
+    // And it is a check like any other: it covers the next try.
+    expect((await signIn({ email: NOBODY, cookie: checkLeft(nobody)! })).status).toBe(401);
   });
 });
 
