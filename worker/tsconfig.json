@@ -9,7 +9,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    // emailTemplates.ts names the one shared module it imports by file name, extension and all, so
+    // worker/scripts/ can still load it under plain Node.
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts"]
 }

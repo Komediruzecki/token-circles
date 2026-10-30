@@ -155,6 +155,7 @@ afterEach(async () => {
   dispose?.()
   dispose = undefined
   host?.remove()
+  localStorage.removeItem('tc:email-link-waiting')
   // A screen unmounted on a step takes its entry back: let that land before the next test.
   await historySettled()
   vi.unstubAllGlobals()
@@ -226,6 +227,28 @@ describe('the back gesture returns to the form', () => {
     expect(onTheForm()).toBe(true)
     expect(host.querySelector<HTMLInputElement>('#login-email')!.value).toBe('name@example.com')
     expect(host.querySelector('#login-password')).not.toBeNull()
+    expect(history.state).toEqual(BEFORE)
+  })
+
+  it('from Finish signing up, on the sign-in form with the address typed kept and the link still waiting', async () => {
+    // A confirm link opened signed out, as the app notes it at boot (core/emailVerification.ts).
+    localStorage.setItem(
+      'tc:email-link-waiting',
+      JSON.stringify({ change: false, until: Date.now() + 60_000 })
+    )
+    answers['/api/auth/email-link'] = () => json({ waiting: 'confirm', email: 'n•••@example.com' })
+    await mount()
+    expect(byTestId('finish-signup-address')?.textContent).toBe('n•••@example.com')
+    expect(history.length).toBe(length + 1)
+    const typed = host.querySelector<HTMLInputElement>('#finish-signup-email')!
+    typed.value = 'name@example.com'
+    typed.dispatchEvent(new Event('input', { bubbles: true }))
+
+    await backGesture()
+
+    expect(onTheForm()).toBe(true)
+    expect(host.querySelector<HTMLInputElement>('#login-email')!.value).toBe('name@example.com')
+    expect(byTestId('auth-notice')?.textContent).toBe('Sign in to confirm your address.')
     expect(history.state).toEqual(BEFORE)
   })
 })

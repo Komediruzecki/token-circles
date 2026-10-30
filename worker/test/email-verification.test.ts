@@ -15,6 +15,7 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { CONFIRM_LINK_SIGN_IN } from '../../shared/confirmLinkSignIn';
 import { unconfirmedSessionCookie } from './helpers/session';
 import {
   renderAccountExists,
@@ -430,32 +431,34 @@ describe('the mail itself', () => {
   const fresh = renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP });
   const welcome = renderWelcome({ appUrl: APP });
   /**
-   * What each confirm mail says the link does. A new sign-up has no session, so its link always
-   * asks for a sign-in (email-link.ts). A fresh link can also be asked for from a session, where it
-   * confirms at once, so that mail says the sign-in only may come.
+   * What each confirm mail says the link does (shared/confirmLinkSignIn.ts): opened within an hour
+   * in the browser that signed up, it signs in by itself (signup-marker.ts); anywhere else, or
+   * later, it asks for the password, and that sign-in confirms the address (email-link.ts).
    */
-  const CONFIRM_SAYS =
-    'Open the link in any browser and sign in there. That confirms this address and opens your Token Circles account.';
+  const WHERE =
+    "Open it within an hour in the browser you signed up in and you're signed in. Later, or anywhere else, it asks you to sign in first.";
+  const CONFIRM_SAYS = `This link confirms your address and opens your Token Circles account. ${WHERE}`;
   const FRESH_SAYS = [
     'Use this link to confirm your address. It replaces the ones sent before.',
-    'If it asks you to sign in, sign in right there, in this browser or any other, and your Token Circles account opens.',
+    WHERE,
   ];
+  const inHtml = (words: string) => words.replaceAll("'", '&#39;');
 
   it('gives a password sign-up Confirm: the link as its button, and again as text to paste', () => {
     expect(confirm.subject).toBe('Confirm your email for Token Circles');
-    expect(confirm.html).toContain('One link, one sign-in, and you&#39;re&nbsp;in.');
-    expect(confirm.html).toContain(
-      'Open the link, then sign in where it opens. It works for 24 hours.'
-    );
+    expect(confirm.html).toContain('One click and you&#39;re&nbsp;in.');
+    expect(confirm.html).toContain('Confirm your address. The link works for 24 hours.');
     // The button and the paste-this line.
     expect(confirm.html.split(`href="${link.replaceAll('&', '&amp;')}"`)).toHaveLength(3);
     expect(confirm.text).toContain(`Confirm my email: ${link}`);
   });
 
-  it('says in both confirm mails, html and text, how the sign-in the link may ask for confirms the address', () => {
-    for (const part of [confirm.html, confirm.text]) expect(part).toContain(CONFIRM_SAYS);
-    for (const part of [fresh.html, fresh.text]) {
-      for (const words of FRESH_SAYS) expect(part).toContain(words);
+  it('says in both confirm mails, html and text, where the link signs in by itself and where it asks for the password', () => {
+    expect(confirm.html).toContain(inHtml(CONFIRM_SAYS));
+    expect(confirm.text).toContain(CONFIRM_SAYS);
+    for (const words of FRESH_SAYS) {
+      expect(fresh.html).toContain(inHtml(words));
+      expect(fresh.text).toContain(words);
     }
   });
 
@@ -478,14 +481,27 @@ describe('the mail itself', () => {
     expect(welcome.html).toMatch(appLink);
   });
 
-  it('promises no one-click confirm in either mail while the link asks for a sign-in', () => {
-    // maff's call of 2026-10-11: the mails promise nothing the app does not do yet. "One click"
-    // can come back with the same-browser sign-in.
-    for (const mail of [confirm, fresh]) {
-      for (const part of [mail.subject, mail.html, mail.text]) {
-        expect(part).not.toMatch(/one click|one-click|single click/i);
+  it('promises one click only while the link signs in the browser that signed up', () => {
+    // maff's call of 2026-10-11: the mails promise nothing the app does not do. With the
+    // same-browser sign-in off, the link asks for the password everywhere, and the mails say so.
+    CONFIRM_LINK_SIGN_IN.sameBrowser = false;
+    try {
+      const without = [
+        renderConfirmEmail({ link, ttlHours: 24, assetOrigin: APP }),
+        renderEmailVerification({ link, ttlHours: 24, assetOrigin: APP }),
+      ];
+      for (const mail of without) {
+        for (const part of [mail.subject, mail.html, mail.text]) {
+          expect(part).not.toMatch(/one click|one-click|single click|within an hour/i);
+        }
+        expect(mail.text).toContain('Open it, then sign in where it opens.');
+        expect(mail.text).toContain("Didn't sign up for Token Circles? Ignore this mail.");
       }
+      expect(without[0]!.html).toContain('One link, one sign-in, and you&#39;re&nbsp;in.');
+    } finally {
+      CONFIRM_LINK_SIGN_IN.sameBrowser = true;
     }
+    expect(confirm.text).toMatch(/^One click and you're in\./);
   });
 
   it('says in both confirm mails how long the link works, and what to do once it has run out', () => {
@@ -516,12 +532,12 @@ describe('the mail itself', () => {
     }
   });
 
-  it('tells someone who never signed up that nobody can use the account until the address is confirmed', () => {
-    const ignore =
-      "Didn't sign up for Token Circles? Ignore this mail. Nobody can use the account until this address is confirmed.";
+  it('tells someone who never signed up not to open the link, and that nobody can use the account until the address is confirmed', () => {
+    const notYou =
+      "Didn't sign up for Token Circles? Don't open the link. Nobody can use the account until this address is confirmed.";
     for (const mail of [confirm, fresh]) {
-      expect(mail.html).toContain(ignore.replace("'", '&#39;'));
-      expect(mail.text).toContain(ignore);
+      expect(mail.html).toContain(inHtml(notYou));
+      expect(mail.text).toContain(notYou);
     }
   });
 

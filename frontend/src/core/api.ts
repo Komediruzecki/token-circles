@@ -250,6 +250,23 @@ export class ApiClient {
   }
 
   /**
+   * Whether the confirm link this browser opened, signed out, still waits for its account
+   * (worker: GET /api/auth/email-link), and for which address: `masked` is the address as the
+   * Worker writes it, its first character, three dots and its domain (k•••@example.com). Null
+   * when nothing waits. The page that finishes a sign-up (FinishSignUp) shows it and asks for the
+   * address and its password.
+   */
+  async confirmLinkWaiting(): Promise<{ masked: string } | null> {
+    const answer = await this.request<{ waiting?: unknown; email?: unknown }>(
+      '/auth/email-link',
+      undefined
+    )
+    return answer?.waiting === 'confirm' && typeof answer.email === 'string'
+      ? { masked: answer.email }
+      : null
+  }
+
+  /**
    * Request a password-reset email (worker: POST /api/auth/forgot-password). Always resolves
    * (the worker never reveals whether the address has an account).
    */

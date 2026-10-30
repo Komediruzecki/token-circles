@@ -1,4 +1,5 @@
 import { createSignal, Show } from 'solid-js'
+import { whereTheLinkSignsIn } from '../../../shared/confirmLinkSignIn'
 import { api } from '../core/api'
 import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
@@ -14,9 +15,10 @@ import styles from './SignInSteps.module.css'
  * already had an account: the Worker answered both the same, and an address with an account gets
  * a notice instead of a link.
  *
- * It says where to sign in: in the browser that opened the link. Opened without a session, the
- * link leaves its marker in that browser only, and a password sign-in there confirms the address
- * (routes/auth.ts). A sign-in anywhere else is refused until then.
+ * It says where the link signs in (shared/confirmLinkSignIn.ts): opened soon enough in the browser
+ * that signed up, it confirms the address and signs in by itself. Anywhere else, or later, it asks
+ * for the password where it was opened (FinishSignUp), and a sign-in anywhere else is refused until
+ * the address is confirmed.
  *
  * "Send the link again" asks for a fresh confirm link, signed out (POST
  * /api/auth/verify-email/resend), behind the captcha. A limit reached and a request the captcha
@@ -24,7 +26,8 @@ import styles from './SignInSteps.module.css'
  *
  * With no mail at all, creating the account again is the other way: it makes the account when
  * the first sign-up did not, and mails a fresh link to one still waiting for it. That account
- * keeps the password it was created with, hence "the same password".
+ * keeps the password it was created with, hence "the same password", and a sign-up with that
+ * password leaves a marker this browser's link signs in with (worker/src/signup-marker.ts).
  */
 export default function CheckInbox(props: { email: string; onBack: () => void }) {
   // Its own widget: the form that sent the address is gone, and its token with it.
@@ -52,9 +55,8 @@ export default function CheckInbox(props: { email: string; onBack: () => void })
   return (
     <div data-test-id="check-inbox">
       <p class={styles.lead} data-test-id="check-inbox-lead">
-        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>. Open it
-        in this browser, then sign in with your password. Opening it in another browser or on
-        another device? Sign in there first.
+        We sent a link to <strong data-test-id="check-inbox-address">{props.email}</strong>.{' '}
+        {whereTheLinkSignsIn()}
       </p>
       <FormNotice form={resend} testId="check-inbox-error" />
       <Show when={sentAgain()}>

@@ -1807,6 +1807,100 @@ Changed:
   `frontend/src/components/__tests__/captchaGate.test.ts` (12 new),
   `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
   `frontend/src/core/__tests__/apiError.test.ts` (9 new).
+- **The confirm link signs in the browser that signed up.** `POST /api/auth/register` now hashes
+  the password before its answer, for every address alike (nothing is read before the answer, so
+  it takes the same time whether or not the address has an account), and its answer leaves the
+  browser a sign-up marker: an HttpOnly cookie `fm_signup`, host-only,
+  `Path=/api/auth/verify-email`, `SameSite=Lax`, `Secure` outside development, `Max-Age=3600`
+  (`worker/src/signup-marker.ts`). Every sign-up the route takes sets it with the same attributes,
+  whether the address is new, waiting for its link, confirmed or a Google account's, so the answer
+  still says nothing about the address; a 400, 429 or captcha 403 sets none. The value is
+  `v1.<exp>.<id>.<mac>`: `exp` is the sign-up's time plus `SIGNUP_MARKER_SECONDS`, `id` is 16
+  random bytes, and `mac` is HMAC-SHA256 over the JSON
+  `["signup-marker","v1",exp,id,address,passwordHash]` with a key derived from `JWT_SECRET` by
+  HKDF-SHA256 under the label `token-circles signup-marker v1 env=<APP_ENV>`. The derivation moved
+  to `worker/src/derived-key.ts` and is shared with the login check, whose key is unchanged. The
+  value holds neither the address nor anything from the password; the hash it signs is the one
+  this sign-up computed, which the work after the answer stores for a new account.
+  - `GET /api/auth/verify-email`, for an unspent, unexpired link opened without its account's
+    session, now signs in (`signInFromSignUp` in `worker/src/routes/auth.ts`) when every one of
+    these holds: the link's purpose is `confirm`; its account is a password account that still
+    waits for it (`emailUnconfirmed`); the account's address is the link's; the account has no
+    confirmed TOTP; and one of the first three `fm_signup` values verifies for the link's address
+    and the account's stored `password_hash`, byte for byte, with `exp` in
+    `(now, now + SIGNUP_MARKER_SECONDS]` and a 22-character id. Then `spendLink` claims the link,
+    as on every other path. On `confirmed` the route calls `issueSessionCookie` with the
+    `token_version` it read before the spend, logs `login ok confirm_link`, and answers
+    `302 #everified=1&signed_in=1` with the session cookie and the marker cleared (`Max-Age=0`).
+    A session of another account that the request carried ends first, since the new cookie takes
+    its place: its `auth_sessions` row is deleted by id and account, as `POST /api/auth/logout`
+    deletes it, and that account's other sessions stay. When the bound insert writes no session (the account signed out everywhere in between), the
+    answer is `#everified=1`: the address is confirmed and the person signs in as usual. Any other
+    case keeps the answer it had: `signin_required` with the `fm_email_link` marker, or the link's
+    own outcome.
+  - The marker matches the browser that set the account's current password. Signing up again at
+    an address that waits, with the password the account has, stores that sign-up's hash in its
+    place before the fresh link is mailed (`checkSignUpPassword`:
+    `UPDATE ... WHERE id = ? AND password_hash = <the one checked> AND email_verified = 0`), so the
+    browser that signed up last is the one the link signs in. With another password the account
+    keeps its first one, and the first browser's marker is the one that matches. A new password
+    since the sign-up means a new hash, and no marker from before matches it. Every sign-up runs
+    that one check after its answer, whatever the address: against the waiting account's hash, or
+    against `DUMMY_PASSWORD_HASH`, as a sign-in to an address with no account does, for a new
+    address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
+    check for every address.
+  - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
+    per IP). From the browser's `fm_email_link` marker it answers
+    `{ waiting: 'confirm', email: '<masked>' }` for an unspent, unexpired confirm link whose
+    account still waits at that address, and `{ waiting: null }` for anything else. The address
+    goes out as `maskedAddress` writes it: the first character of the part before the last `@`,
+    then `•••` whatever that part's length, then `@` and the whole domain (`k•••@example.com`).
+    The full address is not in this answer. It spends nothing and checks no password.
+  - The rule is in one place, `shared/confirmLinkSignIn.ts`:
+    `CONFIRM_LINK_SIGN_IN = { sameBrowser: true, seconds: 3600 }`. With `sameBrowser: false` no
+    sign-up sets a marker and no marker signs in, and `seconds` is the marker's `Max-Age` and its
+    longest `exp`; a test holds it to the link's 24 hours or less. The words follow the rule:
+    `whereTheLinkSignsIn` and `notYourSignUp` write the two confirm mails, Check your inbox and the
+    refused sign-in (`SIGN_IN_REFUSED`). `worker/src/emailTemplates.ts` imports the module by file
+    name, `.ts` included, so `worker/scripts/` still load the templates under plain Node; that is
+    what `allowImportingTsExtensions` in `worker/tsconfig.json` is for.
+  - Mails: Confirm's headline is "One click and you're in." (maff's call of 2026-10-11, held back
+    until the link did it) and its preheader "Confirm your address. The link works for 24 hours."
+    Both confirm mails say "Open it within an hour in the browser you signed up in and you're
+    signed in. Later, or anywhere else, it asks you to sign in first.", and the line for
+    someone who never signed up starts "Didn't sign up for Token Circles? Don't open the link."
+  - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
+    `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in
+    screen on Finish signing up (`frontend/src/components/FinishSignUp.tsx`, stage `finish` of
+    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`, which returns
+    `{ masked }`), says "This link is for k•••@example.com. Enter that address and its password to
+    confirm it and sign in.", and takes the address in an empty, editable `username` field and the
+    password in a `current-password` one, so a password manager fills both. It sends them to
+    `POST /api/auth/login`, which spends the link it finds in the marker for that account, as a
+    sign-in from the form does. Another account's address and password sign in to that account,
+    and the app says the link is for another account, as after any sign-in. A 401 asks the route
+    again: while the link waits the form says "That email and password don't match. Try again, or
+    reset your password."; once it does not, the step says "This link can't finish here anymore.
+    Open the newest link in your email, or send a fresh one.", with Send the link again. A page
+    open longer than `LINK_WAITING_MS` sends nothing and says the same. With no answer from the
+    route the screen goes back to the sign-in form and "Sign in to confirm your address.". The
+    second factor, Forgot your password? and the back gesture lead where the form's do, with the
+    address typed kept. A change link keeps the form and its notice.
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (44 new); the mail tests in
+    `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
+    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
+    and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
+    each kind of address (1 new);
+    `frontend/src/components/__tests__/finishSignUp.test.tsx` (15 new),
+    `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
+    `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
+    `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
+    `frontend/tests/email-confirm-link.spec.ts`, with two new `@smoke` cases in both boots (the
+    link in the browser that signed up signs in; in a second browser it asks for the password,
+    signs in there, and leaves the first signed out). The cases that open a link in a browser that
+    did not sign up finish on the new step, typing the address and the password, and the first
+    of them checks that the route answers the masked address and the page shows no full one; the
+    two that sign up in the browser that opens the link now land signed in.
 
 ### Section headings
 

@@ -9,8 +9,9 @@
  *    emoji. Branding rides on hosted images from the app's origin.
  *  - Every renderer also returns a plain-text twin (deliverability + a11y).
  *  - Renderers are pure (no I/O, no Env) so they can be unit-tested and
- *    previewed; callers pass links/currency in. This module imports nothing, so
- *    worker/scripts/ can load it under plain Node as well.
+ *    previewed; callers pass links/currency in. This module imports only
+ *    shared/confirmLinkSignIn.ts, by file name, so worker/scripts/ can load it
+ *    under plain Node as well.
  *
  * Every mail is on one layout, the mail layout of 2026-10-11 (renderMail): the engraved art, dark
  * by default and paper in light mode. The four mails that show an amount of money (the budget
@@ -20,6 +21,12 @@
  * stays, because mails already sent still point at it. worker/test/mail-catalogue.test.ts pins
  * the four over a grid of inputs.
  */
+
+import {
+  CONFIRM_LINK_SIGN_IN,
+  notYourSignUp,
+  whereTheLinkSignsIn,
+} from '../../shared/confirmLinkSignIn.ts';
 
 // ── Brand constants ───────────────────────────────────────────────────────────
 
@@ -549,8 +556,13 @@ ${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel)}
 /** How long a link lasts, in words. */
 const lasts = (hours: number) => (hours === 1 ? '1 hour' : `${hours} hours`);
 
-/** What both confirm mails say to someone who never signed up. */
-const NOT_YOU = `Didn't sign up for ${BRAND}? Ignore this mail. Nobody can use the account until this address is confirmed.`;
+/**
+ * What both confirm mails say to someone who never signed up. While the link signs in by itself,
+ * that is "Don't open the link", since opening it is what signs in. Read when a mail is rendered,
+ * as the rule is (shared/confirmLinkSignIn.ts).
+ */
+const notYou = () =>
+  `${notYourSignUp(BRAND)} Nobody can use the account until this address is confirmed.`;
 
 /** Why a mail with a confirm link came. */
 const SIGNED_UP = `You are getting this because this address was used to sign up for ${BRAND}.`;
@@ -558,31 +570,34 @@ const SIGNED_UP = `You are getting this because this address was used to sign up
 /**
  * Confirm: the mail a password sign-up gets, with the link that opens the account.
  *
- * It says what the link does today. The link spends itself only for its own account's session,
- * which a new password account does not have yet, so opening it asks for a sign-in, in any
- * browser, and that sign-in confirms the address (email-link.ts). It promises nothing more until
- * the same-browser sign-in ships, which is when Confirm can say "One click" again (maff's call of
- * 2026-10-11).
+ * It says what the link does (shared/confirmLinkSignIn.ts). Opened in the browser that signed up,
+ * while the sign-up's marker lasts, the link confirms the address and signs in (signup-marker.ts):
+ * the one click the headline promises, by maff's call of 2026-10-11. Anywhere else, or later, it
+ * asks for the password, and that sign-in confirms the address (email-link.ts). With the
+ * same-browser sign-in off, the mail says the second way only.
  */
 export function renderConfirmEmail(opts: {
   link: string;
   ttlHours: number;
   assetOrigin?: string;
 }): RenderedEmail {
+  const oneClick = CONFIRM_LINK_SIGN_IN.sameBrowser;
   return renderMail({
     subject: `Confirm your email for ${BRAND}`,
-    preheader: `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
+    preheader: oneClick
+      ? `Confirm your address. The link works for ${lasts(opts.ttlHours)}.`
+      : `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
     art: 'banner',
-    headline: "One link, one sign-in, and you're in.",
+    headline: oneClick ? "One click and you're in." : "One link, one sign-in, and you're in.",
     paragraphs: [
-      `Open the link in any browser and sign in there. That confirms this address and opens your ${BRAND} account.`,
+      `This link confirms your address and opens your ${BRAND} account. ${whereTheLinkSignsIn()}`,
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
     notes: [
       `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
     ],
     paste: opts.link,
-    aside: NOT_YOU,
+    aside: notYou(),
     unconfirmed: true,
     reason: SIGNED_UP,
     assetOrigin: opts.assetOrigin,
@@ -594,11 +609,9 @@ export function renderConfirmEmail(opts: {
  * its link, which an inbox gets without having asked, so the mail says nothing of asking. Minting
  * it retires the links sent before it (createEmailVerification), and the mail says so.
  *
- * It says what the link does today. It spends itself at once where its own account is signed in
- * (a link asked for from the Confirm your email screen, in that session); anywhere else it asks
- * for a sign-in, in any browser, and that sign-in confirms the address (email-link.ts). So the
- * sign-in is conditional here. It promises nothing more until the same-browser sign-in ships,
- * which is when a mail can say "One click" again (maff's call of 2026-10-11).
+ * It says what the link does (shared/confirmLinkSignIn.ts), as Confirm does. It also spends itself
+ * at once where its own account is signed in (a link asked for from the Confirm your email screen,
+ * in that session).
  */
 export function renderEmailVerification(opts: {
   link: string;
@@ -612,14 +625,14 @@ export function renderEmailVerification(opts: {
     headline: "Here's a fresh link.",
     paragraphs: [
       'Use this link to confirm your address. It replaces the ones sent before.',
-      `If it asks you to sign in, sign in right there, in this browser or any other, and your ${BRAND} account opens.`,
+      whereTheLinkSignsIn(),
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
     notes: [
       `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
     ],
     paste: opts.link,
-    aside: NOT_YOU,
+    aside: notYou(),
     unconfirmed: true,
     reason: SIGNED_UP,
     assetOrigin: opts.assetOrigin,
