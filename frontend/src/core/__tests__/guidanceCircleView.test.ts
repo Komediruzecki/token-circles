@@ -89,7 +89,7 @@ describe('what a circle checks', () => {
       {
         id: 'sorted',
         title: 'Spending sorted',
-        detail: '90% of your spending needs a category.',
+        detail: 'A category on 90% of your spending.',
         state: 'met',
         waiting: null,
         needed: 'Needed to reach Clear picture',
@@ -103,10 +103,10 @@ describe('what a circle checks', () => {
   it('never shows a share as reaching 90% before it does', () => {
     const sorted = row(facts({ sortedShare: 89.9 }), 1, 'sorted')
     expect(sorted?.state).toBe('not-yet')
-    expect(sorted?.detail).toBe('90% of your spending needs a category. 1% to go.')
+    expect(sorted?.detail).toBe('A category on 90% of your spending. 1% to go.')
     // Your next step on the view says the gap.
     expect(stepRow(facts({ sortedShare: 89.9 }), 1, 'sorted')?.detail).toBe(
-      '90% of your spending needs a category.'
+      'A category on 90% of your spending.'
     )
   })
 

@@ -1634,6 +1634,10 @@ check')` first, as the cushion and debt cases do.
   lines already (this branch's "toward", 3c5f5f2e, against main's "towards"); the resolution takes
   #662's title and figure and this detail line.
 - **Tests:** `advice.test.ts`, one entry and two. Fails before the change.
+- **The sorted check says its requirement as the other checks do** (`shared/guidance/circleView.ts`).
+  "90% of your spending needs a category." could read as 90% still lacking one; it now reads "A
+  category on 90% of your spending.", with the gap after it while no step on the view says it.
+- **Tests:** `guidanceCircleView.test.ts`. Fails before the change (2 tests).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

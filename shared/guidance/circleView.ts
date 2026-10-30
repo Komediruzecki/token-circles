@@ -171,7 +171,7 @@ function rowFor(
       return {
         ...base,
         title: 'Spending sorted',
-        detail: `${SORTED_SHARE}% of your spending needs a category.${short}`,
+        detail: `A category on ${SORTED_SHARE}% of your spending.${short}`,
       };
     }
     case 'own-income':
