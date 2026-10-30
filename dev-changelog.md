@@ -1794,6 +1794,41 @@ Changed:
   `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
   `frontend/src/core/__tests__/apiError.test.ts` (9 new).
 
+### Section headings
+
+- **The orbit beside a section heading is one arc, with its dots on it**
+  (`frontend/src/components/OrbitalDivider.module.css` and `OrbitalDivider.tsx`, so every section
+  heading in the app: Analytics, Budgets, Bills, Accounts, Goals, Progress, Retirement and the
+  retirement planner, Portfolio, the compound interest and emergency fund calculators, Tags,
+  Counterparties and Housing). The arc drew itself in with a dash (`pathLength="1"`,
+  `stroke-dasharray: 1`) under `vector-effect: non-scaling-stroke`, which Chrome lays out in screen
+  pixels: at 1280 the arc beside Analytics' "Savings Rate" came out as separate dashes with 101 px
+  gaps and the dots floating in them. It now draws in by uncovering (`clip-path`), and the path has
+  no `pathLength`.
+- **A section heading's orbit never takes a row of its own.** On a phone the orbit wrapped onto a
+  full-width row of its own, arc and dots included (Analytics' "Category Trends" at 360). The label
+  and the orbit now sit in one row that never wraps (a new `.head` wrapper); the orbit takes the
+  room the label leaves, and with less than 64 px it draws nothing. Only a divider's actions move
+  to a row of their own. Ported from `53572ca1` and `de45dcea` on `feat/circles-p2`; the CSS and
+  TSX are identical to `de45dcea`.
+- **Tests:** `frontend/tests/section-heading-orbit.spec.ts` (2 cases, both `@smoke`). One diffs
+  the orbit with and without its arc, column by column, after the reveal, at 1280, 390, 360 and
+  320: no gap wider than 1 px between the faded ends, each dot within 2 px of the line, and the
+  orbit on its heading's row or absent ("Savings Rate" keeps its arc at all four; "What you have
+  earned" on Progress, with its count beside it, leaves it out at 320). The other checks every
+  heading's orbit on Analytics, the emergency fund page and Progress at 360 and 320: an arc only
+  beside its label. Both fail before the change (a 101 px gap at 1280; "Category Trends" at 360).
+
+### Progress
+
+- **The "no category" advice card says what its number counts.** `uncategorised()` in
+  `frontend/src/core/achievements/advice.ts` gave the card a bare count (`String(n)`), so "Worth a
+  look" showed a bold "1" beside the Transactions button with no unit, next to the streak card's
+  "2 entries to go". The figure now reads "1 entry to categorise" or "3 entries to categorise"
+  (through the same `plural()` as the streak card), and one entry gets the title "One entry has no
+  category" instead of "Some entries have no category". The card's id is unchanged, so a dismissal
+  still holds. Tests: `frontend/src/core/achievements/__tests__/advice.test.ts` (2 new, 2 updated).
+
 ## [5.17.2] — 2026-10-30
 
 ### Sign-in
