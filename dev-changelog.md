@@ -1501,6 +1501,16 @@ check')` first, as the cushion and debt cases do.
   counted as needed by default, circles 3 and 4 no longer ask which categories are needed.
 - **Tests:** `guidanceFacts.test.ts` (60 a month under Salary: spending 940, needed 630, one category
   unsure; with it the only unsure one, circles 3 and 4 ask nothing). Fails before the change.
+- **The ledger never sets two figures that read the same side by side short of a target**
+  (`shared/guidance/ledger.ts`). The check rows got this rule in review 9; the ledger's rows, which
+  the circle view's key repeats, did not. Rows 5 to 7 could read "€60,000 of €60,000: 99%"; they now
+  read "€1 short of €60,000: 99%". Row 2's detail could read "€2,500 in, €2,500 out a month." beside
+  "Own income covers 99% of spending"; it now reads "€1 a month short of covering what you spend."
+  (support left out explains a difference of its own, so those figures stay). Row 3's detail reads
+  "€1 short of a month of essentials." (or "of spending") in place of two equal figures. Met, every
+  row keeps both figures.
+- **Tests:** `guidanceLedger.test.ts`, a target cents away on rows 2, 3, 5, 6 and 7, and met cases
+  that keep both figures. Fails before the change; each condition reverted alone fails it.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

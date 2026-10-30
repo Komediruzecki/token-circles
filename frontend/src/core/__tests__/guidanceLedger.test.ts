@@ -371,6 +371,51 @@ describe('the rows', () => {
     expect(row(zero, 6).key).toBe('25 years of spending: €750,000')
   })
 
+  it('never sets two figures that read the same side by side while a target is not met', () => {
+    // A target a few cents away: each figure rounds to the same whole euro, so the gap is said.
+    const room = facts({ cushionMonths: 4, liquid: 8000, invested: 59999.6 })
+    expect(row(room, 5)).toMatchObject({ state: 'current', key: '€1 short of €60,000: 99%' })
+    const work = facts({ cushionMonths: 7, liquid: 14000, invested: 749999.6 })
+    expect(row(work, 6)).toMatchObject({ state: 'current', key: '€1 short of €750,000: 99%' })
+    const enough = facts({
+      cushionMonths: 7,
+      liquid: 14000,
+      invested: 999999.6,
+      enoughPerYear: 40000,
+    })
+    expect(row(enough, 7)).toMatchObject({ state: 'current', key: '€1 short of €1,000,000: 99%' })
+    const own = facts({ income: 2499.6, ownIncome: 2499.6 })
+    expect(row(own, 2)).toMatchObject({
+      state: 'current',
+      key: 'Own income covers 99% of spending',
+      detail: '€1 a month short of covering what you spend.',
+    })
+    const reach = facts({ cushionMonths: 0.9998, liquid: 1999.6 })
+    expect(row(reach, 3)).toMatchObject({
+      state: 'current',
+      detail: '€1 short of a month of essentials.',
+    })
+    const spent = facts({
+      cushionMonths: 0.99984,
+      liquid: 2499.6,
+      unsure: { categories: 4, uncategorised: 0, all: true },
+    })
+    expect(row(spent, 3).detail).toBe('€1 short of a month of spending.')
+    // Met, the two figures stay, however close.
+    const met = facts({ cushionMonths: 4, liquid: 8000, invested: 60000.4 })
+    expect(row(met, 5).key).toBe('€60,000 of €60,000: 100%')
+    expect(row(facts({ cushionMonths: 1.0002, liquid: 2000.4 }), 3).detail).toBe(
+      '€2,000 you can reach, against €2,000 needed a month.'
+    )
+    expect(row(facts({ income: 2500.4, ownIncome: 2500.4 }), 2).detail).toBe(
+      '€2,500 in, €2,500 out a month.'
+    )
+    // Support explains the difference, so its two figures stay.
+    expect(row(facts({ income: 2499.6, ownIncome: 2000 }), 2).detail).toBe(
+      '€2,500 in, €2,500 out a month. €500 a month you marked as support is left out.'
+    )
+  })
+
   it('asks for the own number in More than enough, and reads it once given', () => {
     expect(row(base, 7)).toMatchObject({
       key: 'Your own number',

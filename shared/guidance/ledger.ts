@@ -154,10 +154,15 @@ function payingYourWay(facts: GuidanceFacts, place: CirclePlace, words: LedgerWo
   }
   const viaInvested = check?.via === 'work-optional';
   const support = income !== null ? income - ownIncome : 0;
-  let detail = `${words.money(Math.round(income ?? ownIncome))} in, ${words.money(Math.round(spending))} out a month.`;
+  const cameIn = words.money(Math.round(income ?? ownIncome));
+  const wentOut = words.money(Math.round(spending));
+  let detail = `${cameIn} in, ${wentOut} out a month.`;
   if (viaInvested) detail += ' Your investments could cover it, which counts too.';
   else if (support >= 0.5) {
     detail += ` ${words.money(Math.round(support))} a month you marked as support is left out.`;
+  } else if (check?.met === false && cameIn === wentOut) {
+    // Two figures that read the same beside a check not met: the gap says it instead.
+    detail = `${words.money(gapOf(spending, ownIncome))} a month short of covering what you spend.`;
   }
   return {
     key: `Own income covers ${shareOf(Math.max(0, ownIncome), spending, ownIncome >= spending)}% of spending`,
@@ -179,20 +184,26 @@ function breathingRoom(facts: GuidanceFacts, place: CirclePlace, words: LedgerWo
       : `${monthsText(months)} ${monthsText(months) === '1' ? 'month' : 'months'} of essentials`;
   return {
     key,
-    detail: reachDetail(facts, words),
+    detail: reachDetail(facts, words, check?.met === false),
     measure: Math.max(0, Math.min(1, months / FIRST_CUSHION_MONTHS)),
   };
 }
 
-/** "{liquid} you can reach, against {essentials} needed a month." */
-function reachDetail(facts: GuidanceFacts, words: LedgerWords): string | null {
+/**
+ * "{liquid} you can reach, against {essentials} needed a month.", or the gap to a month while the
+ * check is not met and the two would read the same.
+ */
+function reachDetail(facts: GuidanceFacts, words: LedgerWords, notMet: boolean): string | null {
   if (facts.liquid === null) return null;
+  const spent = facts.unsure.all && facts.spending !== null;
+  const month = spent ? facts.spending : facts.essentials;
+  if (month === null) return null;
   const reach = words.money(Math.round(facts.liquid));
-  if (facts.unsure.all && facts.spending !== null) {
-    return `${reach} you can reach, against ${words.money(Math.round(facts.spending))} spent a month.`;
+  const against = words.money(Math.round(month));
+  if (notMet && reach === against) {
+    return `${words.money(gapOf(month, facts.liquid))} short of a month of ${spent ? 'spending' : 'essentials'}.`;
   }
-  if (facts.essentials === null) return null;
-  return `${reach} you can reach, against ${words.money(Math.round(facts.essentials))} needed a month.`;
+  return `${reach} you can reach, against ${against} ${spent ? 'spent' : 'needed'} a month.`;
 }
 
 /** Solid ground's debt sentence: no debt at the line, the first one at it, or the answer it waits on. */
@@ -247,8 +258,14 @@ function towards(
   const target = words.money(Math.round(check.target));
   if (!(check.value > 0)) return { key: atZero(target), measure: 0 };
   const met = check.met === true;
+  const value = words.money(Math.round(check.value));
+  // Never "€60,000 of €60,000" short of the target: the gap says it.
+  const said =
+    !met && value === target
+      ? `${words.money(gapOf(check.target, check.value))} short of ${target}`
+      : `${value} of ${target}`;
   return {
-    key: `${words.money(Math.round(check.value))} of ${target}: ${shareOf(check.value, check.target, met)}%`,
+    key: `${said}: ${shareOf(check.value, check.target, met)}%`,
     measure: Math.max(0, Math.min(1, check.value / check.target)),
   };
 }
