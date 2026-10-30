@@ -56,13 +56,8 @@
 .button-primary {
   background: var(--primary);
   border-color: var(--primary);
-  /* White on #3b6fe0 is 4.6:1. The dark theme's lighter accent takes dark ink, 7.2:1. */
-  color: #ffffff;
+  color: var(--on-primary);
   font-weight: 600;
-}
-
-:global([data-theme='dark']) .button-primary {
-  color: var(--bg);
 }
 
 .button-outline {
@@ -470,12 +465,8 @@
 .chip[aria-pressed='true'] {
   background: var(--primary);
   border-color: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   font-weight: 600;
-}
-
-:global([data-theme='dark']) .chip[aria-pressed='true'] {
-  color: var(--bg);
 }
 
 .controls {
@@ -630,12 +621,8 @@
 
 .segment[aria-checked='true'] {
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   font-weight: 600;
-}
-
-:global([data-theme='dark']) .segment[aria-checked='true'] {
-  color: var(--bg);
 }
 
 .sentence {

@@ -131,7 +131,7 @@
 .goalButton {
   padding: 6px 14px;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border: none;
   border-radius: 6px;
   font-size: 13px;

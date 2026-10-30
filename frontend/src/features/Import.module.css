@@ -281,7 +281,7 @@
 .sheetTab.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* Column mapping */
@@ -998,7 +998,7 @@
 
 .btnOutline:hover {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* Page layout */

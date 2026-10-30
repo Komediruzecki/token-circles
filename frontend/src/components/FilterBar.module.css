@@ -125,7 +125,7 @@
 
 .typeBtnActive {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -179,7 +179,7 @@
 
 .presetBtnActive {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -241,7 +241,7 @@
 
 .reconcileToggleActive {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 

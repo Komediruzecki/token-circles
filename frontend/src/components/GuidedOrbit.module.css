@@ -305,7 +305,7 @@ button.sumRow[aria-disabled='true'] {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
   font-size: 15px;
-  color: #fff;
+  color: var(--on-primary);
   background: var(--primary);
   cursor: pointer;
   transition:
@@ -350,7 +350,7 @@ button.sumRow[aria-disabled='true'] {
   font-family: var(--font-mono, monospace);
   font-weight: 700;
   font-size: 13px;
-  color: #fff;
+  color: var(--on-primary);
   background: var(--primary);
   cursor: pointer;
   transition:

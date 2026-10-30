@@ -167,7 +167,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                         'border-radius': '8px',
                         border: 'none',
                         background: 'var(--primary)',
-                        color: '#fff',
+                        color: 'var(--on-primary)',
                         cursor: 'pointer',
                         'font-size': '14px',
                       }}
@@ -257,7 +257,7 @@ export default function SupportContact(props: { label?: string; prefillEmail?: s
                       'border-radius': '8px',
                       border: 'none',
                       background: 'var(--primary)',
-                      color: '#fff',
+                      color: 'var(--on-primary)',
                       cursor: 'pointer',
                       'font-size': '14px',
                     }}
