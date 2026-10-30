@@ -1543,19 +1543,6 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `circles-layout.spec.ts`: the label on Progress (an h2) matches Dashboard's in face,
   size, weight, case and spacing, and its face is the body's and the circle view's label's. Fails
   before the change (Fraunces on Progress).
-- **The orbit beside a section's heading is one arc, with its dots on it**
-  (`frontend/src/components/OrbitalDivider.module.css`, so every section divider in the app). The
-  arc drew itself in with a dash (`pathLength="1"`, `stroke-dasharray: 1`) under
-  `vector-effect: non-scaling-stroke`, which Chrome lays out in screen pixels: at 1280 the arc beside
-  "Your seven circles" came out as separate dashes with 101 px gaps and the dots floating in them. It
-  now draws in by uncovering (`clip-path`). The orbit also wrapped to a row of its own on a phone,
-  as two strokes; it now takes the room left beside the heading and never wraps, and with less than
-  64 px it draws nothing. On Progress the arc shows at 1280, 390 and 360; at 320, beside "Circle 4 of
-  7", it is left out. A divider's actions still wrap under the heading on a phone.
-- **Tests:** `circles-layout.spec.ts` diffs the orbit with and without its arc, column by column,
-  after the reveal: no gap wider than 1 px between the faded ends, each dot within 2 px of the line,
-  and the orbit on the heading's row or absent at 1280, 390, 360 and 320. Fails before the change (a
-  101 px gap at 1280).
 - **The copy the benchmarks gate holds back is compiled out of a production build**
   (`frontend/vite.config.ts`, `shared/guidance/questions.ts`,
   `frontend/src/components/guidance/regionWords.ts`). The gate only hid it: the free-money
@@ -1575,18 +1562,6 @@ check')` first, as the cushion and debt cases do.
   `VITE_ENABLE_BENCHMARKS=true` (the control, which fails the spec as before).
   `guidanceGate.test.ts` loads both modules with the constant false, true and undefined; each of 8
   guard mutations fails it.
-- **A section heading's orbit never takes a row of its own** (`OrbitalDivider.tsx` and its CSS).
-  The orbit's previous fix gave it no width of its own, but when a heading left no room at all
-  beside it (Analytics' "Top Categories Breakdown" at 360, three more headings at 320), the
-  flex row still wrapped it onto a full-width row of its own, arc and dots included. The label and
-  the orbit now sit in one row that never wraps; only a divider's actions move to a row of their
-  own. Across 13 pages and 28 headings: at 390, 25 arcs beside their headings and 3 left out (9
-  sat on rows of their own before); at 360, 22 and 6 (15 before); at 320, 18 and 10 (21 before);
-  none on a row of its own at any width. Budgets' "Add Category" now sits on its heading's row
-  from 390 down (it wrapped under it before), which at 360 and 320 leaves no room for the arc.
-- **Tests:** `circles-layout.spec.ts` checks every heading's orbit on Analytics, the emergency fund
-  page and Progress at 360 and 320: an arc only beside its label. Fails before the change
-  (Analytics at 360, "Top Categories Breakdown").
 - **A circle's view says each figure once** (`shared/guidance/circleView.ts`,
   `shared/guidance/nextStep.ts`, `CircleView.tsx`, `NextStepCard.tsx`). The reported Solid ground view said
   €2,800 and €1,460 three times each and "1.9" four times: in the key figure, Your next step's why
