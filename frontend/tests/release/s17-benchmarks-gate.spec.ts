@@ -11,7 +11,10 @@
  *   RELEASE_BUILDS_DIR=<builds> pnpm run test:e2e:release tests/release/s17-benchmarks-gate.spec.ts
  *
  * The build is served by a Playwright page route on a made-up origin, with service workers blocked
- * and every other request aborted, so nothing leaves the machine. Local-first, on the demo data.
+ * and every other request aborted, so nothing leaves the machine. Local-first, on the demo data,
+ * with US dollars as the base currency: the circles then compare with the US, where free money is
+ * asked about, so an open gate would show its check (the demo's euros read as the EU, where it
+ * never shows, gate or not). A build with the gate open fails this spec.
  */
 import { expect, test } from '@playwright/test'
 import { existsSync, statSync } from 'node:fs'
@@ -56,6 +59,8 @@ test.describe('circles part 2: the benchmarks gate in the production build', () 
       await page.goto(`${ORIGIN}/robots.txt`)
       await page.evaluate(() => {
         localStorage.setItem('finance_storage_mode', 'serverless')
+        // The base currency names the region: dollars read as the US, a free-money region.
+        localStorage.setItem('localCurrency', 'USD')
       })
       await page.goto(`${ORIGIN}/`)
       await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Example', {
@@ -70,10 +75,23 @@ test.describe('circles part 2: the benchmarks gate in the production build', () 
       await expect(view.getByTestId('circle-checks')).toBeVisible({ timeout: 60_000 })
       await expect(view.getByTestId('circle-numbers')).toBeVisible()
 
-      // Held back: How you compare and its cards, and the free-money check.
+      // Held back: How you compare and its cards, and the free-money check and question, which
+      // the US would have with the gate open.
       await expect(view.getByTestId('circle-compare')).toHaveCount(0)
       await expect(view.locator('[data-check="free-money"]')).toHaveCount(0)
+      await expect(view.getByTestId('circle-question-free-money')).toHaveCount(0)
       await expect(view).not.toContainText('How you compare')
+
+      // Held back on Dashboard: the gauge's typical band, its sentence and the region it compares
+      // with. The gauge shows, aiming for 20% as it does without the band.
+      await go(page, 'dashboard')
+      const gauge = page.getByTestId('savings-gauge')
+      await expect(gauge.getByTestId('savings-gauge-title')).toBeVisible({ timeout: 60_000 })
+      await expect(gauge.getByTestId('gauge-goal')).toHaveCount(1)
+      await expect(gauge.getByTestId('gauge-band')).toHaveCount(0)
+      await expect(gauge.getByTestId('savings-gauge-compare')).toHaveCount(0)
+      await expect(gauge.getByTestId('savings-gauge-region')).toHaveCount(0)
+      await expect(gauge).not.toContainText('Typical in')
 
       // About this space lists the circles' answers, without setup's region question.
       await go(page, 'settings')

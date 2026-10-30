@@ -1419,6 +1419,16 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   in and out, and spending under an income category: Salary 3,000 and Groceries 1,000 a month, and
   nothing else), `progressCircles.test.tsx` (a window row whose stored category is a transfer is
   neither listed nor written; the test view's snapshot now holds the window's categories).
+- **The store's gate has tests that can fail** (`guidanceStore.test.ts`,
+  `tests/release/s17-benchmarks-gate.spec.ts`). Nothing failed if the store ignored the benchmarks
+  gate: the store test now works the circles out for Germany with a free-money answer on file,
+  under `MODE=production` with `VITE_ENABLE_BENCHMARKS` unset (the view's `gate` is false and
+  circle 4 has no free-money check) and under `development` (the gate is open and the same answer
+  meets the check). Replacing both `benchmarksShown()` calls in `core/guidance.ts` with `true`
+  fails the first; with `false`, the second. s17 ran on the demo's euros, which read as the EU,
+  where the free-money check never shows, so its check could not fail: it now sets US dollars as
+  the base currency, and also checks the free-money question and the Dashboard gauge its header
+  promises (no band, no comparison sentence, no region line, no "Typical in"; the 20% goal shows).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

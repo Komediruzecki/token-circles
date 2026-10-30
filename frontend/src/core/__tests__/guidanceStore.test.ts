@@ -290,6 +290,50 @@ describe('one profile at a time', () => {
   })
 })
 
+describe('the benchmarks gate', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  /** Germany, where free money is asked about, with an answer to it on file. */
+  const freeMoneyAnswered = () => {
+    net.settings = {
+      guidance: JSON.stringify({ region: 'DE', freeMoney: { region: 'DE', answer: 'taken' } }),
+    }
+  }
+  const freeMoneyCheck = (shown: GuidanceView) =>
+    shown.placement.circles[3].checks.find((check) => check.id === 'free-money')
+
+  it('holds free money back in the production build, answer or not', async () => {
+    vi.stubEnv('MODE', 'production')
+    vi.stubEnv('VITE_ENABLE_BENCHMARKS', '')
+    freeMoneyAnswered()
+    setPage('progress')
+    mount('progress')
+    store.set!(snap(1))
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    expect(view()!.region.region).toBe('DE')
+    expect(view()!.inputs.answers.freeMoney).toEqual({ region: 'DE', answer: 'taken' })
+    expect(view()!.gate).toBe(false)
+    expect(freeMoneyCheck(view()!)).toBeUndefined()
+  })
+
+  it('shows it on dev, where the same answer meets the check', async () => {
+    vi.stubEnv('MODE', 'development')
+    freeMoneyAnswered()
+    setPage('progress')
+    mount('progress')
+    store.set!(snap(1))
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    expect(view()!.gate).toBe(true)
+    expect(freeMoneyCheck(view()!)).toMatchObject({ met: true, required: false })
+  })
+})
+
 describe('what is not known', () => {
   it('reads accounts that did not load as not known, not as none', async () => {
     setPage('progress')
