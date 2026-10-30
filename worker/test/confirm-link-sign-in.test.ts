@@ -24,10 +24,11 @@ import {
   SIGNUP_MARKER_SECONDS,
   signupMarker,
   signupMarkerBytes,
+  signupMarkerFor,
 } from '../src/signup-marker';
 import { removeAccounts } from './helpers/account-access';
 import { fetchSettled } from './helpers/after-answer';
-import { bumpTokenVersion, dbWithStep, realDb, withDb } from './helpers/racing-db';
+import { bumpTokenVersion, dbThatRefuses, dbWithStep, realDb, withDb } from './helpers/racing-db';
 import { sessionCookie } from './helpers/session';
 import type { Env } from '../src/index';
 
@@ -278,6 +279,26 @@ describe('a sign-up', () => {
     );
   });
 
+  it('leaves a marker good on the deployment that left it, for that address and hash, and on no other', async () => {
+    const base = env as unknown as Env;
+    const line = await signupMarker({ ...base, APP_ENV: 'dev' }, at('deploy'), 'a-hash');
+    const request = new Request(`${BASE}${SIGNUP_MARKER_PATH}`, {
+      headers: { Cookie: line!.split(';')[0]! },
+    });
+    const good = (e: Env, address: string, hash: string) =>
+      signupMarkerFor(request, e, address, hash);
+
+    expect(await good({ ...base, APP_ENV: 'dev' }, at('deploy'), 'a-hash')).toBe(true);
+    // The same JWT_SECRET, another deployment.
+    expect(await good({ ...base, APP_ENV: 'production' }, at('deploy'), 'a-hash')).toBe(false);
+    expect(await good({ ...base, APP_ENV: 'dev' }, at('deploy'), 'another-hash')).toBe(false);
+    expect(await good({ ...base, APP_ENV: 'dev' }, at('another'), 'a-hash')).toBe(false);
+    // With no JWT_SECRET the Worker reads no marker, and says so without an error.
+    expect(
+      await good({ ...base, APP_ENV: 'dev', JWT_SECRET: undefined }, at('deploy'), 'a-hash')
+    ).toBe(false);
+  });
+
   it('leaves no marker when it is not taken', async () => {
     const refused: Response[] = [];
     refused.push(await signUp('not-an-address'));
@@ -405,6 +426,22 @@ describe('the confirm link, opened in the browser that signed up', () => {
     expect(step.ran()).toBe(true);
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=invalid_or_used`);
     expect(cookieSet(res, 'fm_session')).toBeNull();
+    expect(await sessionsOf(account.id)).toBe(0);
+  });
+
+  it('says so, and signs in nothing, when confirming the address fails after the link is spent', async () => {
+    const { marker, token } = await signedUp(at('write-fails'));
+    const account = await accountAt(at('write-fails'));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const refusing = dbThatRefuses(realDb, /UPDATE users SET email_verified = 1/, 1);
+
+    const res = await withDb(refusing.db, () => open(token, marker));
+
+    errors.mockRestore();
+    expect(refusing.refused()).toBe(1);
+    expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=server_error`);
+    expect(cookieSet(res, 'fm_session')).toBeNull();
+    expect((await accountAt(at('write-fails'))).email_verified).toBe(0);
     expect(await sessionsOf(account.id)).toBe(0);
   });
 
@@ -737,6 +774,45 @@ describe('a sign-up again at a waiting address with the same password', () => {
   });
 });
 
+describe('a sign-up again at a waiting address with the same password, while the account changes', () => {
+  /** The read that finds the account a sign-up again works on. */
+  const FINDS_THE_ACCOUNT = /SELECT id, email_verified, auth_provider, password_hash FROM users/;
+
+  it('leaves the password as it is when the address was confirmed meanwhile', async () => {
+    await signedUp(at('again-confirmed'));
+    const before = (await accountAt(at('again-confirmed'))).password_hash;
+    const step = dbWithStep(realDb, FINDS_THE_ACCOUNT, () =>
+      realDb
+        .prepare('UPDATE users SET email_verified = 1 WHERE email = ?')
+        .bind(at('again-confirmed'))
+        .run()
+    );
+
+    const res = await withDb(step.db, () => signUp(at('again-confirmed')));
+
+    expect(res.status).toBe(200);
+    expect(step.ran()).toBe(true);
+    expect((await accountAt(at('again-confirmed'))).password_hash).toBe(before);
+  });
+
+  it('leaves a password set meanwhile as it is', async () => {
+    await signedUp(at('again-reset'));
+    const reset = await hashPassword(OTHER_PASSWORD);
+    const step = dbWithStep(realDb, FINDS_THE_ACCOUNT, () =>
+      realDb
+        .prepare('UPDATE users SET password_hash = ? WHERE email = ?')
+        .bind(reset, at('again-reset'))
+        .run()
+    );
+
+    const res = await withDb(step.db, () => signUp(at('again-reset')));
+
+    expect(res.status).toBe(200);
+    expect(step.ran()).toBe(true);
+    expect((await accountAt(at('again-reset'))).password_hash).toBe(reset);
+  });
+});
+
 describe('GET /api/auth/email-link', () => {
   const read = (cookie?: string) =>
     fetchSettled(`${BASE}/api/auth/email-link`, {
@@ -811,6 +887,27 @@ describe('GET /api/auth/email-link', () => {
     expect(res.headers.get('Location')).toBe(`${APP}/#everified_error=signin_required&change=1`);
 
     expect(await waiting(cookieSet(res, 'fm_email_link')!)).toEqual({ waiting: null });
+  });
+
+  it('says nothing waits when the account goes while the read runs', async () => {
+    const { cookie } = await openedElsewhere(at('read-gone'));
+    const account = await accountAt(at('read-gone'));
+    const step = dbWithStep(
+      realDb,
+      /FROM email_verifications WHERE id = \? AND token_hash = \?/,
+      () =>
+        realDb.batch([
+          realDb.prepare('DELETE FROM email_verifications WHERE user_id = ?').bind(account.id),
+          realDb.prepare('DELETE FROM profiles WHERE user_id = ?').bind(account.id),
+          realDb.prepare('DELETE FROM users WHERE id = ?').bind(account.id),
+        ])
+    );
+
+    const res = await withDb(step.db, () => read(cookie));
+
+    expect(step.ran()).toBe(true);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ waiting: null });
   });
 
   it('answers 30 reads a minute from one network address', async () => {

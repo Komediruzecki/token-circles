@@ -260,6 +260,24 @@ describe('a confirm link opened in a browser it did not sign in', () => {
     expect(localStorage.getItem(WAITING_KEY)).toBeNull()
   })
 
+  it('takes only a confirm link with an address as one that waits', async () => {
+    for (const answer of [
+      { waiting: 'change', email: ADDRESS },
+      { waiting: 'confirm' },
+      { waiting: 'confirm', email: 7 },
+    ]) {
+      answers['/api/auth/email-link'] = () => json(answer)
+      await mount()
+
+      expect(text('finish-signup-gone'), JSON.stringify(answer)).toBe(GONE)
+      expect(address()).toBeNull()
+      dispose?.()
+      dispose = undefined
+      host.remove()
+      await historySettled()
+    }
+  })
+
   it('goes back to the sign-in form, which finishes the link too, when the Worker does not say what waits', async () => {
     answers['/api/auth/email-link'] = () => json({ error: 'Too many attempts.' }, 429)
     await mount()

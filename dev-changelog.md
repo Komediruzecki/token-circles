@@ -1858,10 +1858,10 @@ Changed:
     answer from the route the screen goes back to the sign-in form and "Sign in to confirm your
     address.". The second factor, Forgot your password? and the back gesture lead where the form's
     do, with the address kept. A change link keeps the form and its notice.
-  - Tests: `worker/test/confirm-link-sign-in.test.ts` (37 new); the mail tests in
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (42 new); the mail tests in
     `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
     `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers;
-    `frontend/src/components/__tests__/finishSignUp.test.tsx` (13 new),
+    `frontend/src/components/__tests__/finishSignUp.test.tsx` (14 new),
     `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
     `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
     `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
