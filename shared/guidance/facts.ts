@@ -209,6 +209,8 @@ export interface Debt {
    * show whether its balance is carried. Null with none, and for a loan. Absent reads as null.
    */
   since?: string | null;
+  /** A loan's last payment, YYYY-MM-DD; null without a schedule, and for a card or overdraft. */
+  ends?: string | null;
 }
 
 /** The money a person can reach against a month of what they need. */
@@ -293,6 +295,12 @@ export interface GuidanceFacts {
    * leaves them out after a "No"): circle 4's view asks the card question while there is one.
    */
   belowZero?: number;
+  /**
+   * The window's month that spent the most, and its largest category by name (null for spending
+   * with no category): what the savings card names when more went out than came in. Null with too
+   * few months for averages.
+   */
+  heaviestMonth?: { month: string; spent: number; category: string | null } | null;
 }
 
 /** A category the window took in or spent in. */
@@ -380,6 +388,8 @@ interface WindowSums {
   byCategory: Map<number, number>;
   /** Expenses with no category, counted. */
   uncategorisedEntries: number;
+  /** Each month's spending, and what each category spent in it (no category: id 0). */
+  byMonth: Map<string, { spent: number; byCategory: Map<number, number> }>;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -419,6 +429,7 @@ function sumWindow(
     unsureSpent: 0,
     byCategory: new Map(),
     uncategorisedEntries: 0,
+    byMonth: new Map(),
   };
   const add = (id: number, value: number) => {
     sums.byCategory.set(id, (sums.byCategory.get(id) ?? 0) + value);
@@ -432,6 +443,11 @@ function sumWindow(
     }
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
+    const month = sums.byMonth.get(monthOf(entry.date)) ?? { spent: 0, byCategory: new Map() };
+    month.spent += spent;
+    const key = isId(id) ? id : 0;
+    month.byCategory.set(key, (month.byCategory.get(key) ?? 0) + spent);
+    sums.byMonth.set(monthOf(entry.date), month);
     if (!isId(id)) {
       sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
@@ -728,6 +744,7 @@ export function debtsOf(
       payment: status.monthly_payment > 0 ? status.monthly_payment : null,
       carried: true,
       expensive: isExpensive('loan', rate),
+      ends: status.payoff_date,
     });
   }
   const answer = input.answers?.carriesCardBalance;
@@ -839,6 +856,30 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     windowCategories: averaged ? windowCategoriesOf(input.categories, sums, months.length) : [],
     uncategorisedEntries: sums.uncategorisedEntries,
     belowZero: belowZeroOf(accountsNow),
+    heaviestMonth: averaged ? heaviestMonthOf(sums, input.categories) : null,
+  };
+}
+
+/** The month that spent the most, the earliest of equals, and its largest category's name. */
+function heaviestMonthOf(
+  sums: WindowSums,
+  categories: readonly KindedCategory[]
+): { month: string; spent: number; category: string | null } | null {
+  let heaviest: [string, { spent: number; byCategory: Map<number, number> }] | null = null;
+  for (const entry of [...sums.byMonth].sort(([a], [b]) => a.localeCompare(b))) {
+    if (heaviest === null || entry[1].spent > heaviest[1].spent) heaviest = entry;
+  }
+  if (heaviest === null) return null;
+  let top: [number, number] | null = null;
+  for (const entry of heaviest[1].byCategory) {
+    if (top === null || entry[1] > top[1]) top = entry;
+  }
+  const lookup = categoryLookup(categories);
+  const name = top === null || top[0] === 0 ? null : lookup(top[0])?.name;
+  return {
+    month: heaviest[0],
+    spent: heaviest[1].spent,
+    category: typeof name === 'string' && name !== '' ? name : null,
   };
 }
 

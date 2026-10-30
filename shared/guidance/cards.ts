@@ -1,0 +1,722 @@
+/**
+ * The benchmark cards (design.md 2.2, guidance.md 5.3): the person's number beside the official
+ * figures where they live, under "How you compare" in a circle's view. Each card has a title with
+ * the person's own number, a sentence or two that compare it with the region and year named, the
+ * band bar, one next step, and "Where this comes from". Both directions get a sentence and a step;
+ * no card passes a verdict on anyone.
+ *
+ * Built behind the benchmarks gate (frontend/src/core/guidanceGate.ts): the app imports this module
+ * with `import()` when the first card shows, so it and benchmarks.json are a chunk of their own,
+ * never in the entry chunk and never fetched while the gate is closed.
+ *
+ * Pure, with the money formatter passed in, as the ledger's is.
+ */
+import {
+  BAND_RULE,
+  BENCHMARKS,
+  bandFor,
+  bandsFor,
+  derivationFor,
+  referencesFor,
+  sourceFor,
+} from './benchmarks';
+import { CLEAR_PICTURE_MONTHS, FIRST_CUSHION_MONTHS, FULL_CUSHION_MONTHS } from './circles';
+import { gapOf, monthsText } from './ledger';
+import { DAYS_IN_A_MONTH, monthName } from '../orientation';
+import type { Band, BandEntry, MetricId, Reference, RegionId, Strength } from './benchmarks';
+import type { CircleNumber } from './circles';
+import type { Debt, GuidanceFacts } from './facts';
+import type { LedgerWords } from './ledger';
+
+/** A tag on a card: its band, figures borrowed from another region, or a figure that is missing. */
+export interface CardTag {
+  kind: 'band' | 'borrowed' | 'missing';
+  text: string;
+}
+
+/** The band bar: low, typical and high on one scale, with the person's mark. */
+export interface CardBar {
+  from: number;
+  to: number;
+  bands: { band: Band; from: number; to: number }[];
+  /** Where the person is, held to the scale. */
+  mark: number;
+  /** Labels at the edges between bands. */
+  edges: { at: number; text: string }[];
+  /** The bar in words, for a screen reader. */
+  label: string;
+}
+
+export interface CardSource {
+  title: string;
+  publisher: string;
+  year: number;
+  url: string;
+}
+
+export interface BenchmarkCard {
+  id: string;
+  metric: MetricId;
+  /** The metric's name, over the title. */
+  eyebrow: string;
+  tags: CardTag[];
+  title: string;
+  /** One or two paragraphs. */
+  body: string[];
+  bar: CardBar | null;
+  /** Borrowed, missing or thin evidence, in a sentence. */
+  note: string | null;
+  step: { label: string; hash: string } | null;
+  /** "Where this comes from": the band rule, the sources and how strong they are. */
+  where: { rule: string; sources: CardSource[]; strength: string };
+  /** "Based on 5 months. It firms up at 12.", under 12 months on file. */
+  provisional: string | null;
+}
+
+/** Where the cards are read. */
+export interface CardContext {
+  region: RegionId;
+  /** The base currency: the unexpected bill is only quoted in its own. */
+  currency: string;
+  /** The tenure answer; a mortgage counts as a housing loan for the debt-payment lines. */
+  tenure: string | null;
+}
+
+/** What a band is called on its tag. Descriptive, never a verdict. */
+const BAND_TAGS: Readonly<Record<Band, string>> = {
+  low: 'Below typical',
+  typical: 'Typical',
+  high: 'Above typical',
+};
+
+/** How strong a figure is, in words. */
+export const STRENGTH_WORDS: Readonly<Record<Strength, string>> = {
+  strong: 'Strong evidence: official figures, recent.',
+  moderate: 'Moderate evidence: official figures, older or less direct.',
+  weak: 'Thin evidence: a convention or a survey, not an official line.',
+};
+
+/** The region as the copy names it: "Germany", "the EU". */
+export function regionName(region: RegionId): string {
+  return BENCHMARKS.regions.find((one) => one.id === region)?.inCopy ?? region;
+}
+
+/** The region as an adjective, for a tag: "No German figure". */
+const REGION_ADJECTIVE: Readonly<Record<RegionId, string>> = {
+  DE: 'German',
+  HR: 'Croatian',
+  EU27: 'EU',
+  UK: 'UK',
+  US: 'US',
+};
+
+/** A sentence that starts with the region: "The UK has", "Germany has". */
+const capital = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+
+/** A percentage, floored to one decimal so it never reads as past an edge it has not reached. */
+export function percentText(value: number): string {
+  const floored = Math.floor(value * 10 + 1e-9) / 10;
+  return Number.isInteger(floored) ? String(floored) : floored.toFixed(1);
+}
+
+/** An edge or a rate as the sources print it: "13.9", "4", "8.99". */
+const figureText = (value: number): string => String(Math.round(value * 100) / 100);
+
+/** A national average, to one decimal as its label prints it: "18.9", "9.0". */
+const averageText = (value: number): string => value.toFixed(1);
+
+/** "August 2026" for "2026-08-31". */
+const monthYear = (date: string): string => `${monthName(date.slice(0, 7))} ${date.slice(0, 4)}`;
+
+/** The publisher as a card cites it: "DZS", not "DZS (Croatian Bureau of Statistics)". */
+function publisherOf(sourceId: string): string {
+  const publisher = sourceFor(sourceId)?.publisher ?? '';
+  return publisher.replace(/\s*\(.*\)$/, '');
+}
+
+/** The sources behind a card, without repeats, in the order given. */
+function sourcesOf(ids: readonly string[]): CardSource[] {
+  const out: CardSource[] = [];
+  for (const id of new Set(ids)) {
+    const source = sourceFor(id);
+    if (!source || !source.url.startsWith('https://')) continue;
+    out.push({
+      title: source.title,
+      publisher: source.publisher,
+      year: source.dataYear,
+      url: source.url,
+    });
+  }
+  return out;
+}
+
+/** "Where this comes from" for a metric in a region, with the references the card quotes. */
+function whereFrom(
+  metric: MetricId,
+  region: RegionId,
+  bands: readonly BandEntry[],
+  quoted: readonly Reference[]
+): BenchmarkCard['where'] {
+  const derivation = derivationFor(metric, region);
+  const ids = [
+    ...(derivation?.sourceIds ?? []),
+    ...bands.flatMap((band) => band.sourceIds),
+    ...quoted.map((ref) => ref.sourceId),
+  ];
+  const strength: Strength = derivation?.strength ?? bands[0]?.strength ?? 'moderate';
+  return {
+    rule: derivation?.text ?? BAND_RULE.text,
+    sources: sourcesOf(ids),
+    strength: STRENGTH_WORDS[strength],
+  };
+}
+
+/** The bar for `value` on the bands given, from `from` to `to`. */
+function barOf(
+  bands: readonly BandEntry[],
+  value: number,
+  scale: { from: number; to: number },
+  edgeText: (edge: number) => string,
+  label: string
+): CardBar | null {
+  if (bands.length === 0) return null;
+  const clamp = (n: number) => Math.min(scale.to, Math.max(scale.from, n));
+  const parts = bands
+    .map((band) => ({
+      band: band.band,
+      from: clamp(band.min ?? scale.from),
+      to: clamp(band.max ?? scale.to),
+    }))
+    .filter((part) => part.to > part.from);
+  const edges = parts.slice(1).map((part) => ({ at: part.from, text: edgeText(part.from) }));
+  return {
+    from: scale.from,
+    to: scale.to,
+    bands: parts,
+    mark: clamp(Number.isFinite(value) ? value : scale.to),
+    edges,
+    label,
+  };
+}
+
+/** "Based on 5 months. It firms up at 12.", while less than a year is on file. */
+function provisionalOf(facts: GuidanceFacts): string | null {
+  if (facts.firm) return null;
+  const n = facts.months.length;
+  return `Based on ${n} ${n === 1 ? 'month' : 'months'}. It firms up at ${CLEAR_PICTURE_MONTHS}.`;
+}
+
+/** The typical band's edges, for the bar's words: "Typical in Germany: 13.9% to 23.9%". */
+function typicalText(bands: readonly BandEntry[], unit: (n: number) => string): string | null {
+  const typical = bands.find((band) => band.band === 'typical');
+  if (!typical) return null;
+  if (typical.min !== null && typical.max !== null) {
+    return `${unit(typical.min)} to ${unit(typical.max)}`;
+  }
+  if (typical.min !== null) return `${unit(typical.min)} or more`;
+  return typical.max === null ? null : `under ${unit(typical.max)}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Savings rate (circle 5; the Dashboard gauge carries its band too)
+
+/** The household saving rate the copy quotes: the reference in percent of disposable income. */
+function savingRateRef(region: RegionId): Reference | null {
+  return (
+    referencesFor('savings.rate', region).find((ref) =>
+      ref.unit.startsWith('percent of disposable income')
+    ) ?? null
+  );
+}
+
+/** The regions whose evidence the "1 in 4 households" sentence comes from. */
+const EUROPEAN: ReadonlySet<RegionId> = new Set(['EU27', 'DE', 'HR']);
+
+/** The largest spending line not needed every month, over the window. */
+function flexibleLine(facts: GuidanceFacts): { name: string; perMonth: number } | null {
+  const line = (facts.windowCategories ?? []).find(
+    (category) => category.type === 'expense' && !category.essential && category.name !== ''
+  );
+  return line ? { name: line.name, perMonth: line.perMonth } : null;
+}
+
+export function savingsCard(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const { rate, cash, withPrincipal } = facts.savings;
+  if (rate === null || cash === null || facts.income === null || facts.spending === null) {
+    return null;
+  }
+  const region = at.region;
+  const name = regionName(region);
+  const money = (n: number) => words.money(Math.round(n));
+  const ref = savingRateRef(region);
+  const bands = bandsFor('savings.rate', region);
+  const principal = facts.principalRepaid ?? 0;
+  const quoted: Reference[] = ref ? [ref] : [];
+  const body: string[] = [];
+  let title: string;
+  let step: BenchmarkCard['step'];
+  let tags: CardTag[];
+  // The rate shown is the one with loan principal added back (D6, LOAN_PRINCIPAL_IS_SAVING); when
+  // cash alone runs below zero, the cash fact leads, as cash is what drains the cushion.
+  const value = cash < 0 ? cash : rate;
+  const band = bandFor('savings.rate', region, value);
+  if (cash < 0) {
+    const gap = facts.spending - facts.income;
+    const n = facts.months.length;
+    title = `${money(gap)} a month more out than in`;
+    const first = [`Over the last ${n} months, spending ran ahead of income.`];
+    if (EUROPEAN.has(region)) {
+      const dissaving = referencesFor('savings.rate', 'EU27').find(
+        (one) => one.sourceId === 'eurostat-icw'
+      );
+      if (dissaving) quoted.push(dissaving);
+      first.push(
+        'About 1 in 4 households in the EU spends more than its income over a year (Eurostat, around 2020).'
+      );
+    }
+    const heaviest = facts.heaviestMonth;
+    if (heaviest) {
+      const month = monthName(heaviest.month);
+      first.push(
+        heaviest.category
+          ? `${month} was the heaviest month, mostly ${heaviest.category}.`
+          : `${month} was the heaviest month.`
+      );
+      step = { label: `See what made ${month} heavier`, hash: '#analytics' };
+    } else {
+      step = { label: 'See where it went', hash: '#analytics' };
+    }
+    body.push(first.join(' '));
+    if (withPrincipal !== null && principal > 0 && withPrincipal - cash > 1) {
+      body.push(
+        `Of your loan payments, ${money(principal)} a month paid the debt down. Counting that, you saved ${percentText(withPrincipal)}%.`
+      );
+    }
+    tags = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
+  } else {
+    title = `You kept ${percentText(rate)}% of your income`;
+    const average = ref ? `${averageText(ref.value ?? 0)}% (${ref.year})` : null;
+    const adjective = REGION_ADJECTIVE[region];
+    if (band?.band === 'high') {
+      body.push(
+        `${average ? `That's above the ${adjective} household average of ${average}. ` : ''}The retirement calculator shows where this rate leads in 10 or 20 years.`
+      );
+      step = { label: 'See where it leads', hash: '#retirement' };
+    } else if (band?.band === 'typical') {
+      body.push(
+        `${average ? `Close to the ${adjective} average of ${average}. ` : ''}One more point is ${money(Math.max(1, facts.income / 100))} a month.`
+      );
+      step = { label: 'Try one point more', hash: '#compound' };
+    } else {
+      const line = flexibleLine(facts);
+      const sentences = [
+        ref
+          ? `Households in ${name} save about ${averageText(ref.value ?? 0)}% on average (${ref.year}), much of it through pension payments taken from pay, which bank statements don't show.`
+          : null,
+        line
+          ? `Your largest flexible line was ${line.name}, ${money(line.perMonth)} a month.`
+          : null,
+      ].filter((one): one is string => one !== null);
+      body.push(sentences.join(' '));
+      step = line
+        ? { label: `Look at ${line.name}`, hash: '#analytics' }
+        : { label: 'See where it goes', hash: '#analytics' };
+    }
+    if (withPrincipal !== null && principal > 0 && withPrincipal - cash > 1) {
+      body.push(
+        `Of your loan payments, ${money(principal)} a month on average paid the debt down; that counts as saving here. Cash alone: ${percentText(cash)}%.`
+      );
+    }
+    tags = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
+  }
+  const typical = typicalText(bands, (n) => `${figureText(n)}%`);
+  return {
+    id: 'savings-rate',
+    metric: 'savings.rate',
+    eyebrow: 'Savings rate',
+    tags,
+    title,
+    body: body.filter((one) => one !== ''),
+    bar: barOf(
+      bands,
+      value,
+      { from: -10, to: 40 },
+      (edge) => `${figureText(edge)}%`,
+      `${typical ? `Typical in ${name}: ${typical}. ` : ''}Yours: ${percentText(value)}%.`
+    ),
+    note: null,
+    step,
+    where: whereFrom('savings.rate', region, bands, quoted),
+    provisional: provisionalOf(facts),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cash cushion (circles 3 and 4)
+
+/** The context line where the region has one, as a sentence. */
+const CUSHION_CONTEXT: Partial<Record<RegionId, string>> = {
+  EU27: "About half of EU households couldn't keep their usual living standard for three months on savings alone (Eurostat, 2020).",
+  HR: "About a third of households in Croatia couldn't keep their usual living standard for three months on savings alone (Eurostat, 2020).",
+  US: '55% of US adults have three months of expenses set aside (Federal Reserve, 2025).',
+};
+
+export function cushionCard(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const months = facts.cushionMonths;
+  const liquid = facts.liquid;
+  const essentials = facts.essentials;
+  if (months === null || liquid === null || essentials === null || !(essentials > 0)) return null;
+  if (!Number.isFinite(months)) return null;
+  const region = at.region;
+  const money = (n: number) => words.money(Math.round(n));
+  const bands = bandsFor('cushion.months', region);
+  const band = bandFor('cushion.months', region, months);
+  const shown = monthsText(months);
+  const monthsTitle = `Your cash covers ${shown} ${shown === '1' ? 'month' : 'months'} of essentials`;
+  let title = monthsTitle;
+  let body: string;
+  let step: BenchmarkCard['step'];
+  if (band?.band === 'low' || months < FIRST_CUSHION_MONTHS) {
+    const days = Math.floor(months * DAYS_IN_A_MONTH);
+    title = `Your cash covers ${days} ${days === 1 ? 'day' : 'days'} of essentials`;
+    body = `The first cushion is one month of essential spending: ${money(essentials)}. You're ${money(gapOf(essentials, liquid))} away.`;
+    step = { label: 'Start a one-month cushion', hash: '#goals' };
+  } else if (band?.band === 'high' || months >= FULL_CUSHION_MONTHS) {
+    body =
+      "That's past the six months most guides stop at. Money beyond it could go toward your next goal; the compound interest calculator shows what time does to it.";
+    step = { label: 'Plan your next goal', hash: '#goals' };
+  } else {
+    const milestone = months < 3 ? 3 : FULL_CUSHION_MONTHS;
+    body = `Most guides aim for three to six months. That range is a convention, not a tested line; if your income moves around, the top of it fits better. Next milestone: ${milestone} months, ${money(gapOf(milestone * essentials, liquid))} away.`;
+    step = { label: 'Open the emergency fund calculator', hash: '#emergency' };
+  }
+  const context = CUSHION_CONTEXT[region];
+  const quoted = referencesFor('cushion.months', region);
+  const tags: CardTag[] = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
+  let note: string | null = null;
+  if (!context) {
+    tags.push({ kind: 'missing', text: `No ${REGION_ADJECTIVE[region]} figure` });
+    note = `${capital(regionName(region))} has no official figure for how many households could live three months on savings.`;
+  }
+  return {
+    id: 'cushion',
+    metric: 'cushion.months',
+    eyebrow: 'Cash cushion',
+    tags,
+    title,
+    body: context ? [body, context] : [body],
+    bar: barOf(
+      bands,
+      months,
+      { from: 0, to: 9 },
+      (edge) => `${figureText(edge)} ${edge === 1 ? 'month' : 'months'}`,
+      `Typical: 1 to 6 months. Yours: ${shown}.`
+    ),
+    note,
+    step,
+    where: whereFrom('cushion.months', region, bands, quoted),
+    provisional: provisionalOf(facts),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The unexpected-bill test (circles 3 and 4)
+
+export function shockCard(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const region = at.region;
+  const ref = referencesFor('shock.cover', region).find(
+    (one) => one.shareUnable !== undefined && one.value !== null
+  );
+  const regionInfo = BENCHMARKS.regions.find((one) => one.id === region);
+  // Quoted in the region's own currency only: with another base currency the card is left out,
+  // and the cushion card covers the ground.
+  if (!ref || ref.value === null || !regionInfo || regionInfo.currency !== at.currency) return null;
+  const liquid = facts.liquid;
+  if (liquid === null) return null;
+  const testAmount = ref.value;
+  const money = (n: number) => words.money(Math.round(n));
+  const bands = bandsFor('shock.cover', region);
+  const cover = liquid / testAmount;
+  const band = bandFor('shock.cover', region, Math.max(0, cover));
+  const name = regionName(region);
+  const share = figureText(ref.shareUnable ?? 0);
+  const cited = `${publisherOf(ref.sourceId)}, ${ref.year}`;
+  const amount = money(testAmount);
+  const low = cover < 1;
+  const title = low
+    ? `An unexpected ${amount} bill would be more than your cash today`
+    : `You could pay an unexpected ${amount} bill from cash`;
+  const body = low
+    ? `${share}% of people in ${name} couldn't pay one from their own money either (${cited}). ${money(gapOf(testAmount, liquid))} more in savings would cover it.`
+    : `${share}% of people in ${name} couldn't (${cited}).`;
+  const step = low
+    ? { label: `Build toward ${amount}`, hash: '#goals' }
+    : facts.cushionMonths !== null && facts.cushionMonths < FIRST_CUSHION_MONTHS
+      ? { label: 'Next: one month of essentials', hash: '#goals' }
+      : null;
+  return {
+    id: 'shock',
+    metric: 'shock.cover',
+    eyebrow: 'Unexpected bill',
+    tags: band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [],
+    title,
+    body: [body],
+    bar: barOf(
+      bands,
+      cover,
+      { from: 0, to: 2 },
+      () => amount,
+      `The test: ${amount}. Your money in reach: ${money(Math.max(0, liquid))}.`
+    ),
+    note: null,
+    step,
+    where: whereFrom('shock.cover', region, bands, [ref]),
+    provisional: null,
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The interest rate on each debt (circle 4)
+
+/**
+ * The market rates the copy quotes per kind of debt, August 2026, as each region's reference in
+ * benchmarks.json words them (a test holds each figure to its label). A kind with no figure for a
+ * region is left out of the sentence rather than compared with another kind's.
+ */
+export const MARKET_RATES: Readonly<
+  Record<RegionId, { sourceId: string; loan: number; card?: number; overdraft?: number }>
+> = {
+  EU27: { sourceId: 'ecb-mir-2026-08', loan: 8.59, card: 16.54 },
+  DE: { sourceId: 'ecb-mir-2026-08', loan: 8.99, card: 17.52, overdraft: 9.46 },
+  HR: { sourceId: 'ecb-mir-2026-08', loan: 5.41, overdraft: 5.55 },
+  UK: { sourceId: 'boe-money-credit-2026-08', loan: 9.96, card: 21.55, overdraft: 20.27 },
+  US: { sourceId: 'fed-g19-2026-08', loan: 11.9, card: 21.19 },
+};
+
+const MARKET_MONTH = 'August 2026';
+
+const KIND_PLURAL: Readonly<Record<Debt['kind'], string>> = {
+  loan: 'new consumer loans',
+  card: 'credit cards',
+  overdraft: 'overdrafts',
+};
+
+/**
+ * How a rate stands against the market rate for its kind: within 1.5 points it is close; a card at
+ * 6% is well below what cards cost, and the sentence says so rather than "close to".
+ */
+function comparedWith(rate: number, market: number): string {
+  if (Math.abs(rate - market) <= 1.5) return 'Close to';
+  return rate < market ? 'Below' : 'Above';
+}
+
+function debtLabel(debt: Debt): string {
+  if (debt.name) return debt.name;
+  return debt.kind === 'loan' ? 'A loan' : debt.kind === 'card' ? 'A card' : 'An overdraft';
+}
+
+export function debtRateCards(
+  facts: GuidanceFacts,
+  _words: LedgerWords,
+  at: CardContext
+): BenchmarkCard[] {
+  const region = at.region;
+  const name = regionName(region);
+  const bands = bandsFor('debt.rate', region);
+  const market = MARKET_RATES[region];
+  const quoted = referencesFor('debt.rate', region);
+  return facts.debts
+    .filter((debt): debt is Debt & { rate: number } => debt.rate !== null && debt.owed > 0)
+    .map((debt, index) => {
+      const band = bandFor('debt.rate', region, debt.rate);
+      const kindRate = debt.kind === 'loan' ? market.loan : market[debt.kind];
+      const kindRef =
+        kindRate === undefined
+          ? null
+          : `${capital(KIND_PLURAL[debt.kind])} in ${name} average ${figureText(kindRate)}% (${MARKET_MONTH}).`;
+      const rate = figureText(debt.rate);
+      let body: string;
+      let step: { label: string; hash: string };
+      const loanPage = debt.kind === 'loan' && debt.id !== null ? `#loans/${debt.id}` : '#loans';
+      const page = debt.kind === 'loan' ? loanPage : '#accounts';
+      if (band?.band === 'high') {
+        body = `Debt at 10% or more is where most guides put extra money first, once a one-month cushion is in place.${kindRef ? ` ${kindRef}` : ''}`;
+        step =
+          debt.kind === 'loan'
+            ? { label: 'Compare paying it off faster', hash: page }
+            : { label: 'Open Accounts', hash: page };
+      } else if (band?.band === 'typical') {
+        body = `${kindRate === undefined ? '' : `${comparedWith(debt.rate, kindRate)} what ${KIND_PLURAL[debt.kind]} cost in ${name} (${figureText(kindRate)}%, ${MARKET_MONTH}). `}Paying it faster is a choice, not an emergency; the cushion comes first.`;
+        step =
+          debt.kind === 'loan'
+            ? { label: 'See its payoff date', hash: page }
+            : { label: 'Open Accounts', hash: page };
+      } else {
+        body =
+          debt.kind === 'loan'
+            ? "Cheap by today's rates. Paying it early saves little interest; the Loans page shows exactly how much."
+            : "Cheap by today's rates. Paying it early saves little interest.";
+        step =
+          debt.kind === 'loan'
+            ? { label: 'See the numbers', hash: page }
+            : { label: 'Open Accounts', hash: page };
+      }
+      return {
+        id: `debt-rate-${debt.kind}-${debt.id ?? index}`,
+        metric: 'debt.rate' as const,
+        eyebrow: 'Interest rate',
+        tags: band ? [{ kind: 'band' as const, text: BAND_TAGS[band.band] }] : [],
+        title: `${debtLabel(debt)} costs ${rate}% a year`,
+        body: [body],
+        bar: barOf(
+          bands,
+          debt.rate,
+          { from: 0, to: 25 },
+          (edge) => `${figureText(edge)}%`,
+          `Typical: 4% to 10% a year. ${debtLabel(debt)}: ${rate}%.`
+        ),
+        note: 'These edges are a rule of thumb from personal-finance guides, not an official line.',
+        step,
+        where: whereFrom('debt.rate', region, bands, quoted),
+        provisional: null,
+      };
+    });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Debt payments (circle 4)
+
+export function debtPaymentsCard(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const income = facts.income;
+  if (income === null || !(income > 0) || !facts.accountsKnown) return null;
+  const region = at.region;
+  const name = regionName(region);
+  const money = (n: number) => words.money(Math.round(n));
+  const hasHousingLoan = at.tenure === 'mortgage';
+  const bands = bandsFor('debt.serviceShare', region, { hasHousingLoan });
+  const payments = facts.debts.reduce((sum, debt) => sum + (debt.payment ?? 0), 0);
+  const share = (payments / income) * 100;
+  const band = bandFor('debt.serviceShare', region, share, { hasHousingLoan });
+  const line = bands.find((one) => one.band === 'typical')?.max ?? null;
+  const borrowed = bands.find((one) => one.borrowedFrom !== undefined)?.borrowedFrom;
+  const quoted = referencesFor('debt.serviceShare', region);
+  const tags: CardTag[] = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
+  if (borrowed) {
+    tags.push({ kind: 'borrowed', text: `${capital(regionName(borrowed))}'s figures` });
+  }
+  let note: string | null = null;
+  if (bands.length === 0) {
+    tags.push({ kind: 'missing', text: `No ${REGION_ADJECTIVE[region]} line` });
+    note = `${capital(name)} has no official line for debt payments against income.`;
+  }
+  const shareText = percentText(share);
+  let title = `Debt payments take ${shareText}% of your take-home pay`;
+  let body: string[] = [];
+  let step: BenchmarkCard['step'] = { label: 'See payoff dates', hash: '#loans' };
+  if (payments <= 0) {
+    title = 'No debt payments';
+    const repaying = quoted.find((ref) => ref.value !== null);
+    body = repaying
+      ? [
+          `${figureText(repaying.value ?? 0)}% of households in ${name} repay a loan other than a mortgage (${repaying.year}).`,
+        ]
+      : [];
+    step = { label: 'Plan your next goal', hash: '#goals' };
+  } else if (band?.band === 'high' && line !== null) {
+    step = { label: 'See which loan ends first', hash: '#loans' };
+    if (region === 'HR') {
+      body = [
+        `In Croatia, banks may lend past ${figureText(line)}% of income only as a limited exception (Croatian National Bank, 2025). It's a lending limit, not a verdict, and a useful line to get back under.`,
+      ];
+    } else if (region === 'US') {
+      body = [
+        "For US mortgages, Fannie Mae's standard limit is 36% of income before tax, higher in some cases. Measured on take-home pay, your share reads higher than theirs would.",
+      ];
+    } else {
+      body = [
+        `There's no official line in ${name}; Croatia's central bank uses ${figureText(line)}% as its limit for new loans.`,
+      ];
+    }
+  } else if (bands.length > 0) {
+    const next = facts.debts
+      .filter((debt): debt is Debt & { ends: string } => debt.kind === 'loan' && !!debt.ends)
+      .sort((a, b) => a.ends.localeCompare(b.ends))[0];
+    if (next) {
+      body = [
+        `${debtLabel(next)} is the next to end, in ${monthYear(next.ends)}; that frees ${money(next.payment ?? 0)} a month.`,
+      ];
+    }
+  }
+  return {
+    id: 'debt-payments',
+    metric: 'debt.serviceShare',
+    eyebrow: 'Debt payments',
+    tags,
+    title,
+    body,
+    bar:
+      line === null
+        ? null
+        : barOf(
+            bands,
+            share,
+            { from: 0, to: 60 },
+            (edge) => `${figureText(edge)}%`,
+            `The line: ${figureText(line)}% of take-home pay. Yours: ${shareText}%.`
+          ),
+    note,
+    step,
+    where: whereFrom('debt.serviceShare', region, bands, quoted),
+    provisional: provisionalOf(facts),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The cards one circle's view shows under How you compare (guidance.md 3.3). The circles that have
+ * any are `CARD_CIRCLES` (circleView.ts), which the view reads without loading this module.
+ */
+export function circleCards(
+  circle: CircleNumber,
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard[] {
+  const cards: (BenchmarkCard | null)[] = [];
+  switch (circle) {
+    case 3:
+      cards.push(cushionCard(facts, words, at), shockCard(facts, words, at));
+      break;
+    case 4:
+      cards.push(
+        cushionCard(facts, words, at),
+        shockCard(facts, words, at),
+        ...debtRateCards(facts, words, at),
+        debtPaymentsCard(facts, words, at)
+      );
+      break;
+    case 5:
+      cards.push(savingsCard(facts, words, at));
+      break;
+    default:
+      break;
+  }
+  return cards.filter((card): card is BenchmarkCard => card !== null);
+}

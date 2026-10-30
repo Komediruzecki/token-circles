@@ -11,9 +11,10 @@
  * questions under the numbers they change. Each is saved through `saveAnswers` and taken by the
  * circles at once. A question Your next step asks on this screen is asked there only.
  */
-import { createMemo, For, Index, onMount, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, Index, onMount, Show } from 'solid-js'
 import { CIRCLE_NAMES } from '../../../../shared/guidance/circles'
 import {
+  CARD_CIRCLES,
   CHECK_STATES,
   checkRows,
   checksLine,
@@ -38,14 +39,18 @@ import { apiPut } from '../../core/api'
 import { asOneWrite } from '../../core/dataVersions'
 import { saveAnswers } from '../../core/guidanceAnswers'
 import { circleHash } from '../../core/progressRoute'
+import { setSettingsTab } from '../../core/settingsStore'
+import BenchmarkCards from './BenchmarkCards'
 import CircleGlyph from './CircleGlyph'
 import ledger from './CircleLedger.module.css'
 import { AnswerChips, EnoughAmount, SavedElsewhereQuestion } from './CircleQuestions'
 import styles from './CircleView.module.css'
 import NextStepCard from './NextStepCard'
 import { createAnswerSave, Question, SaveProblem, TickList } from './questionParts'
+import { regionReasonText } from './regionWords'
 import type { JSX } from 'solid-js'
 import type { Answers, FreeMoneyAnswer } from '../../../../shared/guidance/answers'
+import type * as Cards from '../../../../shared/guidance/cards'
 import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { CheckRow, CheckState, CircleQuestion } from '../../../../shared/guidance/circleView'
 import type { GuidanceView } from '../../core/guidance'
@@ -156,6 +161,25 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
   const asks = (question: CircleQuestion | undefined): question is CircleQuestion =>
     question !== undefined && questions().includes(question)
 
+  // How you compare: cards.ts and benchmarks.json load as their own chunk when the first card is
+  // due, and never while the benchmarks gate is closed (core/guidanceGate.ts).
+  const [cardsModule, setCardsModule] = createSignal<typeof Cards | null>(null)
+  const comparing = () => props.view?.gate === true && CARD_CIRCLES.has(props.circle)
+  createEffect(() => {
+    if (!comparing() || cardsModule() !== null) return
+    void import('../../../../shared/guidance/cards').then((module) => setCardsModule(() => module))
+  })
+  const cards = createMemo(() => {
+    const module = cardsModule()
+    const view = props.view
+    if (!module || !view || !comparing()) return []
+    return module.circleCards(props.circle, view.facts, view.words, {
+      region: view.region.region,
+      currency: view.inputs.currency,
+      tenure: view.inputs.answers.tenure ?? null,
+    })
+  })
+
   return (
     <section
       class={styles.view}
@@ -214,126 +238,162 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
           </p>
         )}
       </Show>
-      <Show when={props.view && row()?.state === 'current' ? props.view : null}>
-        {(view) => <NextStepCard class={styles.next} step={view().next} view={view()} level={3} />}
-      </Show>
+      <div class={styles.columns} data-two={cards().length > 0 ? 'true' : undefined}>
+        <div class={styles.main}>
+          <Show when={props.view && row()?.state === 'current' ? props.view : null}>
+            {(view) => (
+              <NextStepCard class={styles.next} step={view().next} view={view()} level={3} />
+            )}
+          </Show>
 
-      <Show when={props.view}>
-        {(view) => (
-          <>
-            <section class={styles.part} aria-labelledby="circle-checks-title">
-              <h3 id="circle-checks-title" class={styles.partTitle}>
-                What {name()} checks
-              </h3>
-              <p class={styles.partLead} data-test-id="circle-checks-line">
-                {checksLine(view().placement.circles[props.circle - 1])}
-              </p>
-              {/* Keyed by place: a row holds a question's inputs, which an answer must not rebuild. */}
-              <ul class={styles.checks} data-test-id="circle-checks">
-                <Index each={checks()}>
-                  {(check) => (
-                    <li
-                      class={styles.check}
-                      data-state={check().state}
-                      data-check={check().id}
-                      data-test-id="circle-check"
-                    >
-                      <div class={styles.checkHead}>
-                        <StateMark state={check().state} />
-                        <span class={styles.checkTitle}>{check().title}</span>
-                        <span class={styles.checkState} data-test-id="circle-check-state">
-                          {CHECK_STATES[check().state]}
-                        </span>
-                      </div>
-                      <Show when={check().detail}>
-                        <p class={styles.checkDetail} data-test-id="circle-check-detail">
-                          {check().detail}
-                        </p>
-                      </Show>
-                      <Show when={check().waiting}>
-                        <p class={styles.checkWaiting} data-test-id="circle-check-waiting">
-                          {check().waiting}
-                        </p>
-                      </Show>
-                      <Show when={check().needed}>
-                        <p class={styles.checkNeeded}>{check().needed}</p>
-                      </Show>
-                      <Show when={asks(ASKED_UNDER[check().id]) ? ASKED_UNDER[check().id] : null}>
-                        {(question) => (
-                          <CheckQuestion
-                            question={question()}
-                            view={view()}
-                            disabled={answerSave.saving()}
-                            onSave={answerSave.save}
-                          />
-                        )}
-                      </Show>
-                    </li>
-                  )}
-                </Index>
-              </ul>
-            </section>
-
-            <Show when={numbers()}>
-              {(shown) => (
-                <section class={styles.part} aria-labelledby="circle-numbers-title">
-                  <h3 id="circle-numbers-title" class={styles.partTitle}>
-                    Your numbers
+          <Show when={props.view}>
+            {(view) => (
+              <>
+                <section class={styles.part} aria-labelledby="circle-checks-title">
+                  <h3 id="circle-checks-title" class={styles.partTitle}>
+                    What {name()} checks
                   </h3>
-                  <p class={styles.partLead} data-test-id="circle-numbers-lead">
-                    {shown().lead}
+                  <p class={styles.partLead} data-test-id="circle-checks-line">
+                    {checksLine(view().placement.circles[props.circle - 1])}
                   </p>
-                  <dl class={styles.numbers} data-test-id="circle-numbers">
-                    <For each={shown().rows}>
-                      {(number) => (
-                        <div class={styles.number}>
-                          <dt>{number.label}</dt>
-                          <dd>{number.value}</dd>
-                          <Show when={number.note}>
-                            <p class={styles.numberNote}>{number.note}</p>
+                  {/* Keyed by place: a row holds a question's inputs, which an answer must not rebuild. */}
+                  <ul class={styles.checks} data-test-id="circle-checks">
+                    <Index each={checks()}>
+                      {(check) => (
+                        <li
+                          class={styles.check}
+                          data-state={check().state}
+                          data-check={check().id}
+                          data-test-id="circle-check"
+                        >
+                          <div class={styles.checkHead}>
+                            <StateMark state={check().state} />
+                            <span class={styles.checkTitle}>{check().title}</span>
+                            <span class={styles.checkState} data-test-id="circle-check-state">
+                              {CHECK_STATES[check().state]}
+                            </span>
+                          </div>
+                          <Show when={check().detail}>
+                            <p class={styles.checkDetail} data-test-id="circle-check-detail">
+                              {check().detail}
+                            </p>
                           </Show>
-                          <Show when={number.link}>
-                            {(link) => (
-                              <a class={styles.numberLink} href={link().hash}>
-                                {link().label}
-                              </a>
+                          <Show when={check().waiting}>
+                            <p class={styles.checkWaiting} data-test-id="circle-check-waiting">
+                              {check().waiting}
+                            </p>
+                          </Show>
+                          <Show when={check().needed}>
+                            <p class={styles.checkNeeded}>{check().needed}</p>
+                          </Show>
+                          <Show
+                            when={asks(ASKED_UNDER[check().id]) ? ASKED_UNDER[check().id] : null}
+                          >
+                            {(question) => (
+                              <CheckQuestion
+                                question={question()}
+                                view={view()}
+                                disabled={answerSave.saving()}
+                                onSave={answerSave.save}
+                              />
                             )}
                           </Show>
-                        </div>
+                        </li>
                       )}
-                    </For>
-                  </dl>
-                  <Show when={asks('support')}>
-                    <SupportQuestion
-                      view={view()}
-                      disabled={answerSave.saving()}
-                      onSave={answerSave.save}
-                    />
-                  </Show>
-                  <Show when={asks('essentials')}>
-                    <EssentialsQuestion
-                      view={view()}
-                      disabled={answerSave.saving()}
-                      run={answerSave.run}
-                    />
-                  </Show>
-                  <Show when={asks('saved-elsewhere')}>
-                    <SavedElsewhereQuestion
-                      given={view().inputs.answers.savedElsewhere}
-                      currency={view().inputs.currency}
-                      disabled={answerSave.saving()}
-                      idPrefix="circle"
-                      onSave={answerSave.save}
-                    />
-                  </Show>
+                    </Index>
+                  </ul>
                 </section>
-              )}
-            </Show>
-            <SaveProblem problem={answerSave.problem()} testId="circle-view-problem" />
-          </>
-        )}
-      </Show>
-      <p class={styles.guide}>{GUIDANCE_LINE}</p>
+
+                <Show when={numbers()}>
+                  {(shown) => (
+                    <section class={styles.part} aria-labelledby="circle-numbers-title">
+                      <h3 id="circle-numbers-title" class={styles.partTitle}>
+                        Your numbers
+                      </h3>
+                      <p class={styles.partLead} data-test-id="circle-numbers-lead">
+                        {shown().lead}
+                      </p>
+                      <dl class={styles.numbers} data-test-id="circle-numbers">
+                        <For each={shown().rows}>
+                          {(number) => (
+                            <div class={styles.number}>
+                              <dt>{number.label}</dt>
+                              <dd>{number.value}</dd>
+                              <Show when={number.note}>
+                                <p class={styles.numberNote}>{number.note}</p>
+                              </Show>
+                              <Show when={number.link}>
+                                {(link) => (
+                                  <a class={styles.numberLink} href={link().hash}>
+                                    {link().label}
+                                  </a>
+                                )}
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      </dl>
+                      <Show when={asks('support')}>
+                        <SupportQuestion
+                          view={view()}
+                          disabled={answerSave.saving()}
+                          onSave={answerSave.save}
+                        />
+                      </Show>
+                      <Show when={asks('essentials')}>
+                        <EssentialsQuestion
+                          view={view()}
+                          disabled={answerSave.saving()}
+                          run={answerSave.run}
+                        />
+                      </Show>
+                      <Show when={asks('saved-elsewhere')}>
+                        <SavedElsewhereQuestion
+                          given={view().inputs.answers.savedElsewhere}
+                          currency={view().inputs.currency}
+                          disabled={answerSave.saving()}
+                          idPrefix="circle"
+                          onSave={answerSave.save}
+                        />
+                      </Show>
+                    </section>
+                  )}
+                </Show>
+                <SaveProblem problem={answerSave.problem()} testId="circle-view-problem" />
+              </>
+            )}
+          </Show>
+        </div>
+        <div class={styles.side}>
+          <Show when={cards().length > 0 ? props.view : null}>
+            {(view) => (
+              <section
+                class={styles.part}
+                aria-labelledby="circle-compare-title"
+                data-test-id="circle-compare"
+              >
+                <h3 id="circle-compare-title" class={styles.partTitle}>
+                  How you compare
+                </h3>
+                <p class={styles.partLead} data-test-id="circle-compare-region">
+                  {regionReasonText(view().region)}{' '}
+                  <a
+                    class={styles.inlineLink}
+                    href="#settings"
+                    onClick={() => {
+                      setSettingsTab('general')
+                    }}
+                  >
+                    Change
+                  </a>
+                </p>
+                <BenchmarkCards cards={cards()} />
+              </section>
+            )}
+          </Show>
+          <p class={styles.guide}>{GUIDANCE_LINE}</p>
+        </div>
+      </div>
     </section>
   )
 }

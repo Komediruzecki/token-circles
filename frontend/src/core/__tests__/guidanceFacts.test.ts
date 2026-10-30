@@ -593,6 +593,9 @@ describe('debts', () => {
     })
     expect(debts[0].owed).toBeGreaterThan(0)
     expect(debts[0].payment).toBeGreaterThan(0)
+    // The month of its last payment, which the debt-payments card names when it ends next.
+    expect(debts[0].ends).toBe(amortize(reset).at(-1)!.date)
+    expect(debts[0].ends).toBe('2028-12-01')
   })
 
   it('call a loan expensive from the line up', () => {
@@ -1023,6 +1026,28 @@ describe('what the circle views list', () => {
       accounts: [],
     })
     expect(two.windowCategories).toEqual([])
+  })
+
+  it('names the heaviest month of the window, the earliest of equals, and its largest category', () => {
+    const transactions = [
+      ...month(ago(3), 3000, 1000),
+      // 600 on groceries and 1,300 eating out: 1,900, as much as the month after it.
+      ...month(ago(2), 3000, 600),
+      entry(`${ago(2)}-20`, { amount: 1300, category_id: 2 }),
+      ...month(ago(1), 3000, 1900),
+    ]
+    const at = (list: FactsEntry[]) =>
+      guidanceFacts({ today: TODAY, region: 'EU27', transactions: list, categories, accounts: [] })
+    expect(at(transactions).heaviestMonth).toEqual({
+      month: ago(2),
+      spent: 1900,
+      category: 'Eating out',
+    })
+    // Spending filed under no category names the month without one.
+    const loose = [3, 2, 1].flatMap((n) => month(ago(n), 3000, 1000, { category_id: null }))
+    expect(at(loose).heaviestMonth).toMatchObject({ spent: 1000, category: null })
+    // Too few months for an average: no heaviest month either.
+    expect(at([2, 1].flatMap((n) => month(ago(n), 3000, 1000))).heaviestMonth).toBeNull()
   })
 
   it('counts the cards and current accounts below zero, whatever the card answer says', () => {

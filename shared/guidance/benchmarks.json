@@ -84,7 +84,7 @@
       "label": "Savings rate",
       "unit": "percent of income",
       "goodDirection": "higher",
-      "formula": "(income - spending) / income over the last 12 tracked months; spending = expense + deduction entries, transfers excluded; loan principal added back when the loan is on file",
+      "formula": "(income - spending) / income over the last 12 tracked months; income = income less deductions, spending = expense entries only, transfers excluded; loan principal added back when the loan is on file",
       "minData": "3 tracked months for a provisional reading, 12 for a firm one"
     },
     {

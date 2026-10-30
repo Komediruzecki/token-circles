@@ -292,3 +292,37 @@
     margin-left: 0;
   }
 }
+
+/* Under 1024 px one column; from 1024 px, with How you compare, two: the steps, checks and
+   numbers on the left, the comparison and the guidance line on the right. */
+.columns,
+.main,
+.side {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.columns {
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .columns[data-two='true'] {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+.inline-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  color: var(--primary-hover);
+  font-weight: 600;
+}
+
+.inline-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

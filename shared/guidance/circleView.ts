@@ -509,3 +509,9 @@ export function circleQuestions(
       return at.current === 7 ? ['enough'] : [];
   }
 }
+
+/**
+ * The circles whose view has a How you compare part (guidance.md 3.3; cards.ts `circleCards`).
+ * Here, not in cards.ts, so the view can tell without loading the benchmarks.
+ */
+export const CARD_CIRCLES: ReadonlySet<CircleNumber> = new Set<CircleNumber>([3, 4, 5]);

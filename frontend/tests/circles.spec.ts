@@ -85,6 +85,18 @@ async function rowsShown(page: Page) {
   return out
 }
 
+/** Local-first, through setup's first two steps, which make the space, and skip the rest. */
+async function aSpaceOnly(page: Page): Promise<void> {
+  await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+  await page.getByTestId('onboarding-skip').click()
+  await page.getByTestId('confirm-accept').click()
+  await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+}
+
 /** The year imported, 2,800 put in a savings account, and Progress open on the circles. */
 async function aYearInSolidGround(page: Page): Promise<void> {
   await importStatement(page, YEAR, 48)
@@ -195,14 +207,7 @@ test.describe('The seven circles @smoke', () => {
   test('local-first: the ledger reads a year, and a circle opens from its row', async ({
     page,
   }) => {
-    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
-    await page.getByTestId('onboarding-next').click()
-    await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
-    await page.getByTestId('onboarding-next').click()
-    await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
-    await page.getByTestId('onboarding-skip').click()
-    await page.getByTestId('confirm-accept').click()
-    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await aSpaceOnly(page)
 
     // Nothing on file yet: Getting started's first step, and the first circle "for now".
     await openProgress(page)
@@ -251,6 +256,40 @@ test.describe('The seven circles @smoke', () => {
       await answerTheCardQuestion(page)
     } finally {
       await deleteAccount(ctx, email)
+    }
+  })
+})
+
+test.describe('The seven circles, compared', () => {
+  test('local-first: the cards in Solid ground carry a band and say where their figures come from', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000)
+    await aSpaceOnly(page)
+    await aYearInSolidGround(page)
+
+    await page.locator('[data-circle-row="4"] a').click()
+    const compare = page.getByTestId('circle-view').getByTestId('circle-compare')
+    await expect(compare.getByRole('heading', { level: 3 })).toHaveText('How you compare', {
+      timeout: 30_000,
+    })
+    const cushion = compare.locator('[data-card="cushion"]')
+    await expect(cushion.getByTestId('benchmark-title')).toHaveText(
+      'Your cash covers 2 months of essentials'
+    )
+    await expect(cushion.locator('li[data-kind="band"]')).toHaveText('Typical')
+    await expect(cushion.getByTestId('benchmark-bar')).toHaveAttribute(
+      'aria-label',
+      'Typical: 1 to 6 months. Yours: 2.'
+    )
+    const where = cushion.getByTestId('benchmark-where')
+    await where.locator('summary').click()
+    const links = where.locator('a')
+    await expect(links.first()).toBeVisible()
+    for (const href of await links.evaluateAll((all) =>
+      all.map((link) => link.getAttribute('href'))
+    )) {
+      expect(href).toMatch(/^https:\/\//)
     }
   })
 })

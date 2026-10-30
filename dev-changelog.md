@@ -1203,6 +1203,33 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   (production keeps the answers and holds back the space questions; change, remove, a categories
   read that fails), and `circles.spec.ts` (the card question answered in Solid ground, kept
   through a reload and listed in About this space, both modes, `@smoke`).
+- **Benchmark cards** (`shared/guidance/cards.ts`, `BenchmarkCards.tsx`): with the gate open, How
+  you compare sits beside the checks in Breathing room, Solid ground and Room to choose
+  (`CARD_CIRCLES`), in a second column from 1024 px, under the region the figures are for and a
+  Change link to Settings. Five metrics: the savings rate (circle 5), the cushion in months and the
+  unexpected bill (3 and 4), each debt's rate against what new loans, cards and overdrafts cost (4),
+  and debt payments as a share of income (4). Each band reads both ways with the person's number in
+  the title; a band borrowed from another region names that region, a region with no official
+  figure says so, and "Where this comes from" gives the band rule, each source with its publisher
+  and year, and the strength of the evidence. A card on fewer than 12 months says it firms up at 12.
+  The unexpected-bill card shows only while the base currency is the region's: its test is an
+  amount, and the Worker has no exchange rates to convert it. `benchmarks.json` and the cards load
+  as their own chunk, by `import()` from the circle view on the first card, so a closed gate never
+  fetches them. `facts.ts` adds each loan's last payment month (`Debt.ends`) and the window's
+  heaviest month with its largest category (`heaviestMonth`); `benchmarks.json`'s savings-rate
+  formula says which income and spending it counts.
+- **Tests:** `guidanceCards.test.ts` (every card's bands both ways, borrowed and missing figures,
+  the cash-led and principal-led savings lines, the unexpected bill only in the region's currency,
+  debt rates above, close to and below the market, months short of a year), `guidanceFacts.test.ts`
+  (a loan's last payment month; the heaviest month, the earliest of equals, its largest category or
+  none), `benchmarksChunk.test.ts` (the static import graph from the entry, Progress and Dashboard
+  never reaches the benchmarks; the circle view loads them with `import()`),
+  `progressCircles.test.tsx` (cards beside the checks only with the gate open, and only in circles 3
+  to 5), `circles.spec.ts` (the cushion card in Solid ground, local-first), `circles-phone.spec.ts`
+  (each source a 48 px target once Where this comes from opens, at 390 px) and the release case
+  `s17-benchmarks-gate.spec.ts` (a production build shows the circles, holds back How you compare
+  and the free-money check, and never fetches the cards' chunk; it fails on a build with the gate
+  open).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
@@ -1215,6 +1242,7 @@ CHANGELOG.md's [Unreleased].
 Added:
 
 - **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
+- **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
 
 ### Sign-in
 

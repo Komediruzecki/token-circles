@@ -55,6 +55,7 @@ vi.mock('../../core/achievementsStore', () => ({
 import { refreshAchievements } from '../../core/achievementsStore'
 import { apiPut } from '../../core/api'
 import { takeAnswers } from '../../core/guidance'
+import { settingsTab } from '../../core/settingsStore'
 import Progress from '../Progress'
 
 /** The view the store would answer for `f`. */
@@ -65,7 +66,7 @@ function viewOf(f: GuidanceFacts, gate = false, answers: Answers = {}): Guidance
     snapshot: {} as never,
     inputs: { profileId: 1, answers, withdrawalRatePct: 4, currency: 'EUR', holdings: 0 },
     gate,
-    region: { region: f.region } as never,
+    region: { region: f.region as 'EU27', reason: 'fallback', via: null },
     facts: f,
     placement,
     rows: ledgerRows(placement, f, words),
@@ -605,5 +606,55 @@ describe('what a circle checks, and the questions it asks', () => {
     expect(q(view, '[data-check="enough"] [data-test-id="circle-check-waiting"]').textContent).toBe(
       'Asked once you reach Work optional'
     )
+  })
+})
+
+describe('How you compare', () => {
+  it('shows the cards beside the checks while the benchmarks gate is open', async () => {
+    guidance.set!(viewOf(facts(), true))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    const view = q(c, '[data-test-id="circle-view"]')
+    await vi.waitFor(() => {
+      expect(view.querySelectorAll('[data-test-id="benchmark-card"]').length).toBeGreaterThan(0)
+    })
+    const compare = q(view, '[data-test-id="circle-compare"]')
+    expect(q(compare, 'h3').textContent).toBe('How you compare')
+    expect(q(compare, '[data-test-id="circle-compare-region"]').textContent).toBe(
+      'Compared with the EU average, as nothing yet says where you live. Change'
+    )
+    const first = q(compare, '[data-test-id="benchmark-card"]')
+    expect(first.getAttribute('data-card')).toBe('cushion')
+    expect(q(first, '[data-test-id="benchmark-title"]').textContent).toBe(
+      'Your cash covers 2 months of essentials'
+    )
+    expect(first.querySelector('[data-test-id="benchmark-bar"]')?.getAttribute('aria-label')).toBe(
+      'Typical: 1 to 6 months. Yours: 2.'
+    )
+    expect(q(view, '[data-two]').getAttribute('data-two')).toBe('true')
+    const change = q(compare, 'a[href="#settings"]')
+    change.click()
+    expect(settingsTab()).toBe('general')
+  })
+
+  it('shows no cards, and keeps one column, while the gate is closed', async () => {
+    guidance.set!(viewOf(facts(), false))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    await tick()
+    await tick()
+    const view = q(c, '[data-test-id="circle-view"]')
+    expect(view.querySelector('[data-test-id="circle-compare"]')).toBeNull()
+    expect(view.querySelector('[data-two="true"]')).toBeNull()
+    expect(view.textContent).not.toContain('How you compare')
+  })
+
+  it('has no comparison in a circle without cards', async () => {
+    guidance.set!(viewOf(facts(), true))
+    const c = mount(() => <Progress />)
+    go('#progress/1')
+    await tick()
+    await tick()
+    expect(c.querySelector('[data-test-id="circle-compare"]')).toBeNull()
   })
 })
