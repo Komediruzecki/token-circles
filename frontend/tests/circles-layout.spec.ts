@@ -1,6 +1,7 @@
 /**
  * The circles as drawn (circles part 2, from the visual pass): a circle's head keeps its pill on its
- * first row at desktop width and its heading as wide as the name, a link inside running text keeps
+ * first row at desktop width and its heading as wide as the name, the heading takes focus without a
+ * focus box, a link inside running text keeps
  * a 48 px target without spreading the lines apart, and "You're here" reads as the current
  * circle's colour, opaque and at 4.5:1 or more, in both themes. Local-first, on the workspace in
  * circles-fixture.ts.
@@ -196,7 +197,7 @@ test.describe('The circles as drawn', () => {
     })
     const heading = (await title.boundingBox())!
     expect(heading.x + heading.width).toBeLessThan(box.x)
-    // The focus outline follows the heading's box: as wide as the name, not the column.
+    // The heading's box is as wide as the name, not the column.
     expect(heading.width).toBeLessThanOrEqual(Math.ceil(words) + 1)
   })
 
@@ -267,6 +268,47 @@ test.describe('The circles as drawn', () => {
         expect(seen).toContain(`${circle}@${width} beside`)
     }
     expect(seen.filter((s) => s.endsWith('under')).length).toBeGreaterThan(0)
+  })
+
+  test("a circle's heading takes focus when the view opens, and draws no box: it is not a control", async ({
+    page,
+  }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    await page.setViewportSize(DESKTOP)
+    const title = page.getByTestId('circle-view').locator('#circle-view-title')
+    /** The heading's outline as drawn, while it has focus. */
+    const outline = () =>
+      title.evaluate((h) => {
+        const style = getComputedStyle(h)
+        return {
+          focused: document.activeElement === h,
+          visible: h.matches(':focus-visible'),
+          style: style.outlineStyle,
+          width: style.outlineWidth,
+        }
+      })
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme })
+      // From the keyboard, where the focus ring would show: Enter on the row's link.
+      await go(page, 'progress')
+      const link = page.locator('[data-circle-row="4"] a')
+      await expect(link).toBeVisible({ timeout: 30_000 })
+      await link.focus()
+      await page.keyboard.press('Enter')
+      await expect(title).toBeFocused()
+      const keyed = await outline()
+      expect(keyed, `${scheme}, from the keyboard`).toMatchObject({ focused: true, style: 'none' })
+      // With the mouse.
+      await page.keyboard.press('Escape')
+      await expect(link).toBeFocused()
+      await link.click()
+      await expect(title).toBeFocused()
+      expect(await outline(), `${scheme}, with the mouse`).toMatchObject({
+        focused: true,
+        style: 'none',
+      })
+    }
   })
 
   test('"Your next step" on Progress: the spaced-out sans label Dashboard and the circle view use', async ({

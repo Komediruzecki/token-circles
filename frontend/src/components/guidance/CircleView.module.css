@@ -75,13 +75,13 @@
   color: var(--text);
 }
 
-.title:focus {
-  outline: none;
-}
-
+/*
+ * The view moves focus here when it opens, so a screen reader starts at the circle's name. It is
+ * not a control (tabindex -1), so it draws no focus ring, from the keyboard or the mouse.
+ */
+.title:focus,
 .title:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 4px;
+  outline: none;
 }
 
 .line {

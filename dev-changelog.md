@@ -1606,6 +1606,14 @@ check')` first, as the cushion and debt cases do.
   key figure's or Your numbers', and no two of them share one; `guidanceCircleView.test.ts` and
   `guidanceNextStep.test.ts` pin the new lines; `circles.spec.ts` expects the card question's
   check without a line of its own. All fail before the change (34 unit tests).
+- **A circle's heading takes focus without a focus box** (`CircleView.module.css`). Opening a
+  circle moves focus to its heading ("Solid ground") from script, so a screen reader starts there,
+  and `:focus-visible` drew a 2 px outline round it (#3B6FE0 light, #6E9BFF dark), most plainly
+  when the circle was opened from the keyboard. The heading is not a control (`tabindex="-1"`): it
+  keeps the focus and draws no outline.
+- **Tests:** `circles-layout.spec.ts` opens Solid ground with Enter and with a click, in light and
+  dark, and reads the focused heading's outline style. Fails before the change ("solid", from the
+  keyboard, light).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
