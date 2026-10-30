@@ -53,6 +53,8 @@
   /* Action — azure (deep on light ground for contrast) */
   --primary: #3b6fe0;
   --primary-hover: #2f5cc4;
+  /* Text and icons on a --primary fill: white is 4.6:1 on --primary and 6.1:1 on --primary-hover. */
+  --on-primary: #ffffff;
   --primary-bg: rgba(59, 111, 224, 0.1);
   --primary-strong: #3b6fe0;
   --success: #14985a;
