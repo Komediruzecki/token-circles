@@ -98,7 +98,20 @@ describe('buildAdvice', () => {
     expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
     // Spelled as the circle line under it on Progress spells it ("Counts toward ..."), and as
     // most of the app's copy does.
+    // One entry is "it".
     expect(cards.find((c) => c.kind === 'uncategorised')!.detail).toBe(
+      'Categorise it and this month counts toward "Named everything".'
+    )
+    const two = buildAdvice(
+      make({
+        transactions: [
+          ...month('2026-09', 3),
+          tx('2026-09-20', { category_id: null }),
+          tx('2026-09-21', { category_id: null }),
+        ],
+      })
+    )
+    expect(two.find((c) => c.kind === 'uncategorised')!.detail).toBe(
       'Categorise them and this month counts toward "Named everything".'
     )
   })

@@ -1627,6 +1627,13 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `guidanceFacts.test.ts`: the same spending under a deleted category and under none
   gives the same facts, and with it the only spending nothing says anything about, the circles
   ask nothing. Fails before the change.
+- **The no-category advice card says "it" for one entry** (`frontend/src/core/achievements/advice.ts`,
+  `uncategorised()`). Its detail read "Categorise them and this month counts toward ..." over a
+  single entry; one entry now reads "Categorise it and ...". Only the `detail` line changed: #662
+  on main changes the same card's `title` and `figure`. Merging main here conflicts on those three
+  lines already (this branch's "toward", 3c5f5f2e, against main's "towards"); the resolution takes
+  #662's title and figure and this detail line.
+- **Tests:** `advice.test.ts`, one entry and two. Fails before the change.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

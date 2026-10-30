@@ -192,7 +192,7 @@ function uncategorised(input: AdviceInput, byMonth: Map<string, Tx[]>): Advice[]
       kind: 'uncategorised',
       tone: 'info',
       title: 'Some entries have no category',
-      detail: 'Categorise them and this month counts toward "Named everything".',
+      detail: `Categorise ${n === 1 ? 'it' : 'them'} and this month counts toward "Named everything".`,
       figure: String(n),
       link: { page: 'transactions', label: 'Transactions' },
       weight: n,
