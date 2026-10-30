@@ -9,8 +9,7 @@
  * - **Every circle reached**: says so, with a link to the circles.
  *
  * A check not known is asked or read again, never advised. The `why` uses the person's own numbers
- * only; a sentence that quotes a regional figure is `compare`, which the app shows only while the
- * benchmarks gate is open.
+ * only: a circle's How you compare, behind the benchmarks gate, carries the comparisons.
  */
 import {
   CIRCLE_NAMES,
@@ -59,8 +58,6 @@ export interface NextStep {
   circle: CircleNumber | null;
   title: string;
   why: string;
-  /** A sentence quoting a regional figure; shown only while the benchmarks gate is open. */
-  compare: string | null;
   action: StepAction | null;
   meter: StepMeter | null;
   /** "Then: set a budget for Groceries, and build a one-month cushion." */
@@ -435,7 +432,6 @@ const ALL_REACHED: NextStep = {
   circle: null,
   title: "You've reached all seven circles.",
   why: 'Every check the circles hold is met, from a year on file to your own number.',
-  compare: null,
   action: { kind: 'circles', hash: '#progress', label: 'See all seven circles' },
   meter: null,
   then: null,
@@ -453,7 +449,6 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
       circle: current,
       title: first.title,
       why: first.reason,
-      compare: null,
       action: open(first.link.hash, first.link.label),
       meter:
         first.id === 'import-year'
@@ -488,7 +483,6 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
     circle: first.circle,
     title: first.words.title,
     why: first.words.why,
-    compare: null,
     action: first.words.action,
     meter: first.words.meter,
     then: thenLine(later),

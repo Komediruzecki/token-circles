@@ -172,11 +172,6 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
       <p class={styles.why} data-test-id="next-step-why">
         {props.step.why}
       </p>
-      <Show when={props.view.gate && props.step.compare}>
-        <p class={styles.why} data-test-id="next-step-compare">
-          {props.step.compare}
-        </p>
-      </Show>
 
       <Show when={question() === 'card'}>
         <Choices

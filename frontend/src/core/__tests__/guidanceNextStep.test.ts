@@ -5,9 +5,11 @@
  * benchmarks gate is closed.
  */
 import { describe, expect, it } from 'vitest'
+import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
 import { nextStepOf, stepCircleName, thenLine } from '../../../../shared/guidance/nextStep'
 import { ASKED_ONCE } from '../../../../shared/guidance/questions'
+import { REGIONS } from '../../../../shared/guidance/region'
 import { orientationSteps } from '../../../../shared/orientation'
 import { BASE_FACTS as base, facts, words } from './guidanceFixtures'
 import type { PlaceOptions } from '../../../../shared/guidance/circles'
@@ -59,7 +61,6 @@ describe('before a year is on file', () => {
       circle: 1,
       title: 'Import the rest of your year',
       why: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
-      compare: null,
       action: { kind: 'open', hash: '#import', label: 'Open Import' },
       meter: { kind: 'cells', on: 7, left: '7 of 12 months on file', right: 'A year' },
       then: 'Then: sort the 30 entries without a category, and build a one-month cushion.',
@@ -97,7 +98,6 @@ describe('once a year is on file', () => {
       circle: 4,
       title: 'Grow your cushion to three months',
       why: '€2,000 to go: €4,000 you can reach, against €2,000 needed a month.',
-      compare: null,
       action: { kind: 'open', hash: '#goals', label: 'Open Goals' },
       meter: { kind: 'bar', share: 2 / 3, left: '2 months', right: '3 months' },
       then: 'Then: grow your cushion to six months, and raise your savings rate by one point.',
@@ -340,7 +340,6 @@ describe('once a year is on file', () => {
       circle: null,
       title: "You've reached all seven circles.",
       why: 'Every check the circles hold is met, from a year on file to your own number.',
-      compare: null,
       action: { kind: 'circles', hash: '#progress', label: 'See all seven circles' },
       meter: null,
       then: null,
@@ -354,10 +353,26 @@ describe('once a year is on file', () => {
       base,
       facts({ sortedShare: 50 }),
       facts({ ownIncome: 2000 }),
+      facts({ ownIncome: 2000, income: 2000 }),
       facts({ region: 'US' }),
+      facts({ region: 'UK' }),
+      facts({ cushionMonths: 0.5, liquid: 1000 }),
       facts({ cushionMonths: 4, liquid: 8000, invested: 10000 }),
     ]
-    for (const f of cases) expect(step(f).compare).toBeNull()
+    // The why is the person's own numbers: How you compare carries the comparisons. So no region
+    // is named in it, and none of the words a comparison is made of.
+    const places = [
+      ...REGIONS,
+      ...REGIONS.map((region) => regionName(region).replace(/^the /, '')),
+      ...['German', 'Croatian', 'European', 'British', 'American', 'England'],
+    ]
+    const comparing = /\b(typical|average|median|households?|adults|people in)\b/i
+    const whys = cases.map((f) => step(f).why)
+    expect(new Set(whys).size).toBe(cases.length)
+    for (const why of whys) {
+      for (const place of places) expect(why, place).not.toMatch(new RegExp(`\\b${place}\\b`))
+      expect(why).not.toMatch(comparing)
+    }
   })
 })
 

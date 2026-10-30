@@ -1,8 +1,7 @@
 /**
  * What the production build holds back of the guidance until a lawyer has read it (b2, 29 Oct
- * 2026): the benchmark cards, the free-money question and check, the Dashboard gauge's band, a next
- * step's comparison, and setup's region and household questions, which only choose the figures
- * those compare with. The ledger, the circle views and the questions that feed them show in every
+ * 2026): the benchmark cards, the free-money question and check, the Dashboard gauge's band, and
+ * setup's region and household questions, which only choose the figures those compare with. The ledger, the circle views and the questions that feed them show in every
  * build.
  *
  * Opening the gate is one commit: it removes this function and its callers, and moves the held

@@ -1463,6 +1463,18 @@ check')` first, as the cushion and debt cases do.
   history entry, as Loans does.
 - **Tests:** `progressCircles.test.tsx` (Escape in an amount, on a choice, in a text area and in a
   list keeps `#progress/5`; from the heading it goes back to `#progress`).
+- **Your next step has no comparison of its own** (`shared/guidance/nextStep.ts`,
+  `NextStepCard.tsx`, `core/guidanceGate.ts`). Departure from the plan: `NextStep.compare`, a
+  sentence quoting a regional figure under the step while the benchmarks gate is open, was null
+  on every step, and nothing was planned to fill it. It is gone, with the card's
+  `next-step-compare` line: a circle's How you compare carries the comparison, and the step's
+  `why` stays on the person's own numbers. The gate's list of what it holds back no longer names
+  it.
+- **Tests:** `guidanceNextStep.test.ts`: "never quotes a regional figure in the why" read only
+  `compare`, which was always null; it now reads `why` for eight steps (sorting, both own-income
+  sentences, the US and UK free-money questions, a cushion under a month, Solid ground and Room to
+  choose): no region named, no "typical", "average", "median", "households", "adults" or "people
+  in". A why that quotes the EU's households, names the US or gives a typical figure fails it.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
