@@ -94,7 +94,27 @@ describe('buildAdvice', () => {
         ],
       })
     )
-    expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
+    expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1 entry to categorise')
+  })
+
+  it('names one uncategorised entry as one, with a unit beside its count', () => {
+    const cards = buildAdvice(
+      make({ transactions: [...month('2026-09', 3), tx('2026-09-20', { category_id: null })] })
+    )
+    const card = cards.find((c) => c.kind === 'uncategorised')!
+    expect(card.title).toBe('One entry has no category')
+    expect(card.figure).toBe('1 entry to categorise')
+  })
+
+  it('names several uncategorised entries with their count and unit', () => {
+    const cards = buildAdvice(
+      make({
+        transactions: [...month('2026-09', 3), ...month('2026-09', 3, { category_id: null })],
+      })
+    )
+    const card = cards.find((c) => c.kind === 'uncategorised')!
+    expect(card.title).toBe('Some entries have no category')
+    expect(card.figure).toBe('3 entries to categorise')
   })
 
   it('warns a streak is at risk late in a month with too few entries', () => {
@@ -343,7 +363,7 @@ describe('buildAdvice: one card per thing to say', () => {
       })
     )
     expect(cards.find((c) => c.kind === 'budget-drift')!.figure).toBe('EUR 180.00 of EUR 100.00')
-    expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
+    expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1 entry to categorise')
   })
 })
 
