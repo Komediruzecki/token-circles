@@ -1448,6 +1448,14 @@ check')` first, as the cushion and debt cases do.
   someone it applies to, in the circle's list or its next step, with nothing chosen or typed: the
   card, yearly bills, free money, how the household lives, support, savings elsewhere and the own
   number; a new row with Remove has to join the list).
+- **The browser's savings goal never replaces the profile's** (`core/savingsGoal.ts`).
+  `adoptBrowserGoal` decided on the view: with the view's settings read failed, it showed no goal,
+  and a browser holding 15 was saved over a profile holding 30. It now saves with `saveAnswers`'
+  function form, deciding on the record as the save reads it again: `savingsGoal` is set only
+  when the record has none, and the browser's copy is cleared once the save lands, either way.
+- **Tests:** `savingsGoal.test.ts` (its `saveAnswers` stand-in now reads a stored record and works
+  the function form out; new: the profile holds 30, the view shows none, the browser holds 15, and
+  the profile keeps 30, the circles get 30 and the browser's copy goes).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

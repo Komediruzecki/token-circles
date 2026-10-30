@@ -7,7 +7,8 @@
  * of its own, and the browser's copy is then cleared, as the badge record was
  * (achievementsStore.ts): left in place, it would be handed to every other profile too. 20 was only
  * the default, so it moves nowhere and is cleared. A save that fails keeps the copy for the next
- * visit.
+ * visit. Whether the profile has a goal is decided on its record as the save reads it again, not
+ * on the view: a view whose settings read failed shows none, and the profile's own goal stays.
  */
 import { takeAnswers } from './guidance'
 import { saveAnswers } from './guidanceAnswers'
@@ -58,7 +59,12 @@ export function adoptBrowserGoal(view: GuidanceView): Promise<void> {
     return Promise.resolve()
   }
   const profileId = view.profileId
-  moving = saveAnswers({ savingsGoal: goal }, profileId)
+  // Set only on a record that has no goal of its own, as read again for the save. Either way the
+  // browser's copy has done its job once the save lands.
+  moving = saveAnswers(
+    (stored) => (stored.savingsGoal === undefined ? { savingsGoal: goal } : {}),
+    profileId
+  )
     .then((answers) => {
       forget()
       takeAnswers(profileId, answers)

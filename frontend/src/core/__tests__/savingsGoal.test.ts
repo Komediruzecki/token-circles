@@ -5,18 +5,36 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { adoptBrowserGoal, BROWSER_GOAL_KEY } from '../savingsGoal'
-import type { Answers } from '../../../../shared/guidance/answers'
+import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers'
 import type { GuidanceView } from '../guidance'
 
-const saves = vi.hoisted(() => ({ fail: false, calls: [] as Array<[unknown, unknown]> }))
-
-vi.mock('../guidanceAnswers', () => ({
-  saveAnswers: vi.fn(async (changes: Answers, profileId: number) => {
-    saves.calls.push([changes, profileId])
-    if (saves.fail) throw new Error('offline')
-    return changes
-  }),
+const saves = vi.hoisted(() => ({
+  fail: false,
+  calls: [] as Array<[unknown, unknown]>,
+  /** Each profile's answers record, as the settings hold it. */
+  stored: {} as Record<number, Record<string, unknown>>,
 }))
+
+// saveAnswers as it works: it reads the record again, works a function form out from it, and
+// stores the change. The calls list the changes as worked out.
+vi.mock('../guidanceAnswers', async () => {
+  const { mergeAnswers, readAnswers } = await import('../../../../shared/guidance/answers')
+  return {
+    saveAnswers: vi.fn(
+      async (
+        update: AnswerChanges | ((stored: Record<string, unknown>) => AnswerChanges),
+        profileId: number
+      ) => {
+        const record = saves.stored[profileId] ?? {}
+        const changes = typeof update === 'function' ? update(record) : update
+        saves.calls.push([changes, profileId])
+        if (saves.fail) throw new Error('offline')
+        saves.stored[profileId] = mergeAnswers(record, changes)
+        return readAnswers(saves.stored[profileId])
+      }
+    ),
+  }
+})
 vi.mock('../guidance', () => ({ takeAnswers: vi.fn() }))
 
 import { takeAnswers } from '../guidance'
@@ -27,6 +45,7 @@ const view = (answers: Answers = {}, profileId = 3): GuidanceView =>
 beforeEach(() => {
   saves.fail = false
   saves.calls = []
+  saves.stored = {}
   vi.mocked(takeAnswers).mockClear()
   localStorage.removeItem(BROWSER_GOAL_KEY)
 })
@@ -60,6 +79,17 @@ describe("the browser's savings goal", () => {
     localStorage.setItem(BROWSER_GOAL_KEY, '15')
     await adoptBrowserGoal(view({ savingsGoal: 30 }))
     expect(saves.calls).toEqual([])
+    expect(localStorage.getItem(BROWSER_GOAL_KEY)).toBeNull()
+  })
+
+  it("keeps the profile's own goal when the view could not read it", async () => {
+    // The profile holds 30; the view's settings read failed, so it shows no goal; the browser 15.
+    saves.stored[3] = { savingsGoal: 30 }
+    localStorage.setItem(BROWSER_GOAL_KEY, '15')
+    await adoptBrowserGoal(view({}))
+    expect(saves.stored[3]).toEqual({ savingsGoal: 30 })
+    expect(takeAnswers).toHaveBeenCalledWith(3, { savingsGoal: 30 })
+    // The profile has a goal, so the browser's has nowhere to go: cleared all the same.
     expect(localStorage.getItem(BROWSER_GOAL_KEY)).toBeNull()
   })
 
