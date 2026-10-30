@@ -1389,6 +1389,13 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   circle), `progressCircles.test.tsx` (circle 4's view says "€2,000 to go" twice, in Your next
   step and the check; circle 3's card still names the milestone), `tests/circles.spec.ts` (the
   rows' figures and labels).
+- **A circle's glyph at 24 px and under: a faint solid track, no number**
+  (`CircleGlyph.tsx`). At Your next step's 20 px, the dotted orbit's dots sat a pixel apart and
+  blurred into a grey ring. At 24 px and under the track is one `--ring-track` line with no dash,
+  and the number is left out (it was left out under 26 before; the two now share one threshold).
+  The svg carries `data-track="solid"` or `"dotted"`.
+- **Tests:** `circleGlyph.test.tsx` (20 and 24 px: solid, no number; 25 and 36: dotted, with the
+  number).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

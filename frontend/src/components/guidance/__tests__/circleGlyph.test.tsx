@@ -76,10 +76,25 @@ describe('the ring', () => {
     }
   })
 
-  it("leaves the number out of the next step's 20 px chip", () => {
+  it("draws the next step's 20 px chip on a faint solid track, with no number", () => {
+    const small = draw({ circle: 3, state: 'current', measure: 0.5, size: 20 })
+    expect(small.querySelector('text')).toBeNull()
+    const track = small.querySelector('circle')!
+    expect(track.getAttribute('stroke')).toBe('var(--ring-track)')
+    // Dots a pixel apart blur into a grey ring this small: one faint line instead.
+    expect(track.getAttribute('stroke-dasharray')).toBeNull()
+    expect(small.getAttribute('data-track')).toBe('solid')
+    // 24 px and under is the chip's size; above it, a row's, with the dotted orbit and the number.
     expect(
-      draw({ circle: 3, state: 'current', measure: 0.5, size: 20 }).querySelector('text')
+      draw({ circle: 3, state: 'later', measure: null, size: 24 }).querySelector('text')
     ).toBeNull()
+    expect(
+      draw({ circle: 3, state: 'later', measure: null, size: 25 }).getAttribute('data-track')
+    ).toBe('dotted')
+    const row = draw({ circle: 3, state: 'later', measure: null, size: 36 })
+    expect(row.querySelector('circle')!.getAttribute('stroke-dasharray')).toBe('0.6 3.4')
+    expect(row.getAttribute('data-track')).toBe('dotted')
+    expect(row.querySelector('text')!.textContent).toBe('3')
   })
 
   it('gives each ring its own gradient', () => {

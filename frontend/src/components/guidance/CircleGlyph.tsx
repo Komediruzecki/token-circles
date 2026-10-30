@@ -3,7 +3,8 @@
  * dotted orbit; solid from `--ring-a` to `--ring-b` once reached; for the circle being worked on, an
  * arc to its measure with a dot in `--circle-now` at the end of it (Clear picture short of a year:
  * twelve segments, one per month on file); for a circle further out, a faint arc once its measure
- * is above zero. A measure not known draws the dotted orbit only.
+ * is above zero. A measure not known draws the dotted orbit only. At 24 px and under, the orbit is a
+ * faint solid line and the number is left out.
  *
  * Decorative: the row's link carries the words, so the glyph is `aria-hidden`.
  */
@@ -14,6 +15,11 @@ import type { RowState } from '../../../../shared/guidance/ledger'
 
 const C = 20
 const R = 15
+/**
+ * At this size and under (Your next step's chip), the orbit's dots sit a pixel apart and blur into
+ * a grey ring, and a number can't be read: the track is one faint line and the number goes.
+ */
+const SMALL = 24
 
 /** The point at `deg` degrees clockwise from twelve o'clock. */
 function polar(deg: number): [number, number] {
@@ -54,6 +60,7 @@ export default function CircleGlyph(props: CircleGlyphProps): JSX.Element {
     return Math.min(share() ?? 0, 0.999) * 360
   }
   const dot = () => polar(dotAt())
+  const small = () => props.size <= SMALL
 
   return (
     <svg
@@ -63,6 +70,7 @@ export default function CircleGlyph(props: CircleGlyphProps): JSX.Element {
       height={props.size}
       aria-hidden="true"
       data-circle-glyph={props.state}
+      data-track={small() ? 'solid' : 'dotted'}
     >
       <defs>
         <linearGradient id={gradient} x1="0" y1="0" x2="1" y2="1">
@@ -77,7 +85,7 @@ export default function CircleGlyph(props: CircleGlyphProps): JSX.Element {
         fill="none"
         stroke="var(--ring-track)"
         stroke-width="2"
-        stroke-dasharray="0.6 3.4"
+        stroke-dasharray={small() ? undefined : '0.6 3.4'}
         stroke-linecap="round"
       />
       <Show when={props.state === 'reached'}>
@@ -131,7 +139,7 @@ export default function CircleGlyph(props: CircleGlyphProps): JSX.Element {
           stroke-linecap="round"
         />
       </Show>
-      <Show when={props.size >= 26}>
+      <Show when={!small()}>
         <text
           x={C}
           y="24.7"
