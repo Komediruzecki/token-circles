@@ -111,6 +111,63 @@ async function inTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
   await expect(page.locator('html')).toHaveAttribute('data-theme', theme, { timeout: 30_000 })
 }
 
+/**
+ * Where an orbit divider's arc is drawn: per screenshot column, the mean row of the pixels that
+ * change when the arc is hidden (null where nothing changes), with the planets hidden in both
+ * shots. Scaled to CSS pixels.
+ */
+async function arcDrawn(page: Page, orbit: Locator): Promise<(number | null)[]> {
+  const planets = orbit.locator('span')
+  const hide = (what: Locator, hidden: boolean) =>
+    what.evaluateAll((all, h) => {
+      for (const e of all) (e as HTMLElement).style.visibility = h ? 'hidden' : ''
+    }, hidden)
+  await hide(planets, true)
+  const shown = (await orbit.screenshot()).toString('base64')
+  await hide(orbit.locator('path'), true)
+  const bare = (await orbit.screenshot()).toString('base64')
+  await hide(orbit.locator('path'), false)
+  await hide(planets, false)
+  const css = (await orbit.boundingBox())!.width
+  return page.evaluate(
+    async ({ a, b, css }) => {
+      const pixels = async (src: string) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${src}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0)
+        return context.getImageData(0, 0, image.width, image.height)
+      }
+      const [x, y] = [await pixels(a), await pixels(b)]
+      const scale = x.width / css
+      const rows: (number | null)[] = []
+      for (let column = 0; column < css; column++) {
+        let sum = 0
+        let n = 0
+        const at = Math.round(column * scale)
+        for (let row = 0; row < x.height; row++) {
+          const i = (row * x.width + at) * 4
+          const d =
+            Math.abs(x.data[i] - y.data[i]) +
+            Math.abs(x.data[i + 1] - y.data[i + 1]) +
+            Math.abs(x.data[i + 2] - y.data[i + 2])
+          if (d > 6) {
+            sum += row
+            n++
+          }
+        }
+        rows.push(n ? sum / n / scale : null)
+      }
+      return rows
+    },
+    { a: shown, b: bare, css }
+  )
+}
+
 test.describe('The circles as drawn', () => {
   test.beforeEach(() => {
     test.setTimeout(150_000)
@@ -251,6 +308,72 @@ test.describe('The circles as drawn', () => {
     expect(progress.font).toBe(circle.font)
     expect(progress).toEqual(dashboard)
     expect(progress).toMatchObject({ caps: 'uppercase', spaced: true })
+  })
+
+  test('the orbit beside "Your seven circles": one arc with its dots on it, or none, never a row of its own', async ({
+    page,
+  }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    await go(page, 'progress')
+    const divider = page.getByTestId('progress-divider-circles')
+    const label = divider.locator('h2')
+    await expect(label).toHaveText('Your seven circles', { timeout: 30_000 })
+    // The meta beside the label comes with the circles; measured before it, the orbit moves.
+    await expect(divider).toContainText('Circle 4 of 7', { timeout: 30_000 })
+    const orbit = divider.locator('[aria-hidden="true"]:has(svg)')
+    // Drawn in as it would be: the reveal runs to its end (the smallest dot's drift never ends).
+    await expect
+      .poll(() =>
+        orbit.evaluate(
+          (o) =>
+            o
+              .getAnimations({ subtree: true })
+              .filter((a) => a.effect?.getTiming().iterations !== Infinity).length
+        )
+      )
+      .toBe(0)
+    const drawn: string[] = []
+    for (const width of [1280, 390, 360, 320]) {
+      await page.setViewportSize({ width, height: 844 })
+      const head = (await label.boundingBox())!
+      const box = (await orbit.boundingBox())!
+      const where = `${width}: label ${JSON.stringify(head)}, orbit ${JSON.stringify(box)}`
+      // On the label's row, to its right: never a row of its own.
+      const middle = (b: { y: number; height: number }) => b.y + b.height / 2
+      expect(Math.abs(middle(box) - middle(head)), where).toBeLessThanOrEqual(4)
+      expect(box.x, where).toBeGreaterThan(head.x + head.width)
+      if (!(await orbit.locator('svg').isVisible())) {
+        // Too little room beside the label for an arc: none at all, dots included.
+        for (const planet of await orbit.locator('span').all()) await expect(planet).toBeHidden()
+        drawn.push(`${width} none`)
+        continue
+      }
+      const rows = await arcDrawn(page, orbit)
+      // One stroke: no gap in it between the faded ends.
+      let gap = 0
+      let widest = 0
+      for (const row of rows.slice(Math.ceil(rows.length * 0.15), Math.floor(rows.length * 0.85))) {
+        gap = row === null ? gap + 1 : 0
+        widest = Math.max(widest, gap)
+      }
+      expect(widest, `${where}: the widest gap in the arc`).toBeLessThanOrEqual(1)
+      // Each dot sits on the line.
+      for (const planet of await orbit.locator('span').all()) {
+        const dot = (await planet.boundingBox())!
+        const column = Math.round(dot.x + dot.width / 2 - box.x)
+        const row = rows[column]
+        expect(row, `${where}: the line under the dot at ${column}`).not.toBeNull()
+        expect(
+          Math.abs(row! - (middle(dot) - box.y)),
+          `${where}: the dot at ${column}`
+        ).toBeLessThanOrEqual(2)
+      }
+      drawn.push(`${width} arc`)
+    }
+    // The mock's phone draws the arc beside the heading; so does this one at 390. At 320,
+    // "Circle 4 of 7" leaves too little room beside the label, and the arc is left out.
+    expect(drawn).toEqual(['1280 arc', '390 arc', '360 arc', '320 none'])
   })
 
   test('a link inside running text at phone width: a 48 px Change, and the lines as the paragraph spaces them', async ({

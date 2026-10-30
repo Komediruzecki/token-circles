@@ -53,8 +53,11 @@
 
 .orbit {
   position: relative;
-  flex: 1 1 120px;
-  min-width: 90px;
+  /* It takes the room left beside the label and never wraps to a row of its own; with too
+     little room for an arc (the container query below) it draws nothing. */
+  flex: 1 1 0;
+  min-width: 0;
+  container-type: inline-size;
   height: 24px;
   /* Fade the arc out toward both ends so it never hard-stops against label/actions. */
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
@@ -67,6 +70,11 @@
   width: 100%;
   height: 100%;
   overflow: visible;
+  /* Drawn in from the left by uncovering it. A dash reveal (pathLength 1, dasharray 1) breaks
+     under non-scaling-stroke: Chrome lays the dashes out in screen pixels, so a wide arc came
+     out as separate dashes with the planets floating in the gaps. */
+  clip-path: inset(-4px 100% -4px -4px);
+  transition: clip-path 1s ease 0.05s;
 }
 
 .arc path {
@@ -74,9 +82,13 @@
   stroke: color-mix(in oklab, var(--primary) 26%, var(--border));
   stroke-width: 1.4;
   vector-effect: non-scaling-stroke;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  transition: stroke-dashoffset 1s ease 0.05s;
+}
+
+@container (max-width: 63.98px) {
+  .arc,
+  .planet {
+    display: none;
+  }
 }
 
 .planet {
@@ -119,8 +131,8 @@
   transition-delay: 0.48s;
 }
 
-.inView .arc path {
-  stroke-dashoffset: 0;
+.inView .arc {
+  clip-path: inset(-4px -4px -4px -4px);
 }
 
 .inView .planet {
@@ -237,7 +249,7 @@
 /* ── Motion safety ──────────────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
-  .arc path,
+  .arc,
   .planet {
     transition: none;
   }
@@ -248,12 +260,9 @@
 }
 
 @media (max-width: 640px) {
+  /* Actions wrap under the label cleanly; the orbit stays beside it (see .orbit). */
   .divider {
     gap: 12px;
     margin: 26px 0 12px;
-  }
-  /* Keep the arc alive on phones but let actions wrap under the label cleanly. */
-  .orbit {
-    min-width: 56px;
   }
 }

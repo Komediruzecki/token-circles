@@ -1543,6 +1543,19 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `circles-layout.spec.ts`: the label on Progress (an h2) matches Dashboard's in face,
   size, weight, case and spacing, and its face is the body's and the circle view's label's. Fails
   before the change (Fraunces on Progress).
+- **The orbit beside a section's heading is one arc, with its dots on it**
+  (`frontend/src/components/OrbitalDivider.module.css`, so every section divider in the app). The
+  arc drew itself in with a dash (`pathLength="1"`, `stroke-dasharray: 1`) under
+  `vector-effect: non-scaling-stroke`, which Chrome lays out in screen pixels: at 1280 the arc beside
+  "Your seven circles" came out as separate dashes with 101 px gaps and the dots floating in them. It
+  now draws in by uncovering (`clip-path`). The orbit also wrapped to a row of its own on a phone,
+  as two strokes; it now takes the room left beside the heading and never wraps, and with less than
+  64 px it draws nothing. On Progress the arc shows at 1280, 390 and 360; at 320, beside "Circle 4 of
+  7", it is left out. A divider's actions still wrap under the heading on a phone.
+- **Tests:** `circles-layout.spec.ts` diffs the orbit with and without its arc, column by column,
+  after the reveal: no gap wider than 1 px between the faded ends, each dot within 2 px of the line,
+  and the orbit on the heading's row or absent at 1280, 390, 360 and 320. Fails before the change (a
+  101 px gap at 1280).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
