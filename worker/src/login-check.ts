@@ -26,9 +26,11 @@
  *   is used up or cannot be read covers nothing, and the try needs a token as it always did. The
  *   answer clears such a check, so the browser stops sending it.
  * - A token Cloudflare passes is used whenever one comes, and starts a check of its own. A carried
- *   check is looked at only for a try with no token or one Cloudflare refused, so the right
- *   password with a passed token signs in whatever check came with it.
- * - A sign-in that goes through, to a session or to the second factor, ends the check.
+ *   check covers a try only when it has no token or one Cloudflare refused, so the right password
+ *   with a passed token signs in whatever check came with it.
+ * - A sign-in that goes through, to a session or to the second factor, ends the checks the request
+ *   carried: each one that verifies has the tries it had left used up here, so a copy of the value
+ *   covers nothing more, and the browser is told to drop it.
  * - Only this route reads it: creating an account, a reset link, the confirm link, a sign-in code
  *   and the support form need a token every time. The limits on sign-in, per network address and
  *   per account, count every try as before.
@@ -48,6 +50,8 @@ export const LOGIN_CHECK_PATH = '/api/auth/login';
 export const LOGIN_CHECK_SECONDS = 5 * 60;
 /** How many sign-in tries one solved check covers, the one that carried its token included. */
 export const LOGIN_CHECK_TRIES = 5;
+/** The tries one check covers after the try that carried its token. */
+const COVERED_TRIES = LOGIN_CHECK_TRIES - 1;
 /** How many login checks of one request are looked at. A browser holds one; each costs a verify. */
 const LOGIN_CHECKS_READ = 3;
 const FORMAT = 'v1';
@@ -133,13 +137,14 @@ const nowSeconds = () => Math.floor(Date.now() / 1000);
 /** The address Cloudflare says the request came from, '' when it names none. */
 const addressOf = (c: Context<AppEnv>) => c.req.header('CF-Connecting-IP') ?? '';
 
-/** The login check the request carries for `ip`, or null when it carries none that is good. */
-async function carriedCheck(request: Request, env: Env, ip: string): Promise<LoginCheck | null> {
+/** The good login checks the request carries for `ip`, in the order it sent them. */
+async function carriedChecks(request: Request, env: Env, ip: string): Promise<LoginCheck[]> {
   // No address, no work: no check is ever left without one (coverNextTry), and the address is
   // signed, so a check left for another one would not verify here anyway.
-  if (!ip || !env.JWT_SECRET) return null;
+  if (!ip || !env.JWT_SECRET) return [];
   const values = readCookies(request, LOGIN_CHECK_COOKIE).filter((v) => v !== '');
-  if (values.length === 0) return null;
+  if (values.length === 0) return [];
+  const good: LoginCheck[] = [];
   const key = await loginCheckKey(env.JWT_SECRET, env.APP_ENV);
   const now = nowSeconds();
   for (const value of values.slice(0, LOGIN_CHECKS_READ)) {
@@ -157,31 +162,32 @@ async function carriedCheck(request: Request, env: Env, ip: string): Promise<Log
       continue;
     }
     if (await crypto.subtle.verify('HMAC', key, mac, loginCheckBytes(exp, id, ip))) {
-      return { id, exp };
+      good.push({ id, exp });
     }
   }
-  return null;
+  return good;
 }
+
+/** Where the tries a check has covered are counted. */
+const bucketOf = (check: LoginCheck) => `login-check:${check.id}`;
 
 /**
  * Count one try against `check`: the tries it covers after this one, or null when it has covered
  * all it covers. One statement, so tries that land at once are counted one by one.
  */
 async function countTry(env: Env, check: LoginCheck): Promise<number | null> {
-  // The try that carried the token was the first of them.
-  const covered = LOGIN_CHECK_TRIES - 1;
   const res = await db.run(
     env.DB,
     `INSERT INTO rate_limits (bucket, count, reset_at) VALUES (?, 1, ?)
      ON CONFLICT(bucket) DO UPDATE SET count = count + 1 WHERE count < ?
      RETURNING count`,
-    `login-check:${check.id}`,
+    bucketOf(check),
     // The count goes when the check does: the cron sweeps expired buckets (sweepRateLimits).
     check.exp * 1000,
-    covered
+    COVERED_TRIES
   );
   const count = (res.results?.[0] as { count?: unknown } | undefined)?.count;
-  return typeof count === 'number' ? covered - count : null;
+  return typeof count === 'number' ? COVERED_TRIES - count : null;
 }
 
 /**
@@ -207,7 +213,7 @@ export async function checkSignInTry(
     refused = result;
   }
   if (carried) {
-    const check = await carriedCheck(c.req.raw, c.env, addressOf(c));
+    const [check] = await carriedChecks(c.req.raw, c.env, addressOf(c));
     const triesLeft = check ? await countTry(c.env, check) : null;
     if (check && triesLeft !== null) return { ok: true, by: 'check', check, triesLeft, carried };
   }
@@ -259,7 +265,30 @@ export async function coverNextTry(
   return seconds;
 }
 
-/** The request's login check goes: its sign-in went through, or the check covered nothing. */
+/** Tells the browser to drop the login check the request carried, if it carried one. */
 export function endLoginCheck(c: Context<AppEnv>, check: SignInCheck): void {
   if (check.carried) c.header('Set-Cookie', clearedLoginCheck(c.env), { append: true });
+}
+
+/**
+ * The sign-in went through, to a session or to the second factor: the login checks the request
+ * carried have done their work. Each one that verifies has the tries it had left used up, so a
+ * copy of the value covers nothing more, and the browser is told to drop it.
+ */
+export async function useUpLoginChecks(
+  c: Context<AppEnv>,
+  check: Extract<SignInCheck, { ok: true }>
+): Promise<void> {
+  if (!check.carried) return;
+  for (const carried of await carriedChecks(c.req.raw, c.env, addressOf(c))) {
+    await db.run(
+      c.env.DB,
+      `INSERT INTO rate_limits (bucket, count, reset_at) VALUES (?, ?, ?)
+       ON CONFLICT(bucket) DO UPDATE SET count = excluded.count`,
+      bucketOf(carried),
+      COVERED_TRIES,
+      carried.exp * 1000
+    );
+  }
+  endLoginCheck(c, check);
 }

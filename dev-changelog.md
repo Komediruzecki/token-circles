@@ -41,24 +41,27 @@ All notable changes to Token Circles are documented here. The format is based on
   the check was solved plus `LOGIN_CHECK_SECONDS` (300): `verifyTurnstileDetailed` now returns
   `challenge_ts` as `solvedAt`, capped at now, and a passed token whose answer has no readable
   `challenge_ts` leaves no check (no seconds in the 401, no cookie). That keeps the check's end
-  with the token's own expiry, when the widget fetches its next token anyway. `id` is
-  16 random bytes. `mac` is HMAC-SHA256 over `login-check.v1.<exp>.<id>.<CF-Connecting-IP>` with a
-  key derived from `JWT_SECRET` by HKDF-SHA256 under the label
+  with the token's own expiry, when the widget fetches its next token anyway. `id` is 16 random
+  bytes. `mac` is HMAC-SHA256 over `login-check.v1.<exp>.<id>.<CF-Connecting-IP>` with a key
+  derived from `JWT_SECRET` by HKDF-SHA256 under the label
   `token-circles login-check v1 env=<APP_ENV>`, so no session, OAuth state, email-link marker or
   capability verifies as one, and a check left on dev never verifies on prod, even if the two were
-  ever given the same `JWT_SECRET`. The address is signed, not stored. A try that carries a good check and no token (or one Cloudflare refused) is counted
-  in `rate_limits` under `login-check:<id>` by one statement,
+  ever given the same `JWT_SECRET`. The address is signed, not stored. A try that carries a good
+  check and no token (or one Cloudflare refused) is counted in `rate_limits` under
+  `login-check:<id>` by one statement,
   `INSERT ... ON CONFLICT DO UPDATE ... WHERE count < 4 RETURNING count`, which caps one solved
   check at `LOGIN_CHECK_TRIES` (5) tries, its token's try included, across every tab sharing the
-  cookie; the bucket expires with the check. A token
-  Cloudflare passes always wins and starts a new check, so the right password with a passed token
-  signs in whatever check comes with it. Everything else fails closed: a check that ran out, was
-  changed, comes from another address, is used up or cannot be read covers nothing (the same 403 as
-  before; the auth log reason gains `:check`) and that answer clears it. A sign-in that reaches a
-  session or the second factor clears it too, and a request without `CF-Connecting-IP` neither
-  leaves nor takes one. With `TURNSTILE_SECRET` unset, local development stays open with no check
-  and every other environment answers 503 as before, check or not. Creating an account, a reset
-  link, both confirm-link resends, the sign-in code and the support form still call
+  cookie; the bucket expires with the check. A token Cloudflare passes always wins and starts a
+  new check, so the right password with a passed token signs in whatever check comes with it.
+  Everything else fails closed: a check that ran out, was changed, comes from another address, is
+  used up or cannot be read covers nothing (the same 403 as before; the auth log reason gains
+  `:check`) and that answer clears it. A sign-in that reaches a session or the second factor ends
+  every check the request carried that verifies: one upsert per check sets its count in
+  `rate_limits` to the most it counts (`useUpLoginChecks`), so a copy of the value covers nothing
+  afterwards, and the answer clears the cookie. A request without `CF-Connecting-IP` neither
+  leaves nor takes a check. With `TURNSTILE_SECRET` unset, local development stays open with no
+  check and every other environment answers 503 as before, check or not. Creating an account, a
+  reset link, both confirm-link resends, the sign-in code and the support form still call
   `verifyTurnstileDetailed` and need a token every time, and the per-address (30) and per-account
   (10) limits per 900 s are unchanged and count covered tries.
   The cookie holds the check because sessions, the 2FA challenge and the email-link marker already
@@ -72,7 +75,7 @@ All notable changes to Token Circles are documented here. The format is based on
   and starts the check, and `signInForm` sends that sign-in again with the next token: by itself
   when Cloudflare passes without a click, or after a tick when the box comes up, so a check that
   stopped covering never costs a right password its try. `signedIn()` ends the cover once a
-  sign-in goes through. Tests: `worker/test/login-check.test.ts` (28, siteverify stubbed),
+  sign-in goes through. Tests: `worker/test/login-check.test.ts` (35, siteverify stubbed),
   `frontend/src/components/__tests__/captchaGate.test.ts` (12 new),
   `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
   `frontend/src/core/__tests__/apiError.test.ts` (9 new).

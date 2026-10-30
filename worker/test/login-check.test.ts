@@ -486,6 +486,35 @@ describe('what one solved check covers', () => {
   });
 });
 
+describe('a sign-in that goes through ends the check on the Worker too', () => {
+  // The browser is told to drop the check (above). These send a copy of the value afterwards.
+
+  it('after a sign-in the check covered', async () => {
+    const cookie = await earnCheck();
+    expect((await signIn({ password: PASSWORD, cookie })).status).toBe(200);
+
+    const copy = await signIn({ cookie });
+
+    expect(copy.status).toBe(403);
+    expect(checkCleared(copy)).toBe(true);
+  });
+
+  it('after a sign-in with a fresh token, the check sent beside it', async () => {
+    const cookie = await earnCheck();
+    expect((await signIn({ password: PASSWORD, token: 'good-again', cookie })).status).toBe(200);
+
+    expect((await signIn({ cookie })).status).toBe(403);
+  });
+
+  it('after the right password reached the second factor', async () => {
+    const cookie = await earnCheck({ email: TWOFA });
+    const res = await signIn({ email: TWOFA, password: PASSWORD, cookie });
+    expect((await body(res)).twofaRequired).toBe(true);
+
+    expect((await signIn({ email: TWOFA, cookie })).status).toBe(403);
+  });
+});
+
 describe('only a password sign-in takes a check', () => {
   const OTHERS: Array<{ name: string; url: string; body: Record<string, unknown> }> = [
     {

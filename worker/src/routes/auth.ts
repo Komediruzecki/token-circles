@@ -57,7 +57,7 @@ import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
-import { checkSignInTry, coverNextTry, endLoginCheck } from '../login-check';
+import { checkSignInTry, coverNextTry, endLoginCheck, useUpLoginChecks } from '../login-check';
 import { refusalOf } from '../../../shared/refusal';
 import {
   addressProblems,
@@ -446,7 +446,7 @@ authRoutes.post('/api/auth/login', async (c) => {
     c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
     clearMarker();
     // The password was right: the check that covered the tries before it has done its work.
-    endLoginCheck(c, check);
+    await useUpLoginChecks(c, check);
     return c.json({ twofaRequired: true, ...finished });
   }
   const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
@@ -454,7 +454,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
   c.header('Set-Cookie', session);
   clearMarker();
-  endLoginCheck(c, check);
+  await useUpLoginChecks(c, check);
   return c.json({ id: user.id, email, ...finished });
 });
 
