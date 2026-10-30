@@ -54,8 +54,10 @@ RELEASE_BUILDS_DIR=<builds> pnpm run test:e2e:release tests/release/s17-benchmar
 ```
 
 Dev and every local build open the gate, so only a production build shows it closed: the circles and their
-questions show, How you compare and the free-money check do not, and the cards' chunk is never fetched. A build
-made with `VITE_ENABLE_BENCHMARKS=true` fails it.
+questions show, How you compare and the free-money check do not, and the cards' chunk is never fetched. The
+copy the gate holds back is compiled out of such a build (`__BENCHMARKS_SHOWN__` in `vite.config.ts`), so the
+spec also greps the build's scripts for some of it and expects none. A build made with
+`VITE_ENABLE_BENCHMARKS=true` fails both checks.
 
 ## Known bugs, pinned
 

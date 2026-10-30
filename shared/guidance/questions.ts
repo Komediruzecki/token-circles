@@ -50,9 +50,20 @@ export const SAVED_ELSEWHERE_OPTIONS: readonly { label: string; answer: boolean 
 ];
 export const SAVED_ELSEWHERE_HINT = 'Counted as invested, at the amount you give.';
 
+/**
+ * Whether this build carries the copy the benchmarks gate holds back
+ * (frontend/src/core/guidanceGate.ts): the frontend's build defines __BENCHMARKS_SHOWN__ by the
+ * gate's own test, so a production build compiles that copy out. Where nothing defines it (the
+ * Worker, tests), the copy is there.
+ */
+declare const __BENCHMARKS_SHOWN__: boolean | undefined;
+const HELD_BACK_COPY = typeof __BENCHMARKS_SHOWN__ === 'undefined' || __BENCHMARKS_SHOWN__;
+
 /** The housing card asks it while it has no answer (the benchmarks gate holds both back). */
-export const TENURE_QUESTION = 'How do you live?';
-export const TENURE_HINT = 'Renting and owning are compared with different figures.';
+export const TENURE_QUESTION = HELD_BACK_COPY ? 'How do you live?' : '';
+export const TENURE_HINT = HELD_BACK_COPY
+  ? 'Renting and owning are compared with different figures.'
+  : '';
 
 /**
  * The answers to "How do you live?" where `region` is compared with: the UK's figures tell private
@@ -63,6 +74,7 @@ export function tenureOptions(
   region: string,
   answered?: TenureAnswer
 ): readonly { label: string; answer: TenureAnswer }[] {
+  if (!HELD_BACK_COPY) return [];
   const renting: { label: string; answer: TenureAnswer }[] =
     region === 'UK' || answered === 'rentSocial'
       ? [
@@ -93,60 +105,64 @@ export interface FreeMoneyQuestion {
   options: readonly { label: string; answer: FreeMoneyAnswer }[];
 }
 
-export const FREE_MONEY_QUESTIONS: Readonly<Record<'DE' | 'HR' | 'UK' | 'US', FreeMoneyQuestion>> =
-  {
-    DE: {
-      title: 'Check the free money your employer adds',
-      check: 'Free money from your employer',
-      question:
-        'Does your employer offer a company pension through salary conversion (Entgeltumwandlung)? By law, your employer adds 15% of what you convert, where it saves social contributions.',
-      options: [
-        { label: 'I use it', answer: 'taken' },
-        { label: 'Offered, not using it', answer: 'not-taken' },
-        { label: 'Not offered', answer: 'not-offered' },
-        { label: 'Not sure', answer: 'not-sure' },
-      ],
-    },
-    HR: {
-      title: "Check the state's top-up",
-      check: "The state's pension top-up",
-      question:
-        'Do you pay into a voluntary pension fund (treći stup)? The state adds 15% of up to EUR 663.61 a year, at most EUR 99.54.',
-      options: [
-        { label: 'Yes', answer: 'taken' },
-        { label: 'No', answer: 'not-taken' },
-        { label: 'Not sure', answer: 'not-sure' },
-      ],
-    },
-    UK: {
-      title: 'Check your workplace pension',
-      check: 'Your workplace pension',
-      question:
-        "Are you in your workplace pension? While you're enrolled, your employer pays at least 3% of qualifying earnings.",
-      options: [
-        { label: 'Yes', answer: 'taken' },
-        { label: 'I opted out', answer: 'not-taken' },
-        { label: 'Not sure', answer: 'not-sure' },
-      ],
-    },
-    US: {
-      title: "Check your employer's match",
-      check: "Your employer's match",
-      question:
-        'Does your employer match what you put into a retirement plan? Contributing enough to get the full match is the step most guides put before extra debt payments.',
-      options: [
-        { label: 'Yes, all of it', answer: 'taken' },
-        { label: 'Some of it', answer: 'partly' },
-        { label: 'No match', answer: 'not-offered' },
-        { label: 'Not sure', answer: 'not-sure' },
-      ],
-    },
-  };
+/** None where the build leaves the gate's copy out (HELD_BACK_COPY): no free money is asked there. */
+export const FREE_MONEY_QUESTIONS: Readonly<
+  Partial<Record<'DE' | 'HR' | 'UK' | 'US', FreeMoneyQuestion>>
+> = !HELD_BACK_COPY
+  ? {}
+  : {
+      DE: {
+        title: 'Check the free money your employer adds',
+        check: 'Free money from your employer',
+        question:
+          'Does your employer offer a company pension through salary conversion (Entgeltumwandlung)? By law, your employer adds 15% of what you convert, where it saves social contributions.',
+        options: [
+          { label: 'I use it', answer: 'taken' },
+          { label: 'Offered, not using it', answer: 'not-taken' },
+          { label: 'Not offered', answer: 'not-offered' },
+          { label: 'Not sure', answer: 'not-sure' },
+        ],
+      },
+      HR: {
+        title: "Check the state's top-up",
+        check: "The state's pension top-up",
+        question:
+          'Do you pay into a voluntary pension fund (treći stup)? The state adds 15% of up to EUR 663.61 a year, at most EUR 99.54.',
+        options: [
+          { label: 'Yes', answer: 'taken' },
+          { label: 'No', answer: 'not-taken' },
+          { label: 'Not sure', answer: 'not-sure' },
+        ],
+      },
+      UK: {
+        title: 'Check your workplace pension',
+        check: 'Your workplace pension',
+        question:
+          "Are you in your workplace pension? While you're enrolled, your employer pays at least 3% of qualifying earnings.",
+        options: [
+          { label: 'Yes', answer: 'taken' },
+          { label: 'I opted out', answer: 'not-taken' },
+          { label: 'Not sure', answer: 'not-sure' },
+        ],
+      },
+      US: {
+        title: "Check your employer's match",
+        check: "Your employer's match",
+        question:
+          'Does your employer match what you put into a retirement plan? Contributing enough to get the full match is the step most guides put before extra debt payments.',
+        options: [
+          { label: 'Yes, all of it', answer: 'taken' },
+          { label: 'Some of it', answer: 'partly' },
+          { label: 'No match', answer: 'not-offered' },
+          { label: 'Not sure', answer: 'not-sure' },
+        ],
+      },
+    };
 
 /** The free-money question for `region`, or null where none is asked. */
 export function freeMoneyQuestion(region: string): FreeMoneyQuestion | null {
   return region === 'DE' || region === 'HR' || region === 'UK' || region === 'US'
-    ? FREE_MONEY_QUESTIONS[region]
+    ? (FREE_MONEY_QUESTIONS[region] ?? null)
     : null;
 }
 

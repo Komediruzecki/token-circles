@@ -5,20 +5,32 @@
 import type { RegionAnswer } from '../../../../shared/guidance/answers'
 import type { Region, RegionChoice } from '../../../../shared/guidance/region'
 
-export const REGION_QUESTION = 'Where do you live?'
-export const REGION_WHY = 'We compare your numbers with official statistics for that place.'
-export const HOUSEHOLD_QUESTION = 'Who does this space cover?'
+/**
+ * Every word here waits behind the benchmarks gate (core/guidanceGate.ts), and a build with the
+ * gate closed compiles it out: vite.config.ts defines __BENCHMARKS_SHOWN__ by the gate's own test.
+ * Where nothing defines it (tests), the copy is there.
+ */
+declare const __BENCHMARKS_SHOWN__: boolean | undefined
+const HELD_BACK_COPY = typeof __BENCHMARKS_SHOWN__ === 'undefined' || __BENCHMARKS_SHOWN__
+
+export const REGION_QUESTION = HELD_BACK_COPY ? 'Where do you live?' : ''
+export const REGION_WHY = HELD_BACK_COPY
+  ? 'We compare your numbers with official statistics for that place.'
+  : ''
+export const HOUSEHOLD_QUESTION = HELD_BACK_COPY ? 'Who does this space cover?' : ''
 
 /** The answers to "Where do you live?", in the question's order. */
 export const REGION_CHOICES: readonly { value: Exclude<RegionAnswer, 'skipped'>; label: string }[] =
-  [
-    { value: 'DE', label: 'Germany' },
-    { value: 'HR', label: 'Croatia' },
-    { value: 'EU27', label: 'Another EU country' },
-    { value: 'UK', label: 'United Kingdom' },
-    { value: 'US', label: 'United States' },
-    { value: 'elsewhere', label: 'Somewhere else' },
-  ]
+  HELD_BACK_COPY
+    ? [
+        { value: 'DE', label: 'Germany' },
+        { value: 'HR', label: 'Croatia' },
+        { value: 'EU27', label: 'Another EU country' },
+        { value: 'UK', label: 'United Kingdom' },
+        { value: 'US', label: 'United States' },
+        { value: 'elsewhere', label: 'Somewhere else' },
+      ]
+    : []
 
 /** The answers to "Who does this space cover?": 3 stands for three or more. */
 export const ADULT_CHOICES: readonly { value: number; label: string }[] = [
@@ -54,6 +66,7 @@ function childrenText(count: number): string {
  * adults. Children not answered yet.", or "Not answered yet." with neither.
  */
 export function householdText(adults: number | undefined, children: number | undefined): string {
+  if (!HELD_BACK_COPY) return ''
   const a = countChoice(adults)
   const c = countChoice(children)
   if (a === undefined && c === undefined) return 'Not answered yet.'
@@ -82,6 +95,7 @@ const BANK_NAMES: Readonly<Record<string, string>> = {
 
 /** How the region was set, in one sentence. */
 export function regionReasonText(choice: RegionChoice): string {
+  if (!HELD_BACK_COPY) return ''
   const name = REGION_NAMES[choice.region]
   switch (choice.reason) {
     case 'answer':

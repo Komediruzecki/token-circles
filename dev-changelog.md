@@ -1556,6 +1556,25 @@ check')` first, as the cushion and debt cases do.
   after the reveal: no gap wider than 1 px between the faded ends, each dot within 2 px of the line,
   and the orbit on the heading's row or absent at 1280, 390, 360 and 320. Fails before the change (a
   101 px gap at 1280).
+- **The copy the benchmarks gate holds back is compiled out of a production build**
+  (`frontend/vite.config.ts`, `shared/guidance/questions.ts`,
+  `frontend/src/components/guidance/regionWords.ts`). The gate only hid it: the free-money
+  questions for Germany, Croatia, the UK and the US, setup's region and household questions, the
+  housing card's tenure question and the lines saying how the region was set still shipped, in
+  `questionParts-*.js` and `regionWords-*.js`, which Dashboard, Progress and Settings fetch. Vite now
+  defines `__BENCHMARKS_SHOWN__` by the gate's own test (`MODE !== 'production'`, or
+  `VITE_ENABLE_BENCHMARKS=true`), and both files read it behind a `typeof` check, so shared code still
+  builds for the Worker and runs in tests, where nothing defines it and the copy stays. In a
+  production build the minifier drops the copy; a build with the gate open, and `--mode dev`, keep it.
+  `benchmarksShown()` stays the runtime switch the UI and its tests use. The benchmark cards' own
+  chunk (`cards-*.js`, with `benchmarks.json`) is still emitted and still never fetched while the
+  gate is closed; this change does not touch it.
+- **Tests:** release `s17-benchmarks-gate.spec.ts` greps the candidate's scripts for 11 held-back
+  lines and expects none, after checking a line every build carries is there. It found all 11 in a
+  production build before the change, none after, and all 11 again in a build with
+  `VITE_ENABLE_BENCHMARKS=true` (the control, which fails the spec as before).
+  `guidanceGate.test.ts` loads both modules with the constant false, true and undefined; each of 8
+  guard mutations fails it.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

@@ -14,10 +14,13 @@
  * and every other request aborted, so nothing leaves the machine. Local-first, on the demo data,
  * with US dollars as the base currency: the circles then compare with the US, where free money is
  * asked about, so an open gate would show its check (the demo's euros read as the EU, where it
- * never shows, gate or not). A build with the gate open fails this spec.
+ * never shows, gate or not). A build with the gate open fails this spec, its scripts holding the
+ * held-back copy included.
  */
+/* eslint-disable security/detect-non-literal-fs-filename -- every path is joined from
+   RELEASE_BUILDS_DIR, the tester's own build of the candidate */
 import { expect, test } from '@playwright/test'
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Page } from '@playwright/test'
 
@@ -41,6 +44,26 @@ async function serveCandidate(page: Page, fetched: string[]): Promise<void> {
   })
 }
 
+/**
+ * Held-back copy, a few lines of each part: the free-money questions (DE, HR, UK, US), setup's
+ * region and household questions, the housing card's tenure question, and how the region was set.
+ * A production build compiles them out (__BENCHMARKS_SHOWN__ in vite.config.ts), so they are in no
+ * file it ships, fetched or not.
+ */
+const HELD_BACK = [
+  'Entgeltumwandlung',
+  'voluntary pension fund',
+  'Are you in your workplace pension',
+  'Does your employer match what you put into',
+  'Where do you live?',
+  'We compare your numbers with official statistics',
+  'Who does this space cover?',
+  'Another EU country',
+  'How do you live?',
+  'Rent social housing',
+  'going by your base currency',
+]
+
 async function go(page: Page, hash: string): Promise<void> {
   await page.evaluate((to) => {
     window.location.hash = to
@@ -48,6 +71,17 @@ async function go(page: Page, hash: string): Promise<void> {
 }
 
 test.describe('circles part 2: the benchmarks gate in the production build', () => {
+  test("the held-back copy is in none of the build's scripts @release", () => {
+    const assets = join(BUILDS as string, 'rc', 'assets')
+    const scripts = readdirSync(assets)
+      .filter((name) => name.endsWith('.js'))
+      .map((name) => readFileSync(join(assets, name), 'utf8'))
+      .join('\n')
+    // The questions every build asks are there, so these are the app's scripts.
+    expect(scripts).toContain('Do you carry a balance on a credit card or overdraft?')
+    expect(HELD_BACK.filter((line) => scripts.includes(line))).toEqual([])
+  })
+
   test('the gated pieces are held back, and the circles show @release', async ({ browser }) => {
     test.setTimeout(240_000)
     const context = await browser.newContext({ serviceWorkers: 'block' })
