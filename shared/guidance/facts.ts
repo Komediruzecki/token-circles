@@ -279,6 +279,32 @@ export interface GuidanceFacts {
   yearlyBills?: YearlyBills | null;
   /** Whether the person sets the yearly bills aside each month; null until they say. */
   setsAsideYearly?: boolean | null;
+  /** Money in reach by where it is; null as `liquid` is. Absent reads as not broken down. */
+  liquidParts?: LiquidParts | null;
+  /**
+   * The categories the window took in or spent in, a month on average, the most first: what the
+   * circle views list for the support and essentials questions. Empty with too few months.
+   */
+  windowCategories?: WindowCategory[];
+  /** Expenses in the window with no category. */
+  uncategorisedEntries?: number;
+  /**
+   * Credit cards and current accounts below zero today, whatever the card answer says (`debts`
+   * leaves them out after a "No"): circle 4's view asks the card question while there is one.
+   */
+  belowZero?: number;
+}
+
+/** A category the window took in or spent in. */
+export interface WindowCategory {
+  id: number;
+  name: string;
+  type: 'income' | 'expense';
+  /** A month on average over the window. */
+  perMonth: number;
+  /** Expenses only: whether it counts as needed every month, and why (`essentialOf`). */
+  essential: boolean;
+  via: 'chosen' | 'kind' | 'no-kind' | null;
 }
 
 const isId = (value: unknown): value is number =>
@@ -350,6 +376,10 @@ interface WindowSums {
   noKind: Set<number>;
   /** Of `essentials`, what was counted as needed only because nothing said otherwise. */
   unsureSpent: number;
+  /** What each category took in or spent over the window. */
+  byCategory: Map<number, number>;
+  /** Expenses with no category, counted. */
+  uncategorisedEntries: number;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -387,22 +417,30 @@ function sumWindow(
     uncategorised: 0,
     noKind: new Set(),
     unsureSpent: 0,
+    byCategory: new Map(),
+    uncategorisedEntries: 0,
+  };
+  const add = (id: number, value: number) => {
+    sums.byCategory.set(id, (sums.byCategory.get(id) ?? 0) + value);
   };
   for (const entry of entries) {
     const id = entry.category_id;
     if (entry.type === 'income') {
+      if (isId(id)) add(id, Math.abs(amount(entry)));
       if (isId(id) && support.has(id)) sums.support += Math.abs(amount(entry));
       continue;
     }
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
     if (!isId(id)) {
+      sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
       sums.essentials += spent;
       sums.unsureSpent += spent;
       continue;
     }
     sums.sorted += spent;
+    add(id, spent);
     if (!verdicts.has(id)) {
       const category = lookup(id);
       verdicts.set(id, category ? essentialOf(category, lookup) : null);
@@ -494,6 +532,47 @@ function currentAccountsLow(
 /** The account types money can be reached in: savings, cash and current accounts. */
 const LIQUID_TYPES: ReadonlySet<string> = new Set(['savings', 'cash', 'giro']);
 
+/** Money in reach, by where it is: what `liquidOf` adds up. */
+export interface LiquidParts {
+  /** Savings accounts at their balance today. */
+  savings: number;
+  /** The current accounts' low point over the last LOW_POINT_DAYS days. */
+  current: number;
+  /** Cash at its balance today. */
+  cash: number;
+}
+
+/**
+ * Liquid money by where it is (`liquidOf`): savings and cash at their balance today, and the
+ * current accounts' low point, read as one pool (`currentAccountsLow`), none of it below zero.
+ * Null when the accounts are unknown or none of them is one money can be reached in.
+ */
+export function liquidPartsOf(
+  accounts: readonly FactsAccount[] | null,
+  transactions: readonly FactsEntry[],
+  today: string
+): LiquidParts | null {
+  if (accounts === null) return null;
+  const reachable = accounts.filter((account) => LIQUID_TYPES.has(storedAccountType(account.type)));
+  if (reachable.length === 0) return null;
+  const counted = accountsToday(reachable, transactions, today).filter((account) =>
+    finite(account.balance)
+  );
+  const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
+  const parts: LiquidParts = {
+    savings: 0,
+    current: giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0,
+    cash: 0,
+  };
+  for (const account of counted) {
+    const type = storedAccountType(account.type);
+    if (type === 'giro' || account.balance <= 0) continue;
+    if (type === 'cash') parts.cash += account.balance;
+    else parts.savings += account.balance;
+  }
+  return parts;
+}
+
 /**
  * Liquid money: savings and cash at their balance today, and the current accounts' low point,
  * read as one pool (`currentAccountsLow`), none of it below zero. Null when the accounts are
@@ -504,18 +583,8 @@ export function liquidOf(
   transactions: readonly FactsEntry[],
   today: string
 ): number | null {
-  if (accounts === null) return null;
-  const reachable = accounts.filter((account) => LIQUID_TYPES.has(storedAccountType(account.type)));
-  if (reachable.length === 0) return null;
-  const counted = accountsToday(reachable, transactions, today).filter((account) =>
-    finite(account.balance)
-  );
-  const giros = counted.filter((account) => storedAccountType(account.type) === 'giro');
-  let total = giros.length > 0 ? currentAccountsLow(giros, transactions, today) : 0;
-  for (const account of counted) {
-    if (storedAccountType(account.type) !== 'giro' && account.balance > 0) total += account.balance;
-  }
-  return total;
+  const parts = liquidPartsOf(accounts, transactions, today);
+  return parts === null ? null : parts.savings + parts.current + parts.cash;
 }
 
 /** Liquid money in months of essential spending; with no essential spending, any money covers it. */
@@ -730,6 +799,8 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
       : percentOf(kept + principalRepaid, income);
   const swr = input.withdrawalRatePct;
   const enough = input.answers?.enoughPerYear;
+  const accountsNow =
+    input.accounts === null ? null : accountsToday(input.accounts, input.transactions, today);
   return {
     today,
     region: input.region,
@@ -750,11 +821,7 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     },
     liquid,
     cushionMonths: cushionMonthsOf(liquid, essentials),
-    invested: investedOf(
-      input.accounts === null ? null : accountsToday(input.accounts, input.transactions, today),
-      input.holdings,
-      input.answers?.savedElsewhere
-    ),
+    invested: investedOf(accountsNow, input.holdings, input.answers?.savedElsewhere),
     debts: debtsOf(input),
     accountsKnown: input.accounts !== null,
     principalRepaid,
@@ -768,7 +835,46 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     freeMoney: input.answers?.freeMoney ?? null,
     yearlyBills: yearlyBillsOf(input.bills ?? []),
     setsAsideYearly: input.answers?.setsAsideYearly ?? null,
+    liquidParts: liquidPartsOf(input.accounts, input.transactions, today),
+    windowCategories: averaged ? windowCategoriesOf(input.categories, sums, months.length) : [],
+    uncategorisedEntries: sums.uncategorisedEntries,
+    belowZero: belowZeroOf(accountsNow),
   };
+}
+
+/** Credit cards and current accounts below zero, as `accountsToday` gives them. */
+function belowZeroOf(accounts: readonly FactsAccount[] | null): number {
+  let count = 0;
+  for (const account of accounts ?? []) {
+    const type = storedAccountType(account.type);
+    if ((type === 'credit' || type === 'giro') && account.balance < 0) count += 1;
+  }
+  return count;
+}
+
+/** The window's categories with what each took in or spent a month, the most first. */
+function windowCategoriesOf(
+  categories: readonly KindedCategory[],
+  sums: WindowSums,
+  months: number
+): WindowCategory[] {
+  const lookup = categoryLookup(categories);
+  const out: WindowCategory[] = [];
+  for (const [id, total] of sums.byCategory) {
+    const category = lookup(id);
+    if (!category || total <= 0) continue;
+    const income = category.type === 'income';
+    const verdict = income ? null : essentialOf(category, lookup);
+    out.push({
+      id,
+      name: typeof category.name === 'string' ? category.name : '',
+      type: income ? 'income' : 'expense',
+      perMonth: total / months,
+      essential: verdict?.essential ?? false,
+      via: verdict?.via ?? null,
+    });
+  }
+  return out.sort((a, b) => b.perMonth - a.perMonth);
 }
 
 /**

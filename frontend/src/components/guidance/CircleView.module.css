@@ -122,3 +122,173 @@
     justify-self: start;
   }
 }
+
+/* What the circle checks, and the person's numbers: each a part with its own heading. */
+.part {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.part-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.part-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.checks {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+/* Not known yet: a dashed edge, and the line that says what it waits on. */
+.check[data-state='not-known'] {
+  border-style: dashed;
+}
+
+.check-head {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  color: var(--text-secondary);
+}
+
+.check[data-state='met'] .mark {
+  color: var(--success);
+}
+
+.check[data-state='not-yet'] .mark {
+  color: var(--circle-now);
+}
+
+.check-title {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.check-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.check[data-state='met'] .check-state {
+  color: var(--success);
+}
+
+.check-detail,
+.check-waiting,
+.check-needed {
+  margin: 0 0 0 30px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.check-detail {
+  color: var(--text);
+}
+
+.check-waiting {
+  font-style: italic;
+}
+
+.check-needed {
+  font-size: 12px;
+}
+
+.check > fieldset {
+  margin-left: 30px;
+}
+
+.numbers {
+  display: grid;
+  margin: 4px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.number {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.number dt {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.number dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+
+.number-note,
+.number-link {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.number-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  margin: -8px 0 -10px;
+  color: var(--primary-hover);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.number-link:hover {
+  text-decoration: underline;
+}
+
+.number-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 400px) {
+  .check-detail,
+  .check-waiting,
+  .check-needed,
+  .check > fieldset {
+    margin-left: 0;
+  }
+}

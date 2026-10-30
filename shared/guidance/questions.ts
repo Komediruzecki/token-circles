@@ -28,6 +28,33 @@ export const YEARLY_BILLS_OPTIONS: readonly { label: string; answer: boolean }[]
 
 export const ENOUGH_QUESTION = 'What would a year of more than enough cost?';
 
+/** Circle 4's view asks it under the yearly-bills check, whose detail names the bills. */
+export const YEARLY_BILLS_ASIDE = 'Do you set this aside each month?';
+
+/** Circle 2's view, under Your numbers: ticks per income category. Never a next step. */
+export const SUPPORT_QUESTION =
+  'Is any of your income support you expect to stop, from family for example?';
+export const SUPPORT_HINT = 'Tick each one that is. Own income is counted without them.';
+
+/** Circles 3 and 4, under Your numbers, while some spending counts as needed by default. */
+export const ESSENTIALS_QUESTION = 'Which of these do you need every month, whatever happens?';
+export const ESSENTIALS_HINT =
+  'Your cushion is counted in months of these. Each choice is kept with its category on Categories.';
+
+/** Circle 5's view, under Your numbers. */
+export const SAVED_ELSEWHERE_QUESTION =
+  "Do you have pension or investment savings that aren't in Token Circles?";
+export const SAVED_ELSEWHERE_OPTIONS: readonly { label: string; answer: boolean }[] = [
+  { label: 'No', answer: false },
+  { label: 'Yes', answer: true },
+];
+export const SAVED_ELSEWHERE_HINT = 'Counted as invested, at the amount you give.';
+
+/** The amount forms' errors. */
+export const AMOUNT_ABOVE_ZERO = 'Enter an amount above 0.';
+export const ENOUGH_ABOVE_ZERO = 'Enter what a year would cost, above 0.';
+export const AMOUNT_TOO_BIG = 'Enter an amount under 1,000,000,000,000.';
+
 /** The free-money question for one region (guidance.md 5.5), and what its step is called. */
 export interface FreeMoneyQuestion {
   /** The next step's title, and the check's in the circle view. */

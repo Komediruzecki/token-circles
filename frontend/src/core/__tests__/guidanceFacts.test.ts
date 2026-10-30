@@ -21,6 +21,7 @@ import {
   guidanceFacts,
   investedOf,
   liquidOf,
+  liquidPartsOf,
   LOAN_PRINCIPAL_IS_SAVING,
   windowMonths,
   yearlyBillsOf,
@@ -970,5 +971,83 @@ describe('the lines it shares with the official figures', () => {
       expect(bands.find((band) => band.band === 'typical')?.min, region).toBe(FIRST_CUSHION_MONTHS)
       expect(bands.find((band) => band.band === 'high')?.min, region).toBe(FULL_CUSHION_MONTHS)
     }
+  })
+})
+
+describe('what the circle views list', () => {
+  it('breaks the money in reach down by where it is, adding up to the whole', () => {
+    const accounts: FactsAccount[] = [
+      { id: 1, type: 'giro', balance: 1500 },
+      { id: 2, type: 'savings', balance: 3000 },
+      { id: 3, type: 'cash', balance: 200 },
+      { id: 4, type: 'savings', balance: -50 },
+      { id: 5, type: 'ib', balance: 9000 },
+    ]
+    const spent = [entry('2026-10-05', { amount: 400, account_id: 1 })]
+    // The current account was 1,900 before the 5th and 1,500 after: its low point is 1,500.
+    expect(liquidPartsOf(accounts, spent, TODAY)).toEqual({
+      savings: 3000,
+      current: 1500,
+      cash: 200,
+    })
+    expect(liquidOf(accounts, spent, TODAY)).toBe(4700)
+    expect(liquidPartsOf(null, spent, TODAY)).toBeNull()
+    expect(liquidPartsOf([{ id: 5, type: 'ib', balance: 9000 }], spent, TODAY)).toBeNull()
+  })
+
+  it("lists the window's categories a month on average, the most first, with what is needed", () => {
+    const transactions = [3, 2, 1].flatMap((n) => [
+      ...month(ago(n), 3000, 1000),
+      entry(`${ago(n)}-12`, { amount: 300, category_id: 2 }),
+      entry(`${ago(n)}-13`, { amount: 60, category_id: null }),
+    ])
+    const facts = guidanceFacts({
+      today: TODAY,
+      region: 'EU27',
+      transactions,
+      categories: [...categories, { id: 9, name: 'Salary', type: 'income' }],
+      accounts: [],
+    })
+    expect(facts.windowCategories).toEqual([
+      { id: 9, name: 'Salary', type: 'income', perMonth: 3000, essential: false, via: null },
+      { id: 1, name: 'Groceries', type: 'expense', perMonth: 1000, essential: true, via: 'kind' },
+      { id: 2, name: 'Eating out', type: 'expense', perMonth: 300, essential: false, via: 'kind' },
+    ])
+    expect(facts.uncategorisedEntries).toBe(3)
+    // Too few months for an average: nothing listed.
+    const two = guidanceFacts({
+      today: TODAY,
+      region: 'EU27',
+      transactions: [2, 1].flatMap((n) => month(ago(n), 3000, 1000)),
+      categories,
+      accounts: [],
+    })
+    expect(two.windowCategories).toEqual([])
+  })
+
+  it('counts the cards and current accounts below zero, whatever the card answer says', () => {
+    const accounts: FactsAccount[] = [
+      { id: 1, type: 'credit', balance: -300 },
+      { id: 2, type: 'giro', balance: -50 },
+      { id: 3, type: 'savings', balance: -20 },
+      { id: 4, type: 'credit', balance: 0 },
+    ]
+    const at = (carriesCardBalance: boolean | null) =>
+      guidanceFacts({
+        today: TODAY,
+        region: 'EU27',
+        transactions: [],
+        categories,
+        accounts,
+        answers: { carriesCardBalance },
+      })
+    expect(at(null).belowZero).toBe(2)
+    // "No" leaves the card and the overdraft out of the debts, not out of the count.
+    expect(at(false).debts).toEqual([])
+    expect(at(false).belowZero).toBe(2)
+    expect(
+      guidanceFacts({ today: TODAY, region: 'EU27', transactions: [], categories, accounts: null })
+        .belowZero
+    ).toBe(0)
   })
 })

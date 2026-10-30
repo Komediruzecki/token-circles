@@ -1,10 +1,13 @@
 /**
  * Settings > General, About this space, against the real local-first router on fake-indexeddb:
  * the production build holds back setup's region and household questions with the benchmarks they
- * choose figures for (core/guidanceGate.ts), so the card is not there; every other build shows it.
+ * choose figures for (core/guidanceGate.ts); every other build asks them. The answers the circles
+ * asked for are listed in every build, each changeable, and "Remove answer" clears one so its
+ * circle asks again. Round invented values.
  */
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { setPage } from '../../core/appStore'
 import { __resetDataVersionsForTest } from '../../core/dataVersions'
 import { setSettingsTab } from '../../core/settingsStore'
 import { getDB } from '../../core/storage/idb'
@@ -53,6 +56,8 @@ afterEach(() => {
 const card = () => host.querySelector('[data-test-id="settings-about-space"]')
 
 async function openGeneral(): Promise<void> {
+  // About this space loads while Settings is the page on screen (refetchOnActive).
+  setPage('settings')
   setSettingsTab('general')
   const { default: Settings } = await import('../Settings')
   dispose = render(() => <Settings />, host)
@@ -61,19 +66,131 @@ async function openGeneral(): Promise<void> {
   })
 }
 
-it('is not in the production build', async () => {
+/** The answers record as the local-first router keeps it for profile 1. */
+async function storedAnswers(): Promise<Record<string, unknown>> {
+  const db = await getDB()
+  const row = (await db.get('settings', 'guidance:1')) as { value?: unknown } | undefined
+  return typeof row?.value === 'string' ? (JSON.parse(row.value) as Record<string, unknown>) : {}
+}
+
+async function storeAnswers(answers: Record<string, unknown>): Promise<void> {
+  const db = await getDB()
+  await db.put('settings', { key: 'guidance:1', value: JSON.stringify(answers) })
+}
+
+const answer = (name: string) => host.querySelector(`[data-test-id="settings-answer-${name}"]`)
+
+it("holds back the space questions in the production build, and keeps the circles' answers", async () => {
   vi.stubEnv('MODE', 'production')
   await openGeneral()
-  expect(card()).toBeNull()
+  expect(card()).not.toBeNull()
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="settings-circle-answers-empty"]')?.textContent).toBe(
+      'Nothing yet. A circle asks when an answer would change one of its checks.'
+    )
+  })
+  expect(host.textContent).toContain('What your circles asked')
   expect(host.textContent).not.toContain('Where do you live?')
+  expect(host.querySelector('[data-test-id="settings-space-region"]')).toBeNull()
+})
+
+it('lists each answer the circles asked for, with the support by name', async () => {
+  vi.stubEnv('MODE', 'production')
+  const db = await getDB()
+  const income = { profile_id: 1, type: 'income', color: '#3b6fe0' }
+  await db.add('categories', { ...income, id: 5, name: 'Family help' })
+  await db.add('categories', { ...income, id: 6, name: 'Allowance' })
+  await storeAnswers({
+    carriesCardBalance: false,
+    setsAsideYearly: true,
+    supportCategoryIds: [5, 6],
+    kindsAsked: true,
+    savedElsewhere: { amount: 12000, currency: 'EUR' },
+    enoughPerYear: { amount: 48000, currency: 'EUR' },
+    freeMoney: { region: 'DE', answer: 'taken' },
+  })
+  await openGeneral()
+  await vi.waitFor(() => {
+    expect(answer('card')).not.toBeNull()
+  })
+  expect(answer('card')?.textContent).toContain(
+    'Do you carry a balance on a credit card or overdraft?'
+  )
+  const chosen = (name: string) =>
+    [...(answer(name)?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? [])]
+      .filter((radio) => radio.checked)
+      .map((radio) => radio.closest('label')?.textContent)
+  expect(chosen('card')).toEqual(['No'])
+  expect(chosen('yearly-bills')).toEqual(['Yes'])
+  expect(host.querySelector('[data-test-id="settings-answer-support-value"]')?.textContent).toBe(
+    'Family help and Allowance.'
+  )
+  expect(answer('essentials')?.textContent).toContain(
+    'Each choice is kept with its category on Categories.'
+  )
+  expect(
+    host.querySelector<HTMLInputElement>('[data-test-id="settings-answer-saved-elsewhere-amount"]')
+      ?.value
+  ).toBe('12000')
+  expect(
+    host.querySelector<HTMLInputElement>('[data-test-id="settings-answer-enough-amount"]')?.value
+  ).toBe('48000')
+  // Free money is held back with the benchmarks in production.
+  expect(answer('free-money')).toBeNull()
+})
+
+it("lists the answers when the categories can't be read, the support as a count", async () => {
+  vi.stubEnv('MODE', 'production')
+  const db = await getDB()
+  // No colour: the categories read fails its check.
+  await db.add('categories', { id: 5, profile_id: 1, name: 'Family help', type: 'income' })
+  await storeAnswers({ supportCategoryIds: [5, 6], carriesCardBalance: true })
+  await openGeneral()
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="settings-answer-support-value"]')?.textContent).toBe(
+      '2 income categories.'
+    )
+  })
+  expect(answer('card')).not.toBeNull()
+})
+
+it('changes an answer here, and removes one so its circle asks again', async () => {
+  vi.stubEnv('MODE', 'production')
+  await storeAnswers({ carriesCardBalance: false, setsAsideYearly: true })
+  await openGeneral()
+  await vi.waitFor(() => {
+    expect(answer('card')).not.toBeNull()
+  })
+  const yes = [...answer('card')!.querySelectorAll('label')].find(
+    (label) => label.textContent === 'Yes'
+  )!
+  yes.querySelector('input')!.click()
+  await vi.waitFor(async () => {
+    expect((await storedAnswers()).carriesCardBalance).toBe(true)
+  })
+
+  host
+    .querySelector<HTMLButtonElement>('[data-test-id="settings-answer-yearly-bills-remove"]')!
+    .click()
+  await vi.waitFor(async () => {
+    expect(await storedAnswers()).toEqual({ carriesCardBalance: true })
+  })
+  await vi.waitFor(() => {
+    expect(answer('yearly-bills')).toBeNull()
+  })
 })
 
 it('asks where you live and who the space covers in every other build', async () => {
   vi.stubEnv('MODE', 'dev')
+  await storeAnswers({ freeMoney: { region: 'DE', answer: 'not-sure' } })
   await openGeneral()
   expect(card()).not.toBeNull()
   await vi.waitFor(() => {
     expect(host.querySelector('[data-test-id="settings-space-region"]')).not.toBeNull()
   })
   expect(host.querySelector('[data-test-id="settings-space-household"]')).not.toBeNull()
+  // The free-money answer, with its question for the region it was asked for.
+  await vi.waitFor(() => {
+    expect(answer('free-money')?.textContent).toContain('Entgeltumwandlung')
+  })
 })

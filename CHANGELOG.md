@@ -17,6 +17,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Two mails for your first week.** On day 2, if nothing is imported yet, how to get a year of statements out of your bank; on day 7, after an import, what your first week found, in counts and never amounts. Both carry a stop link that stops these two mails, and Settings has a switch for them while they can still come.
 - **The subscription scan finds regular payments it has no name for**, like the rent or a local gym, and adds each as a bill or a subscription. It leaves cash withdrawals out, and lists what you pay every week or two unticked.
 - **Seven circles on Progress.** Each circle, from Clear picture to More than enough, gets a row with your own figure, like months on file or the months of essentials your money covers. The row you're in is lit, with Your next step above it.
+- **Open a circle to see what it checks**: met, not yet or not known yet, with the numbers behind each. Where a check needs your answer, like whether you carry a balance on a card or set money aside for yearly bills, the circle asks once and Settings keeps it.
 
 ### Changed
 

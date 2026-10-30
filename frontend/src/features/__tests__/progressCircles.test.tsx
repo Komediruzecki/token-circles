@@ -10,7 +10,9 @@ import { ledgerRows, ledgerStatus } from '../../../../shared/guidance/ledger'
 import { nextStepOf } from '../../../../shared/guidance/nextStep'
 import { facts, words } from '../../core/__tests__/guidanceFixtures'
 import type { JSX } from 'solid-js'
-import type { GuidanceFacts } from '../../../../shared/guidance/facts'
+import type { Answers } from '../../../../shared/guidance/answers'
+import type { GuidanceFacts, WindowCategory } from '../../../../shared/guidance/facts'
+import type * as ApiModule from '../../core/api'
 import type { GuidanceView } from '../../core/guidance'
 
 const guidance = vi.hoisted(() => ({
@@ -36,6 +38,10 @@ vi.mock('../../core/guidanceAnswers', () => ({
     return changes
   }),
 }))
+vi.mock('../../core/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
+  apiPut: vi.fn(async () => ({})),
+}))
 vi.mock('../../core/achievementsStore', () => ({
   snapshot: () => null,
   unlocks: () => [],
@@ -47,16 +53,17 @@ vi.mock('../../core/achievementsStore', () => ({
 }))
 
 import { refreshAchievements } from '../../core/achievementsStore'
+import { apiPut } from '../../core/api'
 import { takeAnswers } from '../../core/guidance'
 import Progress from '../Progress'
 
 /** The view the store would answer for `f`. */
-function viewOf(f: GuidanceFacts, gate = false): GuidanceView {
+function viewOf(f: GuidanceFacts, gate = false, answers: Answers = {}): GuidanceView {
   const placement = placeCircle(f, { freeMoney: gate })
   return {
     profileId: 1,
     snapshot: {} as never,
-    inputs: { profileId: 1, answers: {}, withdrawalRatePct: 4, currency: 'EUR', holdings: 0 },
+    inputs: { profileId: 1, answers, withdrawalRatePct: 4, currency: 'EUR', holdings: 0 },
     gate,
     region: { region: f.region } as never,
     facts: f,
@@ -64,6 +71,7 @@ function viewOf(f: GuidanceFacts, gate = false): GuidanceView {
     rows: ledgerRows(placement, f, words),
     status: ledgerStatus(placement, f, words),
     next: nextStepOf({ placement, facts: f, orientation: null, words }),
+    words,
   }
 }
 
@@ -85,6 +93,7 @@ beforeEach(() => {
   saves.calls = []
   vi.mocked(takeAnswers).mockClear()
   vi.mocked(refreshAchievements).mockClear()
+  vi.mocked(apiPut).mockClear()
   guidance.set!(null)
 })
 afterEach(() => {
@@ -327,5 +336,274 @@ describe("a circle's own view", () => {
     go('#progress/2')
     go('#budgets')
     expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('2')
+  })
+})
+
+describe('what a circle checks, and the questions it asks', () => {
+  /** A card whose entries cannot show whether its balance is carried. */
+  const visa = {
+    kind: 'card' as const,
+    id: 3,
+    name: 'Visa',
+    owed: 400,
+    rate: null,
+    payment: null,
+    carried: null,
+    expensive: null,
+  }
+  const category = (over: Partial<WindowCategory>): WindowCategory => ({
+    id: 11,
+    name: 'Salary',
+    type: 'income',
+    perMonth: 2500,
+    essential: false,
+    via: null,
+    ...over,
+  })
+  const open = (circle: number) => {
+    const c = mount(() => <Progress />)
+    go(`#progress/${circle}`)
+    return q(c, '[data-test-id="circle-view"]')
+  }
+  const radios = (scope: ParentNode, testId: string) =>
+    [...scope.querySelectorAll<HTMLLabelElement>(`[data-test-id="${testId}"]`)].map((label) => ({
+      label: label.textContent,
+      input: q(label, 'input') as HTMLInputElement,
+    }))
+
+  it("lists the checks in the method's order, each with its state and whether it is needed", () => {
+    guidance.set!(viewOf(facts()))
+    const view = open(4)
+    expect(q(view, '#circle-checks-title').textContent).toBe('What Solid ground checks')
+    expect(q(view, '[data-test-id="circle-checks-line"]').textContent).toBe(
+      '2 are needed to reach it; 1 more is on its list.'
+    )
+    const checks = [...view.querySelectorAll('[data-test-id="circle-check"]')]
+    expect(
+      checks.map((check) => [
+        check.getAttribute('data-check'),
+        check.getAttribute('data-state'),
+        q(check, '[data-test-id="circle-check-state"]').textContent,
+      ])
+    ).toEqual([
+      ['no-expensive-debt', 'met', 'Met'],
+      ['solid-cushion', 'not-yet', 'Not yet'],
+      ['full-cushion', 'not-yet', 'Not yet'],
+    ])
+    expect(q(checks[1], '[data-test-id="circle-check-detail"]').textContent).toBe(
+      '2 months: €4,000 against €2,000 a month. €2,000 to go.'
+    )
+    expect(checks[1].textContent).toContain('Needed to reach Solid ground')
+    expect(checks[2].textContent).not.toContain('Needed to reach')
+  })
+
+  it('says what a check not known waits on', () => {
+    guidance.set!(viewOf(facts({ accountsKnown: false, liquid: null, cushionMonths: null })))
+    const view = open(3)
+    const check = q(view, '[data-check="first-cushion"]')
+    expect(check.getAttribute('data-state')).toBe('not-known')
+    expect(q(check, '[data-test-id="circle-check-state"]').textContent).toBe('Not known yet')
+    expect(q(check, '[data-test-id="circle-check-waiting"]').textContent).toBe(
+      "Your accounts didn't load"
+    )
+  })
+
+  it('shows the numbers behind the checks, and where the money in reach is', () => {
+    guidance.set!(viewOf(facts({ liquidParts: { savings: 3000, current: 1000, cash: 0 } })))
+    const view = open(3)
+    expect(q(view, '[data-test-id="circle-numbers-lead"]').textContent).toBe(
+      'Averages over January 2025 to December 2025. Balances as of today.'
+    )
+    const numbers = q(view, '[data-test-id="circle-numbers"]')
+    expect([...numbers.querySelectorAll('dt')].map((dt) => dt.textContent)).toEqual([
+      'Money you can reach',
+      'Needed every month',
+      'Debts',
+    ])
+    expect([...numbers.querySelectorAll('dd')].map((dd) => dd.textContent)).toEqual([
+      '€4,000',
+      '€2,000',
+      'None',
+    ])
+    expect(numbers.textContent).toContain(
+      'Savings €3,000, current accounts at their lowest in the last 30 days €1,000.'
+    )
+  })
+
+  it('links the withdrawal rate to Retirement, where it is set', () => {
+    guidance.set!(viewOf(facts()))
+    const view = open(6)
+    const link = q(view, '[data-test-id="circle-numbers"] a') as HTMLAnchorElement
+    expect(link.getAttribute('href')).toBe('#retirement')
+    expect(link.textContent).toBe('Change it on Retirement')
+  })
+
+  it('asks the card question under the debt check, and saves a change there', async () => {
+    guidance.set!(viewOf(facts({ belowZero: 1 }), false, { carriesCardBalance: false }))
+    const view = open(4)
+    const debt = q(view, '[data-check="no-expensive-debt"]')
+    expect(debt.textContent).toContain('Do you carry a balance on a credit card or overdraft?')
+    const [no, yes] = radios(debt, 'circle-card-choice')
+    expect([no.label, yes.label]).toEqual(['No', 'Yes'])
+    expect(no.input.checked).toBe(true)
+    yes.input.click()
+    expect(yes.input.checked).toBe(true)
+    await tick()
+    expect(saves.calls).toEqual([{ carriesCardBalance: true }])
+    expect(takeAnswers).toHaveBeenCalledWith(1, { carriesCardBalance: true })
+  })
+
+  it('asks a question once when Your next step on the view asks it', () => {
+    guidance.set!(viewOf(facts({ debts: [visa], belowZero: 1 })))
+    const view = open(4)
+    expect(q(view, '[data-test-id="next-step-card"]').getAttribute('data-step')).toBe(
+      'no-expensive-debt'
+    )
+    expect(view.querySelectorAll('[data-test-id="circle-card-choice"]')).toHaveLength(0)
+    expect(
+      q(view, '[data-check="no-expensive-debt"] [data-test-id="circle-check-waiting"]').textContent
+    ).toBe('Waiting on your answer')
+  })
+
+  it('puts a choice back when it did not save', async () => {
+    saves.fail = true
+    guidance.set!(viewOf(facts({ belowZero: 1 }), false, { carriesCardBalance: false }))
+    const view = open(4)
+    const [no, yes] = radios(view, 'circle-card-choice')
+    yes.input.click()
+    await tick()
+    await tick()
+    expect(q(view, '[data-test-id="circle-view-problem"]').textContent).toBe(
+      "Couldn't save your answer. Try again."
+    )
+    expect(yes.input.checked).toBe(false)
+    expect(no.input.checked).toBe(true)
+    expect(takeAnswers).not.toHaveBeenCalled()
+  })
+
+  it('asks which income is support, and keeps support the months on screen do not show', async () => {
+    const f = facts({
+      windowCategories: [category({}), category({ id: 12, name: 'Family help', perMonth: 500 })],
+    })
+    guidance.set!(viewOf(f, false, { supportCategoryIds: [99] }))
+    const view = open(2)
+    const rows = [...view.querySelectorAll('[data-test-id="circle-support-row"]')]
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Salary€2,500 a month',
+      'Family help€500 a month',
+    ])
+    const save = q(view, '[data-test-id="circle-support-save"]') as HTMLButtonElement
+    expect(save.disabled).toBe(true)
+    ;(q(rows[1], 'input') as HTMLInputElement).click()
+    expect(save.disabled).toBe(false)
+    save.click()
+    await tick()
+    expect(saves.calls).toEqual([{ supportCategoryIds: [99, 12] }])
+  })
+
+  it('asks which spending is needed, writes the categories that change, then that it was asked', async () => {
+    const f = facts({
+      unsure: { categories: 1, uncategorised: 0, all: false },
+      windowCategories: [
+        category({
+          id: 21,
+          name: 'Rent',
+          type: 'expense',
+          perMonth: 1000,
+          essential: true,
+          via: 'kind',
+        }),
+        category({
+          id: 22,
+          name: 'Gym',
+          type: 'expense',
+          perMonth: 50,
+          essential: true,
+          via: 'no-kind',
+        }),
+        category({
+          id: 23,
+          name: 'Takeaway',
+          type: 'expense',
+          perMonth: 120,
+          essential: false,
+          via: 'kind',
+        }),
+      ],
+    })
+    guidance.set!(viewOf(f))
+    const view = open(3)
+    expect(view.textContent).toContain(
+      '1 category counts as needed because nothing says otherwise. Choose what you need every month.'
+    )
+    const rows = [...view.querySelectorAll('[data-test-id="circle-essentials-row"]')]
+    const boxes = rows.map((row) => q(row, 'input') as HTMLInputElement)
+    expect(boxes.map((box) => box.checked)).toEqual([true, true, false])
+    boxes[1].click()
+    boxes[2].click()
+    ;(q(view, '[data-test-id="circle-essentials-save"]') as HTMLButtonElement).click()
+    await vi.waitFor(() => {
+      expect(saves.calls).toEqual([{ kindsAsked: true }])
+    })
+    // Rent stays as its kind says, so it is not written.
+    expect(vi.mocked(apiPut).mock.calls).toEqual([
+      ['/api/categories/22', { essential: false }],
+      ['/api/categories/23', { essential: true }],
+    ])
+  })
+
+  it('confirms the spending counted by default as needed when Save is pressed as it is', async () => {
+    const f = facts({
+      unsure: { categories: 1, uncategorised: 0, all: false },
+      windowCategories: [
+        category({
+          id: 22,
+          name: 'Gym',
+          type: 'expense',
+          perMonth: 50,
+          essential: true,
+          via: 'no-kind',
+        }),
+      ],
+    })
+    guidance.set!(viewOf(f))
+    const view = open(4)
+    ;(q(view, '[data-test-id="circle-essentials-save"]') as HTMLButtonElement).click()
+    await vi.waitFor(() => {
+      expect(saves.calls).toEqual([{ kindsAsked: true }])
+    })
+    expect(vi.mocked(apiPut).mock.calls).toEqual([['/api/categories/22', { essential: true }]])
+  })
+
+  it('asks about savings outside the app: No saves 0, Yes asks how much', async () => {
+    guidance.set!(viewOf(facts()))
+    const view = open(5)
+    const question = q(view, '[data-test-id="circle-saved-elsewhere"]')
+    expect(question.textContent).toContain(
+      "Do you have pension or investment savings that aren't in Token Circles?"
+    )
+    const [no, yes] = radios(question, 'circle-saved-elsewhere-choice')
+    expect(view.querySelector('[data-test-id="circle-saved-elsewhere-amount"]')).toBeNull()
+    yes.input.click()
+    const field = q(view, '[data-test-id="circle-saved-elsewhere-amount"]') as HTMLInputElement
+    expect(saves.calls).toEqual([])
+    field.focus()
+    field.value = '12000'
+    field.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    field.closest('form')!.requestSubmit()
+    await tick()
+    expect(saves.calls).toEqual([{ savedElsewhere: { amount: 12000, currency: 'EUR' } }])
+    no.input.click()
+    await tick()
+    expect(saves.calls[1]).toEqual({ savedElsewhere: { amount: 0, currency: 'EUR' } })
+  })
+
+  it('asks for the own number only once More than enough is the circle worked on', () => {
+    guidance.set!(viewOf(facts()))
+    const view = open(7)
+    expect(view.querySelector('[data-test-id="circle-question-enough"]')).toBeNull()
+    expect(q(view, '[data-check="enough"] [data-test-id="circle-check-waiting"]').textContent).toBe(
+      'Asked once you reach Work optional'
+    )
   })
 })

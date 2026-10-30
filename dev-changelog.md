@@ -1178,6 +1178,31 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   a failed save, the amount refused at 0, Reload, the circle view's focus in and out) and
   `circles.spec.ts` `@smoke` in both modes (a year in Solid ground; the circle view by its row,
   Escape and a reload).
+- **Circle view** (`shared/guidance/circleView.ts`, `CircleView.tsx`): each circle's checks in the
+  method's order, met, not yet or not known yet, with what a check not known waits on (an answer,
+  the accounts read again, three tracked months, or Work optional for the own number), and the
+  person's numbers behind them: the months the averages cover, and where the money in reach is
+  (`liquidPartsOf` in `facts.ts`: savings, current accounts at their 30-day low and cash, adding up
+  to `liquidOf`). The questions that feed the circles are asked where each answer is first needed
+  (`circleQuestions`): support per income category in Paying your way; essentials per spending
+  category in the cushion circles while some spending counts as needed only by default, saved as
+  one `asOneWrite` (each category's `essential` where it changes or was a default, then
+  `kindsAsked`); the card question while a card or an overdraft is below zero; yearly bills; free
+  money with the gate open; savings held elsewhere in Room to choose; and the own number once More
+  than enough is the circle worked on. A question Your next step asks on the view is asked there
+  only, and a choice that does not save goes back. Settings, About this space shows in every build
+  again: the circles' answers, each changeable or removed so its circle asks again, with setup's
+  region and household questions only while the gate is open. `facts.ts` adds `windowCategories`
+  and `uncategorisedEntries`; the view carries its money `words`; the chips and the amount form
+  move to `questionParts.tsx`.
+- **Tests:** `guidanceCircleView.test.ts` (every check's words and state, the waiting reasons, the
+  numbers per circle, which questions each circle asks), `guidanceFacts.test.ts` (the money in
+  reach by kind, the window's categories, entries without one), `progressCircles.test.tsx` (checks
+  and numbers on screen, the card question under its check and not twice, a failed save put back,
+  support keeping ids off screen, the essentials write set), `settingsAboutThisSpace.test.tsx`
+  (production keeps the answers and holds back the space questions; change, remove, a categories
+  read that fails), and `circles.spec.ts` (the card question answered in Solid ground, kept
+  through a reload and listed in About this space, both modes, `@smoke`).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

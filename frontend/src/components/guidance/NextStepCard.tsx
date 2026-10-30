@@ -9,22 +9,21 @@
  */
 import { createSignal, createUniqueId, For, Show } from 'solid-js'
 import { Dynamic } from 'solid-js/web'
-import { MONEY_MAX } from '../../../../shared/fieldReaders'
 import { stepCircleName } from '../../../../shared/guidance/nextStep'
 import {
   CARD_OPTIONS,
+  ENOUGH_ABOVE_ZERO,
   freeMoneyQuestion,
   GUIDANCE_LINE,
   SAVE_FAILED,
   YEARLY_BILLS_OPTIONS,
 } from '../../../../shared/guidance/questions'
-import { round } from '../../../../shared/retirementSettings'
 import { refreshAchievements } from '../../core/achievementsStore'
 import { takeAnswers } from '../../core/guidance'
 import { saveAnswers } from '../../core/guidanceAnswers'
-import NumberField from '../NumberField'
 import CircleGlyph from './CircleGlyph'
 import styles from './NextStepCard.module.css'
+import { AmountForm, Choices } from './questionParts'
 import type { JSX } from 'solid-js'
 import type { AnswerChanges, FreeMoneyAnswer } from '../../../../shared/guidance/answers'
 import type { NextStep, StepMeter } from '../../../../shared/guidance/nextStep'
@@ -80,94 +79,6 @@ export function Meter(props: { meter: StepMeter }): JSX.Element {
         <span>{props.meter.right}</span>
       </div>
     </div>
-  )
-}
-
-/** A question's choices, as radio chips. */
-function Choices<T>(props: {
-  name: string
-  question: string
-  options: readonly { label: string; answer: T }[]
-  chosen: T | undefined
-  disabled: boolean
-  onChoose: (answer: T) => void
-}): JSX.Element {
-  return (
-    <div class={styles.chips} role="radiogroup" aria-label={props.question}>
-      <For each={props.options}>
-        {(option) => (
-          <label class={styles.chip} data-test-id="next-step-choice">
-            <input
-              type="radio"
-              class={styles.radio}
-              name={props.name}
-              checked={props.chosen === option.answer}
-              disabled={props.disabled}
-              onChange={() => {
-                props.onChoose(option.answer)
-              }}
-            />
-            <span>{option.label}</span>
-          </label>
-        )}
-      </For>
-    </div>
-  )
-}
-
-/** "What would a year of more than enough cost?": an amount in the base currency, and Save. */
-function EnoughForm(props: {
-  currency: string
-  disabled: boolean
-  onSave: (amount: number) => void
-}): JSX.Element {
-  const [amount, setAmount] = createSignal<number | null>(null)
-  const [problem, setProblem] = createSignal<string | null>(null)
-  return (
-    <form
-      class={styles.amountForm}
-      noValidate
-      onSubmit={(e) => {
-        e.preventDefault()
-        const value = amount()
-        if (value === null || !Number.isFinite(value) || value <= 0) {
-          setProblem('Enter what a year would cost, above 0.')
-          return
-        }
-        if (value >= MONEY_MAX) {
-          setProblem('Enter an amount under 1,000,000,000,000.')
-          return
-        }
-        setProblem(null)
-        props.onSave(round(value, 2))
-      }}
-    >
-      <div class={styles.amountRow}>
-        <label class={styles.amount}>
-          <span class={styles.currency}>{props.currency}</span>
-          <NumberField<number | null>
-            value={amount()}
-            emptyValue={null}
-            onChange={setAmount}
-            step="0.01"
-            min="0"
-            class={styles.amountInput}
-            ariaLabel={`A year of more than enough, in ${props.currency}`}
-            ariaInvalid={problem() ? 'true' : undefined}
-            testId="next-step-amount"
-            disabled={props.disabled}
-          />
-        </label>
-        <button type="submit" class={styles.primary} disabled={props.disabled}>
-          Save
-        </button>
-      </div>
-      <Show when={problem()}>
-        <p class={styles.problem} role="alert">
-          {problem()}
-        </p>
-      </Show>
-    </form>
   )
 }
 
@@ -300,9 +211,12 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
         )}
       </Show>
       <Show when={question() === 'enough'}>
-        <EnoughForm
+        <AmountForm
           currency={props.view.inputs.currency}
+          label={`A year of more than enough, in ${props.view.inputs.currency}`}
+          emptyProblem={ENOUGH_ABOVE_ZERO}
           disabled={saving()}
+          testId="next-step-amount"
           onSave={(amount) =>
             void answer({ enoughPerYear: { amount, currency: props.view.inputs.currency } }, amount)
           }

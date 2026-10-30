@@ -48,7 +48,7 @@ import { getStorageMode } from './storage/storageFactory'
 import type { Answers } from '../../../shared/guidance/answers'
 import type { Placement } from '../../../shared/guidance/circles'
 import type { GuidanceFacts, GuidanceInput } from '../../../shared/guidance/facts'
-import type { LedgerRow, LedgerStatus } from '../../../shared/guidance/ledger'
+import type { LedgerRow, LedgerStatus, LedgerWords } from '../../../shared/guidance/ledger'
 import type { NextStep } from '../../../shared/guidance/nextStep'
 import type { RegionChoice } from '../../../shared/guidance/region'
 import type { AchievementsSnapshot } from './achievementsStore'
@@ -83,6 +83,8 @@ export interface GuidanceView {
   status: LedgerStatus
   /** Your next step: Getting started's first while less than a year is on file. */
   next: NextStep
+  /** Money in whole units of the base currency, as the rows write it. */
+  words: LedgerWords
 }
 
 const SETTINGS_KEY = 'retirement_settings'
@@ -197,7 +199,9 @@ export function workOut(
     bills: snap.bills,
   })
   const placement = placeCircle(facts, { freeMoney: gate })
-  const words = { money: (amount: number) => formatWholeCurrency(amount, inputs.currency) }
+  const words: LedgerWords = {
+    money: (amount: number) => formatWholeCurrency(amount, inputs.currency),
+  }
   // Getting started's steps scan the entries for subscriptions: read only while they are the step.
   const orientation = facts.firm ? null : orientationSteps(orientationFacts(snap, Date.now()))
   return {
@@ -211,6 +215,7 @@ export function workOut(
     rows: ledgerRows(placement, facts, words),
     status: ledgerStatus(placement, facts, words),
     next: nextStepOf({ placement, facts, orientation, words }),
+    words,
   }
 }
 
