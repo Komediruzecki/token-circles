@@ -121,7 +121,10 @@ async function signedInFromBefore(api: APIRequestContext, email: string): Promis
   sql(`UPDATE users SET email_verified = 0 WHERE email = '${email}'`)
 }
 
-/** Sign up through the sign-in screen of this browser, and wait for Check your inbox. */
+/**
+ * Sign up through the sign-in screen of this browser, wait for Check your inbox, and mark the new
+ * account's setup decided, so the wizard does not open over the app once the link signs it in.
+ */
 async function signUpHere(page: Page, boot: Boot, email: string): Promise<void> {
   sql(
     "DELETE FROM rate_limits WHERE bucket LIKE 'register%' OR bucket LIKE 'login%' OR bucket LIKE 'confirm-resend%'"
@@ -133,6 +136,7 @@ async function signUpHere(page: Page, boot: Boot, email: string): Promise<void> 
   await page.locator('button[type="submit"]').click()
   await expect(page.getByTestId('check-inbox-address')).toHaveText(email, { timeout: 30_000 })
   await accountMade(email)
+  await markSetupDecided(page.context(), email)
 }
 
 /**
