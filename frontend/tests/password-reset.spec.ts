@@ -91,10 +91,18 @@ async function plantResetLink(email: string): Promise<string> {
   return `${E2E_BASE}/#reset-password?token=${token}`
 }
 
-/** Open the link in a browser of its own, booted `boot`'s way, and set the new password there. */
-async function setNewPassword(browser: Browser, boot: (typeof BOOTS)[number], link: string) {
+/**
+ * Open the link in a browser of its own, booted `boot`'s way with the account's setup decided, and
+ * set the new password there.
+ */
+async function setNewPassword(
+  browser: Browser,
+  boot: (typeof BOOTS)[number],
+  link: string,
+  email: string
+) {
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
-  await bootApp(context, boot)
+  await bootApp(context, boot, email)
   const page = await context.newPage()
   await page.goto(link)
   await page.getByLabel('New password', { exact: true }).fill(NEW_PASSWORD)
@@ -137,7 +145,7 @@ for (const boot of BOOTS) {
         await openSignIn(page, boot, E2E_BASE)
         await askForReset(page, email)
 
-        const opened = await setNewPassword(browser, boot, await plantResetLink(email))
+        const opened = await setNewPassword(browser, boot, await plantResetLink(email), email)
         // A confirmed account loses nothing else, so the sign-in screen has nothing to add.
         await expect(opened.page.getByTestId('auth-notice')).toHaveCount(0)
 
@@ -165,7 +173,7 @@ for (const boot of BOOTS) {
         await openSignIn(page, boot, E2E_BASE)
         await askForReset(page, email)
 
-        const opened = await setNewPassword(browser, boot, await plantResetLink(email))
+        const opened = await setNewPassword(browser, boot, await plantResetLink(email), email)
 
         // It names the API token, the one thing the account had besides its password.
         await expect(opened.page.getByTestId('auth-notice')).toHaveText(
