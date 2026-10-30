@@ -52,6 +52,9 @@
   /* Action — azure */
   --primary: #6e9bff;
   --primary-hover: #93b4ff;
+  /* Text and icons on a --primary fill. White on this azure is 2.7:1 (2.1:1 hovered); the night
+     ink is 7.1:1 on --primary and 9.4:1 on --primary-hover. */
+  --on-primary: #0a0e1c;
   --primary-bg: rgba(110, 155, 255, 0.12);
   --primary-strong: #3b6fe0;
   --success: #22c55e;
