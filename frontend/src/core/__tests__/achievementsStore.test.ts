@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 
 const calls: Record<string, unknown[]> = {}
@@ -29,6 +29,9 @@ vi.mock('../api', () => ({
       (calls.loans as Array<{ id: number }>)?.find((l) => l.id === id)
     ),
   },
+  // The setup wizard's store keeps its decision through these (onboardingStore.ts).
+  apiGet: vi.fn(async () => ({})),
+  apiPut: vi.fn(async () => ({})),
 }))
 const toasts: string[] = []
 vi.mock('../toastStore', () => ({ addToast: vi.fn((m: string) => toasts.push(m)) }))
@@ -46,6 +49,12 @@ import {
   unlocks,
 } from '../achievementsStore'
 import { api } from '../api'
+import {
+  completeOnboarding,
+  onboardingOpen,
+  skipOnboarding,
+  startOnboarding,
+} from '../onboardingStore'
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
 const apiMock = api as unknown as Record<
@@ -504,6 +513,63 @@ describe('a profile switch while an evaluation is running', () => {
     await running
 
     expect(parseRecords(settingsStore['achievements:2']).map((r) => r.id)).toContain('first-budget')
+    expect(toasts).toEqual([])
+  })
+})
+
+describe('badges earned while the setup wizard is open', () => {
+  afterEach(() => {
+    if (onboardingOpen()) skipOnboarding()
+  })
+
+  it('are saved at once and announced when setup closes, not over it', async () => {
+    startOnboarding('import')
+    calls.transactions = [...month(thisMonth)]
+
+    const newly = await refreshAchievements()
+
+    expect(newly.length).toBeGreaterThan(1)
+    expect(saved(0).unlocks).toHaveLength(newly.length)
+    expect(toasts).toEqual([])
+
+    completeOnboarding()
+
+    expect(toasts).toEqual([`${newly.length} badges earned from your history so far.`])
+  })
+
+  it('from two evaluations are each announced by name when setup closes, as outside it', async () => {
+    seed(
+      JSON.stringify({
+        v: 1,
+        unlocks: [
+          { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
+        ],
+      })
+    )
+    startOnboarding('account')
+    calls.transactions = [...month(thisMonth)]
+    const first = await refreshAchievements()
+    calls.transactions = [...month(monthsAgo(2)), ...month(monthsAgo(1)), ...month(thisMonth)]
+    const second = await refreshAchievements()
+    expect(first.length).toBeGreaterThan(0)
+    expect(second.length).toBeGreaterThan(0)
+    expect(toasts).toEqual([])
+
+    skipOnboarding()
+
+    expect(toasts).toHaveLength(first.length + second.length)
+    for (const toast of toasts) expect(toast).toMatch(/^Badge unlocked: .+\.$/)
+  })
+
+  it('are not announced on another profile, when setup closes after a switch', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    startOnboarding('import')
+    calls.transactions = [...month(thisMonth)]
+    await refreshAchievements()
+
+    localStorage.setItem('currentProfileId', '2')
+    completeOnboarding()
+
     expect(toasts).toEqual([])
   })
 })
