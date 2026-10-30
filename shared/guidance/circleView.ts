@@ -327,6 +327,13 @@ function partsNote(facts: GuidanceFacts, words: LedgerWords): string | undefined
   }
   if (parts.cash > 0) out.push(`cash ${money(parts.cash)}`);
   if (out.length === 0) return undefined;
+  // One part holds it all: its figure is the row's, so it is not said twice. Current accounts
+  // still say how they are counted, which the row's figure alone does not.
+  if (out.length === 1) {
+    return parts.current > 0
+      ? 'Your current accounts at their lowest in the last 30 days.'
+      : undefined;
+  }
   const text = out.join(', ');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
 }

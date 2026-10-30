@@ -206,11 +206,14 @@ function reachDetail(facts: GuidanceFacts, words: LedgerWords, notMet: boolean):
   return `${reach} you can reach, against ${against} ${spent ? 'spent' : 'needed'} a month.`;
 }
 
-/** Solid ground's debt sentence: no debt at the line, the first one at it, or the answer it waits on. */
+/**
+ * Solid ground's debt sentence: the first debt at the line, or the answer the check waits on.
+ * Met, it says nothing: the circle's line beside it already says "no debt at 10% or more".
+ */
 export function debtSentence(facts: GuidanceFacts, place: CirclePlace): string | null {
   const check = checkOf(place, 'no-expensive-debt');
   if (!check) return null;
-  if (check.met === true) return 'No debt at 10% or more.';
+  if (check.met === true) return null;
   if (check.unknown === 'unread')
     return "The debt check waits on your accounts, which didn't load.";
   if (check.unknown === 'not-on-file') return 'The debt check waits on one answer.';

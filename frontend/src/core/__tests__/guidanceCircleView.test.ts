@@ -339,6 +339,15 @@ describe("the person's numbers", () => {
       value: '€4,000',
       note: 'Savings €3,000, current accounts at their lowest in the last 30 days €800, cash €200.',
     })
+    // One part holds it all: its figure would only repeat the row's, so the row stands alone.
+    const reach = (savings: number, current: number, cash: number) =>
+      numbers(facts({ liquidParts: { savings, current, cash } }), 4).rows[0]
+    expect(reach(4000, 0, 0)).toEqual({ label: 'Money you can reach', value: '€4,000' })
+    expect(reach(0, 0, 4000).note).toBeUndefined()
+    // Current accounts alone still say how they are counted, without the figure again.
+    expect(reach(0, 4000, 0).note).toBe(
+      'Your current accounts at their lowest in the last 30 days.'
+    )
     expect(rows[1]).toEqual({
       label: 'Needed every month',
       value: '€2,000',

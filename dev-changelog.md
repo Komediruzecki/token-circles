@@ -1511,6 +1511,17 @@ check')` first, as the cushion and debt cases do.
   row keeps both figures.
 - **Tests:** `guidanceLedger.test.ts`, a target cents away on rows 2, 3, 5, 6 and 7, and met cases
   that keep both figures. Fails before the change; each condition reverted alone fails it.
+- **A circle's numbers say each thing once** (`shared/guidance/circleView.ts`,
+  `shared/guidance/ledger.ts`). With savings the only money in reach, "Money you can reach €2,800"
+  sat over "Savings €2,800."; one part holding it all now gives the row alone, and current accounts
+  alone keep their note without the figure ("Your current accounts at their lowest in the last 30
+  days."). Solid ground met said "no debt at 10% or more" twice, in the circle's line and in row 4's
+  detail, on Progress and in the circle view's head; the detail now leaves it out while the check is
+  met, and still names the first debt at the line or the answer the check waits on.
+- **Tests:** `guidanceCircleView.test.ts` (savings, cash and current accounts alone),
+  `guidanceLedger.test.ts` and `progressCircles.test.tsx` (the phrase once on row 4 and once in the
+  view's head). Fail before the change. Mutation log: one equivalent mutant survives, the met early
+  return removed, since a met check has no debt at the line to name.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

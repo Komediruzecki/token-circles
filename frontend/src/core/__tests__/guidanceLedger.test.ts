@@ -279,10 +279,8 @@ describe('the rows', () => {
 
   it('reads Solid ground as the months put by: of three, then on their own once met', () => {
     // Where the cushion stands, not the gap: Your next step and the check say that.
-    expect(row(base, 4)).toMatchObject({
-      key: '2 of 3 months put by',
-      detail: 'No debt at 10% or more.',
-    })
+    // The circle's line already says no debt at 10% or more; met, the figure leaves it out.
+    expect(row(base, 4)).toMatchObject({ key: '2 of 3 months put by', detail: null })
     // Never "3 of 3" beside a check not met.
     expect(row(facts({ cushionMonths: 2.9999, liquid: 5999.8 }), 4).key).toBe(
       '2.9 of 3 months put by'
@@ -322,9 +320,7 @@ describe('the rows', () => {
     })
     expect(row(card, 4).detail).toBe('The debt check waits on one answer.')
     const bills = facts({ yearlyBills: { count: 2, perYear: 770, perMonth: 770 / 12 } })
-    expect(row(bills, 4).detail).toBe(
-      'No debt at 10% or more. Yearly bills: about €65 a month to set aside.'
-    )
+    expect(row(bills, 4).detail).toBe('Yearly bills: about €65 a month to set aside.')
   })
 
   it('says when no account holds money to count, and when the accounts did not load', () => {

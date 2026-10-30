@@ -172,7 +172,8 @@ describe('the ledger', () => {
     expect(fourth.getAttribute('aria-label')).toBe(
       "Solid ground. You're here. 2 of 3 months put by."
     )
-    expect(fourth.textContent).toContain('No debt at 10% or more.')
+    // Said once: the circle's line says it, and the row's figure leaves it out while it is met.
+    expect(fourth.textContent!.match(/no debt at 10% or more/gi)).toHaveLength(1)
     // The glyph is decoration: the link's name carries what it shows.
     expect(q(rows[3], 'svg').getAttribute('aria-hidden')).toBe('true')
     // The table's header is for the eye; a screen reader has each link's name.
@@ -455,6 +456,9 @@ describe('what a circle checks, and the questions it asks', () => {
     )
     expect(checks[1].textContent).toContain('Needed to reach Solid ground')
     expect(checks[2].textContent).not.toContain('Needed to reach')
+    // The head says it once, in the circle's line, and not again under the key figure.
+    const head = `${q(view, 'header').textContent} ${q(view, '[data-test-id="circle-view-key"]').textContent}`
+    expect(head.match(/no debt at 10% or more/gi)).toHaveLength(1)
   })
 
   it('says what a check not known waits on', () => {
