@@ -9,7 +9,6 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { signState } from '../src/auth';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
@@ -25,6 +24,7 @@ import {
 } from './helpers/account-access';
 import { bumpTokenVersion, dbThatNotes, dbWithStep, realDb, withDb } from './helpers/racing-db';
 import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
+import { googleSignInFromStart } from './helpers/google';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
 
@@ -263,11 +263,7 @@ function signInWays(): Record<string, SignInWay> {
       },
       async signIn() {
         answerGoogle();
-        const state = await signState({ returnTo: APP, ts: Date.now() }, env.JWT_SECRET);
-        const res = await SELF.fetch(
-          `https://example.com/api/auth/google/callback?code=test-code&state=${encodeURIComponent(state)}`,
-          { redirect: 'manual' }
-        );
+        const res = await googleSignInFromStart(APP);
         expect(res.status).toBe(302);
         return sessionFrom(res)!;
       },

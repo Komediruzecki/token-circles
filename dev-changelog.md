@@ -1700,6 +1700,30 @@ Changed:
 
 ### Sign-in
 
+- **Google sign-in finishes in the browser that started it.** `GET /api/auth/google/start` now
+  leaves a cookie, `fm_google_state`, holding a random 32-byte nonce (HttpOnly, SameSite=Lax,
+  host-only, `Path=/api/auth/google/callback`, `Max-Age=600`, the state's ten minutes, Secure
+  outside development), and the signed `state` carries the nonce's SHA-256 as `browser`
+  (`worker/src/auth.ts`: `newGoogleBrowserNonce`, `startedInThisBrowser`). The callback finishes a
+  sign-in only when the request carries the nonce that hashes to the state's `browser`, compared
+  without an early exit. Otherwise it answers 302 to the state's `returnTo`, so the app opens
+  signed out on its sign-in screen, before Google's code is exchanged: no account, session or mail
+  comes of it, and the auth log records `login` / `denied` / `google_started_elsewhere`. A request
+  with two or more values for the cookie gets that same answer. The cookie belongs to the start
+  that set it, and only that start's callback clears it (`Max-Age=0` at its Path): every answer
+  after the browser check passed does, error answers included, through a middleware on the
+  callback's path. An answer before it (a refused state, another start's state) leaves the cookie,
+  which expires on its own after 600 s. A state signed before this change has no `browser` and is
+  answered as an invalid state (400) without asking Google, so a Google sign-in in progress during
+  the deploy starts again. With two Google sign-ins started in one browser, the newer start
+  replaces the cookie: the older tab lands signed out and the newer one signs in.
+- **`isAllowedReturnTo` takes the local app only in development.** `http://localhost:3800` and
+  `http://127.0.0.1:3800` count when `APP_ENV=development`; dev and prod take their own
+  `CORS_ORIGIN` and `APP_ORIGINS`. The same check picks the `returnTo` of the emailed confirm link
+  (`GET /api/auth/verify-email`), which falls back to the app's origin.
+- Tests: `worker/test/google-sign-in-browser.test.ts` (28 new). `google-sign-in.test.ts`,
+  `bound-writes.test.ts` and `email-link-finish.test.ts` now start the sign-in through the start
+  route and send its cookie back (`worker/test/helpers/google.ts`).
 - **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the
   field a stale session shows before adding a passkey was a bare `<input type="password">` whose
   only name was `placeholder="Password or 2FA code"`, which goes as soon as the person types and is
@@ -1813,6 +1837,39 @@ Changed:
   Each cell carries `data-month`. Tests: `months.test.ts` (`streakStrip`) and
   `progressPage.test.tsx` (twelve full months and nothing this month: 12 lit tiles ending last
   month; this month tracked: ends this month). They fail before the change (3 tests).
+
+### API
+
+- **Requests that change data are taken from the app's own pages, with a JSON body.** A
+  middleware in `worker/src/request-origin.ts`, registered in `worker/src/index.ts` after CORS and
+  before any route, takes a POST, PUT, PATCH or DELETE when three things the browser says about it
+  agree: `Sec-Fetch-Site` is same-origin, same-site or none, or absent (any other value is not
+  taken); `Origin`, when there is one, is one of the app's origins (`CORS_ORIGIN` and every origin
+  in `APP_ORIGINS`, and under `APP_ENV=development` only, any `http` origin on `localhost`,
+  `127.0.0.1` or `[::1]`, on any port); and the body is `application/json`, or
+  `multipart/form-data` on the uploads (`POST /api/import/upload`, `POST /api/receipts/upload` and
+  `POST /api/receipts`). A change with no body needs no `Content-Type`, and a POST that arrives
+  with `Content-Length: 0` and an empty body stream, as the app's bodiless POSTs do, is one with no
+  body. Any other request that changes data is answered 403, "Changes are taken from the Token
+  Circles app only. Open the app and try again.", before a route runs, and a `request_not_taken`
+  log line (level `warn`, with the `cf-ray` request id, as `errorlog.ts` writes them) names the
+  check and what the request said. Reads and CORS preflights are untouched.
+  - **Called from elsewhere by design**, each listed in the file with why: the Stripe webhook (its
+    signature), `/api/v1/*` (an API token or a signed upload link), `/mcp` (an API token) and
+    `POST /api/notifications/unsubscribe` (the token in the link: mail providers post it from their
+    own servers, RFC 8058, and the unsubscribe page's form arrives with `Origin: null`, as the
+    page's Referrer-Policy is no-referrer). Mail-in reaches the Worker's `email` handler, not
+    `fetch`.
+  - Scripts, tests and other servers send neither header and are taken with a JSON body, as
+    before. In development a local app is taken on any loopback port, so `E2E_PORT`, the
+    screenshot runs at :3900 and the tour walk's `BASE_URL` need nothing in `worker/.dev.vars`.
+  - Tests: `worker/test/requests-from-the-app.test.ts` (30): each of the three checks on a sign-in,
+    a sign-up and a new profile (403, no cookie, no rows written), a PUT and a DELETE, the app's
+    origins in production, on the dev deployment and in development, the `Sec-Fetch-Site` values, a
+    bodiless POST as workerd delivers it, the uploads, each route called from elsewhere as its
+    callers send it, paths that resolve out of `/api/v1/` and `/mcp`, and the log line.
+    `worker/test/support-captcha.test.ts` now names the origin it posts from as the app's
+    (`CORS_ORIGIN`), as on the deployment it stands for.
 
 ## [5.17.2] — 2026-10-30
 

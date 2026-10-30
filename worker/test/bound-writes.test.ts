@@ -9,7 +9,6 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { signState } from '../src/auth';
 import { createLoginCode, newCodeHandle } from '../src/login-codes';
 import { issueLoginCodeCookie } from '../src/routes/email-code';
 import { currentStep, totpCode } from '../src/totp';
@@ -21,6 +20,7 @@ import {
   whileConfirmed,
 } from './helpers/account-access';
 import { bumpTokenVersion, clearAndConfirm, dbWithStep, realDb, withDb } from './helpers/racing-db';
+import { googleSignInFromStart } from './helpers/google';
 import { createAuthenticator } from './helpers/software-authenticator';
 import type { SoftwareAuthenticator } from './helpers/software-authenticator';
 
@@ -120,13 +120,8 @@ function answerGoogle(): void {
   }) as typeof fetch;
 }
 
-async function googleCallback(): Promise<Response> {
-  const state = await signState({ returnTo: ORIGIN, ts: Date.now() }, env.JWT_SECRET);
-  return SELF.fetch(
-    `https://example.com/api/auth/google/callback?code=test-code&state=${encodeURIComponent(state)}`,
-    { redirect: 'manual' }
-  );
-}
+/** Start a Google sign-in and arrive at the callback the way Google's redirect does. */
+const googleCallback = () => googleSignInFromStart(ORIGIN);
 
 describe('a sign-in is refused when the account changed after the check', () => {
   // A password account waiting for its confirm link signs in with its password only together
