@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.3] — 2026-10-30
+
 ### Local-first
 
 - **A write never lands on a profile that does not exist, and rows that did are filed.** A local
