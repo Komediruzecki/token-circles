@@ -267,6 +267,15 @@ export function holdsTransfers(
 }
 
 /**
+ * Whether a category can be marked needed every month: it takes a kind, as only an expense
+ * category stores `essential` (shared/categorySchema.ts), and its entries are spending, not money
+ * moved (`holdsTransfers`). What the essentials question lists, and all it writes to.
+ */
+export function takesEssential(category: KindedCategory, lookup?: CategoryLookup): boolean {
+  return takesKind(category.type) && !holdsTransfers(category, lookup);
+}
+
+/**
  * The kind a category goes by: its own, else its parent's, else the one its name suggests, else
  * the one its parent's name suggests. Null for a category that takes no kind, and for one nothing
  * suggests a kind for.

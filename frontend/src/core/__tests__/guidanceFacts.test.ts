@@ -1117,6 +1117,30 @@ describe('what the circle views list', () => {
     expect(two.windowCategories).toEqual([])
   })
 
+  it('lists spending only where it can be marked needed, and keeps money in apart from money out', () => {
+    const transactions = [3, 2, 1].flatMap((n) => [
+      ...month(ago(n), 3000, 1000),
+      // A refund into Groceries: Groceries spent 1,000 a month, and is no income line.
+      entry(`${ago(n)}-14`, { type: 'income', amount: 50, category_id: 1 }),
+      // Money moved under a transfer-typed category, either way: on neither list.
+      entry(`${ago(n)}-15`, { type: 'income', amount: 200, category_id: 7 }),
+      entry(`${ago(n)}-16`, { amount: 100, category_id: 7 }),
+      // Spending filed under an income category: it can't be marked needed, so it isn't asked.
+      entry(`${ago(n)}-17`, { amount: 40, category_id: 9 }),
+    ])
+    const facts = guidanceFacts({
+      today: TODAY,
+      region: 'EU27',
+      transactions,
+      categories: [...categories, { id: 7, name: 'Between my accounts', type: 'transfer' }],
+      accounts: [],
+    })
+    expect(facts.windowCategories).toEqual([
+      { id: 9, name: 'Salary', type: 'income', perMonth: 3000, essential: false, via: null },
+      { id: 1, name: 'Groceries', type: 'expense', perMonth: 1000, essential: true, via: 'kind' },
+    ])
+  })
+
   it('names the heaviest month of the window, the earliest of equals, and its largest category', () => {
     const transactions = [
       ...month(ago(3), 3000, 1000),

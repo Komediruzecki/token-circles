@@ -1404,6 +1404,21 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   address and `data-test-id="advice-why"`. CHANGELOG's line for it says "counts toward".
 - **Tests:** `progressAdvice.test.tsx` (the words and address per card, straight after the detail
   line, and not in the row with the card's button).
+- **The essentials question lists only what can be marked needed** (`shared/guidance/facts.ts`,
+  `kinds.ts`, `CircleView.tsx`). `sumWindow` added a category's income and its spending into one
+  total, and `windowCategoriesOf` listed every category with a total as an expense unless its type
+  was `income`. So money coming in under a transfer-typed category was listed as spending that
+  counts as needed, and the question's Save sent `PUT /api/categories/<id> { essential }`, which
+  both runtimes refuse on a category that is not an expense (`checkCategoryEdit`); a refund under
+  Groceries was added to what Groceries spent. The window now keeps `inBy` and `outBy` apart: the
+  income list is income categories with what they took in, and the spending list is the categories
+  `takesEssential` allows (new in kinds.ts: `takesKind(type)` and not `holdsTransfers`) with what
+  they spent. The question applies the same rule to the stored records it writes to, from the
+  snapshot's categories.
+- **Tests:** `guidanceFacts.test.ts` (a refund in Groceries, a transfer-typed category with money
+  in and out, and spending under an income category: Salary 3,000 and Groceries 1,000 a month, and
+  nothing else), `progressCircles.test.tsx` (a window row whose stored category is a transfer is
+  neither listed nor written; the test view's snapshot now holds the window's categories).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

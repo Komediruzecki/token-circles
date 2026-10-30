@@ -24,6 +24,7 @@ import {
   circleNumbers,
   circleQuestions,
 } from '../../../../shared/guidance/circleView'
+import { categoryLookup, takesEssential } from '../../../../shared/guidance/kinds'
 import { CIRCLE_LINES } from '../../../../shared/guidance/ledger'
 import {
   CARD_OPTIONS,
@@ -65,6 +66,7 @@ import type {
 import type * as Cards from '../../../../shared/guidance/cards'
 import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { CheckRow, CheckState, CircleQuestion } from '../../../../shared/guidance/circleView'
+import type { KindedCategory } from '../../../../shared/guidance/kinds'
 import type { GuidanceView } from '../../core/guidance'
 import type { SaveAnswer } from './CircleQuestions'
 import type { TickRow } from './questionParts'
@@ -565,8 +567,17 @@ function EssentialsQuestion(props: {
   disabled: boolean
   run: (work: () => Promise<Answers>) => Promise<boolean>
 }): JSX.Element {
-  const categories = () =>
-    (props.view.facts.windowCategories ?? []).filter((category) => category.type === 'expense')
+  // Only what the category's stored record lets be marked needed: the Worker and local-first
+  // refuse `essential` on any other, and a refused write would stop the rest.
+  const categories = () => {
+    const lookup = categoryLookup(
+      (props.view.snapshot.categories ?? []) as readonly KindedCategory[]
+    )
+    return (props.view.facts.windowCategories ?? []).filter((category) => {
+      const stored = lookup(category.id)
+      return category.type === 'expense' && stored !== undefined && takesEssential(stored, lookup)
+    })
+  }
   const rows = (): TickRow[] =>
     categories().map((category) => ({
       id: category.id,

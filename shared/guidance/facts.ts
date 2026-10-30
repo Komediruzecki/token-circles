@@ -43,7 +43,13 @@ import { monthlyEquivalent } from '../subscriptionMath';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
 import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
-import { categoryLookup, effectiveKind, essentialOf, holdsTransfers } from './kinds';
+import {
+  categoryLookup,
+  effectiveKind,
+  essentialOf,
+  holdsTransfers,
+  takesEssential,
+} from './kinds';
 import type { LoanInput } from '../loanSchedule';
 import type { FreeMoneyAnswer } from './answers';
 import type { Kind, KindedCategory } from './kinds';
@@ -406,8 +412,10 @@ interface WindowSums {
   noKind: Set<number>;
   /** Of `essentials`, what was counted as needed only because nothing said otherwise. */
   unsureSpent: number;
-  /** What each category took in or spent over the window. */
-  byCategory: Map<number, number>;
+  /** What each category took in over the window: a refund in Groceries is Groceries' too. */
+  inBy: Map<number, number>;
+  /** What each category spent over the window, apart from what it took in. */
+  outBy: Map<number, number>;
   /** Expenses with no category, counted. */
   uncategorisedEntries: number;
   /** Each month's spending, and what each category spent in it (no category: id 0). */
@@ -452,18 +460,19 @@ function sumWindow(
     uncategorised: 0,
     noKind: new Set(),
     unsureSpent: 0,
-    byCategory: new Map(),
+    inBy: new Map(),
+    outBy: new Map(),
     uncategorisedEntries: 0,
     byMonth: new Map(),
     byKind: new Map(),
   };
-  const add = (id: number, value: number) => {
-    sums.byCategory.set(id, (sums.byCategory.get(id) ?? 0) + value);
+  const add = (totals: Map<number, number>, id: number, value: number) => {
+    totals.set(id, (totals.get(id) ?? 0) + value);
   };
   for (const entry of entries) {
     const id = entry.category_id;
     if (entry.type === 'income') {
-      if (isId(id)) add(id, Math.abs(amount(entry)));
+      if (isId(id)) add(sums.inBy, id, Math.abs(amount(entry)));
       if (isId(id) && support.has(id)) sums.support += Math.abs(amount(entry));
       continue;
     }
@@ -482,7 +491,7 @@ function sumWindow(
       continue;
     }
     sums.sorted += spent;
-    add(id, spent);
+    add(sums.outBy, id, spent);
     if (!verdicts.has(id)) {
       const category = lookup(id);
       verdicts.set(id, category ? essentialOf(category, lookup) : null);
@@ -931,26 +940,45 @@ function belowZeroOf(accounts: readonly FactsAccount[] | null): number {
   return count;
 }
 
-/** The window's categories with what each took in or spent a month, the most first. */
+/**
+ * The window's categories with what each took in or spent a month, the most first: the income
+ * categories with what they took in, for the support question, and the categories that can be
+ * marked needed (`takesEssential`) with what they spent, for the essentials question. A refund
+ * under Groceries neither lists Groceries as income nor takes from what it spent, and a transfer
+ * category is on neither list.
+ */
 function windowCategoriesOf(
   categories: readonly KindedCategory[],
   sums: WindowSums,
   months: number
 ): WindowCategory[] {
   const lookup = categoryLookup(categories);
+  const nameOf = (category: KindedCategory) =>
+    typeof category.name === 'string' ? category.name : '';
   const out: WindowCategory[] = [];
-  for (const [id, total] of sums.byCategory) {
+  for (const [id, total] of sums.inBy) {
     const category = lookup(id);
-    if (!category || total <= 0) continue;
-    const income = category.type === 'income';
-    const verdict = income ? null : essentialOf(category, lookup);
+    if (!category || total <= 0 || category.type !== 'income') continue;
     out.push({
       id,
-      name: typeof category.name === 'string' ? category.name : '',
-      type: income ? 'income' : 'expense',
+      name: nameOf(category),
+      type: 'income',
       perMonth: total / months,
-      essential: verdict?.essential ?? false,
-      via: verdict?.via ?? null,
+      essential: false,
+      via: null,
+    });
+  }
+  for (const [id, total] of sums.outBy) {
+    const category = lookup(id);
+    if (!category || total <= 0 || !takesEssential(category, lookup)) continue;
+    const verdict = essentialOf(category, lookup);
+    out.push({
+      id,
+      name: nameOf(category),
+      type: 'expense',
+      perMonth: total / months,
+      essential: verdict.essential,
+      via: verdict.via,
     });
   }
   return out.sort((a, b) => b.perMonth - a.perMonth);

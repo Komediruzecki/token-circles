@@ -62,9 +62,11 @@ import Progress from '../Progress'
 /** The view the store would answer for `f`. */
 function viewOf(f: GuidanceFacts, gate = false, answers: Answers = {}): GuidanceView {
   const placement = placeCircle(f, { freeMoney: gate })
+  // The stored categories behind the window's, as the snapshot holds them.
+  const categories = (f.windowCategories ?? []).map(({ id, name, type }) => ({ id, name, type }))
   return {
     profileId: 1,
-    snapshot: {} as never,
+    snapshot: { categories } as never,
     inputs: { profileId: 1, answers, withdrawalRatePct: 4, currency: 'EUR', holdings: 0 },
     gate,
     region: { region: f.region as 'EU27', reason: 'fallback', via: null },
@@ -606,6 +608,48 @@ describe('what a circle checks, and the questions it asks', () => {
       ['/api/categories/22', { essential: false }],
       ['/api/categories/23', { essential: true }],
     ])
+  })
+
+  it('never lists or writes a category that cannot be needed, whatever the window says', async () => {
+    const f = facts({
+      unsure: { categories: 1, uncategorised: 0, all: false },
+      windowCategories: [
+        category({
+          id: 22,
+          name: 'Gym',
+          type: 'expense',
+          perMonth: 50,
+          essential: true,
+          via: 'no-kind',
+        }),
+        category({
+          id: 7,
+          name: 'Between my accounts',
+          type: 'expense',
+          perMonth: 200,
+          essential: true,
+          via: 'no-kind',
+        }),
+      ],
+    })
+    const view = viewOf(f)
+    // Stored as a transfer category: the Worker and local-first refuse `essential` on it.
+    view.snapshot.categories = [
+      { id: 22, name: 'Gym', type: 'expense' },
+      { id: 7, name: 'Between my accounts', type: 'transfer' },
+    ] as never
+    guidance.set!(view)
+    const shown = open(4)
+    expect(
+      [...shown.querySelectorAll('[data-test-id="circle-essentials-row"]')].map((row) =>
+        row.textContent?.includes('Between my accounts')
+      )
+    ).toEqual([false])
+    ;(q(shown, '[data-test-id="circle-essentials-save"]') as HTMLButtonElement).click()
+    await vi.waitFor(() => {
+      expect(saves.calls).toEqual([{ kindsAsked: true }])
+    })
+    expect(vi.mocked(apiPut).mock.calls).toEqual([['/api/categories/22', { essential: true }]])
   })
 
   it('confirms the spending counted by default as needed when Save is pressed as it is', async () => {
