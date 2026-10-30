@@ -370,7 +370,9 @@ describe('once a year is on file', () => {
     const whys = cases.map((f) => step(f).why)
     expect(new Set(whys).size).toBe(cases.length)
     for (const why of whys) {
-      for (const place of places) expect(why, place).not.toMatch(new RegExp(`\\b${place}\\b`))
+      // Whole words only, so "US" is not found inside another word.
+      const said = ` ${(why.match(/\w+/g) ?? []).join(' ')} `
+      for (const place of places) expect(said, place).not.toContain(` ${place} `)
       expect(why).not.toMatch(comparing)
     }
   })

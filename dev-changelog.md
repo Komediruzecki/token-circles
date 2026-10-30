@@ -1487,6 +1487,11 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `progressCircles.test.tsx` (the note for 12,000 dollars, none for 0),
   `guidanceCircleView.test.ts` (each of the five rows at a figure that rounds the same, and two
   years met), `currencies.test.ts` (-0.4, -0 and 0.4 read "€0"; -0.5 reads "-€1").
+- **The why's region check matches whole words without a built RegExp**
+  (`guidanceNextStep.test.ts`). 'never quotes a regional figure in the why' built
+  ``new RegExp(`\\b${place}\\b`)`` for each region, the one new lint warning on the branch
+  (security/detect-non-literal-regexp). It now splits the why into words and looks for the place
+  among them. The mutations that put "the US" or "EU households" into a why still fail it.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
