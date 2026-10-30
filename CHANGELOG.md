@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.3] — 2026-10-30
+
 ### Fixed
 
 - **Passing Cloudflare's check once covers your next few sign-in tries.** For five minutes after you pass it, a wrong password no longer brings the box back, so you can fix a typo and press Sign in again.
