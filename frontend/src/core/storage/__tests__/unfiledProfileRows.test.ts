@@ -269,24 +269,215 @@ describe('a workspace with rows on profile 0 beside an empty profile', () => {
   })
 })
 
-describe('a profile setting on profile 0', () => {
-  it('never replaces the one the receiving profile already has', async () => {
+describe('profile settings on profile 0', () => {
+  /** A retirement plan typed in on profile 0, beside the import. */
+  const PLAN_ON_ZERO = { key: 'retirement_settings:0', value: { retire_at: 60 } }
+
+  const settingsOf = async () =>
+    new Map(
+      ((await snapshot()).settings as Array<{ key: string; value: unknown }>).map((s) => [
+        s.key,
+        s.value,
+      ])
+    )
+  const names = async () =>
+    ((await snapshot()).profiles as Array<{ id: number; name: string }>).map((p) => p.name)
+
+  it('never make a profile on their own', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.add('transactions', {
+      profile_id: 1,
+      description: 'Corner market',
+      amount: 200,
+      type: 'expense',
+      date: '2026-09-01',
+      currency: 'EUR',
+    })
+    await db.put('settings', PLAN_ON_ZERO)
+    await db.put('settings', { key: 'achievements:0', value: { first_import: '2026-09' } })
+    db.close()
+    const before = await snapshot()
+
+    await load()
+
+    expect(await names()).toEqual(['Home'])
+    expect(await snapshot()).toEqual(before)
+  })
+
+  it('follow the rows, and a badge record the profile has already stands', async () => {
     const db = await raw()
     await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
     await db.put('settings', { key: 'achievements:1', value: { first_entry: '2026-08' } })
+    await db.put('settings', PLAN_ON_ZERO)
     await seedUnfiledImport(db)
     db.close()
 
     await load()
 
-    const settings = (await snapshot()).settings as Array<{ key: string; value: unknown }>
-    expect(settings.find((s) => s.key === 'achievements:1')?.value).toEqual({
-      first_entry: '2026-08',
-    })
-    // Not lost either: it stays under its old key.
-    expect(settings.find((s) => s.key === 'achievements:0')?.value).toEqual({
-      first_import: '2026-09',
-    })
+    expect(await names()).toEqual(['Home'])
+    const settings = await settingsOf()
+    expect(settings.get('retirement_settings:1')).toEqual({ retire_at: 60 })
+    // Worked out from the rows: the profile's own stands, the old one is gone.
+    expect(settings.get('achievements:1')).toEqual({ first_entry: '2026-08' })
+    expect(settings.has('achievements:0')).toBe(false)
+    expect(settings.has('retirement_settings:0')).toBe(false)
+  })
+
+  it('never replace a retirement plan: an empty profile with its own is passed over', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.put('profiles', { id: 2, name: 'Test', created_at: CREATED_AT })
+    await db.put('settings', { key: 'retirement_settings:1', value: { retire_at: 67 } })
+    await db.put('settings', PLAN_ON_ZERO)
+    await seedUnfiledImport(db)
+    db.close()
+    localStorage.setItem('currentProfileId', '1')
+
+    const { api } = await load()
+
+    expect(await names()).toEqual(['Home', 'Test'])
+    const settings = await settingsOf()
+    expect(settings.get('retirement_settings:1')).toEqual({ retire_at: 67 })
+    expect(settings.get('retirement_settings:2')).toEqual({ retire_at: 60 })
+    localStorage.setItem('currentProfileId', '2')
+    expect((await api.getTransactions()).map((t) => t.description).sort()).toEqual([
+      'Corner market',
+      'Flat rent',
+      'Salary',
+    ])
+  })
+
+  it('never replace a retirement plan: with nowhere else, the rows get a profile of their own', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.put('settings', { key: 'retirement_settings:1', value: { retire_at: 67 } })
+    await db.put('settings', PLAN_ON_ZERO)
+    await seedUnfiledImport(db)
+    db.close()
+
+    await load()
+
+    expect(await names()).toEqual(['Home', 'Recovered entries'])
+    const recovered = ((await snapshot()).profiles as Array<{ id: number }>)[1].id
+    const settings = await settingsOf()
+    expect(settings.get('retirement_settings:1')).toEqual({ retire_at: 67 })
+    expect(settings.get(`retirement_settings:${recovered}`)).toEqual({ retire_at: 60 })
+    expect(settings.get(`achievements:${recovered}`)).toEqual({ first_import: '2026-09' })
+  })
+
+  it('are settled by one load: the second makes nothing', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.put('settings', { key: 'retirement_settings:1', value: { retire_at: 67 } })
+    await db.put('settings', { key: 'achievements:1', value: { first_entry: '2026-08' } })
+    await db.put('settings', PLAN_ON_ZERO)
+    await seedUnfiledImport(db)
+    db.close()
+    await load()
+    const once = await snapshot()
+
+    await load()
+
+    expect(await snapshot()).toEqual(once)
+  })
+})
+
+describe('among empty profiles', () => {
+  it('the rows go to the open one', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.put('profiles', { id: 2, name: 'Test', created_at: CREATED_AT })
+    await seedUnfiledImport(db)
+    db.close()
+    localStorage.setItem('currentProfileId', '2')
+    localStorage.setItem('selectedProfileIds', JSON.stringify([2]))
+
+    const { api } = await load()
+
+    expect((await api.getTransactions()).map((t) => t.description).sort()).toEqual([
+      'Corner market',
+      'Flat rent',
+      'Salary',
+    ])
+    const rows = (await snapshot()).transactions as Array<{ profile_id: number }>
+    expect(new Set(rows.map((r) => r.profile_id))).toEqual(new Set([2]))
+  })
+})
+
+describe('two tabs filing at once', () => {
+  async function bothAtOnce() {
+    vi.resetModules()
+    const { fileUnfiledRows } = await import('../unfiledProfileRows')
+    const [a, b] = [await raw(), await raw()]
+    const results = await Promise.all([fileUnfiledRows(a), fileUnfiledRows(b)])
+    a.close()
+    b.close()
+    return results
+  }
+
+  it('beside a profile in use: one profile is made, and every row moves once', async () => {
+    const db = await raw()
+    await db.put('profiles', { id: 1, name: 'Home', created_at: CREATED_AT })
+    await db.add('categories', { profile_id: 1, name: 'Groceries', type: 'expense' })
+    await seedUnfiledImport(db)
+    db.close()
+
+    const results = await bothAtOnce()
+
+    expect(results.filter((r) => r.created)).toHaveLength(1)
+    expect(results.reduce((sum, r) => sum + r.moved, 0)).toBe(7)
+    const after = await snapshot()
+    expect((after.profiles as Array<{ name: string }>).map((p) => p.name)).toEqual([
+      'Home',
+      'Recovered entries',
+    ])
+  })
+
+  it('with no profile: one profile is made', async () => {
+    const db = await raw()
+    await seedUnfiledImport(db)
+    db.close()
+
+    const results = await bothAtOnce()
+
+    expect(results.filter((r) => r.created)).toHaveLength(1)
+    const after = await snapshot()
+    expect((after.profiles as Array<{ name: string }>).map((p) => p.name)).toEqual([
+      'Personal Profile',
+    ])
+  })
+})
+
+describe('a failure part way through filing', () => {
+  it('files none of them and makes no profile', async () => {
+    const db = await raw()
+    await seedUnfiledImport(db)
+    db.close()
+    const before = await snapshot()
+    vi.resetModules()
+    const { fileUnfiledRows } = await import('../unfiledProfileRows')
+    // The third row's write throws in JavaScript, which does not abort a transaction by itself.
+    // Kept to be called with the store as `this`, below, and put back afterwards.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const put = IDBObjectStore.prototype.put
+    let writes = 0
+    IDBObjectStore.prototype.put = function (
+      this: IDBObjectStore,
+      ...args: [unknown, IDBValidKey?]
+    ) {
+      if (++writes === 3) throw new Error('disk full')
+      return put.apply(this, args)
+    }
+    const conn = await raw()
+    try {
+      await expect(fileUnfiledRows(conn)).rejects.toThrow('disk full')
+    } finally {
+      IDBObjectStore.prototype.put = put
+      conn.close()
+    }
+
+    expect(await snapshot()).toEqual(before)
   })
 })
 
