@@ -198,6 +198,7 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
       currency: view.inputs.currency,
       tenure: view.inputs.answers.tenure ?? null,
       adults: view.inputs.answers.adults ?? null,
+      current: view.placement.current === props.circle,
     })
   })
 

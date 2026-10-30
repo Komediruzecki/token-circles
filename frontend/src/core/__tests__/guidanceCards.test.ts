@@ -247,6 +247,20 @@ describe('the cash cushion', () => {
     ).toContain('Next milestone: 6 months, €4,000 away.')
   })
 
+  it('leaves the gap out in the circle the person is in, where the step and the check say it', () => {
+    const current = { current: true }
+    expect(cushionCard(facts(), words, at('US', current))!.body[0]).toBe(
+      'Most guides aim for three to six months. That range is a convention, not a tested line; if your income moves around, the top of it fits better.'
+    )
+    expect(
+      cushionCard(facts({ liquid: 1000, cushionMonths: 0.5 }), words, at('EU27', current))!.body[0]
+    ).toBe('The first cushion is one month of essential spending: €2,000.')
+    // In a circle further in, the card still says how far the next milestone is.
+    expect(cushionCard(facts(), words, at('US', { current: false }))!.body[0]).toContain(
+      'Next milestone: 3 months, €2,000 away.'
+    )
+  })
+
   it('points past six months to the next goal', () => {
     const shown = cushionCard(facts({ liquid: 14000, cushionMonths: 7 }), words, at('HR'))!
     expect(shown.tags[0]).toEqual({ kind: 'band', text: 'Above typical' })

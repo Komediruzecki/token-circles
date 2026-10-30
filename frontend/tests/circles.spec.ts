@@ -41,7 +41,7 @@ const ROWS = [
   { state: 'reached', key: '12 of 12 months on file' },
   { state: 'reached', key: 'Own income covers 214% of spending' },
   { state: 'reached', key: '2 months of essentials' },
-  { state: 'current', key: '2 of 3 months: €1,400 to go' },
+  { state: 'current', key: '2 of 3 months put by' },
   { state: 'later', key: 'Two years of spending: €33,600' },
   { state: 'later', key: '25 years of spending: €420,000' },
   { state: 'later', key: 'Your own number' },
@@ -115,7 +115,7 @@ async function aYearInSolidGround(page: Page): Promise<void> {
   )
   await expect(page.locator('[data-circle-row="4"] a')).toHaveAttribute(
     'aria-label',
-    "Solid ground. You're here. 2 of 3 months: €1,400 to go."
+    "Solid ground. You're here. 2 of 3 months put by."
   )
 
   const step = page.locator('[data-tour="progress-next-step"]').getByTestId('next-step-card')

@@ -101,6 +101,11 @@ export interface CardContext {
   tenure: string | null;
   /** The adults the space covers (3 stands for three or more); null until the person says. */
   adults: number | null;
+  /**
+   * The cards sit in the circle the person is in, whose Your next step and check say the gap to
+   * the next cushion: the cushion card leaves it out there.
+   */
+  current?: boolean;
 }
 
 /** What a band is called on its tag. Descriptive, never a verdict. */
@@ -430,10 +435,13 @@ export function cushionCard(
   let title = monthsTitle;
   let body: string;
   let step: BenchmarkCard['step'];
+  // In the circle the person is in, Your next step and the check say the gap: the card doesn't.
+  const gapSaid = at.current !== true;
   if (band?.band === 'low' || months < FIRST_CUSHION_MONTHS) {
     const days = Math.floor(months * DAYS_IN_A_MONTH);
     title = `Your cash covers ${days} ${days === 1 ? 'day' : 'days'} of essentials`;
-    body = `The first cushion is one month of essential spending: ${money(essentials)}. You're ${money(gapOf(essentials, liquid))} away.`;
+    body = `The first cushion is one month of essential spending: ${money(essentials)}.`;
+    if (gapSaid) body += ` You're ${money(gapOf(essentials, liquid))} away.`;
     step = { label: 'Start a one-month cushion', hash: '#goals' };
   } else if (band?.band === 'high' || months >= FULL_CUSHION_MONTHS) {
     body =
@@ -441,7 +449,11 @@ export function cushionCard(
     step = { label: 'Plan your next goal', hash: '#goals' };
   } else {
     const milestone = months < 3 ? 3 : FULL_CUSHION_MONTHS;
-    body = `Most guides aim for three to six months. That range is a convention, not a tested line; if your income moves around, the top of it fits better. Next milestone: ${milestone} months, ${money(gapOf(milestone * essentials, liquid))} away.`;
+    body =
+      'Most guides aim for three to six months. That range is a convention, not a tested line; if your income moves around, the top of it fits better.';
+    if (gapSaid) {
+      body += ` Next milestone: ${milestone} months, ${money(gapOf(milestone * essentials, liquid))} away.`;
+    }
     step = { label: 'Open the emergency fund calculator', hash: '#emergency' };
   }
   const context = CUSHION_CONTEXT[region];

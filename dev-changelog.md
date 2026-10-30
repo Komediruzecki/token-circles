@@ -1370,6 +1370,25 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
 - **Tests:** `SavingsGauge.test.tsx` (the band's words appear once, the goal line is the sentence
   alone, Set a goal follows), `guidanceCards.test.ts` (nothing paid: no tags, bar, step or note,
   in the EU, the UK and Germany).
+- **A circle's words: the gap said where it is acted on, and the checks counted plainly**
+  (`shared/guidance/ledger.ts`, `circleView.ts`, `cards.ts`, `CircleView.tsx`). Solid ground's
+  view said the gap to three months four times. Its key figure, which is also the ledger row's,
+  now says where the cushion stands, "2 of 3 months put by", and inside the circle the person is
+  in, the gated cushion card leaves out its gap ("Next milestone: 3 months, €2,000 away.", and
+  under a month "You're €1,000 away."): `CardContext.current`, which the view sets for that
+  circle. Your next step and the check keep it. The checks' lead reads "It needs 2 of these, and
+  1 more is optional." where it read "2 are needed to reach it; 1 more is on its list.", and "It
+  needs this one." or "It needs both of these." when every check is needed. The debt check's
+  detail said "Your loans and cards are under 10% a year, or carry nothing." with none on file;
+  with an empty list it says "No loans or cards on file." Rows 5 and 6 say what their figure
+  counts: "Counts what you've invested, plus money in reach beyond six months of essentials." and
+  "Enough invested that taking 4% a year covers what you spend."
+- **Tests:** `guidanceLedger.test.ts` (the key figure and label, rows 5 and 6),
+  `guidanceCircleView.test.ts` (the checks' lead for one, two and some optional; no debts on file
+  against a cheap loan), `guidanceCards.test.ts` (the cushion card in and outside the current
+  circle), `progressCircles.test.tsx` (circle 4's view says "€2,000 to go" twice, in Your next
+  step and the check; circle 3's card still names the milestone), `tests/circles.spec.ts` (the
+  rows' figures and labels).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

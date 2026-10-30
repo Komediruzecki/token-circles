@@ -166,7 +166,7 @@ describe('the ledger', () => {
     const fourth = q(rows[3], 'a') as HTMLAnchorElement
     expect(fourth.getAttribute('href')).toBe('#progress/4')
     expect(fourth.getAttribute('aria-label')).toBe(
-      "Solid ground. You're here. 2 of 3 months: €2,000 to go."
+      "Solid ground. You're here. 2 of 3 months put by."
     )
     expect(fourth.textContent).toContain('No debt at 10% or more.')
     // The glyph is decoration: the link's name carries what it shows.
@@ -432,7 +432,7 @@ describe('what a circle checks, and the questions it asks', () => {
     const view = open(4)
     expect(q(view, '#circle-checks-title').textContent).toBe('What Solid ground checks')
     expect(q(view, '[data-test-id="circle-checks-line"]').textContent).toBe(
-      '2 are needed to reach it; 1 more is on its list.'
+      'It needs 2 of these, and 1 more is optional.'
     )
     const checks = [...view.querySelectorAll('[data-test-id="circle-check"]')]
     expect(
@@ -695,6 +695,34 @@ describe('How you compare', () => {
       expect(window.location.hash).toBe('#settings')
     })
     await tick()
+  })
+
+  it('says the gap in Your next step and the check, and not again in the key figure or a card', async () => {
+    guidance.set!(viewOf(facts(), true))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    const view = q(c, '[data-test-id="circle-view"]')
+    await vi.waitFor(() => {
+      expect(view.querySelector('[data-card="cushion"]')).not.toBeNull()
+    })
+    // Where the cushion stands, then what is between it and three months, twice.
+    expect(q(view, '[data-test-id="circle-view-key"]').firstChild!.textContent).toBe(
+      '2 of 3 months put by'
+    )
+    expect(view.textContent!.match(/€2,000 (to go|away)/g)).toHaveLength(2)
+    expect(q(view, '[data-test-id="next-step-why"]').textContent).toContain('€2,000 to go')
+    expect(q(view, '[data-check="solid-cushion"]').textContent).toContain('€2,000 to go')
+    expect(q(view, '[data-card="cushion"]').textContent).not.toContain('Next milestone')
+    // A circle further in has no next step on it: its cushion card names the milestone.
+    go('#progress/3')
+    await vi.waitFor(() => {
+      expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('3')
+    })
+    await vi.waitFor(() => {
+      expect(q(c, '[data-card="cushion"]').textContent).toContain(
+        'Next milestone: 3 months, €2,000 away.'
+      )
+    })
   })
 
   it('shows no cards, and keeps one column, while the gate is closed', async () => {

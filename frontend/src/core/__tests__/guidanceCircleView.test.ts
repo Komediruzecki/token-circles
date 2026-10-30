@@ -61,12 +61,13 @@ const category = (over: Partial<WindowCategory>): WindowCategory => ({
 })
 
 describe('what a circle checks', () => {
-  it('counts what is needed and what more is on the list', () => {
-    expect(checksLine(place(facts(), 2))).toBe('1 is needed to reach it.')
-    expect(checksLine(place(facts(), 4))).toBe('2 are needed to reach it; 1 more is on its list.')
+  it('counts what it needs and what is optional', () => {
+    expect(checksLine(place(facts(), 2))).toBe('It needs this one.')
+    expect(checksLine(place(facts(), 1))).toBe('It needs both of these.')
+    expect(checksLine(place(facts(), 4))).toBe('It needs 2 of these, and 1 more is optional.')
     expect(
       checksLine(place(facts({ yearlyBills: { count: 2, perYear: 1200, perMonth: 100 } }), 4))
-    ).toBe('2 are needed to reach it; 2 more are on its list.')
+    ).toBe('It needs 2 of these, and 2 more are optional.')
   })
 
   it('lists Clear picture with the months and the share sorted', () => {
@@ -131,9 +132,11 @@ describe('what a circle checks', () => {
       { id: 'solid-cushion', state: 'not-yet', needed: 'Needed to reach Solid ground' },
       { id: 'full-cushion', state: 'not-yet', needed: null },
     ])
-    expect(row(facts(), 4, 'no-expensive-debt')?.detail).toBe(
-      'Your loans and cards are under 10% a year, or carry nothing.'
-    )
+    expect(row(facts(), 4, 'no-expensive-debt')?.detail).toBe('No loans or cards on file.')
+    expect(
+      row(facts({ debts: [{ ...loan, rate: 5, expensive: false }] }), 4, 'no-expensive-debt')
+        ?.detail
+    ).toBe('Your loans and cards are under 10% a year, or carry nothing.')
     expect(row(facts(), 4, 'solid-cushion')?.detail).toBe(
       '2 months: €4,000 against €2,000 a month. €2,000 to go.'
     )

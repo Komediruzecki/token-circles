@@ -213,7 +213,7 @@ describe('the rows', () => {
       [7, 'later', 'Later'],
     ])
     expect(all.map((r) => r.line)).toEqual(Object.values(CIRCLE_LINES))
-    expect(all[3].label).toBe("Solid ground. You're here. 2 of 3 months: €2,000 to go.")
+    expect(all[3].label).toBe("Solid ground. You're here. 2 of 3 months put by.")
   })
 
   it.each([0, 1, 3, 11, 12])('counts %i months on file in Clear picture', (n) => {
@@ -277,14 +277,15 @@ describe('the rows', () => {
     expect(row(spentOnly, 3).detail).toBe('€4,000 you can reach, against €2,500 spent a month.')
   })
 
-  it('reads Solid ground as the gap to three months, and as months put by once met', () => {
+  it('reads Solid ground as the months put by: of three, then on their own once met', () => {
+    // Where the cushion stands, not the gap: Your next step and the check say that.
     expect(row(base, 4)).toMatchObject({
-      key: '2 of 3 months: €2,000 to go',
+      key: '2 of 3 months put by',
       detail: 'No debt at 10% or more.',
     })
-    // Never "€0 to go" beside a check not met.
+    // Never "3 of 3" beside a check not met.
     expect(row(facts({ cushionMonths: 2.9999, liquid: 5999.8 }), 4).key).toBe(
-      '2.9 of 3 months: €1 to go'
+      '2.9 of 3 months put by'
     )
     expect(row(facts({ cushionMonths: 4.25, liquid: 8500 }), 4).key).toBe('4.2 months put by')
   })
@@ -359,11 +360,11 @@ describe('the rows', () => {
     expect(row(f, 5)).toMatchObject({
       state: 'current',
       key: '€10,000 of €60,000: 16%',
-      detail: 'Invested, plus money in reach beyond six months of essentials.',
+      detail: "Counts what you've invested, plus money in reach beyond six months of essentials.",
     })
     expect(row(f, 6)).toMatchObject({
       key: '€10,000 of €750,000: 1%',
-      detail: 'Invested, so taking 4% a year would cover what you spend.',
+      detail: 'Enough invested that taking 4% a year covers what you spend.',
     })
     const zero = facts({ cushionMonths: 4, liquid: 8000 })
     expect(row(zero, 5).key).toBe('Two years of spending: €60,000')

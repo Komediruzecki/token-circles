@@ -228,10 +228,11 @@ function solidGround(facts: GuidanceFacts, place: CirclePlace, words: LedgerWord
     return { key: null, detail, measure: null };
   }
   if (months === Infinity) return { key: NOTHING_NEEDED, detail, measure: 1 };
+  // Where the cushion stands, not the gap to three months: Your next step and the check say that.
   const key =
     check?.met === true
       ? `${monthsText(months)} months put by`
-      : `${monthsText(months)} of 3 months: ${words.money(gapOf(SOLID_CUSHION_MONTHS * facts.essentials, facts.liquid))} to go`;
+      : `${monthsText(months)} of 3 months put by`;
   return { key, detail, measure: Math.max(0, Math.min(1, months / SOLID_CUSHION_MONTHS)) };
 }
 
@@ -258,7 +259,9 @@ function roomToChoose(facts: GuidanceFacts, place: CirclePlace, words: LedgerWor
   const figure = towards(check, facts, words, (target) => `Two years of spending: ${target}`);
   return {
     key: figure?.key ?? null,
-    detail: figure ? 'Invested, plus money in reach beyond six months of essentials.' : null,
+    detail: figure
+      ? "Counts what you've invested, plus money in reach beyond six months of essentials."
+      : null,
     measure: figure?.measure ?? null,
   };
 }
@@ -276,7 +279,7 @@ function workOptional(facts: GuidanceFacts, place: CirclePlace, words: LedgerWor
   return {
     key: figure?.key ?? null,
     detail: figure
-      ? `Invested, so taking ${rateText(facts.withdrawalRatePct)}% a year would cover what you spend.`
+      ? `Enough invested that taking ${rateText(facts.withdrawalRatePct)}% a year covers what you spend.`
       : null,
     measure: figure?.measure ?? null,
   };

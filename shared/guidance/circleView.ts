@@ -61,13 +61,18 @@ const ASKED: ReadonlySet<CheckId> = new Set([
 const stateOf = (check: Check): CheckState =>
   check.met === true ? 'met' : check.met === false ? 'not-yet' : 'not-known';
 
-/** "2 are needed to reach it; 3 more are on its list." */
+/**
+ * How many of its checks a circle needs: "It needs 2 of these, and 3 more are optional.", or,
+ * when it needs them all, "It needs this one." and "It needs both of these."
+ */
 export function checksLine(place: CirclePlace): string {
   const required = place.checks.filter((check) => check.required).length;
   const optional = place.checks.length - required;
-  const needed = `${required} ${required === 1 ? 'is' : 'are'} needed to reach it`;
-  if (optional === 0) return `${needed}.`;
-  return `${needed}; ${optional} more ${optional === 1 ? 'is' : 'are'} on its list.`;
+  if (optional === 0) {
+    if (required === 1) return 'It needs this one.';
+    return required === 2 ? 'It needs both of these.' : `It needs all ${required} of these.`;
+  }
+  return `It needs ${required} of these, and ${optional} more ${optional === 1 ? 'is' : 'are'} optional.`;
 }
 
 /** "August 2026" for "2026-08". */
@@ -96,6 +101,7 @@ function debtDetail(facts: GuidanceFacts, check: Check, words: LedgerWords): str
       ? `${debtName(card)} has been here since ${monthYear(card.since.slice(0, 7))}, too short to show whether you carry its ${owed(card)}.`
       : `${debtName(card)} has too few entries to show whether you carry its ${owed(card)}.`;
   }
+  if (facts.debts.length === 0) return 'No loans or cards on file.';
   return 'Your loans and cards are under 10% a year, or carry nothing.';
 }
 
