@@ -90,6 +90,8 @@ export interface NextStepCardProps {
   class?: string
   /** Under the card, as on Dashboard: a link to all seven circles. */
   footer?: JSX.Element
+  /** Dashboard's: a smaller title. */
+  compact?: boolean
 }
 
 export default function NextStepCard(props: NextStepCardProps): JSX.Element {
@@ -135,7 +137,7 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
 
   return (
     <section
-      class={`${styles.card} ${props.class ?? ''}`}
+      class={`${styles.card} ${props.compact ? styles.compact : ''} ${props.class ?? ''}`}
       aria-labelledby={headingId}
       data-test-id="next-step-card"
       data-step={props.step.id}
@@ -277,6 +279,18 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
       </Show>
       {props.footer}
     </section>
+  )
+}
+
+/** Under the card on Dashboard: the way to all seven circles, on Progress. */
+export function AllCircles(): JSX.Element {
+  return (
+    <div class={styles.out}>
+      <a class={styles.outLink} href="#progress" data-test-id="next-step-circles">
+        See all seven circles
+        <ArrowIcon />
+      </a>
+    </div>
   )
 }
 

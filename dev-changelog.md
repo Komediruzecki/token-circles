@@ -1270,6 +1270,42 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   3 months and provisional under 12),
   `progressCircles.test.tsx` (the household question on the card, saved and gone once answered, a
   failed save puts the chip back).
+- **Dashboard** (`frontend/src/features/Dashboard.tsx`): Your next step takes Getting started's
+  place (`components/guidance/DashboardNextStep.tsx`) once its record is hidden, there is none, or a
+  year is on file (`facts.firm`); nothing is written, so a year that lapses brings Getting started
+  back. It waits until both the circles and the record are known (`gettingStartedKnown`), so it
+  never shows one and swaps it for the other. The card is `NextStepCard` with `compact` and "See all
+  seven circles" (48 px) to `#progress`. The `savings-gauge` widget replaces the `savings-rate` tail
+  widget at a fixed spot under the metrics grid, on by default; `loadWidgetPrefs` splices it into
+  saved layouts as visible and now drops ids this build no longer has, `savings-rate` among them.
+  The gauge reads `facts.savings` over the last 12 tracked months, not the period bar, and the ring
+  says how many months it covers; the title and the D6 principal line moved to
+  `shared/guidance/savingsWords.ts`, which the savings card uses too. The goal is `savingsGoal` in
+  the answers record, set on the gauge; a browser goal other than 20 (`localStorage.savingsGoal`)
+  moves to the first profile that opens Dashboard without one and is then cleared, and a failed
+  save keeps it for the next visit (`core/savingsGoal.ts`). Behind the gate: the band arc, the
+  "Typical in {region}" legend, the savings card's sentence for the band (`savingsBand` in
+  `cards.ts`, loaded with `import()` only while the gate is open) and the region note; without a
+  goal of its own the band is the target, and with the gate closed 20% is, as before.
+  `SavingsRateCard` is gone; `OrbitGauge` gains a band arc, a value text and an aria label, and its
+  caption renders at 12 px or more.
+- **Tests:** `dashboardWidgets.test.ts` (the gauge after the metrics and on by default, unknown ids
+  dropped from an older layout), `savingsGoal.test.ts` (the browser goal moves once, 20 and junk are
+  cleared, a profile's own goal stays, a failed save keeps it), `SavingsGauge.test.tsx` (the year
+  from the facts and the ring's months, own and default goals, below zero, the principal line,
+  provisional and waiting, setting a goal, a goal out of range, a failed save; the band, sentence,
+  region note and band target with the gate open, none of it closed), `SavingsGaugeGate.test.tsx`
+  (the cards chunk is never loaded while the gate is closed), `DashboardNextStep.test.tsx` (the
+  four rows of the table, a lapsed year, nothing until both are known), `guidanceCards.test.ts`
+  (`savingsBand`; the card's first paragraph is the band's sentence in every region and band),
+  `benchmarksChunk.test.ts` (the gauge loads the cards with `import()`),
+  `dashboardFollowsWrites.test.tsx` (the gauge drawn once, under the metrics),
+  `circles-phone.spec.ts` (the next step and the gauge at 390 px: 48 px targets, the region note's
+  Change among them, and 12 px text), and E2E
+  `dashboard-circles.spec.ts` (`@smoke` signed in: Getting started until a year is on file, then Your
+  next step and its link to Progress; both modes: the gauge keeps to the year when the period
+  changes, and a browser goal moves to the profile once) and `orientation.spec.ts` (Your next step
+  after Getting started is hidden).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
@@ -1285,6 +1321,10 @@ Added:
 - **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
 - **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
 - **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
+
+Changed:
+
+- **The savings rate shows the typical range where you live**, which is your target until you set your own.
 
 ### Sign-in
 

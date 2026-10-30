@@ -28,6 +28,7 @@ import {
   SORTED_SHARE,
 } from './circles';
 import { gapOf, monthsText, shareOf } from './ledger';
+import { percentText, principalLine, savingsTitle, shownRate } from './savingsWords';
 import { DAYS_IN_A_MONTH, monthName } from '../orientation';
 import type { Band, BandEntry, MetricId, Reference, RegionId, Strength } from './benchmarks';
 import type { CircleNumber } from './circles';
@@ -133,11 +134,7 @@ const REGION_ADJECTIVE: Readonly<Record<RegionId, string>> = {
 /** A sentence that starts with the region: "The UK has", "Germany has". */
 const capital = (text: string): string => `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 
-/** A percentage, floored to one decimal so it never reads as past an edge it has not reached. */
-export function percentText(value: number): string {
-  const floored = Math.floor(value * 10 + 1e-9) / 10;
-  return Number.isInteger(floored) ? String(floored) : floored.toFixed(1);
-}
+export { percentText };
 
 /** An edge or a rate as the sources print it: "13.9", "4", "8.99". */
 const figureText = (value: number): string => String(Math.round(value * 100) / 100);
@@ -270,7 +267,7 @@ export function savingsCard(
   words: LedgerWords,
   at: CardContext
 ): BenchmarkCard | null {
-  const { rate, cash, withPrincipal } = facts.savings;
+  const { rate, cash } = facts.savings;
   if (rate === null || cash === null || facts.income === null || facts.spending === null) {
     return null;
   }
@@ -279,7 +276,6 @@ export function savingsCard(
   const money = (n: number) => words.money(Math.round(n));
   const ref = savingRateRef(region);
   const bands = bandsFor('savings.rate', region);
-  const principal = facts.principalRepaid ?? 0;
   const quoted: Reference[] = ref ? [ref] : [];
   const body: string[] = [];
   let title: string;
@@ -287,12 +283,13 @@ export function savingsCard(
   let tags: CardTag[];
   // The rate shown is the one with loan principal added back (D6, LOAN_PRINCIPAL_IS_SAVING); when
   // cash alone runs below zero, the cash fact leads, as cash is what drains the cushion.
-  const value = cash < 0 ? cash : rate;
+  const value = shownRate(facts) ?? rate;
   const band = bandFor('savings.rate', region, value);
+  // The title and the principal line are the Dashboard gauge's too (savingsWords.ts).
+  const principalSaid = principalLine(facts, words);
   if (cash < 0) {
-    const gap = facts.spending - facts.income;
     const n = facts.months.length;
-    title = `${money(gap)} a month more out than in`;
+    title = savingsTitle(facts, words) ?? '';
     const first = [`Over the last ${n} months, spending ran ahead of income.`];
     if (EUROPEAN.has(region)) {
       const dissaving = referencesFor('savings.rate', 'EU27').find(
@@ -316,14 +313,10 @@ export function savingsCard(
       step = { label: 'See where it went', hash: '#analytics' };
     }
     body.push(first.join(' '));
-    if (withPrincipal !== null && principal > 0 && withPrincipal - cash > 1) {
-      body.push(
-        `Of your loan payments, ${money(principal)} a month paid the debt down. Counting that, you saved ${percentText(withPrincipal)}%.`
-      );
-    }
+    if (principalSaid) body.push(principalSaid);
     tags = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
   } else {
-    title = `You kept ${percentText(rate)}% of your income`;
+    title = savingsTitle(facts, words) ?? '';
     const average = ref ? `${averageText(ref.value ?? 0)}% (${ref.year})` : null;
     const adjective = REGION_ADJECTIVE[region];
     if (band?.band === 'high') {
@@ -351,11 +344,7 @@ export function savingsCard(
         ? { label: `Look at ${line.name}`, hash: '#analytics' }
         : { label: 'See where it goes', hash: '#analytics' };
     }
-    if (withPrincipal !== null && principal > 0 && withPrincipal - cash > 1) {
-      body.push(
-        `Of your loan payments, ${money(principal)} a month on average paid the debt down; that counts as saving here. Cash alone: ${percentText(cash)}%.`
-      );
-    }
+    if (principalSaid) body.push(principalSaid);
     tags = band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [];
   }
   const typical = typicalText(bands, (n) => `${figureText(n)}%`);
@@ -377,6 +366,38 @@ export function savingsCard(
     step,
     where: whereFrom('savings.rate', region, bands, quoted),
     provisional: provisionalOf(facts),
+  };
+}
+
+/** What the Dashboard gauge adds to the savings rate while the gate is open (design.md 2.3). */
+export interface SavingsBand {
+  /** The typical band's edges, in percent: the arc on the ring, and the target without a goal. */
+  from: number;
+  to: number;
+  /** "Typical in Croatia: 4% to 14%" */
+  legend: string;
+  /** guidance.md 5.3's sentence for the band the rate is in, as the savings card says it. */
+  comparison: string | null;
+}
+
+/** The savings rate's typical band where the person lives, and what the card says of their rate. */
+export function savingsBand(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): SavingsBand | null {
+  const bands = bandsFor('savings.rate', at.region);
+  const typical = bands.find((band) => band.band === 'typical');
+  const range = typicalText(bands, (n) => `${figureText(n)}%`);
+  if (!typical || typical.min === null || typical.max === null || range === null) return null;
+  // The card's first paragraph is its sentence for the band: every region has a household saving
+  // rate to quote. The principal line, which the gauge says in every build, comes after it.
+  const comparison = savingsCard(facts, words, at)?.body[0] ?? null;
+  return {
+    from: typical.min,
+    to: typical.max,
+    legend: `Typical in ${regionName(at.region)}: ${range}`,
+    comparison,
   };
 }
 

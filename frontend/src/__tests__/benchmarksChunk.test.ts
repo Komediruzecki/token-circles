@@ -86,8 +86,17 @@ describe('the benchmarks chunk', () => {
     }
   })
 
-  it('is loaded by the circle view with import()', () => {
-    const view = readFileSync(resolve(SRC, 'components/guidance/CircleView.tsx'), 'utf8')
-    expect(view).toContain("import('../../../../shared/guidance/cards')")
+  it("is loaded by the circle view and Dashboard's savings gauge with import()", () => {
+    for (const file of [
+      'components/guidance/CircleView.tsx',
+      'components/Dashboard/SavingsGauge.tsx',
+    ]) {
+      const source = readFileSync(resolve(SRC, file), 'utf8')
+      expect(source, file).toContain("import('../../../../shared/guidance/cards')")
+    }
+    // The gauge is on Dashboard's static graph, so the walk above covers what it imports.
+    expect(reachable(resolve(SRC, 'features/Dashboard.tsx'))).toContain(
+      resolve(SRC, 'components/Dashboard/SavingsGauge.tsx')
+    )
   })
 })

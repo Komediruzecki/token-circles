@@ -156,6 +156,11 @@ test.describe('Getting started @smoke', () => {
     expect(await page.evaluate(() => localStorage.getItem('finance_getting_started:local'))).toBe(
       '{"hidden":true}'
     )
+    // Your next step takes its place: Getting started's first step, while less than a year is here.
+    await expect(page.getByTestId('dashboard-container').getByTestId('next-step-title')).toHaveText(
+      AFTER_IMPORT[0].title,
+      { timeout: 30_000 }
+    )
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
@@ -242,6 +247,9 @@ test.describe('Getting started @smoke', () => {
       await page.getByTestId('getting-started-hide').click()
       expect((await hidden).request().postData()).toBe('{"hidden":true}')
       await expect(page.getByTestId('getting-started')).toHaveCount(0)
+      await expect(
+        page.getByTestId('dashboard-container').getByTestId('next-step-title')
+      ).toHaveText(AFTER_IMPORT[0].title, { timeout: 30_000 })
 
       // Another device: nothing in its storage, the same account signed in.
       const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })

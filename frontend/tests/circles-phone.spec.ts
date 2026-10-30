@@ -112,4 +112,23 @@ test.describe('The circles at phone width', () => {
     await page.setViewportSize(NARROWEST)
     expect(await sideways(page)).toBe(0)
   })
+
+  test("Dashboard's next step and savings gauge: 48 px targets, 12 px text", async ({ page }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    await page.setViewportSize(PHONE)
+    await go(page, 'dashboard')
+    const home = page.getByTestId('dashboard-container')
+    await expect(home.getByTestId('next-step-card')).toBeVisible({ timeout: 30_000 })
+    // The benchmarks gate is open in development: the region note and its Change link show.
+    await expect(home.getByTestId('savings-gauge-region')).toBeVisible({ timeout: 30_000 })
+    const parts = [
+      '[data-test-id="dashboard-container"] [data-test-id="next-step-card"]',
+      '[data-test-id="savings-gauge"]',
+    ]
+    expect(await phoneFloors(page, parts)).toEqual(NOTHING_BELOW)
+
+    await page.setViewportSize(NARROWEST)
+    expect(await sideways(page)).toBe(0)
+  })
 })

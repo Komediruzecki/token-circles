@@ -18,6 +18,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The subscription scan finds regular payments it has no name for**, like the rent or a local gym, and adds each as a bill or a subscription. It leaves cash withdrawals out, and lists what you pay every week or two unticked.
 - **Seven circles on Progress.** Each circle, from Clear picture to More than enough, gets a row with your own figure, like months on file or the months of essentials your money covers. The row you're in is lit, with Your next step above it.
 - **Open a circle to see what it checks**: met, not yet or not known yet, with the numbers behind each. Where a check needs your answer, like whether you carry a balance on a card or set money aside for yearly bills, the circle asks once and Settings keeps it.
+- **Your next step on Dashboard.** Once Getting started is hidden or a full year is on file, Dashboard shows the one step your circles point to, with a link to all seven.
 
 ### Changed
 
@@ -27,6 +28,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Sign-up mails do one job each.** Signing up with a password sends Confirm, which holds the link that opens your account and nothing else. The welcome comes once your address is confirmed, or straight away for a Google sign-up, and says where to start: a year of statements from your bank.
 - **The mail that says your address already has an account now has Reset password**, which opens the form that sends a reset link.
 - **A deduction lowers income** instead of counting as spending, in the rainy-day badge, the year in review and the advice about a month in the red.
+- **The savings rate covers your last 12 months** and sits under the totals. A goal you set stays with the profile instead of the browser.
 
 ### Fixed
 

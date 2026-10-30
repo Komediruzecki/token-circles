@@ -1,7 +1,9 @@
 /**
  * OrbitGauge — circular ring gauge in the brand's orbital language.
  * A dotted "orbit" track with a glowing progress arc and a goal tick;
- * the value sits in the luminous core. SVG only.
+ * the value sits in the luminous core. SVG only. A band (the typical
+ * range where the person lives, on Dashboard's savings gauge) is a wide
+ * soft arc under the progress arc.
  */
 import { Show } from 'solid-js'
 
@@ -12,6 +14,12 @@ export interface OrbitGaugeProps {
   goal?: number
   label?: string
   size?: number
+  /** A range on the same 0–100 scale, drawn under the progress arc. */
+  band?: { from: number; to: number }
+  /** The core's text in place of the value to one decimal, e.g. a floored "13.8". */
+  valueText?: string
+  /** The whole gauge in words, in place of "{label}: {value}%". */
+  ariaLabel?: string
 }
 
 export default function OrbitGauge(props: OrbitGaugeProps) {
@@ -23,6 +31,12 @@ export default function OrbitGauge(props: OrbitGaugeProps) {
   const goalX = () => 60 + Math.cos((goalAngle() * Math.PI) / 180) * R
   const goalY = () => 60 + Math.sin((goalAngle() * Math.PI) / 180) * R
   const met = () => props.goal !== undefined && props.value >= props.goal
+  const clamp = (v: number) => Math.max(0, Math.min(100, v))
+  // The caption renders at 12 px or more, whatever the size (compact-ui TYPE-01).
+  const captionSize = () => String(Math.max(7.5, (12 * 120) / (props.size ?? 132)))
+  const bandFrom = () => (props.band ? (clamp(props.band.from) / 100) * C : 0)
+  const bandLength = () =>
+    props.band ? (Math.max(0, clamp(props.band.to) - clamp(props.band.from)) / 100) * C : 0
 
   return (
     <svg
@@ -30,7 +44,7 @@ export default function OrbitGauge(props: OrbitGaugeProps) {
       width={props.size ?? 132}
       height={props.size ?? 132}
       role="img"
-      aria-label={`${props.label ?? 'Gauge'}: ${props.value.toFixed(1)}%`}
+      aria-label={props.ariaLabel ?? `${props.label ?? 'Gauge'}: ${props.value.toFixed(1)}%`}
     >
       <defs>
         <linearGradient id="og-arc" x1="0" y1="0" x2="1" y2="1">
@@ -54,6 +68,21 @@ export default function OrbitGauge(props: OrbitGaugeProps) {
         stroke-dasharray="1 5"
         stroke-linecap="round"
       />
+      {/* band: the typical range, a wide soft arc */}
+      <Show when={props.band}>
+        <circle
+          cx="60"
+          cy="60"
+          r={R}
+          fill="none"
+          stroke="var(--band-mid)"
+          stroke-width="13"
+          stroke-dasharray={`${bandLength()} ${C}`}
+          stroke-dashoffset={-bandFrom()}
+          transform="rotate(-90 60 60)"
+          data-test-id="gauge-band"
+        />
+      </Show>
       {/* progress arc */}
       <circle
         cx="60"
@@ -73,6 +102,7 @@ export default function OrbitGauge(props: OrbitGaugeProps) {
           cx={goalX()}
           cy={goalY()}
           r="4"
+          data-test-id="gauge-goal"
           fill={met() ? 'var(--text-positive)' : 'var(--accent-warm, #f0a860)'}
           stroke="var(--card-bg)"
           stroke-width="1.5"
@@ -90,15 +120,15 @@ export default function OrbitGauge(props: OrbitGaugeProps) {
         font-family="var(--font-display)"
         fill="var(--text)"
       >
-        {props.value.toFixed(1)}%
+        {props.valueText ?? props.value.toFixed(1)}%
       </text>
       <Show when={props.label}>
         <text
           x="60"
-          y="76"
+          y="77"
           text-anchor="middle"
-          font-size="7.5"
-          letter-spacing="1.6"
+          font-size={captionSize()}
+          letter-spacing="1.2"
           fill="var(--text-secondary)"
         >
           {props.label!.toUpperCase()}

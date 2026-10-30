@@ -13,11 +13,13 @@ import {
   housingCard,
   MARKET_RATES,
   percentText,
+  savingsBand,
   savingsCard,
   shockCard,
   spendingShareCards,
   subscriptionsCard,
 } from '../../../../shared/guidance/cards'
+import { principalLine } from '../../../../shared/guidance/savingsWords'
 import { facts, words } from './guidanceFixtures'
 import type { RegionId } from '../../../../shared/guidance/benchmarks'
 import type { CardContext } from '../../../../shared/guidance/cards'
@@ -62,6 +64,51 @@ const flexible: WindowCategory = {
   essential: false,
   via: 'kind',
 }
+
+describe("the savings rate's band, for the Dashboard gauge", () => {
+  it("gives the typical band, its legend, and the card's sentence for the rate's band", () => {
+    const band = savingsBand(facts(), words, at('EU27'))!
+    expect(band).toEqual({
+      from: 9.3,
+      to: 19.3,
+      legend: 'Typical in the EU: 9.3% to 19.3%',
+      comparison: savingsCard(facts(), words, at('EU27'))!.body[0],
+    })
+    expect(savingsBand(facts(), words, at('HR'))!.legend).toBe('Typical in Croatia: 4% to 14%')
+  })
+
+  it('leaves out the principal line, which the gauge says in every build, in every region and band', () => {
+    // No flexible line to name, so the low band's sentence is the region's figure alone.
+    for (const region of ['DE', 'HR', 'EU27', 'UK', 'US'] as const) {
+      for (const [cash, rate] of [
+        [-8, -2],
+        [0.5, 1.6],
+        [12, 14],
+        [40, 42],
+      ]) {
+        const paid = facts({
+          windowCategories: [],
+          principalRepaid: 33,
+          savings: { rate, cash, withPrincipal: rate },
+        })
+        const principal = principalLine(paid, words)
+        const said = savingsBand(paid, words, at(region))!.comparison
+        expect(principal, `${region} ${cash}`).not.toBeNull()
+        expect(said, `${region} ${cash}`).not.toBeNull()
+        expect(said, `${region} ${cash}`).not.toBe(principal)
+        expect(savingsCard(paid, words, at(region))!.body, `${region} ${cash}`).toEqual([
+          said,
+          principal,
+        ])
+      }
+    }
+  })
+
+  it('has no sentence without a rate', () => {
+    const none = facts({ savings: { rate: null, cash: null, withPrincipal: null } })
+    expect(savingsBand(none, words, at('DE'))!.comparison).toBeNull()
+  })
+})
 
 describe('the savings rate', () => {
   const rated = (rate: number) =>

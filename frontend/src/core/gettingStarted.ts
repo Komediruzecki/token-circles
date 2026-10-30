@@ -59,6 +59,15 @@ export function gettingStartedRecord(): GettingStartedRecord | null {
   return written === undefined ? readLocal() : written
 }
 
+/**
+ * Whether the record is known: in local-first always (it is this browser's); signed in once the
+ * account's state has been read. Dashboard waits on it before choosing Getting started or Your
+ * next step, so a read still on its way never shows the one and then the other. Reactive.
+ */
+export function gettingStartedKnown(): boolean {
+  return !isServerAccount(accountStateOwner()) || accountState() !== null
+}
+
 /** Signed in, read the account's state if it has not been read yet (one request per account). */
 export function loadGettingStarted(): Promise<unknown> {
   return readAccountState()
