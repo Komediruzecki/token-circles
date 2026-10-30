@@ -927,3 +927,224 @@ describe('the sign-in screen with the captcha off', () => {
     expect(hint()).toBeNull()
   })
 })
+
+/**
+ * A solved check covers the sign-in tries after it for five minutes (worker/src/login-check.ts):
+ * after a wrong password the Worker says for how long, and until then the box does not come back,
+ * not even when the person is back in the form, and Sign in sends at once with no token. When the
+ * Worker asks for the check again the box comes back, and every other form still asks for a check.
+ */
+describe('a wrong password, then the next try', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  const WRONG = 'Invalid email or password'
+  /** The Worker's 401, saying for how many seconds the solved check covers the next try. */
+  const refused = (seconds?: number) =>
+    json({ error: WRONG, ...(seconds === undefined ? {} : { checkValidForSeconds: seconds }) }, 401)
+  const signedIn = () => json({ id: 1, email: 'someone@example.com' })
+  const theRefusal = () => host.textContent?.includes("don't match") ?? false
+
+  /** Ticks Cloudflare's box, as it asks maff's browser to before every sign-in. */
+  async function tickTheBox(token: string) {
+    cf.ask()
+    await settle()
+    expect(hintText()).toBe(TICK)
+    cf.tick(token)
+    await sleep(AFTER_TICK_MS * 3)
+    await settle()
+  }
+
+  it('brings no box back and sends the next sign-in at once, with no token', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    await tickTheBox('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    // Nothing for Cloudflare to ask a tick for: no new check, now or back in the form.
+    expect(resets).toEqual([])
+    field('#login-password').focus()
+    await settle()
+    expect(resets).toEqual([])
+    expect(hintText()).toBe('')
+    expect(button().hasAttribute('aria-disabled')).toBe(false)
+
+    answers['/api/auth/login'] = signedIn
+    type(field('#login-password'), 'the-right-password')
+    await press()
+    expect(button().textContent).toBe('Signing in…')
+    await until(() => sent.length === 2, 'the second sign-in')
+    expect(tokens('/api/auth/login')).toEqual(['token-1', ''])
+    expect(resets).toEqual([])
+  })
+
+  it('does the same in the Sign In window', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInDialog()
+    await tickTheBox('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    field('#login-modal-password').focus()
+    await settle()
+    expect(resets).toEqual([])
+    expect(hintText()).toBe('')
+
+    answers['/api/auth/login'] = signedIn
+    await press()
+    await until(() => sent.length === 2, 'the second sign-in')
+    expect(tokens('/api/auth/login')).toEqual(['token-1', ''])
+    expect(resets).toEqual([])
+  })
+
+  it('brings the box back after the last try the Worker covers', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+    expect(resets).toEqual([])
+
+    answers['/api/auth/login'] = () => refused()
+    await press()
+    await until(() => sent.length === 2, 'the covered try')
+    await settle()
+    expect(resets).toEqual([cf.widget().id])
+  })
+
+  it('brings the box back when the Worker asks for the check again, and signs in once it is ticked', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    // The check covers nothing any more: another tab used it up, or the network address changed.
+    answers['/api/auth/login'] = () =>
+      json({ error: 'Captcha verification failed. Please try again.' }, 403)
+    await press()
+    await until(() => resets.length === 1, 'the check to start again')
+    cf.ask()
+    await settle()
+    expect(hintText()).toBe(TICK)
+    neverBusyBesideTheBox('Sign in')
+    expect(host.textContent).not.toContain("Verification didn't go through")
+
+    answers['/api/auth/login'] = signedIn
+    cf.tick('token-2')
+    await sleep(AFTER_TICK_MS * 3)
+    await press()
+    await until(() => sent.length === 3, 'the sign-in with the new token')
+    expect(tokens('/api/auth/login')).toEqual(['token-1', '', 'token-2'])
+  })
+
+  it('sends the sign-in again by itself when Cloudflare passes the new check without a click', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    let tries = 0
+    answers['/api/auth/login'] = () => {
+      tries += 1
+      return tries === 1
+        ? json({ error: 'Captcha verification failed. Please try again.' }, 403)
+        : signedIn()
+    }
+    await press()
+    await until(() => resets.length === 1, 'the check to start again')
+    expect(button().textContent).toBe(CHECKING)
+    cf.pass('token-2')
+    await until(() => sent.length === 3, 'the same sign-in, with the new token')
+    expect(tokens('/api/auth/login')).toEqual(['token-1', '', 'token-2'])
+    expect(host.textContent).not.toContain("Verification didn't go through")
+  })
+
+  it('still asks for a check to create an account', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    answers['/api/auth/register'] = () => json({ ok: true })
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    byText('Create one').click()
+    await settle()
+    await press()
+    expect(resets).toEqual([cf.widget().id])
+    expect(button().textContent).toBe(CHECKING)
+    cf.pass('token-2')
+    await until(() => tokens('/api/auth/register').length === 1, 'the account request')
+    expect(tokens('/api/auth/register')).toEqual(['token-2'])
+  })
+
+  it('still asks for a check to send the confirm link again', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    answers['/api/auth/verify-email/resend'] = () => json({ ok: true })
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    host.querySelector<HTMLButtonElement>('[data-test-id="send-confirm-link"]')!.click()
+    await settle()
+    expect(resets).toEqual([cf.widget().id])
+    cf.pass('token-2')
+    await until(() => tokens('/api/auth/verify-email/resend').length === 1, 'the link request')
+    expect(tokens('/api/auth/verify-email/resend')).toEqual(['token-2'])
+  })
+
+  it('asks for a check again after the right password led to the second factor and back', async () => {
+    vi.doMock('../TwofaChallenge', () => ({
+      default: (props: { onBack: () => void }) => (
+        <button
+          type="button"
+          data-test-id="twofa-back"
+          onClick={() => {
+            props.onBack()
+          }}
+        >
+          Back
+        </button>
+      ),
+    }))
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    answers['/api/auth/login'] = () => json({ twofaRequired: true })
+    await press()
+    await until(() => host.querySelector('[data-test-id="twofa-back"]') !== null, 'the code step')
+    const drawn = widgets.length
+    host.querySelector<HTMLButtonElement>('[data-test-id="twofa-back"]')!.click()
+    await settle()
+    await until(() => widgets.length > drawn, "the form's new widget")
+
+    // The password was right, so the check that covered it is spent, here as on the Worker.
+    type(field('#login-password'), 'a-long-enough-password')
+    await press()
+    expect(button().textContent).toBe(CHECKING)
+    cf.pass('token-2')
+    await until(() => sent.length === 3, 'the sign-in with a new token')
+    expect(tokens('/api/auth/login')).toEqual(['token-1', '', 'token-2'])
+  })
+
+  it('brings the box back on the next visit to the form once the five minutes are over', async () => {
+    answers['/api/auth/login'] = () => refused(300)
+    await signInScreen('login')
+    cf.pass('token-1')
+    await press()
+    await until(theRefusal, 'the refusal')
+
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 295_000)
+    field('#login-password').focus()
+    await settle()
+    expect(resets).toEqual([cf.widget().id])
+  })
+})

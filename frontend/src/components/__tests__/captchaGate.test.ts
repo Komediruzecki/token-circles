@@ -11,13 +11,14 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-async function makeGate() {
+async function makeGate(options?: { signingIn?: () => boolean }) {
   vi.resetModules()
   vi.stubEnv('VITE_TURNSTILE_SITE_KEY', 'test-site-key')
   const gateModule = await import('../captchaGate')
   const { NOT_SENT } = await import('../form')
   const { captchaStatusMessage } = await import('../Turnstile')
-  const gate = gateModule.createCaptchaGate()
+  const { ApiError } = await import('../../core/apiError')
+  const gate = gateModule.createCaptchaGate(options)
   let resets = 0
   /** What Turnstile.tsx tells the gate, as Cloudflare's frame drives it. */
   const widget = {
@@ -41,6 +42,12 @@ async function makeGate() {
     },
   }
   widget.drawn()
+  /** The Worker's answer to a sign-in: `status`, saying the check covers `seconds` more of them. */
+  const answer = (status: number, seconds?: number) => {
+    const error = new ApiError(status, 'Invalid email or password')
+    if (seconds !== undefined) error.checkValidFor = seconds
+    return error
+  }
   return {
     gate,
     widget,
@@ -49,6 +56,7 @@ async function makeGate() {
     CHECKING: gateModule.CHECKING_YOU_ARE_HUMAN,
     captchaStatusMessage,
     resets: () => resets,
+    answer,
   }
 }
 
@@ -370,5 +378,147 @@ describe('the next check', () => {
     gate.wake()
     expect(resets()).toBe(0)
     expect(newResets).toBe(0)
+  })
+})
+
+describe('a solved check after a wrong password', () => {
+  /** A gate on the password sign-in whose first send took token-1 and was refused. */
+  async function refusedOnce(seconds?: number, signingIn: () => boolean = () => true) {
+    const made = await makeGate({ signingIn })
+    made.widget.pass('token-1')
+    const sent = await made.gate.next()
+    expect(sent).toBe('token-1')
+    made.gate.explain(made.answer(401, seconds), sent)
+    return made
+  }
+
+  it('covers the next sign-in: it goes at once with no token, and no check starts', async () => {
+    const { gate, resets } = await refusedOnce(300)
+    expect(resets()).toBe(0)
+
+    const next = gate.next()
+    expect(gate.holding()).toBe(false)
+    expect(await next).toBe('')
+    expect(resets()).toBe(0)
+  })
+
+  it('starts no check when the person is back in the form', async () => {
+    const { gate, resets } = await refusedOnce(300)
+
+    gate.wake()
+    gate.wake()
+    expect(resets()).toBe(0)
+  })
+
+  it('covers each try the Worker says it does, and the check starts after the last', async () => {
+    const { gate, resets, answer } = await refusedOnce(300)
+    for (let i = 0; i < 3; i += 1) {
+      const sent = await gate.next()
+      expect(sent).toBe('')
+      gate.explain(answer(401, 250), sent)
+    }
+    expect(resets()).toBe(0)
+
+    // The Worker covered this one and says nothing about the next.
+    const last = await gate.next()
+    gate.explain(answer(401), last)
+    expect(resets()).toBe(1)
+    void outcome(gate.next())
+    expect(gate.holding()).toBe(true)
+  })
+
+  it('covers no other send: creating an account, a reset link and the confirm link need a check', async () => {
+    let signingIn = true
+    const { gate, widget, resets } = await refusedOnce(300, () => signingIn)
+    signingIn = false
+
+    gate.wake()
+    expect(resets()).toBe(1)
+    const sent = outcome(gate.next())
+    expect(gate.holding()).toBe(true)
+    widget.pass('token-2')
+    expect((await sent).token).toBe('token-2')
+  })
+
+  it("runs out on this browser's clock ten seconds before the Worker's", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const start = Date.parse('2026-10-30T09:00:00Z')
+    vi.setSystemTime(start)
+    const { gate, resets } = await refusedOnce(300)
+
+    vi.setSystemTime(start + 289_000)
+    gate.wake()
+    expect(resets()).toBe(0)
+
+    vi.setSystemTime(start + 291_000)
+    gate.wake()
+    expect(resets()).toBe(1)
+  })
+
+  it('is no cover when only a few seconds are left', async () => {
+    const { gate, resets } = await refusedOnce(8)
+
+    expect(resets()).toBe(1)
+    void outcome(gate.next())
+    expect(gate.holding()).toBe(true)
+  })
+
+  it('ends when the Worker asks for the check again, and the send goes again with a token', async () => {
+    const { gate, widget, resets, answer } = await refusedOnce(300)
+    const sent = await gate.next()
+    expect(sent).toBe('')
+
+    expect(gate.checkAgain(answer(403), sent)).toBe(true)
+    expect(resets()).toBe(1)
+    const again = outcome(gate.next())
+    expect(gate.holding()).toBe(true)
+    widget.pass('token-2')
+    expect((await again).token).toBe('token-2')
+  })
+
+  it('sends nothing again for a refused send that carried a token', async () => {
+    const { gate, widget, answer } = await makeGate({ signingIn: () => true })
+    widget.pass('token-1')
+    const sent = await gate.next()
+
+    expect(gate.checkAgain(answer(403), sent)).toBe(false)
+  })
+
+  it("sends nothing again for an answer that is not the check's", async () => {
+    const { gate, resets, answer } = await refusedOnce(300)
+    const sent = await gate.next()
+
+    expect(gate.checkAgain(answer(401, 100), sent)).toBe(false)
+    expect(gate.checkAgain(answer(429), sent)).toBe(false)
+    expect(gate.checkAgain(answer(503), sent)).toBe(false)
+    expect(gate.checkAgain(new Error('offline'), sent)).toBe(false)
+    expect(resets()).toBe(0)
+  })
+
+  it('keeps the cover through an answer that says nothing about it, such as a limit reached', async () => {
+    const { gate, resets, answer } = await refusedOnce(300)
+    const sent = await gate.next()
+
+    gate.explain(answer(429), sent)
+    expect(resets()).toBe(0)
+    expect(await gate.next()).toBe('')
+  })
+
+  it('sends a token Cloudflare handed over meanwhile along with a covered try', async () => {
+    const { gate, widget, resets } = await refusedOnce(300)
+    // Cloudflare fetched the next token by itself, as after the old one expired.
+    gate.onStatus('expired')
+    widget.pass('token-2')
+
+    expect(await gate.next()).toBe('token-2')
+    expect(resets()).toBe(0)
+  })
+
+  it('ends once the sign-in goes through', async () => {
+    const { gate, resets } = await refusedOnce(300)
+
+    gate.signedIn()
+    gate.wake()
+    expect(resets()).toBe(1)
   })
 })

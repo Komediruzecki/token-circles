@@ -23,6 +23,18 @@
  *   so the next press gets its token; only a check that has run for a minute is started over.
  * - A token that expires unused is dropped, and Cloudflare fetches the next one (Turnstile.tsx).
  *
+ * A solved check covers the password sign-in tries after it for five minutes
+ * (worker/src/login-check.ts). A wrong password after a token the Worker took says for how many
+ * seconds (`checkValidFor` on its 401), and until ten seconds before then (this browser's clock and
+ * the answer's travel time) a sign-in from this form goes at once with no token, no check starts,
+ * not even when the person is back in the form, and so no box comes back. The form says which
+ * sends are sign-ins (`signingIn`); creating an account, a reset link and the confirm link always
+ * need a check. A 401 that says nothing about it ends the cover (the Worker covered its last try),
+ * and so does a sign-in that went through (`signedIn`). When the Worker asks for the check again
+ * for a try that went out on the cover alone (its 403), the cover ends, the check starts, and the
+ * form sends that sign-in again with the next token (`checkAgain`): the box comes back for someone
+ * Cloudflare asks to click, and the sign-in goes by itself for everyone else.
+ *
  * The captcha's refusals mark no field. They are said in the form's notice:
  * - a widget that cannot run (blocked, failed, an unsupported browser) says what to fix, before
  *   anything is sent;
@@ -53,6 +65,17 @@ const TOKEN_WAIT_MS = 20000
 /** How long a check may run without an answer before a hold that times out starts it over. */
 const STALE_CHECK_MS = 60000
 
+/** How long before the Worker's end of a solved check this form stops counting on it. */
+const COVER_MARGIN_MS = 10000
+
+export interface CaptchaGateOptions {
+  /**
+   * True while the form's next send is a password sign-in: the one send a check solved for a wrong
+   * password covers afterwards. Left out by a form that never signs in.
+   */
+  signingIn?: () => boolean
+}
+
 export interface CaptchaGate {
   /** The token held now, '' when there is none. */
   token: () => string
@@ -76,21 +99,30 @@ export interface CaptchaGate {
   /** Ends a send that holds for its token without a word: the form switched to another mode. */
   cancel: () => void
   /**
-   * The token for the next request: the one held, or the next one. Throws the refusal to show, or
-   * NOT_SENT when the send should end without a word (Cloudflare asks for a tick, a newer send, a
-   * cancel, the widget gone).
+   * The token for the next request: the one held, or the next one. '' for a sign-in a solved check
+   * still covers, unless a token is in hand. Throws the refusal to show, or NOT_SENT when the send
+   * should end without a word (Cloudflare asks for a tick, a newer send, a cancel, the widget gone).
    */
   next: () => Promise<string>
   /**
    * A send's failure as the form says it: a 403 is the captcha's, in its words. Call it in the
    * send's `catch` with the token that send took from `next()`, or `undefined` if it took none.
-   * The send that took the last token starts the next check at once when it fails; an older one
-   * that fails late leaves the widget to the newer send that used it or holds for it.
+   * The send that took the last token starts the next check at once when it fails, unless the
+   * Worker says the solved check covers the next sign-in; an older one that fails late leaves the
+   * widget to the newer send that used it or holds for it.
    */
   explain: (error: unknown, token: string | undefined) => unknown
+  /**
+   * For a sign-in that went out on a solved check alone (`next()` gave ''), refused with the
+   * Worker's 403: the check covers nothing now. Ends the cover, starts the check, and says true:
+   * the form sends the sign-in again with the token `next()` gives it next.
+   */
+  checkAgain: (error: unknown, token: string | undefined) => boolean
+  /** The sign-in went through: the solved check has done its work, here as on the Worker. */
+  signedIn: () => void
 }
 
-export function createCaptchaGate(): CaptchaGate {
+export function createCaptchaGate(options: CaptchaGateOptions = {}): CaptchaGate {
   const [token, setToken] = createSignal('')
   const [status, setStatus] = createSignal<TurnstileStatus>(
     turnstileEnabled ? 'loading' : 'disabled'
@@ -103,8 +135,15 @@ export function createCaptchaGate(): CaptchaGate {
   let checkStartedAt = Date.now()
   /** The token the latest send took: only that send's failure starts the next check. */
   let lastIssued: string | undefined
+  /** Until when (this browser's clock) a solved check covers the next sign-in; 0 when it does not. */
+  let coveredUntil = 0
+  /** The latest send was a sign-in that went out on the solved check alone, with no token. */
+  let lastCovered = false
 
   const asking = () => status() === 'interactive'
+
+  /** The form's next send is a sign-in that a solved check still covers. */
+  const covered = () => (options.signingIn?.() ?? false) && Date.now() < coveredUntil
 
   /** The widget handed over a token and it went out with a send: a new check is due. */
   const lastTokenSpent = () => token() === '' && status() === 'solved'
@@ -143,7 +182,7 @@ export function createCaptchaGate(): CaptchaGate {
       else hold?.end(NOT_SENT)
     },
     wake: () => {
-      if (lastTokenSpent()) rearm()
+      if (lastTokenSpent() && !covered()) rearm()
     },
     cancel: () => {
       hold?.end(NOT_SENT)
@@ -154,6 +193,15 @@ export function createCaptchaGate(): CaptchaGate {
       hold?.end(NOT_SENT)
       // The form takes no submit while the box waits; this covers a send started some other way.
       if (asking()) throw NOT_SENT
+      // A wrong password a moment ago, and the check solved for it covers this try too: nothing to
+      // wait for, and no new check. A token Cloudflare handed over meanwhile goes along.
+      if (covered()) {
+        const inHand = token()
+        setToken('')
+        lastIssued = inHand
+        lastCovered = inHand === ''
+        return inHand
+      }
       if (captchaIsStuck(status())) throw refusal()
       if (lastTokenSpent()) rearm()
       let issued = token()
@@ -189,6 +237,7 @@ export function createCaptchaGate(): CaptchaGate {
       // A token is good for one request: this one is going, so the form holds none until the next.
       setToken('')
       lastIssued = issued
+      lastCovered = false
       return issued
     },
     explain: (error, sent) => {
@@ -196,8 +245,29 @@ export function createCaptchaGate(): CaptchaGate {
       // token than the latest is not the widget's news: a newer send has used the check since, or
       // holds for the one it started, and a reset would bring Cloudflare's box up beside it.
       const last = sent !== undefined && sent === lastIssued
-      if (error !== NOT_SENT && last && lastTokenSpent()) rearm()
+      if (error !== NOT_SENT && last) {
+        const seconds = error instanceof ApiError ? error.checkValidFor : undefined
+        // The Worker says how long the check solved for this sign-in covers the next one. A 401 or
+        // 403 that does not say so means nothing covers it; any other failure leaves it as it was.
+        if (seconds !== undefined) coveredUntil = Date.now() + seconds * 1000 - COVER_MARGIN_MS
+        else if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+          coveredUntil = 0
+        }
+        if (lastTokenSpent() && !covered()) rearm()
+      }
       return error instanceof ApiError && error.status === 403 ? refusal() : error
+    },
+    checkAgain: (error, sent) => {
+      const onTheCoverAlone = sent === '' && sent === lastIssued && lastCovered
+      if (!onTheCoverAlone || !(error instanceof ApiError) || error.status !== 403) return false
+      coveredUntil = 0
+      lastCovered = false
+      if (lastTokenSpent()) rearm()
+      return true
+    },
+    signedIn: () => {
+      coveredUntil = 0
+      lastCovered = false
     },
   }
 }

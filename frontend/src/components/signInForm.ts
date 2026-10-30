@@ -17,6 +17,9 @@
  *   for an address that had an account already.
  * - A limit reached (429) is said in the route's words, which say when to try again. A request
  *   the captcha stopped is said in the captcha's (captchaGate.ts). Neither marks a field.
+ * - After a wrong password, the check solved for it covers the next sign-in tries for a while
+ *   (captchaGate.ts): they go with no token. One the Worker then asks a check for goes again by
+ *   itself once Cloudflare's check has a token, so the cover never costs a right password its try.
  * - Signing in reloads into the app, and the button stays busy until the page goes.
  */
 import {
@@ -119,7 +122,18 @@ export function createSignInForm(options: {
           await api.register(email, values.password, token)
           return { kind: 'check-inbox', email }
         }
-        const login = await api.loginWithPassword(email, values.password, token)
+        let login: Awaited<ReturnType<typeof api.loginWithPassword>>
+        try {
+          login = await api.loginWithPassword(email, values.password, token)
+        } catch (error) {
+          // It went out on the check solved for a wrong password, and that covers nothing now (it
+          // ran out, another tab used it up, the network address changed): Cloudflare's check runs
+          // again, and this sign-in goes with its token, or steps back while the box waits.
+          if (!options.captcha.checkAgain(error, token)) throw error
+          token = await options.captcha.next()
+          login = await api.loginWithPassword(email, values.password, token)
+        }
+        options.captcha.signedIn()
         if (login?.emailConfirmed) noteAddressConfirmed()
         // The password was right; the session waits behind the second factor.
         if (login?.twofaRequired) return { kind: 'second-factor' }
