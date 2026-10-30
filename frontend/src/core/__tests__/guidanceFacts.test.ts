@@ -12,6 +12,7 @@ import {
   FULL_CUSHION_MONTHS,
   placeCircle,
 } from '../../../../shared/guidance/circles'
+import { circleQuestions } from '../../../../shared/guidance/circleView'
 import {
   balanceMoves,
   CARD_PAYMENT_MONTHS,
@@ -283,6 +284,42 @@ describe('what is needed every month', () => {
     expect(against([{ ...najam, kind: 'housing' }, eatingOut, salary])).toBe('needs')
     expect(against([{ ...najam, essential: 1 }, eatingOut, salary])).toBe('needs')
     expect(against([najam, { ...eatingOut, essential: 1 }, salary])).toBe('needs')
+  })
+
+  it('leaves out what is filed under a category that can take no kind: spent, but never counted as needed', () => {
+    // An expense filed under Salary, an income category: nothing can mark it needed (only an
+    // expense category stores `essential`), and the essentials question does not list it.
+    const underSalary = [1, 2, 3].map((n) => entry(`${ago(n)}-08`, { amount: 60, category_id: 9 }))
+    const facts = guidanceFacts(
+      input({ transactions: [...transactions, ...underSalary], categories: kinds })
+    )
+    expect(facts.spending).toBeCloseTo(940, 6)
+    // Groceries 400, the gym 30, Konzum 120 and the 80 with no category, as before.
+    expect(facts.essentials).toBeCloseTo(630, 6)
+    expect(facts.unsure).toEqual({ categories: 1, uncategorised: 80, all: false })
+
+    // With it the only spending nothing says anything about, the circles ask nothing.
+    const sorted = [
+      { id: 1, name: 'Groceries', type: 'expense', kind: 'groceries' },
+      { id: 9, name: 'Salary', type: 'income' },
+    ]
+    const only = guidanceFacts(
+      input({
+        categories: sorted,
+        transactions: [1, 2, 3].flatMap((n) => [
+          entry(`${ago(n)}-01`, { type: 'income', amount: 3000, category_id: 9 }),
+          entry(`${ago(n)}-02`, { amount: 400, category_id: 1 }),
+          entry(`${ago(n)}-03`, { amount: 60, category_id: 9 }),
+        ]),
+      })
+    )
+    expect(only.essentials).toBeCloseTo(400, 6)
+    expect(only.unsure).toEqual({ categories: 0, uncategorised: 0, all: false })
+    for (const circle of [3, 4] as const) {
+      expect(
+        circleQuestions(circle, only, { kindsAsked: false, current: circle, gate: false })
+      ).not.toContain('essentials')
+    }
   })
 })
 

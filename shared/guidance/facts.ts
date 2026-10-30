@@ -15,7 +15,9 @@
  * - **Essential spending** is spending in the categories needed every month (kinds.ts
  *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
  *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
- *   `unsure` says how much was counted that way. When all of it was, the needed spending is what
+ *   `unsure` says how much was counted that way. An expense filed under a category that can take
+ *   no kind (an income category; kinds.ts `takesEssential`) is spending but never needed: nothing
+ *   can mark it, and the essentials question does not list it. When all of it was, the needed spending is what
  *   is spent, and the cushion says so (`Cushion.against`; guidance.md 3.1, "all spending, labelled
  *   as such").
  * - **Balances** are read as they stand today (`accountsToday`): the stored balance holds every
@@ -448,7 +450,8 @@ function sumWindow(
   const amount = (entry: FactsEntry) => baseAmount(entry);
   const flows = flowsOf(entries, amount);
   const support = new Set(input.answers?.supportCategoryIds ?? []);
-  const verdicts = new Map<number, ReturnType<typeof essentialOf> | null>();
+  // 'outside': a category that can be marked needed never (kinds.ts `takesEssential`).
+  const verdicts = new Map<number, ReturnType<typeof essentialOf> | 'outside' | null>();
   const kinds = new Map<number, Kind | null>();
   const sums: WindowSums = {
     months: months.length,
@@ -494,12 +497,23 @@ function sumWindow(
     add(sums.outBy, id, spent);
     if (!verdicts.has(id)) {
       const category = lookup(id);
-      verdicts.set(id, category ? essentialOf(category, lookup) : null);
+      verdicts.set(
+        id,
+        !category
+          ? null
+          : takesEssential(category, lookup)
+            ? essentialOf(category, lookup)
+            : 'outside'
+      );
       kinds.set(id, category ? effectiveKind(category, lookup) : null);
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
     const verdict = verdicts.get(id);
+    // Filed under a category that can take no kind, an income category: spending, but nothing
+    // can mark it needed and the essentials question does not list it, so it counts neither as
+    // needed nor among what nothing said anything about.
+    if (verdict === 'outside') continue;
     // A category the profile no longer has says nothing about its kind: needed, as no kind is.
     if (!verdict || verdict.essential) sums.essentials += spent;
     if (!verdict || verdict.via === 'no-kind') {

@@ -1492,6 +1492,15 @@ check')` first, as the cushion and debt cases do.
   ``new RegExp(`\\b${place}\\b`)`` for each region, the one new lint warning on the branch
   (security/detect-non-literal-regexp). It now splits the why into words and looks for the place
   among them. The mutations that put "the US" or "EU households" into a why still fail it.
+- **Spending filed under an income category is no longer counted as needed** (`shared/guidance/facts.ts`).
+  An expense under a category that can take no kind (an income category; transfer and account
+  categories were already left out as money moved) counted as needed by default and as one of the
+  categories nothing said anything about. Nothing can mark such a category needed, and since review
+  1 the essentials question does not list it, so the default could never be changed. It now counts
+  as spending only. What the circles ask changes with it: where such a category was the only one
+  counted as needed by default, circles 3 and 4 no longer ask which categories are needed.
+- **Tests:** `guidanceFacts.test.ts` (60 a month under Salary: spending 940, needed 630, one category
+  unsure; with it the only unsure one, circles 3 and 4 ask nothing). Fails before the change.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
