@@ -12,8 +12,8 @@
  */
 import { env, SELF } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { signState } from '../src/auth';
 import { fetchSettled } from './helpers/after-answer';
+import { startGoogleSignIn } from './helpers/google';
 import { sessionCookie, unconfirmedSessionCookie } from './helpers/session';
 
 const API = 'https://api.example.com';
@@ -186,10 +186,12 @@ async function signInWithGoogle(email: string, sub: string): Promise<void> {
     email_verified: 'true',
     exp: String(Math.floor(Date.now() / 1000) + 3600),
   };
-  const state = await signState({ returnTo: APP, ts: Date.now() }, env.JWT_SECRET);
+  // Started the way the app starts it, so the callback gets the start's cookie back.
+  const { state, cookie } = await startGoogleSignIn(APP);
+  expect(cookie).not.toBeNull();
   const res = await fetchSettled(
     `${API}/api/auth/google/callback?code=test-code&state=${encodeURIComponent(state)}`,
-    { redirect: 'manual' }
+    { redirect: 'manual', headers: { Cookie: cookie! } }
   );
   expect(res.status).toBe(302);
 }
