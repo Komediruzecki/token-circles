@@ -1614,6 +1614,19 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `circles-layout.spec.ts` opens Solid ground with Enter and with a click, in light and
   dark, and reads the focused heading's outline style. Fails before the change ("solid", from the
   keyboard, light).
+- **Spending under a deleted category counts as spending with no category**
+  (`shared/guidance/facts.ts`). Deleting a category today clears it from its entries in both
+  runtimes (the Worker's `deleteProfileCategory`, local-first's `deleteCategory`, since #384 in July
+  2026). Before that fix both deleted the row alone, and nothing has cleared the entries left
+  pointing at it since, in D1 or in IndexedDB. The guidance counted that spending as needed, as
+  sorted, and as a category nothing said anything about: Breathing room and Solid ground then asked
+  which categories are needed every month, a question that cannot list a category that is gone.
+  It now counts as spending with no category: needed and among what nothing said anything about,
+  as before, but not sorted, counted with the entries without a category, and not a category to
+  ask about.
+- **Tests:** `guidanceFacts.test.ts`: the same spending under a deleted category and under none
+  gives the same facts, and with it the only spending nothing says anything about, the circles
+  ask nothing. Fails before the change.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

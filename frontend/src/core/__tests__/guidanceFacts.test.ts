@@ -321,6 +321,52 @@ describe('what is needed every month', () => {
       ).not.toContain('essentials')
     }
   })
+
+  it('counts spending under a deleted category as spending with no category', () => {
+    // Before the July 2026 fix (#384), deleting a category in either runtime left its entries
+    // pointing at it; today both runtimes clear the category instead. Nothing marks a category
+    // that is gone needed, and the essentials question cannot list it: it is no category.
+    const underGone = [1, 2, 3].map((n) => entry(`${ago(n)}-08`, { amount: 60, category_id: 42 }))
+    const cleared = [1, 2, 3].map((n) => entry(`${ago(n)}-08`, { amount: 60, category_id: null }))
+    const gone = guidanceFacts(
+      input({ transactions: [...transactions, ...underGone], categories: kinds })
+    )
+    const none = guidanceFacts(
+      input({ transactions: [...transactions, ...cleared], categories: kinds })
+    )
+    // Needed, and among what nothing said anything about, as the 80 with no category is; not a
+    // category nothing said anything about, as Konzum is.
+    expect(gone.essentials).toBeCloseTo(690, 6)
+    expect(gone.unsure).toEqual({ categories: 1, uncategorised: 140, all: false })
+    // Not sorted, and counted with the entries without a category.
+    expect(gone.sortedShare).toBeCloseTo(none.sortedShare!, 6)
+    expect(gone.uncategorisedEntries).toBe(none.uncategorisedEntries)
+    expect(gone.windowCategories?.some((category) => category.id === 42)).toBe(false)
+    expect(gone).toEqual(none)
+
+    // With it the only spending nothing says anything about, the circles do not ask which
+    // categories are needed: there is none to tick.
+    const sorted = [
+      { id: 1, name: 'Groceries', type: 'expense', kind: 'groceries' },
+      { id: 9, name: 'Salary', type: 'income' },
+    ]
+    const only = guidanceFacts(
+      input({
+        categories: sorted,
+        transactions: [1, 2, 3].flatMap((n) => [
+          entry(`${ago(n)}-01`, { type: 'income', amount: 3000, category_id: 9 }),
+          entry(`${ago(n)}-02`, { amount: 400, category_id: 1 }),
+          entry(`${ago(n)}-03`, { amount: 60, category_id: 42 }),
+        ]),
+      })
+    )
+    expect(only.unsure).toEqual({ categories: 0, uncategorised: 60, all: false })
+    for (const circle of [3, 4] as const) {
+      expect(
+        circleQuestions(circle, only, { kindsAsked: false, current: circle, gate: false })
+      ).not.toContain('essentials')
+    }
+  })
 })
 
 describe('money moved between accounts', () => {

@@ -13,8 +13,9 @@
  *   as spending, not as needed (guidance.md 3.1, "transfers excluded"). **Own income** leaves out
  *   the categories the person marks as support they expect to stop.
  * - **Essential spending** is spending in the categories needed every month (kinds.ts
- *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category
- *   counts as needed too: like a category with no kind, it errs towards a larger cushion, and
+ *   `essentialOf`: the person's choice, else the kind, else needed). Spending with no category,
+ *   or under a category the profile no longer has, counts as needed too: like a category with no
+ *   kind, it errs towards a larger cushion, and
  *   `unsure` says how much was counted that way. An expense filed under a category that can take
  *   no kind (an income category; kinds.ts `takesEssential`) is spending but never needed: nothing
  *   can mark it, and the essentials question does not list it. When all of it was, the needed spending is what
@@ -451,7 +452,7 @@ function sumWindow(
   const flows = flowsOf(entries, amount);
   const support = new Set(input.answers?.supportCategoryIds ?? []);
   // 'outside': a category that can be marked needed never (kinds.ts `takesEssential`).
-  const verdicts = new Map<number, ReturnType<typeof essentialOf> | 'outside' | null>();
+  const verdicts = new Map<number, ReturnType<typeof essentialOf> | 'outside'>();
   const kinds = new Map<number, Kind | null>();
   const sums: WindowSums = {
     months: months.length,
@@ -481,12 +482,16 @@ function sumWindow(
     }
     if (entry.type !== 'expense') continue;
     const spent = Math.abs(amount(entry));
+    // Filed under a category the profile no longer has: no category. Before #384 (July 2026),
+    // deleting a category in either runtime left its entries pointing at it; both clear it now.
+    // Nothing can mark a category that is gone, and the essentials question cannot list it.
+    const filed = isId(id) && lookup(id) !== undefined;
     const month = sums.byMonth.get(monthOf(entry.date)) ?? { spent: 0, byCategory: new Map() };
     month.spent += spent;
-    const key = isId(id) ? id : 0;
+    const key = filed ? id : 0;
     month.byCategory.set(key, (month.byCategory.get(key) ?? 0) + spent);
     sums.byMonth.set(monthOf(entry.date), month);
-    if (!isId(id)) {
+    if (!filed) {
       sums.uncategorisedEntries += 1;
       sums.uncategorised += spent;
       sums.essentials += spent;
@@ -496,27 +501,22 @@ function sumWindow(
     sums.sorted += spent;
     add(sums.outBy, id, spent);
     if (!verdicts.has(id)) {
-      const category = lookup(id);
+      const category = lookup(id)!;
       verdicts.set(
         id,
-        !category
-          ? null
-          : takesEssential(category, lookup)
-            ? essentialOf(category, lookup)
-            : 'outside'
+        takesEssential(category, lookup) ? essentialOf(category, lookup) : 'outside'
       );
-      kinds.set(id, category ? effectiveKind(category, lookup) : null);
+      kinds.set(id, effectiveKind(category, lookup));
     }
     const kind = kinds.get(id);
     if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
-    const verdict = verdicts.get(id);
+    const verdict = verdicts.get(id)!;
     // Filed under a category that can take no kind, an income category: spending, but nothing
     // can mark it needed and the essentials question does not list it, so it counts neither as
     // needed nor among what nothing said anything about.
     if (verdict === 'outside') continue;
-    // A category the profile no longer has says nothing about its kind: needed, as no kind is.
-    if (!verdict || verdict.essential) sums.essentials += spent;
-    if (!verdict || verdict.via === 'no-kind') {
+    if (verdict.essential) sums.essentials += spent;
+    if (verdict.via === 'no-kind') {
       sums.noKind.add(id);
       sums.unsureSpent += spent;
     }
