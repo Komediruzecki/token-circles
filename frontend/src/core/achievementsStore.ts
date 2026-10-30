@@ -57,11 +57,14 @@ export function isSelfHosted(): boolean {
  * cushion step; the badges do not use them.
  */
 export interface AchievementsSnapshot {
+  /** The profile the rows are of: every list is filtered to it (`ownRows`). */
+  profileId: number
   transactions: Transaction[]
   budgets: EvaluateInput['budgets']
   goals: EvaluateInput['goals']
   importLogs: EvaluateInput['importLogs']
-  loans: EvaluateInput['loans']
+  /** With their ids and names, which the circles' debt check names. */
+  loans: SnapshotLoan[]
   categories: Array<{ id: number; name: string }>
   bills: Bill[]
   /** Null when they could not be read: the badges are worked out all the same. */
@@ -70,6 +73,9 @@ export interface AchievementsSnapshot {
   /** YYYY-MM-DD the evaluation used, so the page and the badges agree on "today". */
   today: string
 }
+
+/** A loan as the badges read it, with the id and the name the circles' debt check names it by. */
+export type SnapshotLoan = EvaluateInput['loans'][number] & { id: number; name: string }
 
 const state = createRoot(() => {
   const [unlocks, setUnlocks] = createSignal<UnlockRecord[]>([])
@@ -178,7 +184,7 @@ export function refreshAchievements(): Promise<UnlockRecord[]> {
  * A loan deleted between the list and its own read (in another tab, say) answers 404. It is
  * simply not counted, and the 404 is not logged as an error: nothing went wrong.
  */
-async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
+async function loadLoans(profileId: number): Promise<SnapshotLoan[]> {
   const list = ownRows(await api.getLoans().catch(() => []), profileId)
   if (list.length === 0) return []
   const details = await Promise.all(
@@ -189,6 +195,8 @@ async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
   return details
     .filter((d): d is NonNullable<typeof d> => d !== null)
     .map((d) => ({
+      id: d.id,
+      name: d.name,
       principal: d.principal,
       interest_rate: d.interest_rate,
       start_date: d.start_date,
@@ -247,6 +255,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
   state.setStreak(evaluation.streak)
   state.setDismissedAdvice(dismissed)
   state.setSnapshot({
+    profileId,
     transactions,
     budgets,
     goals,

@@ -154,6 +154,11 @@ export const BillSchema = z.object({
   last_paid_date: z.string().nullable(),
   next_due_date: z.string().nullable(),
   profile_id: z.number(),
+  // Both runtimes list these; the circles read them for the yearly bills (shared/guidance/facts.ts).
+  // Optional, so a row from before them still parses, and listed so z.object keeps them.
+  frequency: z.string().nullable().optional(),
+  is_active: z.number().or(z.boolean()).nullable().optional(),
+  type: z.string().nullable().optional(),
 })
 
 export const SettingsSchema = z.record(z.string(), z.unknown())

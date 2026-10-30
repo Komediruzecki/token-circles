@@ -86,6 +86,7 @@ function fourMonths(over: Partial<AchievementsSnapshot> = {}): AchievementsSnaps
     row(`${monthsAgo(n)}-09`, { amount: -(60 + 9 * n), category_id: 1 }),
   ])
   return {
+    profileId: 1,
     transactions,
     budgets: [],
     goals: [],
@@ -219,6 +220,8 @@ describe('with the card on the account', () => {
         ],
         loans: [
           {
+            id: 1,
+            name: 'Car loan',
             principal: 1000,
             interest_rate: 5,
             start_date: '2025-01-01',

@@ -373,6 +373,12 @@ export interface Bill {
   last_paid_date: string | null
   next_due_date: string | null
   profile_id: ProfileId
+  /** weekly, biweekly, monthly or yearly. */
+  frequency?: string | null
+  /** 0 or false when paused. */
+  is_active?: number | boolean | null
+  /** bill or subscription; none reads as bill. */
+  type?: string | null
 }
 
 // ============ SETTINGS ============

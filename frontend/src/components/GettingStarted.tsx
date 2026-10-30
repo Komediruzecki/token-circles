@@ -17,6 +17,7 @@
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import { nextSteps } from '../../../shared/orientation'
 import { snapshot } from '../core/achievementsStore'
+import { afterPaint } from '../core/afterPaint'
 import { getPage } from '../core/appStore'
 import {
   gettingStartedRecord,
@@ -38,18 +39,6 @@ function stepsFor(snap: AchievementsSnapshot): OrientationStep[] {
 export function currentNextSteps(): OrientationStep[] {
   const snap = snapshot()
   return snap === null ? [] : stepsFor(snap)
-}
-
-/**
- * Run `fn` once the browser has painted what is on screen now: a frame, then a task. Falls back to
- * a task where there are no frames.
- */
-function afterPaint(fn: () => void): void {
-  if (typeof requestAnimationFrame === 'undefined') {
-    setTimeout(fn, 0)
-    return
-  }
-  requestAnimationFrame(() => setTimeout(fn, 0))
 }
 
 const ArrowIcon = (): JSX.Element => (

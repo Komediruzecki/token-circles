@@ -1133,6 +1133,21 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   with yearly bills, its place after the debts, met, not met and not known; a person in each circle
   and one past the seventh keep their place whatever the answer) and `guidanceExamples.test.ts` (the
   family in Leipzig sets EUR 64 a month aside for EUR 768 of yearly bills and stays in the fourth).
+- **Guidance store** (`frontend/src/core/guidance.ts`): region, facts and placement from the
+  achievements snapshot, the profile's holdings and its retirement settings, worked out after paint
+  and only while Progress or Dashboard is on screen, once for both pages. The store reads the
+  answers record and the withdrawal rate itself from `GET /api/settings`, again after each settings
+  write: a settings write starts no badge evaluation (`dataChangedEvent.ts`), so a copy carried in
+  the snapshot would stay as it was before every answer. Holdings come from
+  `GET /api/portfolio/holdings`, the profile's rows at what was paid, again after each portfolio
+  write; a reread that changes nothing works nothing out. `guidanceView()` answers null while the
+  view on hand is another profile's. The snapshot gains `profileId` and loans with `id` and `name`;
+  `BillSchema` keeps `frequency`, `is_active` and `type`, which `z.object` dropped; `afterPaint`
+  moves to `core/afterPaint.ts` for Getting started and the store.
+- **Tests:** `guidanceStore.test.ts` (nothing worked out off screen or for a page left before it
+  painted, once for both pages; a new evaluation, a settings write and a portfolio write each
+  followed; a profile switch answers nothing until the new profile's inputs are in; accounts that
+  did not load read as not known; the withdrawal rate where each runtime keeps the plan).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
