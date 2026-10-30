@@ -1536,6 +1536,13 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `circles-layout.spec.ts`, every circle at 320, 360, 390 and 1280: beside the name
   whenever name and pill fit with room to spare, under it at its start when they don't, never under
   the circle's line. Fails before the change (circle 1 at 320, the pill under the line).
+- **"Your next step" on Progress is set as a label** (`NextStepCard.module.css`). Progress gives the
+  card's label an h2, and the app sets every h2 in the display face, so it read in the serif while
+  Dashboard, the circle view and the mock use the spaced-out sans label. The label now inherits the
+  body face at either heading level.
+- **Tests:** `circles-layout.spec.ts`: the label on Progress (an h2) matches Dashboard's in face,
+  size, weight, case and spacing, and its face is the body's and the circle view's label's. Fails
+  before the change (Fraunces on Progress).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

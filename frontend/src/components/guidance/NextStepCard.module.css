@@ -40,6 +40,8 @@
   align-items: center;
   gap: 9px;
   margin: 0;
+  /* A label, not a heading to look at: on Progress it is an h2, which the app sets in the display face. */
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.16em;

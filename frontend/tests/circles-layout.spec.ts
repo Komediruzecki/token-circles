@@ -212,6 +212,47 @@ test.describe('The circles as drawn', () => {
     expect(seen.filter((s) => s.endsWith('under')).length).toBeGreaterThan(0)
   })
 
+  test('"Your next step" on Progress: the spaced-out sans label Dashboard and the circle view use', async ({
+    page,
+  }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    await page.setViewportSize(DESKTOP)
+    const label = async (selector: string) => {
+      const element = page.locator(selector).first()
+      await expect(element).toBeVisible({ timeout: 30_000 })
+      return element.evaluate((e) => {
+        const style = getComputedStyle(e)
+        return {
+          font: style.fontFamily,
+          size: style.fontSize,
+          weight: style.fontWeight,
+          caps: style.textTransform,
+          spaced: parseFloat(style.letterSpacing) > 0,
+          body: getComputedStyle(document.body).fontFamily,
+        }
+      })
+    }
+    const step = '[data-test-id="next-step-card"] [id]:is(h2, h3)'
+    await go(page, 'dashboard')
+    const dashboard = await label(`[data-test-id="dashboard-container"] ${step}`)
+    await go(page, 'progress')
+    // Progress gives the card an h2, which the app's headings set in the display face.
+    const progress = await label(`[data-tour="progress-next-step"] ${step}`)
+    expect(
+      await page
+        .locator(`[data-tour="progress-next-step"] ${step}`)
+        .first()
+        .evaluate((e) => e.tagName)
+    ).toBe('H2')
+    await go(page, 'progress/4')
+    const circle = await label('[data-test-id="circle-view"] header p')
+    expect(progress.font).toBe(progress.body)
+    expect(progress.font).toBe(circle.font)
+    expect(progress).toEqual(dashboard)
+    expect(progress).toMatchObject({ caps: 'uppercase', spaced: true })
+  })
+
   test('a link inside running text at phone width: a 48 px Change, and the lines as the paragraph spaces them', async ({
     page,
   }) => {
