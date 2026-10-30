@@ -236,24 +236,31 @@ function lookUpAddress(env: Env, email: string): Promise<AccountAtAddress | null
 }
 
 /**
- * A sign-up again, with the same password, at an address that still waits for its confirm link:
- * the account takes the hash this sign-up computed. Same password, new salt, so the sign-up's
+ * The password a sign-up sent, checked once after its answer whatever the address: against the
+ * hash of the account there when that account waits for its confirm link (`waiting`), and against
+ * DUMMY_PASSWORD_HASH for every other address (none, a new account, a confirmed one, a Google
+ * one), as a sign-in checks an address with no account. Every sign-up does the same work after
+ * its answer.
+ *
+ * A sign-up again with the same password, at an address that still waits for its confirm link,
+ * gives the account the hash this sign-up computed. Same password, new salt, so the sign-up's
  * marker (signup-marker.ts) matches the account and the fresh link signs this browser in. The
  * write is bound to the hash it checked and to the address still waiting, so a password set or an
  * address confirmed meanwhile is left as it is. Another password changes nothing.
  */
-async function takeSameSignUpPassword(
+async function checkSignUpPassword(
   env: Env,
-  account: AccountAtAddress,
+  waiting: AccountAtAddress | null,
   password: string,
   passwordHash: string
 ): Promise<void> {
-  const stored = account.password_hash;
-  if (!stored || !(await verifyPassword(password, stored))) return;
+  const stored = waiting?.password_hash ?? null;
+  const same = await verifyPassword(password, stored ?? DUMMY_PASSWORD_HASH);
+  if (!waiting || !stored || !same) return;
   await env.DB.prepare(
     'UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ? AND email_verified = 0'
   )
-    .bind(passwordHash, account.id, stored)
+    .bind(passwordHash, waiting.id, stored)
     .run();
 }
 
@@ -287,8 +294,8 @@ async function accountAt(
  * Confirm, the mail with the link that opens it; the Welcome comes once the address is confirmed
  * (welcome.ts). A password account waiting for its confirm link gets a fresh one, as Send the link
  * again would mail it, and keeps its password: typed again, the same password is stored with this
- * sign-up's hash (takeSameSignUpPassword). Any other address with an account gets a notice that
- * someone tried, and nothing else changes.
+ * sign-up's hash. Any other address with an account gets a notice that someone tried, and nothing
+ * else changes. Every address has its password checked once, the same way (checkSignUpPassword).
  *
  * `passwordHash` is the hash the route computed before its answer, for the sign-up marker.
  *
@@ -306,15 +313,14 @@ async function signUpAfterAnswer(
   const account = await accountAt(env, email, passwordHash).catch(() =>
     accountAt(env, email, passwordHash)
   );
-  if ('found' in account && emailUnconfirmed(account.found)) {
-    await takeSameSignUpPassword(env, account.found, password, passwordHash).catch((e: unknown) => {
-      console.error('Sign-up could not keep the same password:', e);
+  const waiting = 'found' in account && emailUnconfirmed(account.found) ? account.found : null;
+  await checkSignUpPassword(env, waiting, password, passwordHash).catch((e: unknown) => {
+    console.error('Sign-up could not check the password:', e);
+  });
+  if (waiting) {
+    await mailFreshConfirmLink(env, waiting.id, email, base, apiOrigin).catch((e: unknown) => {
+      console.error('Confirm link could not be sent again:', e);
     });
-    await mailFreshConfirmLink(env, account.found.id, email, base, apiOrigin).catch(
-      (e: unknown) => {
-        console.error('Confirm link could not be sent again:', e);
-      }
-    );
     return;
   }
   if ('found' in account) {

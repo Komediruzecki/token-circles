@@ -1823,11 +1823,15 @@ Changed:
     own outcome.
   - The marker matches the browser that set the account's current password. Signing up again at
     an address that waits, with the password the account has, stores that sign-up's hash in its
-    place before the fresh link is mailed (`takeSameSignUpPassword`:
+    place before the fresh link is mailed (`checkSignUpPassword`:
     `UPDATE ... WHERE id = ? AND password_hash = <the one checked> AND email_verified = 0`), so the
     browser that signed up last is the one the link signs in. With another password the account
     keeps its first one, and the first browser's marker is the one that matches. A new password
-    since the sign-up means a new hash, and no marker from before matches it.
+    since the sign-up means a new hash, and no marker from before matches it. Every sign-up runs
+    that one check after its answer, whatever the address: against the waiting account's hash, or
+    against `DUMMY_PASSWORD_HASH`, as a sign-in to an address with no account does, for a new
+    address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
+    check for every address.
   - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
     per IP). From the browser's `fm_email_link` marker it answers `{ waiting: 'confirm', email }`
     for an unspent, unexpired confirm link whose account still waits at that address, and
@@ -1860,7 +1864,9 @@ Changed:
     do, with the address kept. A change link keeps the form and its notice.
   - Tests: `worker/test/confirm-link-sign-in.test.ts` (42 new); the mail tests in
     `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
-    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers;
+    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
+    and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
+    each kind of address (1 new);
     `frontend/src/components/__tests__/finishSignUp.test.tsx` (14 new),
     `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
     `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
