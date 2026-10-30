@@ -1522,6 +1522,12 @@ check')` first, as the cushion and debt cases do.
   `guidanceLedger.test.ts` and `progressCircles.test.tsx` (the phrase once on row 4 and once in the
   view's head). Fail before the change. Mutation log: one equivalent mutant survives, the met early
   return removed, since a met check has no debt at the line to name.
+- **"Counts toward", spelled one way on Progress** (`frontend/src/core/achievements/advice.ts`). The
+  "Some entries have no category" card read "counts towards" one line above the advice card's
+  "Counts toward ...". The app's visible copy spells it "toward" 8 times and "towards" twice, so the
+  card now says "counts toward". The other "towards", the Goals page's subtitle, is not on Progress
+  and stays.
+- **Tests:** `advice.test.ts` reads the card's detail. Fails before the change.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

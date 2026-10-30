@@ -96,6 +96,11 @@ describe('buildAdvice', () => {
       })
     )
     expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1')
+    // Spelled as the circle line under it on Progress spells it ("Counts toward ..."), and as
+    // most of the app's copy does.
+    expect(cards.find((c) => c.kind === 'uncategorised')!.detail).toBe(
+      'Categorise them and this month counts toward "Named everything".'
+    )
   })
 
   it('warns a streak is at risk late in a month with too few entries', () => {
