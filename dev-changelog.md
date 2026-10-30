@@ -145,6 +145,16 @@ All notable changes to Token Circles are documented here. The format is based on
   `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
   `frontend/src/core/__tests__/apiError.test.ts` (9 new).
 
+### Progress
+
+- **The "no category" advice card says what its number counts.** `uncategorised()` in
+  `frontend/src/core/achievements/advice.ts` gave the card a bare count (`String(n)`), so "Worth a
+  look" showed a bold "1" beside the Transactions button with no unit, next to the streak card's
+  "2 entries to go". The figure now reads "1 entry to categorise" or "3 entries to categorise"
+  (through the same `plural()` as the streak card), and one entry gets the title "One entry has no
+  category" instead of "Some entries have no category". The card's id is unchanged, so a dismissal
+  still holds. Tests: `frontend/src/core/achievements/__tests__/advice.test.ts` (2 new, 2 updated).
+
 ## [5.17.2] — 2026-10-30
 
 ### Sign-in
