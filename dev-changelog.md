@@ -1607,6 +1607,71 @@ Changed:
 
 - **The savings rate shows the typical range where you live**, which is your target until you set your own.
 
+### Local-first
+
+- **A write never lands on a profile that does not exist, and rows that did are filed.** A local
+  workspace with no profile (the wizard's "Use local-only", then Skip before the "Name your space"
+  step; possibly also deleting every profile, before the Danger Zone disabled deleting the last one
+  in 3685f239 on 2026-07-20) wrote on profile 0: `IndexedDBAdapter.getCurrentProfileId()`
+  (`frontend/src/core/storage/idb.ts`) answered 0 when the `profiles` store was empty and
+  `finance_had_profiles` was set, and every writer that files a row through it
+  (`if (!data.profile_id)`, `writeProfileIdFromHeaders`, the import, category, tag and goal
+  handlers) stored that 0. Reads ask for `activeProfileId()` (`core/apiProfileScope.ts`), which is 1
+  when `currentProfileId` is unset, so an import reported "Imported 48 transactions", left 48 rows
+  on profile 0 and Transactions and Progress showed none; a reload could not help. The pieces date
+  from 9383fce7 (return 0 instead of creating "My Finances"), ca6e767c (Use local-only sets
+  `finance_had_profiles`, so no example seed) and 4e863bae (#378, explicit profile scopes). Outside
+  tests, `chooseLocalOnly` (`OnboardingWizard.tsx`) is what sets `finance_had_profiles` before any
+  profile exists; "Continue with no account" does not (it seeds the examples).
+  - **Guard**: with no profile at all, `getCurrentProfileId()` now makes one, as the Worker's
+    `ensureProfile` does, under the same name ("Personal Profile"), and makes it the active profile
+    (`currentProfileId`), so reads and writes name the same profile. `ensureAProfile()` reads and
+    adds in one read-write transaction that adds only to an empty store, so parallel requests, in
+    one tab or several, make one profile. The last profile can no longer be deleted (ceb43bb3), so
+    the "ghost profile" 9383fce7 avoided cannot come back. The setup wizard opens as before (the
+    workspace is still empty) and its "Name your space" step renames the profile, as it does for a
+    cloud signup.
+  - **The example seed and the guard agree.** `seedDemoProfiles()` used to set
+    `finance_had_profiles`, then add the three example profiles one transaction each, between other
+    writes. A request in that gap, from the same boot or a second tab, found the mark and an empty
+    store, and the guard made "Personal Profile" beside the examples; two tabs seeding at once each
+    added a set (main had that one too). The seed now adds the three profiles in one transaction
+    that runs only on an empty store (`claimExampleProfiles`), stops when the store already has a
+    profile, and sets the mark after that transaction. The seed's claim and the guard each decide
+    on an empty store inside one transaction, so the first to run wins and the other adds nothing.
+    The Danger Zone's reseed goes through the same claim.
+  - **Repair**: `frontend/src/core/storage/unfiledProfileRows.ts`, `fileUnfiledRows(db)`, runs on
+    every open of the database in `getDB()`, before any read or write gets the connection. Rows
+    decide: it counts rows on profile 0 in every store with a `by_profile` index (found from the
+    schema, so a new store is covered), in one read-only transaction, and with none it does
+    nothing, whatever per-profile settings sit on profile 0. Otherwise, in one read-write
+    transaction aborted on any failure, it counts again (another tab may have filed them; then it
+    stops without making a profile) and picks the profile: with no profile at all, a new "Personal
+    Profile", made active; when no profile holds a row, the open one (`currentProfileId`), else the
+    lowest id, passing over any that has its own `retirement_settings` when one on profile 0 moves
+    too; when a profile holds rows, or every empty one was passed over, a new "Recovered entries"
+    ("Recovered entries 2" when taken), with the active profile left alone. Only rows still on
+    profile 0 are rewritten, every other field and link kept (accounts, categories and transactions
+    move together, so their links stay within one profile). The settings `retirement_settings:0` and
+    `achievements:0` follow the rows to the same profile; a badge record (`achievements`) the
+    profile already has is kept and the one on profile 0 deleted, since it is worked out from the
+    rows. One load leaves nothing on profile 0, so the next one only counts. A failure is logged
+    with `console.warn` and the database opens anyway; the next load tries again. No IndexedDB
+    version bump.
+  - **Why a profile of their own when one is in use**: after an import showed nothing, the likely
+    next step was to make a profile and import the same statement again. Filing the old rows there
+    would count those transactions twice and put a second "Groceries" beside the first; a separate
+    profile doubles nothing and can be deleted from the Danger Zone.
+  - Tests, all in `frontend/src/core/storage/__tests__/`: `writesLandOnARealProfile.test.ts` (9: an
+    import, a hand-added transaction, an account, a category, the default categories, a goal and a
+    tag from an empty workspace are read back and leave no row on a missing profile; eight parallel
+    reads make one profile); `unfiledProfileRows.test.ts` (19: no profile, a profile in use, empty
+    profiles and the open one, a taken name, settings that never decide alone, follow the rows, never
+    replace a retirement plan and settle in one load, two tabs filing at once, a throw part way
+    through leaving everything as it was, no row lost, and a failing repair still opening the
+    database); `exampleSeedOnce.test.ts` (3: parallel requests in one tab, two tabs at once, and a
+    reseed under reads end with exactly the three example profiles).
+
 ### Sign-in
 
 - **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the
@@ -1626,6 +1691,57 @@ Changed:
   you signed in. Confirm your password (or a 2FA code) to add a passkey." (a full stop where an em
   dash was). Tests: `frontend/src/components/__tests__/PasskeySettings.test.tsx` (3 new: the field
   found by its label before and after it holds a value, with no placeholder; the reveal; the prompt).
+- **A solved Cloudflare check covers the next password sign-in tries for five minutes.**
+  Cloudflare's siteverify takes a Turnstile token once, and `POST /api/auth/login` verified one on
+  every try, so after a wrong password the form started the next check at once
+  (`captchaGate.explain`), and again on every focus back into the form (`wake`): a browser
+  Cloudflare asks to click got the box back before each try. Now a sign-in whose token Cloudflare
+  passed and which then fails on the password (either 401: wrong address or password, or an
+  account waiting for its confirm link, which is answered the same) leaves a login check and says
+  so: `checkValidForSeconds` in the 401 body and an HttpOnly cookie `fm_login_check`, host-only,
+  `Path=/api/auth/login`, `SameSite=Lax`, `Secure` outside development
+  (`worker/src/login-check.ts`). The value is `v1.<exp>.<id>.<mac>`. `exp` is when Cloudflare says
+  the check was solved plus `LOGIN_CHECK_SECONDS` (300): `verifyTurnstileDetailed` now returns
+  `challenge_ts` as `solvedAt`, capped at now, and a passed token whose answer has no readable
+  `challenge_ts` leaves no check (no seconds in the 401, no cookie). That keeps the check's end
+  with the token's own expiry, when the widget fetches its next token anyway. `id` is 16 random
+  bytes. `mac` is HMAC-SHA256 over `login-check.v1.<exp>.<id>.<CF-Connecting-IP>` with a key
+  derived from `JWT_SECRET` by HKDF-SHA256 under the label
+  `token-circles login-check v1 env=<APP_ENV>`, so no session, OAuth state, email-link marker or
+  capability verifies as one, and a check left on dev never verifies on prod, even if the two were
+  ever given the same `JWT_SECRET`. The address is signed, not stored. A try that carries a good
+  check and no token (or one Cloudflare refused) is counted in `rate_limits` under
+  `login-check:<id>` by one statement,
+  `INSERT ... ON CONFLICT DO UPDATE ... WHERE count < 4 RETURNING count`, which caps one solved
+  check at `LOGIN_CHECK_TRIES` (5) tries, its token's try included, across every tab sharing the
+  cookie; the bucket expires with the check. A token Cloudflare passes always wins and starts a
+  new check, so the right password with a passed token signs in whatever check comes with it.
+  Everything else fails closed: a check that ran out, was changed, comes from another address, is
+  used up or cannot be read covers nothing (the same 403 as before; the auth log reason gains
+  `:check`) and that answer clears it. A sign-in that reaches a session or the second factor ends
+  every check the request carried that verifies: one upsert per check sets its count in
+  `rate_limits` to the most it counts (`useUpLoginChecks`), so a copy of the value covers nothing
+  afterwards, and the answer clears the cookie. A request without `CF-Connecting-IP` neither
+  leaves nor takes a check. With `TURNSTILE_SECRET` unset, local development stays open with no
+  check and every other environment answers 503 as before, check or not. Creating an account, a
+  reset link, both confirm-link resends, the sign-in code and the support form still call
+  `verifyTurnstileDetailed` and need a token every time, and the per-address (30) and per-account
+  (10) limits per 900 s are unchanged and count covered tries.
+  The cookie holds the check because sessions, the 2FA challenge and the email-link marker already
+  travel that way: page scripts never see it, and the form keeps only the seconds left, in memory.
+  `ApiError.checkValidFor` reads `checkValidForSeconds` (finite and above 0 only).
+  `createCaptchaGate({ signingIn })` takes whether the next send is a password sign-in (the sign-in
+  screen and the Sign In window pass `mode() === 'login'`). After a 401 with `checkValidFor`, and
+  until 10 s before the Worker's end on this browser's clock, `next()` gives `''` at once (or a
+  token Cloudflare handed over meanwhile) and neither `explain` nor `wake` starts a check. A 401 or
+  403 without it ends the cover. A covered try the Worker answers 403 (`checkAgain`) ends the cover
+  and starts the check, and `signInForm` sends that sign-in again with the next token: by itself
+  when Cloudflare passes without a click, or after a tick when the box comes up, so a check that
+  stopped covering never costs a right password its try. `signedIn()` ends the cover once a
+  sign-in goes through. Tests: `worker/test/login-check.test.ts` (35, siteverify stubbed),
+  `frontend/src/components/__tests__/captchaGate.test.ts` (12 new),
+  `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
+  `frontend/src/core/__tests__/apiError.test.ts` (9 new).
 
 ## [5.17.2] — 2026-10-30
 

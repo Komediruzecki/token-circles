@@ -36,6 +36,7 @@ import {
   clearUpgradeBlocked,
 } from './connectionNotices'
 import { addKeepingIds, asRetirementGoalRow, isLegacyRetirementGoal } from './retirementGoalRows'
+import { DEFAULT_PROFILE_NAME, fileUnfiledRows } from './unfiledProfileRows'
 import type { IDBPDatabase } from 'idb'
 import type { Kind } from '../../../../shared/guidance/kinds'
 import type {
@@ -344,6 +345,7 @@ export function getDB() {
   if (releasedFor) announceConnectionReleased(releasedFor)
   if (upgradeBlocked) announceUpgradeBlocked()
   if (!dbPromise) {
+    let current: ReturnType<typeof openDB> | null = null
     const opening = openDB(DB_NAME, DB_VERSION, {
       upgrade: upgradeSchema,
       blocked() {
@@ -359,10 +361,22 @@ export function getDB() {
         announceConnectionReleased(releasedFor, true)
       },
       terminated() {
-        if (dbPromise === opening) dbPromise = null
+        if (dbPromise === current) dbPromise = null
       },
     })
-    dbPromise = opening
+    // Rows the old code filed on profile 0 go to a real profile before anything reads (see
+    // unfiledProfileRows.ts). A failure is logged and the database opens anyway: the rows stay
+    // where they were, and the next load tries again.
+    const ready = opening.then(async (db) => {
+      try {
+        await fileUnfiledRows(db as unknown as IDBPDatabase)
+      } catch (error) {
+        console.warn('Could not file rows saved without a profile', error)
+      }
+      return db
+    })
+    current = ready
+    dbPromise = ready
     void opening.then(
       () => {
         if (!upgradeBlocked) return
@@ -373,6 +387,26 @@ export function getDB() {
     )
   }
   return dbPromise
+}
+
+/**
+ * The workspace's first profile, made when there is none, or the first one there is. One
+ * read-write transaction: the boot sends many reads at once, and IndexedDB runs two such
+ * transactions in turn, so the second finds the profile the first made instead of adding another.
+ */
+async function ensureAProfile(): Promise<number> {
+  const db = await getDB()
+  const tx = db.transaction('profiles', 'readwrite')
+  const existing = (await tx.store.getAll()) as Array<{ id: number }>
+  const id =
+    existing.length > 0
+      ? existing[0].id
+      : ((await tx.store.add({
+          name: DEFAULT_PROFILE_NAME,
+          created_at: new Date().toISOString(),
+        })) as number)
+  await tx.done
+  return id
 }
 
 // ---- Seed Data ----
@@ -527,19 +561,18 @@ export class IndexedDBAdapter implements StorageAdapter {
 
   async getCurrentProfileId(): Promise<number> {
     const db = await getDB()
-    const profiles = await db.getAll('profiles')
+    let profiles = await db.getAll('profiles')
 
-    // No profiles exist — only seed demo on first init, never after user deletes all
-    if (profiles.length === 0) {
-      const hadProfiles = localStorage.getItem('finance_had_profiles')
-      if (!hadProfiles) {
-        localStorage.setItem('finance_had_profiles', '1')
-        await seedDemoProfiles()
-        const seeded = await db.getAll('profiles')
-        if (seeded.length > 0) {
-          return seeded[0].id
-        }
-      }
+    // No profiles: a browser that never had any gets the example profiles. The seed adds all three
+    // in one transaction that only runs on an empty store, and ensureAProfile below adds its one in
+    // one transaction that only runs on an empty store too, so whichever runs first, the other
+    // finds its profiles and adds none: two seeds make one set, and a seed and the guard never make
+    // "Personal Profile" beside the examples. The seed marks the browser (`finance_had_profiles`)
+    // only once its profiles are stored, so the guard cannot even start while a seed is starting.
+    if (profiles.length === 0 && !localStorage.getItem('finance_had_profiles')) {
+      await seedDemoProfiles()
+      profiles = await db.getAll('profiles')
+      if (profiles.length > 0) return profiles[0].id
     }
 
     const profileId = this.getProfileId()
@@ -548,9 +581,13 @@ export class IndexedDBAdapter implements StorageAdapter {
       localStorage.setItem('currentProfileId', String(profiles[0].id))
       return profiles[0].id
     }
-    // If user deleted all profiles, don't force-create one — return 0 so UI can handle it
-    localStorage.removeItem('currentProfileId')
-    return 0
+    // No profile at all: make the one the workspace needs, as the Worker does for an account with
+    // none (ensureProfile). This used to answer 0, and every writer filed its rows on profile 0,
+    // which no read asks for: an import into a workspace that had left the setup wizard before
+    // naming its space reported every row imported and showed none of them.
+    const id = await ensureAProfile()
+    localStorage.setItem('currentProfileId', String(id))
+    return id
   }
 
   async createProfile(name: string): Promise<number> {
@@ -1997,12 +2034,39 @@ const MONTHLY_EXPENSES = [
   { name: 'Subscriptions', description: 'Streaming services', pct: 0.05 },
 ]
 
+/**
+ * Add the example profiles, if the store is empty, in one transaction, and answer their ids in
+ * DEMO_PROFILES order, or null when the store already has a profile. Two tabs seeding at once used
+ * to add a set each, one profile per transaction; now the second finds the first's and stops.
+ */
+async function claimExampleProfiles(
+  db: Awaited<ReturnType<typeof getDB>>
+): Promise<number[] | null> {
+  const tx = db.transaction('profiles', 'readwrite')
+  if ((await tx.store.count()) > 0) {
+    await tx.done
+    return null
+  }
+  const ids: number[] = []
+  for (const profile of DEMO_PROFILES) {
+    ids.push(
+      (await tx.store.add({ name: profile.name, created_at: new Date().toISOString() })) as number
+    )
+  }
+  await tx.done
+  return ids
+}
+
+/**
+ * Seed the example profiles into an empty workspace. A workspace that has a profile, or gets one
+ * from another seed first, is left as it is.
+ */
 export async function seedDemoProfiles(): Promise<void> {
   const db = await getDB()
-  const existingProfiles = await db.getAll('profiles')
-  // Check if any demo profile name already exists (not just count)
-  const existingNames = new Set(existingProfiles.map((p: { name: string }) => p.name))
-  if (DEMO_PROFILES.some((dp) => existingNames.has(dp.name))) return
+  const claimed = await claimExampleProfiles(db)
+  if (!claimed) return
+  // Marked once the profiles are stored: a request that reads the mark finds them.
+  localStorage.setItem('finance_had_profiles', '1')
 
   // Inline seed helper so we don't need to import
   async function seedCats(profileId: number) {
@@ -2028,15 +2092,8 @@ export async function seedDemoProfiles(): Promise<void> {
     return Math.round(min + r * (max - min))
   }
 
-  let firstProfileId: number | null = null
-
-  for (const profile of DEMO_PROFILES) {
-    const profileId = (await db.add('profiles', {
-      name: profile.name,
-      created_at: new Date().toISOString(),
-    })) as number
-
-    if (firstProfileId === null) firstProfileId = profileId
+  for (const [index, profile] of DEMO_PROFILES.entries()) {
+    const profileId = claimed[index]
 
     // Seed categories
     await seedCats(profileId)

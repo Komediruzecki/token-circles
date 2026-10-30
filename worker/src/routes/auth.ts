@@ -58,6 +58,7 @@ import { clearRateLimit, enforce, clientIp, rateLimit } from '../ratelimit';
 import { getTotpForLogin, issueTwofaChallengeCookie } from '../twofa';
 import { logAuthEvent } from '../authlog';
 import { captchaRejection, verifyTurnstileDetailed } from '../turnstile';
+import { checkSignInTry, coverNextTry, endLoginCheck, useUpLoginChecks } from '../login-check';
 import { refusalOf } from '../../../shared/refusal';
 import {
   addressProblems,
@@ -339,13 +340,26 @@ authRoutes.post('/api/auth/login', async (c) => {
     password?: string;
     turnstileToken?: string;
   };
-  const captcha = await verifyTurnstileDetailed(c, body.turnstileToken);
-  if (!captcha.ok) {
+  // A token Cloudflare passes now, or the login check an earlier try left (login-check.ts): a
+  // solved check covers the tries after a wrong password for five minutes.
+  const check = await checkSignInTry(c, body.turnstileToken);
+  if (!check.ok) {
     // The widget goes green and the request is still refused, which reads as the app being broken.
     // Recording the reason is what turns that into a five-second diagnosis.
-    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: `captcha:${captcha.reason}` });
-    return captchaRejection(c, captcha);
+    logAuthEvent(c, { event: 'login', outcome: 'denied', reason: check.why });
+    endLoginCheck(c, check);
+    return captchaRejection(c, check.result);
   }
+  /** The 401 for a wrong address or password, saying how long the check covers the next try. */
+  const refuse = async () => {
+    const checkValidForSeconds = await coverNextTry(c, check);
+    return c.json(
+      checkValidForSeconds === undefined
+        ? WRONG_PASSWORD
+        : { ...WRONG_PASSWORD, checkValidForSeconds },
+      401
+    );
+  };
   const email = (body.email ?? '').trim().toLowerCase();
   const password = body.password ?? '';
   // Only a field left empty is named. A wrong address or password names neither (below).
@@ -382,7 +396,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   const passwordOk = await verifyPassword(password, user?.password_hash || DUMMY_PASSWORD_HASH);
   if (!user || !user.password_hash || !passwordOk) {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'bad_credentials', email });
-    return c.json(WRONG_PASSWORD, 401);
+    return refuse();
   }
   // An account waiting for its confirm link is answered as a wrong password is, after the same
   // work, and its limits are left as a wrong password leaves them: nothing in the answer says the
@@ -393,7 +407,7 @@ authRoutes.post('/api/auth/login', async (c) => {
     confirmedNow = await confirmWithOwnLink(c.env.DB, user.id, opened, welcomeAfterAnswer(c));
     if (!confirmedNow) {
       logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'email_unconfirmed', email });
-      return c.json(WRONG_PASSWORD, 401);
+      return refuse();
     }
   }
   // The marker has done its work once the link is spent.
@@ -419,6 +433,8 @@ authRoutes.post('/api/auth/login', async (c) => {
     });
     c.header('Set-Cookie', await issueTwofaChallengeCookie(c.env, signIn));
     clearMarker();
+    // The password was right: the check that covered the tries before it has done its work.
+    await useUpLoginChecks(c, check);
     return c.json({ twofaRequired: true, ...finished });
   }
   const session = await issueSessionCookie(c.env, signIn, sessionOrigin(c));
@@ -426,6 +442,7 @@ authRoutes.post('/api/auth/login', async (c) => {
   logAuthEvent(c, { event: 'login', outcome: 'ok', userId: user.id, email });
   c.header('Set-Cookie', session);
   clearMarker();
+  await useUpLoginChecks(c, check);
   return c.json({ id: user.id, email, ...finished });
 });
 

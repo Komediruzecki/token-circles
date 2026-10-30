@@ -42,8 +42,9 @@ export default function LoginModal(props: LoginModalProps) {
   const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
   const [inbox, setInbox] = createSignal('')
   // The send holds for the token rather than the button waiting for it, and while Cloudflare's box
-  // waits for a tick the button waits too (captchaGate.ts).
-  const captcha = createCaptchaGate()
+  // waits for a tick the button waits too (captchaGate.ts). After a wrong password the check
+  // solved for it covers the next sign-in tries, and only those.
+  const captcha = createCaptchaGate({ signingIn: () => mode() === 'login' })
 
   // In an installed app the back gesture had no entry to pop and closed the app under the dialog.
   // The dialog has one history entry while it is open, and popping it closes the dialog. Closing it

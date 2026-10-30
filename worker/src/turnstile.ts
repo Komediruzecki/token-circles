@@ -33,7 +33,15 @@ export type TurnstileFailure =
   | 'unreachable'; // siteverify did not answer
 
 export type TurnstileResult =
-  | { ok: true }
+  | {
+      ok: true;
+      /**
+       * When Cloudflare says the check was solved (`challenge_ts`, epoch ms, never later than
+       * now), when it said so. A password sign-in counts its login check from it, and leaves none
+       * without it (login-check.ts).
+       */
+      solvedAt?: number;
+    }
   | { ok: false; reason: TurnstileFailure; codes: string[] };
 
 /**
@@ -66,8 +74,17 @@ export async function verifyTurnstileDetailed(
         remoteip: c.req.header('CF-Connecting-IP') ?? '',
       }),
     });
-    const data = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
-    if (data.success === true) return { ok: true };
+    const data = (await res.json()) as {
+      success?: boolean;
+      'error-codes'?: string[];
+      challenge_ts?: unknown;
+    };
+    if (data.success === true) {
+      const solved = typeof data.challenge_ts === 'string' ? Date.parse(data.challenge_ts) : NaN;
+      return Number.isFinite(solved)
+        ? { ok: true, solvedAt: Math.min(solved, Date.now()) }
+        : { ok: true };
+    }
     const codes = data['error-codes'] ?? [];
     // A secret Cloudflare will not accept is a deployment fault, not a failed challenge.
     const ours = codes.some(
