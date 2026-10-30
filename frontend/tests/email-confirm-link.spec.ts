@@ -31,7 +31,14 @@ import {
   test,
 } from '@playwright/test'
 import { createHash, randomBytes } from 'node:crypto'
-import { BOOTS, bootApp, openSignIn, signInWithPassword, storedMode } from './boot'
+import {
+  BOOTS,
+  bootApp,
+  markSetupDecided,
+  openSignIn,
+  signInWithPassword,
+  storedMode,
+} from './boot'
 import { accountMade, confirmAccount, sql, sqlRows } from './db'
 import { E2E_API_BASE, E2E_BASE } from './e2e-constants'
 
@@ -352,6 +359,8 @@ for (const boot of BOOTS) {
         // This browser is signed in to another account.
         await signUpConfirmed(page.request, other)
         await bootApp(context, boot, other)
+        // The account it signs in to at the end has decided its setup too.
+        await markSetupDecided(context, email)
 
         const fragment = await openLink(page, link)
         expect(fragment).toBe('#everified_error=signin_required')
@@ -508,6 +517,8 @@ for (const boot of BOOTS) {
           `We sent a link to ${email}. Open it in this browser, then sign in with your password. Opening it in another browser or on another device? Sign in there first.`
         )
         await accountMade(email)
+        // Made here, so its setup is marked decided before this browser signs in to it.
+        await markSetupDecided(context, email)
         await expect.poll(() => accountState(email)?.waiting).toBe(1)
         expect(accountState(email)).toMatchObject({ email_verified: 0 })
         expect((await context.cookies()).find((c) => c.name === 'fm_session')).toBeUndefined()

@@ -54,6 +54,23 @@ export async function bootApp(context: BrowserContext, boot: Boot, email?: strin
   )
 }
 
+/**
+ * Mark the setup wizard decided for the account at `email` too, on every page `context` loads from
+ * now on: for a spec that signs in to an account other than the one it booted as, or to one it
+ * made after booting. The wizard opens a moment after a sign-in to an account that has not decided
+ * it, and hides the app while it is open.
+ */
+export async function markSetupDecided(context: BrowserContext, email: string): Promise<void> {
+  const account = accountIdOf(email)
+  expect(account, `an account at ${email}`).not.toBeNull()
+  await context.addInitScript(
+    (decided) => {
+      for (const [key, value] of decided) localStorage.setItem(key, value)
+    },
+    onboardingDecided([account as number])
+  )
+}
+
 /** The mode the page's app stored, or null when it stored none (a fresh browser). */
 export const storedMode = (page: Page) =>
   page.evaluate(() => localStorage.getItem('finance_storage_mode'))

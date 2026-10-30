@@ -1614,6 +1614,19 @@ check')` first, as the cushion and debt cases do.
   category on 90% of your spending.", with the gap after it while no step on the view says it.
 - **Tests:** `guidanceCircleView.test.ts`. Fails before the change (2 tests).
 
+### Tests
+
+- **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens
+  after `shouldOfferOnboarding()` (`frontend/src/core/onboardingStore.ts`) has fetched the new
+  account's accounts, transactions, bills and settings, and since 5.17.3 it hides the app while it
+  is open. `signInWithPassword` (`frontend/tests/boot.ts`) waits for the Logout button, so it
+  passed only when it saw the button before the wizard opened. `password-reset.spec.ts` signed in
+  to its account in a browser booted without it, and two `email-confirm-link.spec.ts` cases sign in
+  to an account other than the one they booted as, or to one made after booting. Run without the
+  fix and with a probe after each sign-in, all eight cases met the wizard: three failed at the
+  Logout wait, five at the probe. `setNewPassword` now boots with the account, and the confirm-link
+  cases call the new `markSetupDecided(context, email)`.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures
@@ -1632,6 +1645,8 @@ Added:
 Changed:
 
 - **The savings rate shows the typical range where you live**, which is your target until you set your own.
+
+## [5.17.3] — 2026-10-30
 
 ### Local-first
 
