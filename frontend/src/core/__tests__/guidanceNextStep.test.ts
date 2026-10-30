@@ -61,6 +61,8 @@ describe('before a year is on file', () => {
       circle: 1,
       title: 'Import the rest of your year',
       why: '7 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+      // In Clear picture's view, the key figure says the months and the check how one counts.
+      whyHere: '5 months to go.',
       action: { kind: 'open', hash: '#import', label: 'Open Import' },
       meter: { kind: 'cells', on: 7, left: '7 of 12 months on file', right: 'A year' },
       then: 'Then: sort the 30 entries without a category, and build a one-month cushion.',
@@ -74,8 +76,10 @@ describe('before a year is on file', () => {
     expect(step(seven)).toMatchObject({
       id: 'year-on-file',
       title: 'Import the rest of your year',
+      whyHere: '5 months to go.',
       meter: { kind: 'cells', on: 7 },
     })
+    expect(step(facts({ monthsInYear: 11, firm: false })).whyHere).toBe('1 month to go.')
     const none = facts({
       months: [],
       monthsInYear: 0,
@@ -98,6 +102,8 @@ describe('once a year is on file', () => {
       circle: 4,
       title: 'Grow your cushion to three months',
       why: '€2,000 to go: €4,000 you can reach, against €2,000 needed a month.',
+      // In Solid ground's view, Your numbers has the inputs: the step keeps the gap.
+      whyHere: '€2,000 to go.',
       action: { kind: 'open', hash: '#goals', label: 'Open Goals' },
       meter: { kind: 'bar', share: 2 / 3, left: '2 months', right: '3 months' },
       then: 'Then: grow your cushion to six months, and raise your savings rate by one point.',
@@ -112,6 +118,7 @@ describe('once a year is on file', () => {
       circle: 1,
       title: 'Sort the entries without a category',
       why: '89% of your spending has a category; Clear picture needs 90%.',
+      whyHere: 'Another 1% of your spending to sort.',
       action: { kind: 'open', hash: '#transactions?uncategorised=1', label: 'Open Transactions' },
       meter: { kind: 'bar', left: '89% sorted', right: '90%' },
     })
@@ -126,11 +133,16 @@ describe('once a year is on file', () => {
       circle: 2,
       title: 'Close the €100 a month gap',
       why: 'Over your last 12 tracked months, €100 a month more went out than came in.',
+      // The title says the gap.
+      whyHere: 'Over your last 12 tracked months, more went out than came in.',
       action: { kind: 'open', hash: '#budgets', label: 'Open Budgets' },
       meter: { kind: 'bar', left: '€2,400 in', right: '€2,500 out' },
     })
     expect(step(facts({ ownIncome: 2400 })).why).toBe(
       'Over your last 12 tracked months, €100 a month more went out than your own income brought in.'
+    )
+    expect(step(facts({ ownIncome: 2400 })).whyHere).toBe(
+      'Over your last 12 tracked months, more went out than your own income brought in.'
     )
   })
 
@@ -140,6 +152,8 @@ describe('once a year is on file', () => {
       circle: 3,
       title: 'Build a one-month cushion',
       why: 'The money you can reach covers 15 days of what you need.',
+      // The days are Breathing room's key figure.
+      whyHere: '€1,000 to go.',
       meter: { kind: 'bar', share: 0.5, left: '15 days', right: '1 month' },
     })
     expect(step(facts({ cushionMonths: 0.01, liquid: 20 })).why).toBe(
@@ -251,6 +265,8 @@ describe('once a year is on file', () => {
       expect(step(facts({ debts: [loan] }))).toMatchObject({
         title: 'Compare paying Car loan off faster',
         why: 'It costs 11.5% a year. Solid ground asks for no debt at 10% or more.',
+        // The rate is on Your numbers' debts; the circle's line says the 10%.
+        whyHere: null,
         action: { kind: 'open', hash: '#loans/2/compare', label: 'Open Loans' },
       })
     })
@@ -259,12 +275,14 @@ describe('once a year is on file', () => {
       expect(step(facts({ debts: [debt({})] }))).toMatchObject({
         title: 'Visa costs 19.9% a year',
         why: 'It carries €400. Solid ground asks for no debt at 10% or more.',
+        whyHere: null,
         action: { kind: 'open', hash: '#accounts', label: 'Open Accounts' },
       })
       const noRate = debt({ kind: 'overdraft', name: null, owed: 90.4, rate: null })
       expect(step(facts({ debts: [noRate] }))).toMatchObject({
         title: 'An overdraft carries €90',
         why: 'With no rate set, it counts as debt at 10% or more. Add its rate in Accounts.',
+        whyHere: 'With no rate set, it counts as debt at 10% or more. Add its rate in Accounts.',
       })
     })
   })
@@ -302,6 +320,7 @@ describe('once a year is on file', () => {
       circle: 5,
       title: 'Raise your savings rate by one point',
       why: 'One more point is €30 a month. €50,000 to two years of spending.',
+      whyHere: 'One more point is €30 a month. €50,000 to two years of spending.',
       meter: { kind: 'bar', left: '€10,000', right: '€60,000' },
       then: 'Then: check the withdrawal rate you plan with.',
     })
@@ -313,6 +332,8 @@ describe('once a year is on file', () => {
       circle: 6,
       title: 'Check the withdrawal rate you plan with',
       why: "At 4% a year, €750,000 would cover what you spend. You're at €70,000.",
+      // Both figures are Work optional's key figure, the rate Your numbers'.
+      whyHere: 'A lower rate needs more invested; a higher one, less.',
       action: { kind: 'open', hash: '#retirement', label: 'Open Retirement' },
     })
   })
@@ -330,6 +351,7 @@ describe('once a year is on file', () => {
     expect(step({ ...seventh, enoughPerYear: 40000 })).toMatchObject({
       title: 'Your own number: €1,000,000',
       why: "You're at €800,000. At 4% a year, €1,000,000 pays for a year of more than enough.",
+      whyHere: '€200,000 to go.',
     })
   })
 
@@ -340,6 +362,7 @@ describe('once a year is on file', () => {
       circle: null,
       title: "You've reached all seven circles.",
       why: 'Every check the circles hold is met, from a year on file to your own number.',
+      whyHere: 'Every check the circles hold is met, from a year on file to your own number.',
       action: { kind: 'circles', hash: '#progress', label: 'See all seven circles' },
       meter: null,
       then: null,

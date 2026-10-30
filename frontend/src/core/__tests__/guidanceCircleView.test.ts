@@ -12,7 +12,7 @@ import {
   circleQuestions,
 } from '../../../../shared/guidance/circleView'
 import { facts, words } from './guidanceFixtures'
-import type { CircleNumber } from '../../../../shared/guidance/circles'
+import type { CheckId, CircleNumber } from '../../../../shared/guidance/circles'
 import type { Debt, GuidanceFacts, WindowCategory } from '../../../../shared/guidance/facts'
 
 const place = (f: GuidanceFacts, circle: CircleNumber, freeMoney = false) =>
@@ -23,6 +23,10 @@ const rows = (f: GuidanceFacts, circle: CircleNumber, current: CircleNumber | nu
 
 const row = (f: GuidanceFacts, circle: CircleNumber, id: string, current?: CircleNumber | null) =>
   rows(f, circle, current).find((one) => one.id === id)
+
+/** Check `id` while Your next step on the same view is about it. */
+const stepRow = (f: GuidanceFacts, circle: CircleNumber, id: CheckId) =>
+  checkRows(place(f, circle, true), f, words, circle, id).find((one) => one.id === id)
 
 const numbers = (f: GuidanceFacts, circle: CircleNumber, holdings: number | null = null) =>
   circleNumbers(circle, f, words, { holdings, kindsAsked: false })
@@ -70,12 +74,14 @@ describe('what a circle checks', () => {
     ).toBe('It needs 2 of these, and 2 more are optional.')
   })
 
-  it('lists Clear picture with the months and the share sorted', () => {
+  // The months on file and the share sorted are the key figure's and Your numbers': a check says
+  // what it needs.
+  it('lists Clear picture with what each check needs', () => {
     expect(rows(facts(), 1)).toEqual([
       {
         id: 'year-on-file',
         title: 'A year on file',
-        detail: '12 of the last 13 months are tracked. A month counts once it holds 3 entries.',
+        detail: '12 tracked months of the last 13. A month counts once it holds 3 entries.',
         state: 'met',
         waiting: null,
         needed: 'Needed to reach Clear picture',
@@ -83,28 +89,36 @@ describe('what a circle checks', () => {
       {
         id: 'sorted',
         title: 'Spending sorted',
-        detail: '96% of your spending has a category; 90% is needed.',
+        detail: '90% of your spending needs a category.',
         state: 'met',
         waiting: null,
         needed: 'Needed to reach Clear picture',
       },
     ])
     expect(row(facts({ monthsInYear: 1, firm: false }), 1, 'year-on-file')?.detail).toBe(
-      '1 of the last 13 months is tracked. A month counts once it holds 3 entries.'
-    )
-    expect(row(facts({ monthsInYear: 0, firm: false }), 1, 'year-on-file')?.detail).toBe(
-      'None of the last 13 months is tracked yet. A month counts once it holds 3 entries.'
+      '12 tracked months of the last 13. A month counts once it holds 3 entries.'
     )
   })
 
   it('never shows a share as reaching 90% before it does', () => {
     const sorted = row(facts({ sortedShare: 89.9 }), 1, 'sorted')
     expect(sorted?.state).toBe('not-yet')
-    expect(sorted?.detail).toBe('89% of your spending has a category; 90% is needed.')
+    expect(sorted?.detail).toBe('90% of your spending needs a category. 1% to go.')
+    // Your next step on the view says the gap.
+    expect(stepRow(facts({ sortedShare: 89.9 }), 1, 'sorted')?.detail).toBe(
+      '90% of your spending needs a category.'
+    )
   })
 
-  it('reads own income against spending, or the investments that cover it', () => {
-    expect(row(facts(), 2, 'own-income')?.detail).toBe('€3,000 in, €2,500 out a month.')
+  it('says the gap to own income, or the investments that cover it', () => {
+    // Met: what came in and went out is Your numbers'.
+    expect(row(facts(), 2, 'own-income')?.detail).toBeNull()
+    const short = facts({ ownIncome: 1500, income: 1500, spending: 2000 })
+    expect(row(short, 2, 'own-income')?.detail).toBe(
+      '€500 a month short of covering what you spend.'
+    )
+    // Your next step's title says the gap.
+    expect(stepRow(short, 2, 'own-income')?.detail).toBeNull()
     const covered = row(
       facts({ ownIncome: 1000, invested: 1_000_000, withdrawalRatePct: 4 }),
       2,
@@ -116,14 +130,11 @@ describe('what a circle checks', () => {
     )
   })
 
-  it('counts the first cushion in whole days', () => {
-    expect(row(facts(), 3, 'first-cushion')?.detail).toBe(
-      '60 days: €4,000 you can reach, against €2,000 needed a month.'
-    )
-    expect(row(facts({ liquid: 1990, cushionMonths: 0.995 }), 3, 'first-cushion')).toMatchObject({
-      state: 'not-yet',
-      detail: '29 days: €1,990 you can reach, against €2,000 needed a month.',
-    })
+  it('says only the gap to the first cushion: the days are the key figure', () => {
+    expect(row(facts(), 3, 'first-cushion')?.detail).toBeNull()
+    const short = facts({ liquid: 1990, cushionMonths: 0.995 })
+    expect(row(short, 3, 'first-cushion')).toMatchObject({ state: 'not-yet', detail: '€10 to go.' })
+    expect(stepRow(short, 3, 'first-cushion')?.detail).toBeNull()
   })
 
   it('gives Solid ground the debt check, then the cushion with its gap', () => {
@@ -137,29 +148,38 @@ describe('what a circle checks', () => {
       row(facts({ debts: [{ ...loan, rate: 5, expensive: false }] }), 4, 'no-expensive-debt')
         ?.detail
     ).toBe('Your loans and cards are under 10% a year, or carry nothing.')
+    // What it needs, in money; the months are the key figure, the inputs Your numbers'.
     expect(row(facts(), 4, 'solid-cushion')?.detail).toBe(
-      '2 months: €4,000 against €2,000 a month. €2,000 to go.'
+      '€6,000 would be three months. €2,000 to go.'
     )
+    // Your next step says the gap.
+    expect(stepRow(facts(), 4, 'solid-cushion')?.detail).toBe('€6,000 would be three months.')
     expect(row(facts(), 4, 'full-cushion')?.detail).toBe(
-      '€12,000 would be six months: €8,000 to go. Six is where most guides stop.'
+      '€12,000 would be six months. €8,000 to go. Six is where most guides stop.'
     )
     const full = facts({ liquid: 13000, cushionMonths: 6.5 })
-    expect(row(full, 4, 'solid-cushion')?.detail).toBe(
-      '6.5 months: €13,000 against €2,000 a month.'
+    expect(row(full, 4, 'solid-cushion')?.detail).toBe('€6,000 is three months.')
+    expect(row(full, 4, 'full-cushion')?.detail).toBe(
+      '€12,000 is six months. Six is where most guides stop.'
     )
-    expect(row(full, 4, 'full-cushion')?.detail).toBe('6.5 months put by.')
   })
 
-  it('says the gap where two figures would read the same beside Not yet', () => {
-    // 1,999.60 against 2,000.40 rounds to "€2,000 in, €2,000 out": not met, so the gap says it.
+  it("says none of the person's inputs: Your numbers has them", () => {
+    // The brief's view: 2,800 in reach against 1,460 needed a month, the cushion as the step.
+    const f = facts({ liquid: 2800, essentials: 1460, cushionMonths: 2800 / 1460 })
+    const said = checkRows(place(f, 4, true), f, words, 4, 'solid-cushion')
+      .map((one) => one.detail ?? '')
+      .join(' ')
+    expect(said).not.toMatch(/€2,800|€1,460|1\.9/)
+    expect(said).not.toContain('€1,580')
+  })
+
+  it('never says €0 to go beside a check not met', () => {
     const close = facts({ ownIncome: 1999.6, income: 1999.6, spending: 2000.4 })
     expect(row(close, 2, 'own-income')).toMatchObject({
       state: 'not-yet',
       detail: '€1 a month short of covering what you spend.',
     })
-    expect(
-      row(facts({ ownIncome: 1500, income: 1500, spending: 2000 }), 2, 'own-income')?.detail
-    ).toBe('€1,500 in, €2,000 out a month.')
     const nearlyAMonth = facts({
       liquid: 1999.6,
       essentials: 2000.4,
@@ -167,18 +187,19 @@ describe('what a circle checks', () => {
     })
     expect(row(nearlyAMonth, 3, 'first-cushion')).toMatchObject({
       state: 'not-yet',
-      detail: '29 days: €1 to a month of essentials.',
+      detail: '€1 to go.',
     })
     // Two years is 60,000; 59,999.60 invested reads as 60,000.
     const twoYears = facts({ cushionMonths: 4, liquid: 8000, invested: 59999.6 })
     expect(row(twoYears, 5, 'two-years')).toMatchObject({
       state: 'not-yet',
-      detail: '€1 to go: invested, plus money in reach beyond six months of essentials.',
+      detail:
+        "Counts what you've invested, plus money in reach beyond six months of essentials. €1 to go.",
     })
     const workOptional = facts({ cushionMonths: 4, liquid: 8000, invested: 749999.6 })
     expect(row(workOptional, 6, 'work-optional')).toMatchObject({
       state: 'not-yet',
-      detail: '€1 to go. At 4% a year, €750,000 covers what you spend.',
+      detail: 'Enough invested that your yearly withdrawal covers what you spend. €1 to go.',
     })
     const enough = facts({
       cushionMonths: 4,
@@ -187,27 +208,34 @@ describe('what a circle checks', () => {
       enoughPerYear: 40000,
     })
     expect(row(enough, 7, 'enough', 7)).toMatchObject({ state: 'not-yet', detail: '€1 to go.' })
-    // Met, the two figures stand: they are what met it.
+    // Met, no gap: the key figure says where the circle stands.
     expect(
       row(facts({ cushionMonths: 4, liquid: 8000, invested: 60000 }), 5, 'two-years')?.detail
-    ).toBe('€60,000 of €60,000: invested, plus money in reach beyond six months of essentials.')
+    ).toBe("Counts what you've invested, plus money in reach beyond six months of essentials.")
   })
 
   it('names the expensive debt, and the card it waits on an answer for', () => {
+    // What it owes, and its rate, are Your numbers' debts.
     expect(row(facts({ debts: [loan] }), 4, 'no-expensive-debt')).toMatchObject({
       state: 'not-yet',
-      detail: 'Car loan at 12%, €5,000 owed.',
+      detail: 'Car loan is at 10% or more.',
       waiting: null,
     })
+    expect(row(facts({ debts: [{ ...loan, rate: null }] }), 4, 'no-expensive-debt')?.detail).toBe(
+      'Car loan has no rate set, so it counts as 10% or more.'
+    )
     expect(row(facts({ debts: [card] }), 4, 'no-expensive-debt')).toMatchObject({
       state: 'not-known',
       detail:
-        'Travel card has been here since September 2026, too short to show whether you carry its €300.',
+        'Travel card has been here since September 2026, too short to show whether you carry its balance.',
       waiting: 'Waiting on your answer',
     })
     expect(row(facts({ debts: [{ ...card, since: null }] }), 4, 'no-expensive-debt')?.detail).toBe(
-      'Travel card has too few entries to show whether you carry its €300.'
+      'Travel card has too few entries to show whether you carry its balance.'
     )
+    // Your next step on the view names the debt, or asks the question, with the same words.
+    expect(stepRow(facts({ debts: [loan] }), 4, 'no-expensive-debt')?.detail).toBeNull()
+    expect(stepRow(facts({ debts: [card] }), 4, 'no-expensive-debt')?.detail).toBeNull()
   })
 
   it('says when a check waits on the accounts, not on the person', () => {
@@ -259,6 +287,8 @@ describe('what a circle checks', () => {
       state: 'met',
       waiting: null,
     })
+    // Your next step asks it on the view, with the same sentence.
+    expect(stepRow(one, 4, 'yearly-bills')?.detail).toBeNull()
   })
 
   it("reads back the free-money answer in its chip's words", () => {
@@ -287,15 +317,19 @@ describe('what a circle checks', () => {
     expect(row(facts(), 7, 'enough', 7)).toMatchObject({ waiting: 'Waiting on your answer' })
   })
 
-  it('reads the investments against their targets', () => {
+  it('says how the investments are counted, and the gap: the key figure has value and target', () => {
     const rich = facts({ invested: 100_000, enoughPerYear: 48_000 })
     expect(row(rich, 5, 'two-years')?.detail).toBe(
-      '€100,000 of €60,000: invested, plus money in reach beyond six months of essentials.'
+      "Counts what you've invested, plus money in reach beyond six months of essentials."
     )
     expect(row(rich, 6, 'work-optional')?.detail).toBe(
-      '€100,000 of €750,000. At 4% a year, €750,000 covers what you spend.'
+      'Enough invested that your yearly withdrawal covers what you spend. €650,000 to go.'
     )
-    expect(row(rich, 7, 'enough', 7)?.detail).toBe('€100,000 of €1,200,000.')
+    expect(stepRow(rich, 6, 'work-optional')?.detail).toBe(
+      'Enough invested that your yearly withdrawal covers what you spend.'
+    )
+    expect(row(rich, 7, 'enough', 7)?.detail).toBe('€1,100,000 to go.')
+    expect(stepRow(rich, 7, 'enough')?.detail).toBeNull()
   })
 })
 

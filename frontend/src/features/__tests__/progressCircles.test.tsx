@@ -451,8 +451,9 @@ describe('what a circle checks, and the questions it asks', () => {
       ['solid-cushion', 'not-yet', 'Not yet'],
       ['full-cushion', 'not-yet', 'Not yet'],
     ])
+    // What it needs: Your next step over it says the gap, the key figure the months.
     expect(q(checks[1], '[data-test-id="circle-check-detail"]').textContent).toBe(
-      '2 months: €4,000 against €2,000 a month. €2,000 to go.'
+      '€6,000 would be three months.'
     )
     expect(checks[1].textContent).toContain('Needed to reach Solid ground')
     expect(checks[2].textContent).not.toContain('Needed to reach')
@@ -787,7 +788,7 @@ describe('How you compare', () => {
     await tick()
   })
 
-  it('says the gap in Your next step and the check, and not again in the key figure or a card', async () => {
+  it('says the gap once, in Your next step, and not again in the check, the key figure or a card', async () => {
     guidance.set!(viewOf(facts(), true))
     const c = mount(() => <Progress />)
     go('#progress/4')
@@ -795,13 +796,11 @@ describe('How you compare', () => {
     await vi.waitFor(() => {
       expect(view.querySelector('[data-card="cushion"]')).not.toBeNull()
     })
-    // Where the cushion stands, then what is between it and three months, twice.
-    expect(q(view, '[data-test-id="circle-view-key"]').firstChild!.textContent).toBe(
-      '2 of 3 months put by'
-    )
-    expect(view.textContent!.match(/€2,000 (to go|away)/g)).toHaveLength(2)
-    expect(q(view, '[data-test-id="next-step-why"]').textContent).toContain('€2,000 to go')
-    expect(q(view, '[data-check="solid-cushion"]').textContent).toContain('€2,000 to go')
+    // Where the cushion stands, then what is between it and three months, once.
+    expect(q(view, '[data-test-id="circle-view-key"]').textContent).toBe('2 of 3 months put by')
+    expect(view.textContent!.match(/€2,000 (to go|away)/g)).toHaveLength(1)
+    expect(q(view, '[data-test-id="next-step-why"]').textContent).toBe('€2,000 to go.')
+    expect(q(view, '[data-check="solid-cushion"]').textContent).not.toContain('to go')
     expect(q(view, '[data-card="cushion"]').textContent).not.toContain('Next milestone')
     // A circle further in has no next step on it: its cushion card names the milestone.
     go('#progress/3')
@@ -1101,4 +1100,112 @@ describe('What your circles asked, in Settings', () => {
       })
     }
   })
+})
+
+describe('a circle view says each figure once', () => {
+  /** The figures in a text: money, months, shares and days. */
+  const figures = (text: string): string[] => [
+    ...(text.match(/€[\d,]+/g) ?? []),
+    ...(text.match(/\d[\d.]*(?=%| month| day| of 12)/g) ?? []),
+  ]
+
+  /**
+   * Each part's text: the key figure (where the circle stands), Your next step's why, every
+   * check's line, and Your numbers' values (the person's inputs).
+   */
+  function parts(view: HTMLElement) {
+    const all = (sel: string) => [...view.querySelectorAll(sel)].map((el) => el.textContent ?? '')
+    return {
+      key: all('[data-test-id="circle-view-key"]').join(' '),
+      step: all('[data-test-id="next-step-why"], [data-test-id="next-step-meter"]').join(' '),
+      checks: all('[data-test-id="circle-check-detail"]'),
+      numbers: all('[data-test-id="circle-numbers"] dd, [data-test-id="circle-numbers"] p').join(
+        ' '
+      ),
+    }
+  }
+
+  it("says Solid ground's figures once each, as the brief's view had them", () => {
+    // 2,800 in reach against 1,460 needed a month: 1.9 of 3 months, 1,580 to go.
+    guidance.set!(viewOf(facts({ liquid: 2800, essentials: 1460, cushionMonths: 2800 / 1460 })))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    const view = q(c, '[data-test-id="circle-view"]')
+    expect(q(view, '[data-test-id="next-step-card"]').getAttribute('data-step')).toBe(
+      'solid-cushion'
+    )
+    const text = view.textContent!
+    expect(text.match(/€2,800/g)).toHaveLength(1)
+    expect(text.match(/€1,460/g)).toHaveLength(1)
+    expect(text.match(/1\.9/g)).toHaveLength(1)
+    expect(text.match(/€1,580/g)).toHaveLength(1)
+    // Each where it does a job: the inputs in Your numbers, where the circle stands in the key
+    // figure, the gap in Your next step, and what the check needs in the check.
+    const { key, step, checks, numbers } = parts(view)
+    expect(numbers).toContain('€2,800')
+    expect(numbers).toContain('€1,460')
+    expect(key).toBe('1.9 of 3 months put by')
+    expect(step).toBe('€1,580 to go.')
+    expect(
+      q(view, '[data-check="solid-cushion"] [data-test-id="circle-check-detail"]').textContent
+    ).toBe('€4,380 would be three months.')
+    expect(view.querySelector('[data-test-id="next-step-meter"]')).toBeNull()
+    expect(checks.join(' ')).not.toMatch(/€2,800|€1,460|1\.9|€1,580/)
+  })
+
+  // Each circle as the one being worked on, and one reached.
+  const cases: [string, number, Partial<GuidanceFacts>][] = [
+    ['Clear picture', 1, { sortedShare: 80 }],
+    ['Clear picture, short of a year', 1, { monthsInYear: 7, firm: false }],
+    ['Paying your way', 2, { ownIncome: 2000, income: 2000 }],
+    ['Breathing room', 3, { liquid: 1200, cushionMonths: 0.6 }],
+    ['Breathing room, reached', 3, { liquid: 2800, essentials: 1460, cushionMonths: 2800 / 1460 }],
+    [
+      'Solid ground, with a debt and yearly bills',
+      4,
+      {
+        liquid: 4200,
+        cushionMonths: 2.1,
+        debts: [
+          {
+            kind: 'card',
+            id: 3,
+            name: 'Travel card',
+            owed: 400,
+            rate: 19.9,
+            payment: null,
+            carried: true,
+            expensive: true,
+          },
+        ],
+        yearlyBills: { count: 1, perYear: 780, perMonth: 65 },
+      },
+    ],
+    ['Room to choose', 5, { liquid: 13000, cushionMonths: 6.5, invested: 20000 }],
+    ['Work optional', 6, { liquid: 13000, cushionMonths: 6.5, invested: 70000 }],
+    [
+      'More than enough',
+      7,
+      { liquid: 13000, cushionMonths: 6.5, invested: 800000, enoughPerYear: 40000 },
+    ],
+  ]
+  for (const [name, circle, over] of cases) {
+    it(`keeps ${name}'s inputs in Your numbers and its standing in the key figure`, () => {
+      guidance.set!(viewOf(facts(over)))
+      const c = mount(() => <Progress />)
+      go(`#progress/${circle}`)
+      const { key, step, checks, numbers } = parts(q(c, '[data-test-id="circle-view"]'))
+      const elsewhere = new Set([...figures(key), ...figures(numbers)])
+      // Your next step and the checks say what to do and what is needed, not those again.
+      for (const said of [step, ...checks]) {
+        expect(
+          figures(said).filter((figure) => elsewhere.has(figure)),
+          said
+        ).toEqual([])
+      }
+      // No two parts below the key figure say the same figure either.
+      const below = [step, ...checks].flatMap((said) => [...new Set(figures(said))])
+      expect(below.length).toBe(new Set(below).size)
+    })
+  }
 })

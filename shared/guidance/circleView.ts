@@ -6,7 +6,7 @@
  * use the person's own numbers only, rounded as the ledger rounds them (ledger.ts): a check not
  * met never reads as met.
  */
-import { DAYS_IN_A_MONTH, monthName } from '../orientation';
+import { monthName } from '../orientation';
 import { targetFromSpend } from '../retirement';
 import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
 import {
@@ -16,12 +16,13 @@ import {
   SOLID_CUSHION_MONTHS,
   SORTED_SHARE,
 } from './circles';
-import { debtName, gapOf, monthsText, rateText, shareOf } from './ledger';
+import { debtName, gapOf, rateText, shareOf } from './ledger';
 import { freeMoneyQuestion } from './questions';
 import type { FreeMoneyAnswer } from './answers';
 import type { Check, CheckId, CircleNumber, CirclePlace } from './circles';
-import type { Debt, GuidanceFacts } from './facts';
+import type { GuidanceFacts } from './facts';
 import type { LedgerWords } from './ledger';
+import type { NextStep } from './nextStep';
 
 export type CheckState = 'met' | 'not-yet' | 'not-known';
 
@@ -84,22 +85,27 @@ function freeMoneyAnswerText(region: string, answer: FreeMoneyAnswer): string | 
   return option ? `Your answer: ${option.label}.` : null;
 }
 
-function debtDetail(facts: GuidanceFacts, check: Check, words: LedgerWords): string | null {
+/**
+ * The debt check's line. What each debt owes, and at what rate, is on Your numbers' debts, so the
+ * line names the debt only; while Your next step is about this check, it says nothing.
+ */
+function debtDetail(facts: GuidanceFacts, check: Check, here: boolean): string | null {
   if (check.unknown === 'unread') return null;
-  const owed = (debt: Debt) => words.money(Math.round(debt.owed));
   if (check.met === false) {
+    if (here) return null;
     const debt = facts.debts.find((one) => one.expensive === true);
     if (!debt) return null;
     return debt.rate === null
-      ? `${debtName(debt)} has no rate set, ${owed(debt)} owed.`
-      : `${debtName(debt)} at ${rateText(debt.rate)}%, ${owed(debt)} owed.`;
+      ? `${debtName(debt)} has no rate set, so it counts as 10% or more.`
+      : `${debtName(debt)} is at 10% or more.`;
   }
   if (check.met === null) {
+    if (here) return null;
     const card = facts.debts.find((one) => one.expensive === null);
     if (!card) return null;
     return card.since
-      ? `${debtName(card)} has been here since ${monthYear(card.since.slice(0, 7))}, too short to show whether you carry its ${owed(card)}.`
-      : `${debtName(card)} has too few entries to show whether you carry its ${owed(card)}.`;
+      ? `${debtName(card)} has been here since ${monthYear(card.since.slice(0, 7))}, too short to show whether you carry its balance.`
+      : `${debtName(card)} has too few entries to show whether you carry its balance.`;
   }
   if (facts.debts.length === 0) return 'No loans or cards on file.';
   return 'Your loans and cards are under 10% a year, or carry nothing.';
@@ -121,12 +127,17 @@ function waitingOn(
   return facts.averaged ? null : WAITING_ON_MONTHS;
 }
 
-/** The words for one check. */
+/**
+ * The words for one check: what it needs, and the gap while it is not met. The person's inputs are
+ * Your numbers', and where the circle stands is the key figure's, so a check does not say them
+ * again; while Your next step on the same view is about this check (`here`), the step says the gap.
+ */
 function rowFor(
   check: Check,
   facts: GuidanceFacts,
   words: LedgerWords,
-  current: CircleNumber | null
+  current: CircleNumber | null,
+  here: boolean
 ): CheckRow {
   const state = stateOf(check);
   const base = {
@@ -136,60 +147,53 @@ function rowFor(
     needed: null as string | null,
   };
   const money = (amount: number) => words.money(Math.round(amount));
-  /**
-   * Two figures that read the same beside Not yet ("€2,000 in, €2,000 out") say nothing about
-   * why: the row says the gap instead, which is never €0.
-   */
-  const readTheSame = (a: number, b: number) => check.met === false && money(a) === money(b);
   const gap = (target: number, value: number) => words.money(gapOf(target, value));
+  /** " €1,580 to go." after what a check needs, while it is not met and no step here says it. */
+  const toGo = (target: number, value: number) =>
+    check.met === false && !here ? ` ${gap(target, value)} to go.` : '';
   const essentials = facts.essentials;
   const liquid = facts.liquid;
   switch (check.id) {
-    case 'year-on-file': {
-      const n = Math.min(facts.monthsInYear, 12);
-      const counts = `A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`;
-      const window = `the last ${YEAR_WINDOW_MONTHS} months`;
+    case 'year-on-file':
+      // The months on file are the key figure and Your numbers'.
       return {
         ...base,
         title: 'A year on file',
-        detail:
-          n === 0
-            ? `None of ${window} is tracked yet. ${counts}`
-            : `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
+        detail: `12 tracked months of the last ${YEAR_WINDOW_MONTHS}. A month counts once it holds ${TRACKED_MONTH_MIN_TRANSACTIONS} entries.`,
       };
-    }
-    case 'sorted':
+    case 'sorted': {
+      // The share sorted is Your numbers'.
+      const share = facts.sortedShare;
+      const short =
+        share !== null && check.met === false && !here
+          ? ` ${SORTED_SHARE - shareOf(share, 100, false)}% to go.`
+          : '';
       return {
         ...base,
         title: 'Spending sorted',
-        detail:
-          facts.sortedShare === null
-            ? null
-            : `${shareOf(facts.sortedShare, 100, check.met === true)}% of your spending has a category; ${SORTED_SHARE}% is needed.`,
+        detail: `${SORTED_SHARE}% of your spending needs a category.${short}`,
       };
+    }
     case 'own-income':
       return {
         ...base,
         title: 'Own income covers spending',
+        // What came in and went out is Your numbers'; the gap is the step's while it is here.
         detail:
           check.via === 'work-optional'
             ? 'Your investments could cover what you spend, which counts as paying your way.'
-            : facts.income === null || facts.spending === null
+            : check.met !== false || here || facts.income === null || facts.spending === null
               ? null
-              : readTheSame(facts.ownIncome ?? facts.income, facts.spending)
-                ? `${gap(facts.spending, facts.ownIncome ?? facts.income)} a month short of covering what you spend.`
-                : `${money(facts.ownIncome ?? facts.income)} in, ${money(facts.spending)} out a month.`,
+              : `${gap(facts.spending, facts.ownIncome ?? facts.income)} a month short of covering what you spend.`,
       };
     case 'first-cushion': {
+      // A month of essentials is Your numbers' "Needed every month", and the days the key figure:
+      // the row says only the gap, while no step here says it.
       let detail: string | null = null;
       if (facts.cushionMonths === Number.POSITIVE_INFINITY) {
-        detail = 'Nothing is marked as needed every month.';
+        detail = null;
       } else if (facts.cushionMonths !== null && liquid !== null && essentials !== null) {
-        const days = Math.floor(facts.cushionMonths * DAYS_IN_A_MONTH);
-        const counted = `${days} ${days === 1 ? 'day' : 'days'}`;
-        detail = readTheSame(liquid, essentials)
-          ? `${counted}: ${gap(essentials, liquid)} to a month of essentials.`
-          : `${counted}: ${money(liquid)} you can reach, against ${money(essentials)} needed a month.`;
+        detail = toGo(essentials, liquid).trim() || null;
       } else if (facts.accountsKnown && liquid === null) {
         detail = NO_ACCOUNT;
       }
@@ -208,42 +212,39 @@ function rowFor(
       return {
         ...base,
         title: 'No debt at 10% or more',
-        detail: debtDetail(facts, check, words),
+        detail: debtDetail(facts, check, here),
       };
     case 'yearly-bills': {
       const bills = facts.yearlyBills;
       return {
         ...base,
         title: 'Yearly bills set aside',
-        detail: !bills
-          ? null
-          : bills.count === 1
-            ? `One yearly bill on Bills comes to ${money(bills.perYear)} a year: about ${words.money(Math.ceil(bills.perMonth))} a month.`
-            : `${bills.count} yearly bills on Bills come to ${money(bills.perYear)} a year: about ${words.money(Math.ceil(bills.perMonth))} a month.`,
+        // While Your next step asks it here, the step says the same sentence.
+        detail:
+          !bills || here
+            ? null
+            : bills.count === 1
+              ? `One yearly bill on Bills comes to ${money(bills.perYear)} a year: about ${words.money(Math.ceil(bills.perMonth))} a month.`
+              : `${bills.count} yearly bills on Bills come to ${money(bills.perYear)} a year: about ${words.money(Math.ceil(bills.perMonth))} a month.`,
       };
     }
     case 'solid-cushion':
     case 'full-cushion': {
       const solid = check.id === 'solid-cushion';
       const target = solid ? SOLID_CUSHION_MONTHS : FULL_CUSHION_MONTHS;
+      // What it needs, in money: the months put by are the key figure, what you can reach and need
+      // a month Your numbers'. The gap follows while no step here says it.
       let detail: string | null = null;
       if (facts.cushionMonths === Number.POSITIVE_INFINITY) {
-        detail = 'Nothing is marked as needed every month.';
+        detail = null;
       } else if (facts.cushionMonths !== null && liquid !== null && essentials !== null) {
-        const gap = money(gapOf(target * essentials, liquid));
-        const months = monthsText(facts.cushionMonths);
-        const put = `${months} ${months === '1' ? 'month' : 'months'}`;
-        if (solid) {
-          detail =
-            check.met === true
-              ? `${put}: ${money(liquid)} against ${money(essentials)} a month.`
-              : `${put}: ${money(liquid)} against ${money(essentials)} a month. ${gap} to go.`;
-        } else {
-          detail =
-            check.met === true
-              ? `${put} put by.`
-              : `${money(target * essentials)} would be six months: ${gap} to go. Six is where most guides stop.`;
-        }
+        const amount = money(target * essentials);
+        const months = solid ? 'three months' : 'six months';
+        const needs =
+          check.met === true
+            ? `${amount} is ${months}.`
+            : `${amount} would be ${months}.${toGo(target * essentials, liquid)}`;
+        detail = solid ? needs : `${needs} Six is where most guides stop.`;
       } else if (facts.accountsKnown && liquid === null) {
         detail = NO_ACCOUNT;
       }
@@ -257,44 +258,57 @@ function rowFor(
       return {
         ...base,
         title: 'Two years of spending set aside',
-        detail:
-          check.value === null || check.target === null
-            ? null
-            : `${readTheSame(check.value, check.target) ? `${gap(check.target, check.value)} to go` : `${money(check.value)} of ${money(check.target)}`}: invested, plus money in reach beyond six months of essentials.`,
+        // Its value and target are the key figure.
+        detail: `Counts what you've invested, plus money in reach beyond six months of essentials.${
+          check.value === null || check.target === null ? '' : toGo(check.target, check.value)
+        }`,
       };
     case 'work-optional':
       return {
         ...base,
         title: 'Investments that could cover your spending',
-        detail:
-          check.value === null || check.target === null
-            ? null
-            : `${readTheSame(check.value, check.target) ? `${gap(check.target, check.value)} to go` : `${money(check.value)} of ${money(check.target)}`}. At ${rateText(facts.withdrawalRatePct)}% a year, ${money(check.target)} covers what you spend.`,
+        // Its value and target are the key figure, the rate Your numbers'.
+        detail: `Enough invested that your yearly withdrawal covers what you spend.${
+          check.value === null || check.target === null ? '' : toGo(check.target, check.value)
+        }`,
       };
     case 'enough':
       return {
         ...base,
         title: 'Your own number',
+        // Its value and target are the key figure and Your numbers'.
         detail:
           check.value === null || check.target === null
             ? null
-            : readTheSame(check.value, check.target)
-              ? `${gap(check.target, check.value)} to go.`
-              : `${money(check.value)} of ${money(check.target)}.`,
+            : toGo(check.target, check.value).trim() || null,
       };
   }
 }
 
-/** The circle's checks, in the method's order. `current` is the circle being worked on. */
+/**
+ * The check Your next step is about, when the step shows in `place`'s view: Getting
+ * started's import step is the year on file's.
+ */
+export function stepCheck(step: NextStep, place: CirclePlace): CheckId | null {
+  if (step.circle !== place.circle) return null;
+  const id = step.id === 'import-year' ? 'year-on-file' : step.id;
+  return place.checks.find((check) => check.id === id)?.id ?? null;
+}
+
+/**
+ * The circle's checks, in the method's order. `current` is the circle being worked on; `step`, the
+ * check Your next step on the same view is about (`stepCheck`), whose gap the step says.
+ */
 export function checkRows(
   place: CirclePlace,
   facts: GuidanceFacts,
   words: LedgerWords,
-  current: CircleNumber | null
+  current: CircleNumber | null,
+  step: CheckId | null = null
 ): CheckRow[] {
   const name = CIRCLE_NAMES[place.circle];
   return place.checks.map((check) => ({
-    ...rowFor(check, facts, words, current),
+    ...rowFor(check, facts, words, current, check.id === step),
     needed: check.required ? `Needed to reach ${name}` : null,
   }));
 }

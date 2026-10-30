@@ -92,6 +92,11 @@ export interface NextStepCardProps {
   footer?: JSX.Element
   /** Dashboard's: a smaller title. */
   compact?: boolean
+  /**
+   * Inside the step's own circle view: the why as `whyHere` says it, and no meter, since the ring
+   * and the key figure over the card draw the same measure.
+   */
+  inCircle?: boolean
 }
 
 export default function NextStepCard(props: NextStepCardProps): JSX.Element {
@@ -169,9 +174,13 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
       >
         {props.step.title}
       </Dynamic>
-      <p class={styles.why} data-test-id="next-step-why">
-        {props.step.why}
-      </p>
+      <Show when={props.inCircle ? props.step.whyHere : props.step.why}>
+        {(why) => (
+          <p class={styles.why} data-test-id="next-step-why">
+            {why()}
+          </p>
+        )}
+      </Show>
 
       <Show when={question() === 'card'}>
         <Choices
@@ -231,7 +240,9 @@ export default function NextStepCard(props: NextStepCardProps): JSX.Element {
         <p class={styles.fine}>{GUIDANCE_LINE}</p>
       </Show>
 
-      <Show when={props.step.meter}>{(meter) => <Meter meter={meter()} />}</Show>
+      <Show when={props.inCircle ? null : props.step.meter}>
+        {(meter) => <Meter meter={meter()} />}
+      </Show>
 
       <Show when={link()}>
         {(action) => (

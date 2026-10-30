@@ -23,6 +23,7 @@ import {
   checksLine,
   circleNumbers,
   circleQuestions,
+  stepCheck,
 } from '../../../../shared/guidance/circleView'
 import { categoryLookup, takesEssential } from '../../../../shared/guidance/kinds'
 import { CIRCLE_LINES } from '../../../../shared/guidance/ledger'
@@ -149,14 +150,19 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
     heading.focus()
   })
 
+  /** Your next step, while this is the circle being worked on. */
+  const step = () => (props.view && row()?.state === 'current' ? props.view.next : null)
   const checks = createMemo(() => {
     const view = props.view
     if (!view) return []
+    const place = view.placement.circles[props.circle - 1]
+    const shown = step()
     return checkRows(
-      view.placement.circles[props.circle - 1],
+      place,
       view.facts,
       view.words,
-      view.placement.current
+      view.placement.current,
+      shown ? stepCheck(shown, place) : null
     )
   })
   const numbers = createMemo(() => {
@@ -257,13 +263,14 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
           <p class={styles.line}>{CIRCLE_LINES[props.circle]}</p>
         </div>
       </header>
+      {/*
+        Where the circle stands. The row's detail line stays on Progress: here the checks and
+        Your numbers say each part of it.
+      */}
       <Show when={row()?.key}>
         {(key) => (
           <p class={styles.key} data-test-id="circle-view-key">
             {key()}
-            <Show when={row()?.detail}>
-              {(detail) => <span class={styles.detail}>{detail()}</span>}
-            </Show>
           </p>
         )}
       </Show>
@@ -271,7 +278,13 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
         <div class={styles.main}>
           <Show when={props.view && row()?.state === 'current' ? props.view : null}>
             {(view) => (
-              <NextStepCard class={styles.next} step={view().next} view={view()} level={3} />
+              <NextStepCard
+                class={styles.next}
+                step={view().next}
+                view={view()}
+                level={3}
+                inCircle={view().next.circle === props.circle}
+              />
             )}
           </Show>
 

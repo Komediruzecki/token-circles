@@ -58,6 +58,12 @@ export interface NextStep {
   circle: CircleNumber | null;
   title: string;
   why: string;
+  /**
+   * The why inside its own circle's view, where Your numbers holds the inputs, the key figure says
+   * where the circle stands and the checks say what they need: the step keeps what to do and the
+   * gap, and drops the rest. Null for no line there.
+   */
+  whyHere: string | null;
   action: StepAction | null;
   meter: StepMeter | null;
   /** "Then: set a budget for Groceries, and build a one-month cushion." */
@@ -72,6 +78,8 @@ interface StepWords {
   /** How "Then:" names it: lowercase, short. */
   thenText: string;
   why: string;
+  /** `NextStep.whyHere`; left out where it is `why` as it is. */
+  whyHere?: string | null;
   action: StepAction | null;
   meter: StepMeter | null;
   fine: string | null;
@@ -84,6 +92,9 @@ const open = (hash: string, page: string): StepAction => ({
 });
 
 const RELOAD: StepAction = { kind: 'reload', label: 'Reload' };
+
+/** In a circle's view, a year on file's step: "5 months to go." The check says how a month counts. */
+const monthsToGo = (n: number): string => `${12 - n} ${12 - n === 1 ? 'month' : 'months'} to go.`;
 
 /** "Set a budget" as "Then:" lists it. */
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
@@ -177,6 +188,8 @@ function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): Ste
       title: `Compare paying ${name} off faster`,
       thenText: `compare paying ${name} off faster`,
       why: `It costs ${rateText(debt.rate ?? 0)}% a year. Solid ground asks for no debt at 10% or more.`,
+      // Its rate is on Your numbers' debts, and the circle's line asks for no debt at 10% or more.
+      whyHere: null,
       action: open(debt.id === null ? '#loans' : `#loans/${debt.id}/compare`, 'Loans'),
       meter: null,
       fine: null,
@@ -197,6 +210,8 @@ function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): Ste
     title: `${name} costs ${rateText(debt.rate)}% a year`,
     thenText: `look at the ${rateText(debt.rate)}% ${name} costs`,
     why: `It carries ${owed}. Solid ground asks for no debt at 10% or more.`,
+    // What it carries is on Your numbers' debts; the title has the rate.
+    whyHere: null,
     action: open('#accounts', 'Accounts'),
     meter: null,
     fine: null,
@@ -224,6 +239,7 @@ function stepFor(
           n === 0
             ? `None of ${window} is tracked yet. ${counts}`
             : `${n} of ${window} ${n === 1 ? 'is' : 'are'} tracked. ${counts}`,
+        whyHere: monthsToGo(n),
         action: open('#import', 'Import'),
         meter: {
           kind: 'cells',
@@ -240,6 +256,7 @@ function stepFor(
         title: 'Sort the entries without a category',
         thenText: 'sort the entries without a category',
         why: `${shareOf(share, 100, false)}% of your spending has a category; Clear picture needs ${SORTED_SHARE}%.`,
+        whyHere: `Another ${SORTED_SHARE - shareOf(share, 100, false)}% of your spending to sort.`,
         action: open('#transactions?uncategorised=1', 'Transactions'),
         meter: {
           kind: 'bar',
@@ -262,6 +279,10 @@ function stepFor(
         why: support
           ? `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than your own income brought in.`
           : `Over your last ${facts.months.length} tracked months, ${gap} a month more went out than came in.`,
+        // The title says the gap; Your numbers, what came in and went out.
+        whyHere: support
+          ? `Over your last ${facts.months.length} tracked months, more went out than your own income brought in.`
+          : `Over your last ${facts.months.length} tracked months, more went out than came in.`,
         action: open('#budgets', 'Budgets'),
         meter: {
           kind: 'bar',
@@ -284,6 +305,11 @@ function stepFor(
           days === 0
             ? `The money you can reach doesn't cover a day of ${what}.`
             : `The money you can reach covers ${days} ${days === 1 ? 'day' : 'days'} of ${what}.`,
+        // The days are the key figure over it; the gap is what to put by.
+        whyHere:
+          facts.liquid === null || facts.essentials === null
+            ? undefined
+            : `${words.money(gapOf(FIRST_CUSHION_MONTHS * facts.essentials, facts.liquid))} to go.`,
         action: open('#goals', 'Goals'),
         meter: cushionMeter(facts, FIRST_CUSHION_MONTHS, met),
         fine: null,
@@ -337,6 +363,7 @@ function stepFor(
             title: 'Grow your cushion to three months',
             thenText: 'grow your cushion to three months',
             why: `${gap} to go: ${words.money(Math.round(facts.liquid))} you can reach, against ${words.money(Math.round(facts.essentials))} needed a month.`,
+            whyHere: `${gap} to go.`,
             action: open('#goals', 'Goals'),
             meter: cushionMeter(facts, target, met),
             fine: null,
@@ -374,6 +401,8 @@ function stepFor(
         title: 'Check the withdrawal rate you plan with',
         thenText: 'check the withdrawal rate you plan with',
         why: `At ${rateText(facts.withdrawalRatePct)}% a year, ${words.money(Math.round(check.target))} would cover what you spend. You're at ${words.money(Math.round(check.value))}.`,
+        // Both figures are the key figure; the rate is on Your numbers, with its link.
+        whyHere: 'A lower rate needs more invested; a higher one, less.',
         action: open('#retirement', 'Retirement'),
         meter: moneyMeter(check, words),
         fine: null,
@@ -399,6 +428,7 @@ function stepFor(
         title: `Your own number: ${target}`,
         thenText: `reach your own number, ${target}`,
         why: `You're at ${words.money(Math.round(check.value))}. At ${rateText(facts.withdrawalRatePct)}% a year, ${target} pays for a year of more than enough.`,
+        whyHere: `${words.money(gapOf(check.target, check.value))} to go.`,
         action: open('#retirement', 'Retirement'),
         meter: moneyMeter(check, words),
         fine: null,
@@ -432,6 +462,7 @@ const ALL_REACHED: NextStep = {
   circle: null,
   title: "You've reached all seven circles.",
   why: 'Every check the circles hold is met, from a year on file to your own number.',
+  whyHere: 'Every check the circles hold is met, from a year on file to your own number.',
   action: { kind: 'circles', hash: '#progress', label: 'See all seven circles' },
   meter: null,
   then: null,
@@ -449,6 +480,9 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
       circle: current,
       title: first.title,
       why: first.reason,
+      // A year on file's check says how a month counts, and the key figure the months there are.
+      whyHere:
+        first.id === 'import-year' ? monthsToGo(Math.min(facts.monthsInYear, 12)) : first.reason,
       action: open(first.link.hash, first.link.label),
       meter:
         first.id === 'import-year'
@@ -483,6 +517,7 @@ export function nextStepOf({ placement, facts, orientation, words }: NextStepInp
     circle: first.circle,
     title: first.words.title,
     why: first.words.why,
+    whyHere: first.words.whyHere === undefined ? first.words.why : first.words.whyHere,
     action: first.words.action,
     meter: first.words.meter,
     then: thenLine(later),

@@ -1587,6 +1587,25 @@ check')` first, as the cushion and debt cases do.
 - **Tests:** `circles-layout.spec.ts` checks every heading's orbit on Analytics, the emergency fund
   page and Progress at 360 and 320: an arc only beside its label. Fails before the change
   (Analytics at 360, "Top Categories Breakdown").
+- **A circle's view says each figure once** (`shared/guidance/circleView.ts`,
+  `shared/guidance/nextStep.ts`, `CircleView.tsx`, `NextStepCard.tsx`). The reported Solid ground view said
+  €2,800 and €1,460 three times each and "1.9" four times: in the key figure, Your next step's why
+  and its bar, the cushion check and Your numbers. Each part now has one job. Your numbers holds
+  the inputs; the key figure says where the circle stands; Your next step says what to do and the
+  gap (`NextStep.whyHere`, "€1,580 to go."), and draws no bar in its own circle, where the ring and
+  the key figure are the same measure; a check says what it needs ("€4,380 would be three
+  months."), and the gap only while no step on the view says it. The key figure's detail line stays
+  on Progress: in the view the checks and Your numbers say each part of it. The same pattern is
+  gone from the other six circles: Clear picture (months and share sorted), Paying your way (in and
+  out), Breathing room (days, reach and need), the debt and yearly-bills checks (owed and rate are
+  Your numbers' debts; the asked sentence is the step's), Room to choose, Work optional and More
+  than enough (value and target are the key figure's; the rate is Your numbers'). Dashboard and the
+  Progress list keep the step's full why and its bar.
+- **Tests:** `progressCircles.test.tsx` renders that Solid ground view (each of €2,800, €1,460,
+  1.9 and €1,580 once) and nine circle states, where no figure in Your next step or a check is the
+  key figure's or Your numbers', and no two of them share one; `guidanceCircleView.test.ts` and
+  `guidanceNextStep.test.ts` pin the new lines; `circles.spec.ts` expects the card question's
+  check without a line of its own. All fail before the change (34 unit tests).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

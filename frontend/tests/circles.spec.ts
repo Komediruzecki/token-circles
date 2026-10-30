@@ -168,8 +168,10 @@ async function answerTheCardQuestion(page: Page): Promise<void> {
   const debt = view.locator('[data-check="no-expensive-debt"]')
   await expect(debt).toHaveAttribute('data-state', 'not-known')
   await expect(debt.getByTestId('circle-check-waiting')).toHaveText('Waiting on your answer')
-  await expect(debt.getByTestId('circle-check-detail')).toHaveText(
-    'Travel card has too few entries to show whether you carry its €300.'
+  // Your next step says why it asks, so the check does not say it again.
+  await expect(debt.getByTestId('circle-check-detail')).toHaveCount(0)
+  await expect(view.getByTestId('next-step-why')).toHaveText(
+    'Travel card has too few entries to show whether you clear it each month. Your answer settles the debt check in Solid ground.'
   )
   // Your next step asks it on this view, so the check does not ask it twice.
   await expect(debt.getByTestId('circle-card-choice')).toHaveCount(0)

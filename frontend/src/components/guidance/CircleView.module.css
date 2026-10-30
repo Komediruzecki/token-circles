@@ -105,13 +105,6 @@
   color: var(--text);
 }
 
-.detail {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.45;
-  color: var(--text-secondary);
-}
-
 .next {
   margin-top: 4px;
 }
