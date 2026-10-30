@@ -11,7 +11,8 @@
  * Cloudflare passed.
  *
  * Cloudflare's siteverify is stubbed: a token that starts with "good" passes, any other fails, and
- * `solvedAgo` sets how long before now Cloudflare says the check was solved.
+ * `solvedAgo` sets how long before now Cloudflare says the check was solved, and `solveTime`
+ * whether its answer says so at all.
  */
 import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,10 +51,13 @@ const UNCONFIGURED: Env = { ...base, TURNSTILE_SECRET: undefined, APP_ENV: 'dev'
 let verified: string[] = [];
 /** How many seconds before now Cloudflare says the check was solved. */
 let solvedAgo = 0;
+/** Whether siteverify's answer says when the check was solved: yes, not at all, or unreadably. */
+let solveTime: 'given' | 'missing' | 'garbage' = 'given';
 
 beforeEach(async () => {
   verified = [];
   solvedAgo = 0;
+  solveTime = 'given';
   await env.DB.prepare('DELETE FROM rate_limits').run();
   const accounts = [EMAIL, WAITING, TWOFA];
   await env.DB.prepare(
@@ -92,7 +96,14 @@ beforeEach(async () => {
       return Response.json({
         success: true,
         'error-codes': [],
-        challenge_ts: new Date(Date.now() - solvedAgo * 1000).toISOString(),
+        ...(solveTime === 'missing'
+          ? {}
+          : {
+              challenge_ts:
+                solveTime === 'garbage'
+                  ? 'not a time'
+                  : new Date(Date.now() - solvedAgo * 1000).toISOString(),
+            }),
       });
     }
     if (url.includes('api.resend.com')) return Response.json({ id: 're_1' });
@@ -223,6 +234,28 @@ describe('a wrong password after a check Cloudflare passed', () => {
     const res = await signIn({ token: 'good-1' });
 
     expect((await body(res)).checkValidForSeconds).toBeLessThanOrEqual(LOGIN_CHECK_SECONDS);
+  });
+
+  it('leaves no check when Cloudflare does not say when the check was solved', async () => {
+    for (const answer of ['missing', 'garbage'] as const) {
+      solveTime = answer;
+
+      const res = await signIn({ token: `good-${answer}` });
+
+      expect(res.status, answer).toBe(401);
+      expect(await body(res), answer).toEqual({ error: 'Invalid email or password' });
+      expect(checkLine(res), answer).toBeNull();
+    }
+  });
+
+  it('signs in as before when Cloudflare does not say when the check was solved', async () => {
+    solveTime = 'missing';
+
+    const res = await signIn({ password: PASSWORD, token: 'good-1' });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.getSetCookie().some((line) => line.startsWith('fm_session='))).toBe(true);
+    expect(checkLine(res)).toBeNull();
   });
 
   it('covers the next try with no token and nothing asked of Cloudflare', async () => {

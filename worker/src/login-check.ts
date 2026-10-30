@@ -10,7 +10,8 @@
  * covered (`checkValidForSeconds` in the 401), so the form knows not to ask for a check before then.
  *
  * - It lasts LOGIN_CHECK_SECONDS from when Cloudflare says the check was solved (`challenge_ts`),
- *   as the token would have, and a try does not renew it.
+ *   as the token would have, and a try does not renew it. A passed token whose answer does not
+ *   say when (no `challenge_ts`, or one that cannot be read) leaves no check.
  * - It covers LOGIN_CHECK_TRIES tries in all, the one that carried the token included. The tries
  *   are counted in rate_limits under the check's own id, one atomic statement per try, so tabs
  *   that share the cookie share the count.
@@ -65,7 +66,13 @@ export interface LoginCheck {
 /** How a password sign-in try got past Cloudflare's check, or why it did not. */
 export type SignInCheck =
   | { ok: true; by: 'off'; carried: boolean }
-  | { ok: true; by: 'token'; solvedAt: number; carried: boolean }
+  | {
+      ok: true;
+      by: 'token';
+      /** When Cloudflare says the check was solved; undefined when its answer did not say. */
+      solvedAt: number | undefined;
+      carried: boolean;
+    }
   | { ok: true; by: 'check'; check: LoginCheck; triesLeft: number; carried: true }
   | {
       ok: false;
@@ -196,8 +203,7 @@ export async function checkSignInTry(
   let refused: Extract<TurnstileResult, { ok: false }> | undefined;
   if (token) {
     const result = await verifyTurnstileDetailed(c, token);
-    if (result.ok)
-      return { ok: true, by: 'token', solvedAt: result.solvedAt ?? Date.now(), carried };
+    if (result.ok) return { ok: true, by: 'token', solvedAt: result.solvedAt, carried };
     refused = result;
   }
   if (carried) {
@@ -227,9 +233,15 @@ export async function coverNextTry(
     return undefined;
   }
   const ip = addressOf(c);
+  // The five minutes run from when Cloudflare says the check was solved. An answer that did not
+  // say leaves no check, rather than one counted from a guess.
+  if (check.solvedAt === undefined || !ip || !c.env.JWT_SECRET) {
+    endLoginCheck(c, check);
+    return undefined;
+  }
   const exp = Math.floor(check.solvedAt / 1000) + LOGIN_CHECK_SECONDS;
   const seconds = exp - nowSeconds();
-  if (!ip || !c.env.JWT_SECRET || seconds <= 0) {
+  if (seconds <= 0) {
     endLoginCheck(c, check);
     return undefined;
   }

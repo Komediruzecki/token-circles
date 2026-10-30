@@ -37,7 +37,8 @@ export type TurnstileResult =
       ok: true;
       /**
        * When Cloudflare says the check was solved (`challenge_ts`, epoch ms, never later than
-       * now), when it said so. A password sign-in counts its login check from it (login-check.ts).
+       * now), when it said so. A password sign-in counts its login check from it, and leaves none
+       * without it (login-check.ts).
        */
       solvedAt?: number;
     }

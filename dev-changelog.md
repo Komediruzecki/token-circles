@@ -39,8 +39,9 @@ All notable changes to Token Circles are documented here. The format is based on
   `Path=/api/auth/login`, `SameSite=Lax`, `Secure` outside development
   (`worker/src/login-check.ts`). The value is `v1.<exp>.<id>.<mac>`. `exp` is when Cloudflare says
   the check was solved plus `LOGIN_CHECK_SECONDS` (300): `verifyTurnstileDetailed` now returns
-  `challenge_ts` as `solvedAt`, capped at now, and the route uses now without it. That keeps the
-  check's end with the token's own expiry, when the widget fetches its next token anyway. `id` is
+  `challenge_ts` as `solvedAt`, capped at now, and a passed token whose answer has no readable
+  `challenge_ts` leaves no check (no seconds in the 401, no cookie). That keeps the check's end
+  with the token's own expiry, when the widget fetches its next token anyway. `id` is
   16 random bytes. `mac` is HMAC-SHA256 over `login-check.v1.<exp>.<id>.<CF-Connecting-IP>` with a
   key derived from `JWT_SECRET` by HKDF-SHA256 under the label
   `token-circles login-check v1 env=<APP_ENV>`, so no session, OAuth state, email-link marker or
