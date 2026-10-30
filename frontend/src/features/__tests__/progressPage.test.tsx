@@ -37,14 +37,15 @@ vi.mock('../../core/achievementsStore', () => ({
     evaluation: {
       earned: [],
       streak: 2,
-      trackedMonths: [(globalThis as never as { __snap: { month: string } }).__snap.month],
+      trackedMonths: (globalThis as never as { __snap: { month: string; tracked?: string[] } })
+        .__snap.tracked ?? [(globalThis as never as { __snap: { month: string } }).__snap.month],
     },
     today: (globalThis as never as { __snap: { today: string } }).__snap.today,
   }),
   unlocks: () => [
     { id: 'first-entry', earnedOn: '2026-07-01', unlockedAt: '2026-08-01T00:00:00.000Z' },
   ],
-  streak: () => 2,
+  streak: () => (globalThis as never as { __snap: { streak?: number } }).__snap.streak ?? 2,
   // A test that needs dismissals to take effect puts a signal on globalThis.__dismissed.
   dismissedAdvice: () =>
     (globalThis as never as { __dismissed?: () => string[] }).__dismissed?.() ?? [],
@@ -64,6 +65,7 @@ vi.mock('../../core/achievementsStore', () => ({
 }
 
 import { ACHIEVEMENTS } from '../../core/achievements/definitions'
+import { addMonths } from '../../core/achievements/months'
 import { dismissAdvice } from '../../core/achievementsStore'
 import { setPage } from '../../core/appStore'
 import Progress from '../Progress'
@@ -115,6 +117,33 @@ describe('Progress page', () => {
     expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(3)
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
+  })
+
+  it('ends the strip last month while this one is not tracked, so the run it counts is lit', () => {
+    // Twelve full months and nothing tracked this month: "12 months tracked" over 12 lit tiles.
+    const snap = (globalThis as never as { __snap: Record<string, unknown> }).__snap
+    const before = { ...snap }
+    const year = Array.from({ length: 12 }, (_, i) => addMonths(thisMonth, -1 - i))
+    Object.assign(snap, { tracked: year, streak: 12 })
+    try {
+      const c = mount(() => <Progress />)
+      expect(c.querySelector('[data-test-id="progress-streak"]')!.textContent).toBe(
+        '12 months tracked'
+      )
+      const cells = [...c.querySelectorAll('[data-month-cell]')]
+      expect(cells).toHaveLength(12)
+      expect(c.querySelectorAll('[data-month-cell][data-tracked="true"]')).toHaveLength(12)
+      expect(cells.at(-1)!.getAttribute('data-month')).toBe(addMonths(thisMonth, -1))
+    } finally {
+      for (const key of Object.keys(snap)) delete snap[key]
+      Object.assign(snap, before)
+    }
+  })
+
+  it('ends the strip this month once this month is tracked', () => {
+    const c = mount(() => <Progress />)
+    const cells = [...c.querySelectorAll('[data-month-cell]')]
+    expect(cells.at(-1)!.getAttribute('data-month')).toBe(thisMonth)
   })
 
   it('builds advice from the snapshot and can dismiss a card', () => {
