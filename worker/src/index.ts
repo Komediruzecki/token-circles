@@ -47,6 +47,7 @@ import { sweepAuthLogs } from './authlog';
 import { errorResponse, rejectMalformedJson } from './error-response';
 import { type TokenIdentity } from './apitoken';
 import { readTimeZone } from './local-date';
+import { requireAppRequest } from './request-origin';
 
 /** Bindings declared in wrangler.toml (env.*) plus secrets (wrangler secret put). */
 export interface Env {
@@ -139,6 +140,11 @@ app.use('*', async (c, next) => {
   }
 });
 app.get('/robots.txt', (c) => c.text('User-agent: *\nDisallow: /\n'));
+
+// Requests that change data are taken from the app's own pages, with a JSON body, before any route
+// runs; the routes called from elsewhere by design are listed there, each with why
+// (request-origin.ts). After CORS and the headers above, so its 403 carries them.
+app.use('*', requireAppRequest);
 
 // A request body that is not JSON answers 400, not 500 (error-response.ts).
 app.use('*', rejectMalformedJson);
