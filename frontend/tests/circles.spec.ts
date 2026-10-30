@@ -261,7 +261,7 @@ test.describe('The seven circles @smoke', () => {
 })
 
 test.describe('The seven circles, compared', () => {
-  test('local-first: the cards carry a band and say where their figures come from, and the housing card asks how you live', async ({
+  test('local-first: the cards carry a band and say where their figures come from, and ask how you live and who the space covers', async ({
     page,
   }) => {
     test.setTimeout(150_000)
@@ -316,6 +316,19 @@ test.describe('The seven circles, compared', () => {
     await expect(housing.getByTestId('benchmark-body')).toHaveText(
       'Households in the EU spend 18.9% on average (2025).'
     )
+
+    // The subscriptions on Bills lead, and the card asks who the space covers until it knows.
+    await expect(paying.getByTestId('benchmark-card').first()).toHaveAttribute(
+      'data-card',
+      'subscriptions'
+    )
+    const subscriptions = paying.locator('[data-card="subscriptions"]')
+    await expect(subscriptions.getByTestId('benchmark-title')).toHaveText(
+      'No subscriptions on Bills'
+    )
+    const household = subscriptions.getByTestId('circle-space-household')
+    await household.getByTestId('circle-space-adults-2').click()
+    await expect(household).toHaveCount(0)
 
     // Kept in About this space, where it can change.
     await page.evaluate(() => {

@@ -1251,6 +1251,25 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   a failed save said beside the card, the UK's choices), `settingsAboutThisSpace.test.tsx` (the
   tenure answer held back in production, changed and removed in other builds) and `circles.spec.ts`
   (the housing card's question answered local-first and kept in About this space).
+- **Subscription cards** (`shared/guidance/cards.ts`, `facts.ts`): with the gate open, Paying your
+  way opens with the active subscriptions on Bills (type `subscription`, not paused, above 0;
+  `subscriptionsOf`), counted per adult and costed a month with `monthlyEquivalent`, which moved to
+  `shared/subscriptionMath.ts` (the frontend module re-exports it). The count is compared
+  everywhere, the euro regions with the UK's figure and a tag saying so; the spend only in the UK
+  and the US, and only while the base currency is the region's. The card shows the higher of the
+  two bands, from 3 tracked months, and says it firms up at 12, once the yearly ones have come
+  round (`benchmarks.json`'s minimum). The euro regions' card says only the count is compared: Bills keeps no record of what
+  was active when, so there is no earlier spend to set beside today's (D4's own trend). While no
+  adult count is on file the card counts one and asks "Who does this space cover?" on itself; the
+  question is setup's (`HouseholdQuestion`, now its own component in `SpaceQuestions.tsx`), and a
+  chip whose save fails goes back to the answer before.
+- **Tests:** `guidanceFacts.test.ts` (what counts as an active subscription and its monthly cost;
+  none without the bills), `guidanceCards.test.ts` (guidance.md 5.2's three US cards, the higher of
+  the two bands, the spend only in the region's currency, the euro regions' borrowed count and
+  their note, per adult with 2 and with 3 or more, the quoted figures held to the file, none before
+  3 months and provisional under 12),
+  `progressCircles.test.tsx` (the household question on the card, saved and gone once answered, a
+  failed save puts the chip back).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
@@ -1265,6 +1284,7 @@ Added:
 - **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
 - **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
 - **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
+- **Your subscriptions beside the usual count**, and in the UK and US beside the usual monthly spend, inside Paying your way.
 
 ### Sign-in
 

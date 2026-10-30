@@ -17,6 +17,7 @@ import {
   bandFor,
   bandsFor,
   derivationFor,
+  gapFor,
   referencesFor,
   sourceFor,
 } from './benchmarks';
@@ -80,12 +81,15 @@ export interface BenchmarkCard {
   where: { rule: string; sources: CardSource[]; strength: string } | null;
   /** "Based on 5 months. It firms up at 12.", under 12 months on file. */
   provisional: string | null;
-  /** Asked on the card while it has no answer: the housing card's "How do you live?". */
+  /**
+   * Asked on the card while it has no answer: the housing card's "How do you live?", the
+   * subscription card's "Who does this space cover?".
+   */
   ask?: CardQuestion;
 }
 
 /** A question a card asks while its answer would change the comparison. */
-export type CardQuestion = 'tenure';
+export type CardQuestion = 'tenure' | 'household';
 
 /** Where the cards are read. */
 export interface CardContext {
@@ -94,6 +98,8 @@ export interface CardContext {
   currency: string;
   /** The tenure answer; a mortgage counts as a housing loan for the debt-payment lines. */
   tenure: string | null;
+  /** The adults the space covers (3 stands for three or more); null until the person says. */
+  adults: number | null;
 }
 
 /** What a band is called on its tag. Descriptive, never a verdict. */
@@ -164,18 +170,23 @@ function sourcesOf(ids: readonly string[]): CardSource[] {
   return out;
 }
 
-/** "Where this comes from" for a metric in a region, with the references the card quotes. */
+/**
+ * "Where this comes from" for a metric in a region, with the references the card quotes and any
+ * other sources its sentences name.
+ */
 function whereFrom(
   metric: MetricId,
   region: RegionId,
   bands: readonly BandEntry[],
-  quoted: readonly Reference[]
-): BenchmarkCard['where'] {
+  quoted: readonly Reference[],
+  named: readonly string[] = []
+): NonNullable<BenchmarkCard['where']> {
   const derivation = derivationFor(metric, region);
   const ids = [
     ...(derivation?.sourceIds ?? []),
     ...bands.flatMap((band) => band.sourceIds),
     ...quoted.map((ref) => ref.sourceId),
+    ...named,
   ];
   const strength: Strength = derivation?.strength ?? bands[0]?.strength ?? 'moderate';
   return {
@@ -702,6 +713,153 @@ export function debtPaymentsCard(
 }
 
 // ---------------------------------------------------------------------------------------------
+// Subscriptions (circle 2)
+
+const BAND_ORDER: Readonly<Record<Band, number>> = { low: 0, typical: 1, high: 2 };
+
+/** The sentences a subscription card says per band, after "That's about {a year} a year." */
+interface SubscriptionWords {
+  high: string;
+  typical: string;
+  low: string;
+  /** Sources the sentences name besides the bands'. */
+  named: readonly string[];
+}
+
+/** The US and the UK have figures of their own (guidance.md 5.2, worked for the US). */
+const SUBSCRIPTION_WORDS: Readonly<Partial<Record<RegionId, SubscriptionWords>>> = {
+  US: {
+    high: "People in the US report about 3 subscriptions, and $35 to $111 a month on average depending on the survey (Self Financial and CNET, 2026). In the March poll, 6 in 10 paid for at least one they hadn't used in a month.",
+    typical:
+      "That's in the usual range in the US. Recent surveys put the average between $35 and $111 a month, depending on what they count.",
+    low: 'Fewer than most people in the US, who report about 3.',
+    named: ['self-subscriptions-2026', 'cnet-subscriptions-2026'],
+  },
+  UK: {
+    high: 'Adults in the UK hold about 3 subscriptions and spend about £41 a month on them (Department for Business and Trade, 2023).',
+    typical:
+      "That's in the usual range in the UK, where adults hold about 3 and spend about £41 a month on them (Department for Business and Trade, 2023).",
+    low: 'Fewer than most adults in the UK, who hold about 3.',
+    named: ['dbt-subscription-traps-2023'],
+  },
+};
+
+/** The euro regions, which compare the count with the UK's (D4) and have no spend figure. */
+function borrowedSubscriptionWords(region: RegionId): SubscriptionWords {
+  const name = regionName(region);
+  return {
+    high: `${capital(name)} has no official count yet; in the UK, where there is one, adults hold about 3 (Department for Business and Trade, 2023). In an EU survey, 37% of people said they often keep paying for subscriptions they no longer use (European Commission, 2024).`,
+    typical: `That's in the usual range for the UK, where adults hold about 3 (Department for Business and Trade, 2023); ${name} has no official count yet.`,
+    low: `Fewer than most adults in the UK, who hold about 3; ${name} has no official count yet.`,
+    named: ['dbt-subscription-traps-2023', 'ec-digital-fairness-2024'],
+  };
+}
+
+const KEEP_OR_DROP =
+  'Want fewer, or more out of the ones you keep? Each one on Bills is a quick yes or no.';
+const NOT_HERE_YET =
+  "If some are paid from a card that isn't here yet, import that statement and the scan will find them. And if there's a chore you repeat every week, a service that does it might be worth its price in time saved.";
+
+/** A count or a share of one per adult, as the bar and the body write it: "3", "2.5". */
+const countText = (value: number): string => String(Math.round(value * 10) / 10);
+
+/**
+ * The subscriptions on Bills beside the usual count per adult, and in the UK and the US beside the
+ * usual spend a month (guidance.md 4.4.1, 5.2): one card, in the higher of the two bands. The
+ * spend is compared only in the region's own currency. Until the person says how many adults the
+ * space covers, it counts one and asks. It waits for 3 tracked months, and firms up at 12, when the
+ * yearly ones have come round (benchmarks.json's minData).
+ */
+export function subscriptionsCard(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const held = facts.subscriptions;
+  if (!held || !facts.averaged) return null;
+  const region = at.region;
+  const name = regionName(region);
+  const money = (n: number) => words.money(Math.round(n));
+  const adults = at.adults !== null && at.adults > 0 ? at.adults : 1;
+  const perAdult = held.count / adults;
+  const countBands = bandsFor('subscriptions.count', region);
+  const typical = countBands.find((one) => one.band === 'typical');
+  const high = countBands.find((one) => one.band === 'high');
+  if (!typical || typical.min === null || typical.max === null || !high || high.min === null) {
+    return null;
+  }
+  const countBand = bandFor('subscriptions.count', region, perAdult);
+  const regionInfo = BENCHMARKS.regions.find((one) => one.id === region);
+  const spendShown = regionInfo !== undefined && regionInfo.currency === at.currency;
+  const spendBands = spendShown ? bandsFor('subscriptions.monthlySpend', region) : [];
+  const spendBand =
+    spendBands.length > 0
+      ? bandFor('subscriptions.monthlySpend', region, held.perMonth / adults)
+      : null;
+  const band = [countBand?.band, spendBand?.band]
+    .filter((one): one is Band => one !== undefined)
+    .sort((a, b) => BAND_ORDER[b] - BAND_ORDER[a])[0];
+  const borrowed = typical.borrowedFrom;
+  const said = SUBSCRIPTION_WORDS[region] ?? borrowedSubscriptionWords(region);
+  let body: string;
+  let step: { label: string; hash: string };
+  if (band === 'high') {
+    body = `That's about ${money(held.perMonth * 12)} a year. ${said.high}`;
+    step = { label: 'Review them on Bills', hash: '#bills' };
+  } else if (band === 'typical') {
+    body = `${said.typical} ${KEEP_OR_DROP}`;
+    step = { label: 'Open Bills', hash: '#bills' };
+  } else {
+    body = `${said.low} ${NOT_HERE_YET}`;
+    step = { label: 'Import another account', hash: '#import' };
+  }
+  const paragraphs = [body];
+  if (adults > 1) {
+    paragraphs.push(
+      `The surveys count per adult: with ${adults >= 3 ? '3 or more' : adults} adults here, that's ${countText(perAdult)} each.`
+    );
+  }
+  const tags: CardTag[] = band ? [{ kind: 'band', text: BAND_TAGS[band] }] : [];
+  if (borrowed) {
+    tags.push({ kind: 'borrowed', text: `${capital(regionName(borrowed))}'s figures` });
+  }
+  const title =
+    held.count === 0
+      ? 'No subscriptions on Bills'
+      : `${held.count} ${held.count === 1 ? 'subscription' : 'subscriptions'}, about ${money(held.perMonth)} a month`;
+  const where = whereFrom(
+    'subscriptions.count',
+    region,
+    [...countBands, ...spendBands],
+    [],
+    said.named
+  );
+  return {
+    id: 'subscriptions',
+    metric: 'subscriptions.count',
+    eyebrow: 'Subscriptions',
+    tags,
+    title,
+    body: paragraphs,
+    bar: barOf(
+      countBands,
+      perAdult,
+      { from: 0, to: Math.max(10, Math.ceil(high.min * 1.5)) },
+      (edge) => countText(edge),
+      `Typical in ${borrowed ? regionName(borrowed) : name}: ${countText(typical.min)} to ${countText(typical.max - 1)} per adult. Yours: ${countText(perAdult)}.`
+    ),
+    note:
+      gapFor('subscriptions.monthlySpend', region) === null
+        ? null
+        : `${capital(name)} has no official figure for what subscriptions cost, so only the count is compared.`,
+    step,
+    where,
+    provisional: provisionalOf(facts),
+    ...(at.adults === null ? { ask: 'household' as const } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 // Groceries, eating out and transport, as shares of spending (circle 2)
 
 /** What a share card says, per metric (guidance.md 5.3). */
@@ -1035,7 +1193,11 @@ export function circleCards(
   const cards: (BenchmarkCard | null)[] = [];
   switch (circle) {
     case 2:
-      cards.push(...spendingShareCards(facts, words, at), housingCard(facts, words, at));
+      cards.push(
+        subscriptionsCard(facts, words, at),
+        ...spendingShareCards(facts, words, at),
+        housingCard(facts, words, at)
+      );
       break;
     case 3:
       cards.push(cushionCard(facts, words, at), shockCard(facts, words, at));

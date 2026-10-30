@@ -83,11 +83,90 @@ function AskAgain(props: {
   )
 }
 
-export function SpaceQuestions(props: SpaceQuestionsProps) {
+/**
+ * "Who does this space cover?": adults and children, each a group of chips. Setup and About this
+ * space ask it with the region question; the subscription card asks it on its own while no adult
+ * count is on file.
+ */
+export function HouseholdQuestion(props: {
+  /** Keeps the radio groups of two copies apart, and prefixes the test ids. */
+  idPrefix: string
+  answers: Answers
+  onChoose: (changes: AnswerChanges) => void
+  disabled?: boolean
+  /** A line under the question. */
+  note?: JSX.Element
+  /** With it, an answered question offers "Remove answer". */
+  onAskAgain?: () => void
+}): JSX.Element {
   const id = (part: string) => `${props.idPrefix}-${part}`
   const adults = () => countChoice(props.answers.adults)
   const children = () => countChoice(props.answers.children)
-  const householdAnswered = () => adults() !== undefined || children() !== undefined
+  const answered = () => adults() !== undefined || children() !== undefined
+  return (
+    <fieldset class={styles.question} data-test-id={id('household')}>
+      <legend id={id('household-question')} class={styles.legend}>
+        {HOUSEHOLD_QUESTION}
+      </legend>
+      <div class={styles.counts}>
+        <fieldset class={styles.count}>
+          <legend class={styles.countLegend}>Adults</legend>
+          <div class={styles.chips}>
+            <For each={ADULT_CHOICES}>
+              {(choice) => (
+                <Chip
+                  name={id('adults')}
+                  label={choice.label}
+                  checked={adults() === choice.value}
+                  disabled={props.disabled}
+                  testId={id(`adults-${choice.value}`)}
+                  onChoose={() => {
+                    props.onChoose({ adults: choice.value })
+                  }}
+                />
+              )}
+            </For>
+          </div>
+        </fieldset>
+        <fieldset class={styles.count}>
+          <legend class={styles.countLegend}>Children</legend>
+          <div class={styles.chips}>
+            <For each={CHILD_CHOICES}>
+              {(choice) => (
+                <Chip
+                  name={id('children')}
+                  label={choice.label}
+                  checked={children() === choice.value}
+                  disabled={props.disabled}
+                  testId={id(`children-${choice.value}`)}
+                  onChoose={() => {
+                    props.onChoose({ children: choice.value })
+                  }}
+                />
+              )}
+            </For>
+          </div>
+        </fieldset>
+      </div>
+      <Show when={props.note || (props.onAskAgain && answered())}>
+        <div class={styles.note}>
+          <span data-test-id={id('household-note')}>{props.note}</span>
+          <Show when={props.onAskAgain && answered()}>
+            <AskAgain
+              testId={id('household-ask-again')}
+              describedBy={id('household-question')}
+              disabled={props.disabled}
+              onClick={() => props.onAskAgain?.()}
+            />
+          </Show>
+        </div>
+      </Show>
+    </fieldset>
+  )
+}
+
+export function SpaceQuestions(props: SpaceQuestionsProps) {
+  const id = (part: string) => `${props.idPrefix}-${part}`
   return (
     <div class={styles.questions}>
       <fieldset class={styles.question} data-test-id={id('region')}>
@@ -126,64 +205,14 @@ export function SpaceQuestions(props: SpaceQuestionsProps) {
         </Show>
       </fieldset>
 
-      <fieldset class={styles.question} data-test-id={id('household')}>
-        <legend id={id('household-question')} class={styles.legend}>
-          {HOUSEHOLD_QUESTION}
-        </legend>
-        <div class={styles.counts}>
-          <fieldset class={styles.count}>
-            <legend class={styles.countLegend}>Adults</legend>
-            <div class={styles.chips}>
-              <For each={ADULT_CHOICES}>
-                {(choice) => (
-                  <Chip
-                    name={id('adults')}
-                    label={choice.label}
-                    checked={adults() === choice.value}
-                    disabled={props.disabled}
-                    testId={id(`adults-${choice.value}`)}
-                    onChoose={() => {
-                      props.onChoose({ adults: choice.value })
-                    }}
-                  />
-                )}
-              </For>
-            </div>
-          </fieldset>
-          <fieldset class={styles.count}>
-            <legend class={styles.countLegend}>Children</legend>
-            <div class={styles.chips}>
-              <For each={CHILD_CHOICES}>
-                {(choice) => (
-                  <Chip
-                    name={id('children')}
-                    label={choice.label}
-                    checked={children() === choice.value}
-                    disabled={props.disabled}
-                    testId={id(`children-${choice.value}`)}
-                    onChoose={() => {
-                      props.onChoose({ children: choice.value })
-                    }}
-                  />
-                )}
-              </For>
-            </div>
-          </fieldset>
-        </div>
-        <Show when={props.householdNote || (props.onAskAgain && householdAnswered())}>
-          <div class={styles.note}>
-            <span data-test-id={id('household-note')}>{props.householdNote}</span>
-            <Show when={props.onAskAgain && householdAnswered()}>
-              <AskAgain
-                testId={id('household-ask-again')}
-                describedBy={id('household-question')}
-                disabled={props.disabled}
-                onClick={() => props.onAskAgain?.('household')}
-              />
-            </Show>
-          </div>
-        </Show>
-      </fieldset>
+      <HouseholdQuestion
+        idPrefix={props.idPrefix}
+        answers={props.answers}
+        disabled={props.disabled}
+        onChoose={props.onChoose}
+        note={props.householdNote}
+        onAskAgain={props.onAskAgain ? () => props.onAskAgain?.('household') : undefined}
+      />
     </div>
   )
 }

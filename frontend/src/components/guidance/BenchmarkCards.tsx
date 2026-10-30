@@ -74,7 +74,10 @@ function Card(props: { card: BenchmarkCard; question?: CardQuestionSlot }): JSX.
           </p>
         )}
       </For>
-      <Show when={props.question && props.card.ask}>{(ask) => props.question?.(ask())}</Show>
+      {/* Keyed: a place in the list that holds another card asks that card's question. */}
+      <Show when={props.question && props.card.ask} keyed>
+        {(ask) => props.question?.(ask)}
+      </Show>
       <Show when={props.card.bar}>{(bar) => <BandBar bar={bar()} />}</Show>
       <Show when={props.card.note}>
         <p class={styles.note} data-test-id="benchmark-note">

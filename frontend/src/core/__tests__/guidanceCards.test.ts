@@ -16,6 +16,7 @@ import {
   savingsCard,
   shockCard,
   spendingShareCards,
+  subscriptionsCard,
 } from '../../../../shared/guidance/cards'
 import { facts, words } from './guidanceFixtures'
 import type { RegionId } from '../../../../shared/guidance/benchmarks'
@@ -26,6 +27,7 @@ const at = (region: RegionId, over: Partial<CardContext> = {}): CardContext => (
   region,
   currency: BENCHMARKS.regions.find((one) => one.id === region)!.currency,
   tenure: null,
+  adults: null,
   ...over,
 })
 
@@ -349,6 +351,148 @@ describe('debt payments', () => {
   })
 })
 
+/** Whole dollars, for the US cards' own currency. */
+const usd = {
+  money: (n: number): string =>
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(n),
+}
+
+describe('subscriptions', () => {
+  const held = (count: number, perMonth: number) => facts({ subscriptions: { count, perMonth } })
+  const KEEP =
+    'Want fewer, or more out of the ones you keep? Each one on Bills is a quick yes or no.'
+  const NOT_HERE =
+    "If some are paid from a card that isn't here yet, import that statement and the scan will find them. And if there's a chore you repeat every week, a service that does it might be worth its price in time saved."
+
+  it("reads guidance.md's worked example: 30 subscriptions in the US, about $350 a month", () => {
+    const shown = subscriptionsCard(held(30, 350), usd, at('US'))!
+    expect(shown).toMatchObject({
+      eyebrow: 'Subscriptions',
+      tags: [{ kind: 'band', text: 'Above typical' }],
+      title: '30 subscriptions, about $350 a month',
+      body: [
+        "That's about $4,200 a year. People in the US report about 3 subscriptions, and $35 to $111 a month on average depending on the survey (Self Financial and CNET, 2026). In the March poll, 6 in 10 paid for at least one they hadn't used in a month.",
+      ],
+      step: { label: 'Review them on Bills', hash: '#bills' },
+      note: null,
+      ask: 'household',
+    })
+    expect(shown.bar!.label).toBe('Typical in the US: 2 to 6 per adult. Yours: 30.')
+    expect(shown.bar).toMatchObject({ from: 0, to: 11, mark: 11 })
+    expect(shown.where!.sources.map((source) => source.publisher)).toEqual(
+      expect.arrayContaining(['Self Financial', 'WFSB / CNET'])
+    )
+  })
+
+  it('calls the usual range usual, and a low count a sign of a card not here yet', () => {
+    expect(subscriptionsCard(held(4, 62), usd, at('US'))!).toMatchObject({
+      tags: [{ kind: 'band', text: 'Typical' }],
+      title: '4 subscriptions, about $62 a month',
+      body: [
+        `That's in the usual range in the US. Recent surveys put the average between $35 and $111 a month, depending on what they count. ${KEEP}`,
+      ],
+      step: { label: 'Open Bills', hash: '#bills' },
+    })
+    expect(subscriptionsCard(held(1, 9.99), usd, at('US'))!).toMatchObject({
+      tags: [{ kind: 'band', text: 'Below typical' }],
+      title: '1 subscription, about $10 a month',
+      body: [`Fewer than most people in the US, who report about 3. ${NOT_HERE}`],
+      step: { label: 'Import another account', hash: '#import' },
+    })
+    expect(subscriptionsCard(held(0, 0), usd, at('US'))!.title).toBe('No subscriptions on Bills')
+  })
+
+  it('takes the higher band of the count and the spend, the spend only in its own currency', () => {
+    // Three is a usual count; $200 a month is past the usual spend.
+    expect(subscriptionsCard(held(3, 200), usd, at('US'))!.tags).toEqual([
+      { kind: 'band', text: 'Above typical' },
+    ])
+    expect(subscriptionsCard(held(3, 200), words, at('US', { currency: 'EUR' }))!.tags).toEqual([
+      { kind: 'band', text: 'Typical' },
+    ])
+    expect(subscriptionsCard(held(3, 100), words, at('UK'))!.tags).toEqual([
+      { kind: 'band', text: 'Above typical' },
+    ])
+  })
+
+  it("compares the euro regions' count with the UK's, named as borrowed, and says the spend has no figure", () => {
+    const shown = subscriptionsCard(held(30, 320), words, at('DE'))!
+    expect(shown).toMatchObject({
+      tags: [
+        { kind: 'band', text: 'Above typical' },
+        { kind: 'borrowed', text: "The UK's figures" },
+      ],
+      title: '30 subscriptions, about €320 a month',
+      body: [
+        "That's about €3,840 a year. Germany has no official count yet; in the UK, where there is one, adults hold about 3 (Department for Business and Trade, 2023). In an EU survey, 37% of people said they often keep paying for subscriptions they no longer use (European Commission, 2024).",
+      ],
+      note: 'Germany has no official figure for what subscriptions cost, so only the count is compared.',
+    })
+    expect(shown.bar!.label).toBe('Typical in the UK: 2 to 5 per adult. Yours: 30.')
+    expect(shown.where!.sources.map((source) => source.publisher)).toContain('European Commission')
+    expect(subscriptionsCard(held(3, 40), words, at('EU27'))!.body).toEqual([
+      `That's in the usual range for the UK, where adults hold about 3 (Department for Business and Trade, 2023); the EU has no official count yet. ${KEEP}`,
+    ])
+    expect(subscriptionsCard(held(1, 10), words, at('HR'))!.body).toEqual([
+      `Fewer than most adults in the UK, who hold about 3; Croatia has no official count yet. ${NOT_HERE}`,
+    ])
+    expect(subscriptionsCard(held(3, 40), words, at('UK'))!.note).toBeNull()
+  })
+
+  it('counts per adult once the household is known, and asks until it is', () => {
+    const two = subscriptionsCard(held(8, 120), words, at('UK', { adults: 2 }))!
+    expect(two.bar!.label).toBe('Typical in the UK: 2 to 5 per adult. Yours: 4.')
+    expect(two.body[1]).toBe("The surveys count per adult: with 2 adults here, that's 4 each.")
+    expect(two.ask).toBeUndefined()
+    const three = subscriptionsCard(held(8, 120), words, at('UK', { adults: 3 }))!
+    expect(three.body[1]).toBe(
+      "The surveys count per adult: with 3 or more adults here, that's 2.7 each."
+    )
+    // Unknown counts as one adult, with no per-adult line, and the card asks.
+    const one = subscriptionsCard(held(8, 120), words, at('UK'))!
+    expect(one.body).toHaveLength(1)
+    expect(one.ask).toBe('household')
+    expect(one.tags[0].text).toBe('Above typical')
+  })
+
+  it('holds the figures its sentences quote to the file', () => {
+    const about = (
+      metric: 'subscriptions.count' | 'subscriptions.monthlySpend',
+      region: RegionId
+    ) => referencesFor(metric, region)[0]
+    expect(Math.round(about('subscriptions.count', 'US').value!)).toBe(3)
+    expect(Math.round(about('subscriptions.count', 'UK').value!)).toBe(3)
+    expect(about('subscriptions.monthlySpend', 'UK').value).toBe(41)
+    expect(about('subscriptions.monthlySpend', 'US').value).toBe(111)
+    expect(about('subscriptions.monthlySpend', 'US').label).toContain('$35')
+  })
+
+  it('shows nothing without the bills or 3 months, and firms up at 12', () => {
+    expect(subscriptionsCard(facts(), words, at('DE'))).toBeNull()
+    expect(
+      subscriptionsCard(
+        facts({ subscriptions: { count: 3, perMonth: 40 }, averaged: false }),
+        words,
+        at('DE')
+      )
+    ).toBeNull()
+    const early = facts({
+      subscriptions: { count: 3, perMonth: 40 },
+      firm: false,
+      months: ['2026-04', '2026-05', '2026-06', '2026-07'],
+    })
+    expect(subscriptionsCard(early, words, at('DE'))!.provisional).toBe(
+      'Based on 4 months. It firms up at 12.'
+    )
+    expect(subscriptionsCard(held(3, 40), words, at('DE'))!.provisional).toBeNull()
+  })
+})
+
 /** A month's spending by kind, out of 2,500 spent and 3,000 earned: 35% of pay on the home. */
 const SPENT = { groceries: 300, eating_out: 100, transport: 250, housing: 900, utilities: 150 }
 
@@ -592,10 +736,15 @@ describe('housing costs', () => {
 })
 
 describe('the cards each circle shows', () => {
-  it('puts spending and housing in Paying your way', () => {
-    expect(
-      circleCards(2, facts({ spendingByKind: SPENT }), words, at('DE')).map((one) => one.id)
-    ).toEqual(['groceries', 'eating-out', 'transport', 'housing'])
+  it('puts subscriptions, spending and housing in Paying your way', () => {
+    const paying = facts({ spendingByKind: SPENT, subscriptions: { count: 3, perMonth: 40 } })
+    expect(circleCards(2, paying, words, at('DE')).map((one) => one.id)).toEqual([
+      'subscriptions',
+      'groceries',
+      'eating-out',
+      'transport',
+      'housing',
+    ])
   })
 
   it('puts the cushion, the bill and the debts in Breathing room and Solid ground, savings in Room to choose', () => {
@@ -615,7 +764,12 @@ describe('the cards each circle shows', () => {
 
   it('says where every figure comes from, with links that open securely', () => {
     const shown = [
-      ...circleCards(2, facts({ spendingByKind: SPENT }), words, at('DE')),
+      ...circleCards(
+        2,
+        facts({ spendingByKind: SPENT, subscriptions: { count: 3, perMonth: 40 } }),
+        words,
+        at('DE')
+      ),
       ...circleCards(4, facts({ debts: [loan] }), words, at('DE')),
     ]
     expect(shown.length).toBeGreaterThan(5)

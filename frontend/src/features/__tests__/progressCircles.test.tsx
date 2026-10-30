@@ -727,6 +727,61 @@ describe('How you compare', () => {
     ])
   })
 
+  it('asks who the space covers on the subscription card until the adults are known', async () => {
+    const held = facts({ subscriptions: { count: 8, perMonth: 120 } })
+    guidance.set!(viewOf(held, true))
+    const c = mount(() => <Progress />)
+    go('#progress/2')
+    const view = q(c, '[data-test-id="circle-view"]')
+    await vi.waitFor(() => {
+      expect(view.querySelector('[data-card="subscriptions"]')).not.toBeNull()
+    })
+    const card = q(view, '[data-card="subscriptions"]')
+    expect(q(card, '[data-test-id="benchmark-title"]').textContent).toBe(
+      '8 subscriptions, about €120 a month'
+    )
+    const question = q(card, '[data-test-id="circle-space-household"]')
+    expect(q(question, 'legend').textContent).toBe('Who does this space cover?')
+    q(question, '[data-test-id="circle-space-adults-2"] input').click()
+    await vi.waitFor(() => {
+      expect(saves.calls).toEqual([{ adults: 2 }])
+    })
+    expect(vi.mocked(takeAnswers)).toHaveBeenCalledWith(1, { adults: 2 })
+
+    // Answered: the card counts per adult and asks no more.
+    guidance.set!(viewOf(held, true, { adults: 2 }))
+    await vi.waitFor(() => {
+      expect(view.querySelector('[data-test-id="circle-space-household"]')).toBeNull()
+    })
+    expect(
+      [
+        ...q(view, '[data-card="subscriptions"]').querySelectorAll(
+          '[data-test-id="benchmark-body"]'
+        ),
+      ]
+        .map((one) => one.textContent)
+        .at(-1)
+    ).toBe("The surveys count per adult: with 2 adults here, that's 4 each.")
+  })
+
+  it('puts the household chip back when the answer did not save', async () => {
+    saves.fail = true
+    guidance.set!(viewOf(facts({ subscriptions: { count: 3, perMonth: 40 } }), true))
+    const c = mount(() => <Progress />)
+    go('#progress/2')
+    await vi.waitFor(() => {
+      expect(c.querySelector('[data-test-id="circle-space-household"]')).not.toBeNull()
+    })
+    const chip = q(c, '[data-test-id="circle-space-adults-1"] input') as HTMLInputElement
+    chip.click()
+    await vi.waitFor(() => {
+      expect(q(c, '[data-test-id="circle-compare-problem"]').textContent).toBe(
+        "Couldn't save your answer. Try again."
+      )
+    })
+    expect(chip.checked).toBe(false)
+  })
+
   it('has no comparison in a circle without cards', async () => {
     guidance.set!(viewOf(facts(), true))
     const c = mount(() => <Progress />)

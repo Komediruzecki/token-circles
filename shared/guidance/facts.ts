@@ -39,6 +39,7 @@ import { addCalendarMonths, addDays } from '../calendarMonths';
 import { amortize, loanStatus, rateStretches } from '../loanSchedule';
 import { nextPaymentMonth } from '../loanScenarios';
 import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings';
+import { monthlyEquivalent } from '../subscriptionMath';
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
 import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
@@ -112,6 +113,15 @@ export interface FactsBill {
   frequency?: string | null;
   /** 0 or false when paused; absent reads as active, as Bills does. */
   is_active?: number | boolean | null;
+  /** 'bill' or 'subscription'; absent reads as a bill, as Bills does. */
+  type?: string | null;
+}
+
+/** The active subscriptions on Bills: how many, and what they cost a month together. */
+export interface Subscriptions {
+  count: number;
+  /** Each one's monthly equivalent (`monthlyEquivalent`), added up, in the base currency. */
+  perMonth: number;
 }
 
 /** The yearly entries on Bills, active ones of both types: what setting money aside covers. */
@@ -308,6 +318,11 @@ export interface GuidanceFacts {
    * months.
    */
   spendingByKind?: Partial<Record<Kind, number>> | null;
+  /**
+   * The active subscriptions on Bills, for the household: the subscription card divides them by
+   * the adults it covers. Null when the bills were not given.
+   */
+  subscriptions?: Subscriptions | null;
 }
 
 /** A category the window took in or spent in. */
@@ -865,6 +880,7 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     enoughPerYear: finite(enough) && enough > 0 ? enough : null,
     freeMoney: input.answers?.freeMoney ?? null,
     yearlyBills: yearlyBillsOf(input.bills ?? []),
+    subscriptions: input.bills ? subscriptionsOf(input.bills) : null,
     setsAsideYearly: input.answers?.setsAsideYearly ?? null,
     liquidParts: liquidPartsOf(input.accounts, input.transactions, today),
     windowCategories: averaged ? windowCategoriesOf(input.categories, sums, months.length) : [],
@@ -938,6 +954,26 @@ function windowCategoriesOf(
     });
   }
   return out.sort((a, b) => b.perMonth - a.perMonth);
+}
+
+/**
+ * The active subscriptions on Bills (guidance.md 4.4.1): the ones the scan found and the person
+ * kept are subscriptions there too. Their cost a month is each one's monthly equivalent, as the
+ * Bills page totals them.
+ */
+export function subscriptionsOf(bills: readonly FactsBill[]): Subscriptions {
+  const active = bills.filter(
+    (bill) =>
+      bill.type === 'subscription' &&
+      bill.is_active !== 0 &&
+      bill.is_active !== false &&
+      finite(bill.amount) &&
+      bill.amount > 0
+  );
+  return {
+    count: active.length,
+    perMonth: active.reduce((sum, bill) => sum + monthlyEquivalent(bill.amount, bill.frequency), 0),
+  };
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   liquidOf,
   liquidPartsOf,
   LOAN_PRINCIPAL_IS_SAVING,
+  subscriptionsOf,
   windowMonths,
   yearlyBillsOf,
 } from '../../../../shared/guidance/facts'
@@ -33,6 +34,7 @@ import { computeBalanceDeltas } from '../storage/idb'
 import type {
   FactsAccount,
   FactsAnswers,
+  FactsBill,
   FactsEntry,
   GuidanceInput,
 } from '../../../../shared/guidance/facts'
@@ -974,6 +976,40 @@ describe('the lines it shares with the official figures', () => {
       expect(bands.find((band) => band.band === 'typical')?.min, region).toBe(FIRST_CUSHION_MONTHS)
       expect(bands.find((band) => band.band === 'high')?.min, region).toBe(FULL_CUSHION_MONTHS)
     }
+  })
+})
+
+describe('subscriptions', () => {
+  it('are the active subscriptions on Bills, each at its cost a month', () => {
+    expect(
+      subscriptionsOf([
+        { type: 'subscription', amount: 10, frequency: 'monthly' },
+        { type: 'subscription', amount: 120, frequency: 'yearly' },
+        { type: 'subscription', amount: 3, frequency: 'weekly' },
+        { type: 'subscription', amount: 20 },
+        // Paused, free, or a bill: not counted.
+        { type: 'subscription', amount: 15, is_active: 0 },
+        { type: 'subscription', amount: 15, is_active: false },
+        { type: 'subscription', amount: 0 },
+        { type: 'bill', amount: 900, frequency: 'monthly' },
+        { amount: 50 },
+      ])
+    ).toEqual({ count: 4, perMonth: 10 + 10 + (3 * 52) / 12 + 20 })
+    expect(subscriptionsOf([])).toEqual({ count: 0, perMonth: 0 })
+  })
+
+  it('are in the facts once the bills are, and not before', () => {
+    const at = (bills?: FactsBill[]) =>
+      guidanceFacts({
+        today: TODAY,
+        region: 'DE',
+        transactions: [],
+        categories,
+        accounts: [],
+        bills,
+      }).subscriptions
+    expect(at([{ type: 'subscription', amount: 12 }])).toEqual({ count: 1, perMonth: 12 })
+    expect(at()).toBeNull()
   })
 })
 
