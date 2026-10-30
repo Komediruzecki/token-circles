@@ -17,6 +17,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv, Env } from './index';
 import { logAuthEvent } from './authlog';
 import { CLEARED_KINDS, type ClearedKind } from '../../shared/accessCleared';
+import { sha256Hex } from './email-verification';
 
 const encoder = new TextEncoder();
 
@@ -557,11 +558,6 @@ export function clearedGoogleStateCookie(env: Env): string {
   return googleStateCookie('', 0, env);
 }
 
-async function sha256Hex(input: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', encoder.encode(input));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
 /** A fresh nonce for the cookie, and the hash of it that goes in the state. */
 export async function newGoogleBrowserNonce(): Promise<{ nonce: string; hash: string }> {
   const nonce = b64urlEncode(crypto.getRandomValues(new Uint8Array(32)));
@@ -576,20 +572,21 @@ function sameText(a: string, b: string): boolean {
   return diff === 0;
 }
 
-/** True when `request` carries the nonce whose hash `state` was signed with. */
+/**
+ * True when `request` carries exactly one nonce, and it is the one whose hash `state` was signed
+ * with. A browser holds one: a start replaces the cookie, so two values get the same answer as a
+ * nonce of another start.
+ */
 export async function startedInThisBrowser(request: Request, state: OAuthState): Promise<boolean> {
-  let match = false;
-  for (const nonce of readCookies(request, GOOGLE_STATE_COOKIE)) {
-    if (!nonce) continue;
-    if (sameText(await sha256Hex(nonce), state.browser)) match = true;
-  }
-  return match;
+  const nonces = readCookies(request, GOOGLE_STATE_COOKIE).filter(Boolean);
+  if (nonces.length !== 1) return false;
+  return sameText(await sha256Hex(nonces[0]!), state.browser);
 }
 
 /**
- * Allowlist for the post-login redirect target (open-redirect defense). The local app's origins
- * count only in development, like the other allowances local dev gets (no Secure on cookies, the
- * captcha gate off).
+ * Whether `returnTo` may be where a sign-in lands: its origin is the environment's app
+ * (CORS_ORIGIN or one of APP_ORIGINS), or, in development only, the local app on port 3800, like
+ * the other allowances local dev gets (no Secure on cookies, the captcha gate off).
  */
 export function isAllowedReturnTo(returnTo: string, env: Env): boolean {
   let origin: string;

@@ -1,9 +1,9 @@
 /**
  * Google sign-in finishes in the browser that started it. The start route leaves a short-lived
  * cookie in the browser and puts its hash in the signed `state`; the callback signs in only when
- * the request carries that cookie, and clears it whatever happens. Google's two calls (the code
- * exchange and tokeninfo) are answered here, and every call is recorded, so a callback that never
- * asks Google can be told apart from one that asked and then stopped.
+ * the request carries that cookie, and once it has, clears it whatever happens. Google's two calls
+ * (the code exchange and tokeninfo) are answered here, and every call is recorded, so a callback
+ * that never asks Google can be told apart from one that asked and then stopped.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -167,8 +167,20 @@ describe('the callback in the browser that started the sign-in', () => {
   });
 });
 
+/** Whether the response sets or clears the start route's cookie at all. */
+const touchesCookie = (res: Response) =>
+  res.headers.getSetCookie().some((line) => line.startsWith(`${GOOGLE_STATE_COOKIE}=`));
+
+/** The auth log rows the callback writes when the browser check does not pass. */
+async function startedElsewhereRows(): Promise<number> {
+  const row = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM auth_logs WHERE event = 'login' AND outcome = 'denied' AND reason = 'google_started_elsewhere'"
+  ).first<{ n: number }>();
+  return row!.n;
+}
+
 describe('the callback without the cookie of the start that made its state', () => {
-  const cases = [
+  const cases: Array<{ name: string; cookieFor: (own: string) => Promise<string | null> }> = [
     { name: 'no cookie', cookieFor: async () => null },
     {
       name: 'the cookie of another start',
@@ -179,15 +191,23 @@ describe('the callback without the cookie of the start that made its state', () 
       cookieFor: async () => `${GOOGLE_STATE_COOKIE}=${'A'.repeat(43)}`,
     },
     { name: 'an empty cookie', cookieFor: async () => `${GOOGLE_STATE_COOKIE}=` },
+    {
+      name: 'its own cookie and a second one',
+      cookieFor: async (own) => `${own}; ${(await startGoogleSignIn(RETURN_TO)).cookie}`,
+    },
+    {
+      name: 'a second cookie before its own',
+      cookieFor: async (own) => `${(await startGoogleSignIn(RETURN_TO)).cookie}; ${own}`,
+    },
   ];
 
   it.each(cases)(
     'with $name: signs nothing in, creates no account and sends the browser back',
     async ({ cookieFor }) => {
-      const { state } = await startGoogleSignIn(RETURN_TO);
-      const cookie = await cookieFor();
+      const start = await startGoogleSignIn(RETURN_TO);
+      const cookie = await cookieFor(start.cookie!);
 
-      const res = await googleCallback(state, cookie);
+      const res = await googleCallback(start.state, cookie);
 
       expect(res.status).toBe(302);
       // Back to the app, signed out, which shows sign-in. Nothing in the address names why.
@@ -197,9 +217,22 @@ describe('the callback without the cookie of the start that made its state', () 
       expect(await rowsWritten()).toEqual({ users: 0, sessions: 0 });
       expect(googleCalls, 'Google is never asked for the account').toEqual([]);
       expect(mailsSent()).toBe(0);
-      expect(clearing(res), 'the cookie is cleared').toBeDefined();
+      // The cookie in the browser belongs to the start that set it; this answer leaves it.
+      expect(touchesCookie(res), 'the cookie is left alone').toBe(false);
     }
   );
+
+  it('writes a row to the auth log', async () => {
+    await env.DB.prepare("DELETE FROM auth_logs WHERE reason = 'google_started_elsewhere'").run();
+    const { state } = await startGoogleSignIn(RETURN_TO);
+
+    await googleCallback(state, null);
+
+    // The insert is handed to waitUntil, so it can land just after the answer.
+    await vi.waitFor(async () => expect(await startedElsewhereRows()).toBe(1), {
+      timeout: 2000,
+    });
+  });
 
   it('leaves an existing account at that address as it was', async () => {
     await seedAccount(UID, ADDRESS, 0);
@@ -218,7 +251,35 @@ describe('the callback without the cookie of the start that made its state', () 
   });
 });
 
-describe('the cookie is cleared whatever the callback answers', () => {
+describe('two Google sign-ins started in one browser', () => {
+  it('the older lands signed out and the newer signs in', async () => {
+    // One browser's cookie for this name and Path: a start sets it, a clearing line removes it.
+    let jar: string | null = null;
+    const keep = (res: Response) => {
+      for (const line of res.headers.getSetCookie()) {
+        if (!line.startsWith(`${GOOGLE_STATE_COOKIE}=`)) continue;
+        jar = /Max-Age=0(;|$)/.test(line) ? null : line.split(';')[0]!;
+      }
+    };
+    const older = await startGoogleSignIn(RETURN_TO);
+    jar = older.cookie;
+    const newer = await startGoogleSignIn(RETURN_TO);
+    jar = newer.cookie;
+
+    const first = await googleCallback(older.state, jar);
+    keep(first);
+    expect(first.status).toBe(302);
+    expect(sessionFrom(first)).toBeNull();
+
+    const second = await googleCallback(newer.state, jar);
+    keep(second);
+    expect(second.status).toBe(302);
+    expect(sessionFrom(second), 'the newer tab signs in').not.toBeNull();
+    expect(jar, 'its callback clears the cookie').toBeNull();
+  });
+});
+
+describe('the cookie is cleared by its own callback, whatever that answers', () => {
   it('when the sign-in succeeds', async () => {
     const res = await googleSignInFromStart(RETURN_TO);
     expect(sessionFrom(res)).not.toBeNull();
@@ -226,21 +287,6 @@ describe('the cookie is cleared whatever the callback answers', () => {
     expect(line).toBeDefined();
     // Cleared at the Path it was set on, or the browser keeps the original.
     expect(line).toContain(`Path=${CALLBACK_PATH}`);
-  });
-
-  it('when the code is missing', async () => {
-    const { state, cookie } = await startGoogleSignIn(RETURN_TO);
-    const res = await googleCallback(state, cookie, null);
-    expect(res.status).toBe(400);
-    expect(clearing(res)).toBeDefined();
-  });
-
-  it('when the state is not one the Worker signed', async () => {
-    const { state, cookie } = await startGoogleSignIn(RETURN_TO);
-    const res = await googleCallback(`${state.split('.')[0]}.not-a-signature`, cookie);
-    expect(res.status).toBe(400);
-    expect(sessionFrom(res)).toBeNull();
-    expect(clearing(res)).toBeDefined();
   });
 
   it("when Google's code exchange is refused", async () => {
@@ -263,6 +309,44 @@ describe('the cookie is cleared whatever the callback answers', () => {
   });
 });
 
+describe('an answer before the browser check leaves the cookie', () => {
+  it('when the code is missing', async () => {
+    const { state, cookie } = await startGoogleSignIn(RETURN_TO);
+    const res = await googleCallback(state, cookie, null);
+    expect(res.status).toBe(400);
+    expect(touchesCookie(res)).toBe(false);
+  });
+
+  it('when the state is not one the Worker signed', async () => {
+    const { state, cookie } = await startGoogleSignIn(RETURN_TO);
+    const res = await googleCallback(`${state.split('.')[0]}.not-a-signature`, cookie);
+    expect(res.status).toBe(400);
+    expect(sessionFrom(res)).toBeNull();
+    expect(touchesCookie(res)).toBe(false);
+  });
+});
+
+describe('a state signed before the browser was part of it', () => {
+  it.each([
+    { name: 'without a cookie', withCookie: false },
+    { name: 'with a cookie', withCookie: true },
+  ])('is refused $name, and Google is never asked', async ({ withCookie }) => {
+    const { cookie } = await startGoogleSignIn(RETURN_TO);
+    // The shape every state had before this change: no `browser`.
+    const state = await signState(
+      { returnTo: RETURN_TO, ts: Date.now() } as Parameters<typeof signState>[0],
+      env.JWT_SECRET!
+    );
+
+    const res = await googleCallback(state, withCookie ? cookie : null);
+
+    expect(res.status).toBe(400);
+    expect(sessionFrom(res)).toBeNull();
+    expect(await rowsWritten()).toEqual({ users: 0, sessions: 0 });
+    expect(googleCalls).toEqual([]);
+  });
+});
+
 describe('a state older than ten minutes', () => {
   /** A state for this browser's cookie, signed `ageMs` ago. */
   async function signedAgo(ageMs: number) {
@@ -280,7 +364,7 @@ describe('a state older than ten minutes', () => {
     expect(sessionFrom(res)).toBeNull();
     expect(await rowsWritten()).toEqual({ users: 0, sessions: 0 });
     expect(googleCalls).toEqual([]);
-    expect(clearing(res)).toBeDefined();
+    expect(touchesCookie(res)).toBe(false);
   });
 
   it('while one a minute younger than that still signs in', async () => {

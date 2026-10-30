@@ -84,17 +84,20 @@ All notable changes to Token Circles are documented here. The format is based on
   sign-in only when the request carries the nonce that hashes to the state's `browser`, compared
   without an early exit. Otherwise it answers 302 to the state's `returnTo`, so the app opens
   signed out on its sign-in screen, before Google's code is exchanged: no account, session or mail
-  comes of it, and the auth log records `login` / `denied` / `google_started_elsewhere`. Every
-  callback answer clears the cookie (`Max-Age=0` at its Path), error answers included, through a
-  middleware on the callback's path. A state signed before this change has no `browser` and is
-  answered as an invalid state (400), so a Google sign-in in progress during the deploy starts
-  again. A second Google sign-in started in another tab of the same browser replaces the cookie,
-  so the first tab's callback lands signed out.
+  comes of it, and the auth log records `login` / `denied` / `google_started_elsewhere`. A request
+  with two or more values for the cookie gets that same answer. The cookie belongs to the start
+  that set it, and only that start's callback clears it (`Max-Age=0` at its Path): every answer
+  after the browser check passed does, error answers included, through a middleware on the
+  callback's path. An answer before it (a refused state, another start's state) leaves the cookie,
+  which expires on its own after 600 s. A state signed before this change has no `browser` and is
+  answered as an invalid state (400) without asking Google, so a Google sign-in in progress during
+  the deploy starts again. With two Google sign-ins started in one browser, the newer start
+  replaces the cookie: the older tab lands signed out and the newer one signs in.
 - **`isAllowedReturnTo` takes the local app only in development.** `http://localhost:3800` and
   `http://127.0.0.1:3800` count when `APP_ENV=development`; dev and prod take their own
   `CORS_ORIGIN` and `APP_ORIGINS`. The same check picks the `returnTo` of the emailed confirm link
   (`GET /api/auth/verify-email`), which falls back to the app's origin.
-- Tests: `worker/test/google-sign-in-browser.test.ts` (22 new). `google-sign-in.test.ts`,
+- Tests: `worker/test/google-sign-in-browser.test.ts` (28 new). `google-sign-in.test.ts`,
   `bound-writes.test.ts` and `email-link-finish.test.ts` now start the sign-in through the start
   route and send its cookie back (`worker/test/helpers/google.ts`).
 - **The passkey re-auth field has a label.** In `frontend/src/components/PasskeySettings.tsx`, the

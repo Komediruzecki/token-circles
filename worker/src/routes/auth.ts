@@ -119,11 +119,16 @@ authRoutes.get('/api/auth/google/start', async (c) => {
   });
 });
 
-// The cookie the start route left is good for one callback: every answer clears it, an error
-// answer included.
+// The cookie the start route left belongs to that start, and only that start's callback clears
+// it: once the browser check has passed, every answer clears it, an error answer included. An
+// answer before that (a refused state, another start's state) leaves it for the callback it
+// belongs to; it expires on its own with the state.
+const ownGoogleStateCookie = new WeakSet<Request>();
 authRoutes.use(GOOGLE_CALLBACK_PATH, async (c, next) => {
   await next();
-  c.res.headers.append('Set-Cookie', clearedGoogleStateCookie(c.env));
+  if (ownGoogleStateCookie.has(c.req.raw)) {
+    c.res.headers.append('Set-Cookie', clearedGoogleStateCookie(c.env));
+  }
 });
 
 // 2) Google redirect target: exchange code, verify, set session cookie, go home.
@@ -147,6 +152,7 @@ authRoutes.get(GOOGLE_CALLBACK_PATH, async (c) => {
     logAuthEvent(c, { event: 'login', outcome: 'denied', reason: 'google_started_elsewhere' });
     return new Response(null, { status: 302, headers: { Location: state.returnTo } });
   }
+  ownGoogleStateCookie.add(c.req.raw);
 
   const redirectUri = `${url.origin}${GOOGLE_CALLBACK_PATH}`;
   const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
