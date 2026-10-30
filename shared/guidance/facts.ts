@@ -104,6 +104,25 @@ export interface FactsAccount {
   credit_rate?: number | null;
 }
 
+/** A bill or subscription as Bills holds it: what the yearly-bills check reads. */
+export interface FactsBill {
+  /** What one payment costs, in the base currency. */
+  amount: number;
+  /** weekly, biweekly, monthly or yearly; blank reads as monthly, as Bills does. */
+  frequency?: string | null;
+  /** 0 or false when paused; absent reads as active, as Bills does. */
+  is_active?: number | boolean | null;
+}
+
+/** The yearly entries on Bills, active ones of both types: what setting money aside covers. */
+export interface YearlyBills {
+  count: number;
+  /** Their amounts added up: a year of them. */
+  perYear: number;
+  /** A year of them over 12: what to set aside each month. */
+  perMonth: number;
+}
+
 /** A loan as Loans holds it, with its rate periods and extra payments. */
 export interface FactsLoan extends LoanInput {
   id?: number | null;
@@ -136,6 +155,8 @@ export interface FactsAnswers {
   savedElsewhere?: number | null;
   /** What a year of more than enough would cost, in the base currency (circle 7). */
   enoughPerYear?: number | null;
+  /** "Do you set this aside each month?", about the yearly bills on Bills (circle 4). */
+  setsAsideYearly?: boolean | null;
 }
 
 export interface GuidanceInput {
@@ -152,6 +173,8 @@ export interface GuidanceInput {
   /** The retirement settings' safe withdrawal rate, in percent; their default when none. */
   withdrawalRatePct?: number | null;
   answers?: FactsAnswers;
+  /** The profile's entries on Bills, bills and subscriptions both. */
+  bills?: readonly FactsBill[];
 }
 
 /** A debt the person carries. */
@@ -247,6 +270,10 @@ export interface GuidanceFacts {
   /** What a year of more than enough would cost; null until the person says (D11). */
   enoughPerYear: number | null;
   freeMoney: FreeMoney | null;
+  /** The yearly entries on Bills; null with none. Absent reads as none. */
+  yearlyBills?: YearlyBills | null;
+  /** Whether the person sets the yearly bills aside each month; null until they say. */
+  setsAsideYearly?: boolean | null;
 }
 
 const isId = (value: unknown): value is number =>
@@ -722,5 +749,26 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     withdrawalRatePct: finite(swr) && swr > 0 ? swr : DEFAULT_SETTINGS.safeWithdrawalRatePct,
     enoughPerYear: finite(enough) && enough > 0 ? enough : null,
     freeMoney: input.answers?.freeMoney ?? null,
+    yearlyBills: yearlyBillsOf(input.bills ?? []),
+    setsAsideYearly: input.answers?.setsAsideYearly ?? null,
   };
+}
+
+/**
+ * The active entries on Bills that come once a year, bills and subscriptions both (a yearly
+ * subscription needs setting aside as much as a yearly bill): how many, a year of them, and that
+ * over 12. Null with none.
+ */
+export function yearlyBillsOf(bills: readonly FactsBill[]): YearlyBills | null {
+  const yearly = bills.filter(
+    (bill) =>
+      bill.frequency === 'yearly' &&
+      bill.is_active !== 0 &&
+      bill.is_active !== false &&
+      finite(bill.amount) &&
+      bill.amount > 0
+  );
+  if (yearly.length === 0) return null;
+  const perYear = yearly.reduce((sum, bill) => sum + bill.amount, 0);
+  return { count: yearly.length, perYear, perMonth: perYear / 12 };
 }

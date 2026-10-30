@@ -180,6 +180,7 @@ describe('what the circles read of the answers', () => {
       freeMoney: null,
       savedElsewhere: null,
       enoughPerYear: null,
+      setsAsideYearly: true,
     })
   })
 
@@ -190,6 +191,7 @@ describe('what the circles read of the answers', () => {
       freeMoney: null,
       savedElsewhere: null,
       enoughPerYear: null,
+      setsAsideYearly: null,
     })
   })
 })

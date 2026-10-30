@@ -220,6 +220,63 @@ describe('Solid ground', () => {
     expect(check(placeCircle(unanswered, { freeMoney: true }), 4, 'free-money')).toBeDefined()
   })
 
+  it('checks yearly bills set aside only with a yearly entry on Bills, after the debts', () => {
+    expect(check(placeCircle(outer), 4, 'yearly-bills')).toBeUndefined()
+    const yearly = { count: 3, perYear: 900, perMonth: 75 }
+    const at = (setsAsideYearly: boolean | null) =>
+      check(placeCircle(facts({ yearlyBills: yearly, setsAsideYearly })), 4, 'yearly-bills')!
+    expect(placeCircle(facts({ yearlyBills: yearly })).circles[3].checks.map((c) => c.id)).toEqual([
+      'free-money',
+      'no-expensive-debt',
+      'yearly-bills',
+      'solid-cushion',
+      'full-cushion',
+    ])
+    expect(at(true)).toMatchObject({ met: true, unknown: null, required: false, target: 75 })
+    expect(at(false)).toMatchObject({ met: false, unknown: null })
+    expect(at(null)).toMatchObject({ met: null, unknown: 'not-on-file' })
+    // Not answered, it is the next step after the debts, ahead of the cushion.
+    expect(
+      placeCircle(facts({ yearlyBills: yearly, cushionMonths: 2.9, liquid: 5800 })).next
+    ).toEqual({ circle: 4, check: 'yearly-bills', unknown: 'not-on-file' })
+  })
+
+  it('moves no one with yearly bills on its checklist, whatever the answer', () => {
+    // A person in each circle, and one with all seven reached.
+    const people: Partial<GuidanceFacts>[] = [
+      { monthsInYear: 8, firm: false },
+      { ownIncome: 2000, invested: 0 },
+      { cushionMonths: 0.5, liquid: 1000 },
+      { cushionMonths: 2.9, liquid: 5800 },
+      { invested: 20000 },
+      { invested: 300000 },
+      {},
+      { enoughPerYear: 30000 },
+    ]
+    const yearly = { count: 1, perYear: 1200, perMonth: 100 }
+    for (const person of people) {
+      const without = placeCircle(facts(person))
+      for (const setsAsideYearly of [null, false, true]) {
+        const placement = placeCircle(facts({ ...person, yearlyBills: yearly, setsAsideYearly }))
+        expect(placement.current).toBe(without.current)
+        expect(placement.circles.map((c) => c.reached)).toEqual(
+          without.circles.map((c) => c.reached)
+        )
+        expect(placement.provisional).toBe(without.provisional)
+      }
+    }
+    expect(people.map((person) => placeCircle(facts(person)).current)).toEqual([
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      null,
+    ])
+  })
+
   it('is reached at three months, and keeps six on its checklist', () => {
     const three = placeCircle(facts({ cushionMonths: 3, liquid: 6000, invested: 0 }))
     expect(three.circles[3].reached).toBe(true)

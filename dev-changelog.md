@@ -1124,6 +1124,15 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   `guidanceCircles.test.ts` (free money left out moves no circle, for every answer and cushion),
   `onboardingSpaceAnswersFail.test.tsx` (production asks neither question and writes no record)
   and `settingsAboutThisSpace.test.tsx` (no card in production).
+- **Solid ground checks yearly bills** (`circles.ts`): with an active yearly entry on Bills, an
+  optional check after the debt check, its amount the yearly total over 12, met when the person says
+  they set it aside. Optional, so no one's circle moves. The facts take the profile's Bills entries
+  (`GuidanceInput.bills`) and count the active ones of both types with a yearly frequency
+  (`yearlyBillsOf`: count, a year of them, and that over 12), and the answer `setsAsideYearly`.
+- **Tests:** `guidanceFacts.test.ts` (which entries count), `guidanceCircles.test.ts` (shown only
+  with yearly bills, its place after the debts, met, not met and not known; a person in each circle
+  and one past the seventh keep their place whatever the answer) and `guidanceExamples.test.ts` (the
+  family in Leipzig sets EUR 64 a month aside for EUR 768 of yearly bills and stays in the fourth).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

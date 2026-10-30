@@ -376,5 +376,6 @@ export function factsAnswersOf(answers: Answers, at: AnswersContext): FactsAnswe
     freeMoney: answers.freeMoney?.region === at.region ? answers.freeMoney.answer : null,
     savedElsewhere: inCurrency(answers.savedElsewhere),
     enoughPerYear: inCurrency(answers.enoughPerYear),
+    setsAsideYearly: answers.setsAsideYearly ?? null,
   };
 }

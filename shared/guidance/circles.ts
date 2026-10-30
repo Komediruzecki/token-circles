@@ -80,6 +80,7 @@ export type CheckId =
   | 'first-cushion'
   | 'free-money'
   | 'no-expensive-debt'
+  | 'yearly-bills'
   | 'solid-cushion'
   | 'full-cushion'
   | 'two-years'
@@ -222,6 +223,28 @@ function freeMoneyMet(answer: FreeMoney | null): boolean | null {
 }
 
 /**
+ * Yearly bills set aside: with a yearly entry on Bills, met when the person says they set a twelfth
+ * of them aside each month. On the checklist, never a condition, so no one's circle moves. Its
+ * target is that twelfth.
+ */
+function yearlyBills(facts: GuidanceFacts): Check[] {
+  const bills = facts.yearlyBills;
+  if (!bills) return [];
+  const met = facts.setsAsideYearly ?? null;
+  return [
+    {
+      id: 'yearly-bills',
+      met,
+      unknown: met === null ? 'not-on-file' : null,
+      required: false,
+      provisional: false,
+      value: null,
+      target: bills.perMonth,
+    },
+  ];
+}
+
+/**
  * D1: the seven circles in order, each with its checks, in the order its next step takes them.
  * guidance.md 3.2 says what each circle checks; 5.4 how it reads.
  */
@@ -252,7 +275,8 @@ export const CIRCLES: ReadonlyArray<{
     ],
   },
   {
-    // The method's order: free money, then debt at the line or above, then the cushion.
+    // The method's order: free money, then debt at the line or above, then yearly bills set
+    // aside, then the cushion (guidance.md 3.2: method step 4 before the full emergency fund).
     circle: 4,
     checks: (facts) => [
       ...(FREE_MONEY_REGIONS.has(facts.region)
@@ -269,6 +293,7 @@ export const CIRCLES: ReadonlyArray<{
           ]
         : []),
       noExpensiveDebt(facts),
+      ...yearlyBills(facts),
       reaching('solid-cushion', facts.cushionMonths, SOLID_CUSHION_MONTHS, {
         unread: !facts.accountsKnown,
       }),

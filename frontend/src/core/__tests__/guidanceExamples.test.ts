@@ -286,6 +286,52 @@ describe('B. A family of four in Leipzig', () => {
     expect(answered.next).toEqual({ circle: 4, check: 'solid-cushion', unknown: null })
   })
 
+  it('sets EUR 64 a month aside for EUR 768 of yearly bills, after the debts and before the cushion', () => {
+    // examples.md: "Set aside EUR 64 a month for yearly bills". A yearly bill and a yearly
+    // subscription on Bills, active, beside a monthly one and a paused yearly one.
+    const bills = [
+      { amount: 600, frequency: 'yearly', is_active: 1 },
+      { amount: 168, frequency: 'yearly', is_active: 1 },
+      { amount: 98, frequency: 'monthly', is_active: 1 },
+      { amount: 300, frequency: 'yearly', is_active: 0 },
+    ]
+    const withBills = (setsAsideYearly?: boolean) =>
+      placed({ ...input, bills, answers: { freeMoney: 'taken', setsAsideYearly } })
+    const asked = withBills()
+    expect(asked.facts.yearlyBills).toEqual({ count: 2, perYear: 768, perMonth: 64 })
+    expect(asked.placement.circles[3].checks.map((c) => c.id)).toEqual([
+      'free-money',
+      'no-expensive-debt',
+      'yearly-bills',
+      'solid-cushion',
+      'full-cushion',
+    ])
+    expect(check(asked.placement, 4, 'yearly-bills')).toMatchObject({
+      met: null,
+      unknown: 'not-on-file',
+      required: false,
+      target: 64,
+    })
+    expect(asked.placement.next).toEqual({
+      circle: 4,
+      check: 'yearly-bills',
+      unknown: 'not-on-file',
+    })
+    expect(withBills(false).placement.next).toEqual({
+      circle: 4,
+      check: 'yearly-bills',
+      unknown: null,
+    })
+    // Set aside, the cushion is the step again; in every case the family stays in the fourth.
+    expect(withBills(true).placement.next).toEqual({
+      circle: 4,
+      check: 'solid-cushion',
+      unknown: null,
+    })
+    for (const answer of [undefined, false, true])
+      expect(withBills(answer).placement.current).toBe(4)
+  })
+
   it('is 15% of the way to Room to choose: EUR 18,500 against two years of spending', () => {
     const twoYears = check(placement, 5, 'two-years')!
     expect(twoYears.value).toBe(18500)

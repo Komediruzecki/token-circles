@@ -23,6 +23,7 @@ import {
   liquidOf,
   LOAN_PRINCIPAL_IS_SAVING,
   windowMonths,
+  yearlyBillsOf,
 } from '../../../../shared/guidance/facts'
 import { kindForName } from '../../../../shared/guidance/kinds'
 import { REGIONS } from '../../../../shared/guidance/region'
@@ -910,6 +911,48 @@ describe('the rest', () => {
     expect(guidanceFacts(input({ withdrawalRatePct: 3.5 })).withdrawalRatePct).toBe(3.5)
     expect(guidanceFacts(input()).enoughPerYear).toBeNull()
     expect(guidanceFacts(input({ answers: { enoughPerYear: 80000 } })).enoughPerYear).toBe(80000)
+  })
+})
+
+describe('yearly bills', () => {
+  it.each([
+    ['nothing on Bills', [], null],
+    [
+      'only monthly and weekly entries',
+      [
+        { amount: 50, frequency: 'monthly' },
+        { amount: 9, frequency: 'weekly' },
+      ],
+      null,
+    ],
+    ['an entry with no frequency, which Bills reads as monthly', [{ amount: 300 }], null],
+    ['a paused yearly entry', [{ amount: 300, frequency: 'yearly', is_active: 0 }], null],
+    [
+      'a yearly entry paused as false',
+      [{ amount: 300, frequency: 'yearly', is_active: false }],
+      null,
+    ],
+    ['a yearly entry of 0', [{ amount: 0, frequency: 'yearly' }], null],
+    [
+      'a yearly bill and a yearly subscription, both active',
+      [
+        { amount: 840, frequency: 'yearly', is_active: 1 },
+        { amount: 120, frequency: 'yearly', is_active: true },
+        { amount: 60, frequency: 'yearly' },
+      ],
+      { count: 3, perYear: 1020, perMonth: 85 },
+    ],
+  ])('reads %s', (_, bills, expected) => {
+    expect(yearlyBillsOf(bills)).toEqual(expected)
+    expect(guidanceFacts(input({ bills })).yearlyBills).toEqual(expected)
+  })
+
+  it('takes whether they are set aside from the answers, unanswered as null', () => {
+    expect(guidanceFacts(input()).setsAsideYearly).toBeNull()
+    expect(guidanceFacts(input({ answers: { setsAsideYearly: true } })).setsAsideYearly).toBe(true)
+    expect(guidanceFacts(input({ answers: { setsAsideYearly: false } })).setsAsideYearly).toBe(
+      false
+    )
   })
 })
 
