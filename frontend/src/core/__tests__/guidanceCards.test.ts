@@ -10,10 +10,12 @@ import {
   cushionCard,
   debtPaymentsCard,
   debtRateCards,
+  housingCard,
   MARKET_RATES,
   percentText,
   savingsCard,
   shockCard,
+  spendingShareCards,
 } from '../../../../shared/guidance/cards'
 import { facts, words } from './guidanceFixtures'
 import type { RegionId } from '../../../../shared/guidance/benchmarks'
@@ -347,7 +349,255 @@ describe('debt payments', () => {
   })
 })
 
+/** A month's spending by kind, out of 2,500 spent and 3,000 earned: 35% of pay on the home. */
+const SPENT = { groceries: 300, eating_out: 100, transport: 250, housing: 900, utilities: 150 }
+
+describe('groceries, eating out and transport', () => {
+  const card = (id: string, cards: ReturnType<typeof spendingShareCards>) =>
+    cards.find((one) => one.id === id)!
+  const shares = (spent: Partial<typeof SPENT>, region: RegionId, over = {}) =>
+    spendingShareCards(
+      facts({ spendingByKind: { ...SPENT, ...spent }, ...over }),
+      words,
+      at(region)
+    )
+
+  it('puts a typical share close to what households spend, across income groups', () => {
+    const groceries = card('groceries', shares({}, 'DE'))
+    expect(groceries).toMatchObject({
+      eyebrow: 'Groceries',
+      tags: [{ kind: 'band', text: 'Typical' }],
+      title: 'Groceries are 12% of your spending',
+      body: [
+        'Close to what households in Germany spend: 11.7% to 14.7% on average, depending on income (2020).',
+      ],
+      step: { label: 'Compare with last year', hash: '#analytics' },
+      note: null,
+    })
+    expect(groceries.bar!.label).toBe('Typical in Germany: 8.8% to 18.4%. Yours: 12%.')
+    expect(groceries.bar).toMatchObject({ from: 0, to: 30, mark: 12 })
+    expect(card('eating-out', shares({}, 'UK')).body).toEqual([
+      'Close to what households in the UK spend: 3.5% to 6.0% on average, depending on income (2025).',
+    ])
+  })
+
+  it('says what a high share often means, and how much eating out is a month', () => {
+    const high = shares({ groceries: 600, eating_out: 250, transport: 800 }, 'DE')
+    expect(card('groceries', high)).toMatchObject({
+      tags: [{ kind: 'band', text: 'Above typical' }],
+      body: [
+        'Households in Germany spend 11.7% to 14.7%, depending on income (2020). A high share often means the rest of the budget is already lean, not that the shopping is lavish.',
+      ],
+      step: { label: 'Set a grocery budget', hash: '#budgets' },
+    })
+    expect(card('eating-out', high)).toMatchObject({
+      title: 'Eating out is 10% of your spending, about €250 a month',
+      body: [
+        "Households in Germany spend 3.6% to 5.7% (2020). It's the line most people can move fastest, if they want to.",
+      ],
+      step: { label: 'Set an eating-out budget', hash: '#budgets' },
+    })
+    expect(card('transport', high)).toMatchObject({
+      body: ['Households in Germany spend 8.5% to 20.5%, car purchases included (2020).'],
+      step: { label: 'See transport by month', hash: '#analytics' },
+    })
+  })
+
+  it('says what a low share may be missing', () => {
+    expect(card('groceries', shares({}, 'HR'))).toMatchObject({
+      tags: [{ kind: 'band', text: 'Below typical' }],
+      body: [
+        "Below most households in Croatia. If you also buy food in cash or on a card that isn't here, add it; otherwise eating out may be carrying the meals.",
+      ],
+      step: { label: 'Check how food is sorted', hash: '#transactions' },
+    })
+    expect(card('eating-out', shares({ eating_out: 0 }, 'DE'))).toMatchObject({
+      title: 'Eating out is 0% of your spending',
+      body: [
+        'Below most households in Germany. If some meals are sorted under Groceries or Other, moving them sharpens this.',
+      ],
+      step: { label: 'Check the sorting', hash: '#transactions' },
+    })
+    // Transport in the US: yearly costs may not have come round before a year is on file.
+    expect(card('transport', shares({}, 'US', { firm: false, months: ['2026-08'] }))).toMatchObject(
+      {
+        body: [
+          'Below most households in the US. With fewer than 12 months here, yearly costs like insurance may not have come round yet.',
+        ],
+        step: { label: 'Import the rest of your year', hash: '#import' },
+        provisional: 'Based on 1 month. It firms up at 12.',
+      }
+    )
+    expect(card('transport', shares({}, 'US'))).toMatchObject({
+      body: ['Below most households in the US.'],
+      step: { label: 'See transport by month', hash: '#analytics' },
+    })
+  })
+
+  it("says Croatia's and the EU's eating-out figures run low", () => {
+    const note = 'These figures come from the 2020 survey wave and run low.'
+    expect(card('eating-out', shares({}, 'HR')).note).toBe(note)
+    expect(card('eating-out', shares({}, 'EU27')).note).toBe(note)
+    expect(card('eating-out', shares({}, 'DE')).note).toBeNull()
+    expect(card('groceries', shares({}, 'HR')).note).toBeNull()
+  })
+
+  it('shows one card in their place until 90% of the spending has a category', () => {
+    const unsorted = shares({}, 'DE', { sortedShare: 89.9 })
+    expect(unsorted).toEqual([
+      {
+        id: 'spending-unsorted',
+        metric: 'spending.foodAtHome',
+        eyebrow: 'Groceries, eating out and transport',
+        tags: [],
+        title: '89% of your spending has a category',
+        body: ["They're compared with households in Germany once 90% has one."],
+        bar: null,
+        note: null,
+        step: {
+          label: 'Sort the entries without a category',
+          hash: '#transactions?uncategorised=1',
+        },
+        where: null,
+        provisional: null,
+      },
+    ])
+    expect(shares({}, 'DE', { sortedShare: 90 }).map((one) => one.id)).toEqual([
+      'groceries',
+      'eating-out',
+      'transport',
+    ])
+  })
+
+  it('shows nothing without an average or any spending', () => {
+    expect(spendingShareCards(facts({ spendingByKind: null }), words, at('DE'))).toEqual([])
+    expect(spendingShareCards(facts(), words, at('DE'))).toEqual([])
+    expect(shares({}, 'DE', { spending: 0 })).toEqual([])
+  })
+})
+
+describe('housing costs', () => {
+  const housing = (
+    spent: Partial<typeof SPENT>,
+    region: RegionId,
+    tenure: string | null = null,
+    over = {}
+  ) =>
+    housingCard(
+      facts({ spendingByKind: { ...SPENT, ...spent }, ...over }),
+      words,
+      at(region, { tenure })
+    )
+
+  it('reads rent and utilities over take-home pay, and asks how the household lives', () => {
+    const shown = housing({}, 'DE')!
+    expect(shown).toMatchObject({
+      eyebrow: 'Housing costs',
+      tags: [{ kind: 'band', text: 'Typical' }],
+      title: 'Housing takes 35% of your take-home pay',
+      body: ['Households in Germany spend 24.1% on average (2025).'],
+      step: { label: 'Compare renting and buying', hash: '#rentBuy' },
+      ask: 'tenure',
+    })
+    expect(shown.bar!.label).toBe('Typical in Germany: 24.1% to 40%. Yours: 35%.')
+    // Answered, it asks no more; skipped counts as answered.
+    expect(housing({}, 'DE', 'outright')!.ask).toBeUndefined()
+    expect(housing({}, 'DE', 'skipped')!.ask).toBeUndefined()
+  })
+
+  it('compares renters with renters where the figures allow', () => {
+    expect(housing({}, 'DE', 'rentPrivate')!.body).toEqual([
+      'Households in Germany spend 24.1% on average (2025). Renters in Germany spend 27.9% of net income on rent (2022).',
+    ])
+    expect(housing({}, 'HR', 'rentPrivate')!.body).toEqual([
+      'Households in Croatia spend 11.5% on average (2025). Most households in Croatia own their home outright, which keeps that average low; among people renting at market rates, 19.8% pay over 40%.',
+    ])
+    expect(housing({}, 'HR', 'mortgage')!.body).toEqual([
+      'Households in Croatia spend 11.5% on average (2025).',
+    ])
+    expect(housing({}, 'US', 'rentPrivate')!.body).toEqual([
+      'Over 30% is what US agencies call cost-burdened; about half of US renters are (2024).',
+    ])
+    expect(housing({}, 'US', 'mortgage')!.body).toEqual([
+      'Over 30% is what US agencies call cost-burdened.',
+    ])
+  })
+
+  it("compares the UK by tenure, with England's groups", () => {
+    expect(housing({}, 'UK', 'rentPrivate')!).toMatchObject({
+      body: ['Private renters in England spend 34% of gross income on average (2025).'],
+    })
+    expect(housing({}, 'UK', 'rentPrivate')!.bar!.label).toBe(
+      'Typical in the UK: 34% to 40%. Yours: 35%.'
+    )
+    expect(housing({}, 'UK', 'rentSocial')!.body).toEqual([
+      'Social renters in England spend 28% of gross income on average (2025).',
+    ])
+    expect(housing({}, 'UK')!.body).toEqual([
+      'Mortgagors in England spend 19% of gross income on average (2025).',
+    ])
+    expect(housing({ housing: 300, utilities: 300 }, 'UK', 'rentPrivate')!.body).toEqual([
+      'Below the 34% that private renters in England spend on average (2025). That gap is room the rest of your plan can use.',
+    ])
+  })
+
+  it('names the overburden line above it, and how many are over it too', () => {
+    const over = { housing: 1150, utilities: 150 }
+    expect(housing(over, 'EU27')!).toMatchObject({
+      tags: [{ kind: 'band', text: 'Above typical' }],
+      title: 'Housing takes 43.3% of your take-home pay',
+      body: [
+        "That's over the 40% line Eurostat uses for a heavy housing burden; 7.7% of people in the EU are over it too (2025). Rent changes slowly, so room usually comes from the lines that move faster.",
+      ],
+      step: { label: 'See where the rest goes', hash: '#analytics' },
+    })
+    expect(housing(over, 'HR', 'rentPrivate')!.body).toEqual([
+      "That's over the 40% line Eurostat uses for a heavy housing burden; 19.8% of people renting at market rates in Croatia are over it too (2025). Rent changes slowly, so room usually comes from the lines that move faster.",
+    ])
+    expect(housing(over, 'UK')!.body).toEqual([
+      "That's over the 40% line Eurostat uses for a heavy housing burden. Rent changes slowly, so room usually comes from the lines that move faster.",
+    ])
+    expect(housing({ housing: 1450, utilities: 150 }, 'US')!.body).toEqual([
+      "That's over the 50% line US housing agencies call a severe burden. They measure before tax, so their figure for you would be a little lower.",
+    ])
+  })
+
+  it('calls the room below the average room for the rest of the plan', () => {
+    const low = { housing: 500, utilities: 100 }
+    expect(housing(low, 'DE')!).toMatchObject({
+      tags: [{ kind: 'band', text: 'Below typical' }],
+      body: [
+        'Below the German household average of 24.1% (2025). That gap is room the rest of your plan can use.',
+      ],
+      step: { label: 'Put it toward your cushion', hash: '#goals' },
+    })
+    expect(housing(low, 'US')!.body).toEqual([
+      'Under the 30% line US agencies call cost-burdened. That gap is room the rest of your plan can use.',
+    ])
+  })
+
+  it('holds "about half of US renters" to the figure it stands for', () => {
+    const renters = referencesFor('housing.share', 'US').find(
+      (ref) => ref.unit === 'percent of renter households'
+    )
+    expect(renters!.value).toBeGreaterThanOrEqual(45)
+    expect(renters!.value).toBeLessThanOrEqual(55)
+  })
+
+  it('shows nothing without income, an average or anything spent on the home', () => {
+    expect(housing({ housing: 0, utilities: 0 }, 'DE')).toBeNull()
+    expect(housing({}, 'DE', null, { income: null })).toBeNull()
+    expect(housingCard(facts({ spendingByKind: null }), words, at('DE'))).toBeNull()
+  })
+})
+
 describe('the cards each circle shows', () => {
+  it('puts spending and housing in Paying your way', () => {
+    expect(
+      circleCards(2, facts({ spendingByKind: SPENT }), words, at('DE')).map((one) => one.id)
+    ).toEqual(['groceries', 'eating-out', 'transport', 'housing'])
+  })
+
   it('puts the cushion, the bill and the debts in Breathing room and Solid ground, savings in Room to choose', () => {
     const f = facts({ debts: [loan], liquid: 1000, cushionMonths: 0.5 })
     expect(circleCards(3, f, words, at('DE')).map((one) => one.id)).toEqual(['cushion', 'shock'])
@@ -364,11 +614,17 @@ describe('the cards each circle shows', () => {
   })
 
   it('says where every figure comes from, with links that open securely', () => {
-    for (const shown of circleCards(4, facts({ debts: [loan] }), words, at('DE'))) {
-      expect(shown.where.rule).not.toBe('')
-      expect(shown.where.sources.length).toBeGreaterThan(0)
-      for (const source of shown.where.sources) expect(source.url).toMatch(/^https:\/\//)
-      expect(shown.where.strength).toMatch(/evidence/)
+    const shown = [
+      ...circleCards(2, facts({ spendingByKind: SPENT }), words, at('DE')),
+      ...circleCards(4, facts({ debts: [loan] }), words, at('DE')),
+    ]
+    expect(shown.length).toBeGreaterThan(5)
+    for (const card of shown) {
+      const where = card.where!
+      expect(where.rule, card.id).not.toBe('')
+      expect(where.sources.length, card.id).toBeGreaterThan(0)
+      for (const source of where.sources) expect(source.url).toMatch(/^https:\/\//)
+      expect(where.strength, card.id).toMatch(/evidence/)
     }
   })
 

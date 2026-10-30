@@ -108,6 +108,7 @@ it('lists each answer the circles asked for, with the support by name', async ()
     savedElsewhere: { amount: 12000, currency: 'EUR' },
     enoughPerYear: { amount: 48000, currency: 'EUR' },
     freeMoney: { region: 'DE', answer: 'taken' },
+    tenure: 'mortgage',
   })
   await openGeneral()
   await vi.waitFor(() => {
@@ -135,8 +136,10 @@ it('lists each answer the circles asked for, with the support by name', async ()
   expect(
     host.querySelector<HTMLInputElement>('[data-test-id="settings-answer-enough-amount"]')?.value
   ).toBe('48000')
-  // Free money is held back with the benchmarks in production.
+  // Free money and how the household lives are held back with the benchmarks in production.
   expect(answer('free-money')).toBeNull()
+  expect(answer('tenure')).toBeNull()
+  expect(host.textContent).not.toContain('How do you live?')
 })
 
 it("lists the answers when the categories can't be read, the support as a count", async () => {
@@ -192,5 +195,40 @@ it('asks where you live and who the space covers in every other build', async ()
   // The free-money answer, with its question for the region it was asked for.
   await vi.waitFor(() => {
     expect(answer('free-money')?.textContent).toContain('Entgeltumwandlung')
+  })
+})
+
+it('lists how the household lives in every other build, to change or remove', async () => {
+  vi.stubEnv('MODE', 'dev')
+  await storeAnswers({ region: 'UK', tenure: 'rentSocial' })
+  await openGeneral()
+  await vi.waitFor(() => {
+    expect(answer('tenure')).not.toBeNull()
+  })
+  const chips = () => [...answer('tenure')!.querySelectorAll('label')]
+  // The UK's figures tell social renters apart, so its choices do too.
+  expect(chips().map((label) => label.textContent)).toEqual([
+    'Rent privately',
+    'Rent social housing',
+    'Own with a mortgage',
+    'Own outright',
+    'Live with family',
+  ])
+  expect(chips().find((label) => label.querySelector('input')!.checked)?.textContent).toBe(
+    'Rent social housing'
+  )
+  chips()
+    .find((label) => label.textContent === 'Own outright')!
+    .querySelector('input')!
+    .click()
+  await vi.waitFor(async () => {
+    expect((await storedAnswers()).tenure).toBe('outright')
+  })
+  host.querySelector<HTMLButtonElement>('[data-test-id="settings-answer-tenure-remove"]')!.click()
+  await vi.waitFor(async () => {
+    expect(await storedAnswers()).toEqual({ region: 'UK' })
+  })
+  await vi.waitFor(() => {
+    expect(answer('tenure')).toBeNull()
   })
 })

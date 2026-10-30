@@ -3,7 +3,7 @@
  * the words the circle view, Your next step and Settings share. Every answer is kept in the
  * answers record (answers.ts) and can be changed in Settings, About this space.
  */
-import type { FreeMoneyAnswer } from './answers';
+import type { FreeMoneyAnswer, TenureAnswer } from './answers';
 
 /** Under a question in Your next step and the circle view. */
 export const ASKED_ONCE = 'Asked once. You can change it in Settings, About this space.';
@@ -49,6 +49,34 @@ export const SAVED_ELSEWHERE_OPTIONS: readonly { label: string; answer: boolean 
   { label: 'Yes', answer: true },
 ];
 export const SAVED_ELSEWHERE_HINT = 'Counted as invested, at the amount you give.';
+
+/** The housing card asks it while it has no answer (the benchmarks gate holds both back). */
+export const TENURE_QUESTION = 'How do you live?';
+export const TENURE_HINT = 'Renting and owning are compared with different figures.';
+
+/**
+ * The answers to "How do you live?" where `region` is compared with: the UK's figures tell private
+ * and social renters apart, so only there is social housing a choice of its own (and wherever it is
+ * the answer on file).
+ */
+export function tenureOptions(
+  region: string,
+  answered?: TenureAnswer
+): readonly { label: string; answer: TenureAnswer }[] {
+  const renting: { label: string; answer: TenureAnswer }[] =
+    region === 'UK' || answered === 'rentSocial'
+      ? [
+          { label: 'Rent privately', answer: 'rentPrivate' },
+          { label: 'Rent social housing', answer: 'rentSocial' },
+        ]
+      : [{ label: 'Rent', answer: 'rentPrivate' }];
+  return [
+    ...renting,
+    { label: 'Own with a mortgage', answer: 'mortgage' },
+    { label: 'Own outright', answer: 'outright' },
+    { label: 'Live with family', answer: 'family' },
+  ];
+}
 
 /** The amount forms' errors. */
 export const AMOUNT_ABOVE_ZERO = 'Enter an amount above 0.';

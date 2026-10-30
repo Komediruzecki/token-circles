@@ -649,6 +649,84 @@ describe('How you compare', () => {
     expect(view.textContent).not.toContain('How you compare')
   })
 
+  it('asks how the household lives on the housing card in Paying your way, and saves it', async () => {
+    const spent = facts({
+      spendingByKind: { groceries: 300, eating_out: 100, transport: 250, housing: 900 },
+    })
+    guidance.set!(viewOf(spent, true))
+    const c = mount(() => <Progress />)
+    go('#progress/2')
+    const view = q(c, '[data-test-id="circle-view"]')
+    await vi.waitFor(() => {
+      expect(view.querySelectorAll('[data-test-id="benchmark-card"]').length).toBe(4)
+    })
+    const ids = [...view.querySelectorAll('[data-test-id="benchmark-card"]')].map((card) =>
+      card.getAttribute('data-card')
+    )
+    expect(ids).toEqual(['groceries', 'eating-out', 'transport', 'housing'])
+    const housing = q(view, '[data-card="housing"]')
+    const question = q(housing, '[data-test-id="circle-question-tenure"]')
+    expect(q(question, 'legend').textContent).toBe('How do you live?')
+    const chips = [...question.querySelectorAll('[data-test-id="circle-tenure-choice"]')]
+    expect(chips.map((chip) => chip.textContent)).toEqual([
+      'Rent',
+      'Own with a mortgage',
+      'Own outright',
+      'Live with family',
+    ])
+    // Only the housing card asks.
+    expect(view.querySelectorAll('[data-test-id="circle-question-tenure"]')).toHaveLength(1)
+    q(chips[1], 'input').click()
+    await vi.waitFor(() => {
+      expect(saves.calls).toEqual([{ tenure: 'mortgage' }])
+    })
+    expect(vi.mocked(takeAnswers)).toHaveBeenCalledWith(1, { tenure: 'mortgage' })
+
+    // Answered: the store hands the card the answer, and it asks no more.
+    guidance.set!(viewOf(spent, true, { tenure: 'mortgage' }))
+    await vi.waitFor(() => {
+      expect(view.querySelector('[data-test-id="circle-question-tenure"]')).toBeNull()
+    })
+  })
+
+  it('says beside the card when the answer did not save, and puts the choice back', async () => {
+    saves.fail = true
+    guidance.set!(viewOf(facts({ spendingByKind: { housing: 900 } }), true))
+    const c = mount(() => <Progress />)
+    go('#progress/2')
+    const view = q(c, '[data-test-id="circle-view"]')
+    await vi.waitFor(() => {
+      expect(view.querySelector('[data-test-id="circle-question-tenure"]')).not.toBeNull()
+    })
+    const chip = q(view, '[data-test-id="circle-tenure-choice"] input') as HTMLInputElement
+    chip.click()
+    await vi.waitFor(() => {
+      expect(q(view, '[data-test-id="circle-compare-problem"]').textContent).toBe(
+        "Couldn't save your answer. Try again."
+      )
+    })
+    expect(chip.checked).toBe(false)
+  })
+
+  it('offers social housing where the figures tell it apart, in the UK', async () => {
+    const uk = viewOf(facts({ region: 'UK', spendingByKind: { housing: 900 } }), true)
+    guidance.set!({ ...uk, region: { region: 'UK', reason: 'answer', via: null } })
+    const c = mount(() => <Progress />)
+    go('#progress/2')
+    await vi.waitFor(() => {
+      expect(c.querySelector('[data-test-id="circle-question-tenure"]')).not.toBeNull()
+    })
+    expect(
+      [...c.querySelectorAll('[data-test-id="circle-tenure-choice"]')].map((one) => one.textContent)
+    ).toEqual([
+      'Rent privately',
+      'Rent social housing',
+      'Own with a mortgage',
+      'Own outright',
+      'Live with family',
+    ])
+  })
+
   it('has no comparison in a circle without cards', async () => {
     guidance.set!(viewOf(facts(), true))
     const c = mount(() => <Progress />)

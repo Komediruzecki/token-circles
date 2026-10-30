@@ -3,7 +3,8 @@
  * Each answered question is listed with its answer, changeable here, and "Remove answer", after
  * which its circle asks again. The support and essentials answers change where they were given:
  * Paying your way ticks the support, and each category keeps whether it is needed every month.
- * The free-money answer shows only while the benchmarks gate is open, as its question does.
+ * The free-money and tenure answers show only while the benchmarks gate is open, as their questions
+ * do.
  */
 import { createUniqueId, Show } from 'solid-js'
 import {
@@ -13,6 +14,8 @@ import {
   ESSENTIALS_QUESTION,
   freeMoneyQuestion,
   SUPPORT_QUESTION,
+  TENURE_QUESTION,
+  tenureOptions,
   YEARLY_BILLS_OPTIONS,
   YEARLY_BILLS_QUESTION,
 } from '../../../../shared/guidance/questions'
@@ -21,7 +24,12 @@ import { AnswerChips, EnoughAmount, SavedElsewhereQuestion } from './CircleQuest
 import { Question } from './questionParts'
 import styles from './Questions.module.css'
 import type { JSX } from 'solid-js'
-import type { AnswerChanges, Answers, FreeMoneyAnswer } from '../../../../shared/guidance/answers'
+import type {
+  AnswerChanges,
+  Answers,
+  FreeMoneyAnswer,
+  TenureAnswer,
+} from '../../../../shared/guidance/answers'
 import type { SaveAnswer } from './CircleQuestions'
 
 export interface CircleAnswersProps {
@@ -32,6 +40,8 @@ export interface CircleAnswersProps {
   categoryNames: ReadonlyMap<number, string> | null
   /** The benchmarks gate (core/guidanceGate.ts): the free-money answer shows only while open. */
   gate: boolean
+  /** The region compared with: the UK's figures tell social renters apart. */
+  region: string
   disabled: boolean
   onSave: SaveAnswer
 }
@@ -121,6 +131,7 @@ export function CircleAnswers(props: CircleAnswersProps): JSX.Element {
     a().carriesCardBalance !== undefined ||
     a().setsAsideYearly !== undefined ||
     freeMoney() !== null ||
+    (props.gate && a().tenure !== undefined) ||
     a().supportCategoryIds !== undefined ||
     a().kindsAsked !== undefined ||
     a().savedElsewhere !== undefined ||
@@ -208,6 +219,26 @@ export function CircleAnswers(props: CircleAnswersProps): JSX.Element {
             />
           </Answered>
         )}
+      </Show>
+
+      <Show when={props.gate && a().tenure !== undefined}>
+        <Answered
+          question={TENURE_QUESTION}
+          name="tenure"
+          disabled={props.disabled}
+          remove={{ tenure: null }}
+          onSave={props.onSave}
+        >
+          <AnswerChips<TenureAnswer>
+            name="settings-answer-tenure"
+            question={TENURE_QUESTION}
+            options={tenureOptions(props.region, a().tenure)}
+            answered={a().tenure}
+            disabled={props.disabled}
+            testId="settings-answer-tenure-choice"
+            onChoose={(answer) => props.onSave({ tenure: answer })}
+          />
+        </Answered>
       </Show>
 
       <Show when={a().supportCategoryIds !== undefined}>

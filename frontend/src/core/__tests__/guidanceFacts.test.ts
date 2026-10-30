@@ -977,6 +977,59 @@ describe('the lines it shares with the official figures', () => {
   })
 })
 
+describe('spending by kind', () => {
+  const kinded = [
+    ...categories,
+    // The name suggests housing; a child takes its parent's kind; Misc says other; Transfers moves.
+    { id: 3, name: 'Flat rent', type: 'expense' },
+    { id: 4, name: 'Monthly pass', type: 'expense', parent_id: 5 },
+    { id: 5, name: 'Getting around', type: 'expense', kind: 'transport' },
+    { id: 6, name: 'Odds and ends', type: 'expense' },
+    { id: 7, name: 'Transfers', type: 'expense' },
+  ]
+  const months = (n: number) =>
+    [n, n - 1, n - 2].flatMap((m) => [
+      ...month(ago(m), 3000, 600),
+      entry(`${ago(m)}-11`, { amount: 900, category_id: 3 }),
+      entry(`${ago(m)}-12`, { amount: 60, category_id: 4 }),
+      entry(`${ago(m)}-13`, { amount: 30, category_id: 5 }),
+      entry(`${ago(m)}-14`, { amount: 45, category_id: 6 }),
+      entry(`${ago(m)}-15`, { amount: 500, category_id: 7 }),
+      entry(`${ago(m)}-16`, { amount: 25, category_id: null }),
+      entry(`${ago(m)}-17`, { amount: 120, category_id: 2 }),
+    ])
+
+  it("is each kind's spending a month on average, by the kind its category goes by", () => {
+    const facts = guidanceFacts({
+      today: TODAY,
+      region: 'DE',
+      transactions: months(3),
+      categories: kinded,
+      accounts: [],
+    })
+    expect(facts.spendingByKind).toEqual({
+      groceries: 600,
+      housing: 900,
+      transport: 90,
+      eating_out: 120,
+    })
+    // Money moved and spending with no category or no kind are in no kind, but still spending.
+    expect(facts.spending).toBe(600 + 900 + 90 + 45 + 25 + 120)
+  })
+
+  it('has none with too few months for an average', () => {
+    const facts = guidanceFacts({
+      today: TODAY,
+      region: 'DE',
+      transactions: [2, 1].flatMap((n) => month(ago(n), 3000, 600)),
+      categories: kinded,
+      accounts: [],
+    })
+    expect(facts.averaged).toBe(false)
+    expect(facts.spendingByKind).toBeNull()
+  })
+})
+
 describe('what the circle views list', () => {
   it('breaks the money in reach down by where it is, adding up to the whole', () => {
     const accounts: FactsAccount[] = [

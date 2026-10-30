@@ -130,6 +130,7 @@ export function AboutThisSpace() {
         currency={currency()}
         categoryNames={categoryNames()}
         gate={benchmarksShown()}
+        region={region().region}
         disabled={saving()}
         onSave={save}
       />

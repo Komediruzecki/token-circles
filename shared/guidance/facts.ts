@@ -42,10 +42,10 @@ import { DEFAULT_SETTINGS, MIN_MONTHS_FOR_AVERAGES } from '../retirementSettings
 import { trackedMonthsInYearWindow, trackedMonthsOf, YEAR_ON_FILE_MONTHS } from '../trackedMonths';
 import { CLEAR_PICTURE_MONTHS } from './circles';
 import { flowsOf } from './flows';
-import { categoryLookup, essentialOf, holdsTransfers } from './kinds';
+import { categoryLookup, effectiveKind, essentialOf, holdsTransfers } from './kinds';
 import type { LoanInput } from '../loanSchedule';
 import type { FreeMoneyAnswer } from './answers';
-import type { KindedCategory } from './kinds';
+import type { Kind, KindedCategory } from './kinds';
 import type { Region } from './region';
 
 /** How many tracked months the averages run over, at most: a year. */
@@ -301,6 +301,13 @@ export interface GuidanceFacts {
    * few months for averages.
    */
   heaviestMonth?: { month: string; spent: number; category: string | null } | null;
+  /**
+   * Spending by the kind its category goes by (`effectiveKind`), a month on average: what the
+   * groceries, eating out, transport and housing cards read. Kinds with no spending are absent;
+   * spending with no category, or under a category with no kind, is in none. Null with too few
+   * months.
+   */
+  spendingByKind?: Partial<Record<Kind, number>> | null;
 }
 
 /** A category the window took in or spent in. */
@@ -390,6 +397,8 @@ interface WindowSums {
   uncategorisedEntries: number;
   /** Each month's spending, and what each category spent in it (no category: id 0). */
   byMonth: Map<string, { spent: number; byCategory: Map<number, number> }>;
+  /** What was spent under each kind, by the kind its category goes by. */
+  byKind: Map<Kind, number>;
 }
 
 /** The window's money, added up, without the expenses that only moved money (`holdsTransfers`). */
@@ -417,6 +426,7 @@ function sumWindow(
   const flows = flowsOf(entries, amount);
   const support = new Set(input.answers?.supportCategoryIds ?? []);
   const verdicts = new Map<number, ReturnType<typeof essentialOf> | null>();
+  const kinds = new Map<number, Kind | null>();
   const sums: WindowSums = {
     months: months.length,
     income: flows.income,
@@ -430,6 +440,7 @@ function sumWindow(
     byCategory: new Map(),
     uncategorisedEntries: 0,
     byMonth: new Map(),
+    byKind: new Map(),
   };
   const add = (id: number, value: number) => {
     sums.byCategory.set(id, (sums.byCategory.get(id) ?? 0) + value);
@@ -460,7 +471,10 @@ function sumWindow(
     if (!verdicts.has(id)) {
       const category = lookup(id);
       verdicts.set(id, category ? essentialOf(category, lookup) : null);
+      kinds.set(id, category ? effectiveKind(category, lookup) : null);
     }
+    const kind = kinds.get(id);
+    if (kind) sums.byKind.set(kind, (sums.byKind.get(kind) ?? 0) + spent);
     const verdict = verdicts.get(id);
     // A category the profile no longer has says nothing about its kind: needed, as no kind is.
     if (!verdict || verdict.essential) sums.essentials += spent;
@@ -857,7 +871,15 @@ export function guidanceFacts(input: GuidanceInput): GuidanceFacts {
     uncategorisedEntries: sums.uncategorisedEntries,
     belowZero: belowZeroOf(accountsNow),
     heaviestMonth: averaged ? heaviestMonthOf(sums, input.categories) : null,
+    spendingByKind: averaged ? perKind(sums.byKind, months.length) : null,
   };
+}
+
+/** Each kind's spending a month on average, for the kinds that had any. */
+function perKind(byKind: ReadonlyMap<Kind, number>, months: number): Partial<Record<Kind, number>> {
+  const out: Partial<Record<Kind, number>> = {};
+  for (const [kind, total] of byKind) if (total > 0) out[kind] = total / months;
+  return out;
 }
 
 /** The month that spent the most, the earliest of equals, and its largest category's name. */

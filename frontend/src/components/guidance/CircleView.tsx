@@ -9,7 +9,8 @@
  * (shared/guidance/circleView.ts `circleQuestions`): the card, yearly-bills, free-money and
  * own-number questions under the check they settle, the support, essentials and outside-savings
  * questions under the numbers they change. Each is saved through `saveAnswers` and taken by the
- * circles at once. A question Your next step asks on this screen is asked there only.
+ * circles at once. A question Your next step asks on this screen is asked there only. The housing
+ * card asks "How do you live?" on itself, behind the benchmarks gate as the card is.
  */
 import { createEffect, createMemo, createSignal, For, Index, onMount, Show } from 'solid-js'
 import { CIRCLE_NAMES } from '../../../../shared/guidance/circles'
@@ -32,6 +33,9 @@ import {
   GUIDANCE_LINE,
   SUPPORT_HINT,
   SUPPORT_QUESTION,
+  TENURE_HINT,
+  TENURE_QUESTION,
+  tenureOptions,
   YEARLY_BILLS_ASIDE,
   YEARLY_BILLS_OPTIONS,
 } from '../../../../shared/guidance/questions'
@@ -49,7 +53,7 @@ import NextStepCard from './NextStepCard'
 import { createAnswerSave, Question, SaveProblem, TickList } from './questionParts'
 import { regionReasonText } from './regionWords'
 import type { JSX } from 'solid-js'
-import type { Answers, FreeMoneyAnswer } from '../../../../shared/guidance/answers'
+import type { Answers, FreeMoneyAnswer, TenureAnswer } from '../../../../shared/guidance/answers'
 import type * as Cards from '../../../../shared/guidance/cards'
 import type { CircleNumber } from '../../../../shared/guidance/circles'
 import type { CheckRow, CheckState, CircleQuestion } from '../../../../shared/guidance/circleView'
@@ -122,6 +126,8 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
   const row = () => props.view?.rows[props.circle - 1]
   const name = () => CIRCLE_NAMES[props.circle]
   const answerSave = createAnswerSave(() => props.view?.profileId ?? 0)
+  // The cards' questions save on their own, so a failed save is said beside the card.
+  const cardSave = createAnswerSave(() => props.view?.profileId ?? 0)
 
   onMount(() => {
     heading.focus()
@@ -387,7 +393,27 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
                     Change
                   </a>
                 </p>
-                <BenchmarkCards cards={cards()} />
+                <BenchmarkCards
+                  cards={cards()}
+                  question={() => (
+                    <Question
+                      question={TENURE_QUESTION}
+                      hint={TENURE_HINT}
+                      testId="circle-question-tenure"
+                    >
+                      <AnswerChips<TenureAnswer>
+                        name="circle-tenure"
+                        question={TENURE_QUESTION}
+                        options={tenureOptions(view().region.region)}
+                        answered={view().inputs.answers.tenure}
+                        disabled={cardSave.saving()}
+                        testId="circle-tenure-choice"
+                        onChoose={(answer) => cardSave.save({ tenure: answer })}
+                      />
+                    </Question>
+                  )}
+                />
+                <SaveProblem problem={cardSave.problem()} testId="circle-compare-problem" />
               </section>
             )}
           </Show>

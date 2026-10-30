@@ -2895,6 +2895,66 @@
       "sourceId": "jchs-son-2026"
     },
     {
+      "metric": "housing.share",
+      "region": "EU27",
+      "value": 7.7,
+      "unit": "percent of people",
+      "label": "7.7% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 11.2,
+      "unit": "percent of people",
+      "label": "11.2% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "value": 3.2,
+      "unit": "percent of people",
+      "label": "3.2% of people live in households spending over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "EU27",
+      "value": 18.6,
+      "unit": "percent of market-rate renters",
+      "label": "18.6% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "DE",
+      "value": 13.2,
+      "unit": "percent of market-rate renters",
+      "label": "13.2% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
+      "metric": "housing.share",
+      "region": "HR",
+      "value": 19.8,
+      "unit": "percent of market-rate renters",
+      "label": "19.8% of people renting at market rates spend over 40% of disposable income on housing (2025)",
+      "sourceUrl": "https://ec.europa.eu/eurostat/databrowser/view/ilc_lvho07a/default/table",
+      "year": 2025,
+      "sourceId": "eurostat-ilc_lvho07a"
+    },
+    {
       "metric": "spending.foodAtHome",
       "region": "EU27",
       "value": null,

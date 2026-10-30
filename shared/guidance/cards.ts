@@ -20,12 +20,18 @@ import {
   referencesFor,
   sourceFor,
 } from './benchmarks';
-import { CLEAR_PICTURE_MONTHS, FIRST_CUSHION_MONTHS, FULL_CUSHION_MONTHS } from './circles';
-import { gapOf, monthsText } from './ledger';
+import {
+  CLEAR_PICTURE_MONTHS,
+  FIRST_CUSHION_MONTHS,
+  FULL_CUSHION_MONTHS,
+  SORTED_SHARE,
+} from './circles';
+import { gapOf, monthsText, shareOf } from './ledger';
 import { DAYS_IN_A_MONTH, monthName } from '../orientation';
 import type { Band, BandEntry, MetricId, Reference, RegionId, Strength } from './benchmarks';
 import type { CircleNumber } from './circles';
 import type { Debt, GuidanceFacts } from './facts';
+import type { Kind } from './kinds';
 import type { LedgerWords } from './ledger';
 
 /** A tag on a card: its band, figures borrowed from another region, or a figure that is missing. */
@@ -67,11 +73,19 @@ export interface BenchmarkCard {
   /** Borrowed, missing or thin evidence, in a sentence. */
   note: string | null;
   step: { label: string; hash: string } | null;
-  /** "Where this comes from": the band rule, the sources and how strong they are. */
-  where: { rule: string; sources: CardSource[]; strength: string };
+  /**
+   * "Where this comes from": the band rule, the sources and how strong they are. Null on a card
+   * that compares nothing yet.
+   */
+  where: { rule: string; sources: CardSource[]; strength: string } | null;
   /** "Based on 5 months. It firms up at 12.", under 12 months on file. */
   provisional: string | null;
+  /** Asked on the card while it has no answer: the housing card's "How do you live?". */
+  ask?: CardQuestion;
 }
+
+/** A question a card asks while its answer would change the comparison. */
+export type CardQuestion = 'tenure';
 
 /** Where the cards are read. */
 export interface CardContext {
@@ -688,6 +702,325 @@ export function debtPaymentsCard(
 }
 
 // ---------------------------------------------------------------------------------------------
+// Groceries, eating out and transport, as shares of spending (circle 2)
+
+/** What a share card says, per metric (guidance.md 5.3). */
+interface ShareCopy {
+  id: string;
+  metric: MetricId;
+  kind: Kind;
+  eyebrow: string;
+  title: (share: string, perMonth: string, band: Band | undefined) => string;
+  /** The high band's sentence, after "Households in {region} spend {lo}% to {hi}%". */
+  high: (range: string, year: number) => string;
+  low: (name: string, facts: GuidanceFacts) => string;
+  steps: (facts: GuidanceFacts) => Record<Band, { label: string; hash: string }>;
+  /** A note on evidence that runs low in some regions. */
+  note?: (region: RegionId) => string | null;
+}
+
+const SHARES: readonly ShareCopy[] = [
+  {
+    id: 'groceries',
+    metric: 'spending.foodAtHome',
+    kind: 'groceries',
+    eyebrow: 'Groceries',
+    title: (share) => `Groceries are ${share}% of your spending`,
+    high: (range, year) =>
+      `${range}, depending on income (${year}). A high share often means the rest of the budget is already lean, not that the shopping is lavish.`,
+    low: (name) =>
+      `Below most households in ${name}. If you also buy food in cash or on a card that isn't here, add it; otherwise eating out may be carrying the meals.`,
+    steps: () => ({
+      high: { label: 'Set a grocery budget', hash: '#budgets' },
+      typical: { label: 'Compare with last year', hash: '#analytics' },
+      low: { label: 'Check how food is sorted', hash: '#transactions' },
+    }),
+  },
+  {
+    id: 'eating-out',
+    metric: 'spending.eatingOut',
+    kind: 'eating_out',
+    eyebrow: 'Eating out',
+    title: (share, perMonth, band) =>
+      band === 'high'
+        ? `Eating out is ${share}% of your spending, about ${perMonth} a month`
+        : `Eating out is ${share}% of your spending`,
+    high: (range, year) =>
+      `${range} (${year}). It's the line most people can move fastest, if they want to.`,
+    low: (name) =>
+      `Below most households in ${name}. If some meals are sorted under Groceries or Other, moving them sharpens this.`,
+    steps: () => ({
+      high: { label: 'Set an eating-out budget', hash: '#budgets' },
+      typical: { label: 'See it month by month', hash: '#analytics' },
+      low: { label: 'Check the sorting', hash: '#transactions' },
+    }),
+    note: (region) =>
+      region === 'HR' || region === 'EU27'
+        ? 'These figures come from the 2020 survey wave and run low.'
+        : null,
+  },
+  {
+    id: 'transport',
+    metric: 'spending.transport',
+    kind: 'transport',
+    eyebrow: 'Transport',
+    title: (share) => `Transport is ${share}% of your spending`,
+    high: (range, year) => `${range}, car purchases included (${year}).`,
+    low: (name, facts) =>
+      facts.firm
+        ? `Below most households in ${name}.`
+        : `Below most households in ${name}. With fewer than 12 months here, yearly costs like insurance may not have come round yet.`,
+    steps: (facts) => {
+      const byMonth = { label: 'See transport by month', hash: '#analytics' };
+      return {
+        high: byMonth,
+        typical: byMonth,
+        low: facts.firm ? byMonth : { label: 'Import the rest of your year', hash: '#import' },
+      };
+    },
+  },
+];
+
+/** The spread across income groups the copy quotes: "11.7% to 14.7%" and its year. */
+function groupRangeOf(metric: MetricId, region: RegionId): Reference | null {
+  return (
+    referencesFor(metric, region).find(
+      (ref) => ref.kind === 'groupRange' && ref.min !== undefined && ref.max !== undefined
+    ) ?? null
+  );
+}
+
+function shareCard(
+  copy: ShareCopy,
+  perMonth: number,
+  spending: number,
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const region = at.region;
+  const range = groupRangeOf(copy.metric, region);
+  const bands = bandsFor(copy.metric, region);
+  const typical = bands.find((one) => one.band === 'typical');
+  if (!range || !typical || typical.max === null) return null;
+  const name = regionName(region);
+  const share = (perMonth / spending) * 100;
+  const band = bandFor(copy.metric, region, share);
+  const shown = percentText(share);
+  const spread = `${averageText(range.min ?? 0)}% to ${averageText(range.max ?? 0)}%`;
+  let body: string;
+  if (band?.band === 'high') {
+    body = copy.high(`Households in ${name} spend ${spread}`, range.year);
+  } else if (band?.band === 'typical') {
+    body = `Close to what households in ${name} spend: ${spread} on average, depending on income (${range.year}).`;
+  } else {
+    body = copy.low(name, facts);
+  }
+  const edges = typicalText(bands, (n) => `${figureText(n)}%`);
+  return {
+    id: copy.id,
+    metric: copy.metric,
+    eyebrow: copy.eyebrow,
+    tags: band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [],
+    title: copy.title(shown, words.money(Math.round(perMonth)), band?.band),
+    body: [body],
+    bar: barOf(
+      bands,
+      share,
+      { from: 0, to: Math.max(10, Math.ceil((typical.max * 1.6) / 5) * 5) },
+      (edge) => `${figureText(edge)}%`,
+      `${edges ? `Typical in ${name}: ${edges}. ` : ''}Yours: ${shown}%.`
+    ),
+    note: copy.note?.(region) ?? null,
+    step: copy.steps(facts)[band?.band ?? 'low'],
+    where: whereFrom(copy.metric, region, bands, [range]),
+    provisional: provisionalOf(facts),
+  };
+}
+
+/**
+ * Groceries, eating out and transport as shares of spending, once the averages run and enough of
+ * the spending has a category to be shared out (`SORTED_SHARE`, the file's minimum): before that,
+ * one card in their place says how much has one.
+ */
+export function spendingShareCards(
+  facts: GuidanceFacts,
+  words: LedgerWords,
+  at: CardContext
+): BenchmarkCard[] {
+  const byKind = facts.spendingByKind;
+  const spending = facts.spending;
+  if (!byKind || spending === null || !(spending > 0)) return [];
+  const sorted = facts.sortedShare ?? 0;
+  if (sorted < SORTED_SHARE) {
+    return [
+      {
+        id: 'spending-unsorted',
+        metric: 'spending.foodAtHome',
+        eyebrow: 'Groceries, eating out and transport',
+        tags: [],
+        title: `${shareOf(sorted, 100, false)}% of your spending has a category`,
+        body: [
+          `They're compared with households in ${regionName(at.region)} once ${SORTED_SHARE}% has one.`,
+        ],
+        bar: null,
+        note: null,
+        step: {
+          label: 'Sort the entries without a category',
+          hash: '#transactions?uncategorised=1',
+        },
+        where: null,
+        provisional: null,
+      },
+    ];
+  }
+  return SHARES.map((copy) =>
+    shareCard(copy, byKind[copy.kind] ?? 0, spending, facts, words, at)
+  ).filter((card): card is BenchmarkCard => card !== null);
+}
+
+// ---------------------------------------------------------------------------------------------
+// Housing costs, as a share of take-home pay (circle 2)
+
+/** The kinds a home costs: rent or the mortgage, and its energy, water and charges. */
+const HOUSING_KINDS: readonly Kind[] = ['housing', 'utilities'];
+
+const RENTING: ReadonlySet<string> = new Set(['rentPrivate', 'rentSocial']);
+
+/** The regions Eurostat's overburden figures cover. */
+const EUROSTAT_HOUSING: ReadonlySet<RegionId> = new Set(['EU27', 'DE', 'HR']);
+
+/** Who England's figures compare a household with, by tenure: the survey's groups. */
+function englandGroup(tenure: string | null): string {
+  if (tenure === 'rentPrivate') return 'private renters';
+  if (tenure === 'rentSocial') return 'social renters';
+  return 'mortgagors';
+}
+
+const ROOM_LEFT = 'That gap is room the rest of your plan can use.';
+
+export function housingCard(
+  facts: GuidanceFacts,
+  _words: LedgerWords,
+  at: CardContext
+): BenchmarkCard | null {
+  const income = facts.income;
+  const byKind = facts.spendingByKind;
+  if (!byKind || income === null || !(income > 0)) return null;
+  const housing = HOUSING_KINDS.reduce((sum, kind) => sum + (byKind[kind] ?? 0), 0);
+  if (!(housing > 0)) return null;
+  const region = at.region;
+  const name = regionName(region);
+  const tenure = at.tenure;
+  const renting = tenure !== null && RENTING.has(tenure);
+  const bands = bandsFor('housing.share', region, { tenure });
+  const typical = bands.find((one) => one.band === 'typical');
+  const share = (housing / income) * 100;
+  const band = bandFor('housing.share', region, share, { tenure });
+  const refs = referencesFor('housing.share', region);
+  const byUnit = (unit: string) => refs.find((ref) => ref.unit === unit && ref.value !== null);
+  const average = byUnit('percent of disposable income');
+  const quoted: Reference[] = [];
+  const quote = (ref: Reference | undefined): number | null => {
+    if (!ref || ref.value === null) return null;
+    quoted.push(ref);
+    return ref.value;
+  };
+  // England's figures are by tenure: the typical band starts at its group's own share.
+  const england = typical?.min ?? null;
+  let body: string;
+  let step: { label: string; hash: string };
+  if (band?.band === 'high') {
+    step = { label: 'See where the rest goes', hash: '#analytics' };
+    if (region === 'US') {
+      body =
+        "That's over the 50% line US housing agencies call a severe burden. They measure before tax, so their figure for you would be a little lower.";
+    } else {
+      const over = EUROSTAT_HOUSING.has(region)
+        ? byUnit(renting ? 'percent of market-rate renters' : 'percent of people')
+        : undefined;
+      const overShare = quote(over);
+      const who =
+        overShare === null || !over
+          ? ''
+          : `; ${figureText(overShare)}% of ${renting ? 'people renting at market rates' : 'people'} in ${name} are over it too (${over.year})`;
+      body = `That's over the 40% line Eurostat uses for a heavy housing burden${who}. Rent changes slowly, so room usually comes from the lines that move faster.`;
+    }
+  } else if (band?.band === 'typical') {
+    step = { label: 'Compare renting and buying', hash: '#rentBuy' };
+    if (region === 'US') {
+      const renters = byUnit('percent of renter households');
+      body =
+        renting && quote(renters) !== null
+          ? `Over 30% is what US agencies call cost-burdened; about half of US renters are (${renters?.year}).`
+          : 'Over 30% is what US agencies call cost-burdened.';
+    } else if (region === 'UK') {
+      body = `${capital(englandGroup(tenure))} in England spend ${figureText(england ?? 0)}% of gross income on average (${typical?.year}).`;
+    } else {
+      const value = quote(average);
+      const sentences = [
+        value === null
+          ? null
+          : `Households in ${name} spend ${averageText(value)}% on average (${average?.year}).`,
+      ];
+      if (renting && region === 'HR') {
+        const renters = byUnit('percent of market-rate renters');
+        const over = quote(renters);
+        if (over !== null) {
+          sentences.push(
+            `Most households in Croatia own their home outright, which keeps that average low; among people renting at market rates, ${figureText(over)}% pay over 40%.`
+          );
+        }
+      } else if (renting && region === 'DE') {
+        const rent = byUnit('percent of net income');
+        const rentShare = quote(rent);
+        if (rentShare !== null) {
+          sentences.push(
+            `Renters in Germany spend ${figureText(rentShare)}% of net income on rent (${rent?.year}).`
+          );
+        }
+      }
+      body = sentences.filter((one): one is string => one !== null).join(' ');
+    }
+  } else {
+    step = { label: 'Put it toward your cushion', hash: '#goals' };
+    if (region === 'US') {
+      body = `Under the 30% line US agencies call cost-burdened. ${ROOM_LEFT}`;
+    } else if (region === 'UK') {
+      body = `Below the ${figureText(england ?? 0)}% that ${englandGroup(tenure)} in England spend on average (${typical?.year}). ${ROOM_LEFT}`;
+    } else {
+      const value = quote(average);
+      body =
+        value === null
+          ? ROOM_LEFT
+          : `Below the ${REGION_ADJECTIVE[region]} household average of ${averageText(value)}% (${average?.year}). ${ROOM_LEFT}`;
+    }
+  }
+  const shown = percentText(share);
+  const edges = typicalText(bands, (n) => `${figureText(n)}%`);
+  return {
+    id: 'housing',
+    metric: 'housing.share',
+    eyebrow: 'Housing costs',
+    tags: band ? [{ kind: 'band', text: BAND_TAGS[band.band] }] : [],
+    title: `Housing takes ${shown}% of your take-home pay`,
+    body: [body],
+    bar: barOf(
+      bands,
+      share,
+      { from: 0, to: 60 },
+      (edge) => `${figureText(edge)}%`,
+      `${edges ? `Typical in ${name}: ${edges}. ` : ''}Yours: ${shown}%.`
+    ),
+    note: null,
+    step,
+    where: whereFrom('housing.share', region, bands, quoted),
+    provisional: provisionalOf(facts),
+    ...(tenure === null ? { ask: 'tenure' as const } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------------------------
 
 /**
  * The cards one circle's view shows under How you compare (guidance.md 3.3). The circles that have
@@ -701,6 +1034,9 @@ export function circleCards(
 ): BenchmarkCard[] {
   const cards: (BenchmarkCard | null)[] = [];
   switch (circle) {
+    case 2:
+      cards.push(...spendingShareCards(facts, words, at), housingCard(facts, words, at));
+      break;
     case 3:
       cards.push(cushionCard(facts, words, at), shockCard(facts, words, at));
       break;

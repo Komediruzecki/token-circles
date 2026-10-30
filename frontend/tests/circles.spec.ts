@@ -261,7 +261,7 @@ test.describe('The seven circles @smoke', () => {
 })
 
 test.describe('The seven circles, compared', () => {
-  test('local-first: the cards in Solid ground carry a band and say where their figures come from', async ({
+  test('local-first: the cards carry a band and say where their figures come from, and the housing card asks how you live', async ({
     page,
   }) => {
     test.setTimeout(150_000)
@@ -291,5 +291,39 @@ test.describe('The seven circles, compared', () => {
     )) {
       expect(href).toMatch(/^https:\/\//)
     }
+
+    // Paying your way: rent is a third of take-home pay, and the housing card asks how you live.
+    await page.evaluate(() => {
+      window.location.hash = 'progress/2'
+    })
+    const paying = page.getByTestId('circle-view')
+    await expect(paying.getByRole('heading', { level: 2 })).toHaveText('Paying your way')
+    const housing = paying.locator('[data-card="housing"]')
+    await expect(housing.getByTestId('benchmark-title')).toHaveText(
+      'Housing takes 33.3% of your take-home pay',
+      { timeout: 30_000 }
+    )
+    await expect(paying.locator('[data-card="groceries"] li[data-kind="band"]')).toHaveText(
+      'Above typical'
+    )
+    const question = housing.getByTestId('circle-question-tenure')
+    await expect(question.locator('legend')).toHaveText('How do you live?')
+    await question
+      .getByTestId('circle-tenure-choice')
+      .filter({ hasText: /^Rent$/ })
+      .click()
+    await expect(question).toHaveCount(0)
+    await expect(housing.getByTestId('benchmark-body')).toHaveText(
+      'Households in the EU spend 18.9% on average (2025).'
+    )
+
+    // Kept in About this space, where it can change.
+    await page.evaluate(() => {
+      window.location.hash = 'settings'
+    })
+    await page.getByTestId('settings-tab-general').click()
+    const tenure = page.getByTestId('settings-answer-tenure')
+    await expect(tenure.locator('input:checked')).toHaveCount(1, { timeout: 30_000 })
+    await expect(tenure.locator('label:has(input:checked)')).toHaveText('Rent')
   })
 })

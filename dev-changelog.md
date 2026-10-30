@@ -1230,6 +1230,27 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   `s17-benchmarks-gate.spec.ts` (a production build shows the circles, holds back How you compare
   and the free-money check, and never fetches the cards' chunk; it fails on a build with the gate
   open).
+- **Spending shares** (`shared/guidance/cards.ts`, `facts.ts`): with the gate open, Paying your way
+  compares groceries, eating out and transport as shares of spending, and housing (the housing and
+  utilities kinds) as a share of take-home pay. `spendingByKind` in `facts.ts` is each kind's
+  spending a month over the window, by the kind each category goes by (`effectiveKind`: its own,
+  its parent's, or the one its name suggests). The share cards wait for 90% of the spending to have
+  a category (`SORTED_SHARE`, the file's minimum); until then one card says how much has one and
+  links to the entries without. The housing card asks "How do you live?" while it has no answer
+  (`tenure`; social housing is a choice of its own only where the UK is compared with): it picks
+  the UK's rows and the renter lines (Croatia's market renters, Germany's renters, US renters), and
+  a mortgage counts as a housing loan for the debt-payment lines. About this space lists the answer
+  while the gate is open. `benchmarks.json` gains the overburden shares Eurostat publishes for the
+  EU, Germany and Croatia (everyone, and people renting at market rates, 2025), which the high band
+  quotes. A card can ask a question (`ask`) and can have no sources yet (`where: null`).
+- **Tests:** `guidanceCards.test.ts` (each share and housing band per region, renters, the UK by
+  tenure, the overburden line, the sorted minimum, "about half" held to its figure),
+  `guidanceFacts.test.ts` (spending by kind: a category's own, its parent's and its name's kind; no
+  category, no kind and money moved in none; none without an average), `progressCircles.test.tsx`
+  (Paying your way's four cards, the tenure question on the housing card only, saved and handed on,
+  a failed save said beside the card, the UK's choices), `settingsAboutThisSpace.test.tsx` (the
+  tenure answer held back in production, changed and removed in other builds) and `circles.spec.ts`
+  (the housing card's question answered local-first and kept in About this space).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
@@ -1243,6 +1264,7 @@ Added:
 
 - **Setup asks where you live and who the space covers**, to choose the official figures your numbers are compared with. Change the answers in Settings.
 - **Your savings rate, cushion and debts beside the official figures where you live.** Breathing room, Solid ground and Room to choose show the typical range, where you sit in it, and the source and year of every figure.
+- **Paying your way compares groceries, eating out, transport and housing** with what households where you live spend: the first three as shares of your spending, housing as a share of your take-home pay.
 
 ### Sign-in
 

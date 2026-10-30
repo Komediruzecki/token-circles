@@ -1,13 +1,14 @@
 /**
  * The benchmark cards under How you compare (design.md 2.2, shared/guidance/cards.ts): the metric,
  * its tags, a title with the person's number, a sentence or two, the band bar, one next step, and
- * "Where this comes from". The words come from cards.ts; this draws them.
+ * "Where this comes from". The words come from cards.ts; this draws them. A card that asks a
+ * question (the housing card's "How do you live?") gets it from the view, which saves the answer.
  */
 import { For, Index, Show } from 'solid-js'
 import styles from './BenchmarkCards.module.css'
 import { ArrowIcon } from './NextStepCard'
 import type { JSX } from 'solid-js'
-import type { BenchmarkCard, CardBar } from '../../../../shared/guidance/cards'
+import type { BenchmarkCard, CardBar, CardQuestion } from '../../../../shared/guidance/cards'
 
 /** Low, typical and high on one scale, the person's mark on it, and the edges labelled. */
 function BandBar(props: { bar: CardBar }): JSX.Element {
@@ -38,7 +39,10 @@ function BandBar(props: { bar: CardBar }): JSX.Element {
   )
 }
 
-function Card(props: { card: BenchmarkCard }): JSX.Element {
+/** Draws the question a card asks. */
+export type CardQuestionSlot = (ask: CardQuestion) => JSX.Element
+
+function Card(props: { card: BenchmarkCard; question?: CardQuestionSlot }): JSX.Element {
   return (
     <article
       class={styles.card}
@@ -63,7 +67,14 @@ function Card(props: { card: BenchmarkCard }): JSX.Element {
       <h4 class={styles.title} data-test-id="benchmark-title">
         {props.card.title}
       </h4>
-      <For each={props.card.body}>{(paragraph) => <p class={styles.body}>{paragraph}</p>}</For>
+      <For each={props.card.body}>
+        {(paragraph) => (
+          <p class={styles.body} data-test-id="benchmark-body">
+            {paragraph}
+          </p>
+        )}
+      </For>
+      <Show when={props.question && props.card.ask}>{(ask) => props.question?.(ask())}</Show>
       <Show when={props.card.bar}>{(bar) => <BandBar bar={bar()} />}</Show>
       <Show when={props.card.note}>
         <p class={styles.note} data-test-id="benchmark-note">
@@ -81,32 +92,39 @@ function Card(props: { card: BenchmarkCard }): JSX.Element {
           </a>
         )}
       </Show>
-      <details class={styles.where} data-test-id="benchmark-where">
-        <summary>Where this comes from</summary>
-        <p>{props.card.where.rule}</p>
-        <ul class={styles.sources}>
-          <For each={props.card.where.sources}>
-            {(source) => (
-              <li>
-                <a href={source.url} target="_blank" rel="noopener noreferrer">
-                  {source.title}
-                </a>
-                , {source.publisher}, {source.year}
-              </li>
-            )}
-          </For>
-        </ul>
-        <p>{props.card.where.strength}</p>
-      </details>
+      <Show when={props.card.where}>
+        {(where) => (
+          <details class={styles.where} data-test-id="benchmark-where">
+            <summary>Where this comes from</summary>
+            <p>{where().rule}</p>
+            <ul class={styles.sources}>
+              <For each={where().sources}>
+                {(source) => (
+                  <li>
+                    <a href={source.url} target="_blank" rel="noopener noreferrer">
+                      {source.title}
+                    </a>
+                    , {source.publisher}, {source.year}
+                  </li>
+                )}
+              </For>
+            </ul>
+            <p>{where().strength}</p>
+          </details>
+        )}
+      </Show>
     </article>
   )
 }
 
-export default function BenchmarkCards(props: { cards: readonly BenchmarkCard[] }): JSX.Element {
+export default function BenchmarkCards(props: {
+  cards: readonly BenchmarkCard[]
+  question?: CardQuestionSlot
+}): JSX.Element {
   return (
     <div class={styles.cards} data-test-id="benchmark-cards">
       {/* Keyed by place: a card's "Where this comes from" stays open when its numbers change. */}
-      <Index each={props.cards}>{(card) => <Card card={card()} />}</Index>
+      <Index each={props.cards}>{(card) => <Card card={card()} question={props.question} />}</Index>
     </div>
   )
 }
