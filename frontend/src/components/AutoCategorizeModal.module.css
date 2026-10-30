@@ -186,7 +186,7 @@
 .selectBtn.selected {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .spinnerIcon {
@@ -257,7 +257,7 @@
 
 .applyButton {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .applyButton:hover:not(.disabled) {
@@ -277,7 +277,7 @@
 
 .spinner svg {
   animation: spin 1s linear infinite;
-  color: #fff;
+  color: var(--on-primary);
 }
 
 @keyframes spin {

@@ -8,6 +8,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
+
 ## [5.17.3] — 2026-10-30
 
 ### Fixed

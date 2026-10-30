@@ -329,7 +329,7 @@ export default function BillingPlans(props: {
                   'font-size': '13px',
                   'font-weight': interval() === opt ? 600 : 400,
                   background: interval() === opt ? 'var(--primary)' : 'transparent',
-                  color: interval() === opt ? '#fff' : 'var(--text-secondary)',
+                  color: interval() === opt ? 'var(--on-primary)' : 'var(--text-secondary)',
                 }}
               >
                 {opt === 'monthly' ? 'Monthly' : 'Annual'}
@@ -397,7 +397,7 @@ export default function BillingPlans(props: {
                       top: '-9px',
                       left: '16px',
                       background: mine() ? 'var(--success, #22c55e)' : 'var(--primary)',
-                      color: '#fff',
+                      color: mine() ? '#fff' : 'var(--on-primary)',
                       'font-size': '10px',
                       'font-weight': 700,
                       'letter-spacing': '0.04em',
@@ -591,6 +591,6 @@ function ctaStyle(primary: boolean) {
     cursor: 'pointer',
     border: primary ? 'none' : '1px solid var(--border, rgba(255,255,255,0.16))',
     background: primary ? 'var(--primary)' : 'transparent',
-    color: primary ? '#fff' : 'var(--text)',
+    color: primary ? 'var(--on-primary)' : 'var(--text)',
   } as const
 }

@@ -47,12 +47,12 @@
 
 .pillActive {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .pillActive:hover {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .pillIcon {

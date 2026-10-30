@@ -224,7 +224,7 @@
 /* Auto sync — filled azure with the brand glow */
 .sync {
   background: linear-gradient(180deg, var(--primary) 0%, var(--primary-strong) 100%);
-  color: #eef4ff;
+  color: var(--on-primary);
   box-shadow: var(--glow-primary);
 }
 .sync:hover:not(:disabled) {

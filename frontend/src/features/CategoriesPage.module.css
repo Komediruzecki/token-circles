@@ -33,7 +33,7 @@
   cursor: pointer;
   transition: all 0.15s;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .categories-page .add-category-btn:hover {
@@ -234,7 +234,7 @@
   cursor: pointer;
   transition: all 0.15s;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .add-category-btn:hover {

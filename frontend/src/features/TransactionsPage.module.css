@@ -56,7 +56,7 @@
 }
 .transactions-page .type-btn-active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 .transactions-page .loading {
@@ -182,7 +182,7 @@
 .transactions-page .type-selector .transfer.active {
   border-color: var(--primary);
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 /* tag chips */
