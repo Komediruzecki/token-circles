@@ -1321,6 +1321,16 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   `progressCircles.test.tsx` (the tour takes a circle's view back to the list, a circle opened under
   it closes again, and focus stays off the row's link) and `TourSelectionModal.account.test.tsx`
   (sixteen tours).
+- **Getting started's facts are worked out once per evaluation** (`frontend/src/core/orientationOnce.ts`,
+  `orientationFactsOnce(snap)`). While less than a year is on file, Dashboard shows the Getting
+  started card and the circles' store reads Getting started's steps for Your next step: each worked
+  the facts out after paint for the same snapshot, so the subscription scan ran twice. Both now read
+  them through a `WeakMap` keyed by the snapshot object, which every data change replaces. The
+  scan's window ends at the first reader's clock. Node, ms per evaluation at 3,000 rows, the card
+  and the store on one snapshot, median of 3 rounds: 199.3 before and 100.8 after at seven months
+  on file, 198.4 and 99.2 at eleven; the card alone is 96 to 104 either way.
+- **Tests:** `GettingStarted.test.tsx` (the card and the store's `workOut` on one evaluation work the
+  facts out once, whichever reads them first, and the store's next step is the card's first step).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

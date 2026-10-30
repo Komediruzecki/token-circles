@@ -42,7 +42,7 @@ import { getPage, getProfileVersion } from './appStore'
 import { entityVersion } from './dataVersions'
 import { answersIn } from './guidanceAnswers'
 import { benchmarksShown } from './guidanceGate'
-import { orientationFacts } from './orientation'
+import { orientationFactsOnce } from './orientationOnce'
 import { refetchOnActive } from './pageVisibility'
 import { getStorageMode } from './storage/storageFactory'
 import type { Answers } from '../../../shared/guidance/answers'
@@ -202,8 +202,9 @@ export function workOut(
   const words: LedgerWords = {
     money: (amount: number) => formatWholeCurrency(amount, inputs.currency),
   }
-  // Getting started's steps scan the entries for subscriptions: read only while they are the step.
-  const orientation = facts.firm ? null : orientationSteps(orientationFacts(snap, Date.now()))
+  // Getting started's steps scan the entries for subscriptions: read only while they are the step,
+  // and from the facts Dashboard's Getting started card works out for the same evaluation.
+  const orientation = facts.firm ? null : orientationSteps(orientationFactsOnce(snap))
   return {
     profileId: snap.profileId,
     snapshot: snap,

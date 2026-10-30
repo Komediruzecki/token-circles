@@ -12,7 +12,8 @@
  * only for someone who can see it: while its record is shown and Dashboard is the page on screen.
  * Pages stay mounted, so without that a category saved on another page would scan the history
  * for a card nobody is looking at, and an account with no card would pay for one on every change.
- * It works them out once per evaluation, after the page has painted, never inside the render.
+ * It works them out once per evaluation, after the page has painted, never inside the render, and
+ * the circles' store reads the same facts for that evaluation instead of working them out again.
  */
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js'
 import { nextSteps } from '../../../shared/orientation'
@@ -24,15 +25,15 @@ import {
   hideGettingStarted,
   loadGettingStarted,
 } from '../core/gettingStarted'
-import { orientationFacts } from '../core/orientation'
+import { orientationFactsOnce } from '../core/orientationOnce'
 import styles from './GettingStarted.module.css'
 import type { JSX } from 'solid-js'
 import type { OrientationStep } from '../../../shared/orientation'
 import type { AchievementsSnapshot } from '../core/achievementsStore'
 
-/** The steps for one evaluation. */
+/** The steps for one evaluation, from facts the circles read too (core/orientationOnce.ts). */
 function stepsFor(snap: AchievementsSnapshot): OrientationStep[] {
-  return nextSteps(orientationFacts(snap, Date.now()))
+  return nextSteps(orientationFactsOnce(snap))
 }
 
 /** The steps to show now, from the last badge evaluation; none before one has run. */

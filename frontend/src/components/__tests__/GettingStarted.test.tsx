@@ -14,6 +14,7 @@ import {
   hideGettingStarted,
   LOCAL_GETTING_STARTED_KEY,
 } from '../../core/gettingStarted'
+import { workOut } from '../../core/guidance'
 import { setOnboardingOwner } from '../../core/onboardingStore'
 import { GettingStartedCard } from '../GettingStarted'
 import type { AchievementsSnapshot } from '../../core/achievementsStore'
@@ -335,6 +336,29 @@ describe('with the card on the account', () => {
     store.set!(settled(savings(257)))
     await painted()
     expect(card()).toBeNull()
+  })
+
+  // While less than a year is on file, Dashboard shows this card beside the circles' Your next
+  // step, which takes these steps: one scan of the entries per evaluation, not one per reader.
+  it('works the facts out once per evaluation, and the circles read the same ones', async () => {
+    const inputs = { profileId: 1, answers: {}, withdrawalRatePct: 4, currency: 'EUR', holdings: 0 }
+    const first = fourMonths()
+    store.set!(first)
+    mount()
+    await painted()
+    expect(workedOut.calls).toBe(1)
+    const view = workOut(first, inputs, false)
+    expect(workedOut.calls).toBe(1)
+    expect(view.next.title).toBe(steps()[0].title)
+
+    // The circles first this time: the card takes what they worked out.
+    const second = fourMonths()
+    workOut(second, inputs, false)
+    expect(workedOut.calls).toBe(2)
+    store.set!(second)
+    await painted()
+    expect(workedOut.calls).toBe(2)
+    expect(steps()).toHaveLength(3)
   })
 
   it('works the steps out once per evaluation, after the page has painted', async () => {
