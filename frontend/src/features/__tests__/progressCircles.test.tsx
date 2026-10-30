@@ -110,10 +110,16 @@ const mount = (el: () => JSX.Element): HTMLDivElement => {
 }
 const q = (c: ParentNode, sel: string): HTMLElement => c.querySelector<HTMLElement>(sel)!
 
-/** Go to `hash` as a link would, firing the hashchange the app listens for. */
+/** Go to `hash` as a link would, firing the hashchange the app listens for, with both addresses. */
 function go(hash: string) {
+  const oldURL = window.location.href
   history.pushState(null, '', hash)
-  window.dispatchEvent(new HashChangeEvent('hashchange'))
+  changed(oldURL)
+}
+
+/** The hashchange a browser fires once the address has moved on from `oldURL`. */
+function changed(oldURL: string) {
+  window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL, newURL: window.location.href }))
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -312,9 +318,10 @@ describe("a circle's own view", () => {
     expect(view.querySelector('[data-test-id="next-step-card"]')).not.toBeNull()
     expect(q(c, '[data-test-id="progress-list"]').hidden).toBe(true)
 
+    const inView = window.location.href
     view.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(window.location.hash).toBe('#progress')
-    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    changed(inView)
     await tick()
     expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
     expect(q(c, '[data-test-id="progress-list"]').hidden).toBe(false)
@@ -339,9 +346,10 @@ describe("a circle's own view", () => {
     const heading = q(c, '[data-test-id="circle-view"] h2')
     expect(document.activeElement).toBe(heading)
     try {
+      const inView = window.location.href
       startTour('progress')
       expect(window.location.hash).toBe('#progress')
-      window.dispatchEvent(new HashChangeEvent('hashchange'))
+      changed(inView)
       await tick()
       expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
       expect(q(c, '[data-tour="progress-circles"]').closest('[hidden]')).toBeNull()
@@ -358,12 +366,32 @@ describe("a circle's own view", () => {
     expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('2')
   })
 
-  it('stays as it was while another page is on screen', () => {
+  it('closes while another page is on screen, and the address says what opens on the way back', () => {
     guidance.set!(viewOf(facts()))
     const c = mount(() => <Progress />)
     go('#progress/2')
     go('#budgets')
+    expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
+    // Back, as the browser's Back button goes: the circle's own address opens it again.
+    go('#progress/2')
     expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('2')
+  })
+
+  // Open circle 4, go to Dashboard, come back to Progress: the list, as it was, with focus and the
+  // scroll left alone. Focus goes to a row only on the way back from that circle's own view.
+  it('moves no focus coming back to the list from another page', async () => {
+    guidance.set!(viewOf(facts()))
+    const c = mount(() => <Progress />)
+    go('#progress/4')
+    go('#dashboard')
+    const row = q(c, '[data-circle-row="4"] a')
+    const focus = vi.spyOn(row, 'focus')
+    go('#progress')
+    await tick()
+    expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
+    expect(q(c, '[data-test-id="progress-list"]').hidden).toBe(false)
+    expect(focus).not.toHaveBeenCalled()
+    expect(document.activeElement).not.toBe(row)
   })
 })
 
@@ -662,6 +690,11 @@ describe('How you compare', () => {
     const change = q(compare, 'a[href="#settings"]')
     change.click()
     expect(settingsTab()).toBe('general')
+    // The link really navigates, a task later: let it land in this test, not the next one.
+    await vi.waitFor(() => {
+      expect(window.location.hash).toBe('#settings')
+    })
+    await tick()
   })
 
   it('shows no cards, and keeps one column, while the gate is closed', async () => {

@@ -60,6 +60,15 @@ const monthLabel = (ym: string): string =>
 const monthInitial = (ym: string): string =>
   new Date(`${ym}-15T00:00:00Z`).toLocaleDateString(undefined, { month: 'narrow', timeZone: 'UTC' })
 
+/** The `#...` part of a URL a hashchange names; empty when there is none to read. */
+const hashOf = (url: string): string => {
+  try {
+    return new URL(url).hash
+  } catch {
+    return ''
+  }
+}
+
 export default function Progress(): JSX.Element {
   const snap = () => snapshot()
   const guidance = useGuidance('progress')
@@ -68,18 +77,23 @@ export default function Progress(): JSX.Element {
   const [opened, setOpened] = createSignal(circleFromHash(window.location.hash))
   let root: HTMLDivElement | undefined
   onMount(() => {
-    const onHashChange = () => {
-      // Another page's address leaves Progress as it was, for when it is next on screen.
-      if (!isProgressHash(window.location.hash)) return
-      const before = opened()
+    const onHashChange = (event: HashChangeEvent) => {
+      // Another page's address closes the circle: the address decides what opens when Progress is
+      // next on screen, #progress/<n> that circle and #progress the list.
+      if (!isProgressHash(window.location.hash)) {
+        setOpened(null)
+        return
+      }
       const next = circleFromHash(window.location.hash)
       setOpened(next)
-      if (before !== null && next === null && !spotlightActive()) {
-        // Back on the list: focus the row of the circle that was open. Not under a tour, where
-        // the row's link would take Enter from the tour and open the circle again.
+      // Back on the list from a circle's own view: focus that circle's row. Only from the view, so
+      // coming back from another page moves nothing, and not under a tour, where the row's link
+      // would take Enter from the tour and open the circle again.
+      const was = circleFromHash(hashOf(event.oldURL))
+      if (was !== null && next === null && !spotlightActive()) {
         queueMicrotask(() => {
           root
-            ?.querySelector<HTMLAnchorElement>(`[data-circle-row="${before}"] a`)
+            ?.querySelector<HTMLAnchorElement>(`[data-circle-row="${was}"] a`)
             ?.focus({ preventScroll: false })
         })
       }

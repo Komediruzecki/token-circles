@@ -1331,6 +1331,15 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   on file, 198.4 and 99.2 at eleven; the card alone is 96 to 104 either way.
 - **Tests:** `GettingStarted.test.tsx` (the card and the store's `workOut` on one evaluation work the
   facts out once, whichever reads them first, and the store's next step is the card's first step).
+- **Back on Progress from another page moves no focus** (`frontend/src/features/Progress.tsx`).
+  The hashchange handler returned early on another page's address, so `opened` kept the circle that
+  was open: open circle 4, go to Dashboard, come back to `#progress`, and the page focused row 4
+  and scrolled to it. Another page's address now closes the circle (the address decides what opens
+  on the way back: `#progress/<n>` that circle, `#progress` the list), and a row takes focus only
+  when the hashchange's `oldURL` was that circle's own view.
+- **Tests:** `progressCircles.test.tsx` (that path moves no focus; the circle closes while another
+  page is on screen and its address opens it again; the test helpers fire hashchange with both
+  addresses, as a browser does, and the Change link's navigation lands inside its own test).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
