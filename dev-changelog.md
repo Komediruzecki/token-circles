@@ -1575,6 +1575,18 @@ check')` first, as the cushion and debt cases do.
   `VITE_ENABLE_BENCHMARKS=true` (the control, which fails the spec as before).
   `guidanceGate.test.ts` loads both modules with the constant false, true and undefined; each of 8
   guard mutations fails it.
+- **A section heading's orbit never takes a row of its own** (`OrbitalDivider.tsx` and its CSS).
+  The orbit's previous fix gave it no width of its own, but when a heading left no room at all
+  beside it (Analytics' "Top Categories Breakdown" at 360, three more headings at 320), the
+  flex row still wrapped it onto a full-width row of its own, arc and dots included. The label and
+  the orbit now sit in one row that never wraps; only a divider's actions move to a row of their
+  own. Across 13 pages and 28 headings: at 390, 25 arcs beside their headings and 3 left out (9
+  sat on rows of their own before); at 360, 22 and 6 (15 before); at 320, 18 and 10 (21 before);
+  none on a row of its own at any width. Budgets' "Add Category" now sits on its heading's row
+  from 390 down (it wrapped under it before), which at 360 and 320 leaves no room for the arc.
+- **Tests:** `circles-layout.spec.ts` checks every heading's orbit on Analytics, the emergency fund
+  page and Progress at 360 and 320: an arc only beside its label. Fails before the change
+  (Analytics at 360, "Top Categories Breakdown").
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

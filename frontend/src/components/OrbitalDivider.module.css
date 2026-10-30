@@ -11,6 +11,16 @@
   scroll-margin-top: 18px;
 }
 
+/* The label and the orbit: one row that never wraps (the orbit takes what the label leaves). It
+   grows to fill the line, so actions sit at the end of it, or wrap to a row of their own. */
+.head {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
 .labelWrap {
   display: flex;
   align-items: center;
@@ -53,8 +63,8 @@
 
 .orbit {
   position: relative;
-  /* It takes the room left beside the label and never wraps to a row of its own; with too
-     little room for an arc (the container query below) it draws nothing. */
+  /* It takes the room left beside the label; with too little room for an arc (the container
+     query below) it draws nothing. */
   flex: 1 1 0;
   min-width: 0;
   container-type: inline-size;
@@ -260,9 +270,12 @@
 }
 
 @media (max-width: 640px) {
-  /* Actions wrap under the label cleanly; the orbit stays beside it (see .orbit). */
+  /* Actions wrap under the label cleanly; the orbit stays beside it (see .head). */
   .divider {
     gap: 12px;
     margin: 26px 0 12px;
+  }
+  .head {
+    gap: 12px;
   }
 }

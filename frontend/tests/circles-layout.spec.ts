@@ -376,6 +376,56 @@ test.describe('The circles as drawn', () => {
     expect(drawn).toEqual(['1280 arc', '390 arc', '360 arc', '320 none'])
   })
 
+  test("every section heading's orbit on a phone: beside its label or left out, never a row of its own", async ({
+    page,
+  }) => {
+    await aSpaceOnly(page)
+    await aYear(page)
+    const seen: string[] = []
+    // Analytics and the emergency fund page have headings too long to leave room for an arc at
+    // 320 and 360; Progress has the circles' heading. Each page waits for its last heading.
+    const pages = [
+      { hash: 'analytics', last: 'Top Categories Breakdown' },
+      { hash: 'emergency', last: 'Coverage by Fund Level' },
+      { hash: 'progress', last: 'Your seven circles' },
+    ]
+    for (const width of [360, 320]) {
+      await page.setViewportSize({ width, height: 844 })
+      for (const { hash, last } of pages) {
+        await go(page, hash)
+        await expect(page.locator('h2', { hasText: last }).locator('visible=true')).toHaveCount(1, {
+          timeout: 30_000,
+        })
+        const placed = await page.evaluate(() =>
+          // The divider's orbit: the only SVG drawn with this box, stretched to its track.
+          [...document.querySelectorAll('svg[viewBox="0 0 100 24"][preserveAspectRatio="none"]')]
+            .map((svg) => {
+              const orbit = svg.parentElement as HTMLElement
+              const label = orbit.parentElement?.querySelector('h2') as HTMLElement
+              const l = label.getBoundingClientRect()
+              const o = orbit.getBoundingClientRect()
+              return {
+                label: label.textContent,
+                shown: l.width > 0,
+                arc: o.width > 0 && getComputedStyle(svg).display !== 'none',
+                beside: Math.abs(o.top + o.height / 2 - (l.top + l.height / 2)) <= 4,
+              }
+            })
+            .filter((one) => one.shown)
+        )
+        expect(placed.length, `${hash} at ${width}`).toBeGreaterThan(0)
+        for (const one of placed) {
+          const where = `${hash} at ${width}: ${one.label}`
+          if (one.arc) expect(one.beside, where).toBe(true)
+          seen.push(`${one.arc ? 'arc' : 'none'} ${where}`)
+        }
+      }
+    }
+    // Both happen: arcs beside their labels, and headings with no room left for one.
+    expect(seen.some((one) => one.startsWith('arc'))).toBe(true)
+    expect(seen.some((one) => one.startsWith('none'))).toBe(true)
+  })
+
   test('a link inside running text at phone width: a 48 px Change, and the lines as the paragraph spaces them', async ({
     page,
   }) => {
