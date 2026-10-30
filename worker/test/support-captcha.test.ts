@@ -26,8 +26,11 @@ function post(body: unknown, ip = '203.0.113.10') {
     }),
     // RESEND_API_KEY must be set or sendMail short-circuits before ever calling out, which would
     // make the "sends no mail" assertion below pass whether or not the captcha is enforced.
+    // CORS_ORIGIN is the app's origin, as on the deployment ORIGIN names: the API takes the form
+    // from the app's own page (request-origin.ts).
     {
       ...env,
+      CORS_ORIGIN: ORIGIN,
       TURNSTILE_SECRET: 'test-secret',
       APP_ENV: 'production',
       SUPPORT_EMAIL: 'x@y.tld',

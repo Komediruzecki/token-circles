@@ -180,6 +180,34 @@ All notable changes to Token Circles are documented here. The format is based on
   category" instead of "Some entries have no category". The card's id is unchanged, so a dismissal
   still holds. Tests: `frontend/src/core/achievements/__tests__/advice.test.ts` (2 new, 2 updated).
 
+### API
+
+- **Requests that change data are taken from the app's own pages, with a JSON body.** A
+  middleware in `worker/src/request-origin.ts`, registered in `worker/src/index.ts` after CORS and
+  before any route, takes a POST, PUT, PATCH or DELETE when three things the browser says about it
+  agree: `Sec-Fetch-Site` is same-origin, same-site or none, or absent; `Origin`, when there is one,
+  is one of the app's origins (`CORS_ORIGIN` and every origin in `APP_ORIGINS`, plus
+  `http://localhost:3800` and `http://127.0.0.1:3800` under `APP_ENV=development`); and the body is
+  `application/json`, or `multipart/form-data` on the uploads (`POST /api/import/upload`,
+  `POST /api/receipts/upload` and `POST /api/receipts`). A change with no body needs no
+  `Content-Type`. Any other request that changes data is answered 403, "Changes are taken from the
+  Token Circles app only. Open the app and try again.", before a route runs, and a
+  `request_not_taken` log line names the check and what the request said. Reads and CORS preflights
+  are untouched.
+  - **Called from elsewhere by design**, each listed in the file with why: the Stripe webhook (its
+    signature), `/api/v1/*` (an API token or a signed upload link), `/mcp` (an API token) and
+    `POST /api/notifications/unsubscribe` (the token in the link: mail providers post it from their
+    own servers, RFC 8058, and the unsubscribe page posts its form from the API host). Mail-in
+    reaches the Worker's `email` handler, not `fetch`.
+  - Scripts, tests and other servers send neither header and are taken with a JSON body, as
+    before. A local app on another port is named in `worker/.dev.vars` (`CORS_ORIGIN` or
+    `APP_ORIGINS`), as passkeys already need.
+  - Tests: `worker/test/requests-from-the-app.test.ts` (23): each of the three checks on a sign-in,
+    a sign-up and a new profile (403, no cookie, no rows written), the app's origins in production
+    and in development, the uploads, and each route called from elsewhere.
+    `worker/test/support-captcha.test.ts` now names the origin it posts from as the app's
+    (`CORS_ORIGIN`), as on the deployment it stands for.
+
 ## [5.17.2] — 2026-10-30
 
 ### Sign-in
