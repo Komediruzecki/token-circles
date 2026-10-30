@@ -16,7 +16,7 @@
 import { createExecutionContext, env, waitOnExecutionContext } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import worker, { type Env } from '../src/index';
-import { b64urlEncode, hashPassword, hmacKey } from '../src/auth';
+import { b64urlDecode, b64urlEncode, hashPassword, hmacKey } from '../src/auth';
 import {
   LOGIN_CHECK_COOKIE,
   LOGIN_CHECK_SECONDS,
@@ -362,7 +362,13 @@ describe('what one solved check covers', () => {
     const cookie = await earnCheck();
     const [format, exp, id, mac] = parts(cookie);
     const otherId = b64urlEncode(crypto.getRandomValues(new Uint8Array(16)));
-    const flipped = (s: string) => (s.endsWith('A') ? `${s.slice(0, -1)}B` : `${s.slice(0, -1)}A`);
+    // A character from the middle of the signature, which carries six of its bits. The last one
+    // also carries two padding bits that decoding drops, so changing it can leave the same bytes.
+    const flipped = (s: string) => {
+      const i = Math.floor(s.length / 2);
+      return `${s.slice(0, i)}${s[i] === 'A' ? 'B' : 'A'}${s.slice(i + 1)}`;
+    };
+    expect(b64urlDecode(flipped(mac))).not.toEqual(b64urlDecode(mac));
     const changed = [
       ['v2', exp, id, mac],
       [format, String(Number(exp) + 60), id, mac],
