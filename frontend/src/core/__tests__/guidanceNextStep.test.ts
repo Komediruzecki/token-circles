@@ -173,6 +173,31 @@ describe('once a year is on file', () => {
     })
   })
 
+  it('reads the accounts again before advising on income they might cover', () => {
+    // Own income 500 short, and the accounts that might hold investments to cover it didn't load:
+    // the check is waiting on them, not lost, so the step is to read them, not to cut 500.
+    const unread = facts({
+      ownIncome: 2000,
+      spending: 2500,
+      accountsKnown: false,
+      liquid: null,
+      cushionMonths: null,
+    })
+    expect(placeCircle(unread).circles[1].checks[0]).toMatchObject({ met: null, unknown: 'unread' })
+    expect(step(unread)).toMatchObject({
+      id: 'own-income',
+      circle: 2,
+      title: 'Reload your accounts',
+      why: "They didn't load, so the income check is waiting.",
+      action: { kind: 'reload', label: 'Reload' },
+      meter: null,
+    })
+    // With the accounts read and nothing invested, the gap is the step.
+    expect(step(facts({ ownIncome: 2000, spending: 2500 })).title).toBe(
+      'Close the €500 a month gap'
+    )
+  })
+
   it('asks the free-money question for its region, and only while the gate is open', () => {
     const de = facts({ region: 'DE' })
     expect(step(de)).toMatchObject({

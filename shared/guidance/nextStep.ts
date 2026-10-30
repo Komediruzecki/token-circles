@@ -254,6 +254,8 @@ function stepFor(
       };
     }
     case 'own-income': {
+      // Short on own income, with the accounts that might cover it unread: read them first.
+      if (check.unknown === 'unread') return reloadStep('the income check');
       if (check.value === null || check.target === null) return null;
       const gap = words.money(gapOf(check.target, check.value));
       const support = facts.income !== null && facts.income - check.value >= 0.5;

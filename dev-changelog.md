@@ -1429,6 +1429,14 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
   where the free-money check never shows, so its check could not fail: it now sets US dollars as
   the base currency, and also checks the free-money question and the Dashboard gauge its header
   promises (no band, no comparison sentence, no region line, no "Typical in"; the 20% goal shows).
+- **Your next step reads the accounts before advising on income** (`shared/guidance/nextStep.ts`).
+  With own income short and the accounts unread, the own-income check is not known (the accounts
+  might hold investments that cover it), and the status line said so, but the step said "Close the
+  €500 a month gap" and opened Budgets. The own-income case now answers `reloadStep('the income
+check')` first, as the cushion and debt cases do.
+- **Tests:** `guidanceNextStep.test.ts` (the review's P2 case: the step is Reload your accounts,
+  "They didn't load, so the income check is waiting.", with no meter; read and with nothing
+  invested, the gap is the step).
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
