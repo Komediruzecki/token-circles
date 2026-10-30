@@ -89,16 +89,21 @@
   font-weight: 500;
 }
 
+/* The pill's look, with no grid placement: the circle's own view puts it in its head's grid. */
 .pill {
-  grid-area: pill;
-  align-self: center;
-  justify-self: end;
   padding: 3px 9px;
   border: 1px solid transparent;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Where a ledger row puts its pill. */
+.pill-place {
+  grid-area: pill;
+  align-self: center;
+  justify-self: end;
 }
 
 /* --primary-hover on --primary-bg: --primary on it is 4.08:1 in light (circles mocks, finding i). */
@@ -108,7 +113,8 @@
 }
 
 .pill[data-state='current'] {
-  background: color-mix(in oklab, var(--circle-now) 18%, transparent);
+  border-color: var(--circle-now-line);
+  background: var(--circle-now-bg);
   color: var(--text);
 }
 
@@ -233,7 +239,7 @@
     height: 40px;
   }
 
-  .pill {
+  .pill-place {
     justify-self: start;
   }
 

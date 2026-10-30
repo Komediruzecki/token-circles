@@ -55,6 +55,8 @@
 }
 
 .title {
+  width: fit-content;
+  max-width: 100%;
   margin: 4px 0 0;
   font-family: var(--font-display, inherit);
   font-size: 24px;
@@ -187,6 +189,7 @@
 
 .check-title {
   min-width: 0;
+  text-wrap: pretty;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
@@ -206,6 +209,7 @@
 .check-waiting,
 .check-needed {
   margin: 0 0 0 30px;
+  text-wrap: pretty;
   font-size: 13px;
   line-height: 1.45;
   color: var(--text-secondary);
@@ -314,10 +318,14 @@
   }
 }
 
+/* A link inside running text: the padding makes a 48 px target, and the negative margin hands
+   the same height back, so the line it sits on keeps the paragraph's spacing. */
 .inline-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 48px;
+  display: inline-block;
+  min-width: 48px;
+  padding-block: calc((48px - 1lh) / 2);
+  margin-block: calc((1lh - 48px) / 2);
+  text-align: center;
   color: var(--primary-hover);
   font-weight: 600;
 }

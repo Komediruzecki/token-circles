@@ -115,6 +115,7 @@
 
 .goal {
   margin: 12px 0 0;
+  text-wrap: pretty;
   font-size: 13px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
@@ -136,12 +137,14 @@
   color: var(--text-secondary);
 }
 
+/* A link inside running text, as the circle view's: a 48 px target that leaves the lines' spacing
+   alone. */
 .inline {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   min-width: 48px;
-  min-height: 48px;
+  padding-block: calc((48px - 1lh) / 2);
+  margin-block: calc((1lh - 48px) / 2);
+  text-align: center;
   color: var(--primary-hover);
   font-weight: 600;
 }

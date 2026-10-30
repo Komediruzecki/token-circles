@@ -1340,6 +1340,26 @@ budgets, bills)` in `achievements/monthFacts.ts` applies `budgetsForMonth` (the 
 - **Tests:** `progressCircles.test.tsx` (that path moves no focus; the circle closes while another
   page is on screen and its address opens it again; the test helpers fire hashchange with both
   addresses, as a browser does, and the Change link's navigation lands inside its own test).
+- **The circles as drawn: the head, the links in running text and "You're here"**
+  (`CircleLedger.module.css`, `CircleView.module.css`, `SavingsGauge.module.css`,
+  `NextStepCard.module.css`, `dawn-light.css`, `orbit-dark.css`). The ledger's `.pill` carried its
+  row's grid placement, so the circle view, which borrows the pill's look, put it in a row of its
+  own under the head at 1280: the look is now `.pill` and the ledger row's placement `.pill-place`.
+  The inline Change links (the circle view's `.inline-link`, the gauge's `.inline`) were 48 px
+  `inline-flex` boxes that pushed their line apart; they are `inline-block` with
+  `padding-block: calc((48px - 1lh) / 2)` and the same negative margin, so the target stays 48 px
+  and the line keeps the paragraph's spacing. "You're here" reads two new per-theme tokens,
+  `--circle-now-bg` and `--circle-now-line`: light keeps its 18% tint, now mixed against
+  `--card-bg` so it is opaque; dark mixes 30% against the card in srgb with a 60% line (18% into
+  transparent read grey-violet over navy, and in oklab this orange and this navy meet near grey).
+  The text on it is 14.8:1 in light and 7.8:1 in dark. The circle view's title is `fit-content`,
+  so its focus outline is as wide as the name, and the check rows, the "Then:" line and the
+  gauge's goal line wrap with `text-wrap: pretty`.
+- **Tests:** `tests/circles-layout.spec.ts`, new and local-first (at 1280 the pill sits on the
+  glyph's row and the heading is as wide as its words; at 390 the paragraphs holding Change space
+  their lines by their own line height, with Change at least 48 by 48; in both themes the pill is
+  opaque, 4.5:1 or more and warm). `tests/circles-fixture.ts` holds the workspace it shares with
+  `circles-phone.spec.ts`.
 
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 

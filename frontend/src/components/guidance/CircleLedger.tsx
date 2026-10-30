@@ -64,7 +64,7 @@ function Row(props: { row: LedgerRow }): JSX.Element {
           size={40}
         />
         <span class={styles.name}>{props.row.name}</span>
-        <span class={styles.pill} data-state={props.row.state}>
+        <span class={`${styles.pill} ${styles.pillPlace}`} data-state={props.row.state}>
           {props.row.pill}
         </span>
         <span id={`${id()}-line`} class={styles.line}>

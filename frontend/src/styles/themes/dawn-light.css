@@ -111,6 +111,10 @@
   --band: rgba(90, 103, 136, 0.16);
   --band-mid: rgba(90, 103, 136, 0.34);
   --circle-now: var(--accent-warm);
+  /* "You're here": a tint of --circle-now over the card, opaque so the row under it shows no
+     other hue through. */
+  --circle-now-bg: color-mix(in oklab, var(--circle-now) 18%, var(--card-bg));
+  --circle-now-line: transparent;
 
   /* Fonts (shared across themes; declared on :root so always present) */
   --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
