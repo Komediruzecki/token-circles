@@ -153,8 +153,10 @@ describe('a statement from a bank the app reads', () => {
     choose('revolut.csv', revolut())
     await readUntil('ready')
 
-    expect(byTestId('onboarding-import-meta')?.textContent).toMatch(
-      /^Revolut · 7 new transactions · 14 Apr( 2026)? to 1 Jul( 2026)?$/
+    expect(byTestId('onboarding-import-meta')?.textContent).toBe('Revolut · 7 new transactions')
+    // Each date in one piece: a narrow card wraps between them, never inside one.
+    expect(byTestId('onboarding-import-dates')?.textContent).toMatch(
+      /^14\u00a0Apr(\u00a02026)? to 1\u00a0Jul(\u00a02026)?$/
     )
     const [target] = options()
     expect(options()).toHaveLength(1)
@@ -275,9 +277,7 @@ describe('a statement from a bank the app reads', () => {
     choose('revolut.csv', revolut())
     await readUntil('ready')
 
-    expect(byTestId('onboarding-import-meta')?.textContent).toMatch(
-      /^Revolut · 4 new transactions · /
-    )
+    expect(byTestId('onboarding-import-meta')?.textContent).toBe('Revolut · 4 new transactions')
     expect(host.textContent).toContain(
       '3 transactions in it are here already and stay as they are.'
     )

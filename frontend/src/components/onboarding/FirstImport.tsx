@@ -77,7 +77,9 @@ export function dateRangeText(
     ...(sameYear ? {} : { year: 'numeric' }),
     timeZone: 'UTC',
   })
-  const day = (iso: string) => format.format(new Date(`${iso}T00:00:00Z`))
+  // Each date holds together (no-break spaces): a narrow card wraps between the dates, never
+  // inside one.
+  const day = (iso: string) => format.format(new Date(`${iso}T00:00:00Z`)).replace(/ /g, '\u00a0')
   return from === to ? day(from) : `${day(from)} to ${day(to)}`
 }
 
@@ -334,12 +336,15 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
   const metaLine = () => {
     const parts: string[] = []
     if (importer.bank()) parts.push(importer.bank())
-    if (importer.state() === 'ready') {
-      parts.push(counted(importer.newCount(), 'new transaction'))
-      const range = importer.dateRange()
-      if (range) parts.push(dateRangeText(range.from, range.to))
-    }
+    if (importer.state() === 'ready') parts.push(counted(importer.newCount(), 'new transaction'))
     return parts.join(' · ')
+  }
+
+  // The dates the statement covers, on a line of their own: after the count, a phone's card
+  // wrapped them mid-date or left a separator hanging at the end of a line.
+  const datesLine = () => {
+    const range = importer.state() === 'ready' ? importer.dateRange() : null
+    return range ? dateRangeText(range.from, range.to) : ''
   }
 
   const categoriesLine = () => {
@@ -398,6 +403,11 @@ export function FirstImportPanel(props: { importer: FirstImport }) {
               <Show when={metaLine()}>
                 <div class={styles.fileMeta} data-test-id="onboarding-import-meta">
                   {metaLine()}
+                </div>
+              </Show>
+              <Show when={datesLine()}>
+                <div class={styles.fileMeta} data-test-id="onboarding-import-dates">
+                  {datesLine()}
                 </div>
               </Show>
             </div>

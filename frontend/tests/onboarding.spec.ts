@@ -173,7 +173,10 @@ test.describe('onboarding wizard', () => {
     // Read with the bank's own columns: what goes in, and where, before the one tap.
     await fileIn(page, 'ready')
     await expect(page.getByTestId('onboarding-import-meta')).toHaveText(
-      /^Revolut · 7 new transactions · 14 Apr( 2026)? to 1 Jul( 2026)?$/
+      'Revolut · 7 new transactions'
+    )
+    await expect(page.getByTestId('onboarding-import-dates')).toHaveText(
+      /^14\u00a0Apr(\u00a02026)? to 1\u00a0Jul(\u00a02026)?$/
     )
     const target = page.getByTestId('onboarding-import-target')
     await expect(target).toHaveValue('Main Checking')
@@ -955,6 +958,16 @@ test.describe('onboarding wizard at phone width', () => {
             .setInputFiles('tests/fixtures/revolut-sample.csv')
           await fileIn(page, 'ready')
           await check('statement, ready')
+          // What the card says of the statement: its bank and count on one line, its dates on the
+          // next. Neither wraps, so no date breaks in two and no separator hangs at a line's end.
+          for (const id of ['onboarding-import-meta', 'onboarding-import-dates']) {
+            const lines = await page.getByTestId(id).evaluate((el) => {
+              const range = document.createRange()
+              range.selectNodeContents(el)
+              return new Set(Array.from(range.getClientRects()).map((r) => Math.round(r.top))).size
+            })
+            expect(lines, id).toBe(1)
+          }
           await page.getByTestId('onboarding-import-selected').click()
 
           await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
