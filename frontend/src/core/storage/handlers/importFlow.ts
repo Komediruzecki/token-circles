@@ -9,7 +9,9 @@ import {
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
+  existingAccountStartingBalance,
   MISSING_DATE_WARNING,
+  startingBalanceKeptNote,
   unreadableNumbersReason,
 } from '../../../../../shared/importRowChecks'
 import { importRowLabel } from '../../../../../shared/importRowLabel'
@@ -26,7 +28,7 @@ import { computeBalanceDeltas, getDB } from '../idb'
 import { adapter, json, refuse } from './helpers'
 import { readUploadWithin, uploadReader } from './uploadRead'
 import type { AccountType } from '../../../../../shared/accountSchema'
-import type { ImportRowWarning } from '../../../../../shared/importRowChecks'
+import type { ImportNote, ImportRowWarning } from '../../../../../shared/importRowChecks'
 
 const pad2 = (n: number): string => String(n).padStart(2, '0')
 
@@ -498,7 +500,7 @@ export async function importExecute(body: unknown): Promise<Response> {
     // pre-resolution deduped subset.
     const clean = rows
     const skipped: { index: number; reason: string; label?: string }[] = []
-    const warnings: ImportRowWarning[] = []
+    const warnings: Array<ImportRowWarning | ImportNote> = []
     const validatedRows: Array<{
       index: number
       row: Record<string, unknown>
@@ -721,7 +723,63 @@ export async function importExecute(body: unknown): Promise<Response> {
       configuredAccounts.add(catLower)
     }
 
+    // A starting balance given for an account that already exists: an unused one takes it, one in
+    // use keeps its own and the import says so. Mirrors the Worker (existingAccountStartingBalance).
+    // A value that does not read as a number is left alone, as it always was for existing accounts.
+    const startingBalanceUpdates: Array<{
+      record: Record<string, unknown>
+      amount: number
+      date: string
+    }> = []
+    let profileTransactions: Record<string, unknown>[] | null = null
+    for (const [rawName, rawBalance] of Object.entries(accountBalances)) {
+      const name = rawName.trim()
+      const lower = name.toLowerCase()
+      const id = accountIdMap.get(lower)
+      if (id === undefined || !toStr(rawBalance).trim()) continue
+      if (clean.length > 0 && !validAccountNames.has(lower)) continue
+      const amount = parseImportNumber(toStr(rawBalance).trim())
+      if (amount === null) continue
+      const record = existingAccounts.find((a) => (a as Record<string, unknown>).id === id) as
+        Record<string, unknown> | undefined
+      if (!record) continue
+      profileTransactions ??= (await db.getAllFromIndex(
+        'transactions',
+        'by_profile',
+        profileId
+      )) as Record<string, unknown>[]
+      const outcome = existingAccountStartingBalance(
+        {
+          startingBalance:
+            typeof record.starting_balance === 'number' ? record.starting_balance : 0,
+          hasTransactions: profileTransactions.some(
+            (t) => t.account_id === id || t.transfer_account_id === id
+          ),
+        },
+        amount
+      )
+      if (outcome === 'keep') warnings.push({ reason: startingBalanceKeptNote(name, amount) })
+      if (outcome === 'apply') {
+        startingBalanceUpdates.push({
+          record,
+          amount,
+          date: acctBalanceDates[lower] || localToday(),
+        })
+      }
+    }
+
     if (!dryRun) {
+      for (const { record, amount, date } of startingBalanceUpdates) {
+        const before = typeof record.starting_balance === 'number' ? record.starting_balance : 0
+        const balance = typeof record.balance === 'number' ? record.balance : 0
+        // Balances here move by deltas, not a recompute: shift by what the starting balance moved.
+        await db.put('accounts', {
+          ...record,
+          starting_balance: amount,
+          starting_date: date,
+          balance: balance + (amount - before),
+        })
+      }
       for (const config of accountConfigs) {
         const account = {
           name: config.name,

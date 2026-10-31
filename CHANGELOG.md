@@ -10,6 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **A file exported from YNAB imports with its accounts.** Drop the Register file from YNAB's Export Plan download on Bank Imports, with commas or tabs, and each row goes to its own account, each transfer arrives once, and starting balances go to accounts that are new or still empty.
 - **A first bank import files into the standard categories.** Fuel, parking and fares go under Transportation, pharmacies and clinics under Healthcare, bills under Utilities and pay under Salary, instead of new Car (Gas), Transport, Fuel, Health, Apartment (Bills) or Salary Eur categories; if you already have one of those, its rows keep going there.
 - **The bank import rules suggest only your profile's categories.** In local-first household view the Category field also listed the other profiles' categories.
 - **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.

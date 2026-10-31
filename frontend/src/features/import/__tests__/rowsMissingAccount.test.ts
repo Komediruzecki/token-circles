@@ -43,6 +43,13 @@ describe('rowsMissingAccount', () => {
     expect(rowsMissingAccount([row(null, ''), row('erste', ''), row('pbz', 'Giro')])).toEqual([1])
   })
 
+  it('asks no account of a file that names the account of every row', () => {
+    // A YNAB register export: each row imports into the account its Account column names.
+    const ynab = { ...row('ynab', ''), meta: { accounts: ['Test Checking', 'Test Savings'] } }
+    const ynabImportCsv = { ...row('ynab', ''), meta: {} }
+    expect(rowsMissingAccount([ynab, ynabImportCsv])).toEqual([1])
+  })
+
   it('has nothing to say about an empty list', () => {
     expect(rowsMissingAccount([])).toEqual([])
   })

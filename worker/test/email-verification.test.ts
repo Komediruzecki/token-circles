@@ -544,6 +544,14 @@ describe('the mail itself', () => {
     }
   });
 
+  it('names the YNAB file that imports, and what comes with it', () => {
+    // A register export imports with its accounts, transfers and starting balances; the plan file
+    // beside it in the same download does not. The mail says which one to use.
+    expect(welcome.text).toContain(
+      'So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty.'
+    );
+  });
+
   it('welcomes a Google sign-up with no confirm link, and points at the three pages to start on', () => {
     expect(welcome.subject).toBe('Token Circles is ready for your first statement');
     for (const part of [welcome.html, welcome.text]) {

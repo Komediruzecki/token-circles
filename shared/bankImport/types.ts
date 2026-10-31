@@ -11,15 +11,7 @@ import type { ParseDeps } from './xlsx';
 
 /** Supported bank identifiers. Extend by adding an adapter + a registry entry. */
 export type BankId =
-  | 'revolut'
-  | 'erste'
-  | 'pbz'
-  | 'ynab'
-  | 'n26'
-  | 'wise'
-  | 'ing'
-  | 'sparkasse'
-  | 'dkb';
+  'revolut' | 'erste' | 'pbz' | 'ynab' | 'n26' | 'wise' | 'ing' | 'sparkasse' | 'dkb';
 
 /**
  * Transaction type in the app's canonical vocabulary. `/api/import/execute`
@@ -64,6 +56,23 @@ export interface StatementMeta {
   /** Last 4 digits of the account/card, when present in the statement. */
   accountLast4?: string;
   holder?: string;
+  /**
+   * The accounts a multi-account export assigns its rows to (YNAB's register names one per
+   * row). When present, each row imports into its own account and the file needs no target
+   * account chosen for it.
+   */
+  accounts?: string[];
+  /**
+   * Opening balances the export records as rows rather than as transactions (YNAB's
+   * "Starting Balance"), by account name. They are not income: the import offers them as
+   * the starting balance of each account it creates.
+   */
+  startingBalances?: Record<string, { amount: number; date: string }>;
+  /**
+   * What the adapter skipped or changed while reading the file, in words for the person
+   * importing it. `processFiles` prefixes each with the file name.
+   */
+  warnings?: string[];
 }
 
 /** A parsed statement: the raw data rows plus sniffed metadata. */

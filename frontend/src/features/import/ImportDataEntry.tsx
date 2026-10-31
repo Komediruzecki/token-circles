@@ -21,6 +21,7 @@ import { Pill } from '../../components/Pill'
 import { listAdapters } from '../../core/bankImport'
 import styles from '../Import.module.css'
 import { BankRulesEditor } from './BankRulesEditor'
+import { namesItsAccounts } from './importFlow'
 import { createPasteForm } from './pasteForm'
 import { downloadSampleTemplate } from './sampleTemplate'
 import { createSheetLinkForm } from './sheetLinkForm'
@@ -507,7 +508,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             <input
               type="file"
               id={bankInputId}
-              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               multiple
               class={styles.fileInput}
               data-test-id="bank-file-input"
@@ -617,22 +618,40 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
                           )}
                         </For>
                       </select>
-                      <AccountSelect
-                        accounts={flow.bankAccounts}
-                        value={() => row.targetAccount}
-                        onChange={(name) => {
-                          flow.updateBankFile(i(), { targetAccount: name })
-                        }}
-                        onCreated={(account) => {
-                          flow.addBankAccount(account)
-                        }}
-                        suggestedName={() =>
-                          [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ')
+                      <Show
+                        when={!namesItsAccounts(row)}
+                        fallback={
+                          <span
+                            data-test-id="bank-file-accounts"
+                            style={{
+                              flex: '1 1 180px',
+                              'font-size': '13px',
+                              color: 'var(--text-secondary)',
+                              'overflow-wrap': 'anywhere',
+                              'padding-top': '6px',
+                            }}
+                          >
+                            Accounts from the file: {(row.meta.accounts ?? []).join(', ')}
+                          </span>
                         }
-                        invalid={missingAccount}
-                        invalidMessage={() => 'Choose an account for this statement'}
-                        testId="bank-target-account"
-                      />
+                      >
+                        <AccountSelect
+                          accounts={flow.bankAccounts}
+                          value={() => row.targetAccount}
+                          onChange={(name) => {
+                            flow.updateBankFile(i(), { targetAccount: name })
+                          }}
+                          onCreated={(account) => {
+                            flow.addBankAccount(account)
+                          }}
+                          suggestedName={() =>
+                            [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ')
+                          }
+                          invalid={missingAccount}
+                          invalidMessage={() => 'Choose an account for this statement'}
+                          testId="bank-target-account"
+                        />
+                      </Show>
                       <button
                         class={`${styles.btn} ${styles.btnGhost} ${styles.btnSm}`}
                         style={{ 'margin-top': '2px' }}

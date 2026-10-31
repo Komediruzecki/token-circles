@@ -27,4 +27,6 @@ export type XlsxLoader = () => Promise<XlsxModule>;
 /** Optional capabilities handed to `BankAdapter.parse`. */
 export interface ParseDeps {
   xlsx?: XlsxLoader;
+  /** The profile's account names, for a parser that warns about names in the file that clash. */
+  knownAccounts?: string[];
 }
