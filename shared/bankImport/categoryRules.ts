@@ -8,29 +8,32 @@
  * edited/extended in-app (persistence lives in the rules store, not here).
  *
  * A rule's category is a name a newcomer's first import offers to create, so it is a default
- * category or a general name, never someone's own label. Renaming one means adding the old name
- * to RETIRED_RULE_CATEGORY_NAMES (categoryAliases.ts), so a space that already has a category
- * under it keeps getting those rows there.
+ * category or a general name: never someone's own label, and never a second name for a default.
+ * A rule that gave another name before lists it in `formerly`, oldest first, and keeps it there
+ * for good: a space that has a category under that name keeps getting the rule's rows there
+ * (`ruleCategory`). Renaming a rule means adding the name it gave to the end of its `formerly`.
  */
-import type { CategoryRuleSet } from './types';
+import type { CategoryRule, CategoryRuleSet } from './types';
+
+const fold = (name: string): string => name.trim().toLowerCase();
 
 /**
- * Return the category for `text`, or null if nothing matches. The **longest**
- * matching keyword wins (most specific), so a rule with `"spar food & fuel"`
+ * The rule whose **longest** matching keyword appears in `text`, or null if none
+ * does. The longest keyword wins (most specific), so a rule with `"spar food & fuel"`
  * beats one with `"spar"` even if the latter is listed first; rule order only
  * breaks exact-length ties. Matching is case-insensitive substring.
  */
-export function matchCategory(text: string, rules: CategoryRuleSet): string | null {
+export function matchRule(text: string, rules: CategoryRuleSet): CategoryRule | null {
   const s = text.toLowerCase();
   if (!s.trim()) return null;
-  let best: string | null = null;
+  let best: CategoryRule | null = null;
   let bestLen = 0;
   for (const rule of rules) {
     for (const kw of rule.keywords) {
       const k = kw.toLowerCase().trim();
       // Strict `>` keeps the first rule on a length tie (stable, order = priority).
       if (k.length > bestLen && s.includes(k)) {
-        best = rule.category;
+        best = rule;
         bestLen = k.length;
       }
     }
@@ -39,17 +42,60 @@ export function matchCategory(text: string, rules: CategoryRuleSet): string | nu
 }
 
 /**
+ * The category `rule` files a row under in a space whose categories are named `categoryNames`:
+ * the first of the names it gave before (`formerly`, oldest first) that the space has a category
+ * under, as the space spells it, and otherwise the name it gives now. Names match case-blind and
+ * trimmed, like every import match.
+ *
+ * This is what lets two rules give one name. The Croatian fuel and parking rules both give
+ * Transportation, and a space that holds 'Car (Gas)' and 'Transport' still gets fuel under the
+ * one and parking under the other: by the time a row only carries 'Transportation', nothing can
+ * tell which of the two it stands for.
+ */
+export function ruleCategory(rule: CategoryRule, categoryNames: readonly string[] = []): string {
+  // A saved rule set is read back from browser storage unchecked.
+  const formerly = Array.isArray(rule.formerly) ? rule.formerly : [];
+  for (const former of formerly) {
+    const key = typeof former === 'string' ? fold(former) : '';
+    if (!key) continue;
+    const held = categoryNames.find((name) => fold(name) === key);
+    if (held !== undefined) return held.trim();
+  }
+  return rule.category;
+}
+
+/**
+ * Return the category for `text`, or null if nothing matches: the category of the rule
+ * `matchRule` finds, in a space whose categories are named `categoryNames` (`ruleCategory`).
+ */
+export function matchCategory(
+  text: string,
+  rules: CategoryRuleSet,
+  categoryNames?: readonly string[]
+): string | null {
+  const rule = matchRule(text, rules);
+  return rule ? ruleCategory(rule, categoryNames) : null;
+}
+
+export interface CategorizeOptions {
+  /** The names of the categories the space being imported into has (`ruleCategory`). */
+  categoryNames?: readonly string[];
+  /** The category when no rule matches. */
+  fallback?: string;
+}
+
+/**
  * Convenience: match against several text fragments (e.g. description then
- * counterparty), returning the first category found, else `fallback`.
+ * counterparty), returning the first category found, else the fallback ('Other').
  */
 export function categorize(
   fragments: Array<string | undefined>,
   rules: CategoryRuleSet,
-  fallback = 'Other'
+  { categoryNames, fallback = 'Other' }: CategorizeOptions = {}
 ): string {
   for (const frag of fragments) {
     if (!frag) continue;
-    const hit = matchCategory(frag, rules);
+    const hit = matchCategory(frag, rules, categoryNames);
     if (hit) return hit;
   }
   return fallback;
@@ -99,6 +145,7 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     // NB: no bare "ina" — as a substring it false-matches Croatian words like
     // "član-ARINA" / "naknad-INA". Use the station forms instead.
     category: 'Transportation',
+    formerly: ['Car (Gas)'],
     keywords: ['ina bp', 'lukoil', 'petrol', 'crodux', 'tifon', 'shell', 'benzinska'],
   },
   {
@@ -116,6 +163,7 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
   {
     // Electricity, gas, water, waste, telecoms, the building reserve fund and insurance.
     category: 'Utilities',
+    formerly: ['Apartment (Bills)'],
     keywords: [
       'pričuva',
       'pricuva',
@@ -132,6 +180,7 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
   },
   {
     category: 'Salary',
+    formerly: ['Salary Eur'],
     keywords: [
       'isplata plaće',
       'isplata place',
@@ -143,7 +192,8 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Health',
+    category: 'Healthcare',
+    formerly: ['Health'],
     keywords: ['ljekarn', 'ljekarne', 'pharmacy', 'poliklinik', 'dom zdravlja'],
   },
   {
@@ -155,8 +205,10 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     keywords: ['about you', 'reserved', 'zara', 'h&m', 'steam', 'amazon'],
   },
   {
-    category: 'Transport',
-    keywords: ['zet', 'garaža', 'garaza', 'parking', 'hak', 'enc', 'autoceste', 'badminton'],
+    // Zagreb's trams and buses (ZET), garages and parking, HAK, the ENC toll tag and the motorways.
+    category: 'Transportation',
+    formerly: ['Transport'],
+    keywords: ['zet', 'garaža', 'garaza', 'parking', 'hak', 'enc', 'autoceste'],
   },
 ];
 
@@ -206,11 +258,13 @@ export const DEFAULT_CATEGORY_RULES_WORLDWIDE: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Transport',
+    category: 'Transportation',
+    formerly: ['Transport'],
     keywords: ['uber', 'lyft', 'bolt', 'taxi', 'transit', 'metro', 'parking', 'toll', 'railway'],
   },
   {
-    category: 'Fuel',
+    category: 'Transportation',
+    formerly: ['Fuel'],
     keywords: ['shell', 'esso', 'exxon', 'chevron', 'texaco', 'gas station', 'petrol', 'fuel'],
   },
   {
@@ -268,7 +322,8 @@ export const DEFAULT_CATEGORY_RULES_WORLDWIDE: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Health',
+    category: 'Healthcare',
+    formerly: ['Health'],
     keywords: ['pharmacy', 'cvs', 'walgreens', 'boots', 'clinic', 'hospital', 'dental', 'doctor'],
   },
   {
@@ -310,6 +365,7 @@ export const DEFAULT_CATEGORY_RULES_WORLDWIDE: CategoryRuleSet = [
     ],
   },
   {
+    // Not folded into the default Salary: refunds and reimbursements are money in, not pay.
     category: 'Income',
     keywords: ['salary', 'payroll', 'wages', 'direct deposit', 'refund', 'reimbursement'],
   },

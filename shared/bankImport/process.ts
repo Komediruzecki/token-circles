@@ -32,6 +32,13 @@ export interface BankFileInput {
 
 export interface ProcessOptions {
   categoryRules?: CategoryRuleSet;
+  /**
+   * The names of the categories the space being imported into has, so a built-in rule gives a
+   * name it gave before where the space has it (TransformContext.categoryNames). Every caller
+   * that categorizes a statement for a space passes them: the Bank Imports tab and the Worker's
+   * /api/v1/import.
+   */
+  categoryNames?: readonly string[];
   transferRules?: TransferRuleSet;
   /** The user's known account names — for transfer counterpart typing. */
   knownAccounts?: string[];
@@ -95,6 +102,7 @@ export async function processFiles(
   options: ProcessOptions = {}
 ): Promise<ProcessResult> {
   const categoryRules = options.categoryRules ?? DEFAULT_CATEGORY_RULES;
+  const categoryNames = options.categoryNames ?? [];
   const transferRules = options.transferRules ?? DEFAULT_TRANSFER_RULES;
   const knownAccounts = options.knownAccounts ?? [];
 
@@ -136,7 +144,13 @@ export async function processFiles(
       if (!file.targetAccount && !parsed.meta.accounts?.length) {
         warnings.push(`${file.filename}: no target account chosen — using "${adapter.label}"`);
       }
-      const ctx: TransformContext = { targetAccount, categoryRules, transferRules, knownAccounts };
+      const ctx: TransformContext = {
+        targetAccount,
+        categoryRules,
+        categoryNames,
+        transferRules,
+        knownAccounts,
+      };
       const txns = adapter.transform(parsed, ctx);
       for (const note of parsed.meta.warnings ?? []) warnings.push(`${file.filename}: ${note}`);
       // Transfer ends that are not accounts yet. The mapping step lists every Means of Payment

@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import * as XLSX from 'xlsx';
 import { transactionInvariantError } from '../../../shared/transactionInvariant';
 import { calendarDateIn } from '../../../shared/calendarDate';
-import { profileCategoryKey } from '../../../shared/bankImport/categoryAliases';
 import { parseImportCsv } from '../../../shared/importCsv';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
@@ -667,10 +666,6 @@ export async function executeImport(
     for (const cat of cats) categoryMap.set(cat.name.toLowerCase(), cat.id);
   };
   await loadCategories();
-  // The category a row files under: its own name, or the old name a bank-import rule used to give
-  // when the profile still has a category under it (shared/bankImport/categoryAliases.ts). Every
-  // category lookup below goes through this; account lookups keep the row's own name.
-  const categoryKey = (name: string) => profileCategoryKey(name, (k) => categoryMap.has(k));
 
   let colorIndex = 0;
   const newCats: string[] = [];
@@ -682,9 +677,7 @@ export async function executeImport(
     const lower = name.toLowerCase();
     // Skip names that already exist, are already queued, or are an account (Means-of-Payment /
     // transfer target) — those must NOT become 'account'-typed categories.
-    if (categoryMap.has(categoryKey(name)) || seenNew.has(lower) || accountIdMap.has(lower)) {
-      continue;
-    }
+    if (categoryMap.has(lower) || seenNew.has(lower) || accountIdMap.has(lower)) continue;
     seenNew.add(lower);
     newCats.push(name);
   }
@@ -810,8 +803,7 @@ export async function executeImport(
     const catRaw = pick(row, mapping, 'category');
     const catName = catRaw ? String(catRaw).trim() : '';
     const catLower = catName.toLowerCase();
-    const catKey = catName ? categoryKey(catName) : '';
-    const categoryId = catKey && categoryMap.has(catKey) ? categoryMap.get(catKey)! : null;
+    const categoryId = catLower && categoryMap.has(catLower) ? categoryMap.get(catLower)! : null;
 
     const dateRaw = pick(row, mapping, 'date') ?? today();
     const currency = normalizeCurrencyCode(pick(row, mapping, 'currency'), defaultCurrency);

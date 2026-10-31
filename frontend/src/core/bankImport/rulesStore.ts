@@ -9,6 +9,7 @@
  */
 import { DEFAULT_RULE_GROUP_ID, rulesForGroup } from '../../../../shared/bankImport/categoryRules'
 import { DEFAULT_TRANSFER_RULES } from '../../../../shared/bankImport/transferRules'
+import { earlierBuiltInGroup, sameJson } from './earlierBuiltInRules'
 import type { CategoryRuleSet, TransferRuleSet } from '../../../../shared/bankImport/types'
 
 const CAT_KEY = 'bankImportCategoryRules'
@@ -33,7 +34,11 @@ export function loadCategoryRules(): CategoryRuleSet {
     // No user override yet → the selected mapping group's seed (Croatian / Worldwide).
     if (!raw) return rulesForGroup(loadRuleGroup())
     const parsed: unknown = JSON.parse(raw)
-    return Array.isArray(parsed) ? (parsed as CategoryRuleSet) : rulesForGroup(loadRuleGroup())
+    if (!Array.isArray(parsed)) return rulesForGroup(loadRuleGroup())
+    // A copy of a group's built-in rules that an earlier version stored was never edited: it
+    // loads as that group's rules now (earlierBuiltInRules.ts).
+    const group = earlierBuiltInGroup(parsed)
+    return group ? rulesForGroup(group) : (parsed as CategoryRuleSet)
   } catch {
     return rulesForGroup(loadRuleGroup())
   }
@@ -41,7 +46,10 @@ export function loadCategoryRules(): CategoryRuleSet {
 
 export function saveCategoryRules(rules: CategoryRuleSet): void {
   try {
-    localStorage.setItem(scoped(CAT_KEY), JSON.stringify(rules))
+    // The group's built-in rules as they are are not an edit: no copy is kept, so the rules follow
+    // the built-in ones when a later version changes them, as they do for anyone who never saved.
+    if (sameJson(rules, rulesForGroup(loadRuleGroup()))) localStorage.removeItem(scoped(CAT_KEY))
+    else localStorage.setItem(scoped(CAT_KEY), JSON.stringify(rules))
   } catch {
     /* ignore quota / disabled storage */
   }

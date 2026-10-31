@@ -93,6 +93,13 @@ export interface DetectInput {
 /** A category keyword rule: match any keyword in the text → assign `category`. */
 export interface CategoryRule {
   category: string;
+  /**
+   * The names this rule gave before `category`, oldest first. A space that has a category under
+   * one of them keeps getting this rule's rows there (categoryRules.ts, `ruleCategory`). The
+   * built-in rules list them, and a rule set the user saves keeps them until the user gives the
+   * rule another category.
+   */
+  formerly?: string[];
   keywords: string[];
 }
 export type CategoryRuleSet = CategoryRule[];
@@ -116,6 +123,12 @@ export interface TransformContext {
   /** The app account this statement belongs to (auto-resolved or user-picked). */
   targetAccount: string;
   categoryRules: CategoryRuleSet;
+  /**
+   * The names of the categories the space being imported into has. A rule gives a name it gave
+   * before (`CategoryRule.formerly`) where the space has a category under it. Left out, every
+   * rule gives the name it gives now.
+   */
+  categoryNames?: readonly string[];
   transferRules: TransferRuleSet;
   /** The user's known account names — for counterpart resolution + account typing. */
   knownAccounts: string[];
