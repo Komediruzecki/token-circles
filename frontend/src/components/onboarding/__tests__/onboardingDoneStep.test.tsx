@@ -8,6 +8,7 @@
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { setCurrentProfile, setProfiles } from '../../../core/appStore'
+import { confirmRequests } from '../../../core/confirmStore'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import {
   __resetGettingStartedForTest,
@@ -139,4 +140,21 @@ it('lists the next steps from what the profile holds, and a step finishes setup 
   await vi.waitFor(() => {
     expect(window.location.hash).toBe('#bills?scan=1')
   })
+})
+
+// Done has nothing left to leave: Escape there finishes setup as Go to my dashboard does, and
+// records it completed. It used to ask "Leave setup?" and record a skip.
+it('Escape on Done finishes setup without asking, and records it completed', async () => {
+  startOnboarding('done')
+  const { OnboardingWizard } = await import('../OnboardingWizard')
+  dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-step-done"]')).not.toBeNull()
+  })
+
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+
+  expect(confirmRequests()).toEqual([])
+  expect(onboardingOpen()).toBe(false)
+  expect(localStorage.getItem('finance_onboarding:local')).toBe('completed')
 })

@@ -84,7 +84,7 @@ afterEach(() => {
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50))
 const waitLong = { timeout: 15_000 }
 
-async function openAt(step: 'account' | 'import'): Promise<void> {
+async function openAt(step: 'account' | 'import' | 'subscriptions'): Promise<void> {
   startOnboarding(step)
   const { OnboardingWizard } = await import('../OnboardingWizard')
   dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
@@ -431,5 +431,43 @@ describe('back on the step after an import', () => {
     await vi.waitFor(() => {
       expect(onboardingStep()).toBe('subscriptions')
     })
+  })
+})
+
+describe('leaving setup at its subscriptions', () => {
+  /** What Close asks there; then Stay. */
+  const closeAsks = async (): Promise<string> => {
+    byTestId('onboarding-skip')!.click()
+    await vi.waitFor(() => {
+      expect(confirmRequests()).toHaveLength(1)
+    })
+    const [{ id, message }] = confirmRequests()
+    resolveConfirm(id, false)
+    await settle()
+    return message
+  }
+
+  it('after a statement went in on this visit, says the import is kept', async () => {
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+
+    expect(await closeAsks()).toBe(
+      'Leave setup? Your import is saved, and Bills can scan for subscriptions any time.'
+    )
+    expect(onboardingStep()).toBe('subscriptions')
+  })
+
+  it('reopened there with nothing imported on this visit, claims no import', async () => {
+    await openAt('subscriptions')
+
+    expect(await closeAsks()).toBe(
+      'Leave setup? Bills can scan your transactions for subscriptions any time, and Settings can run setup again.'
+    )
+    expect(onboardingStep()).toBe('subscriptions')
   })
 })

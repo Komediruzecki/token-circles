@@ -168,15 +168,25 @@ const glyph = {
 export const SPACE_ANSWERS_NOT_SAVED =
   "Your space is saved, but your answers didn't save. You can give them in Settings, under About this space."
 
-/** What Close asks, by where setup is: what is still to do, and where setup runs again. */
-export function leaveSetupQuestion(step: string, screen: 'name' | 'about'): string {
+/**
+ * What Close asks, by where setup is: what is still to do, and where setup runs again. On the
+ * subscriptions, `imported` says whether a statement went in on this visit: setup can also reopen
+ * there from an earlier one, with nothing imported since it opened.
+ */
+export function leaveSetupQuestion(
+  step: string,
+  screen: 'name' | 'about',
+  imported = false
+): string {
   switch (step) {
     case 'account':
       return 'Leave setup? Your main account and a statement can wait. Settings can run setup again.'
     case 'import':
       return 'Leave setup? Your statement can wait: the Import page takes one any time, and Settings can run setup again.'
     case 'subscriptions':
-      return 'Leave setup? Your import is saved, and Bills can scan for subscriptions any time.'
+      return imported
+        ? 'Leave setup? Your import is saved, and Bills can scan for subscriptions any time.'
+        : 'Leave setup? Bills can scan your transactions for subscriptions any time, and Settings can run setup again.'
     default:
       return screen === 'about'
         ? 'Leave setup? Your main account and a statement can wait. Settings can run setup again.'
@@ -461,10 +471,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     if (leavePromptOpen) return
     leavePromptOpen = true
     try {
-      const sure = await showConfirm(leaveSetupQuestion(onboardingStep(), spaceScreen()), {
-        confirmText: 'Leave setup',
-        cancelText: 'Stay',
-      })
+      const imported = (importSummary()?.imported ?? 0) > 0
+      const sure = await showConfirm(
+        leaveSetupQuestion(onboardingStep(), spaceScreen(), imported),
+        {
+          confirmText: 'Leave setup',
+          cancelText: 'Stay',
+        }
+      )
       if (sure) skipOnboarding()
     } finally {
       leavePromptOpen = false
