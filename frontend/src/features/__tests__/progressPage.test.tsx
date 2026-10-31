@@ -248,3 +248,38 @@ describe('Progress page', () => {
     expect(vi.mocked(setPage)).toHaveBeenCalledWith('budgets')
   })
 })
+
+describe('#progress/prints', () => {
+  /** jsdom has no scrollIntoView: each call is recorded by the id of what it scrolled to. */
+  let scrolled: string[] = []
+  beforeEach(() => {
+    scrolled = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id)
+    }
+  })
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView
+    window.location.hash = ''
+    vi.useRealTimers()
+  })
+
+  it('opens the page scrolled to its Prints section, and goes back there when asked again', async () => {
+    window.location.hash = '#progress/prints'
+    // The address's own hashchange fires a task later; let it pass before the page mounts.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    vi.useFakeTimers()
+    mount(() => <Progress />)
+    expect(scrolled).toEqual(['progress-sec-prints'])
+    // Asked again from a toast while there: the page is told again and scrolls back.
+    vi.advanceTimersByTime(5000)
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    expect(scrolled).toEqual(['progress-sec-prints', 'progress-sec-prints'])
+  })
+
+  it('leaves the page where it is on its plain address', () => {
+    window.location.hash = '#progress'
+    mount(() => <Progress />)
+    expect(scrolled).toEqual([])
+  })
+})

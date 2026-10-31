@@ -1988,6 +1988,23 @@ check')` first, as the cushion and debt cases do.
   (4 in 25 runs' worth, worst 99 ms). Progress's own first task, before the shelf, was 69 ms at
   4x; with the shelf inside it, an earlier build measured about 120 ms against about 80 ms a task
   later. Run it by hand before a release, not in CI.
+- **The A year toast points at the first print** (`core/achievementsStore.ts`,
+  `core/progressRoute.ts`, `core/scrollAndHold.ts`, `core/prints/windows.ts`). "Badge unlocked: A
+  year. Your first print is on Progress." with "See my print"; Two, Three, Five and Ten years say
+  "A new print is on Progress.", as a run reaching 24, 36, 60 or 120 months completes a print
+  that month. A first run that holds prints counts them: "{n} badges and your first print from
+  your history so far." or "{n} badges and {m} prints ...", with "See my print(s)"; without one
+  it is unchanged, as is every other badge's toast and its "See badges". The count is
+  `shelfOf(trackedMonths)`, moved with the print windows into `core/prints/windows.ts` so the
+  store loads neither the drawing nor the money (`shelf.ts` re-exports them). The action is
+  `openPrints()`: `#progress/prints`, or, when the address already says so, a hashchange
+  dispatched again, as an address set to itself fires none. `sectionFromHash` reads it;
+  `circleFromHash` still answers null, so the list shows. Progress, on mount or that hashchange,
+  scrolls the Prints divider to the top and holds it there while the page above fills in
+  (`scrollAndHold`: checked every 100 ms, scrolled again when it moved, for 3 s from when it is
+  found, given up after 10 s, ended at once by the person's wheel, touch, pointer or key). The
+  release suite's `BADGE_TOAST` and s06's `SUMMARY` read both first-run wordings: the example
+  profiles' first run now says "... and 26 prints ...".
 
 ### Fixed
 

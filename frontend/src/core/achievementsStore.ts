@@ -23,6 +23,8 @@ import { api } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
 import { onboardingOpen } from './onboardingStore'
+import { shelfOf } from './prints/windows'
+import { openPrints } from './progressRoute'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
 import type { Account, Bill, Transaction } from '../types/models'
@@ -341,22 +343,56 @@ function announce(profileId: number, newly: UnlockRecord[], firstRun: boolean): 
   announceNow(newly, firstRun)
 }
 
+/**
+ * The badges a print comes with: a run of tracked months reaching 12, 24, 36, 60 or 120 completes
+ * its first, second, third, fifth or tenth print that month (core/prints/windows.ts).
+ */
+const PRINT_BADGES = new Set<string>([
+  'a-year',
+  'two-years',
+  'three-years',
+  'five-years',
+  'ten-years',
+])
+
 function announceNow(newly: UnlockRecord[], firstRun: boolean): void {
-  const opts = {
-    channel: 'achievements',
-    durationMs: 9000,
-    action: {
-      label: 'See badges',
-      onClick: () => {
-        setPage('progress')
-      },
-    },
+  const toast = (text: string, label: string, onClick: () => void) => {
+    addToast(text, 'success', {
+      channel: 'achievements',
+      durationMs: 9000,
+      action: { label, onClick },
+    })
+  }
+  const toBadges = () => {
+    setPage('progress')
   }
   if (firstRun && newly.length > 1) {
-    addToast(`${newly.length} badges earned from your history so far.`, 'success', opts)
+    const prints = shelfOf(state.snapshot()?.evaluation.trackedMonths ?? []).prints.length
+    if (prints === 0) {
+      toast(`${newly.length} badges earned from your history so far.`, 'See badges', toBadges)
+    } else if (prints === 1) {
+      toast(
+        `${newly.length} badges and your first print from your history so far.`,
+        'See my print',
+        openPrints
+      )
+    } else {
+      toast(
+        `${newly.length} badges and ${prints} prints from your history so far.`,
+        'See my prints',
+        openPrints
+      )
+    }
     return
   }
   for (const rec of newly) {
-    addToast(`Badge unlocked: ${achievementById(rec.id).name}.`, 'success', opts)
+    const name = achievementById(rec.id).name
+    if (rec.id === 'a-year') {
+      toast(`Badge unlocked: ${name}. Your first print is on Progress.`, 'See my print', openPrints)
+    } else if (PRINT_BADGES.has(rec.id)) {
+      toast(`Badge unlocked: ${name}. A new print is on Progress.`, 'See my print', openPrints)
+    } else {
+      toast(`Badge unlocked: ${name}.`, 'See badges', toBadges)
+    }
   }
 }

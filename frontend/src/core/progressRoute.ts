@@ -1,7 +1,8 @@
 /**
  * Progress's addresses: `#progress` for the page, `#progress/<n>` for circle n's own view
- * (design.md 1.8, circles part 2), which reload, back and forward all keep. A query after the path
- * (the period) is not part of the route.
+ * (design.md 1.8, circles part 2) and `#progress/prints` for the page at its Prints section
+ * (first week, phase 4), which reload, back and forward all keep. A query after the path (the
+ * period) is not part of the route.
  */
 import { hashRouteName } from './hashRoute'
 import type { CircleNumber } from '../../../shared/guidance/circles'
@@ -21,3 +22,26 @@ export function circleFromHash(hash: string): CircleNumber | null {
 /** The address of a circle's view, or of the page. */
 export const circleHash = (circle: CircleNumber | null): string =>
   circle === null ? '#progress' : `#progress/${circle}`
+
+/** The Prints section's address. */
+export const PRINTS_HASH = '#progress/prints'
+
+/** The section of the page the address names: 'prints' for `#progress/prints`, else null. */
+export function sectionFromHash(hash: string): 'prints' | null {
+  const [page, section, ...rest] = hashRouteName(hash).split('/')
+  return page === 'progress' && section === 'prints' && rest.length === 0 ? 'prints' : null
+}
+
+/**
+ * Takes the person to their prints, from a toast or a link. Asked again while the address
+ * already names them (scrolled away since), the page is told again, as an address set to itself
+ * fires no hashchange.
+ */
+export function openPrints(): void {
+  if (sectionFromHash(window.location.hash) === 'prints') {
+    const here = window.location.href
+    window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL: here, newURL: here }))
+    return
+  }
+  window.location.hash = PRINTS_HASH
+}

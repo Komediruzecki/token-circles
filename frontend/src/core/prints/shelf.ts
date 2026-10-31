@@ -17,51 +17,15 @@ import { flowsOf, savedOf } from '../../../../shared/guidance/flows'
 import { SEAL_SLOTS } from '../../../../shared/prints/seal'
 import { sealShares } from '../../../../shared/prints/shares'
 import { baseAmount } from '../achievements/evaluate'
-import { addMonths, runs } from '../achievements/months'
+import { addMonths } from '../achievements/months'
+import { shelfOf, slotMonth } from './windows'
 import type { SealSlot } from '../../../../shared/prints/seal'
 import type { MonthMoney } from '../../../../shared/prints/shares'
 import type { Tx } from '../achievements/evaluate'
+import type { PrintWindow } from './windows'
 
-/** Months in a print. */
-export const PRINT_MONTHS = 12
-
-/** Twelve months from `from`, of which the first `months` are on the seal. */
-export interface PrintWindow {
-  /** 'YYYY-MM', the month at twelve o'clock. */
-  from: string
-  /** How many months, from `from` on, are engraved: 12 for a print, 0 to 11 for the plate. */
-  months: number
-}
-
-export interface Shelf {
-  /** Complete prints, oldest first. */
-  prints: PrintWindow[]
-  /** The next print so far, or null before any month is tracked. */
-  plate: PrintWindow | null
-  /** The newest tracked month, or null. */
-  last: string | null
-}
-
-export function shelfOf(tracked: Iterable<string>): Shelf {
-  const all = runs(tracked)
-  const prints: PrintWindow[] = []
-  for (const run of all) {
-    for (let k = 0; k + PRINT_MONTHS <= run.length; k += PRINT_MONTHS) {
-      prints.push({ from: addMonths(run.start, k), months: PRINT_MONTHS })
-    }
-  }
-  const newest = all[all.length - 1]
-  if (!newest) return { prints, plate: null, last: null }
-  const whole = newest.length - (newest.length % PRINT_MONTHS)
-  return {
-    prints,
-    plate: { from: addMonths(newest.start, whole), months: newest.length % PRINT_MONTHS },
-    last: addMonths(newest.start, newest.length - 1),
-  }
-}
-
-/** The month in slot `i` of a window. */
-export const slotMonth = (w: PrintWindow, i: number): string => addMonths(w.from, i)
+export { PRINT_MONTHS, shelfOf, slotMonth } from './windows'
+export type { PrintWindow, Shelf } from './windows'
 
 /** A print or the plate as the shelf shows it: its months and their shares, never an amount. */
 export interface PrintView {

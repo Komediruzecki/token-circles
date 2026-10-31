@@ -32,7 +32,8 @@ import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { useGuidance } from '../core/guidance'
 import { DIVIDER_META as PRINTS_META } from '../core/prints/copy'
-import { circleFromHash, circleHash, isProgressHash } from '../core/progressRoute'
+import { circleFromHash, circleHash, isProgressHash, sectionFromHash } from '../core/progressRoute'
+import { scrollAndHold } from '../core/scrollAndHold'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { addToast } from '../core/toastStore'
 import { localToday } from '../utils/period'
@@ -78,7 +79,15 @@ export default function Progress(): JSX.Element {
   /** The circle open in place of the page, from the address. */
   const [opened, setOpened] = createSignal(circleFromHash(window.location.hash))
   let root: HTMLDivElement | undefined
+  /** `#progress/prints`: the page at its Prints section, held there while the page fills in. */
+  let release: (() => void) | undefined
+  const toPrints = () => {
+    release?.()
+    release = scrollAndHold(() => document.getElementById('progress-sec-prints'))
+  }
+  onCleanup(() => release?.())
   onMount(() => {
+    if (sectionFromHash(window.location.hash) === 'prints') toPrints()
     const onHashChange = (event: HashChangeEvent) => {
       // Another page's address closes the circle: the address decides what opens when Progress is
       // next on screen, #progress/<n> that circle and #progress the list.
@@ -91,6 +100,10 @@ export default function Progress(): JSX.Element {
       // Back on the list from a circle's own view: focus that circle's row. Only from the view, so
       // coming back from another page moves nothing, and not under a tour, where the row's link
       // would take Enter from the tour and open the circle again.
+      if (sectionFromHash(window.location.hash) === 'prints') {
+        toPrints()
+        return
+      }
       const was = circleFromHash(hashOf(event.oldURL))
       if (was !== null && next === null && !spotlightActive()) {
         queueMicrotask(() => {

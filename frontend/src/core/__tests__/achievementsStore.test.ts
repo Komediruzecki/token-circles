@@ -55,6 +55,7 @@ import {
   skipOnboarding,
   startOnboarding,
 } from '../onboardingStore'
+import { addToast } from '../toastStore'
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
 const apiMock = api as unknown as Record<
@@ -672,5 +673,70 @@ describe('badges earned while the setup wizard is open', () => {
     completeOnboarding()
 
     expect(toasts).toEqual([])
+  })
+})
+
+describe('the badges a print comes with', () => {
+  /** The months from `n` months ago up to this one, each tracked. */
+  const run = (n: number) => Array.from({ length: n }, (_, i) => month(monthsAgo(n - 1 - i))).flat()
+  /** The action the toast with this text was given. */
+  const actionOf = (text: string) => {
+    const call = vi.mocked(addToast).mock.calls.find(([m]) => m === text)
+    expect(call, text).toBeDefined()
+    return (call![2] as { action: { label: string; onClick: () => void } }).action
+  }
+  const stored = (...ids: string[]) => {
+    seed(
+      JSON.stringify({
+        v: 1,
+        unlocks: ids.map((id) => ({
+          id,
+          earnedOn: '2026-01-01',
+          unlockedAt: '2026-01-02T00:00:00.000Z',
+        })),
+      })
+    )
+  }
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('A year names the first print, and its action opens #progress/prints', async () => {
+    stored('first-entry', 'named-everything')
+    calls.transactions = run(12)
+    await refreshAchievements()
+    const text = 'Badge unlocked: A year. Your first print is on Progress.'
+    expect(toasts).toContain(text)
+    const action = actionOf(text)
+    expect(action.label).toBe('See my print')
+    action.onClick()
+    expect(window.location.hash).toBe('#progress/prints')
+    // A badge that brings no print still points at the badges.
+    expect(actionOf('Badge unlocked: One month.').label).toBe('See badges')
+  })
+
+  it('Two years says a new print is on Progress', async () => {
+    stored('first-entry', 'named-everything', 'one-month', 'a-quarter', 'a-year')
+    calls.transactions = run(24)
+    await refreshAchievements()
+    const text = 'Badge unlocked: Two years. A new print is on Progress.'
+    expect(toasts).toContain(text)
+    expect(actionOf(text).label).toBe('See my print')
+  })
+
+  it('the first run counts the prints with the badges', async () => {
+    calls.transactions = run(12)
+    const newly = await refreshAchievements()
+    const one = `${newly.length} badges and your first print from your history so far.`
+    expect(toasts).toEqual([one])
+    expect(actionOf(one).label).toBe('See my print')
+  })
+
+  it('the first run over two years counts two prints', async () => {
+    calls.transactions = run(24)
+    const newly = await refreshAchievements()
+    const two = `${newly.length} badges and 2 prints from your history so far.`
+    expect(toasts).toEqual([two])
+    expect(actionOf(two).label).toBe('See my prints')
   })
 })
