@@ -427,7 +427,66 @@ describe('review: a transfer to an account the profile does not have yet', () =>
     const { txns } = await stored()
     expect(txns).toEqual([['2026-01-05', 'transfer', 100, 'Pocket Savings', 'Revolut Main']])
     expect(flow.bankWarnings()).toEqual([
-      'account-statement_2026-01.csv: transfers name accounts you do not have yet: Pocket Savings. The import creates them as new accounts, listed in the mapping step.',
+      'account-statement_2026-01.csv: transfers name accounts you do not have yet: Pocket Savings. The import creates them as new accounts.',
     ])
+  })
+})
+
+describe('review round 2: a category named like an account the profile already has', () => {
+  it('books the spending against the account it left, and says why', async () => {
+    const db = await getDB()
+    const base = { type: 'giro', currency: 'EUR', balance: 0, starting_balance: 0, profile_id: 1 }
+    await db.add('accounts', { ...base, name: 'Vacation' })
+    await flow.loadBankAccounts()
+    await dropText(
+      [
+        HEADER_ROW,
+        row('Test Checking', '01/13/2026', 'Travel Agent', '$80.00', '$0.00', 'Goals', 'Vacation'),
+      ].join('\n')
+    )
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the files to be read')
+    await flow.goToPreview()
+    expect(flow.previewWarnings().map((w) => w.reason)).toContain(
+      'Register.csv: The category Vacation has the name of an account, so its rows were categorized by your rules instead.'
+    )
+    await flow.handleImport('selected')
+    await waitUntil(() => !flow.loading(), 'the import')
+    const { accounts, txns } = await stored()
+    expect(txns).toEqual([['2026-01-13', 'expense', 80, 'Test Checking', null]])
+    expect(accounts['Vacation']!.balance).toBe(0)
+    expect(accounts['Test Checking']!.balance).toBe(-80)
+  })
+})
+
+describe('review round 2: notes from reading the files, in the preview', () => {
+  it('are not listed as rows imported with changes', async () => {
+    const { ImportPreviewStep } = await import('../ImportPreviewStep')
+    await dropText(
+      [
+        HEADER_ROW,
+        row('Test Checking', '01/10/2026', 'Travel Agent', '$80.00', '$0.00', 'Goals', 'Vacation'),
+        row('Test Checking', '01/20/2026', 'Transfer : Vacation', '$100.00', '$0.00'),
+      ].join('\n')
+    )
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the files to be read')
+    await flow.goToPreview()
+    const preview = document.createElement('div')
+    document.body.appendChild(preview)
+    const unmount = render(() => <ImportPreviewStep flow={flow} />, preview)
+    try {
+      const note =
+        'Register.csv: The category Vacation has the name of an account, so its rows were categorized by your rules instead.'
+      expect(
+        preview.querySelector('[data-test-id="import-warnings"]')?.textContent ?? ''
+      ).not.toContain(note)
+      expect(preview.querySelector('[data-test-id="import-notes"]')?.textContent ?? '').toContain(
+        note
+      )
+    } finally {
+      unmount()
+      preview.remove()
+    }
   })
 })

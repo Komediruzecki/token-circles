@@ -125,7 +125,10 @@ export async function processFiles(
     }
 
     try {
-      const parsed = await adapter.parse(file.bytes, file.filename, { xlsx: options.xlsx });
+      const parsed = await adapter.parse(file.bytes, file.filename, {
+        xlsx: options.xlsx,
+        knownAccounts,
+      });
       // Without a target account we can't set means_of_payment; fall back to the
       // bank label and warn so the row still imports (the user can remap it).
       const targetAccount = file.targetAccount || adapter.label;
@@ -152,7 +155,7 @@ export async function processFiles(
         }
         if (unknown.size > 0) {
           warnings.push(
-            `${file.filename}: transfers name accounts you do not have yet: ${[...unknown].join(', ')}. The import creates them as new accounts, listed in the mapping step.`
+            `${file.filename}: transfers name accounts you do not have yet: ${[...unknown].join(', ')}. The import creates them as new accounts.`
           );
         }
       }

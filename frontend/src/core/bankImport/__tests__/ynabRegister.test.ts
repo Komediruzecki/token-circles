@@ -585,19 +585,16 @@ describe('review: transfer ends that are not accounts yet', () => {
 })
 
 describe('review: a shifted row whose extra cell is empty', () => {
-  it('is skipped when it is wider than the rows around it', async () => {
+  it('is read when only one row ends with a separator', async () => {
     const csv = [
-      'Date,Payee,Category,Memo,Outflow,Inflow',
-      '2026-01-14,Shop,Food,m,"5,00",',
-      // "1.234,56" not in quotes: Outflow reads "1.234", Inflow "56", and the empty Inflow spills over.
-      '2026-01-15,Shop,Food,m,1.234,56,',
-      '2026-01-16,Shop,Food,m,"6,00",',
+      'Date,Payee,Memo,Amount',
+      '2026-01-15,Shop,a,-5.00,',
+      '2026-01-16,Shop,b,-6.00',
+      '2026-01-17,Shop,c,-7.00',
     ].join('\n')
     const { parsed, txns } = await read(csv)
-    expect(txns.map((t) => t.amount)).toEqual([5, 6])
-    expect(parsed.meta.warnings).toEqual([
-      '1 row was skipped because it has more cells than the header: an amount with a comma that is not in quotes is the usual cause.',
-    ])
+    expect(txns.map((t) => t.amount)).toEqual([5, 6, 7])
+    expect(parsed.meta.warnings).toBeUndefined()
   })
 
   it('is read when every row ends with a separator', async () => {
@@ -609,5 +606,113 @@ describe('review: a shifted row whose extra cell is empty', () => {
     const { parsed, txns } = await read(csv)
     expect(txns.map((t) => t.amount)).toEqual([5, 6])
     expect(parsed.meta.warnings).toBeUndefined()
+  })
+})
+
+describe('review round 2: currencies with three decimals', () => {
+  it('reads the CSV YNAB imports in dinars as dinars', async () => {
+    const csv = [
+      'Date,Payee,Memo,Amount',
+      '2026-01-15,Shop,,-12.345',
+      '2026-01-16,Shop,,0.500',
+    ].join('\n')
+    const { txns } = await read(csv)
+    expect(txns.map((t) => [t.type, t.amount])).toEqual([
+      ['Expense', 12.345],
+      ['Income', 0.5],
+    ])
+  })
+
+  it('reads a register in dinars as dinars', async () => {
+    const rows = [
+      reg(CHECKING, '01/15/2026', 'Shop', 'KD12.345', 'KD0.000'),
+      reg(CHECKING, '01/16/2026', 'Shop', 'KD0.000', 'KD1.500'),
+    ]
+    const { txns } = await read(file(rows))
+    expect(txns.map((t) => t.amount)).toEqual([12.345, 1.5])
+  })
+
+  it('reads a decimal comma after more than three digits as a decimal comma', async () => {
+    const csv = [
+      'Date;Payee;Memo;Amount',
+      '15.01.2026;Shop;;-1234,567',
+      '16.01.2026;Shop;;-12,345',
+    ].join('\n')
+    const { txns } = await read(csv)
+    expect(txns.map((t) => t.amount)).toEqual([1234.567, 12.345])
+  })
+
+  it('does not read a file of plain three-decimal amounts as thousands', async () => {
+    const csv = [
+      'Date,Payee,Memo,Amount',
+      '2026-01-15,Shop,,-12.345',
+      '2026-01-16,Shop,,-1.500',
+    ].join('\n')
+    const { txns } = await read(csv)
+    expect(txns.map((t) => t.amount)).toEqual([12.345, 1.5])
+  })
+
+  it('still reads whole amounts with a thousands comma as thousands', async () => {
+    const csv = [
+      'Date,Payee,Memo,Amount',
+      '2026-01-15,Shop,,"-1,250"',
+      '2026-01-16,Shop,,"2,000"',
+    ].join('\n')
+    const { txns } = await read(csv)
+    expect(txns.map((t) => t.amount)).toEqual([1250, 2000])
+  })
+
+  it('reads a register without decimals by its zeros', async () => {
+    const rows = [
+      reg(CHECKING, '14.01.2026', 'Shop', '1.234 kr.', '0 kr.'),
+      reg(CHECKING, '15.01.2026', 'Shop', '0 kr.', '25.000 kr.'),
+    ]
+    const { txns } = await read(file(rows, '\t'))
+    expect(txns.map((t) => t.amount)).toEqual([1234, 25000])
+  })
+})
+
+describe('review round 2: a category with the name of an account the profile has', () => {
+  it('is not used as the category, and the file says so', async () => {
+    const rows = [
+      reg(CHECKING, '01/10/2026', 'Travel Agent', '$80.00', '$0.00', 'Goals', 'Vacation'),
+      reg(CHECKING, '01/11/2026', 'Corner Grocer', '$5.00', '$0.00', 'Everyday', 'Groceries'),
+    ]
+    const result = await processFiles([{ filename: 'Register.csv', bytes: enc(file(rows)) }], {
+      knownAccounts: ['Vacation'],
+    })
+    expect(result.rows.map((r) => [r[1], r[2], r[3]])).toEqual([
+      ['Expense', CHECKING, 'Other'],
+      ['Expense', CHECKING, 'Groceries'],
+    ])
+    expect(result.warnings).toEqual([
+      'Register.csv: The category Vacation has the name of an account, so its rows were categorized by your rules instead.',
+    ])
+  })
+
+  it('is not used by the CSV YNAB imports either', async () => {
+    const csv = [
+      'Date,Payee,Category,Memo,Outflow,Inflow',
+      '2026-01-10,Travel Agent,Goals: Vacation,,80.00,',
+    ].join('\n')
+    const result = await processFiles(
+      [{ filename: 'ynab-import.csv', bytes: enc(csv), targetAccount: CHECKING }],
+      { knownAccounts: ['Vacation', CHECKING] }
+    )
+    expect(result.rows.map((r) => [r[1], r[2], r[3]])).toEqual([['Expense', CHECKING, 'Other']])
+    expect(result.warnings).toEqual([
+      'ynab-import.csv: The category Vacation has the name of an account, so its rows were categorized by your rules instead.',
+    ])
+  })
+})
+
+describe('review round 2: llms.txt', () => {
+  it('describes the importers without em dashes', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const text = readFileSync(resolve(__dirname, '../../../../public/llms.txt'), 'utf-8')
+    const bullet = text.split('\n- ').find((b) => b.includes('YNAB'))!
+    expect(bullet).toContain('the CSV YNAB imports')
+    expect(bullet).not.toContain('\u2014')
   })
 })

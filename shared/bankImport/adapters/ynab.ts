@@ -57,6 +57,7 @@ import {
   splitDelimited,
 } from '../parse';
 import type { RawTxn } from '../classify';
+import type { ParseDeps } from '../xlsx';
 import type {
   BankAdapter,
   CanonicalTxn,
@@ -135,18 +136,18 @@ export const ynabAdapter: BankAdapter = {
     return 0;
   },
 
-  async parse(bytes: Uint8Array, _filename: string): Promise<ParsedStatement> {
+  async parse(bytes: Uint8Array, _filename: string, deps?: ParseDeps): Promise<ParsedStatement> {
     const text = decodeText(bytes, 'utf-8');
     const delimiter = sniffDelimiter(firstLine(text));
     const matrix = splitDelimited(text, delimiter);
     // Keep the header as row 0 — transform() resolves columns from it, so the
     // Category-less, signed-Amount and register variants all work.
     const rows = matrix.filter((r) => r.some((c) => c));
-    return { rows, meta: readFile(rows)?.meta ?? {} };
+    return { rows, meta: readFile(rows, deps?.knownAccounts)?.meta ?? {} };
   },
 
   transform(parsed: ParsedStatement, ctx: TransformContext): CanonicalTxn[] {
-    const file = readFile(parsed.rows);
+    const file = readFile(parsed.rows, ctx.knownAccounts);
     if (!file) return [];
     if (file.register) return transformRegister(file, ctx);
     const out: CanonicalTxn[] = [];
@@ -165,8 +166,15 @@ export const ynabAdapter: BankAdapter = {
         dedupKey: row.cells.join('\x01'),
       };
       const txn = buildTxn(raw, ctx);
-      // The file's own Category (minus a "Group: " prefix) beats keyword rules.
-      if (txn.type !== 'Transfer' && row.category) txn.category = row.category;
+      // The file's own Category (minus a "Group: " prefix) beats keyword rules, unless it is an
+      // account's name: the import would book the row against that account.
+      if (
+        txn.type !== 'Transfer' &&
+        row.category &&
+        !file.accountNames.has(row.category.toLowerCase())
+      ) {
+        txn.category = row.category;
+      }
       out.push(txn);
     }
     return out;
@@ -190,7 +198,10 @@ interface ReadRow {
 interface ReadFile {
   register: boolean;
   rows: ReadRow[];
-  /** Lowercased names of the accounts the file names: its Account values and transfer payees. */
+  /**
+   * Lowercased names of accounts: the ones the file names (its Account values and transfer
+   * payees) and the ones the profile already has.
+   */
   accountNames: Set<string>;
   meta: StatementMeta;
 }
@@ -199,7 +210,7 @@ interface ReadFile {
  * Read either shape into rows, plus what the import needs to know about the file. Pure, so
  * parse() (for the metadata) and transform() (for the rows) read the same thing.
  */
-function readFile(matrix: string[][]): ReadFile | null {
+function readFile(matrix: string[][], knownAccounts: string[] = []): ReadFile | null {
   const [header, ...data] = matrix;
   if (!header) return null;
   const names = columnNames(header);
@@ -208,12 +219,10 @@ function readFile(matrix: string[][]): ReadFile | null {
   const cell = (r: string[], name: string) => (r[col[name] ?? -1] || '').trim();
 
   // A row with more cells than the header has its columns shifted: an unquoted "$1,250.00" in
-  // a comma file is the usual cause. Reading it would book the wrong amount, so skip it. Empty
-  // extra cells are a trailing separator, unless the row is also wider than most rows are.
-  const usual = mostCommon(data.map((r) => r.length));
+  // a comma file is the usual cause. Reading it would book the wrong amount, so skip it. Extra
+  // cells that are all empty are a trailing separator, and the row is read.
   const fits = data.filter(
-    (r) =>
-      r.length <= header.length || (r.length <= usual && r.slice(header.length).every((c) => !c))
+    (r) => r.length <= header.length || r.slice(header.length).every((c) => !c.trim())
   );
   const tooWide = data.length - fits.length;
 
@@ -232,7 +241,7 @@ function readFile(matrix: string[][]): ReadFile | null {
     }
     const amount = register
       ? // Both columns are written on every row, the unused one as zero: net them.
-        round2(toAmount(cell(r, 'inflow')) - toAmount(cell(r, 'outflow')))
+        roundAmount(toAmount(cell(r, 'inflow')) - toAmount(cell(r, 'outflow')))
       : hasSplitAmounts
         ? toAmount(cell(r, 'inflow')) - Math.abs(toAmount(cell(r, 'outflow')))
         : toAmount(cell(r, 'amount') || '0');
@@ -266,21 +275,19 @@ function readFile(matrix: string[][]): ReadFile | null {
     );
   }
 
-  const accountNames = new Set<string>();
-  if (!register) {
-    return { register, rows, accountNames, meta: warnings.length ? { warnings } : {} };
-  }
-
+  const accountNames = new Set(knownAccounts.map((a) => a.toLowerCase()));
   const accounts: string[] = [];
-  for (const row of rows) {
-    if (row.account && !accounts.includes(row.account)) accounts.push(row.account);
-    if (row.account) accountNames.add(row.account.toLowerCase());
-    const other = row.payee.match(TRANSFER_PAYEE)?.[1]?.trim();
-    if (other) accountNames.add(other.toLowerCase());
+  if (register) {
+    for (const row of rows) {
+      if (row.account && !accounts.includes(row.account)) accounts.push(row.account);
+      if (row.account) accountNames.add(row.account.toLowerCase());
+      const other = row.payee.match(TRANSFER_PAYEE)?.[1]?.trim();
+      if (other) accountNames.add(other.toLowerCase());
+    }
   }
 
-  // A category with an account's name would make the import read its rows as transfers into
-  // that account (the canonical Category doubles as a transfer's destination).
+  // A category with an account's name would make the import book its rows against that account,
+  // or read them as transfers into it (the canonical Category doubles as a transfer's destination).
   const clashes: string[] = [];
   for (const row of rows) {
     if (!usesFileCategory(row) || !accountNames.has(row.category.toLowerCase())) continue;
@@ -297,6 +304,9 @@ function readFile(matrix: string[][]): ReadFile | null {
       `The categories ${listed(clashes)} have the names of accounts, so their rows were categorized by your rules instead.`
     );
   }
+  if (!register) {
+    return { register, rows, accountNames, meta: warnings.length ? { warnings } : {} };
+  }
 
   // Keyed by account; '' is the file's own account when it has no Account column, which
   // processFiles resolves to the account chosen for the file.
@@ -307,7 +317,7 @@ function readFile(matrix: string[][]): ReadFile | null {
     const prior = startingBalances[row.account];
     startingBalances[row.account] = prior
       ? {
-          amount: round2(prior.amount + row.amount),
+          amount: roundAmount(prior.amount + row.amount),
           date: prior.date < row.date ? prior.date : row.date,
         }
       : { amount: row.amount, date: row.date };
@@ -325,20 +335,6 @@ function readFile(matrix: string[][]): ReadFile | null {
 /** A register row whose own Category is used: not Ready to Assign, and not an account's name. */
 function usesFileCategory(row: ReadRow): boolean {
   return Boolean(row.category) && row.group.toLowerCase() !== INFLOW_GROUP;
-}
-
-function mostCommon(values: number[]): number {
-  const counts = new Map<number, number>();
-  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
-  let best = 0;
-  let bestCount = 0;
-  for (const [v, n] of counts) {
-    if (n > bestCount || (n === bestCount && v < best)) {
-      best = v;
-      bestCount = n;
-    }
-  }
-  return best;
 }
 
 function listed(items: string[]): string {
@@ -406,11 +402,12 @@ function transformRegister(file: ReadFile, ctx: TransformContext): CanonicalTxn[
 }
 
 function transferKey(date: string, from: string, to: string, amount: number): string {
-  return [date, from.toLowerCase(), to.toLowerCase(), amount.toFixed(2)].join('\x01');
+  return [date, from.toLowerCase(), to.toLowerCase(), amount.toFixed(6)].join('\x01');
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
+/** Drop the float noise of adding amounts ("0.1 + 0.2"), keeping a three-decimal currency's mills. */
+function roundAmount(n: number): number {
+  return Math.round(n * 1e6) / 1e6;
 }
 
 const SLASHED_DATE = /^(\d{1,2})([./-])(\d{1,2})[./-](\d{4})/;
@@ -466,25 +463,34 @@ function decimalEvidence(s: string): '.' | ',' | null {
   // Leading (".50"): a decimal point. Repeated ("1.234.567"): thousands, so the other one is.
   if (s.startsWith(sep)) return sep;
   if (dots + commas > 1) return sep === '.' ? ',' : '.';
+  // A thousands group never starts at a whole part of "0" or after more than three digits, so
+  // "0.500" and "1234,567" are decimals.
+  const whole = s.slice(0, s.indexOf(sep));
+  if (whole === '0' || whole.length > 3) return sep;
   // One separator before exactly three digits ("1,234", "1.234") could be either.
   return s.length - s.indexOf(sep) - 1 === 3 ? null : sep;
 }
 
 /**
  * Decide the file's decimal separator ONCE from every amount cell, the way the date order is
- * decided: "1,234" is 1234 in a file whose other amounts read "5.50", and in a file of a currency
- * without decimals ("¥1,234", "1.234 kr."), where no amount proves a decimal point at all. A
- * file whose cells prove both separators falls back to reading each cell on its own.
+ * decided: "1,234" is 1234 in a file whose other amounts read "5.50". A file of a currency without
+ * decimals ("¥1,234", "1.234 kr.") proves it by its zeros, which the register writes with a
+ * currency sign and no separator ("¥0", "0 kr."). A file that proves nothing reads a dot as a
+ * decimal point and a comma as a thousands separator, so "12.345" dinars stay 12.345 and "2,000"
+ * dollars stay 2000. A file whose cells prove both separators reads each cell on its own.
  */
 function makeAmountReader(cells: string[]): (value: string) => number {
   let dot = false;
   let comma = false;
+  let wholeZero = false;
   for (const c of cells) {
-    const evidence = decimalEvidence(numberSpan(c));
+    const span = numberSpan(c);
+    const evidence = decimalEvidence(span);
     if (evidence === '.') dot = true;
     if (evidence === ',') comma = true;
+    if (/^0+$/.test(span) && /[^\d\s+-]/.test(c)) wholeZero = true;
   }
-  const decimal = dot && comma ? 'mixed' : dot ? '.' : comma ? ',' : 'none';
+  const decimal = dot && comma ? 'mixed' : comma ? ',' : dot ? '.' : wholeZero ? 'none' : '.';
   return (value: string) => {
     const trimmed = value.trim();
     if (!trimmed) return 0;

@@ -26,7 +26,10 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
   const duplicates = () => flow.duplicateIndices().length
   const invalidRows = () => flow.invalidRowSet().size
   const validationIssues = () => flow.previewValidationIssues()
-  const warnings = () => flow.previewWarnings()
+  // A warning with a row index is about that row; one without is about the import as a whole
+  // (what reading the files skipped, a starting balance left alone).
+  const warnings = () => flow.previewWarnings().filter((w) => typeof w.index === 'number')
+  const notes = () => flow.previewWarnings().filter((w) => typeof w.index !== 'number')
   const selectableTotal = () => total() - invalidRows()
 
   return (
@@ -141,6 +144,15 @@ export function ImportPreviewStep(props: { flow: ImportFlow; embedded?: boolean 
         {/* Dry-run verdict: rows the dedup pass will skip because they already
             exist. A full-duplicate re-import gets called out as "nothing new"
             up front instead of surprising the user with "Imported 0". */}
+        <Show when={notes().length > 0}>
+          <div class={styles.infoNote} data-test-id="import-notes">
+            <strong>About this import</strong>
+            <For each={notes().slice(0, 8)}>{(note) => <div>{note.reason}</div>}</For>
+            <Show when={notes().length > 8}>
+              <div>And {notes().length - 8} more.</div>
+            </Show>
+          </div>
+        </Show>
         {/* Imported anyway, but worth a look — a rounded amount, a date we had to invent.
             Deliberately NOT wired into invalidRowSet: these rows stay selected. */}
         <Show when={warnings().length > 0}>
