@@ -1,0 +1,177 @@
+/* Prints on Progress. The seal is a square drawn by shared/prints/seal.ts: a finished print on its
+   own paper, the plate in the theme's --seal-* colours on the card. One column at 640 px and under
+   (Progress's breakpoint), the seal beside its words above it. */
+.body {
+  padding: 22px 24px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+.pending {
+  min-height: 260px;
+}
+.shelf {
+  display: grid;
+  grid-template-columns: clamp(260px, 28vw, 440px) minmax(0, 1fr);
+  grid-template-areas:
+    'seal head'
+    'seal rest'
+    'every every';
+  grid-template-rows: auto 1fr auto;
+  gap: 10px 28px;
+  align-items: start;
+}
+/* A grid item that holds a sideways scroller must be allowed to be narrower than its content, or
+   the strip of prints pushes the page wider than the screen. */
+.shelf > * {
+  min-width: 0;
+}
+.head {
+  grid-area: head;
+}
+.figure {
+  grid-area: seal;
+}
+.rest {
+  grid-area: rest;
+}
+.every {
+  grid-area: every;
+  margin-top: 14px;
+}
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.line {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.legend {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.seal {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+}
+.seal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.paper {
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  outline: 1px solid var(--seal-sheet-edge);
+}
+.next {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.next-seal {
+  flex: none;
+  width: 96px;
+  height: 96px;
+}
+.next-seal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.next-heading,
+.every-heading {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.next .line:first-of-type {
+  margin-top: 4px;
+}
+.strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 96px);
+  gap: 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.thumb {
+  display: block;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  border: 1px solid var(--seal-sheet-edge);
+  border-radius: 4px;
+  background: transparent;
+  overflow: hidden;
+  cursor: pointer;
+}
+.thumb[aria-pressed='true'] {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.thumb:focus-visible {
+  outline: 2px solid var(--primary-hover);
+  outline-offset: 3px;
+}
+.thumb-seal,
+.thumb-seal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@media (max-width: 640px) {
+  .body {
+    padding: 16px;
+  }
+  .shelf {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'head'
+      'seal'
+      'rest'
+      'every';
+    grid-template-rows: none;
+  }
+  .figure {
+    justify-self: center;
+    width: 100%;
+    max-width: 340px;
+    margin: 6px 0 4px;
+  }
+  /* On a phone the prints sit in one row that scrolls inside itself, newest first. */
+  .strip {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x proximity;
+  }
+  .strip > li {
+    flex: none;
+    scroll-snap-align: start;
+  }
+  .thumb[aria-pressed='true'] {
+    outline-offset: -3px;
+  }
+}

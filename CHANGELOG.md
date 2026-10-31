@@ -20,6 +20,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Open a circle to see what it checks**: met, not yet or not known yet, with the numbers behind each. Where a check needs your answer, like whether you carry a balance on a card or set money aside for yearly bills, the circle asks once and Settings keeps it.
 - **Your next step on Dashboard.** Once Getting started is hidden or a full year is on file, Dashboard shows the one step your circles point to, with a link to all seven.
 - **Progress has a tour**: what the page holds, Your next step and the seven circles, one stop each.
+- **Prints on Progress.** Every twelve tracked months in a row make a print: your year drawn as a seal, one petal a month, with no amounts on it.
 
 ### Changed
 

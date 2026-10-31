@@ -31,10 +31,12 @@ import {
 import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { useGuidance } from '../core/guidance'
+import { DIVIDER_META as PRINTS_META } from '../core/prints/copy'
 import { circleFromHash, circleHash, isProgressHash } from '../core/progressRoute'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { addToast } from '../core/toastStore'
 import { localToday } from '../utils/period'
+import PrintsShelf from './PrintsShelf'
 import AdviceList from './ProgressAdvice'
 import styles from './ProgressPage.module.css'
 import type { JSX } from 'solid-js'
@@ -294,9 +296,16 @@ export default function Progress(): JSX.Element {
           </Show>
         </section>
 
-        {/* Prints, phase 4 (design.md 6, circles part 2): their own section under an OrbitalDivider
-          "Prints", anchors data-test-id and data-tour "progress-prints", shown once the profile has
-          12 tracked months in a row or holds a pressed print. Until then, nothing. */}
+        {/* Prints (first week, phase 4): in every state, from an empty plate to every print. */}
+        <section class={styles.section} aria-label="Prints">
+          <OrbitalDivider
+            id="progress-sec-prints"
+            testId="progress-divider-prints"
+            label="Prints"
+            meta={PRINTS_META}
+          />
+          <PrintsShelf />
+        </section>
 
         <section class={styles.section} aria-label="What you have earned">
           <OrbitalDivider

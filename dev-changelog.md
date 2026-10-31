@@ -1930,6 +1930,20 @@ check')` first, as the cushion and debt cases do.
   light copper is `#c46a2c`, not `--accent-warm` (`#d97f2e`, 2.99:1 on white).
   `src/__tests__/sealContrast.test.ts` reads both theme files and holds each mark at 3:1 on the
   card, and PAPER's marks on its sheet; it fails with `--accent-warm` as the light copper.
+- **A Prints section on Progress** (`features/PrintsShelf.tsx`, `PrintsShelf.module.css`), between
+  Worth a look and What you have earned, under an `OrbitalDivider` "Prints" (meta "One for every
+  twelve months in a row", test id `progress-divider-prints`). Its body carries `data-test-id` and
+  `data-tour` `progress-prints` in every state: an empty plate (frame and hour marks) with how a
+  month counts; the plate filling in ("6 of 12 months" and how many more finish it, or, when the
+  newest run stopped, "up to {month}" and the month after it with its entries); then the newest
+  print on paper, the next plate at 96 px beside its status, and from two prints on Every print,
+  newest first, where a tap features that print. The seal is `role="img"` with `sealSummary` as
+  its label. It reads the badges' snapshot through `shelfView`, so it fetches nothing and holds no
+  amount; `printsShelf.test.tsx` scans the rendered page for any (class names aside, which CSS
+  modules hash). Copy lives in `core/prints/copy.ts`. Above 640 px the seal is
+  `clamp(260px, 28vw, 440px)` beside its words; at 640 and under one column, the seal up to
+  340 px, and the prints in a strip that scrolls inside itself (`min-width: 0` on the grid items,
+  or the strip pushes the page wider).
 
 ### Fixed
 

@@ -115,8 +115,18 @@ describe('Progress page', () => {
     // The one earned badge appears on the timeline too, dated to the month it was earned.
     const timeline = c.querySelector('[data-test-id="badge-timeline"]')!
     expect(timeline.querySelectorAll('[data-timeline-stop]')).toHaveLength(1)
-    // The four section headings are the brand's orbit dividers, not plain rules.
-    expect(c.querySelectorAll('[data-test-id^="progress-divider-"]')).toHaveLength(4)
+    // The five section headings are the brand's orbit dividers, not plain rules, in page order.
+    expect(
+      [...c.querySelectorAll('[data-test-id^="progress-divider-"]')].map((d) =>
+        d.getAttribute('data-test-id')
+      )
+    ).toEqual([
+      'progress-divider-circles',
+      'progress-divider-advice',
+      'progress-divider-prints',
+      'progress-divider-earned',
+      'progress-divider-badges',
+    ])
     expect(c.textContent).toContain('Year in review')
     expect(c.textContent).toContain('Nothing leaves it')
   })
