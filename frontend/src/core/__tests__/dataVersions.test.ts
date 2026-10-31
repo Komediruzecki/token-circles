@@ -174,6 +174,55 @@ describe('invalidateForRequest', () => {
   )
 })
 
+/**
+ * The badge record is saved in the settings, and an evaluation that earns a badge saves it. Only
+ * the badge store reads it back, so saving it may not tell the readers of other settings (the
+ * circles on Dashboard and Progress, About this space) to read theirs again.
+ */
+describe('a settings write that saves only the badge record', () => {
+  const put = (body: unknown) => {
+    invalidateForRequest('/api/settings', 'PUT', true, JSON.stringify(body))
+  }
+
+  it.each([
+    ['the cloud key', { achievements: '{"v":1,"unlocks":[]}' }],
+    ['the local-first key, which names the profile', { 'achievements:7': '{"v":1}' }],
+    ['a record adopted from the old key', { 'achievements:7': '{"v":1}', achievements: '' }],
+  ])('bumps nothing: %s', (_, body) => {
+    put(body)
+    expect(entityVersion('settings')).toBe(0)
+  })
+
+  it.each([
+    ['another key', { currency: 'USD' }],
+    ['another key beside the badge record', { achievements: '{"v":1}', currency: 'USD' }],
+    ['a key that only starts like it', { achievements_extra: 'x' }],
+  ])('still bumps the settings: %s', (_, body) => {
+    put(body)
+    expect(entityVersion('settings')).toBe(1)
+  })
+
+  it.each([
+    ['a body that is not JSON', '{achievements'],
+    ['an empty object', '{}'],
+    ['an array', '["achievements"]'],
+    ['no body', undefined],
+  ])('still bumps the settings when it cannot tell what was written: %s', (_, body) => {
+    invalidateForRequest('/api/settings', 'PUT', true, body)
+    expect(entityVersion('settings')).toBe(1)
+  })
+
+  it('applies to the settings route alone', () => {
+    invalidateForRequest(
+      '/api/settings/set-storage',
+      'POST',
+      true,
+      JSON.stringify({ achievements: 'x' })
+    )
+    expect(entityVersion('settings')).toBe(1)
+  })
+})
+
 describe('invalidateAllEntities', () => {
   it('bumps every tracked counter in one update, so a page tracking several refetches once', () => {
     // Resume revalidation calls this. Budgets tracks `categories` and `budgets`; bumped one at a

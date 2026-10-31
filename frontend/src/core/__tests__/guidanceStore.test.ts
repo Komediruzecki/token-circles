@@ -7,7 +7,7 @@
 import { createRoot } from 'solid-js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { bumpProfileVersion, setPage } from '../appStore'
-import { invalidateEntity } from '../dataVersions'
+import { invalidateEntity, invalidateForRequest } from '../dataVersions'
 import { __resetGuidanceForTest, holdingsOf, useGuidance, withdrawalRateIn } from '../guidance'
 import type { guidanceFacts as GuidanceFacts } from '../../../../shared/guidance/facts'
 import type { AchievementsSnapshot } from '../achievementsStore'
@@ -19,6 +19,7 @@ const net = vi.hoisted(() => ({
   settings: {} as Record<string, unknown>,
   holdings: [] as unknown[],
   settingsReads: 0,
+  holdingsReads: 0,
   failSettings: false,
 }))
 
@@ -52,7 +53,10 @@ vi.mock('../api', async (importOriginal) => ({
     },
   },
   apiGet: async (url: string) => {
-    if (url === '/api/portfolio/holdings') return net.holdings
+    if (url === '/api/portfolio/holdings') {
+      net.holdingsReads++
+      return net.holdings
+    }
     throw new Error(`unexpected GET ${url}`)
   },
   getLocalCurrency: () => 'EUR',
@@ -129,6 +133,7 @@ beforeEach(() => {
   net.settings = {}
   net.holdings = []
   net.settingsReads = 0
+  net.holdingsReads = 0
   net.failSettings = false
   counted.facts = 0
   store.set!(null)
@@ -250,6 +255,28 @@ describe('what it follows', () => {
     await settled()
     expect(counted.facts).toBe(1)
     expect(view()).toBe(first)
+  })
+
+  // An evaluation that earns a badge saves the badge record in the settings. The circles never
+  // read it: Dashboard asked for its settings and holdings again after every badge earned.
+  it('reads nothing again when a badge record is saved', async () => {
+    setPage('dashboard')
+    mount('dashboard')
+    store.set!(snap(1))
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    const reads = { settings: net.settingsReads, holdings: net.holdingsReads }
+
+    invalidateForRequest('/api/settings', 'PUT', true, JSON.stringify({ achievements: '{"v":1}' }))
+    await settled()
+    expect({ settings: net.settingsReads, holdings: net.holdingsReads }).toEqual(reads)
+
+    // Any other settings write is still read again: the base currency, an answer.
+    invalidateForRequest('/api/settings', 'PUT', true, JSON.stringify({ currency: 'USD' }))
+    await vi.waitFor(() => {
+      expect(net.settingsReads).toBe(reads.settings + 1)
+    })
   })
 
   it('keeps the answers it read when a later settings read fails', async () => {

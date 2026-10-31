@@ -147,6 +147,24 @@ describe('apiFetch write invalidation', () => {
     expect(dataVersions.entityVersion('accounts')).toBe(1)
   })
 
+  // Saving the badge record is a settings write, and the badge store is its only reader: the
+  // pages that follow the settings read other keys, and read them again for nothing after a badge.
+  it.each(['self-hosted', 'serverless'] as const)(
+    'bumps no counter for a settings write that saves only the badge record, in %s mode',
+    async (mode) => {
+      const { apiFetch, dataVersions } = await loadApiFetch(mode, API)
+      const key = mode === 'serverless' ? 'achievements:3' : 'achievements'
+      await apiFetch('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ [key]: '{"v":1,"unlocks":[]}' }),
+      })
+      expect(dataVersions.entityVersion('settings')).toBe(0)
+
+      await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify({ currency: 'USD' }) })
+      expect(dataVersions.entityVersion('settings')).toBe(1)
+    }
+  )
+
   // A wizard step, a finished tour or a hidden card is written to the account's own state. It
   // says where the person is in the app, not what their data is: no page reloads for it, and no
   // badge check runs.

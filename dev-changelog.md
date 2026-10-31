@@ -1951,6 +1951,28 @@ check')` first, as the cushion and debt cases do.
     two exceptions are named with their reasons, and a third case fails when an exception no longer
     matches anything.
 
+- **Saving the badge record no longer makes Dashboard, Progress and About this space read their
+  settings again.** The badge store (`frontend/src/core/achievementsStore.ts`) keeps the unlocks
+  and dismissed advice cards in the settings under `achievements` (`achievements:<profile>` in
+  local-first) and saves them with `PUT /api/settings` after every evaluation that earns a badge.
+  `apiFetch` bumped the `settings` counter for it like any settings write, so the circles
+  (`core/guidance.ts`, which follow `settings` and `portfolio`) asked for `GET /api/settings` and
+  `GET /api/portfolio/holdings` again on the next show of Dashboard or Progress, and About this
+  space for its settings on the next show of Settings, though none of them reads that key. Release
+  case `s04-import.spec.ts` 4.2 (cloud) failed on it whenever the evaluation that follows the
+  case's account arrangement landed after Dashboard was hidden: its last check saw those two GETs
+  on showing Dashboard. `invalidateForRequest` (`core/dataVersions.ts`) now takes the request body
+  from `apiFetch`, and a write to `/api/settings` whose body is a JSON object holding only keys in
+  `SETTINGS_ONLY_THEIR_STORE_READS` (`achievements`, a `:<digits>` suffix ignored) bumps nothing.
+  Any other key in the same body, a body that is not a JSON object, an empty object, or any other
+  settings route bumps `settings` as before. The list fails safe: a key missing from it costs a
+  refetch, never a stale page. Guards: `core/__tests__/dataVersions.test.ts` (the three badge-key
+  shapes bump nothing; mixed keys and unreadable bodies still bump),
+  `core/__tests__/apiFetch.test.ts` (both storage modes, through `apiFetch`) and
+  `core/__tests__/guidanceStore.test.ts` (the circles on Dashboard read neither settings nor
+  holdings after a badge save, and read settings after a currency save). All six fail without the
+  change.
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens
