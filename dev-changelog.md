@@ -67,6 +67,100 @@ All notable changes to Token Circles are documented here. The format is based on
   before render) moves a browser in local-first mode to account mode first, always, as a confirm
   link that needs a sign-in does (`toAccountMode`); a fresh production browser starts in
   local-first mode (`VITE_DEFAULT_STORAGE=dexie`). Data kept on the device is not touched. `frontend/tests/forgot-password-link.spec.ts` opens the link under both boots.
+- **The confirm link signs in the browser that signed up.** `POST /api/auth/register` now hashes
+  the password before its answer, for every address alike (nothing is read before the answer, so
+  it takes the same time whether or not the address has an account), and its answer leaves the
+  browser a sign-up marker: an HttpOnly cookie `fm_signup`, host-only,
+  `Path=/api/auth/verify-email`, `SameSite=Lax`, `Secure` outside development, `Max-Age=3600`
+  (`worker/src/signup-marker.ts`). Every sign-up the route takes sets it with the same attributes,
+  whether the address is new, waiting for its link, confirmed or a Google account's, so the answer
+  still says nothing about the address; a 400, 429 or captcha 403 sets none. The value is
+  `v1.<exp>.<id>.<mac>`: `exp` is the sign-up's time plus `SIGNUP_MARKER_SECONDS`, `id` is 16
+  random bytes, and `mac` is HMAC-SHA256 over the JSON
+  `["signup-marker","v1",exp,id,address,passwordHash]` with a key derived from `JWT_SECRET` by
+  HKDF-SHA256 under the label `token-circles signup-marker v1 env=<APP_ENV>`. The derivation moved
+  to `worker/src/derived-key.ts` and is shared with the login check, whose key is unchanged. The
+  value holds neither the address nor anything from the password; the hash it signs is the one
+  this sign-up computed, which the work after the answer stores for a new account.
+  - `GET /api/auth/verify-email`, for an unspent, unexpired link opened without its account's
+    session, now signs in (`signInFromSignUp` in `worker/src/routes/auth.ts`) when every one of
+    these holds: the link's purpose is `confirm`; its account is a password account that still
+    waits for it (`emailUnconfirmed`); the account's address is the link's; the account has no
+    confirmed TOTP; and one of the first three `fm_signup` values verifies for the link's address
+    and the account's stored `password_hash`, byte for byte, with `exp` in
+    `(now, now + SIGNUP_MARKER_SECONDS]` and a 22-character id. Then `spendLink` claims the link,
+    as on every other path. On `confirmed` the route calls `issueSessionCookie` with the
+    `token_version` it read before the spend, logs `login ok confirm_link`, and answers
+    `302 #everified=1&signed_in=1` with the session cookie and the marker cleared (`Max-Age=0`).
+    A session of another account that the request carried ends first, since the new cookie takes
+    its place: its `auth_sessions` row is deleted by id and account, as `POST /api/auth/logout`
+    deletes it, and that account's other sessions stay. When the bound insert writes no session (the account signed out everywhere in between), the
+    answer is `#everified=1`: the address is confirmed and the person signs in as usual. Any other
+    case keeps the answer it had: `signin_required` with the `fm_email_link` marker, or the link's
+    own outcome.
+  - The marker matches the browser that set the account's current password. Signing up again at
+    an address that waits, with the password the account has, stores that sign-up's hash in its
+    place before the fresh link is mailed (`checkSignUpPassword`:
+    `UPDATE ... WHERE id = ? AND password_hash = <the one checked> AND email_verified = 0`), so the
+    browser that signed up last is the one the link signs in. With another password the account
+    keeps its first one, and the first browser's marker is the one that matches. A new password
+    since the sign-up means a new hash, and no marker from before matches it. Every sign-up runs
+    that one check after its answer, whatever the address: against the waiting account's hash, or
+    against `DUMMY_PASSWORD_HASH`, as a sign-in to an address with no account does, for a new
+    address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
+    check for every address.
+  - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
+    per IP). From the browser's `fm_email_link` marker it answers
+    `{ waiting: 'confirm', email: '<masked>' }` for an unspent, unexpired confirm link whose
+    account still waits at that address, and `{ waiting: null }` for anything else. The address
+    goes out as `maskedAddress` writes it: the first character of the part before the last `@`,
+    then `•••` whatever that part's length, then `@` and the whole domain (`k•••@example.com`).
+    The full address is not in this answer. It spends nothing and checks no password.
+  - The rule is in one place, `shared/confirmLinkSignIn.ts`:
+    `CONFIRM_LINK_SIGN_IN = { sameBrowser: true, seconds: 3600 }`. With `sameBrowser: false` no
+    sign-up sets a marker and no marker signs in, and `seconds` is the marker's `Max-Age` and its
+    longest `exp`; a test holds it to the link's 24 hours or less. The words follow the rule:
+    `whereTheLinkSignsIn` and `notYourSignUp` write the two confirm mails, Check your inbox and the
+    refused sign-in (`SIGN_IN_REFUSED`). `worker/src/emailTemplates.ts` imports the module by file
+    name, `.ts` included, so `worker/scripts/` still load the templates under plain Node; that is
+    what `allowImportingTsExtensions` in `worker/tsconfig.json` is for.
+  - Mails: Confirm's headline is "One click and you're in." (maff's call of 2026-10-11, held back
+    until the link did it) and its preheader "Confirm your address. The link works for 24 hours."
+    Both confirm mails say "Open it within an hour in the browser you signed up in and you're
+    signed in. Later, or anywhere else, it asks you to sign in first.", and the line for
+    someone who never signed up starts "Didn't sign up for Token Circles? Don't open the link."
+  - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
+    `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in
+    screen on Finish signing up (`frontend/src/components/FinishSignUp.tsx`, stage `finish` of
+    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`, which returns
+    `{ masked }`), says "This link is for k•••@example.com. Enter that address and its password to
+    confirm it and sign in.", and takes the address in an empty, editable `username` field and the
+    password in a `current-password` one, so a password manager fills both. It sends them to
+    `POST /api/auth/login`, which spends the link it finds in the marker for that account, as a
+    sign-in from the form does. Another account's address and password sign in to that account,
+    and the app says the link is for another account, as after any sign-in. A 401 asks the route
+    again: while the link waits the form says "That email and password don't match. Try again, or
+    reset your password."; once it does not, the step says "This link can't finish here anymore.
+    Open the newest link in your email, or send a fresh one.", with Send the link again. A page
+    open longer than `LINK_WAITING_MS` sends nothing and says the same. With no answer from the
+    route the screen goes back to the sign-in form and "Sign in to confirm your address.". The
+    second factor, Forgot your password? and the back gesture lead where the form's do, with the
+    address typed kept. A change link keeps the form and its notice.
+  - Tests: `worker/test/confirm-link-sign-in.test.ts` (44 new); the mail tests in
+    `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
+    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
+    and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
+    each kind of address (1 new);
+    `frontend/src/components/__tests__/finishSignUp.test.tsx` (15 new),
+    `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
+    `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
+    `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
+    `frontend/tests/email-confirm-link.spec.ts`, with two new `@smoke` cases in both boots (the
+    link in the browser that signed up signs in; in a second browser it asks for the password,
+    signs in there, and leaves the first signed out). The cases that open a link in a browser that
+    did not sign up finish on the new step, typing the address and the password, and the first
+    of them checks that the route answers the masked address and the page shows no full one; the
+    two that sign up in the browser that opens the link now land signed in.
 
 ### Mails
 
@@ -162,6 +256,192 @@ All notable changes to Token Circles are documented here. The format is based on
   scrolled down at 1280x800 was the overlay scrolling (entry above, 450 px in one measured run),
   not the body, whose `scrollTop` was 0 every time. `tests/onboarding.spec.ts` ("a new step opens at
   its top") checks by mouse, by Enter, through a confirm and going back.
+
+### Setup wizard
+
+- **The setup wizard on a phone: three counted steps, one footer row, a statement in one tap.**
+  Frontend only: no migration and no API change. Measured with the same script before and after,
+  at 30 cells (widths 320, 360, 375, 390 and 430; heights 568, 667 and 844; dark and light), every
+  screen of the wizard at each:
+  - **Before**: the footer wrapped to 3 rows and 170.5 px at 320 to 390 wide (Back, Skip setup,
+    Don't import and the primary) on the account, import and subscriptions steps; the header was
+    80 px; the import step's column mapping was 1,438 px taller than its screen at 320x568 (5.5
+    screens), with 16 inputs under 16 px, which iOS Safari zooms into on focus; one screen had 32
+    targets under 44 px; text went down to 10.5 px; and the core path took 12 taps from opening
+    setup to an imported statement.
+  - **After**: the footer is 70 px and one row at every cell, its buttons 48 px; the header 56 px,
+    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; every target is 44 px or more (Getting started's next-step link on Done was the last, at 41 px: below), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
+    setup to an imported statement (Continue, Continue, Add account, Choose a file, the file,
+    Import 7) and 8 to the dashboard (Track 2 subscriptions, Go to my dashboard).
+  - **Steps.** `ONBOARDING_STEPS` is unchanged. The wizard opens on `space`, whose first screen is
+    the name and base currency under "Welcome to Token Circles": the welcome screen (91 words, 5 em
+    dashes, nothing asked) is gone, and the local-only switch moved onto this screen in server
+    mode. While `benchmarksShown()`, `space` has a second screen, About this space
+    (`SpaceQuestions` with `compact`: the regions in two columns, each count on one row, every chip
+    44 px, `3+` for three or more via `short` in `regionWords.ts`). Account: "Add your main
+    account"; Enter in a field adds it, as the footer's Add account does, and adding one moves on
+    to the statement with no "created" toast. Back on the step it reads "Your accounts", lists them
+    and takes another. Statement: below. Subscriptions only after an import that brought
+    transactions in; with none, `import` goes to `done`. Done: one line of what was set up
+    ("Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.") and Getting
+    started's next steps. `SHOWN_ONBOARDING_STEPS` (every stored step but `welcome`) is what Back
+    and Continue walk, and `openingStep()` opens none and `welcome` on `space`.
+  - **Header and footer.** The header has Back (the logo on the first screen), "Step N of 3" in an
+    orbit ring (`onboarding-progress`), and Close (`aria-label="Leave setup"`). Close and Escape
+    ask once, naming what is left on that step (`leaveSetupQuestion`), with Leave setup and Stay.
+    On the subscriptions it says "Your import is saved" only after a statement went in on this
+    visit; setup reopened there from an earlier one asks "Leave setup? Bills can scan your
+    transactions for subscriptions any time, and Settings can run setup again." On Done, Escape
+    finishes as Go to my dashboard does, without asking (the record comparison, below). Getting
+    started's next-step link, on Done and on Dashboard's card, is at least 44 px tall on a phone
+    (480 px wide or less, where its title and page stack and their text alone was 41 px) and on
+    any touch screen; with a mouse it keeps its height. The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
+    step's Skip asks only when it would drop something: an account with a name or balance typed
+    in, a statement ready to import. On a phone the panel is the screen, capped at `100dvh`
+    (`100vh` first, for a browser without `dvh`): at 320x568 About this space had pushed the footer
+    22 px under the bottom edge. The middle's last 20 px fade while the step goes on below
+    (`data-more-below`), and once it is scrolled down its first 20 px fade too
+    (`data-more-above`): on a phone the header has no ground of its own, and a heading scrolled up
+    under it was cut hard at the edge. `scroll-padding-top` and `-bottom` stop a control brought
+    into view clear of both.
+  - **No orbit field behind the text on a phone.** At 620 px and narrower the panel is the screen
+    and has no ground, so the orbit field drew straight behind the step: its haze behind the middle
+    of every step, its tokens drifting across the leads and the headings. Measured on the painted
+    screen (Tests, below) before this change, at 390x844 in the light theme: the space step's lead
+    1.4:1 with a token behind it, the currency hint 3.75:1, the account's balance hint 3.57:1 and
+    the list of banks 4.04:1; in the dark theme each step's heading 2.81:1, under the 3:1 large
+    text needs, and each lead 1.47:1. The field is not drawn there now (`.backdrop`,
+    `display: none`): the sky's gradient stays, and the progress ring and Done keep their orbits.
+    Wider, it stays behind the glass panel; the only lines under AA there were the plan's, and
+    those from its own colour (next).
+  - **`--primary` as text.** The link buttons (Keep my data in this browser only, Bring in another
+    statement) and the subscription scan's plan (`.plan`, "Standard" beside Netflix) set
+    `--primary` as their text colour: in dawn-light 4.13:1 on the sky's middle, 3.72:1 at its top,
+    and 4.0:1 for the plan on its own tint. Both read
+    `color-mix(in oklab, var(--primary) 70%, var(--text))` now: `#2e53a7` in dawn-light (5.18:1
+    at the worst, the sky's top under the tint), and lighter, so stronger, on the dark themes
+    (`#92b5ff` in orbit-dark, `#85bcfd` in instrument-deck). The plan is on Bills' scan too.
+  - **A chosen chip's text** (`SpaceQuestions.module.css`) reads `--on-primary` instead of
+    `#ffffff` with a dark-theme rule for `var(--bg)`: the same colour in all three themes, from one
+    token, so PR #670's guard against a colour literal on a primary fill passes it.
+  - **The statement** (`components/onboarding/FirstImport.tsx`, on `createImportFlow`). One file.
+    A bank the adapters detect is processed, mapped and previewed (the dry run) in the background,
+    with the defaults the Import page's tap-through took: the bank's own columns, every
+    transaction that is not a duplicate, every new category, no budgets from spending. The account
+    comes preselected: the one the bank names, else the one setup just created on this visit, else
+    one the profile has (the newest in the statement's currency, else the newest whose currency is
+    not known), and a new one named for the bank only when no account fits: a profile with none, or
+    only accounts kept in another currency. Setup reopens at the statement after a
+    reload (the person away at the bank's app, exporting the file) or when run again over a profile
+    with accounts; before, it offered "New account: Revolut EUR" there, and one tap on Import made a
+    second account beside the first and split the money between them (`loadBankAccounts` now
+    carries each account's currency). The card names the bank and the count on one line
+    ("Revolut · 7 new transactions") and the dates on the next (`onboarding-import-dates`), each
+    date held together with no-break spaces: on one line, the card wrapped inside a date at 390
+    wide ("14 Apr to 1" / "Jul") and left a "·" at a line's end at 320. The screen shows the file, the bank, the account, how many transactions are
+    new and the categories it adds, and the footer says `Import N`. N is the ticked rows less the
+    rows the dry run found stored, by index: `existingDuplicateIndices` in `importFlow.ts`, from
+    the dry run's `duplicate_indices`. A statement's repeats of its own rows are unticked already
+    and in that list too, so subtracting the dry run's count took them off twice
+    (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
+    import (a bank the adapters do not know, a table of any other kind, a file that does not read)
+    offers Open in Import, which finishes setup and hands the file to the Import page
+    (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
+    Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
+  - **Badges wait for the wizard** (`core/achievementsStore.ts`). Badges earned while
+    `onboardingOpen()` are held and announced when it closes, for the profile still in use, as one
+    summary on a first run. Setup's own writes earn them (a first account, a first import); their
+    toasts stacked over the header's Back and Close, and See badges changed the page behind.
+  - **`SubscriptionScan`** takes `hideRescan` (setup scans once, right after its import) and `quiet`
+    (no "added" toast: setup's summary says it). Under `pointer: coarse` its rows, price field and
+    frequency are 44 px tall with 16 px text, and the merchant line wraps instead of being cut
+    short. That applies to the Bills scan on a phone as well.
+  - **`--on-primary`**, the text colour on a `--primary` fill, per theme: `#ffffff` in dawn-light
+    (white is 4.6:1 on its primary), `#0a0e1c` in orbit-dark (white is 2.7:1, this 7.1:1) and
+    `#0b0d10` in instrument-deck (white is 2.5:1, this 7.7:1). Setup's primary button uses it; a
+    chosen chip already had dark text on the dark themes (`var(--bg)`). `TagsPage.module.css`
+    (`.primaryButton`) and `ApiAccess.module.css` (`.primaryBtn`) already read
+    `var(--on-primary, #fff)`, so they get the dark text on the dark themes too. The app's other
+    primary fills still set white: a follow-up.
+  - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
+    "Run the Setup Wizard (accounts, imports, subscriptions)".
+  - **Tests**: unit `onboardingFirstImport.test.tsx` (16, two of them setup reopened at the
+    statement over accounts the profile has, two the leave question on the subscriptions),
+    `firstImportCount.test.ts` (3), `firstImportDates.test.ts` (3), Escape on Done in
+    `onboardingDoneStep.test.tsx`, `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
+    in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
+    (`onboardingForms.test.tsx`, `onboardingOnTheAccount.test.ts`, `onboardingStore.test.ts`,
+    `onboardingSpaceAnswersFail.test.tsx`, `createdProfileIsSelected.test.tsx`,
+    `importRulesFollowProfile.test.tsx`). E2E: `onboarding.spec.ts` rewritten, with three `@smoke`
+    cases (the core path; a statement imported in one tap, through Track 2 subscriptions to the
+    summary; a file the defaults cannot read, opened in Import), every line of text read on the
+    painted screen, and every step on a touch screen at 390x844, 375x667 and 320x568 in both themes
+    (header 56 px, its buttons 44x44, one footer row with 48 px buttons, 16 px fields, nothing
+    under the screen's edge, the statement card's two lines one line each, Done's next-step links
+    44 px). The painted screen is `tests/painted-contrast.ts`: each line of text made transparent,
+    the screen captured with the orbit field's animations stopped at six points of their orbits,
+    and the line's colour composited over every pixel of its box, the worst kept; WCAG AA, 4.5:1,
+    or 3:1 for large text. It reads every screen from the space to Done, wide and at 390x844 and
+    320x568, in both themes, and on a phone it also fails any line the field paints behind (a
+    capture with the field hidden, compared pixel by pixel). It replaces an estimate from computed
+    colours that left the field out. Held sideways, the step's heading, lead and first question show
+    above the footer as it opens, and the top fades once scrolled. Signed in
+    (`onboarding-server.spec.ts`): the space step with Keep my data in this browser only, read the
+    same way at three sizes, and an account added, the page reloaded, setup reopened at the
+    statement and the statement imported into that account: one account on the Worker, seven
+    transactions in it, and back on the account step the form blank for another.
+    `onboarding-server.spec.ts`, `onboarding-form-errors.spec.ts`, `onboarding-page-behind.spec.ts`
+    (its short-phone case now scrolls About this space: the name screen fits 320x568),
+    `orientation.spec.ts`, `circles.spec.ts`, `dashboard-circles.spec.ts`, release `s04` 4.7 and
+    `s13` 13.3 follow the new steps. The specs that leave the wizard from a locator handler accept
+    its confirm by `confirm-accept`: its button reads Leave setup now, not Confirm.
+  - **Test ids.** Gone: `onboarding-step-welcome`, `onboarding-account-date`,
+    `onboarding-import-loading`, `onboarding-import-process-bank`, `onboarding-import-summary`,
+    `onboarding-import-to-mapping`, `onboarding-import-to-preview`. New: `onboarding-step-about`,
+    `onboarding-progress`, `onboarding-account-skip`, `onboarding-subs-skip`,
+    `onboarding-done-summary`, `onboarding-backdrop` (the orbit field), and on the statement
+    `onboarding-import-` `choose`, `input`, `pick`, `banks`, `file`, `meta`, `dates`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
+    `done` and `another`. Same id, new place: `onboarding-skip` (the header's Close, still asking),
+    `onboarding-back` (the header's Back), `onboarding-account-create` (the footer's Add account),
+    `onboarding-import-skip` (the footer's Skip), `onboarding-import-selected` (`Import N`),
+    `onboarding-subs-add-continue` (`Track N subscriptions`).
+
+- **How old and new setup records compare.** The record's step names and its forward-only rule
+  are unchanged (`shared/accountStateKeys.ts` points here). What a name means moved with the new
+  steps:
+
+  | `step`          | Started before this build             | Started from this build                                  |
+  | --------------- | ------------------------------------- | -------------------------------------------------------- |
+  | `welcome`       | opened, nothing answered              | never written; an old record at it reopens on `space`    |
+  | `space`         | went past the welcome, on the name    | opened (the first write), on the name or About           |
+  | `account`       | the space saved                       | the space saved, and About answered where it shows       |
+  | `import`        | past the account step                 | past the account step                                    |
+  | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
+  | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
+
+  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
+  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
+  confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
+  `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
+  therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
+  (stopped before saving a space); `account` and `import` as they are; old `subscriptions` and
+  `done` against new `subscriptions` and `done` (got past the import step). New records say who
+  imported during setup only up to `subscriptions`: one at `done` may have come straight from the
+  statement step, so whether it imported is in its transactions, not its record. Split the cohorts
+  on `started_at` (UTC, `YYYY-MM-DD HH:MM:SS`) at this build's deploy time; a record started before
+  and taken up after it keeps an old name until it writes a new one. `existing` (migration 0035)
+  stays out of both:
+
+  ```sql
+  SELECT json_extract(value, '$.started_at') >= '<deploy time, UTC>' AS this_build,
+         json_extract(value, '$.outcome') AS outcome,
+         json_extract(value, '$.step') AS step,
+         COUNT(*) AS records
+  FROM user_state
+  WHERE key = 'onboarding' AND json_extract(value, '$.outcome') IS NOT 'existing'
+  GROUP BY 1, 2, 3
+  ORDER BY 1, 2, 3;
+  ```
 
 ### State that follows the account
 
@@ -1864,100 +2144,6 @@ Changed:
   `frontend/src/components/__tests__/captchaGate.test.ts` (12 new),
   `frontend/src/components/__tests__/captchaForms.test.tsx` (9 new) and
   `frontend/src/core/__tests__/apiError.test.ts` (9 new).
-- **The confirm link signs in the browser that signed up.** `POST /api/auth/register` now hashes
-  the password before its answer, for every address alike (nothing is read before the answer, so
-  it takes the same time whether or not the address has an account), and its answer leaves the
-  browser a sign-up marker: an HttpOnly cookie `fm_signup`, host-only,
-  `Path=/api/auth/verify-email`, `SameSite=Lax`, `Secure` outside development, `Max-Age=3600`
-  (`worker/src/signup-marker.ts`). Every sign-up the route takes sets it with the same attributes,
-  whether the address is new, waiting for its link, confirmed or a Google account's, so the answer
-  still says nothing about the address; a 400, 429 or captcha 403 sets none. The value is
-  `v1.<exp>.<id>.<mac>`: `exp` is the sign-up's time plus `SIGNUP_MARKER_SECONDS`, `id` is 16
-  random bytes, and `mac` is HMAC-SHA256 over the JSON
-  `["signup-marker","v1",exp,id,address,passwordHash]` with a key derived from `JWT_SECRET` by
-  HKDF-SHA256 under the label `token-circles signup-marker v1 env=<APP_ENV>`. The derivation moved
-  to `worker/src/derived-key.ts` and is shared with the login check, whose key is unchanged. The
-  value holds neither the address nor anything from the password; the hash it signs is the one
-  this sign-up computed, which the work after the answer stores for a new account.
-  - `GET /api/auth/verify-email`, for an unspent, unexpired link opened without its account's
-    session, now signs in (`signInFromSignUp` in `worker/src/routes/auth.ts`) when every one of
-    these holds: the link's purpose is `confirm`; its account is a password account that still
-    waits for it (`emailUnconfirmed`); the account's address is the link's; the account has no
-    confirmed TOTP; and one of the first three `fm_signup` values verifies for the link's address
-    and the account's stored `password_hash`, byte for byte, with `exp` in
-    `(now, now + SIGNUP_MARKER_SECONDS]` and a 22-character id. Then `spendLink` claims the link,
-    as on every other path. On `confirmed` the route calls `issueSessionCookie` with the
-    `token_version` it read before the spend, logs `login ok confirm_link`, and answers
-    `302 #everified=1&signed_in=1` with the session cookie and the marker cleared (`Max-Age=0`).
-    A session of another account that the request carried ends first, since the new cookie takes
-    its place: its `auth_sessions` row is deleted by id and account, as `POST /api/auth/logout`
-    deletes it, and that account's other sessions stay. When the bound insert writes no session (the account signed out everywhere in between), the
-    answer is `#everified=1`: the address is confirmed and the person signs in as usual. Any other
-    case keeps the answer it had: `signin_required` with the `fm_email_link` marker, or the link's
-    own outcome.
-  - The marker matches the browser that set the account's current password. Signing up again at
-    an address that waits, with the password the account has, stores that sign-up's hash in its
-    place before the fresh link is mailed (`checkSignUpPassword`:
-    `UPDATE ... WHERE id = ? AND password_hash = <the one checked> AND email_verified = 0`), so the
-    browser that signed up last is the one the link signs in. With another password the account
-    keeps its first one, and the first browser's marker is the one that matches. A new password
-    since the sign-up means a new hash, and no marker from before matches it. Every sign-up runs
-    that one check after its answer, whatever the address: against the waiting account's hash, or
-    against `DUMMY_PASSWORD_HASH`, as a sign-in to an address with no account does, for a new
-    address, a confirmed one and a Google account's. The work after the answer is one PBKDF2
-    check for every address.
-  - `GET /api/auth/email-link` is new (`WORKER_ONLY` in `shared/contract/routes.ts`; 30 a minute
-    per IP). From the browser's `fm_email_link` marker it answers
-    `{ waiting: 'confirm', email: '<masked>' }` for an unspent, unexpired confirm link whose
-    account still waits at that address, and `{ waiting: null }` for anything else. The address
-    goes out as `maskedAddress` writes it: the first character of the part before the last `@`,
-    then `•••` whatever that part's length, then `@` and the whole domain (`k•••@example.com`).
-    The full address is not in this answer. It spends nothing and checks no password.
-  - The rule is in one place, `shared/confirmLinkSignIn.ts`:
-    `CONFIRM_LINK_SIGN_IN = { sameBrowser: true, seconds: 3600 }`. With `sameBrowser: false` no
-    sign-up sets a marker and no marker signs in, and `seconds` is the marker's `Max-Age` and its
-    longest `exp`; a test holds it to the link's 24 hours or less. The words follow the rule:
-    `whereTheLinkSignsIn` and `notYourSignUp` write the two confirm mails, Check your inbox and the
-    refused sign-in (`SIGN_IN_REFUSED`). `worker/src/emailTemplates.ts` imports the module by file
-    name, `.ts` included, so `worker/scripts/` still load the templates under plain Node; that is
-    what `allowImportingTsExtensions` in `worker/tsconfig.json` is for.
-  - Mails: Confirm's headline is "One click and you're in." (maff's call of 2026-10-11, held back
-    until the link did it) and its preheader "Confirm your address. The link works for 24 hours."
-    Both confirm mails say "Open it within an hour in the browser you signed up in and you're
-    signed in. Later, or anywhere else, it asks you to sign in first.", and the line for
-    someone who never signed up starts "Didn't sign up for Token Circles? Don't open the link."
-  - App: `consumeEmailVerifyRedirect` also moves the device to account mode on
-    `everified=1&signed_in=1`. A confirm link that answered `signin_required` opens the sign-in
-    screen on Finish signing up (`frontend/src/components/FinishSignUp.tsx`, stage `finish` of
-    `LoginScreen`): it asks `GET /api/auth/email-link` (`api.confirmLinkWaiting`, which returns
-    `{ masked }`), says "This link is for k•••@example.com. Enter that address and its password to
-    confirm it and sign in.", and takes the address in an empty, editable `username` field and the
-    password in a `current-password` one, so a password manager fills both. It sends them to
-    `POST /api/auth/login`, which spends the link it finds in the marker for that account, as a
-    sign-in from the form does. Another account's address and password sign in to that account,
-    and the app says the link is for another account, as after any sign-in. A 401 asks the route
-    again: while the link waits the form says "That email and password don't match. Try again, or
-    reset your password."; once it does not, the step says "This link can't finish here anymore.
-    Open the newest link in your email, or send a fresh one.", with Send the link again. A page
-    open longer than `LINK_WAITING_MS` sends nothing and says the same. With no answer from the
-    route the screen goes back to the sign-in form and "Sign in to confirm your address.". The
-    second factor, Forgot your password? and the back gesture lead where the form's do, with the
-    address typed kept. A change link keeps the form and its notice.
-  - Tests: `worker/test/confirm-link-sign-in.test.ts` (44 new); the mail tests in
-    `worker/test/email-verification.test.ts`; `sign-in-same-answer.test.ts` and
-    `sign-up-after-answer.test.ts` now write the marker's value as V where they compare answers,
-    and `sign-up-after-answer.test.ts` counts the PBKDF2 derivations a sign-up makes, by salt, for
-    each kind of address (1 new);
-    `frontend/src/components/__tests__/finishSignUp.test.tsx` (15 new),
-    `frontend/src/core/__tests__/confirmLinkSignIn.test.ts` (6 new), 3 new in
-    `frontend/src/core/__tests__/emailVerification.test.ts`, 1 new in
-    `loginScreen.backGesture.test.tsx` and in `loginScreen.linkNotice.test.tsx`; and
-    `frontend/tests/email-confirm-link.spec.ts`, with two new `@smoke` cases in both boots (the
-    link in the browser that signed up signs in; in a second browser it asks for the password,
-    signs in there, and leaves the first signed out). The cases that open a link in a browser that
-    did not sign up finish on the new step, typing the address and the password, and the first
-    of them checks that the route answers the masked address and the page shows no full one; the
-    two that sign up in the browser that opens the link now land signed in.
 
 ### Section headings
 
@@ -2005,190 +2191,6 @@ Changed:
   month; this month tracked: ends this month). They fail before the change (3 tests).
 
 ### Setup wizard
-
-- **The setup wizard on a phone: three counted steps, one footer row, a statement in one tap.**
-  Frontend only: no migration and no API change. Measured with the same script before and after,
-  at 30 cells (widths 320, 360, 375, 390 and 430; heights 568, 667 and 844; dark and light), every
-  screen of the wizard at each:
-  - **Before**: the footer wrapped to 3 rows and 170.5 px at 320 to 390 wide (Back, Skip setup,
-    Don't import and the primary) on the account, import and subscriptions steps; the header was
-    80 px; the import step's column mapping was 1,438 px taller than its screen at 320x568 (5.5
-    screens), with 16 inputs under 16 px, which iOS Safari zooms into on focus; one screen had 32
-    targets under 44 px; text went down to 10.5 px; and the core path took 12 taps from opening
-    setup to an imported statement.
-  - **After**: the footer is 70 px and one row at every cell, its buttons 48 px; the header 56 px,
-    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; every target is 44 px or more (Getting started's next-step link on Done was the last, at 41 px: below), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
-    setup to an imported statement (Continue, Continue, Add account, Choose a file, the file,
-    Import 7) and 8 to the dashboard (Track 2 subscriptions, Go to my dashboard).
-  - **Steps.** `ONBOARDING_STEPS` is unchanged. The wizard opens on `space`, whose first screen is
-    the name and base currency under "Welcome to Token Circles": the welcome screen (91 words, 5 em
-    dashes, nothing asked) is gone, and the local-only switch moved onto this screen in server
-    mode. While `benchmarksShown()`, `space` has a second screen, About this space
-    (`SpaceQuestions` with `compact`: the regions in two columns, each count on one row, every chip
-    44 px, `3+` for three or more via `short` in `regionWords.ts`). Account: "Add your main
-    account"; Enter in a field adds it, as the footer's Add account does, and adding one moves on
-    to the statement with no "created" toast. Back on the step it reads "Your accounts", lists them
-    and takes another. Statement: below. Subscriptions only after an import that brought
-    transactions in; with none, `import` goes to `done`. Done: one line of what was set up
-    ("Personal Profile has 1 account, 7 new transactions and 2 tracked subscriptions.") and Getting
-    started's next steps. `SHOWN_ONBOARDING_STEPS` (every stored step but `welcome`) is what Back
-    and Continue walk, and `openingStep()` opens none and `welcome` on `space`.
-  - **Header and footer.** The header has Back (the logo on the first screen), "Step N of 3" in an
-    orbit ring (`onboarding-progress`), and Close (`aria-label="Leave setup"`). Close and Escape
-    ask once, naming what is left on that step (`leaveSetupQuestion`), with Leave setup and Stay.
-    On the subscriptions it says "Your import is saved" only after a statement went in on this
-    visit; setup reopened there from an earlier one asks "Leave setup? Bills can scan your
-    transactions for subscriptions any time, and Settings can run setup again." On Done, Escape
-    finishes as Go to my dashboard does, without asking (the record comparison, below). Getting
-    started's next-step link, on Done and on Dashboard's card, is at least 44 px tall on a phone
-    (480 px wide or less, where its title and page stack and their text alone was 41 px) and on
-    any touch screen; with a mouse it keeps its height. The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
-    step's Skip asks only when it would drop something: an account with a name or balance typed
-    in, a statement ready to import. On a phone the panel is the screen, capped at `100dvh`
-    (`100vh` first, for a browser without `dvh`): at 320x568 About this space had pushed the footer
-    22 px under the bottom edge. The middle's last 20 px fade while the step goes on below
-    (`data-more-below`), and once it is scrolled down its first 20 px fade too
-    (`data-more-above`): on a phone the header has no ground of its own, and a heading scrolled up
-    under it was cut hard at the edge. `scroll-padding-top` and `-bottom` stop a control brought
-    into view clear of both.
-  - **No orbit field behind the text on a phone.** At 620 px and narrower the panel is the screen
-    and has no ground, so the orbit field drew straight behind the step: its haze behind the middle
-    of every step, its tokens drifting across the leads and the headings. Measured on the painted
-    screen (Tests, below) before this change, at 390x844 in the light theme: the space step's lead
-    1.4:1 with a token behind it, the currency hint 3.75:1, the account's balance hint 3.57:1 and
-    the list of banks 4.04:1; in the dark theme each step's heading 2.81:1, under the 3:1 large
-    text needs, and each lead 1.47:1. The field is not drawn there now (`.backdrop`,
-    `display: none`): the sky's gradient stays, and the progress ring and Done keep their orbits.
-    Wider, it stays behind the glass panel; the only lines under AA there were the plan's, and
-    those from its own colour (next).
-  - **`--primary` as text.** The link buttons (Keep my data in this browser only, Bring in another
-    statement) and the subscription scan's plan (`.plan`, "Standard" beside Netflix) set
-    `--primary` as their text colour: in dawn-light 4.13:1 on the sky's middle, 3.72:1 at its top,
-    and 4.0:1 for the plan on its own tint. Both read
-    `color-mix(in oklab, var(--primary) 70%, var(--text))` now: `#2e53a7` in dawn-light (5.18:1
-    at the worst, the sky's top under the tint), and lighter, so stronger, on the dark themes
-    (`#92b5ff` in orbit-dark, `#85bcfd` in instrument-deck). The plan is on Bills' scan too.
-  - **A chosen chip's text** (`SpaceQuestions.module.css`) reads `--on-primary` instead of
-    `#ffffff` with a dark-theme rule for `var(--bg)`: the same colour in all three themes, from one
-    token, so PR #670's guard against a colour literal on a primary fill passes it.
-  - **The statement** (`components/onboarding/FirstImport.tsx`, on `createImportFlow`). One file.
-    A bank the adapters detect is processed, mapped and previewed (the dry run) in the background,
-    with the defaults the Import page's tap-through took: the bank's own columns, every
-    transaction that is not a duplicate, every new category, no budgets from spending. The account
-    comes preselected: the one the bank names, else the one setup just created on this visit, else
-    one the profile has (the newest in the statement's currency, else the newest whose currency is
-    not known), and a new one named for the bank only when no account fits: a profile with none, or
-    only accounts kept in another currency. Setup reopens at the statement after a
-    reload (the person away at the bank's app, exporting the file) or when run again over a profile
-    with accounts; before, it offered "New account: Revolut EUR" there, and one tap on Import made a
-    second account beside the first and split the money between them (`loadBankAccounts` now
-    carries each account's currency). The card names the bank and the count on one line
-    ("Revolut · 7 new transactions") and the dates on the next (`onboarding-import-dates`), each
-    date held together with no-break spaces: on one line, the card wrapped inside a date at 390
-    wide ("14 Apr to 1" / "Jul") and left a "·" at a line's end at 320. The screen shows the file, the bank, the account, how many transactions are
-    new and the categories it adds, and the footer says `Import N`. N is the ticked rows less the
-    rows the dry run found stored, by index: `existingDuplicateIndices` in `importFlow.ts`, from
-    the dry run's `duplicate_indices`. A statement's repeats of its own rows are unticked already
-    and in that list too, so subtracting the dry run's count took them off twice
-    (`firstImportCount.test.ts`). A statement with nothing new says so. A file the defaults cannot
-    import (a bank the adapters do not know, a table of any other kind, a file that does not read)
-    offers Open in Import, which finishes setup and hands the file to the Import page
-    (`features/import/importHandoff.ts`; `Import.tsx` takes it once the page is active, on Bank
-    Imports for a bank it knows, else on File Upload, which goes on to the column mapping), or Skip.
-  - **Badges wait for the wizard** (`core/achievementsStore.ts`). Badges earned while
-    `onboardingOpen()` are held and announced when it closes, for the profile still in use, as one
-    summary on a first run. Setup's own writes earn them (a first account, a first import); their
-    toasts stacked over the header's Back and Close, and See badges changed the page behind.
-  - **`SubscriptionScan`** takes `hideRescan` (setup scans once, right after its import) and `quiet`
-    (no "added" toast: setup's summary says it). Under `pointer: coarse` its rows, price field and
-    frequency are 44 px tall with 16 px text, and the merchant line wraps instead of being cut
-    short. That applies to the Bills scan on a phone as well.
-  - **`--on-primary`**, the text colour on a `--primary` fill, per theme: `#ffffff` in dawn-light
-    (white is 4.6:1 on its primary), `#0a0e1c` in orbit-dark (white is 2.7:1, this 7.1:1) and
-    `#0b0d10` in instrument-deck (white is 2.5:1, this 7.7:1). Setup's primary button uses it; a
-    chosen chip already had dark text on the dark themes (`var(--bg)`). `TagsPage.module.css`
-    (`.primaryButton`) and `ApiAccess.module.css` (`.primaryBtn`) already read
-    `var(--on-primary, #fff)`, so they get the dark text on the dark themes too. The app's other
-    primary fills still set white: a follow-up.
-  - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
-    "Run the Setup Wizard (accounts, imports, subscriptions)".
-  - **Tests**: unit `onboardingFirstImport.test.tsx` (16, two of them setup reopened at the
-    statement over accounts the profile has, two the leave question on the subscriptions),
-    `firstImportCount.test.ts` (3), `firstImportDates.test.ts` (3), Escape on Done in
-    `onboardingDoneStep.test.tsx`, `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
-    in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
-    (`onboardingForms.test.tsx`, `onboardingOnTheAccount.test.ts`, `onboardingStore.test.ts`,
-    `onboardingSpaceAnswersFail.test.tsx`, `createdProfileIsSelected.test.tsx`,
-    `importRulesFollowProfile.test.tsx`). E2E: `onboarding.spec.ts` rewritten, with three `@smoke`
-    cases (the core path; a statement imported in one tap, through Track 2 subscriptions to the
-    summary; a file the defaults cannot read, opened in Import), every line of text read on the
-    painted screen, and every step on a touch screen at 390x844, 375x667 and 320x568 in both themes
-    (header 56 px, its buttons 44x44, one footer row with 48 px buttons, 16 px fields, nothing
-    under the screen's edge, the statement card's two lines one line each, Done's next-step links
-    44 px). The painted screen is `tests/painted-contrast.ts`: each line of text made transparent,
-    the screen captured with the orbit field's animations stopped at six points of their orbits,
-    and the line's colour composited over every pixel of its box, the worst kept; WCAG AA, 4.5:1,
-    or 3:1 for large text. It reads every screen from the space to Done, wide and at 390x844 and
-    320x568, in both themes, and on a phone it also fails any line the field paints behind (a
-    capture with the field hidden, compared pixel by pixel). It replaces an estimate from computed
-    colours that left the field out. Held sideways, the step's heading, lead and first question show
-    above the footer as it opens, and the top fades once scrolled. Signed in
-    (`onboarding-server.spec.ts`): the space step with Keep my data in this browser only, read the
-    same way at three sizes, and an account added, the page reloaded, setup reopened at the
-    statement and the statement imported into that account: one account on the Worker, seven
-    transactions in it, and back on the account step the form blank for another.
-    `onboarding-server.spec.ts`, `onboarding-form-errors.spec.ts`, `onboarding-page-behind.spec.ts`
-    (its short-phone case now scrolls About this space: the name screen fits 320x568),
-    `orientation.spec.ts`, `circles.spec.ts`, `dashboard-circles.spec.ts`, release `s04` 4.7 and
-    `s13` 13.3 follow the new steps. The specs that leave the wizard from a locator handler accept
-    its confirm by `confirm-accept`: its button reads Leave setup now, not Confirm.
-  - **Test ids.** Gone: `onboarding-step-welcome`, `onboarding-account-date`,
-    `onboarding-import-loading`, `onboarding-import-process-bank`, `onboarding-import-summary`,
-    `onboarding-import-to-mapping`, `onboarding-import-to-preview`. New: `onboarding-step-about`,
-    `onboarding-progress`, `onboarding-account-skip`, `onboarding-subs-skip`,
-    `onboarding-done-summary`, `onboarding-backdrop` (the orbit field), and on the statement
-    `onboarding-import-` `choose`, `input`, `pick`, `banks`, `file`, `meta`, `dates`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
-    `done` and `another`. Same id, new place: `onboarding-skip` (the header's Close, still asking),
-    `onboarding-back` (the header's Back), `onboarding-account-create` (the footer's Add account),
-    `onboarding-import-skip` (the footer's Skip), `onboarding-import-selected` (`Import N`),
-    `onboarding-subs-add-continue` (`Track N subscriptions`).
-
-- **How old and new setup records compare.** The record's step names and its forward-only rule
-  are unchanged (`shared/accountStateKeys.ts` points here). What a name means moved with the new
-  steps:
-
-  | `step`          | Started before this build             | Started from this build                                  |
-  | --------------- | ------------------------------------- | -------------------------------------------------------- |
-  | `welcome`       | opened, nothing answered              | never written; an old record at it reopens on `space`    |
-  | `space`         | went past the welcome, on the name    | opened (the first write), on the name or About           |
-  | `account`       | the space saved                       | the space saved, and About answered where it shows       |
-  | `import`        | past the account step                 | past the account step                                    |
-  | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
-  | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
-
-  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
-  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
-  confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
-  `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
-  therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
-  (stopped before saving a space); `account` and `import` as they are; old `subscriptions` and
-  `done` against new `subscriptions` and `done` (got past the import step). New records say who
-  imported during setup only up to `subscriptions`: one at `done` may have come straight from the
-  statement step, so whether it imported is in its transactions, not its record. Split the cohorts
-  on `started_at` (UTC, `YYYY-MM-DD HH:MM:SS`) at this build's deploy time; a record started before
-  and taken up after it keeps an old name until it writes a new one. `existing` (migration 0035)
-  stays out of both:
-
-  ```sql
-  SELECT json_extract(value, '$.started_at') >= '<deploy time, UTC>' AS this_build,
-         json_extract(value, '$.outcome') AS outcome,
-         json_extract(value, '$.step') AS step,
-         COUNT(*) AS records
-  FROM user_state
-  WHERE key = 'onboarding' AND json_extract(value, '$.outcome') IS NOT 'existing'
-  GROUP BY 1, 2, 3
-  ORDER BY 1, 2, 3;
-  ```
 
 - **The page behind the wizard holds still, unpainted and inert.** Reported from iOS Safari on dev:
   with the wizard open, the Dashboard showed under the status bar and the floating toolbar (the
