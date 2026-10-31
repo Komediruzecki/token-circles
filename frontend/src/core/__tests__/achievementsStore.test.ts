@@ -58,7 +58,7 @@ import {
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
 const apiMock = api as unknown as Record<
-  'getSettings' | 'updateSettings' | 'getLoan' | 'getAccounts',
+  'getSettings' | 'updateSettings' | 'getLoan' | 'getAccounts' | 'getBudgets',
   Mock
 >
 
@@ -524,8 +524,9 @@ describe('a profile switch while an evaluation is running', () => {
 /**
  * A write that lands while an evaluation runs, after the evaluation has read its lists. The ask
  * it sets off (AchievementsHost, 1.2 s after the write) used to be handed the running evaluation,
- * whose lists predate the write, and nothing evaluated again: Getting started kept the account
- * list from before a second account was added.
+ * whose lists predate the write, and nothing evaluated again: a badge the write earned waited for
+ * the next write, and Getting started kept the account list from before a second account was
+ * added.
  */
 describe('a refresh asked for while an evaluation is running', () => {
   const account = (id: number, name: string) => ({
@@ -535,6 +536,16 @@ describe('a refresh asked for while an evaluation is running', () => {
     balance: 1000,
     profile_id: 1,
   })
+
+  const firstBudget = {
+    profile_id: 1,
+    category_id: 1,
+    amount: 100,
+    period: 'monthly',
+    start_date: `${thisMonth}-01`,
+    end_date: null,
+    created_at: `${thisMonth}-02`,
+  }
 
   it('evaluates once more when the running one ends, so the snapshot holds the new account', async () => {
     localStorage.setItem('currentProfileId', '1')
@@ -551,6 +562,23 @@ describe('a refresh asked for while an evaluation is running', () => {
 
     expect(snapshot()!.accounts!.map((a) => a.name)).toEqual(['Rainy day', 'Holiday'])
     expect(apiMock.getAccounts).toHaveBeenCalledTimes(2)
+  })
+
+  it('evaluates once more when the running one ends, so the badge the write earned is there', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    const release = holdSettings()
+    const running = refreshAchievements()
+    expect(apiMock.getBudgets).toHaveBeenCalledTimes(1)
+
+    // POST /api/budgets lands after the running evaluation read the budgets.
+    calls.budgets = [firstBudget]
+    const asked = refreshAchievements()
+    release()
+    await Promise.all([running, asked])
+
+    expect(unlocks().map((u) => u.id)).toContain('first-budget')
+    expect(snapshot()!.budgets).toHaveLength(1)
+    expect(apiMock.getBudgets).toHaveBeenCalledTimes(2)
   })
 
   it('folds several asks into one more evaluation, and stops there', async () => {
