@@ -344,3 +344,95 @@ describe('engraving the seal', () => {
     expect(figure(c).dataset.engraving).toBeUndefined()
   })
 })
+
+describe('reading a month', () => {
+  /** Six months from April 2026, each spending a little more than the one before. */
+  const sixRising = () =>
+    snap(
+      months('2026-04', 6).flatMap((m, i) => aMonth(m, 4, 31457.25, 1000 + 250 * i)),
+      '2026-10-05'
+    )
+  const wedge = (c: HTMLElement, m: number) =>
+    c.querySelector(`[data-test-id="prints-wedge"][data-slot="${m}"]`)!
+  const tap = (el: Element) => el.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  const point = (el: Element, type: string, pointerType = 'mouse') =>
+    el.dispatchEvent(Object.assign(new Event(type), { pointerType }))
+  const faded = (c: HTMLElement) =>
+    [...q(c, 'prints-seal')!.querySelectorAll('[data-dim]')].map((g) => g.getAttribute('data-slot'))
+  const HINT = 'Tap a petal to see its month.'
+  const JUNE = 'June 2026 spent the fourth most of these 6 months, and kept money.'
+  const APRIL = 'April 2026 spent the least of these 6 months, and kept money.'
+  const SEPTEMBER = 'September 2026 spent the most of these 6 months, and kept money.'
+
+  it('gives the line of a tapped month and fades the others until it is tapped again', () => {
+    setSnapshot(sixRising())
+    const c = mount(() => <PrintsShelf />)
+    const readout = q(c, 'prints-readout')!
+    expect(readout.textContent).toBe(HINT)
+    expect(readout.getAttribute('aria-live')).toBe('polite')
+    // One target per month on the seal, hidden from assistive technology.
+    expect(c.querySelectorAll('[data-test-id="prints-wedge"]')).toHaveLength(6)
+    expect(wedge(c, 0).closest('svg')!.getAttribute('aria-hidden')).toBe('true')
+
+    tap(wedge(c, 2))
+    expect(readout.textContent).toBe(JUNE)
+    // Each month is a petal and a stretch of the band: both fade, June's stay.
+    expect(faded(c).sort()).toEqual(['0', '0', '1', '1', '3', '3', '4', '4', '5', '5'])
+
+    tap(wedge(c, 5))
+    expect(readout.textContent).toBe(SEPTEMBER)
+    tap(wedge(c, 5))
+    expect(readout.textContent).toBe(HINT)
+    expect(faded(c)).toEqual([])
+  })
+
+  it('previews the month a mouse points at, and goes back to the tapped one after', () => {
+    setSnapshot(sixRising())
+    const c = mount(() => <PrintsShelf />)
+    const readout = q(c, 'prints-readout')!
+    tap(wedge(c, 5))
+    point(wedge(c, 0), 'pointerenter')
+    expect(readout.textContent).toBe(APRIL)
+    expect(faded(c)).not.toContain('0')
+    point(wedge(c, 0), 'pointerleave')
+    expect(readout.textContent).toBe(SEPTEMBER)
+    // A finger touching down is no preview: the tap that follows picks the month.
+    point(wedge(c, 1), 'pointerenter', 'touch')
+    expect(readout.textContent).toBe(SEPTEMBER)
+  })
+
+  it('lists every month in clock order under Month by month', () => {
+    setSnapshot(sixRising())
+    const c = mount(() => <PrintsShelf />)
+    const list = q(c, 'prints-months')!
+    expect(list.querySelector('summary')?.textContent).toBe('Month by month')
+    const lines = [...list.querySelectorAll('li')].map((li) => li.textContent)
+    expect(lines).toHaveLength(6)
+    expect(lines[0]).toBe(APRIL)
+    expect(lines[2]).toBe(JUNE)
+    expect(lines[5]).toBe(SEPTEMBER)
+  })
+
+  it('clears when another print is featured', () => {
+    setSnapshot(
+      snap(
+        months('2000-01', 322).flatMap((m) => aMonth(m)),
+        '2026-10-15'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    tap(wedge(c, 3))
+    expect(q(c, 'prints-readout')!.textContent).not.toBe(HINT)
+    q(c, 'prints-every')!.querySelector<HTMLButtonElement>('[data-from="2003-01"]')!.click()
+    expect(q(c, 'prints-readout')!.textContent).toBe(HINT)
+    expect(faded(c)).toEqual([])
+  })
+
+  it('has nothing to read on an empty plate', () => {
+    setSnapshot(snap([], '2026-10-05'))
+    const c = mount(() => <PrintsShelf />)
+    expect(q(c, 'prints-readout')).toBeNull()
+    expect(q(c, 'prints-months')).toBeNull()
+    expect(c.querySelector('[data-test-id="prints-wedge"]')).toBeNull()
+  })
+})

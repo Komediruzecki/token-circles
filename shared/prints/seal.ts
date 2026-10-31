@@ -172,6 +172,19 @@ export function checkSlots(slots: readonly unknown[]): SealSlot[] {
 /** The angle at the start of slot `m`; the year starts at twelve o'clock and runs clockwise. */
 const slotStart = (m: number): number => -Math.PI / 2 + (m / SEAL_SLOTS) * TAU;
 
+/**
+ * Slot `m`'s whole 30-degree sector on the 1200-unit plate, as a path from radius `inner` to
+ * `outer`: by default from the hub's rim to the border's outer rule. The app lays these over a
+ * seal as the months' tap targets, far wider than a petal's lines.
+ */
+export function sealSector(m: number, inner = 62, outer = 568): string {
+  const pt = (r: number, a: number): string =>
+    `${Math.round((C + r * Math.cos(a)) * 10) / 10} ${Math.round((C + r * Math.sin(a)) * 10) / 10}`;
+  const a0 = slotStart(m);
+  const a1 = slotStart(m + 1);
+  return `M${pt(inner, a0)}L${pt(outer, a0)}A${outer} ${outer} 0 0 1 ${pt(outer, a1)}L${pt(inner, a1)}A${inner} ${inner} 0 0 0 ${pt(inner, a0)}Z`;
+}
+
 export function drawSeal(input: readonly SealSlot[], options: SealOptions): string {
   const slots = checkSlots(input);
   const g = GRAIN[options.detail ?? 'print'];

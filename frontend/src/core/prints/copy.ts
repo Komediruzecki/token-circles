@@ -42,6 +42,8 @@ export const LEGEND =
 export const SHAPE_LINE = 'Only the shape of your year is on it.'
 export const NEXT_HEADING = 'Next print'
 export const EVERY_HEADING = 'Every print'
+export const READOUT_IDLE = 'Tap a petal to see its month.'
+export const MONTHS_HEADING = 'Month by month'
 
 /** The eyebrow over a finished print: the first one by name, the rest by number. */
 export const printEyebrow = (k: number): string => (k === 1 ? FIRST_EYEBROW : `Print ${k}`)

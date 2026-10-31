@@ -1957,6 +1957,19 @@ check')` first, as the cushion and debt cases do.
   month; a reload engraves once more. Reduced motion never sets the attribute, and the CSS sits
   under `prefers-reduced-motion: no-preference`. The hour marks carry `class="seal-hours"` and
   their `--i` only when `engraveFrom` is given, so the pinned hashes do not move.
+- **Tap a petal to read its month** (`PrintsShelf.tsx`, `sealSector` in `shared/prints/seal.ts`).
+  Over the seal sits an `aria-hidden` SVG with one path per filled month (`data-test-id`
+  `prints-wedge`, `data-slot`): its whole 30-degree sector from the hub's rim (r 62) to the
+  border's outer rule (r 568), so the target is the sector, not the petal's thin lines. A tap or
+  click picks the month until it is tapped again; a mouse pointing at a sector previews it
+  (`pointerType === 'mouse'` only, so a finger's `pointerenter` does not). The readout under a
+  hairline (`prints-readout`, `aria-live="polite"`) gives `monthLine` for that month, or "Tap a
+  petal to see its month.", and the other months' petal and band groups get `data-dim` (45%
+  opacity, a 160 ms fade unless motion is reduced). The drawing is an `innerHTML` string, so an
+  effect marks its `[data-slot]` groups after each draw. "Month by month" (`prints-months`), a
+  `<details>` with a 48 px summary styled as the benchmark cards' one, lists every filled month's
+  line in clock order, so nothing needs a pointer. Featuring another print clears the reading;
+  the empty plate has nothing to read.
 
 ### Fixed
 

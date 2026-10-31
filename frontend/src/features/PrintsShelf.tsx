@@ -7,9 +7,9 @@
  * Everything here is worked out from the badges' snapshot each time (core/prints/shelf.ts); the
  * view it reads carries seal shares only, so no amount reaches the page.
  */
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
-import { sealSummary } from '../../../shared/prints/describe'
-import { drawSeal, PAPER, SEAL_SLOTS, THEME } from '../../../shared/prints/seal'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
+import { monthLine, sealSummary } from '../../../shared/prints/describe'
+import { drawSeal, PAPER, SEAL_SLOTS, sealSector, THEME } from '../../../shared/prints/seal'
 import { snapshot } from '../core/achievementsStore'
 import {
   EMPTY_LINE,
@@ -18,6 +18,7 @@ import {
   gapLine,
   holdsMonth,
   LEGEND,
+  MONTHS_HEADING,
   NEXT_HEADING,
   nextStart,
   periodOf,
@@ -25,6 +26,7 @@ import {
   plateTitle,
   printEyebrow,
   printWords,
+  READOUT_IDLE,
   runningLine,
   SHAPE_LINE,
   thumbLabel,
@@ -160,6 +162,53 @@ export default function PrintsShelf(): JSX.Element {
     return sealSummary(f.seal.slots, f.seal.from || '2000-01', printWords)
   })
 
+  /**
+   * Reading a month: a tap or click picks a month until it is tapped again, and a mouse pointing
+   * at a petal previews one. The readout gives its line and the other months fade. A different
+   * seal featured clears it.
+   */
+  const [reading, setReading] = createSignal<number | null>(null)
+  const [preview, setPreview] = createSignal<number | null>(null)
+  createEffect(
+    on(
+      () => {
+        const f = featured()
+        return f ? `${f.kind}:${f.seal.from}` : ''
+      },
+      () => {
+        setReading(null)
+        setPreview(null)
+      },
+      { defer: true }
+    )
+  )
+  /** The filled months, in clock order: the ones that can be read. */
+  const filledSlots = createMemo(() => {
+    const f = featured()
+    return f ? f.seal.slots.flatMap((slot, m) => (slot === null ? [] : [m])) : []
+  })
+  const shown = createMemo(() => {
+    const m = preview() ?? reading()
+    return m !== null && filledSlots().includes(m) ? m : null
+  })
+  const lineOf = (seal: PrintView, m: number): string =>
+    monthLine(seal.slots, seal.from, m, printWords)
+  const readout = createMemo(() => {
+    const f = featured()
+    const m = shown()
+    return f && m !== null ? lineOf(f.seal, m) : READOUT_IDLE
+  })
+
+  /** Fade every month but the one read; the drawing is a string, so this marks its groups. */
+  let sealEl: HTMLDivElement | undefined
+  createEffect(() => {
+    svg()
+    const m = shown()
+    sealEl?.querySelectorAll<SVGElement>('[data-slot]').forEach((g) => {
+      g.toggleAttribute('data-dim', m !== null && g.dataset.slot !== String(m))
+    })
+  })
+
   const plateThumb = (plate: PrintView): string =>
     drawSeal(plate.slots, { palette: THEME, detail: 'thumb' })
 
@@ -202,6 +251,7 @@ export default function PrintsShelf(): JSX.Element {
 
             <div class={styles.figure} ref={figure} data-test-id="prints-figure">
               <div
+                ref={sealEl}
                 class={styles.seal}
                 classList={{ [styles.paper]: f().kind === 'print' }}
                 role="img"
@@ -212,6 +262,29 @@ export default function PrintsShelf(): JSX.Element {
                 data-months={f().seal.months}
                 innerHTML={svg()}
               />
+              {/* Each month's whole sector is its tap target; the list below says the same. */}
+              <Show when={filledSlots().length > 0}>
+                <svg class={styles.wedges} viewBox="0 0 1200 1200" aria-hidden="true">
+                  <For each={filledSlots()}>
+                    {(m) => (
+                      <path
+                        d={sealSector(m)}
+                        data-test-id="prints-wedge"
+                        data-slot={m}
+                        onClick={() => {
+                          setReading((r) => (r === m ? null : m))
+                        }}
+                        onPointerEnter={(e) => {
+                          if (e.pointerType === 'mouse') setPreview(m)
+                        }}
+                        onPointerLeave={() => {
+                          setPreview((p) => (p === m ? null : p))
+                        }}
+                      />
+                    )}
+                  </For>
+                </svg>
+              </Show>
             </div>
 
             <div class={styles.rest}>
@@ -220,6 +293,17 @@ export default function PrintsShelf(): JSX.Element {
               </Show>
               <Show when={f().kind === 'print'}>
                 <p class={styles.legend}>{SHAPE_LINE}</p>
+              </Show>
+              <Show when={f().kind !== 'empty'}>
+                <p class={styles.readout} aria-live="polite" data-test-id="prints-readout">
+                  {readout()}
+                </p>
+                <details class={styles.months} data-test-id="prints-months">
+                  <summary>{MONTHS_HEADING}</summary>
+                  <ol>
+                    <For each={filledSlots()}>{(m) => <li>{lineOf(f().seal, m)}</li>}</For>
+                  </ol>
+                </details>
               </Show>
               <Show when={f().kind === 'print' && view()!.plate}>
                 {(plate) => (

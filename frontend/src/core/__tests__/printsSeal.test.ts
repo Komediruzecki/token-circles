@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { SAMPLE_FROM, SAMPLE_SHA256, SAMPLE_SLOTS } from '../../../../shared/fixtures/sealSample'
 import { monthLine, sealSummary } from '../../../../shared/prints/describe'
-import { drawSeal, PAPER, THEME } from '../../../../shared/prints/seal'
+import { drawSeal, PAPER, sealSector, THEME } from '../../../../shared/prints/seal'
 import { sealShares } from '../../../../shared/prints/shares'
 import { addMonths, monthReaching } from '../achievements/months'
 import { shelfOf } from '../prints/shelf'
@@ -168,5 +168,17 @@ describe('shelfOf', () => {
     expect(shelf.plate).toEqual({ from: '2023-09', months: 2 })
     expect(shelf.last).toBe('2023-10')
     expect(shelfOf([])).toEqual({ prints: [], plate: null, last: null })
+  })
+})
+
+describe('sealSector', () => {
+  it("spans a month's 30 degrees from the hub's rim to the border, clockwise from twelve", () => {
+    expect(sealSector(0)).toBe(
+      'M600 538L600 32A568 568 0 0 1 884 108.1L631 546.3A62 62 0 0 0 600 538Z'
+    )
+    // March, the fourth month, starts at three o'clock.
+    expect(sealSector(3).startsWith('M662 600L1168 600A568 568 0 0 1 ')).toBe(true)
+    // The last one closes the circle where the first began.
+    expect(sealSector(11)).toContain('A568 568 0 0 1 600 32L600 538A62 62 0 0 0 ')
   })
 })

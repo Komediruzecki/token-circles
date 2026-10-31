@@ -31,6 +31,24 @@
 }
 .figure {
   grid-area: seal;
+  position: relative;
+}
+/* The months' tap targets, laid exactly over the seal's square. */
+.wedges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.wedges path {
+  fill: transparent;
+  pointer-events: all;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* Every month but the one being read. */
+.seal :global([data-dim]) {
+  opacity: 0.45;
 }
 .rest {
   grid-area: rest;
@@ -79,6 +97,39 @@
   overflow: hidden;
   box-shadow: var(--shadow);
   outline: 1px solid var(--seal-sheet-edge);
+}
+.readout {
+  min-height: 3em;
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+/* As the benchmark cards' "Where this comes from": a 48 px row in the link colour. */
+.months summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary-hover);
+  cursor: pointer;
+}
+.months summary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.months ol {
+  margin: 0 0 6px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.months li + li {
+  margin-top: 4px;
 }
 .next {
   display: flex;
@@ -154,6 +205,9 @@
       'every';
     grid-template-rows: none;
   }
+  .readout {
+    min-height: 4.5em;
+  }
   .figure {
     justify-self: center;
     width: 100%;
@@ -180,6 +234,9 @@
    drawn, `engraving` draws it. With neither the seal is finished, which is all reduced motion ever
    shows. */
 @media (prefers-reduced-motion: no-preference) {
+  .seal :global([data-slot]) {
+    transition: opacity 160ms ease;
+  }
   .figure[data-engraving='armed'] :global(.seal-petal):not([data-drawn]) path {
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
