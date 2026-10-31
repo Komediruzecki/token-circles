@@ -35,12 +35,8 @@
 .chip:has(.radio:checked) {
   border-color: var(--primary);
   background: var(--primary);
-  color: #ffffff;
+  color: var(--on-primary);
   font-weight: 600;
-}
-
-:global([data-theme='dark']) .chip:has(.radio:checked) {
-  color: var(--bg);
 }
 
 .chip:has(.radio:focus-visible) {

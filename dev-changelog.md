@@ -1614,6 +1614,10 @@ check')` first, as the cushion and debt cases do.
   category on 90% of your spending.", with the gap after it while no step on the view says it.
 - **Tests:** `guidanceCircleView.test.ts`. Fails before the change (2 tests).
 
+- **The chosen answer chips read `--on-primary`** (`components/guidance/Questions.module.css`,
+  `SpaceQuestions.module.css`): white with a dark-theme override to `--bg` before, the same
+  colours, now from the token main's contrast fix added; `primaryFillText.test.ts` flagged both.
+
 ### Fixed
 
 - **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
