@@ -2041,18 +2041,22 @@ check')` first, as the cushion and debt cases do.
   - deleting a month's entries takes the print away while "A year" stays earned;
   - Share downloading a 1200 by 1200 PNG where the share sheet takes no files.
 
-  `prints-layout.spec.ts` checks the drawing in six cases:
+  `prints-layout.spec.ts` checks the drawing in seven cases:
   - one column at 390 and the seal beside its words at 1280, in both themes;
   - nothing past the screen's edge at 320, 360 and 390 with 26 prints. The app clips sideways
     overflow, so the case measures every part's right edge rather than the page's width;
   - text at 12 px and controls at 48 px, with the month list open;
+  - a print focused from the keyboard at 390 with its whole ring inside the strip: the first
+    print, the pressed one, the first in view after a scroll, and the last;
   - ink, band and copper at 3:1 on the card, measured in the page;
   - reduced motion showing a finished print;
   - an engraving that waits out of view past the 3 s fallback, then finishes.
 
   Each layout case failed with what it guards broken: the strip's desktop grid, a light copper of
   `#f0c8a8`, motion not reduced, the fallback starting out of view, the 640 px breakpoint, a 32 px
-  Share, an 11 px month list, and the strip without both of its narrowing rules.
+  Share, an 11 px month list, the strip without both of its narrowing rules, and the strip without
+  its room for the ring on any one side, without its scroll padding, or with the pressed print's
+  ring drawn inside it.
 
 - **The seal's words when months tie or spend nothing** (`shared/prints/describe.ts`). Months
   with equal spending shares share a rank, and shares are whole percents of the heaviest month,
@@ -2080,6 +2084,17 @@ check')` first, as the cushion and debt cases do.
   `openPrints` knows which: it sets a marker the page reads once (`printsAsked`), and mounting
   clears one the page was not there to hear. `progressCircles.test.tsx` fails with the row put
   after the prints, without the marker, or without the clear on mount.
+- **A focused print's ring shows whole on a phone** (`PrintsShelf.module.css`). At 640 px and
+  under, the strip scrolls sideways, and a box that scrolls clips what its children draw outside
+  it: the focus ring, 2 px wide and 3 px out, lost its top on every print and its left on the
+  first. The strip now keeps 5 px clear on every side (`padding: 5px 5px 6px`, given back by
+  `margin: 5px -5px 0`, so the prints line up as before) and has `scroll-padding-inline: 5px`. A
+  snap therefore stops a print 5 px in from the edge rather than flush with it, which, without the
+  scroll padding, it did even before any scroll. The pressed print's ring, which phones drew inside
+  the print, is outside again as on a desktop. Inside, it sat on the cream paper at 2.41:1 in the
+  dark theme, and a focused pressed print's ring at 1.84:1. Outside, on the card, they measure
+  6.22 and 8.15:1 (4.63 and 6.09:1 in the light theme). `prints-layout.spec.ts` fails with any of
+  those changes taken out.
 
 ### Fixed
 

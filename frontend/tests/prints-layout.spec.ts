@@ -1,9 +1,10 @@
 /**
  * Prints on Progress as drawn (first week, phase 4): one column on a phone and the seal beside its
  * words on a desktop, nothing past the screen's edge down to 320 px with 26 prints, text and
- * controls at the circles' sizes, the seal's marks at 3:1 on the card in both themes, and the
- * engraving: it waits for the seal to be in view, always finishes, and never runs under reduced
- * motion. Local-first, on the example profiles (every month from January 2000) or a new space.
+ * controls at the circles' sizes, a focused print's whole ring inside the phone's strip, the
+ * seal's marks at 3:1 on the card in both themes, and the engraving: it waits for the seal to be
+ * in view, always finishes, and never runs under reduced motion. Local-first, on the example
+ * profiles (every month from January 2000) or a new space.
  *
  * The app clips sideways overflow (`overflow-x: clip` on html, body and `.main`), so the page
  * itself never scrolls sideways: a part too wide is cut off at the screen's edge instead. These
@@ -154,6 +155,85 @@ test.describe('Prints as drawn', () => {
       expect(m.rightmost, `${width}: the right edge`).toBeLessThanOrEqual(width + 0.5)
       expect(strip.holds, `${width}: the strip`).toBeGreaterThan(strip.shows)
     }
+  })
+
+  // On a phone the strip scrolls sideways, and a box that scrolls clips what its children draw
+  // outside it: the focus ring is drawn 3 px outside the print. Inside the print it would sit on
+  // the cream paper, at 1.84:1 in the dark theme, so the ring stays outside, pressed print or not.
+  test('a print focused from the keyboard at 390 shows its whole ring: first, pressed, after a scroll, last', async ({
+    page,
+  }) => {
+    await page.setViewportSize(PHONE)
+    await examplePrints(page)
+    const strip = page.getByTestId('prints-every')
+    const thumbs = strip.getByRole('button')
+    await strip.scrollIntoViewIfNeeded()
+    /** The focused print's ring: how far it reaches outside the print, and past each of the
+     * strip's clipping edges (more than 0 is cut off). */
+    const ring = () =>
+      page.evaluate(() => {
+        const thumb = document.activeElement as HTMLElement
+        const box = thumb.closest('[data-test-id="prints-every"]')!
+        const style = getComputedStyle(thumb)
+        const out = parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
+        const t = thumb.getBoundingClientRect()
+        const s = box.getBoundingClientRect()
+        const top = s.top + box.clientTop
+        const left = s.left + box.clientLeft
+        return {
+          from: thumb.dataset.from,
+          keyboard: thumb.matches(':focus-visible'),
+          pressed: thumb.getAttribute('aria-pressed'),
+          out,
+          past: {
+            top: top - (t.top - out),
+            left: left - (t.left - out),
+            bottom: t.bottom + out - (top + box.clientHeight),
+            right: t.right + out - (left + box.clientWidth),
+          },
+        }
+      })
+    const fits = (r: Awaited<ReturnType<typeof ring>>, which: string) => {
+      expect(r.keyboard, `${which}: focus from the keyboard`).toBe(true)
+      expect.soft(r.out, `${which}: the ring outside the print`).toBeGreaterThan(0)
+      for (const [side, past] of Object.entries(r.past)) {
+        expect.soft(past, `${which}: the ring's ${side} edge`).toBeLessThanOrEqual(0)
+      }
+    }
+
+    // Feature the second print, so the first, at the strip's left edge, is not pressed.
+    await thumbs.nth(1).click()
+    await expect(thumbs.nth(0)).toHaveAttribute('aria-pressed', 'false')
+    await page.keyboard.press('Shift+Tab')
+    const first = await ring()
+    expect(first.from).toBe(await thumbs.nth(0).getAttribute('data-from'))
+    fits(first, 'the first print')
+
+    await page.keyboard.press('Tab')
+    const pressed = await ring()
+    expect(pressed.pressed).toBe('true')
+    fits(pressed, 'the pressed print')
+
+    // Scrolled along, the strip snaps to a print's start, which stops 5 px in from its edge. The
+    // first print wholly in view there takes the focus (still shown, as the last focus was).
+    await strip.evaluate((el) => {
+      const [a, b] = el.querySelectorAll('button')
+      el.scrollLeft = 3 * (b.getBoundingClientRect().left - a.getBoundingClientRect().left) + 2
+    })
+    expect(await strip.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0)
+    await strip.evaluate((el) => {
+      const edge = el.getBoundingClientRect().left + el.clientLeft
+      const all = [...el.querySelectorAll('button')]
+      all.find((b) => b.getBoundingClientRect().left >= edge)?.focus({ preventScroll: true })
+    })
+    fits(await ring(), 'the first print in view once the strip has scrolled')
+
+    await thumbs.last().focus()
+    await page.keyboard.press('Shift+Tab')
+    await page.keyboard.press('Tab')
+    const last = await ring()
+    expect(last.from).toBe(await thumbs.last().getAttribute('data-from'))
+    fits(last, 'the last print')
   })
 
   test("the seal's marks hold 3:1 on their ground in both themes", async ({ page }) => {

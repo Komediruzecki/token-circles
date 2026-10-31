@@ -241,19 +241,22 @@
     max-width: 340px;
     margin: 6px 0 4px;
   }
-  /* On a phone the prints sit in one row that scrolls inside itself, newest first. */
+  /* On a phone the prints sit in one row that scrolls inside itself, newest first. A box that
+     scrolls clips what its children draw outside it, so the strip keeps 5 px clear on every side
+     for the rings drawn around a print (focus reaches 5 px out, pressed 4 px), also where a
+     scroll or a snap stops, and gives the room back as a negative margin so the prints still line
+     up with the words above them. */
   .strip {
     display: flex;
     overflow-x: auto;
-    padding-bottom: 6px;
+    margin: 5px -5px 0;
+    padding: 5px 5px 6px;
+    scroll-padding-inline: 5px;
     scroll-snap-type: x proximity;
   }
   .strip > li {
     flex: none;
     scroll-snap-align: start;
-  }
-  .thumb[aria-pressed='true'] {
-    outline-offset: -3px;
   }
 }
 
