@@ -166,6 +166,73 @@ test.describe('the setup wizard on the account @smoke', () => {
     }
   })
 
+  test('reopened at the statement, an import goes into the account made before, on the Worker', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+
+      // The main account, with what it holds today.
+      await page.getByTestId('onboarding-account-name').fill('Main Checking')
+      await page.getByTestId('onboarding-account-balance').fill('1500')
+      const reached = recordWrite(page, (sent) => sent.step === 'import')
+      await page.getByTestId('onboarding-account-create').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await reached
+
+      // Back on the account step: the account is listed, and the form is blank for another.
+      await page.getByTestId('onboarding-back').click()
+      await expect(page.getByTestId('onboarding-account-chip')).toHaveCount(1)
+      await expect(page.getByTestId('onboarding-account-chip')).toContainText('Main Checking')
+      await expect(page.getByTestId('onboarding-account-name')).toHaveValue('')
+      await expect(page.getByTestId('onboarding-account-balance')).toHaveValue('')
+
+      // Off to the bank to export the statement, and back: setup reopens at the statement, and
+      // the statement goes into the account it has, not into a new one beside it.
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await page
+        .getByTestId('onboarding-import-input')
+        .setInputFiles('tests/fixtures/revolut-sample.csv')
+      await expect(page.getByTestId('onboarding-import-file')).toHaveAttribute(
+        'data-state',
+        'ready',
+        { timeout: 30_000 }
+      )
+      await expect(page.getByTestId('onboarding-import-target')).toHaveValue('Main Checking')
+      const importAll = page.getByTestId('onboarding-import-selected')
+      await expect(importAll).toHaveText('Import 7')
+      const subscriptions = recordWrite(page, (sent) => sent.step === 'subscriptions')
+      await importAll.click()
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+      await subscriptions
+
+      // On the Worker: still the one account, holding the statement's seven transactions.
+      const accounts = (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+        id: number
+        name: string
+      }[]
+      expect(accounts.map((a) => a.name)).toEqual(['Main Checking'])
+      const listed = await ctx.request.get(
+        `${E2E_BASE}/api/transactions?account_id=${String(accounts[0].id)}`
+      )
+      expect(listed.ok(), `GET /api/transactions: ${String(listed.status())}`).toBeTruthy()
+      expect(((await listed.json()) as { total: number }).total).toBe(7)
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
   test('a skip is kept on the account, and another browser on it opens no wizard', async ({
     page,
     browser,

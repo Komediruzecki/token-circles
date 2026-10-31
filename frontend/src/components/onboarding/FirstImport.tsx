@@ -137,10 +137,21 @@ export function createFirstImport(options: FirstImportOptions) {
   const suggestedName = (row: BankFileRow) =>
     [bankLabel(row.bankId), row.meta.currency].filter(Boolean).join(' ') || 'Imported account'
 
+  /**
+   * Where a statement goes when its bank names no account the profile has: the account setup made
+   * on this visit; else one the profile has already (setup reopened at this step, or run again),
+   * the newest in the statement's currency, else the newest; a new account only on a profile with
+   * none. A new one beside an account the person just added would split their money in two.
+   */
   const defaultTarget = (row: BankFileRow) => {
+    const accounts = flow.bankAccounts()
     const preferred = options.preferredAccount()
-    if (preferred && flow.bankAccounts().some((a) => a.name === preferred)) return preferred
-    return suggestedName(row)
+    if (preferred && accounts.some((a) => a.name === preferred)) return preferred
+    if (accounts.length === 0) return suggestedName(row)
+    const currency = row.meta.currency?.toUpperCase()
+    const same = accounts.filter((a) => currency && a.currency?.toUpperCase() === currency)
+    const pool = same.length > 0 ? same : accounts
+    return pool.reduce((newest, a) => (a.id > newest.id ? a : newest), pool[0]).name
   }
 
   const targetChoices = (): TargetChoice[] => {

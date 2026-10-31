@@ -199,6 +199,55 @@ describe('a statement from a bank the app reads', () => {
     expect(await transactions()).toHaveLength(7)
   })
 
+  it('reopened at this step, goes into the account the profile has, not a new one', async () => {
+    // Setup left at the statement (to go and export it) reopens here, with nothing made on this
+    // visit; so does setup run again over a profile that has an account.
+    const db = await getDB()
+    const main = (await db.add('accounts', {
+      name: 'Main Checking',
+      type: 'giro',
+      currency: 'EUR',
+      balance: 1500,
+      profile_id: 1,
+    })) as number
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+
+    expect(options().find((o) => o.selected)?.text).toBe('Main Checking')
+    byTestId('onboarding-import-selected')!.click()
+    await vi.waitFor(() => {
+      expect(onboardingStep()).toBe('subscriptions')
+    }, waitLong)
+    expect((await accounts()).map((a) => a.name)).toEqual(['Main Checking'])
+    const stored = await transactions()
+    expect(stored).toHaveLength(7)
+    expect(new Set(stored.map((t) => t.account_id))).toEqual(new Set([main]))
+  })
+
+  it("reopened with several accounts, picks the newest in the statement's currency", async () => {
+    const db = await getDB()
+    for (const [name, currency] of [
+      ['Old euros', 'EUR'],
+      ['New euros', 'EUR'],
+      ['Dollars', 'USD'],
+    ]) {
+      await db.add('accounts', { name, type: 'giro', currency, balance: 100, profile_id: 1 })
+    }
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+
+    // The newest account is in dollars; the statement is in euros.
+    expect(options().find((o) => o.selected)?.text).toBe('New euros')
+    expect(options().map((o) => o.text)).toEqual([
+      'Old euros',
+      'New euros',
+      'Dollars',
+      expect.stringMatching(/^New account: Revolut/),
+    ])
+  })
+
   it('counts a row the statement repeats once, as the import does', async () => {
     await openAt('import')
     // The last row twice, to the second: the statement's own repeat, left out of the import.

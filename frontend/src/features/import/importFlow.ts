@@ -312,7 +312,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   const bankFilesMissingAccount = (): number[] =>
     showBankFieldErrors() ? rowsMissingAccount(bankFiles()) : []
   const [bankAccounts, setBankAccounts] = createSignal<
-    { id: number; name: string; bank_name?: string | null }[]
+    { id: number; name: string; bank_name?: string | null; currency?: string | null }[]
   >([])
   const [bankWarnings, setBankWarnings] = createSignal<string[]>([])
 
@@ -914,6 +914,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
             id: a.id as number,
             name: a.name as string,
             bank_name: (a.bank_name as string) ?? null,
+            currency: typeof a.currency === 'string' ? a.currency : null,
           }))
         )
       }
