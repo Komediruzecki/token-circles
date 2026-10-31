@@ -13,6 +13,7 @@ export const WIDGET_STORAGE_KEY = 'dashboard_widgets'
 export const DEFAULT_WIDGET_ORDER = [
   'badges',
   'metrics',
+  'savings-gauge',
   'deck-sankey',
   'deck-heatmap',
   'deck-radar',
@@ -22,7 +23,6 @@ export const DEFAULT_WIDGET_ORDER = [
   'category-chart',
   'recent-transactions',
   'upcoming-bills',
-  'savings-rate',
   'budget-alerts',
   'recurring-insights',
   'income-vs-expenses',
@@ -35,6 +35,7 @@ export const ALL_WIDGET_IDS = DEFAULT_WIDGET_ORDER
 export const DEFAULT_VISIBLE = [
   'badges',
   'metrics',
+  'savings-gauge',
   'deck-sankey',
   'deck-heatmap',
   'deck-radar',
@@ -56,14 +57,17 @@ export function loadWidgetPrefs(): WidgetPrefs {
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
+      // Ids this build no longer has are dropped: `savings-rate`, which the savings gauge
+      // replaced, would otherwise stay in the Views list switching nothing on or off.
+      const known = (ids: unknown[]): string[] =>
+        ids.filter((id): id is string => typeof id === 'string' && ALL_WIDGET_IDS.includes(id))
       const visible: string[] =
         parsed.visibleWidgets && Array.isArray(parsed.visibleWidgets)
-          ? parsed.visibleWidgets
+          ? known(parsed.visibleWidgets)
           : [...DEFAULT_VISIBLE]
-      const order: string[] =
-        parsed.widgetOrder && Array.isArray(parsed.widgetOrder) && parsed.widgetOrder.length > 0
-          ? parsed.widgetOrder
-          : [...DEFAULT_WIDGET_ORDER]
+      const savedOrder =
+        parsed.widgetOrder && Array.isArray(parsed.widgetOrder) ? known(parsed.widgetOrder) : []
+      const order: string[] = savedOrder.length > 0 ? savedOrder : [...DEFAULT_WIDGET_ORDER]
       // Widgets added after the user saved their layout: splice them in (a saved
       // order that predates a widget would otherwise hide it forever). An id
       // missing from the saved order is new — user-hidden ids stay in order.

@@ -9,8 +9,9 @@
  *    emoji. Branding rides on hosted images from the app's origin.
  *  - Every renderer also returns a plain-text twin (deliverability + a11y).
  *  - Renderers are pure (no I/O, no Env) so they can be unit-tested and
- *    previewed; callers pass links/currency in. This module imports nothing, so
- *    worker/scripts/ can load it under plain Node as well.
+ *    previewed; callers pass links/currency in. This module imports only
+ *    shared/confirmLinkSignIn.ts, by file name, so worker/scripts/ can load it
+ *    under plain Node as well.
  *
  * Every mail is on one layout, the mail layout of 2026-10-11 (renderMail): the engraved art, dark
  * by default and paper in light mode. The four mails that show an amount of money (the budget
@@ -20,6 +21,12 @@
  * stays, because mails already sent still point at it. worker/test/mail-catalogue.test.ts pins
  * the four over a grid of inputs.
  */
+
+import {
+  CONFIRM_LINK_SIGN_IN,
+  notYourSignUp,
+  whereTheLinkSignsIn,
+} from '../../shared/confirmLinkSignIn.ts';
 
 // ── Brand constants ───────────────────────────────────────────────────────────
 
@@ -264,6 +271,8 @@ export interface MailSpec {
   reason: string;
   /** The reminders' one-click unsubscribe link, in the footer after the reason. */
   unsubUrl?: string | null;
+  /** The words of that link, where it stops less than every mail: "Stop first-week mails". */
+  unsubLabel?: string;
   /**
    * The mail goes to an address that is not confirmed yet, with the link that confirms it. It then
    * carries no link into the app, the wordmark's and the text twin's "Open the app" included: a
@@ -400,7 +409,7 @@ const footerLink = ({ label, href }: MailLink, color: string = INK.link, cls = '
  * The footer, centred under the card, one block a line: the tagline, the links, the copyright,
  * the contact address, and then, set apart, why this mail came with its unsubscribe link.
  */
-function mailFooter(reason: string, unsubUrl?: string | null): string {
+function mailFooter(reason: string, unsubUrl?: string | null, unsubLabel = 'Unsubscribe'): string {
   // Each sentence of the tagline holds together, so a phone breaks it between them and never
   // after "local-", which left "first." alone on a line at 375 px.
   const taglineHtml = TAGLINE.split('. ')
@@ -417,12 +426,17 @@ ${p('0 0 12px', 14, taglineHtml)}
 ${p('0 0 14px', 13, FOOTER_LINKS.map((link) => footerLink(link)).join(dot), 'white-space:nowrap')}
 ${p('0 0 4px', 12, `&copy; ${new Date().getUTCFullYear()} ${BRAND} &middot; AGPL-3.0`, 'white-space:nowrap')}
 ${p('0', 12, footerLink({ label: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` }, INK.muted, 'tc-muted'))}
-${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: 'Unsubscribe', href: unsubUrl })}` : ''}`)}
+${p('18px 0 0', 12, `${escapeHtml(reason)}${unsubUrl ? ` ${footerLink({ label: unsubLabel, href: unsubUrl })}` : ''}`)}
 </td></tr>`;
 }
 
 /** The text twin's last lines, the same for every mail on this layout, in the footer's order. */
-const mailTextFooter = (reason: string, unsubUrl?: string | null, unconfirmed = false) =>
+const mailTextFooter = (
+  reason: string,
+  unsubUrl?: string | null,
+  unconfirmed = false,
+  unsubLabel = 'Unsubscribe'
+) =>
   [
     TAGLINE,
     ...(unconfirmed ? [] : [`Open the app: ${APP_URL}`]),
@@ -431,7 +445,7 @@ const mailTextFooter = (reason: string, unsubUrl?: string | null, unconfirmed = 
     CONTACT_EMAIL,
     '',
     reason,
-    ...(unsubUrl ? [`Unsubscribe: ${unsubUrl}`] : []),
+    ...(unsubUrl ? [`${unsubLabel}: ${unsubUrl}`] : []),
   ].join('\n');
 
 /** One mail on the layout: its HTML and its plain-text twin, from the same words. */
@@ -489,7 +503,7 @@ ${mailStyle(!!spec.tables)}
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
 <tr><td style="padding:2px 6px 14px">${spec.unconfirmed ? wordmark : `<a class="tc-text" href="${APP_URL}" style="text-decoration:none;color:${INK.text}">${wordmark}</a>`}</td></tr>
 <tr><td class="tc-card" bgcolor="${INK.card}" style="background:${INK.card};border-radius:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${rows}</table></td></tr>
-${mailFooter(spec.reason, spec.unsubUrl)}
+${mailFooter(spec.reason, spec.unsubUrl, spec.unsubLabel)}
 </table>
 <!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
@@ -517,7 +531,7 @@ ${mailFooter(spec.reason, spec.unsubUrl)}
       : []),
     ...(spec.signOff ? [spec.signOff] : []),
     ...(spec.aside ? [spec.aside] : []),
-    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed),
+    mailTextFooter(spec.reason, spec.unsubUrl, spec.unconfirmed, spec.unsubLabel),
   ].join('\n\n');
   // The footer's unsubscribe link is also the List-Unsubscribe header sendMail sends, so the two
   // can never name different links.
@@ -531,32 +545,73 @@ ${mailFooter(spec.reason, spec.unsubUrl)}
 
 // ── Renderers ─────────────────────────────────────────────────────────────────
 //
-// The sign-up mails: the Welcome and a fresh confirm link, on the mail layout.
+// The sign-up mails: Confirm, its fresh link, and the Welcome, on the mail layout.
 //
-// A password sign-up gets one mail, the Welcome with its confirm link (routes/auth.ts): the link is
-// the one thing to do, and the steps say where to start once the account is open. A Google sign-up
-// gets the Welcome without a link, its address confirmed by Google. #620 splits these into Confirm
-// and a Welcome sent once the address is confirmed; that needs a migration main does not have yet.
+// A password sign-up gets Confirm, which carries the link that opens the account and nothing
+// else. The Welcome comes once the address is confirmed (by that link, Google sign-in, an emailed
+// sign-in code or a reset link), or at once for a Google sign-up, whose address Google confirmed:
+// worker/src/welcome.ts decides when, and makes sure it goes once. Confirm and the fresh link go to
+// an address that is not confirmed yet, so neither links into the app (MailSpec.unconfirmed).
 
 /** How long a link lasts, in words. */
 const lasts = (hours: number) => (hours === 1 ? '1 hour' : `${hours} hours`);
 
-/** What both confirm mails say to someone who never signed up. */
-const NOT_YOU = `Didn't sign up for ${BRAND}? Ignore this mail. Nobody can use the account until this address is confirmed.`;
+/**
+ * What both confirm mails say to someone who never signed up. While the link signs in by itself,
+ * that is "Don't open the link", since opening it is what signs in. Read when a mail is rendered,
+ * as the rule is (shared/confirmLinkSignIn.ts).
+ */
+const notYou = () =>
+  `${notYourSignUp(BRAND)} Nobody can use the account until this address is confirmed.`;
 
 /** Why a mail with a confirm link came. */
 const SIGNED_UP = `You are getting this because this address was used to sign up for ${BRAND}.`;
+
+/**
+ * Confirm: the mail a password sign-up gets, with the link that opens the account.
+ *
+ * It says what the link does (shared/confirmLinkSignIn.ts). Opened in the browser that signed up,
+ * while the sign-up's marker lasts, the link confirms the address and signs in (signup-marker.ts):
+ * the one click the headline promises, by maff's call of 2026-10-11. Anywhere else, or later, it
+ * asks for the password, and that sign-in confirms the address (email-link.ts). With the
+ * same-browser sign-in off, the mail says the second way only.
+ */
+export function renderConfirmEmail(opts: {
+  link: string;
+  ttlHours: number;
+  assetOrigin?: string;
+}): RenderedEmail {
+  const oneClick = CONFIRM_LINK_SIGN_IN.sameBrowser;
+  return renderMail({
+    subject: `Confirm your email for ${BRAND}`,
+    preheader: oneClick
+      ? `Confirm your address. The link works for ${lasts(opts.ttlHours)}.`
+      : `Open the link, then sign in where it opens. It works for ${lasts(opts.ttlHours)}.`,
+    art: 'banner',
+    headline: oneClick ? "One click and you're in." : "One link, one sign-in, and you're in.",
+    paragraphs: [
+      `This link confirms your address and opens your ${BRAND} account. ${whereTheLinkSignsIn()}`,
+    ],
+    buttons: [{ label: 'Confirm my email', href: opts.link }],
+    notes: [
+      `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
+    ],
+    paste: opts.link,
+    aside: notYou(),
+    unconfirmed: true,
+    reason: SIGNED_UP,
+    assetOrigin: opts.assetOrigin,
+  });
+}
 
 /**
  * A fresh confirm link: Send the link again, or a sign-up again for an address still waiting for
  * its link, which an inbox gets without having asked, so the mail says nothing of asking. Minting
  * it retires the links sent before it (createEmailVerification), and the mail says so.
  *
- * It says what the link does today. It spends itself at once where its own account is signed in
- * (a link asked for from the Confirm your email screen, in that session); anywhere else it asks
- * for a sign-in, in any browser, and that sign-in confirms the address (email-link.ts). So the
- * sign-in is conditional here. It promises nothing more until the same-browser sign-in ships,
- * which is when a mail can say "One click" again (maff's call of 2026-10-11).
+ * It says what the link does (shared/confirmLinkSignIn.ts), as Confirm does. It also spends itself
+ * at once where its own account is signed in (a link asked for from the Confirm your email screen,
+ * in that session).
  */
 export function renderEmailVerification(opts: {
   link: string;
@@ -570,21 +625,21 @@ export function renderEmailVerification(opts: {
     headline: "Here's a fresh link.",
     paragraphs: [
       'Use this link to confirm your address. It replaces the ones sent before.',
-      `If it asks you to sign in, sign in right there, in this browser or any other, and your ${BRAND} account opens.`,
+      whereTheLinkSignsIn(),
     ],
     buttons: [{ label: 'Confirm my email', href: opts.link }],
     notes: [
       `The link works once, for ${lasts(opts.ttlHours)}. Run out? Open it anyway and choose Send the link again.`,
     ],
     paste: opts.link,
-    aside: NOT_YOU,
+    aside: notYou(),
     unconfirmed: true,
     reason: SIGNED_UP,
     assetOrigin: opts.assetOrigin,
   });
 }
 
-/** Where to start, in both welcomes: the three pages, and why each. */
+/** Where the Welcome says to start: the three pages, and why each. */
 const WELCOME_STEPS = [
   {
     title: 'Bring your history',
@@ -610,42 +665,9 @@ const WELCOME_STEPS = [
  * The Welcome. Step 3 is the version for before finance prints ship: what Progress counts, and the
  * badge a year earns (frontend/src/core/achievements/definitions.ts). `appUrl` is the app the links
  * open; the art loads from `assetOrigin`, or from the app.
- *
- * With `verifyUrl`, the welcome of a password sign-up: the confirm link is its button, and the steps
- * carry no links, because before the address is confirmed a sign-in is refused and a page link
- * would open on a sign-in that fails. It does not say how long the link lasts: the caller passes
- * only the link, and the link's own page offers Send the link again once it has run out.
  */
-export function renderWelcome(
-  opts: { appUrl?: string; assetOrigin?: string; verifyUrl?: string } = {}
-): RenderedEmail {
+export function renderWelcome(opts: { appUrl?: string; assetOrigin?: string } = {}): RenderedEmail {
   const app = opts.appUrl || APP_URL;
-  const assetOrigin = opts.assetOrigin || opts.appUrl;
-  const confirm = opts.verifyUrl;
-  if (confirm) {
-    return renderMail({
-      subject: `Welcome to ${BRAND}: confirm your email`,
-      preheader: 'Open the link, then sign in where it opens. Your account opens with it.',
-      art: 'hero',
-      eyebrow: `Welcome to ${BRAND}`,
-      headline: "One link, one sign-in, and you're in.",
-      paragraphs: [
-        `Open the link in any browser and sign in there. That confirms this address and opens your ${BRAND} account.`,
-        `${BRAND} shows where your money goes, month by month, for you alone or for a whole household. The more history it can read, the more it can tell you, so begin with a year of statements from your bank.`,
-      ],
-      buttons: [{ label: 'Confirm my email', href: confirm }],
-      notes: ['The link works once. Run out? Open it anyway and choose Send the link again.'],
-      paste: confirm,
-      steps: {
-        title: 'Once you are in',
-        items: WELCOME_STEPS.map(({ title, text }) => ({ title, text })),
-      },
-      aside: NOT_YOU,
-      unconfirmed: true,
-      reason: SIGNED_UP,
-      assetOrigin,
-    });
-  }
   return renderMail({
     subject: `${BRAND} is ready for your first statement`,
     preheader: 'Import a year from your bank and the app has something to show you on day one.',
@@ -667,7 +689,7 @@ export function renderWelcome(
     },
     signOff: "Questions, or a bank file that won't import? Reply to this mail.",
     reason: `You are getting this because a ${BRAND} account was created with this address.`,
-    assetOrigin,
+    assetOrigin: opts.assetOrigin || opts.appUrl,
   });
 }
 
@@ -732,7 +754,11 @@ export function renderEmailChangeNotice(opts: {
   });
 }
 
-/** Anti-enumeration notice: someone tried to sign up with an address that has an account. */
+/**
+ * Anti-enumeration notice: someone tried to sign up with an address that has an account. Sign in
+ * opens the app; Reset password opens its sign-in screen on the form that sends a reset link
+ * (#forgot-password, frontend/src/components/LoginScreen.tsx).
+ */
 export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
   const app = opts.appUrl || APP_URL;
   return renderMail({
@@ -742,9 +768,12 @@ export function renderAccountExists(opts: { appUrl?: string }): RenderedEmail {
     headline: 'This address already has an account.',
     paragraphs: [
       `Someone just tried to create a ${BRAND} account with this email address, but one already exists.`,
-      "If that was you, sign in, or reset your password from the sign-in screen if you've forgotten it. If it wasn't, there's nothing to do: your account is unchanged.",
+      "If that was you, sign in, or reset your password if you've forgotten it. If it wasn't, there's nothing to do: your account is unchanged.",
     ],
-    buttons: [{ label: 'Sign in', href: app }],
+    buttons: [
+      { label: 'Sign in', href: app },
+      { label: 'Reset password', href: `${app}/#forgot-password` },
+    ],
     reason: `You are getting this because someone tried to sign up for ${BRAND} with this address.`,
     assetOrigin: opts.appUrl,
   });
@@ -1181,5 +1210,132 @@ export function renderSupportAck(opts: { ticketId: string; assetOrigin?: string 
     aside: "Didn't write to us? Ignore this mail.",
     reason: `You are getting this because this address was given with a message to ${BRAND} support.`,
     assetOrigin: opts.assetOrigin,
+  });
+}
+
+// ── Week one ──────────────────────────────────────────────────────────────────
+//
+// Two mails at most in an account's first week (weekOne.ts decides who gets which): day 2, only
+// while nothing is imported, on getting a year of statements out of the bank; day 7, only after an
+// import, with what the week found. Day 7 holds counts and never an amount: amounts stay in the app.
+// Each carries a stop link for these two mails alone, which weekOne.ts also sends as one-click
+// List-Unsubscribe headers.
+
+/** The footer link of the week-one mails: it stops these two and nothing else. */
+export const WEEK_ONE_UNSUB_LABEL = 'Stop first-week mails';
+
+/** Day 2: how to get a year of statements out of the bank, for an account with no import yet. */
+export function renderWeekOneDay2(
+  opts: { appUrl?: string; assetOrigin?: string; unsubUrl?: string | null } = {}
+): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  return renderMail({
+    subject: 'How to get a year of statements out of your bank',
+    preheader: 'Most banks hand over a year of transactions as one CSV or Excel file.',
+    art: 'banner',
+    artHref: `${app}/#import`,
+    eyebrow: 'Your first week',
+    headline: 'Your bank already has your year.',
+    paragraphs: [
+      "Most banks let you download your transactions as a CSV or Excel file. In online banking, open the account's transactions, look for Export or Download, and choose the last 12 months. A PDF statement won't import, so pick CSV or Excel.",
+      'Files from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped, so a longer range does no harm.',
+    ],
+    buttons: [{ label: 'Import statements', href: `${app}/#import` }],
+    signOff: "Can't find your bank's export, or a file won't import? Reply to this mail.",
+    reason: `You are getting this because your ${BRAND} account is new and has no import yet. There are two first-week mails at most.`,
+    unsubUrl: opts.unsubUrl,
+    unsubLabel: WEEK_ONE_UNSUB_LABEL,
+    assetOrigin: opts.assetOrigin || opts.appUrl,
+  });
+}
+
+/** What the day-7 mail counts, from the profile that holds the account's imports. */
+export interface WeekOneCounts {
+  /** Transactions that came in by an import. */
+  entriesImported: number;
+  /** Tracked months in the year window (shared/trackedMonths.ts trackedMonthsInYearWindow). */
+  monthsTracked: number;
+  /** The year window's length in months, as that count reads it. */
+  windowMonths: number;
+  /** Active subscriptions on Bills. */
+  subscriptions: number;
+  /** Active bills on Bills. */
+  bills: number;
+  /** Entries other than transfers with no category. */
+  uncategorised: number;
+}
+
+/** One next step, as Getting started words it (shared/orientation.ts), and the page it opens. */
+export interface WeekOneStep {
+  title: string;
+  reason: string;
+  /** The page's hash route, `#import`. */
+  hash: string;
+  /** The page's name, `Import`. */
+  label: string;
+}
+
+const count = (n: number) => n.toLocaleString('en-US');
+
+/** Day 7: what the first week found, in counts, for an account with an import. */
+export function renderWeekOneDay7(opts: {
+  counts: WeekOneCounts;
+  step: WeekOneStep | null;
+  appUrl?: string;
+  assetOrigin?: string;
+  unsubUrl?: string | null;
+}): RenderedEmail {
+  const app = opts.appUrl || APP_URL;
+  const c = opts.counts;
+  const monthsLabel = `Months tracked of the last ${c.windowMonths}`;
+  const rows: Array<[string, number]> = [
+    ['Entries imported', c.entriesImported],
+    [monthsLabel, c.monthsTracked],
+  ];
+  if (c.subscriptions > 0) rows.push(['Subscriptions you track', c.subscriptions]);
+  if (c.bills > 0) rows.push(['Bills you track', c.bills]);
+  if (c.uncategorised > 0) rows.push(['Entries without a category', c.uncategorised]);
+  const preheader =
+    c.monthsTracked > 0
+      ? `${count(c.monthsTracked)} of the last ${c.windowMonths} months ${plural(c.monthsTracked, 'is', 'are')} tracked, from ${count(c.entriesImported)} imported ${plural(c.entriesImported, 'entry', 'entries')}.`
+      : `Your first import brought in ${count(c.entriesImported)} ${plural(c.entriesImported, 'entry', 'entries')}.`;
+  return renderMail({
+    subject: `Your first week in ${BRAND}`,
+    preheader,
+    art: 'banner',
+    artHref: `${app}/#progress`,
+    eyebrow: 'Your first week',
+    headline: "Here's what your first week found.",
+    paragraphs: [
+      'Your first import is in. Here is the week in counts; the amounts stay in the app.',
+    ],
+    tables: [
+      {
+        // No title: the paragraph above introduces it, and the eyebrow already says "Your first week".
+        rows: rows.map(([label, n]) => ({
+          cells: [{ text: label }, { text: count(n), align: 'right', strong: true }],
+          text: `${label}: ${count(n)}`,
+        })),
+      },
+    ],
+    buttons: [{ label: 'Open Progress', href: `${app}/#progress` }],
+    ...(opts.step
+      ? {
+          steps: {
+            title: 'One next step',
+            items: [
+              {
+                title: opts.step.title,
+                text: opts.step.reason,
+                link: { label: `Open ${opts.step.label}`, href: `${app}/${opts.step.hash}` },
+              },
+            ],
+          },
+        }
+      : {}),
+    reason: `You are getting this because your ${BRAND} account is a week old and has its first import. This is the last first-week mail.`,
+    unsubUrl: opts.unsubUrl,
+    unsubLabel: WEEK_ONE_UNSUB_LABEL,
+    assetOrigin: opts.assetOrigin || opts.appUrl,
   });
 }

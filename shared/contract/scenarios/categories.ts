@@ -1,5 +1,7 @@
 import { addTransaction, rowsOf, transactionForm } from '../helpers';
 import { CATEGORY_MAPPING_MESSAGES } from '../../categoryMappingSchema';
+import { CATEGORY_MESSAGES } from '../../categorySchema';
+import { kindForName } from '../../guidance/kinds';
 import { added, expectOk, scenario } from '../types';
 import type { ContractApi, Expect, Json } from '../types';
 import { billForm } from './bills';
@@ -166,6 +168,188 @@ export const categories = [
       });
     }
   ),
+  scenario(
+    'resetting the categories renames Food to Groceries with its entries, and gives each default its kind',
+    async (api, expect) => {
+      // Food, as the defaults made it before Groceries and Eating out, filed and budgeted under.
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+        icon: 'utensils',
+      });
+      const lunch = await addTransaction(api, expect, { description: 'Lunch', category_id: food });
+      await added(api, expect, '/api/budgets', {
+        category_id: food,
+        amount: 300,
+        period: 'monthly',
+        start_date: '2026-03-01',
+      });
+
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+
+      const list = (await api.get('/api/categories')).body as Json[];
+      const named = (name: string) => list.find((row) => row.name === name);
+      expect(named('Food')).toBeUndefined();
+      // The same category, renamed: its entries and its budget stay with it. Its icon was the old
+      // default's, so it takes the new one's.
+      expect(named('Groceries')).toMatchObject({
+        id: food,
+        kind: 'groceries',
+        essential: null,
+        icon: 'shopping-cart',
+      });
+      expect((await api.get(`/api/transactions/${lunch}`)).body).toMatchObject({
+        category_id: food,
+      });
+      expect((await api.get('/api/budgets')).body).toEqual([
+        expect.objectContaining({ category_id: food }),
+      ]);
+      expect(named('Eating out')).toMatchObject({ type: 'expense', kind: 'eating_out' });
+      // Every default: an expense one with the kind its name gives, an income one with none.
+      for (const row of list) {
+        expect(row.kind, row.name).toBe(row.type === 'expense' ? kindForName(row.name) : null);
+      }
+      expect(named('Salary')).toMatchObject({ type: 'income', kind: null });
+      expect(named('Housing')).toMatchObject({ kind: 'housing' });
+    }
+  ),
+
+  scenario(
+    'resetting the categories keeps the icon you gave Food as it becomes Groceries',
+    async (api, expect) => {
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+        icon: 'coffee',
+      });
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+      const list = (await api.get('/api/categories')).body as Json[];
+      expect(list.find((row) => row.name === 'Groceries')).toMatchObject({
+        id: food,
+        icon: 'coffee',
+      });
+      // A default matched by its own name is set back to the default's icon.
+      expect(list.find((row) => row.name === 'Eating out')).toMatchObject({ icon: 'utensils' });
+    }
+  ),
+
+  scenario(
+    'resetting the categories folds a Groceries of your own into Food, budgets added together',
+    async (api, expect) => {
+      // Food from the old defaults, and a Groceries the person made beside it, each budgeted for
+      // March; their own Groceries for April too.
+      const food = await added(api, expect, '/api/categories', {
+        name: 'Food',
+        type: 'expense',
+        color: '#aa5500',
+      });
+      const own = await added(api, expect, '/api/categories', {
+        name: 'Groceries',
+        type: 'expense',
+        color: '#225588',
+      });
+      const market = await addTransaction(api, expect, { description: 'Market', category_id: own });
+      const budget = (category_id: number, amount: number, start_date: string) =>
+        added(api, expect, '/api/budgets', { category_id, amount, period: 'monthly', start_date });
+      const march = await budget(food, 300, '2026-03-01');
+      await budget(own, 200, '2026-03-01');
+      const april = await budget(own, 50, '2026-04-01');
+
+      expectOk(expect, await api.delete('/api/categories'), 'DELETE /api/categories');
+
+      const list = (await api.get('/api/categories')).body as Json[];
+      // Food is the Groceries kept; the person's own is folded into it, entries and all. Food had
+      // no icon of its own, so it takes the cart.
+      expect(list.filter((row) => row.name === 'Groceries')).toEqual([
+        expect.objectContaining({ id: food, icon: 'shopping-cart' }),
+      ]);
+      expect(list.find((row) => row.id === own)).toBeUndefined();
+      expect((await api.get(`/api/transactions/${market}`)).body).toMatchObject({
+        category_id: food,
+      });
+      // March's two budgets are one, added together; April's moves as it is.
+      const budgets = ((await api.get('/api/budgets')).body as Json[])
+        .map((row) => ({
+          id: row.id,
+          category_id: row.category_id,
+          amount: row.amount,
+          start_date: row.start_date,
+        }))
+        .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
+      expect(budgets).toEqual([
+        { id: march, category_id: food, amount: 500, start_date: '2026-03-01' },
+        { id: april, category_id: food, amount: 50, start_date: '2026-04-01' },
+      ]);
+    }
+  ),
+
+  scenario(
+    'a category keeps its kind and whether it is needed every month, and changes them on an edit',
+    async (api, expect) => {
+      const id = await added(api, expect, '/api/categories', {
+        name: 'Market',
+        type: 'expense',
+        color: '#aa5500',
+        kind: 'groceries',
+        essential: false,
+      });
+      const read = async () => (await api.get(`/api/categories/${id}`)).body as Json;
+      const listed = async () =>
+        ((await api.get('/api/categories')).body as Json[]).find((row) => row.id === id);
+      expect(await read()).toMatchObject({ kind: 'groceries', essential: 0 });
+      expect(await listed()).toMatchObject({ kind: 'groceries', essential: 0 });
+
+      // An edit that leaves them out keeps them; one that sends them changes them.
+      expectOk(expect, await api.put(`/api/categories/${id}`, { color: '#225588' }), 'PUT');
+      expect(await read()).toMatchObject({ kind: 'groceries', essential: 0 });
+      expectOk(
+        expect,
+        await api.put(`/api/categories/${id}`, { kind: 'Eating_Out', essential: null }),
+        'PUT kind'
+      );
+      expect(await listed()).toMatchObject({ kind: 'eating_out', essential: null });
+
+      // A kind the app does not have, and a kind on an income category, are refused.
+      const unknown = await api.put(`/api/categories/${id}`, { kind: 'pets' });
+      expect(unknown.status).toBe(400);
+      expect(unknown.body.fields).toEqual({ kind: CATEGORY_MESSAGES.kind });
+      const income = await api.post('/api/categories', {
+        name: 'Bonus',
+        type: 'income',
+        kind: 'other',
+        essential: true,
+      });
+      expect(income.status).toBe(400);
+      expect(income.body.fields).toEqual({
+        kind: CATEGORY_MESSAGES.kindOnExpense,
+        essential: CATEGORY_MESSAGES.essentialOnExpense,
+      });
+      expect(await listed()).toMatchObject({ kind: 'eating_out', essential: null });
+
+      // Made an income category, it has neither.
+      expectOk(
+        expect,
+        await api.put(`/api/categories/${id}`, { essential: true }),
+        'PUT needed every month'
+      );
+      expectOk(expect, await api.put(`/api/categories/${id}`, { type: 'income' }), 'PUT type');
+      expect(await read()).toMatchObject({ type: 'income', kind: null, essential: null });
+
+      // A category made without either has neither, and a kind sent blank is none.
+      const plain = await added(api, expect, '/api/categories', {
+        name: 'Pets',
+        type: 'expense',
+        kind: '',
+      });
+      expect((await api.get(`/api/categories/${plain}`)).body).toMatchObject({
+        kind: null,
+        essential: null,
+      });
+    }
+  ),
+
   scenario(
     'a learned mapping is saved, listed, applied to a transaction and removed',
     async (api, expect) => {

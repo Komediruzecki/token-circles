@@ -217,7 +217,7 @@ export const DashboardSettings: Component<DashboardSettingsProps> = (props) => {
       ),
     },
     {
-      id: 'savings-rate',
+      id: 'savings-gauge',
       name: 'Savings Rate',
       icon: (
         <svg

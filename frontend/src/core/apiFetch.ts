@@ -83,7 +83,7 @@ async function noteEmailUnconfirmed(response: Response): Promise<void> {
  * branches below cannot drift apart.
  */
 function announceWrite(apiPath: string, init: RequestInit | undefined, ok: boolean): void {
-  invalidateForRequest(apiPath, init?.method, ok)
+  invalidateForRequest(apiPath, init?.method, ok, init?.body)
   announceDataChanged(apiPath, init?.method, ok)
 }
 

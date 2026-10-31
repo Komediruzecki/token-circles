@@ -108,11 +108,12 @@ localTest.describe('5.16.1 s13 profile selection [local]', () => {
         await continueWithNoAccount(page)
         const wizard = page.getByTestId('onboarding-wizard')
         await expect(wizard).toBeVisible({ timeout: 60_000 })
-        await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
-        await page.getByTestId('onboarding-next').click()
         await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
         const name = 'Zz Wizard Space'
         await page.getByTestId('onboarding-profile-name').fill(name)
+        await page.getByTestId('onboarding-next').click()
+        // Saved with the name's Continue; About this space comes next, then the account.
+        await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 20_000 })
         await page.getByTestId('onboarding-next').click()
         await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 20_000 })
         await page.getByTestId('onboarding-skip').click()

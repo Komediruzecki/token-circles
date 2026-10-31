@@ -59,6 +59,7 @@ describe('the mail catalogue', () => {
         "account-exists": "You already have a Token Circles account",
         "bills-reminder": "2 bills due within a week",
         "budget-alert": "Budget alert for November 2026: Sample groceries went over",
+        "confirm-email": "Confirm your email for Token Circles",
         "confirm-email-fresh-link": "Your new confirm link for Token Circles",
         "email-change": "Confirm your new email for Token Circles",
         "email-change-notice": "Someone asked to change your Token Circles email",
@@ -71,8 +72,9 @@ describe('the mail catalogue', () => {
         "subscription-ended": "Your Token Circles Basic plan has ended",
         "support-ack": "We got your message (TC-SAMPLE)",
         "test-basic": "Test mail from Token Circles",
+        "week-one-day-2": "How to get a year of statements out of your bank",
+        "week-one-day-7": "Your first week in Token Circles",
         "welcome": "Token Circles is ready for your first statement",
-        "welcome-confirm": "Welcome to Token Circles: confirm your email",
       }
     `);
   });
@@ -152,11 +154,12 @@ describe('the mail catalogue', () => {
       expect(text, sample.name).toContain(line);
       // In the HTML each sentence of the line is a span of its own.
       const footer = html.slice(html.indexOf('Your money, in clear orbit.'));
-      // An href holds & as &amp;, should a link carry two query parameters.
+      // An href holds & as &amp;: the week-one stop link has two query parameters.
       const links = [...footer.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) =>
         m[1]!.replace(/^mailto:/, '').replaceAll('&amp;', '&')
       );
-      // About, GitHub, Terms, Privacy and the address, and a reminder's Unsubscribe.
+      // About, GitHub, Terms, Privacy and the address, and the unsubscribe or stop link of a
+      // mail that has one.
       expect(links.length, sample.name).toBeGreaterThanOrEqual(5);
       for (const link of links) expect(text, `${sample.name}: ${link}`).toContain(link);
     }

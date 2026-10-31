@@ -275,7 +275,7 @@ describe('the mail layout', () => {
   });
 
   it('leaves a step without a link as its title and words, in the HTML and the text twin', () => {
-    // The welcome of a password sign-up: before the address is confirmed no page opens.
+    // For a mail whose reader cannot open a page yet, as before an address is confirmed.
     const { html, text } = renderMail({
       ...SPEC,
       steps: {
@@ -398,5 +398,17 @@ describe('the mail layout', () => {
     expect(link).toBeGreaterThan(html.indexOf(SPEC.reason));
     expect(text.endsWith(`${SPEC.reason}\nUnsubscribe: ${unsubUrl}`)).toBe(true);
     expect(renderMail(SPEC).html).not.toContain('Unsubscribe');
+  });
+
+  it('words the unsubscribe link as the mail asks, in the footer and in the text twin', () => {
+    // The week-one mails' link stops those two mails only, and says so.
+    const unsubUrl = 'https://api.example/api/notifications/unsubscribe?token=t&list=week-one';
+    const { html, text } = renderMail({ ...SPEC, unsubUrl, unsubLabel: 'Stop first-week mails' });
+    expect(html).toContain(
+      'href="https://api.example/api/notifications/unsubscribe?token=t&amp;list=week-one" style="color:#'
+    );
+    expect(html).toMatch(/>Stop first-week mails<\/a>/);
+    expect(html).not.toContain('>Unsubscribe<');
+    expect(text.endsWith(`${SPEC.reason}\nStop first-week mails: ${unsubUrl}`)).toBe(true);
   });
 });

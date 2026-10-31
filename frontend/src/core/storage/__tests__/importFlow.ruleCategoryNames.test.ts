@@ -98,12 +98,13 @@ describe('local-first import: rule categories in a fresh space', () => {
   it('files the rule rows under the default categories and offers no old name', async () => {
     await seedDefaultCategories(1)
 
+    // Every name these rules give is a default, Groceries included, so nothing is new.
     const preview = await run(true)
-    expect(preview.new_categories).toEqual(['Groceries'])
+    expect(preview.new_categories).toEqual([])
 
     const done = await run(false)
     expect(done.imported).toBe(4)
-    expect(done.created_categories).toEqual(['Groceries'])
+    expect(done.created_categories).toEqual([])
     expect(await filedUnder()).toEqual({
       'PETROL TEST STATION 0000': 'Transportation',
       'HEP TEST INVOICE 0000': 'Utilities',
@@ -123,7 +124,7 @@ describe('local-first import: a space that holds the old names', () => {
     await addCategory('Salary Eur', 'income')
     const before = (await categories()).length
 
-    expect((await run(true)).new_categories).toEqual(['Groceries'])
+    expect((await run(true)).new_categories).toEqual([])
     await run(false)
 
     expect(await filedUnder()).toEqual({
@@ -132,7 +133,7 @@ describe('local-first import: a space that holds the old names', () => {
       'ISPLATA PLACE TEST EMPLOYER': 'Salary Eur',
       'KONZUM TEST STORE 0000': 'Groceries',
     })
-    expect((await categories()).length).toBe(before + 1)
+    expect((await categories()).length).toBe(before)
   })
 
   it('offers and creates no new name beside an old one when the space has no defaults', async () => {

@@ -31,7 +31,7 @@ export async function sendMail(
   subject: string,
   html: string,
   opts?: { replyTo?: string; text?: string; listUnsubscribe?: string | null }
-): Promise<{ sent: boolean; skipped?: boolean; error?: string; id?: string }> {
+): Promise<{ sent: boolean; skipped?: boolean; error?: string; status?: number; id?: string }> {
   if (!to) return { sent: false, skipped: true };
   if (!env.RESEND_API_KEY) {
     console.log(`[email] DEV (no RESEND_API_KEY) -> to=${to} subject=${subject}`);
@@ -58,7 +58,7 @@ export async function sendMail(
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     console.error(`[email] Resend ${res.status}: ${body}`);
-    return { sent: false, error: `Resend ${res.status}` };
+    return { sent: false, error: `Resend ${res.status}`, status: res.status };
   }
   // `sent` means Resend ACCEPTED the message, not that anyone received it. A recipient on the
   // account's suppression list — anything that has hard-bounced or complained before — is accepted

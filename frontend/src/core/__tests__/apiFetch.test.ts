@@ -146,6 +146,52 @@ describe('apiFetch write invalidation', () => {
     expect(dataVersions.entityVersion('dashboard')).toBe(1)
     expect(dataVersions.entityVersion('accounts')).toBe(1)
   })
+
+  // Saving the badge record is a settings write, and the badge store is its only reader: the
+  // pages that follow the settings read other keys, and read them again for nothing after a badge.
+  it.each(['self-hosted', 'serverless'] as const)(
+    'bumps no counter for a settings write that saves only the badge record, in %s mode',
+    async (mode) => {
+      const { apiFetch, dataVersions } = await loadApiFetch(mode, API)
+      const key = mode === 'serverless' ? 'achievements:3' : 'achievements'
+      await apiFetch('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ [key]: '{"v":1,"unlocks":[]}' }),
+      })
+      expect(dataVersions.entityVersion('settings')).toBe(0)
+
+      await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify({ currency: 'USD' }) })
+      expect(dataVersions.entityVersion('settings')).toBe(1)
+    }
+  )
+
+  // A wizard step, a finished tour or a hidden card is written to the account's own state. It
+  // says where the person is in the app, not what their data is: no page reloads for it, and no
+  // badge check runs.
+  it("bumps nothing and announces nothing for a write to the account's own state", async () => {
+    const { apiFetch, dataVersions } = await loadApiFetch('self-hosted', API)
+    const { DATA_CHANGED_EVENT } = await import('../dataChangedEvent')
+    const announced: string[] = []
+    const listen = (event: Event) => {
+      announced.push((event as CustomEvent<{ endpoint: string }>).detail.endpoint)
+    }
+    window.addEventListener(DATA_CHANGED_EVENT, listen)
+    try {
+      for (const key of ['onboarding', 'tours', 'getting_started']) {
+        await apiFetch(`/api/account/state/${key}`, { method: 'PUT', body: '{}' })
+        await apiFetch(`${API}/api/account/state/${key}`, { method: 'PUT', body: '{}' })
+      }
+      expect(dataVersions.trackedEntities()).toEqual([])
+      expect(announced).toEqual([])
+
+      // The rest of the account's routes are writes like any other.
+      await apiFetch('/api/account/password', { method: 'PUT', body: '{}' })
+      expect(dataVersions.trackedEntities()).toEqual(['account'])
+      expect(announced).toEqual(['/api/account/password'])
+    } finally {
+      window.removeEventListener(DATA_CHANGED_EVENT, listen)
+    }
+  })
 })
 
 /**

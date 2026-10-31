@@ -201,6 +201,10 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
     'API tokens authenticate against the Worker; local-first has no API.',
   'DELETE /api/account/api-tokens/:id':
     'API tokens authenticate against the Worker; local-first has no API.',
+  'GET /api/account/state':
+    "State that follows a cloud account (the setup wizard's record, tours, the Getting started card). Local-first keeps it in this browser's localStorage and never calls the route.",
+  'PUT /api/account/state/:key':
+    "State that follows a cloud account (the setup wizard's record, tours, the Getting started card). Local-first keeps it in this browser's localStorage and never calls the route.",
   'POST /api/auth/forgot-password': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/login':
     'Signing in. Local-first has no account to sign in to; Sign in there switches to cloud mode and reloads before it shows a form (App.tsx handleLogin).',
@@ -221,6 +225,8 @@ export const WORKER_ONLY: Readonly<Record<string, string>> = {
   'POST /api/auth/verify-email/resend': 'Signing in. Local-first has no account to sign in to.',
   'POST /api/auth/email-link/finish':
     'Signing in. Local-first has no account to sign in to; a link that asks for a sign-in switches the device to cloud mode first (core/emailVerification.ts).',
+  'GET /api/auth/email-link':
+    'Signing in. Local-first has no account to sign in to; the page that finishes a sign-up asks it after a confirm link has switched the device to cloud mode (core/emailVerification.ts).',
   'POST /api/import/file-sheet':
     'Retired: answers 410 Gone, telling an old cached page to upload the file again. The Import page reads a file in one upload now, and calls this in neither mode.',
   'POST /api/profiles/reseed-demo':

@@ -6,11 +6,13 @@
  * Finding or making the account runs a second time when the first try fails, and the account,
  * its profile and its first confirm link are written together or not at all, so the second try
  * starts from nothing. Signing up again with the address of an account waiting for its confirm
- * link mails that account a fresh link.
+ * link mails that account a fresh link. Every sign-up checks the password it was sent once after
+ * the answer, whatever the address.
  */
 import { env } from 'cloudflare:test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { hashPassword, verifyPassword } from '../src/auth';
+import { b64urlDecode, hashPassword, verifyPassword } from '../src/auth';
+import { DUMMY_PASSWORD_HASH } from '../src/routes/auth';
 import { fetchSettled } from './helpers/after-answer';
 import { dbThatRefuses, realDb, withDb } from './helpers/racing-db';
 
@@ -21,7 +23,9 @@ const NEW = 'sign-up-new@example.com';
 const WAITING = 'sign-up-waiting@example.com';
 /** A password account whose address is confirmed. */
 const CONFIRMED = 'sign-up-confirmed@example.com';
-const EVERY_ADDRESS = [NEW, WAITING, CONFIRMED];
+/** A Google account, with no password of its own; only the test that needs it makes it. */
+const GOOGLE = 'sign-up-google@example.com';
+const EVERY_ADDRESS = [NEW, WAITING, CONFIRMED, GOOGLE];
 const FIRST_PASSWORD = 'the-password-it-signed-up-with';
 
 let ip = 0;
@@ -95,7 +99,7 @@ function accountAt(email: string) {
 }
 
 describe('a sign-up whose account work fails the first time', () => {
-  it('makes the account and its profile on the second try, and mails the welcome once', async () => {
+  it('makes the account and its profile on the second try, and mails Confirm once', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const refusing = dbThatRefuses(realDb, /INSERT INTO users/, 1);
 
@@ -164,11 +168,13 @@ describe('a sign-up whose confirm link cannot be stored', () => {
   });
 });
 
-describe('the welcome of a new account', () => {
+describe('the Confirm mail of a new account', () => {
   it('carries the confirm link stored with the account, and goes to its address alone', async () => {
     await signUp(NEW);
 
-    expect(mailed.map((mail) => mail.to)).toEqual([NEW]);
+    expect(mailed.map(({ to, subject }) => ({ to, subject }))).toEqual([
+      { to: NEW, subject: 'Confirm your email for Token Circles' },
+    ]);
     const token = /verify-email\?token=([0-9a-f]+)/.exec(mailed[0]!.text)?.[1];
     expect(token, mailed[0]!.text).toBeDefined();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
@@ -198,12 +204,18 @@ async function unusedLinks(email: string): Promise<string[]> {
   return results.map((row) => row.token_hash);
 }
 
-/** Every header of an answer but Date, sorted, with its status and body. */
+/**
+ * Every header of an answer but Date, sorted, with its status and body. The sign-up marker's value
+ * is written as V: it is new on every sign-up (confirm-link-sign-in.test.ts).
+ */
 async function read(res: Response) {
   const headers: string[] = [];
   res.headers.forEach((value, name) => {
-    if (name !== 'date') headers.push(`${name}: ${value}`);
+    if (name !== 'date' && name !== 'set-cookie') headers.push(`${name}: ${value}`);
   });
+  for (const cookie of res.headers.getSetCookie()) {
+    headers.push(`set-cookie: ${cookie.replace(/^fm_signup=[^;]*/, 'fm_signup=V')}`);
+  }
   return { status: res.status, headers: headers.sort(), body: await res.text() };
 }
 
@@ -253,5 +265,71 @@ describe('signing up again with the address of a confirmed account', () => {
       { to: CONFIRMED, subject: 'You already have a Token Circles account' },
     ]);
     expect(await unusedLinks(CONFIRMED)).toEqual([]);
+  });
+});
+
+describe('the password check after the answer', () => {
+  const hex = (bytes: BufferSource): string => {
+    const view = ArrayBuffer.isView(bytes)
+      ? new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+      : new Uint8Array(bytes);
+    return [...view].map((b) => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  /** The salt a stored hash was made with, as hex. */
+  const saltOf = (stored: string): string => hex(b64urlDecode(stored.split('$')[2]!));
+
+  /** The salt of every PBKDF2 derivation made while `run` runs, as hex, in order. */
+  async function derivations(run: () => Promise<unknown>): Promise<string[]> {
+    const salts: string[] = [];
+    const subtle = crypto.subtle;
+    const derive = subtle.deriveBits.bind(subtle);
+    const spy = vi.spyOn(subtle, 'deriveBits').mockImplementation((algorithm, key, length) => {
+      const { name, salt } = algorithm as Pbkdf2Params;
+      if (name === 'PBKDF2') salts.push(hex(salt));
+      return derive(algorithm, key, length);
+    });
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return salts;
+  }
+
+  const storedHash = async (email: string): Promise<string> =>
+    (await realDb
+      .prepare('SELECT password_hash FROM users WHERE email = ?')
+      .bind(email)
+      .first<{ password_hash: string }>())!.password_hash;
+
+  it("is one check for every address: against the waiting account's hash, or the stand-in hash sign-in uses", async () => {
+    await realDb
+      .prepare(
+        "INSERT INTO users (email, password_hash, email_verified, auth_provider) VALUES (?, NULL, 1, 'google')"
+      )
+      .bind(GOOGLE)
+      .run();
+    const standIn = saltOf(DUMMY_PASSWORD_HASH);
+    const cases: Array<[email: string, password: string, checkedAgainst: () => Promise<string>]> = [
+      [NEW, 'a-new-password', () => Promise.resolve(standIn)],
+      [CONFIRMED, FIRST_PASSWORD, () => Promise.resolve(standIn)],
+      [GOOGLE, 'a-new-password', () => Promise.resolve(standIn)],
+      [WAITING, 'another-new-password', async () => saltOf(await storedHash(WAITING))],
+      [WAITING, FIRST_PASSWORD, async () => saltOf(await storedHash(WAITING))],
+    ];
+
+    for (const [email, password, checkedAgainst] of cases) {
+      const against = await checkedAgainst();
+      const salts = await derivations(() => signUp(email, password));
+
+      // One is the hash the route makes before its answer, for the sign-up marker; the other is
+      // the check after it.
+      expect(salts, email).toHaveLength(2);
+      expect(
+        salts.filter((salt) => salt === against),
+        email
+      ).toHaveLength(1);
+    }
   });
 });

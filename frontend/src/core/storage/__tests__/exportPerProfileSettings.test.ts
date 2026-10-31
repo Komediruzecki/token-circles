@@ -169,6 +169,57 @@ describe('a backup moved between cloud and local-first', () => {
   })
 })
 
+describe('the guidance answers, kept per profile like the plan and the badges', () => {
+  const ANSWERS_1 = '{"region":"DE","adults":2}'
+  const ANSWERS_2 = '{"region":"UK","tenure":"social_renter"}'
+
+  beforeEach(async () => {
+    const db = await getDB()
+    await db.put('settings', { key: 'guidance:1', value: ANSWERS_1 })
+    await db.put('settings', { key: 'guidance:2', value: ANSWERS_2 })
+  })
+
+  it('are filed under each profile in a whole backup, and follow it back', async () => {
+    const file = await adapter.exportData()
+    expect(keysOf(file.settingsRows, 1)).toContain('guidance:1')
+    expect(keysOf(file.settingsRows, 1)).not.toContain('guidance:2')
+    expect(keysOf(file.settingsRows, 2)).toContain('guidance:2')
+    expect(keysOf(file.settingsRows, 2)).not.toContain('guidance:1')
+
+    const last = await lastProfileId()
+    await adapter.importData(renumbered(file, { 1: last, 2: last + 1 }))
+    const id = await restoredIds()
+    const settings = await adapter.getSettings()
+    expect(settings[`guidance:${id.Me}`]).toBe(ANSWERS_1)
+    expect(settings[`guidance:${id.Partner}`]).toBe(ANSWERS_2)
+  })
+
+  it("are filed under each profile from a cloud backup's rows", async () => {
+    const file = cloudFile()
+    file.settingsRows = [
+      ...(file.settingsRows ?? []),
+      { key: 'guidance', value: ANSWERS_1, profile_id: 41 },
+      { key: 'guidance', value: ANSWERS_2, profile_id: 42 },
+    ]
+    file.settings = { ...file.settings, guidance: ANSWERS_1 }
+    await adapter.importData(file)
+
+    const id = await restoredIds()
+    const settings = await adapter.getSettings()
+    expect(settings[`guidance:${id.Me}`]).toBe(ANSWERS_1)
+    expect(settings[`guidance:${id.Partner}`]).toBe(ANSWERS_2)
+    // Under the plain key, every profile in this browser would read them as its own.
+    expect(settings.guidance).toBeUndefined()
+  })
+
+  it('go with a deleted profile', async () => {
+    await adapter.clearProfileData([2], { deleteProfiles: true })
+    const settings = await adapter.getSettings()
+    expect(settings['guidance:1']).toBe(ANSWERS_1)
+    expect(settings['guidance:2']).toBeUndefined()
+  })
+})
+
 const profileKeys = (settings: Record<string, unknown>) =>
   Object.keys(settings)
     .filter((key) => belongsToOneProfile(key))
@@ -191,7 +242,10 @@ async function lastProfileId(): Promise<number> {
 function renumbered(file: ExportData, ids: Record<number, number>): ExportData {
   const id = (old: unknown) => ids[Number(old)] ?? Number(old)
   const key = (old: string) =>
-    old.replace(/^(retirement_settings|achievements):(\d+)$/, (_, name, n) => `${name}:${id(n)}`)
+    old.replace(
+      /^(retirement_settings|achievements|guidance):(\d+)$/,
+      (_, name, n) => `${name}:${id(n)}`
+    )
   return {
     ...file,
     profiles: file.profiles.map((p) => ({ ...p, id: id(p.id) })),

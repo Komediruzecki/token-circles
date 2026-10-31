@@ -4,6 +4,7 @@ import { transactionInvariantError } from '../../../shared/transactionInvariant'
 import { calendarDateIn } from '../../../shared/calendarDate';
 import { profileCategoryKey } from '../../../shared/bankImport/categoryAliases';
 import { parseImportCsv } from '../../../shared/importCsv';
+import { kindForName } from '../../../shared/guidance/kinds';
 import { MIN_YEAR, MAX_YEAR } from '../import-gate';
 import { importRowLabel } from '../../../shared/importRowLabel';
 import type { AppEnv } from '../index';
@@ -60,13 +61,17 @@ export function parseCsv(text: string): { headers: string[]; rows: string[][] } 
 //     depends on the spreadsheet parser, so it surfaces a 501-style error there.
 export const importRoutes = new Hono<AppEnv>();
 
-// ── getCategoryIcon — ported verbatim from backend/utils.js ───────────────────
-// Maps a category name to an icon key when /execute auto-creates a category.
+// ── getCategoryIcon — ported from backend/utils.js ─────────────────────────────
+// Maps a category name to an icon key when /execute auto-creates a category. Groceries and
+// meals get the icons the app's own name matching draws for them (CategoryIcon.tsx): a stored
+// icon counts as chosen, so a mug stored here would outlast what local-first shows.
 function getCategoryIcon(name: string): string {
   const lower = name.toLowerCase();
   const patterns: Array<[RegExp, string]> = [
     [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, 'car'],
-    [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, 'coffee'],
+    [/grocer/i, 'shopping-cart'],
+    [/eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i, 'utensils'],
+    [/food|cafe|coffee/i, 'coffee'],
     [/hous|rent|mortgage|home|lease|property|real\s*estate/i, 'home'],
     [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, 'zap'],
     [
@@ -698,9 +703,13 @@ export async function executeImport(
         const catType =
           (categoryTypes && categoryTypes[name]) ||
           (INCOME_KEYWORDS.some((kw) => name.toLowerCase().includes(kw)) ? 'income' : 'expense');
+        // An expense category takes the kind its name suggests, as in local-first: "Restaurant"
+        // is eating out (shared/guidance/kinds.ts). In the cloud, where a new account starts with
+        // no categories, this is how most categories get one.
+        const kind = catType === 'expense' ? kindForName(name) : null;
         return DB.prepare(
-          'INSERT INTO categories (name, type, color, icon, profile_id) VALUES (?, ?, ?, ?, ?)'
-        ).bind(name, catType, color, getCategoryIcon(name), pid);
+          'INSERT INTO categories (name, type, color, icon, kind, profile_id) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(name, catType, color, getCategoryIcon(name), kind, pid);
       })
     );
     await loadCategories();

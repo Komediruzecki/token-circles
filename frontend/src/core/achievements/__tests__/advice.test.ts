@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildAdvice } from '../advice'
+import { parseDismissed, serializeRecords } from '../records'
 import { adviceInput, month, tx } from './fixtures'
 import type { AdviceInput } from '../advice'
 
@@ -95,6 +96,24 @@ describe('buildAdvice', () => {
       })
     )
     expect(cards.find((c) => c.kind === 'uncategorised')!.figure).toBe('1 entry to categorise')
+    // Spelled as the circle line under it on Progress spells it ("Counts toward ..."), and as
+    // most of the app's copy does.
+    // One entry is "it".
+    expect(cards.find((c) => c.kind === 'uncategorised')!.detail).toBe(
+      'Categorise it and this month counts toward "Named everything".'
+    )
+    const two = buildAdvice(
+      make({
+        transactions: [
+          ...month('2026-09', 3),
+          tx('2026-09-20', { category_id: null }),
+          tx('2026-09-21', { category_id: null }),
+        ],
+      })
+    )
+    expect(two.find((c) => c.kind === 'uncategorised')!.detail).toBe(
+      'Categorise them and this month counts toward "Named everything".'
+    )
   })
 
   it('names one uncategorised entry as one, with a unit beside its count', () => {
@@ -141,9 +160,22 @@ describe('buildAdvice', () => {
     const cards = buildAdvice(
       make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }) })
     )
-    const card = cards.find((c) => c.kind === 'unbudgeted-subscription')
+    const card = cards.find((c) => c.kind === 'unbudgeted-category')
+    expect(card!.id).toBe('unbudgeted-category:2:2026-09')
     expect(card!.title).toContain('Transport')
     expect(card!.figure).toBe('120')
+  })
+
+  it('keeps hiding that card when it was dismissed under its old name', () => {
+    // Before the kind was named for what it flags, its id began unbudgeted-subscription.
+    const stored = serializeRecords([], ['unbudgeted-subscription:2:2026-09', 'in-the-red:2026-08'])
+    const dismissed = parseDismissed(stored)
+    expect(dismissed).toEqual(['unbudgeted-category:2:2026-09', 'in-the-red:2026-08'])
+
+    const cards = buildAdvice(
+      make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }), dismissed })
+    )
+    expect(kinds(cards)).not.toContain('unbudgeted-category')
   })
 
   it('ranks warnings first and drops what the user dismissed', () => {
@@ -168,6 +200,55 @@ describe('buildAdvice', () => {
     expect(buildAdvice(make(args)).map((c) => c.id)).toEqual(
       buildAdvice(make(args)).map((c) => c.id)
     )
+  })
+})
+
+describe('buildAdvice: the circle each card serves', () => {
+  it('names Clear picture, Paying your way or Breathing room for each kind', () => {
+    const goals = [
+      {
+        name: 'New bike',
+        target_amount: 1200,
+        current_amount: 200,
+        deadline: '2026-12-31',
+        created_at: '2026-01-01T00:00:00Z',
+      },
+    ]
+    const runs = [
+      buildAdvice(make({ budgets: [MONTHLY], transactions: month('2026-09', 3, { amount: 60 }) })),
+      buildAdvice(make({ goals })),
+      buildAdvice(
+        make({
+          transactions: [
+            ...month('2026-08', 3, { amount: 900 }),
+            tx('2026-08-25', { type: 'income', amount: 100 }),
+            ...month('2026-09', 3, { amount: 900 }),
+          ],
+        })
+      ),
+      buildAdvice(
+        make({ transactions: [...month('2026-09', 3), tx('2026-09-20', { category_id: null })] })
+      ),
+      buildAdvice(
+        make({
+          transactions: [...month('2026-07', 3), ...month('2026-08', 3), tx('2026-09-02')],
+          today: '2026-09-26',
+        }),
+        2
+      ),
+      buildAdvice(make({ transactions: month('2026-09', 3, { amount: 40, category_id: 2 }) })),
+    ]
+    const circles = new Map<string, Set<number>>()
+    for (const c of runs.flat())
+      circles.set(c.kind, (circles.get(c.kind) ?? new Set()).add(c.circle))
+    expect(Object.fromEntries([...circles].map(([kind, set]) => [kind, [...set]]))).toEqual({
+      uncategorised: [1],
+      'streak-at-risk': [1],
+      'in-the-red': [2],
+      'budget-drift': [2],
+      'unbudgeted-category': [2],
+      'goal-pace': [3],
+    })
   })
 })
 
@@ -265,7 +346,7 @@ describe('buildAdvice: which budget a month is judged against', () => {
 
   it('names a category whose budget lapsed as having none this month', () => {
     const cards = buildAdvice(apartment({ budgets: [row('2026-06-01', 94.9)] }))
-    const card = cards.find((c) => c.kind === 'unbudgeted-subscription')
+    const card = cards.find((c) => c.kind === 'unbudgeted-category')
     expect(card?.title).toBe('Apartment has no budget')
     expect(card?.figure).toBe('918.81')
   })

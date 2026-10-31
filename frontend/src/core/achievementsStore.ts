@@ -8,7 +8,7 @@
  * only that profile reads them. They used to be judged on the household view, so ticking another
  * profile into it in Settings earned the active profile that profile's badges, permanently.
  */
-import { createRoot, createSignal } from 'solid-js'
+import { createEffect, createRoot, createSignal, on } from 'solid-js'
 import { localToday } from '../utils/period'
 import { achievementById } from './achievements/definitions'
 import { evaluateAchievements } from './achievements/evaluate'
@@ -22,8 +22,10 @@ import {
 import { api } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
+import { onboardingOpen } from './onboardingStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
+import type { Account, Bill, Transaction } from '../types/models'
 import type { EvaluateInput, Evaluation } from './achievements/evaluate'
 import type { UnlockRecord } from './achievements/records'
 
@@ -50,20 +52,31 @@ export function isSelfHosted(): boolean {
 
 /**
  * Everything the last evaluation ran on. The Progress page builds its advice and its year in
- * review from this instead of fetching the same five arrays a second time.
+ * review from this instead of fetching the same five arrays a second time, and Getting started
+ * reads its facts from it (core/orientation.ts). Transactions and bills are the whole rows: the
+ * subscription count reads their text. The accounts are read beside them for Getting started's
+ * cushion step; the badges do not use them.
  */
 export interface AchievementsSnapshot {
-  transactions: EvaluateInput['transactions']
+  /** The profile the rows are of: every list is filtered to it (`ownRows`). */
+  profileId: number
+  transactions: Transaction[]
   budgets: EvaluateInput['budgets']
   goals: EvaluateInput['goals']
   importLogs: EvaluateInput['importLogs']
-  loans: EvaluateInput['loans']
+  /** With their ids and names, which the circles' debt check names. */
+  loans: SnapshotLoan[]
   categories: Array<{ id: number; name: string }>
-  bills: Array<{ category_id?: number | null; amount?: number; name?: string }>
+  bills: Bill[]
+  /** Null when they could not be read: the badges are worked out all the same. */
+  accounts: Account[] | null
   evaluation: Evaluation
   /** YYYY-MM-DD the evaluation used, so the page and the badges agree on "today". */
   today: string
 }
+
+/** A loan as the badges read it, with the id and the name the circles' debt check names it by. */
+export type SnapshotLoan = EvaluateInput['loans'][number] & { id: number; name: string }
 
 const state = createRoot(() => {
   const [unlocks, setUnlocks] = createSignal<UnlockRecord[]>([])
@@ -162,11 +175,11 @@ let inFlight: Running | null = null
  * new profile is not handed the old one's.
  *
  * A call for the profile whose run is going gets one more run, started when that one ends. The
- * running one may have read its lists before the write that asked (a budget added while it reads),
- * so its answer can be out of date. Every call made while it runs shares that one further run; a
- * call made during the further run asks for one more after it, and nothing else starts another.
- * If the profile has changed by the time the running one ends, the further run is dropped and
- * answers no badges: the switch's own refresh evaluates the new profile.
+ * running one may have read its lists before the write that asked (a second account added while
+ * it reads), so its answer can be out of date. Every call made while it runs shares that one
+ * further run; a call made during the further run asks for one more after it, and nothing else
+ * starts another. If the profile has changed by the time the running one ends, the further run is
+ * dropped and answers no badges: the switch's own refresh evaluates the new profile.
  */
 export function refreshAchievements(): Promise<UnlockRecord[]> {
   const profileId = activeProfileId()
@@ -199,7 +212,7 @@ function evaluateAgain(profileId: number): Promise<UnlockRecord[]> {
  * A loan deleted between the list and its own read (in another tab, say) answers 404. It is
  * simply not counted, and the 404 is not logged as an error: nothing went wrong.
  */
-async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
+async function loadLoans(profileId: number): Promise<SnapshotLoan[]> {
   const list = ownRows(await api.getLoans().catch(() => []), profileId)
   if (list.length === 0) return []
   const details = await Promise.all(
@@ -210,6 +223,8 @@ async function loadLoans(profileId: number): Promise<EvaluateInput['loans']> {
   return details
     .filter((d): d is NonNullable<typeof d> => d !== null)
     .map((d) => ({
+      id: d.id,
+      name: d.name,
       principal: d.principal,
       interest_rate: d.interest_rate,
       start_date: d.start_date,
@@ -230,6 +245,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     api.getCategories(),
     api.getBills(),
     loadLoans(profileId),
+    api.getAccounts().catch(() => null),
   ])
   const transactions = ownRows(lists[0], profileId)
   const budgets = ownRows(lists[1], profileId)
@@ -238,6 +254,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
   const categories = ownRows(lists[4], profileId)
   const bills = ownRows(lists[5], profileId)
   const loans = lists[6]
+  const accounts = lists[7] === null ? null : ownRows(lists[7], profileId)
 
   // The profile changed while the lists loaded. What came back is the old profile's, and so would
   // the write be: in cloud mode it would land in the new profile's settings, because X-Profile-Id
@@ -266,6 +283,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
   state.setStreak(evaluation.streak)
   state.setDismissedAdvice(dismissed)
   state.setSnapshot({
+    profileId,
     transactions,
     budgets,
     goals,
@@ -273,6 +291,7 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     loans,
     categories,
     bills,
+    accounts,
     evaluation,
     today,
   })
@@ -285,11 +304,44 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     ...(adopting ? { [SETTINGS_KEY]: '' } : {}),
   })
   // Saved for the profile that earned them either way; not announced on one that did not.
-  if (newly.length > 0 && activeProfileId() === profileId) announce(newly, stored.length === 0)
+  if (newly.length > 0 && activeProfileId() === profileId) {
+    announce(profileId, newly, stored.length === 0)
+  }
   return newly
 }
 
-function announce(newly: UnlockRecord[], firstRun: boolean): void {
+/**
+ * Badges earned while the setup wizard is open, announced when it closes. Setup's own writes earn
+ * them (a first account, a first import), and their toasts stacked over the wizard's header, Back
+ * and Close; their "See badges" changed the page behind it.
+ */
+let held: { profileId: number; newly: UnlockRecord[]; firstRun: boolean }[] = []
+
+createRoot(() => {
+  createEffect(
+    on(onboardingOpen, (open) => {
+      if (open || held.length === 0) return
+      // Only the profile still in use hears about its badges, as when they are announced at once.
+      const waiting = held.filter((batch) => batch.profileId === activeProfileId())
+      held = []
+      if (waiting.length === 0) return
+      announceNow(
+        waiting.flatMap((batch) => batch.newly),
+        waiting.some((batch) => batch.firstRun)
+      )
+    })
+  )
+})
+
+function announce(profileId: number, newly: UnlockRecord[], firstRun: boolean): void {
+  if (onboardingOpen()) {
+    held.push({ profileId, newly, firstRun })
+    return
+  }
+  announceNow(newly, firstRun)
+}
+
+function announceNow(newly: UnlockRecord[], firstRun: boolean): void {
   const opts = {
     channel: 'achievements',
     durationMs: 9000,

@@ -1,16 +1,16 @@
 /**
- * The setup wizard's "Name your space" and "Create your first account" steps, in both storage
- * modes: a blank name is marked at the name and nothing is sent, a name another profile has is
- * marked at the name in the runtime's words, and an account in another currency than the first is
- * refused in the step's notice.
+ * The setup wizard's space and "Add your main account" steps, in both storage modes: a blank name
+ * is marked at the name and nothing is sent, a name another profile has is marked at the name in
+ * the runtime's words, and an account in another currency than the first is refused in the step's
+ * notice.
  *
  * Both steps toasted a caught error's own words ("Validation failed", "HTTP 409") with nothing
  * marked, and a blank name kept the button disabled without saying why. Now each checks with the
  * rules both runtimes run (shared/profileSchema.ts, shared/accountSchema.ts) before it sends
  * anything.
  *
- * Signed in, the wizard opens over a new profile of the case's own, which it renames. Local-first,
- * it opens over an empty browser, where it creates the profile.
+ * Signed in, the wizard opens from the tour menu over a new profile of the case's own, which it
+ * renames. Local-first, it opens over an empty browser, where it creates the profile.
  *
  * Every case runs signed in (the Worker) and local-first (the IndexedDB router). Pull requests
  * run the `@smoke` one; main runs them all.
@@ -33,7 +33,12 @@ import { E2E_BASE, gotoServerlessZeroState } from './test-helpers'
 import type { Mode } from './form-errors-helpers'
 import type { Page } from '@playwright/test'
 
-/** Opens the wizard over a profile with nothing in it, or over an empty local-first browser. */
+/**
+ * Opens the wizard over a profile with nothing in it, or over an empty local-first browser.
+ *
+ * Signed in, the fixture account finished the wizard long ago (global.setup.ts), so it opens the
+ * way such an account reaches it again: from the tour menu.
+ */
 async function openWizard(page: Page, mode: Mode, profile: string): Promise<void> {
   if (mode.name === 'local-first') {
     await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
@@ -44,16 +49,11 @@ async function openWizard(page: Page, mode: Mode, profile: string): Promise<void
     localStorage.setItem('finance_storage_mode', 'self-hosted')
     localStorage.setItem('currentProfileId', String(pid))
     localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-    // Once only: a reload must not erase a decision the case made.
-    if (!sessionStorage.getItem('onb_spec_cleared')) {
-      sessionStorage.setItem('onb_spec_cleared', '1')
-      // The flag is kept per account (finance_onboarding:account-<id>), browser-wide before.
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
-      }
-    }
   }, id)
   await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+  await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+  await page.getByTestId('whats-new-btn').click()
+  await page.getByTestId('tour-open-onboarding').click()
   await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30_000 })
 }
 
@@ -77,8 +77,6 @@ for (const mode of MODES) {
       const errors = watchErrors(page, REFUSAL_LOGGED)
       await openWizard(page, mode, `zz-onb-${stamp}`)
       const next = page.getByTestId('onboarding-next')
-      await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
-      await next.click()
 
       // Your space: blank, then a name another profile has.
       const spaceStep = page.getByTestId('onboarding-step-space')
@@ -117,8 +115,10 @@ for (const mode of MODES) {
       await name.fill(`zz-onb-${stamp}-home`)
       await page.getByTestId('onboarding-currency').selectOption('EUR')
       await next.click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 15_000 })
+      await next.click()
 
-      // Your first account: blank, then one in euros, then one in US dollars.
+      // Your main account: blank, then one in euros, then (Back on the step) one in US dollars.
       await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
       const accountName = page.getByTestId('onboarding-account-name')
       const create = page.getByTestId('onboarding-account-create')
@@ -133,11 +133,17 @@ for (const mode of MODES) {
       expect(accountWrites).toEqual([])
       await expect(errorToasts(page)).toHaveCount(0)
 
+      // The first account sets the base currency, and the step moves on: the statement step is
+      // the answer, not a toast.
       await accountName.fill(`zz-account-${stamp}`)
       await page.getByTestId('onboarding-account-balance').fill('1500')
       await create.click()
-      await expect(toasts(page).getByText(`Account "zz-account-${stamp}" created`)).toBeVisible()
-      // The step lists the profile's accounts once it has read them again.
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 15_000 })
+      await expect(toasts(page).getByText(`Account "zz-account-${stamp}" created`)).toHaveCount(0)
+
+      // Back on the step, it lists the account once it has read them again.
+      await page.getByTestId('onboarding-back').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
       await expect(chips).toHaveCount(1, { timeout: 15_000 })
 
       await accountName.fill(`zz-dollars-${stamp}`)
@@ -147,6 +153,7 @@ for (const mode of MODES) {
       await expect(page.getByTestId('onboarding-account-notice')).toHaveText(
         'Account balances use EUR. Change the base currency in Settings before adding financial data.'
       )
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
       await expect(chips).toHaveCount(1)
       await expect(errorToasts(page)).toHaveCount(0)
       expect(errors).toEqual([])

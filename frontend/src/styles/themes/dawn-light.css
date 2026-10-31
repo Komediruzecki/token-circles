@@ -104,6 +104,20 @@
   --accent-warm: #d97f2e;
   --glow-primary: 0 6px 18px rgba(59, 111, 224, 0.25);
 
+  /* The seven circles: a reached ring runs from --ring-a to --ring-b, a ring not reached is a dotted
+     --ring-track, and the circle being worked on carries a dot in --circle-now. The bands are the
+     official ranges on the benchmark cards. */
+  --ring-a: #6e9bff;
+  --ring-b: #3b6fe0;
+  --ring-track: #c3cee9;
+  --band: rgba(90, 103, 136, 0.16);
+  --band-mid: rgba(90, 103, 136, 0.34);
+  --circle-now: var(--accent-warm);
+  /* "You're here": a tint of --circle-now over the card, opaque so the row under it shows no
+     other hue through. */
+  --circle-now-bg: color-mix(in oklab, var(--circle-now) 18%, var(--card-bg));
+  --circle-now-line: transparent;
+
   /* Fonts (shared across themes; declared on :root so always present) */
   --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
   --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;

@@ -97,4 +97,55 @@ test.describe('import page', () => {
     // Creation selects the new account in the dropdown
     await expect(select).toHaveValue('Onboarding E2E Bank', { timeout: 10000 })
   })
+
+  // The import log keeps the formats of the statements a session read, in a column of its own
+  // (shared/bankFormats.ts): the hint the app takes to where the person lives.
+  test("a bank statement's import is logged with its bank's format", async ({ page }) => {
+    test.setTimeout(90000)
+    await gotoServerless(page, 'import', 'import-header')
+    await page.getByTestId('import-tab-bank-imports').click()
+    await page.getByTestId('bank-file-input').setInputFiles('tests/fixtures/revolut-sample.csv')
+    await expect(page.getByTestId('bank-file-row')).toBeVisible()
+    const select = page.getByTestId('bank-target-account')
+    await select.selectOption('__create-account__')
+    await page.getByTestId('account-select-name').fill('Formats E2E Bank')
+    await page.getByTestId('account-select-submit').click()
+    await expect(select).toHaveValue('Formats E2E Bank', { timeout: 10000 })
+
+    await page.getByTestId('bank-process-btn').click()
+    await page.getByTestId('import-continue-preview').click()
+    await page.getByTestId('import-execute-all').click()
+    await expect(page.getByTestId('import-result')).toContainText('Imported', { timeout: 15000 })
+
+    const formats = () =>
+      page.evaluate(
+        () =>
+          new Promise<unknown[]>((resolve, reject) => {
+            // No version: open whatever is there, never trigger an upgrade from a test.
+            // eslint-disable-next-line no-restricted-globals -- reading the store itself is the point
+            const req = indexedDB.open('finance-manager')
+            req.onerror = () => {
+              reject(new Error(String(req.error)))
+            }
+            req.onsuccess = () => {
+              const db = req.result
+              const all = db
+                .transaction('import_logs', 'readonly')
+                .objectStore('import_logs')
+                .getAll()
+              all.onsuccess = () => {
+                db.close()
+                resolve(
+                  (all.result as Array<{ bank_formats?: unknown }>).map((log) => log.bank_formats)
+                )
+              }
+              all.onerror = () => {
+                db.close()
+                reject(new Error(String(all.error)))
+              }
+            }
+          })
+      )
+    await expect.poll(formats, { timeout: 10000 }).toEqual(['revolut'])
+  })
 })

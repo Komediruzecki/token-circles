@@ -1,0 +1,327 @@
+/* One circle, opened from its row. One column; the back link is a 48 px target. */
+.view {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 14px 0 10px;
+  margin-left: -10px;
+  border-radius: 999px;
+  color: var(--primary-hover);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back:hover {
+  background: var(--primary-bg);
+}
+
+.back:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+
+.glyph {
+  width: 52px;
+  height: 52px;
+}
+
+.head-text {
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+/* The name and its pill: one row while both fit, the pill under the name when they don't. */
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.title {
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+/*
+ * The view moves focus here when it opens, so a screen reader starts at the circle's name. It is
+ * not a control (tabindex -1), so it draws no focus ring, from the keyboard or the mouse.
+ */
+.title:focus,
+.title:focus-visible {
+  outline: none;
+}
+
+.line {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.pill {
+  flex: none;
+}
+
+.key {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.next {
+  margin-top: 4px;
+}
+
+.guide {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* What the circle checks, and the person's numbers: each a part with its own heading. */
+.part {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.part-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.part-lead {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.checks {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.check {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+/* Not known yet: a dashed edge, and the line that says what it waits on. */
+.check[data-state='not-known'] {
+  border-style: dashed;
+}
+
+.check-head {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.mark {
+  color: var(--text-secondary);
+}
+
+.check[data-state='met'] .mark {
+  color: var(--success);
+}
+
+.check[data-state='not-yet'] .mark {
+  color: var(--circle-now);
+}
+
+.check-title {
+  min-width: 0;
+  text-wrap: pretty;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.check-state {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.check[data-state='met'] .check-state {
+  color: var(--success);
+}
+
+.check-detail,
+.check-waiting,
+.check-needed {
+  margin: 0 0 0 30px;
+  text-wrap: pretty;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.check-detail {
+  color: var(--text);
+}
+
+.check-waiting {
+  font-style: italic;
+}
+
+.check-needed {
+  font-size: 12px;
+}
+
+.check > fieldset {
+  margin-left: 30px;
+}
+
+.numbers {
+  display: grid;
+  margin: 4px 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.number {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.number dt {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.number dd {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text);
+}
+
+.number-note,
+.number-link {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.number-link {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  margin: -8px 0 -10px;
+  color: var(--primary-hover);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.number-link:hover {
+  text-decoration: underline;
+}
+
+.number-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 400px) {
+  .check-detail,
+  .check-waiting,
+  .check-needed,
+  .check > fieldset {
+    margin-left: 0;
+  }
+}
+
+/* Under 1024 px one column; from 1024 px, with How you compare, two: the steps, checks and
+   numbers on the left, the comparison and the guidance line on the right. */
+.columns,
+.main,
+.side {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.columns {
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .columns[data-two='true'] {
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+
+/* A link inside running text: the padding makes a 48 px target, and the negative margin hands
+   the same height back, so the line it sits on keeps the paragraph's spacing. */
+.inline-link {
+  display: inline-block;
+  min-width: 48px;
+  padding-block: calc((48px - 1lh) / 2);
+  margin-block: calc((1lh - 48px) / 2);
+  text-align: center;
+  color: var(--primary-hover);
+  font-weight: 600;
+}
+
+.inline-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

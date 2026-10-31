@@ -10,10 +10,11 @@
  * — only unlocked by accident, whenever some unrelated typed-client write happened later.
  *
  * Moving it to `apiFetch`, the one function both surfaces share, fixes that the same way
- * dataVersions did for staleness. Its one import is another leaf module, precisely so `apiFetch`
- * can use it: achievementsStore imports the API client, so anything that reaches back from
- * apiFetch into achievementsStore would close a cycle.
+ * dataVersions did for staleness. Its imports are leaf modules, precisely so `apiFetch` can use
+ * it: achievementsStore imports the API client, so anything that reaches back from apiFetch into
+ * achievementsStore would close a cycle.
  */
+import { isUserStatePath } from '../../../shared/accountStateKeys'
 import { isReadSentAsPost } from './readsSentAsPost'
 
 /** Listened to by components/AchievementsHost.tsx, which debounces before evaluating. */
@@ -38,6 +39,8 @@ export function announceDataChanged(path: string, method: string | undefined, ok
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return
   if (path.startsWith(EXCLUDED_PREFIX)) return
   if (isReadSentAsPost(path)) return
+  // A wizard step, a finished tour or a hidden card: where the person is, not what they own.
+  if (isUserStatePath(path)) return
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent(DATA_CHANGED_EVENT, { detail: { endpoint: path } }))
 }

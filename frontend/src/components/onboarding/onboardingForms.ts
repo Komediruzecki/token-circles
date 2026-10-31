@@ -1,6 +1,6 @@
 /**
- * The onboarding wizard's two forms, written down once: "Name your space" and "Create your first
- * account". Each checks what it sends by the rules both runtimes run (shared/profileSchema.ts,
+ * The onboarding wizard's two forms, written down once: the space's name ("Welcome to Token
+ * Circles") and "Add your main account". Each checks what it sends by the rules both runtimes run (shared/profileSchema.ts,
  * shared/accountSchema.ts) and says what is wrong under the field, in their words. A refusal
  * from the runtime is marked at the field it names (a profile name another of your profiles has),
  * or said in the form's notice (an account in another currency than the profile's balances).
@@ -19,6 +19,7 @@ import { fieldErrorsOf } from '../../../../shared/refusal'
 import { apiPost } from '../../core/api'
 import { parseDecimalInput } from '../../core/decimalInput'
 import { createForm } from '../form'
+import type { AnswerChanges, AnswersRecord } from '../../../../shared/guidance/answers'
 import type { FieldErrors } from '../../../../shared/refusal'
 import type { Form } from '../form'
 
@@ -37,7 +38,7 @@ export interface SpaceFormOptions {
   onSaved: () => void
 }
 
-/** "Name your space": the profile's name, checked as a rename of it or as a new profile. */
+/** The space's name ("Welcome to Token Circles"), checked as a rename of the profile or as a new one. */
 export function createSpaceForm(options: SpaceFormOptions): Form<SpaceValues> {
   return createForm<SpaceValues>({
     initial: { name: '', currency: 'EUR' },
@@ -55,6 +56,22 @@ export function createSpaceForm(options: SpaceFormOptions): Form<SpaceValues> {
     },
     failure: "Couldn't save your space. Try again.",
   })
+}
+
+/**
+ * What "About this space" saves of its two questions (guidance.md section 5.5): the answers chosen
+ * on it, and `skipped` for a region left unanswered, so the question counts as asked. A region the
+ * record already holds is kept instead: an answer from before, or one only a newer build reads.
+ * Worked out from the record as it is read just before the save (saveAnswers).
+ */
+export function spaceAnswerChanges(
+  chosen: AnswerChanges
+): (stored: AnswersRecord) => AnswerChanges {
+  const unanswered = (region: unknown) => region === undefined || region === null
+  return (stored) =>
+    unanswered(chosen.region) && unanswered(stored.region)
+      ? { ...chosen, region: 'skipped' }
+      : { ...chosen }
 }
 
 export interface FirstAccountValues {
@@ -106,7 +123,7 @@ export function firstAccountBody(values: FirstAccountValues): {
   }
 }
 
-/** "Create your first account", which can add another after it. */
+/** "Add your main account", which can add another after it (Back, on "Your accounts"). */
 export function createFirstAccountForm(options: FirstAccountFormOptions): Form<FirstAccountValues> {
   const form: Form<FirstAccountValues> = createForm<FirstAccountValues, CreatedAccount>({
     initial: blankAccount('EUR'),

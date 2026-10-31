@@ -124,8 +124,9 @@ describe('worker import: rule categories in a fresh profile', () => {
   it('files the rule rows under the default categories and offers no old name', async () => {
     await seedDefaults();
 
+    // Every name these rules give is a default, Groceries included, so nothing is new.
     const preview = await run(true);
-    expect(preview.new_categories).toEqual(['Groceries']);
+    expect(preview.new_categories).toEqual([]);
 
     const done = await run(false);
     expect(done.imported).toBe(4);
@@ -156,7 +157,7 @@ describe('worker import: a profile that holds the old names', () => {
     await addCategory('Salary Eur', 'income');
     const before = (await categoryNames()).length;
 
-    expect((await run(true)).new_categories).toEqual(['Groceries']);
+    expect((await run(true)).new_categories).toEqual([]);
     await run(false);
 
     expect(await filedUnder()).toEqual({
@@ -165,7 +166,7 @@ describe('worker import: a profile that holds the old names', () => {
       'ISPLATA PLACE TEST EMPLOYER': 'Salary Eur',
       'KONZUM TEST STORE 0000': 'Groceries',
     });
-    expect((await categoryNames()).length).toBe(before + 1);
+    expect((await categoryNames()).length).toBe(before);
   });
 
   it('offers and creates no new name beside an old one when the profile has no defaults', async () => {

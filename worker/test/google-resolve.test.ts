@@ -68,6 +68,8 @@ describe('resolveGoogleUser', () => {
     } as typeof CLAIMS);
     expect(res.created).toBe(true);
     expect(res.email).toBeNull();
+    // No confirmed address, nowhere to send a welcome.
+    expect(res.welcome).toBe(false);
     const user = await env.DB.prepare('SELECT email FROM users WHERE id = ?')
       .bind(res.userId)
       .first<{ email: string | null }>();
@@ -85,6 +87,7 @@ describe('resolveGoogleUser', () => {
       email: null,
       cleared: [],
       tokenVersion: 1,
+      welcome: false,
     });
     const user = await env.DB.prepare(
       'SELECT email, provider_id FROM users WHERE id = 901'
@@ -96,6 +99,8 @@ describe('resolveGoogleUser', () => {
     const res = await resolveGoogleUser(env.DB, { ...CLAIMS, email: 'New.Person@Example.COM' });
     expect(res.created).toBe(true);
     expect(res.email).toBe('new.person@example.com');
+    // Google has confirmed the address, so the account's welcome is claimed now (welcome.ts).
+    expect(res.welcome).toBe(true);
     const user = await env.DB.prepare('SELECT email FROM users WHERE id = ?')
       .bind(res.userId)
       .first<{ email: string }>();
@@ -114,6 +119,7 @@ describe('resolveGoogleUser', () => {
       email: null,
       cleared: [],
       tokenVersion: 1,
+      welcome: false,
     });
     const { results } = await env.DB.prepare(
       "SELECT id FROM users WHERE lower(email) = 'gina@example.com'"

@@ -1,135 +1,383 @@
 /**
- * Server-mode onboarding trigger (the real signup/login path, not serverless).
+ * Signed in, the setup wizard belongs to the account: its record is on the Worker
+ * (`/api/account/state`, user_state), so an account meets the wizard once, on any device, and
+ * reopens it at the step it reached.
  *
- * The other onboarding specs boot serverless zero-state; this proves the
- * SERVER path — a logged-in session whose active profile is pristine (no
- * accounts / transactions / bills) auto-opens the wizard on load. This is the
- * path that a real email/Google signup takes, and the one that was silently
- * broken: the server's /api/transactions returns `{ rows, total }`, not a
- * bare array, so the pristine check's `Array.isArray` was always false.
+ * Each case signs up an account of its own, signs this browser in to it, and deletes it after.
+ * The fixture account every other spec uses has a finished record (global.setup.ts), as every
+ * account in use before the record existed does (migration 0035).
  *
- * Isolation-safe: it creates a FRESH profile (default categories only) and
- * activates that, so it never wipes the shared seeded profile other specs use.
- * It sets localStorage itself, rather than going through the login() helper, so
- * it can point the app at the pristine profile instead of the seeded one.
+ * The local-first wizard, which keeps its decision in localStorage, is onboarding.spec.ts.
  */
 import { expect, test } from '@playwright/test'
-import { randomBytes } from 'node:crypto'
-import { confirmAccount, sql } from './db'
-import { E2E_BASE, firstProfileId } from './test-helpers'
+import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
+import { paintedContrast } from './painted-contrast'
+import { E2E_BASE } from './test-helpers'
+import type { BrowserContext, Page, Response } from '@playwright/test'
 
-// eslint-disable-next-line sonarjs/no-hardcoded-passwords -- local throwaway fixture account
-const SECOND_PASSWORD = 'onboarding-second-account-1'
+interface OnboardingRecord {
+  step: string | null
+  started_at: string | null
+  finished_at: string | null
+  outcome: string | null
+}
 
-test.describe('onboarding — server mode @smoke', () => {
-  test('auto-opens for a logged-in user whose active profile is pristine', async ({ page }) => {
-    const ctx = page.context()
+/** The account's record, as the Worker answers it to `ctx`'s session. */
+async function recordOf(ctx: BrowserContext): Promise<OnboardingRecord | null> {
+  const res = await ctx.request.get(`${E2E_BASE}/api/account/state`)
+  expect(res.ok(), `GET /api/account/state: ${String(res.status())}`).toBeTruthy()
+  return ((await res.json()) as { onboarding: OnboardingRecord | null }).onboarding
+}
 
-    // No sign-in here: the setup project saved a signed-in storageState and every context starts
-    // from it, so ctx.request already carries the session cookie.
-    const home = await firstProfileId(ctx)
+/** The next answered write to the record whose body matches. */
+const recordWrite = (
+  page: Page,
+  matches: (sent: Partial<OnboardingRecord>) => boolean
+): Promise<Response> =>
+  page.waitForResponse(
+    (res) =>
+      new URL(res.url()).pathname === '/api/account/state/onboarding' &&
+      res.request().method() === 'PUT' &&
+      res.ok() &&
+      matches(JSON.parse(res.request().postData() ?? '{}') as Partial<OnboardingRecord>),
+    { timeout: 30_000 }
+  )
 
-    // A brand-new profile: the worker/backend seeds default categories only —
-    // zero accounts/transactions/bills — the pristine state a fresh signup has.
-    const res = await ctx.request.post(`${E2E_BASE}/api/profiles`, {
-      headers: { 'Content-Type': 'application/json', 'X-Profile-Id': String(home) },
-      data: { name: `Onboarding Probe ${Date.now()}` },
-    })
-    expect(res.ok()).toBeTruthy()
-    const created = (await res.json()) as { id: number }
-    expect(created.id).toBeGreaterThan(0)
+const TIME = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/
 
-    await ctx.addInitScript((pid: number) => {
-      localStorage.setItem('finance_storage_mode', 'self-hosted')
-      localStorage.setItem('darkMode', 'false')
-      localStorage.setItem('currentProfileId', String(pid))
-      localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-      // Init scripts run on EVERY navigation — including the post-skip reload
-      // below. Clear the decision flag only ONCE (sessionStorage survives the
-      // reload), or the reload assertion would erase the skip it just made and
-      // ride on the settings-KV mirror winning a race (flaked on slow CI).
-      if (!sessionStorage.getItem('onb_spec_cleared')) {
-        sessionStorage.setItem('onb_spec_cleared', '1')
-        // The flag is kept per account (finance_onboarding:account-<id>), browser-wide before.
-        for (const key of Object.keys(localStorage)) {
-          if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
-        }
-      }
-    }, created.id)
-    await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-
-    await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30000 })
-    await expect(page.getByTestId('onboarding-step-welcome')).toBeVisible()
-
-    // And it does NOT re-open once the decision is recorded (skip persists).
-    // Deterministically await the settings-KV mirror write the skip fires
-    // before reloading, so the persistence check never races it.
-    const mirrorSettled = page.waitForResponse(
-      (r) => r.url().includes('/api/settings') && r.request().method() === 'PUT',
-      { timeout: 15000 }
-    )
-    await page.getByTestId('onboarding-skip').click()
-    await page.getByTestId('confirm-accept').click()
-    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-    await mirrorSettled
-    await page.reload({ waitUntil: 'domcontentloaded' })
-    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
-    await page.waitForTimeout(1200)
-    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+test.describe('the setup wizard on the account @smoke', () => {
+  test.beforeEach(() => {
+    test.setTimeout(120_000)
   })
 
-  test('a second account in the same browser is offered its own onboarding', async ({ page }) => {
-    test.setTimeout(120_000)
+  test('a new account meets it, and reopens it at the step it reached', async ({ page }) => {
     const ctx = page.context()
-    const me = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
-    const first = ((await me.json()) as { id: number }).id
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      const steps: string[] = []
+      page.on('request', (req) => {
+        if (new URL(req.url()).pathname !== '/api/account/state/onboarding') return
+        const sent = JSON.parse(req.postData() ?? '{}') as Partial<OnboardingRecord>
+        if (sent.step) steps.push(sent.step)
+      })
+      const started = recordWrite(page, (sent) => sent.step === 'space')
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await started
 
-    // This browser onboarded before the flag was kept per account: one browser-wide flag. No
-    // server account takes it over; the fixture account's data keeps the wizard closed.
-    await ctx.addInitScript(() => {
-      if (!sessionStorage.getItem('onb_second_seeded')) {
-        sessionStorage.setItem('onb_second_seeded', '1')
-        for (const key of Object.keys(localStorage)) {
-          if (key.startsWith('finance_onboarding')) localStorage.removeItem(key)
-        }
-        localStorage.setItem('finance_storage_mode', 'self-hosted')
-        localStorage.setItem('finance_onboarding', 'completed')
+      // The space's second screen is the same step: nothing new to keep until the account.
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      const reached = recordWrite(page, (sent) => sent.step === 'account')
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await reached
+
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+
+      const record = await recordOf(ctx)
+      expect(record).toMatchObject({ step: 'account', finished_at: null, outcome: null })
+      expect(record!.started_at).toMatch(TIME)
+      // The old first screen is never written: setup opens on the space.
+      expect(steps).toEqual(['space', 'account'])
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a record left at the old first screen reopens on the space, and moves on from there', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      // Left at welcome, as a build before the space opened setup kept it.
+      const left = await ctx.request.put(`${E2E_BASE}/api/account/state/onboarding`, {
+        data: { step: 'welcome' },
+      })
+      expect(left.ok(), `PUT /api/account/state/onboarding: ${String(left.status())}`).toBeTruthy()
+      const { started_at: startedAt } = (await recordOf(ctx))!
+      expect(startedAt).toMatch(TIME)
+
+      await bootSignedIn(ctx)
+      const moved = recordWrite(page, (sent) => sent.step === 'space')
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await moved
+
+      expect(await recordOf(ctx)).toMatchObject({
+        step: 'space',
+        started_at: startedAt,
+        finished_at: null,
+        outcome: null,
+      })
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('the space step keeps where you live and who the space covers on the profile', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    /** The profile's answers as the Worker keeps them, under the plain key. */
+    const answers = async () => {
+      const res = await ctx.request.get(`${E2E_BASE}/api/settings`)
+      expect(res.ok(), `GET /api/settings: ${String(res.status())}`).toBeTruthy()
+      const { guidance } = (await res.json()) as { guidance?: string }
+      return guidance === undefined ? null : (JSON.parse(guidance) as unknown)
+    }
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+
+      await page.getByTestId('onboarding-space-region-UK').click()
+      await page.getByTestId('onboarding-space-adults-1').click()
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+      await expect.poll(answers).toEqual({ region: 'UK', adults: 1 })
+
+      // Settings shows them, and Remove answer clears one there.
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await page.evaluate(() => {
+        window.location.hash = 'settings'
+      })
+      await expect(page.getByTestId('settings-about-space')).toBeVisible({ timeout: 30_000 })
+      await expect(
+        page.getByTestId('about-this-space').getByRole('radio', { name: 'United Kingdom' })
+      ).toBeChecked()
+      await expect(page.getByTestId('settings-space-region-note')).toHaveText(
+        'Compared with the United Kingdom, from your answer.'
+      )
+      await page.getByTestId('settings-space-region-ask-again').click()
+      await expect.poll(answers).toEqual({ adults: 1 })
+      await expect(page.getByTestId('settings-space-region-note')).toContainText(
+        'Not answered yet.'
+      )
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('reopened at the statement, an import goes into the account made before, on the Worker', async ({
+    page,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-about')).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('onboarding-next').click()
+      await expect(page.getByTestId('onboarding-step-account')).toBeVisible({ timeout: 30_000 })
+
+      // The main account, with what it holds today.
+      await page.getByTestId('onboarding-account-name').fill('Main Checking')
+      await page.getByTestId('onboarding-account-balance').fill('1500')
+      const reached = recordWrite(page, (sent) => sent.step === 'import')
+      await page.getByTestId('onboarding-account-create').click()
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await reached
+
+      // Back on the account step: the account is listed, and the form is blank for another.
+      await page.getByTestId('onboarding-back').click()
+      await expect(page.getByTestId('onboarding-account-chip')).toHaveCount(1)
+      await expect(page.getByTestId('onboarding-account-chip')).toContainText('Main Checking')
+      await expect(page.getByTestId('onboarding-account-name')).toHaveValue('')
+      await expect(page.getByTestId('onboarding-account-balance')).toHaveValue('')
+
+      // Off to the bank to export the statement, and back: setup reopens at the statement, and
+      // the statement goes into the account it has, not into a new one beside it.
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-import')).toBeVisible({ timeout: 30_000 })
+      await page
+        .getByTestId('onboarding-import-input')
+        .setInputFiles('tests/fixtures/revolut-sample.csv')
+      await expect(page.getByTestId('onboarding-import-file')).toHaveAttribute(
+        'data-state',
+        'ready',
+        { timeout: 30_000 }
+      )
+      await expect(page.getByTestId('onboarding-import-target')).toHaveValue('Main Checking')
+      const importAll = page.getByTestId('onboarding-import-selected')
+      await expect(importAll).toHaveText('Import 7')
+      const subscriptions = recordWrite(page, (sent) => sent.step === 'subscriptions')
+      await importAll.click()
+      await expect(page.getByTestId('onboarding-step-subscriptions')).toBeVisible({
+        timeout: 30_000,
+      })
+      await subscriptions
+
+      // On the Worker: still the one account, holding the statement's seven transactions.
+      const accounts = (await (await ctx.request.get(`${E2E_BASE}/api/accounts`)).json()) as {
+        id: number
+        name: string
+      }[]
+      expect(accounts.map((a) => a.name)).toEqual(['Main Checking'])
+      const listed = await ctx.request.get(
+        `${E2E_BASE}/api/transactions?account_id=${String(accounts[0].id)}`
+      )
+      expect(listed.ok(), `GET /api/transactions: ${String(listed.status())}`).toBeTruthy()
+      expect(((await listed.json()) as { total: number }).total).toBe(7)
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a skip is kept on the account, and another browser on it opens no wizard', async ({
+    page,
+    browser,
+  }) => {
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      await bootSignedIn(ctx)
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+
+      const skipped = recordWrite(page, (sent) => sent.outcome === 'skipped')
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await skipped
+
+      const record = await recordOf(ctx)
+      expect(record).toMatchObject({ step: 'space', outcome: 'skipped' })
+      expect(record!.finished_at).toMatch(TIME)
+
+      // Another device: nothing in its storage, the same account signed in.
+      const elsewhere = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+      try {
+        await signIn(elsewhere, email)
+        await bootSignedIn(elsewhere)
+        const other = await elsewhere.newPage()
+        await other.goto(`${E2E_BASE}/#dashboard`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        })
+        await expect(other.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+        await other.waitForTimeout(1200)
+        await expect(other.getByTestId('onboarding-wizard')).toHaveCount(0)
+      } finally {
+        await elsewhere.close()
       }
-    })
-    await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30000 })
-    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30000 })
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a decision this browser kept from before goes to the account, once', async ({ page }) => {
+    const ctx = page.context()
+    const { email, id } = await signUpAndIn(ctx)
+    const flag = `finance_onboarding:account-${id}`
+    try {
+      await bootSignedIn(ctx)
+      // Finished in this browser before the record existed: the flag the app kept then.
+      await ctx.addInitScript((key) => {
+        if (!sessionStorage.getItem('onb_flag_seeded')) {
+          sessionStorage.setItem('onb_flag_seeded', '1')
+          localStorage.setItem(key, 'completed')
+        }
+      }, flag)
+      const writes: string[] = []
+      page.on('request', (req) => {
+        if (new URL(req.url()).pathname.startsWith('/api/account/state/')) {
+          writes.push(`${req.method()} ${req.postData() ?? ''}`)
+        }
+      })
+
+      const sent = recordWrite(page, (body) => body.outcome === 'completed')
+      await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+      await sent
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      expect(await recordOf(ctx)).toMatchObject({ step: null, outcome: 'completed' })
+      await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), flag)).toBeNull()
+
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+      await page.waitForTimeout(1200)
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      expect(writes).toEqual(['PUT {"outcome":"completed"}'])
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+
+  test('a second account in the same browser meets its own wizard', async ({ page }) => {
+    const ctx = page.context()
+    // The fixture account, signed in from the saved state: finished long ago, no wizard.
+    await page.goto(`${E2E_BASE}/#dashboard`, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
     await page.waitForTimeout(1200)
     await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
-    expect(
-      await page.evaluate((id) => localStorage.getItem(`finance_onboarding:account-${id}`), first)
-    ).toBeNull()
 
-    // A second person signs in to their own new account in the same browser.
-    const email = `e2e-onboarding-${randomBytes(6).toString('hex')}@tokencircles.test`
+    const { email } = await signUpAndIn(ctx)
     try {
-      sql('DELETE FROM rate_limits')
-      await ctx.request.post(`${E2E_BASE}/api/auth/register`, {
-        data: { email, password: SECOND_PASSWORD },
-      })
-      await confirmAccount(email)
-      const signedIn = await ctx.request.post(`${E2E_BASE}/api/auth/login`, {
-        data: { email, password: SECOND_PASSWORD },
-      })
-      expect(signedIn.ok(), await signedIn.text()).toBeTruthy()
       await page.evaluate(() => {
         localStorage.removeItem('currentProfileId')
         localStorage.removeItem('selectedProfileIds')
       })
       await page.reload({ waitUntil: 'domcontentloaded' })
-
-      await expect(page.getByTestId('onboarding-wizard')).toBeVisible({ timeout: 30000 })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
     } finally {
-      // Delete the second account, and only it: the session may still be the fixture's.
-      const who = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
-      const signedInAs = who.ok() ? ((await who.json()) as { email?: string }).email : undefined
-      if (signedInAs === email) {
-        await ctx.request.delete(`${E2E_BASE}/api/account`, { data: { confirm: 'delete' } })
-      }
+      await deleteAccount(ctx, email)
     }
   })
+})
+
+// The space step signed in has one line local-first never shows: the way to keep the data in this
+// browser instead. Read over what the screen paints behind it, wide and on a phone.
+test.describe("the signed-in space step's text over what is painted behind it", () => {
+  for (const theme of ['light', 'dark']) {
+    test(`every line reads at AA, ${theme}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const ctx = page.context()
+      const { email } = await signUpAndIn(ctx)
+      try {
+        await bootSignedIn(ctx)
+        await ctx.addInitScript((value) => {
+          localStorage.setItem('finance-theme', value)
+        }, theme)
+        await page.goto(`${E2E_BASE}/#dashboard`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        })
+        await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await expect(page.getByTestId('onboarding-local-only')).toBeVisible()
+        const wrong: string[] = []
+        for (const size of [
+          { width: 1280, height: 720 },
+          { width: 390, height: 844 },
+          { width: 320, height: 568 },
+        ]) {
+          await page.setViewportSize(size)
+          const lines = await paintedContrast(page)
+          expect(lines.map((l) => l.what)).toContain('Keep my data in this browser only')
+          for (const { what, ratio, need, field } of lines) {
+            const where = `${String(size.width)}x${String(size.height)}: "${what}"`
+            if (ratio < need)
+              wrong.push(`${where} reads at ${String(ratio)}:1, under ${String(need)}:1`)
+            if (size.width <= 620 && field > 2) {
+              wrong.push(`${where} has the orbit field behind it (${String(field)})`)
+            }
+          }
+        }
+        expect(wrong).toEqual([])
+      } finally {
+        await deleteAccount(ctx, email)
+      }
+    })
+  }
 })

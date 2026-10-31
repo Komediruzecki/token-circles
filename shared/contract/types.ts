@@ -67,6 +67,7 @@ export const STORED_KINDS = [
   'categories',
   'category mappings',
   'goals',
+  'guidance answers',
   'holdings',
   'housing',
   'import logs',

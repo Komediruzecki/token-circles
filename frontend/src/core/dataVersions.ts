@@ -26,6 +26,7 @@
  * de-duplication and scope-keyed caching are the next step, and they attach at the same seam.
  */
 import { batch, createSignal } from 'solid-js'
+import { isUserStatePath } from '../../../shared/accountStateKeys'
 import { isReadSentAsPost } from './readsSentAsPost'
 import type { Accessor, Setter } from 'solid-js'
 
@@ -136,9 +137,12 @@ const WRITES_THAT_ALSO_MOVE: readonly { path: RegExp; moves: string }[] = [
  * resolve to `categories`. Anything that is not an `/api/<name>` path resolves to nothing, so an
  * unexpected URL is inert rather than invalidating the world. The path's own entity comes first,
  * and each name appears once however many routes through the table reach it.
+ *
+ * The account's own state (`/api/account/state`: a wizard step, a finished tour, a hidden card)
+ * moves no data, so it resolves to nothing too: a tour finished on one page reloads none.
  */
 export function tagsForPath(path: string): string[] {
-  if (isReadSentAsPost(path)) return []
+  if (isReadSentAsPost(path) || isUserStatePath(path)) return []
   const match = /^\/api\/([a-zA-Z][a-zA-Z0-9-]*)/.exec(path)
   if (!match) return []
   const tags: string[] = []
@@ -152,6 +156,41 @@ export function tagsForPath(path: string): string[] {
   return tags
 }
 
+/**
+ * Settings keys that only the store which writes them reads back, so saving one moves nothing a
+ * reader of `settings` shows.
+ *
+ * `achievements` is the badge record: the unlocks and the dismissed advice cards. The badge store
+ * (core/achievementsStore.ts) keeps it in memory and reads it from the settings only when it
+ * evaluates, which a settings write never starts (core/dataChangedEvent.ts). Every evaluation that
+ * earns a badge saves it, though, and as a plain settings write that told the circles on Dashboard
+ * and Progress and About this space to read their settings again (and the circles their holdings),
+ * for keys the save had not touched.
+ *
+ * Local-first names the profile in the key (`achievements:3`), so the suffix is ignored here.
+ */
+const SETTINGS_ONLY_THEIR_STORE_READS: ReadonlySet<string> = new Set(['achievements'])
+
+/**
+ * Whether a write to `/api/settings` saves only keys from the set above. A body this cannot read
+ * as a JSON object with at least one key answers false, and the write bumps `settings` as before.
+ */
+function savesOnlySettingsNobodyFollows(path: string, body: unknown): boolean {
+  if (!/^\/api\/settings(?:\?|$)/.test(path) || typeof body !== 'string') return false
+  let written: unknown
+  try {
+    written = JSON.parse(body)
+  } catch {
+    return false
+  }
+  if (written === null || typeof written !== 'object' || Array.isArray(written)) return false
+  const keys = Object.keys(written)
+  return (
+    keys.length > 0 &&
+    keys.every((key) => SETTINGS_ONLY_THEIR_STORE_READS.has(key.replace(/:\d+$/, '')))
+  )
+}
+
 /** How many `asOneWrite` actions are running, and what their requests bumped meanwhile. */
 let actionsRunning = 0
 const heldTags = new Set<string>()
@@ -162,11 +201,20 @@ const heldTags = new Set<string>()
  * Only a successful non-GET invalidates: a GET changes nothing, and a rejected write (a 400 from
  * a validation guard, a 401 from an expired session) left the server's state alone, so refetching
  * would be pure waste. HEAD and OPTIONS are treated as reads for the same reason.
+ *
+ * `body` is the request's body as sent. It is read for one route only: a settings write that saves
+ * nothing but keys their own store reads back bumps nothing (`SETTINGS_ONLY_THEIR_STORE_READS`).
  */
-export function invalidateForRequest(path: string, method: string | undefined, ok: boolean): void {
+export function invalidateForRequest(
+  path: string,
+  method: string | undefined,
+  ok: boolean,
+  body?: unknown
+): void {
   if (!ok) return
   const verb = (method ?? 'GET').toUpperCase()
   if (verb === 'GET' || verb === 'HEAD' || verb === 'OPTIONS') return
+  if (savesOnlySettingsNobodyFollows(path, body)) return
   const tags = tagsForPath(path)
   // Part of a larger action: delivered with the rest of it, when it ends. See asOneWrite.
   if (actionsRunning > 0) {

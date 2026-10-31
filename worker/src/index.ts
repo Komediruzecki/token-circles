@@ -7,6 +7,7 @@ import { emailCodeRoutes } from './routes/email-code';
 import { passkeyRoutes } from './routes/passkeys';
 import { profilesRoutes } from './routes/profiles';
 import { accountRoutes } from './routes/account';
+import { accountStateRoutes } from './routes/account-state';
 import { accountsRoutes } from './routes/accounts';
 import { transactionsRoutes } from './routes/transactions';
 import { categoriesRoutes } from './routes/categories';
@@ -39,6 +40,7 @@ import { apiTokensRoutes } from './routes/api-tokens';
 import { v1Routes } from './routes/v1';
 import { mcpRoutes } from './mcp';
 import { runScheduledReminders } from './reminders';
+import { runWeekOneMails, WEEK_ONE_CRON } from './weekOne';
 import { runScheduledSheetSyncs } from './import-sync';
 import { handleIngestEmail } from './import-email';
 import { sweepRateLimits } from './ratelimit';
@@ -181,6 +183,7 @@ app.route('/', passkeyRoutes);
 // file storage (needs an R2 bucket), and spreadsheet-file imports.
 app.route('/', profilesRoutes);
 app.route('/', accountRoutes);
+app.route('/', accountStateRoutes);
 app.route('/', accountsRoutes);
 app.route('/', transactionsRoutes);
 app.route('/', categoriesRoutes);
@@ -221,6 +224,14 @@ app.onError(errorResponse);
 export default {
   fetch: app.fetch,
   scheduled: async (event: ScheduledController, env: Env, ctx: ExecutionContext) => {
+    // The week-one mails have a trigger of their own (WEEK_ONE_CRON, 08:30 UTC) and run alone on
+    // it: an invocation has a budget of D1 queries (1,000 on Workers Paid), and the reminders and
+    // sheet syncs of the 08:00 run spend from the same one. Half an hour apart, the two senders
+    // never call Resend at the same time either.
+    if (event.cron === WEEK_ONE_CRON) {
+      ctx.waitUntil(runWeekOneMails(event.cron, env));
+      return;
+    }
     ctx.waitUntil(
       Promise.all([
         runScheduledReminders(event.cron, env),

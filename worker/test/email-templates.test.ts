@@ -67,16 +67,19 @@ describe('email templates', () => {
     expect(mail.html).not.toContain('email/orbit.gif');
   });
 
-  it('account-exists notice offers Sign in, and says where the reset is', () => {
-    // One button: main has no link that opens the reset form (#620 adds #forgot-password).
+  it('account-exists notice offers Sign in, and Reset password as the quieter second button', () => {
     const mail = renderAccountExists({ appUrl: 'https://tokencircles.com' });
     expect(mail.html).toMatch(
       /<a class="tc-btn" href="https:\/\/tokencircles\.com"[^>]*>Sign in<\/a>/
     );
-    expect([...mail.html.matchAll(/class="tc-btn2?"/g)]).toHaveLength(1);
-    expect(mail.html).not.toContain('forgot-password');
-    expect(mail.text).toContain('Sign in: https://tokencircles.com');
-    expect(mail.text).toContain('reset your password from the sign-in screen');
+    // Reset password opens the sign-in screen on the form that sends a reset link
+    // (#forgot-password in frontend/src/components/LoginScreen.tsx).
+    expect(mail.html).toMatch(
+      /<a class="tc-btn2" href="https:\/\/tokencircles\.com\/#forgot-password"[^>]*>Reset password<\/a>/
+    );
+    expect(mail.text).toContain(
+      'Sign in: https://tokencircles.com\nReset password: https://tokencircles.com/#forgot-password'
+    );
   });
 
   it('password reset carries the link in html AND text, with ttl wording', () => {

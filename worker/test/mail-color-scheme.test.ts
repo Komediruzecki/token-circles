@@ -102,6 +102,12 @@ function everyMail(): Array<{ label: string; html: string }> {
 describe('the colour scheme every mail declares', () => {
   const mails = everyMail();
 
+  it('reads every mail of the catalogue, Confirm and the two week-one mails among them', () => {
+    expect(mails.map((mail) => mail.label)).toEqual(
+      expect.arrayContaining(['confirm-email', 'week-one-day-2', 'week-one-day-7'])
+    );
+  });
+
   it('is "light only", in both meta tags and on :root, never "dark"', () => {
     expect(mails.length).toBeGreaterThan(400);
     for (const { label, html } of mails) {

@@ -2,7 +2,7 @@
  * Dashboard Component
  */
 
-import { batch, createSignal, For, Show } from 'solid-js'
+import { batch, createEffect, createSignal, For, Show } from 'solid-js'
 import BadgeRail from '../components/BadgeRail'
 import CalcTracer, { isCalcTracerEnabled } from '../components/CalcTracer'
 import { getCategorySvg } from '../components/CategoryIcon'
@@ -12,9 +12,10 @@ import BudgetAlertsCard from '../components/Dashboard/BudgetAlertsCard'
 import CategoryOrbits from '../components/Dashboard/CategoryOrbits'
 import OverviewDeck from '../components/Dashboard/OverviewDeck'
 import RecurringInsightsCard from '../components/Dashboard/RecurringInsightsCard'
-import SavingsRateCard from '../components/Dashboard/SavingsRateCard'
+import SavingsGauge from '../components/Dashboard/SavingsGauge'
 import Sparkline from '../components/Dashboard/Sparkline'
 import { DashboardSettings } from '../components/DashboardSettings'
+import DashboardNextStep from '../components/guidance/DashboardNextStep'
 import InfoTip from '../components/InfoTip'
 import PeriodBar from '../components/PeriodBar'
 import { SkeletonCard, SkeletonChart } from '../components/Skeleton'
@@ -29,8 +30,10 @@ import {
 import { useAppState } from '../core/appStore'
 import { loadWidgetPrefs } from '../core/dashboardWidgets'
 import { entityVersion } from '../core/dataVersions'
+import { useGuidance } from '../core/guidance'
 import { refetchOnActive } from '../core/pageVisibility'
 import { usePeriod } from '../core/periodStore'
+import { adoptBrowserGoal } from '../core/savingsGoal'
 import { theme } from '../core/theme'
 import { toRange, toYYYYMM } from '../utils/period'
 import { daysToDue, dueDateLabel, dueInWords, nextDue } from './billDue'
@@ -94,19 +97,13 @@ export default function Dashboard() {
   const [visibleWidgets, setVisibleWidgets] = createSignal<string[]>(prefs.visible)
   const [widgetOrder, setWidgetOrder] = createSignal<string[]>(prefs.order)
 
-  const [savingsGoal, setSavingsGoal] = createSignal(
-    (() => {
-      const stored = localStorage.getItem('savingsGoal')
-      return stored ? parseFloat(stored) : 20
-    })()
-  )
-
-  const handleSavingsGoalChange = (num: number) => {
-    if (!isNaN(num) && num >= 0) {
-      setSavingsGoal(num)
-      localStorage.setItem('savingsGoal', String(num))
-    }
-  }
+  // The circles: Your next step in Getting started's place, and the savings gauge's 12 months.
+  const guidance = useGuidance('dashboard')
+  // A goal this browser kept before goals were the profile's moves to the first profile here.
+  createEffect(() => {
+    const view = guidance()
+    if (view) void adoptBrowserGoal(view)
+  })
 
   // Everything follows the global focus period (and profile) — but only while this
   // page is visible. A hidden Dashboard is marked stale and refetches once when next
@@ -252,28 +249,6 @@ export default function Dashboard() {
               </a>
             </div>
             <BudgetAlertsCard />
-          </div>
-        )
-      case 'savings-rate':
-        return (
-          <div class={styles.widgetCard}>
-            <div class={styles.widgetHeader}>
-              <div class={styles.widgetTitle}>Savings Rate</div>
-              <a href="#budgets" class={styles.widgetLink}>
-                Details
-              </a>
-            </div>
-            <SavingsRateCard
-              savingsRate={
-                metrics()!.totalIncome > 0
-                  ? ((metrics()!.totalIncome - metrics()!.totalExpenses) / metrics()!.totalIncome) *
-                    100
-                  : 0
-              }
-              monthlySavings={metrics()!.totalIncome - metrics()!.totalExpenses}
-              goal={savingsGoal()}
-              onGoalChange={handleSavingsGoalChange}
-            />
           </div>
         )
       case 'category-chart':
@@ -524,6 +499,7 @@ export default function Dashboard() {
         bar pins it for zero pixels — which is exactly what a row holding the bar and the rail did.
       */}
       <PeriodBar tourAnchor="dashboard-period" class={styles.periodBarSlot} />
+      <DashboardNextStep view={guidance} />
       <Show when={isWidgetVisible('badges')}>
         <BadgeRail />
       </Show>
@@ -729,6 +705,12 @@ export default function Dashboard() {
                 </Show>
               </div>
             </div>
+          </Show>
+
+          {/* The savings rate over the last 12 months, at its own spot like the metrics: it reads
+              the circles' facts, not the period above. */}
+          <Show when={isWidgetVisible('savings-gauge')}>
+            <SavingsGauge view={guidance()} />
           </Show>
 
           {/* Direction A overview deck — the default "mission control" view.

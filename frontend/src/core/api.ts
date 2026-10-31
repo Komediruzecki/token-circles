@@ -250,6 +250,23 @@ export class ApiClient {
   }
 
   /**
+   * Whether the confirm link this browser opened, signed out, still waits for its account
+   * (worker: GET /api/auth/email-link), and for which address: `masked` is the address as the
+   * Worker writes it, its first character, three dots and its domain (k•••@example.com). Null
+   * when nothing waits. The page that finishes a sign-up (FinishSignUp) shows it and asks for the
+   * address and its password.
+   */
+  async confirmLinkWaiting(): Promise<{ masked: string } | null> {
+    const answer = await this.request<{ waiting?: unknown; email?: unknown }>(
+      '/auth/email-link',
+      undefined
+    )
+    return answer?.waiting === 'confirm' && typeof answer.email === 'string'
+      ? { masked: answer.email }
+      : null
+  }
+
+  /**
    * Request a password-reset email (worker: POST /api/auth/forgot-password). Always resolves
    * (the worker never reveals whether the address has an account).
    */
@@ -1316,6 +1333,25 @@ export const formatCurrency = (
   currency: Models.Currency = getLocalCurrency()
 ): string => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
+}
+
+/**
+ * Money in whole units, as the circles write it: "€1,000". Callers round first, each the way its
+ * figure needs (a gap up, so "€0 to go" never shows beside a check not met). What rounds to
+ * nothing is "€0", never "-€0": Intl keeps the sign of a negative that rounds to zero.
+ */
+export const formatWholeCurrency = (
+  amount: number,
+  currency: Models.Currency = getLocalCurrency()
+): string => {
+  // Intl rounds half away from zero, so under half either way is zero, and -0 is too.
+  const whole = Math.abs(amount) < 0.5 ? 0 : amount
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(whole)
 }
 
 export const formatDate = (dateStr: string): string => {

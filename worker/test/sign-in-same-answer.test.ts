@@ -3,9 +3,10 @@
  * creating an account answer with the same status, headers and body for an address that has an
  * account and for one that has none, and so does each route's limit on one address once it is
  * reached. Signing in with the right password to an account waiting for its confirm link is
- * answered as a wrong password is, after the same statements, and counts against the same limit. Every header but Date is compared, the cookie a sign-in code request sets without its
- * value: that is a new random handle on every request. Signing in checks a password for an address
- * with no account against a hash of the same cost as a real one.
+ * answered as a wrong password is, after the same statements, and counts against the same limit.
+ * Every header but Date is compared, the cookies a sign-in code request and a sign-up set without
+ * their values: each is new on every request. Signing in checks a password for an address with no
+ * account against a hash of the same cost as a real one.
  *
  * The routes that mail an address answer first, and their answer stays ok while the mail cannot be
  * sent or is held. The three that store a row for the address after their answer (a reset link, a
@@ -41,8 +42,8 @@ function sending(body: unknown): RequestInit {
 }
 
 /**
- * Every header of an answer but Date, one `name: value` line each, in order. The value of the
- * cookie a sign-in code request sets is replaced by V.
+ * Every header of an answer but Date, one `name: value` line each, in order. The values of the
+ * cookies a sign-in code request and a sign-up set are replaced by V: each is new on every request.
  */
 function headerLines(res: Response): string[] {
   const lines: string[] = [];
@@ -50,7 +51,7 @@ function headerLines(res: Response): string[] {
     if (name !== 'date' && name !== 'set-cookie') lines.push(`${name}: ${value}`);
   });
   for (const cookie of res.headers.getSetCookie()) {
-    lines.push(`set-cookie: ${cookie.replace(/^fm_logincode=[^;]*/, 'fm_logincode=V')}`);
+    lines.push(`set-cookie: ${cookie.replace(/^(fm_logincode|fm_signup)=[^;]*/, '$1=V')}`);
   }
   return lines.sort();
 }
@@ -114,8 +115,8 @@ const MAILING: { path: string; logged: string[]; mailedTo: string[] }[] = [
   },
   {
     path: '/api/auth/register',
-    logged: ['account-exists notice email failed to send:', 'Welcome email failed:'],
-    // The owner of the address hears someone tried it; the new account gets its welcome.
+    logged: ['account-exists notice email failed to send:', 'Confirm email failed:'],
+    // The owner of the address hears someone tried it; the new account gets its confirm link.
     mailedTo: [HAS_ACCOUNT, NO_ACCOUNT],
   },
 ];

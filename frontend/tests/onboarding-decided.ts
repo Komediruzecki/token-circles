@@ -1,12 +1,15 @@
 /**
  * Mark the setup wizard as decided, so it does not open over the page under test.
  *
- * The decision is kept per owner (src/core/onboardingFlag.ts): `local` for local-first, and each
- * signed-in account by its id. A spec names every owner it boots as. The entries are plain data, so
- * an init script can take them as its argument; unit tests write them straight to localStorage.
+ * Local-first keeps the decision in localStorage, under `local` (src/core/onboardingFlag.ts). A
+ * signed-in account keeps it in its record on the Worker (`/api/account/state`); the fixture
+ * account's is finished by global.setup.ts. A localStorage flag for an account by its id still
+ * works: at its first load the app sends the flag to the account's record, as it does for a person
+ * who decided before the record existed, and then removes it.
  *
- * Imports by explicit `.ts` path, with no dependencies, so scripts/gen-marketing-shots.mjs can run
- * it under plain Node too.
+ * The entries are plain data, so an init script can take them as its argument; unit tests write
+ * them straight to localStorage. Imports by explicit `.ts` path, with no dependencies, so
+ * scripts/gen-marketing-shots.mjs can run it under plain Node too.
  */
 import {
   accountOnboardingOwner,

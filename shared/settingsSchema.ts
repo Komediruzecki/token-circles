@@ -21,11 +21,16 @@
  *   currency codes, stored in capitals.
  * - `locale` is a language tag, `theme` light or dark, `language` one the app has, and
  *   `onboarding` completed or skipped.
+ * - The guidance answers (`guidance`, and local-first's `guidance:<profile id>`) are the JSON text
+ *   of one record, checked by shared/guidance/answers.ts: at most 4 KB, each field it knows well
+ *   formed, and the fields it does not know kept as sent.
  * - Every other value is text, a number, or true or false.
  *
  * Unknown keys are kept: the app has written several over the years, and an older client still
  * sends its own.
  */
+import { checkAnswers } from './guidance/answers';
+import { splitLocalProfileSettingKey } from './profileSettings';
 import type { Checked, FieldErrors } from './refusal';
 
 /** The words for each refusal. A form shows them under the field; a summary joins them. */
@@ -82,6 +87,11 @@ function isOneOf(raw: unknown, allowed: readonly string[]): raw is string {
   return typeof raw === 'string' && allowed.includes(raw);
 }
 
+/** Whether `key` holds a profile's guidance answers, in the Worker's form or local-first's. */
+function isAnswersKey(key: string): boolean {
+  return key === 'guidance' || splitLocalProfileSettingKey(key)?.key === 'guidance';
+}
+
 /** A value `PUT /api/settings` stores. */
 export type SettingValue = string | number | boolean;
 
@@ -105,6 +115,10 @@ function readSetting(key: string, raw: unknown): { value: SettingValue } | { err
   }
   if (key === 'onboarding') {
     return isOneOf(raw, ONBOARDING) ? { value: raw } : { error: SETTINGS_MESSAGES.onboarding };
+  }
+  if (isAnswersKey(key)) {
+    const answers = checkAnswers(raw);
+    return answers.ok ? { value: answers.value } : { error: answers.error };
   }
   if (typeof raw === 'string' || typeof raw === 'boolean') return { value: raw };
   if (typeof raw === 'number' && Number.isFinite(raw)) return { value: raw };

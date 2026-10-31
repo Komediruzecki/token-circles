@@ -5,8 +5,13 @@ import { describe, expect, it } from 'vitest'
 type IconDef = { path: string; viewBox?: string }
 
 const iconPatterns: [RegExp, IconDef][] = [
+  [/grocer/i, { path: 'cart' }],
+  [
+    /eating\s*out|dining|restaurant|\beat\b|\beating\b|meal|lunch|dinner|breakfast/i,
+    { path: 'utensils' },
+  ],
   [/car|auto|vehicle|transport|gas|fuel|parking|uber|lyft|toll/i, { path: 'car' }],
-  [/food|dining|grocer|restaurant|eat|meal|lunch|dinner|breakfast|cafe|coffee/i, { path: 'food' }],
+  [/food|grocer|cafe|coffee/i, { path: 'food' }],
   [/hous|rent|mortgage|home|lease|property|real\s*estate|apartment/i, { path: 'home' }],
   [/utilit|electric|water|gas\s*bill|sewer|trash|garbage|recycling|power|energy/i, { path: 'zap' }],
   [
@@ -100,10 +105,11 @@ const expected: Record<string, string | null> = {
   Gas: 'car',
   Fuel: 'car',
   // Food
-  Groceries: 'food',
-  Restaurant: 'food',
+  Groceries: 'cart',
+  'Eating out': 'utensils',
+  Restaurant: 'utensils',
   Food: 'food',
-  Dining: 'food',
+  Dining: 'utensils',
   Coffee: 'food',
   // Housing
   Apartment: 'home',

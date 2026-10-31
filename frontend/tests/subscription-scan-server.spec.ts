@@ -12,7 +12,6 @@
  * transactions, and expect detections from the envelope-shaped response.
  */
 import { expect, test } from '@playwright/test'
-import { onboardingDecided } from './onboarding-decided'
 import { E2E_BASE, firstProfileId } from './test-helpers'
 
 const day = 24 * 60 * 60 * 1000
@@ -65,18 +64,16 @@ test.describe('subscription scan — server mode @smoke', () => {
     expect(Array.isArray(txnsBody)).toBe(false)
     expect(Array.isArray(txnsBody.rows)).toBe(true)
 
-    // A recorded decision keeps the onboarding wizard from covering the page.
-    const me = await ctx.request.get(`${E2E_BASE}/api/auth/me`)
-    const decided = onboardingDecided([((await me.json()) as { id: number }).id])
+    // The fixture account's setup wizard is finished on its record (global.setup.ts), so the
+    // wizard does not cover the page.
     await ctx.addInitScript(
-      ({ pid, decided }) => {
+      ({ pid }) => {
         localStorage.setItem('finance_storage_mode', 'self-hosted')
         localStorage.setItem('darkMode', 'false')
         localStorage.setItem('currentProfileId', String(pid))
         localStorage.setItem('selectedProfileIds', JSON.stringify([pid]))
-        for (const [key, value] of decided) localStorage.setItem(key, value)
       },
-      { pid: profile.id, decided }
+      { pid: profile.id }
     )
     await page.goto(`${E2E_BASE}/#bills`, { waitUntil: 'domcontentloaded', timeout: 30000 })
 

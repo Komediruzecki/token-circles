@@ -3,6 +3,7 @@ import { takeAccessClearedNotice } from '../core/accessCleared'
 import { api } from '../core/api'
 import { displayVersion } from '../core/appVersion'
 import { linkWaiting, takeConfirmLinkProblem } from '../core/emailVerification'
+import { FORGOT_PASSWORD, hashRouteName } from '../core/hashRoute'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { setStorageMode } from '../core/storage/storageFactory'
 import {
@@ -15,6 +16,7 @@ import CaptchaCheck from './CaptchaCheck'
 import { createCaptchaGate } from './captchaGate'
 import CheckInbox from './CheckInbox'
 import EmailCodeLogin from './EmailCodeLogin'
+import FinishSignUp from './FinishSignUp'
 import { Field, FormNotice, SubmitButton } from './form'
 import layoutStyles from './Layout.module.css'
 import LegalLinks from './LegalLinks'
@@ -34,6 +36,10 @@ import type { SignInMode, SignInOutcome } from './signInForm'
  * and a wrong address or password is one message for the whole form. That message also covers an
  * account whose address is not confirmed yet, and offers to send the confirm link again. Creating
  * an account, or sending the link again, ends on Check your inbox (CheckInbox), not in the app.
+ *
+ * A confirm link opened here signed out, which did not sign in by itself, opens the screen on
+ * Finish signing up (FinishSignUp): which address it waits for, as k•••@example.com, and fields
+ * for that address and its password.
  */
 /**
  * Every way out of the screen reloads, and a reload keeps the current history entry: a step's entry
@@ -45,8 +51,14 @@ function reloadPage() {
   })
 }
 
+/** What the form says while a confirm link opened here waits for its account to sign in. */
+const CONFIRM_BY_SIGNING_IN = 'Sign in to confirm your address.'
+
 export default function LoginScreen() {
-  const [mode, setMode] = createSignal<SignInMode>('login')
+  // #forgot-password opens the screen on the form that sends a reset link: the Reset password
+  // button of the "already has an account" mail links there.
+  const forgotInHash = () => hashRouteName(window.location.hash) === FORGOT_PASSWORD
+  const [mode, setMode] = createSignal<SignInMode>(forgotInHash() ? 'forgot' : 'login')
   // What the screen says that is not a problem with the form: a reset link on its way, or a link
   // from an email waiting for this sign-in.
   const [notice, setNotice] = createSignal('')
@@ -55,8 +67,11 @@ export default function LoginScreen() {
   // A confirm link opened in this browser that did not confirm: why, with the way to a fresh one.
   const [linkProblem, setLinkProblem] = createSignal('')
   // 'inbox' is Check your inbox, for the address `inbox` holds; 'twofa' is the second factor's code
-  // step; 'email-code' is passwordless sign-in.
-  const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code'>('form')
+  // step; 'email-code' is passwordless sign-in; 'finish' finishes a sign-up whose confirm link was
+  // opened here.
+  const [stage, setStage] = createSignal<'form' | 'inbox' | 'twofa' | 'email-code' | 'finish'>(
+    'form'
+  )
   const [inbox, setInbox] = createSignal('')
 
   // The Google callback can't stop for a code mid-redirect, so the worker parks the challenge
@@ -79,15 +94,13 @@ export default function LoginScreen() {
   })
 
   // A link from an email, opened in this browser before signing in: signing in here finishes it
-  // (VerifyEmailBanner asks the worker once the app is signed in).
+  // (VerifyEmailBanner asks the worker once the app is signed in). A confirm link opens on the
+  // step that shows which address it is for and asks for the address and password (FinishSignUp).
   onMount(() => {
     const waiting = linkWaiting()
     if (!waiting) return
-    setNotice(
-      waiting.change
-        ? 'Sign in to finish changing your address.'
-        : 'Sign in to confirm your address.'
-    )
+    if (waiting.change) setNotice('Sign in to finish changing your address.')
+    else setStage('finish')
   })
 
   // Conditional UI: on capable browsers a background WebAuthn request lets the email field's
@@ -148,6 +161,14 @@ export default function LoginScreen() {
     form.reset({ email: inbox(), password: '' })
     setStage('form')
   }
+  // From Finish signing up, with the address typed there in the form (FinishSignUp's onAddress).
+  // Back on the sign-in form, a link that still waits is finished by signing in there, which the
+  // notice says.
+  const leaveFinish = (to: 'login' | 'forgot' | 'confirm' = 'login') => {
+    switchTo(to)
+    setStage('form')
+    if (to === 'login' && linkWaiting()) setNotice(CONFIRM_BY_SIGNING_IN)
+  }
 
   // The steps after the form are in memory only, so in an installed app the back gesture had no
   // entry to pop and closed the app. One history entry while any step is on screen; popping it is
@@ -160,6 +181,7 @@ export default function LoginScreen() {
       if (now === 'twofa') leaveTwofa()
       else if (now === 'email-code') leaveEmailCode()
       else if (now === 'inbox') leaveInbox()
+      else if (now === 'finish') leaveFinish()
     },
     below: () => {
       try {
@@ -177,12 +199,29 @@ export default function LoginScreen() {
   const switchTo = (next: SignInMode) => {
     // A send still holding for its token was for the mode left behind: it must never go out.
     captcha.cancel()
+    // Leaving the reset form takes #forgot-password off the address, so that neither a reload nor
+    // the app after signing in opens the form again. replaceState fires no hashchange.
+    if (next !== 'forgot' && forgotInHash()) {
+      history.replaceState(history.state, '', window.location.pathname + window.location.search)
+    }
     setMode(next)
     setNotice('')
     setElsewhere('')
     setLinkProblem('')
     form.reset({ ...form.values })
   }
+
+  // The address can change to #forgot-password with this screen open: a pasted link only moves
+  // the fragment, and loads nothing.
+  onMount(() => {
+    const onHashChange = () => {
+      if (forgotInHash() && mode() !== 'forgot') switchTo('forgot')
+    }
+    window.addEventListener('hashchange', onHashChange)
+    onCleanup(() => {
+      window.removeEventListener('hashchange', onHashChange)
+    })
+  })
 
   /** From the refused sign-in: send the confirm link to the address in the form, signed out. */
   const sendConfirmLink = () => {
@@ -208,17 +247,19 @@ export default function LoginScreen() {
           <p class={styles.subtitle}>
             {stage() === 'inbox'
               ? 'Check your inbox.'
-              : stage() === 'twofa'
-                ? 'Two-factor authentication'
-                : stage() === 'email-code'
-                  ? 'Sign in by email'
-                  : mode() === 'register'
-                    ? 'Create your account.'
-                    : mode() === 'forgot'
-                      ? 'Reset your password.'
-                      : mode() === 'confirm'
-                        ? 'Send the confirm link again.'
-                        : 'Sign in to access your finances.'}
+              : stage() === 'finish'
+                ? 'Finish signing up.'
+                : stage() === 'twofa'
+                  ? 'Two-factor authentication'
+                  : stage() === 'email-code'
+                    ? 'Sign in by email'
+                    : mode() === 'register'
+                      ? 'Create your account.'
+                      : mode() === 'forgot'
+                        ? 'Reset your password.'
+                        : mode() === 'confirm'
+                          ? 'Send the confirm link again.'
+                          : 'Sign in to access your finances.'}
           </p>
         </div>
 
@@ -227,6 +268,18 @@ export default function LoginScreen() {
           fallback={
             stage() === 'twofa' ? (
               <TwofaChallenge onBack={leaveTwofa} />
+            ) : stage() === 'finish' ? (
+              <FinishSignUp
+                onAddress={(email) => {
+                  form.set('email', email)
+                }}
+                onLeave={leaveFinish}
+                onTwofa={() => setStage('twofa')}
+                onUnavailable={() => {
+                  setStage('form')
+                  setNotice(CONFIRM_BY_SIGNING_IN)
+                }}
+              />
             ) : stage() === 'email-code' ? (
               <EmailCodeLogin
                 email={form.values.email}

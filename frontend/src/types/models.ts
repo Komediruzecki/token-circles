@@ -177,6 +177,10 @@ export interface Category {
   type: TransactionType | 'account'
   parent_id: CategoryId | null
   tax_deductible: boolean
+  /** What an expense category holds (shared/guidance/kinds.ts), or null: the name decides. */
+  kind?: string | null
+  /** Whether it is needed every month, once the person says; null while the kind decides. */
+  essential?: boolean | null
   created_at: string
   profile_id: ProfileId
   parent_name?: string | null
@@ -212,6 +216,13 @@ export interface Account {
   /** Opening balance in the profile base currency. */
   starting_balance?: number | null
   starting_date?: string | null
+  /**
+   * How much a credit card lets you owe, or how far below zero a Giro account's overdraft goes, in
+   * the profile base currency. Null for none given.
+   */
+  credit_limit?: number | null
+  /** The yearly percentage charged on money owed on the account. Null for none given. */
+  credit_rate?: number | null
 }
 
 // ============ BUDGETS ============
@@ -362,6 +373,12 @@ export interface Bill {
   last_paid_date: string | null
   next_due_date: string | null
   profile_id: ProfileId
+  /** weekly, biweekly, monthly or yearly. */
+  frequency?: string | null
+  /** 0 or false when paused. */
+  is_active?: number | boolean | null
+  /** bill or subscription; none reads as bill. */
+  type?: string | null
 }
 
 // ============ SETTINGS ============

@@ -16,6 +16,7 @@ const serverAccounts = [
   { id: 1, name: 'Everyday', type: 'giro', currency: 'EUR', profile_id: 1 },
   { id: 2, name: 'Old current', type: 'checking', currency: 'EUR', profile_id: 1 },
   { id: 3, name: 'Visa', type: 'credit', currency: 'EUR', profile_id: 1 },
+  { id: 4, name: 'Sock drawer', type: 'sock_drawer', currency: 'EUR', profile_id: 1 },
 ]
 
 vi.mock('../../core/api', async (importOriginal) => ({
@@ -67,14 +68,15 @@ describe("the add-transaction form's account select", () => {
     host.querySelector<HTMLElement>('[data-test-id="add-transaction-btn"]')!.click()
     await vi.waitFor(() => {
       const select = host.querySelector<HTMLSelectElement>('[data-test-id="tx-account"]')
-      expect(select?.options.length).toBe(4)
+      expect(select?.options.length).toBe(5)
     })
 
     const select = host.querySelector<HTMLSelectElement>('[data-test-id="tx-account"]')!
     expect(Array.from(select.options, (o) => o.textContent?.trim()).slice(1)).toEqual([
       'Everyday (giro)',
       'Old current (giro)',
-      'Visa (account)',
+      'Visa (credit)',
+      'Sock drawer (account)',
     ])
   })
 })

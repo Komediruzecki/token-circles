@@ -1,0 +1,233 @@
+/* Your next step: on Progress above the circles, and on Dashboard in Getting started's place.
+   Every control is at least 48 px tall and no text is under 12 px (compact-ui TAP-01, TYPE-01). */
+.card {
+  position: relative;
+  padding: 16px 18px 18px;
+  border: 1px solid color-mix(in oklab, var(--primary) 28%, var(--border));
+  border-radius: var(--radius, 14px);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
+}
+
+/* A wash of the primary hue from the top left corner, under everything in the card. */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(
+    560px 200px at 0% 0%,
+    color-mix(in oklab, var(--primary) 11%, transparent),
+    transparent 72%
+  );
+}
+
+.card > * {
+  position: relative;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  /* A label, not a heading to look at: on Progress it is an h2, which the app sets in the display face. */
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.sun {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-warm);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-warm) 18%, transparent);
+  flex: none;
+}
+
+.circle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.title {
+  margin: 10px 0 0;
+  font-family: var(--font-display, inherit);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+  color: var(--text);
+}
+
+.why {
+  margin: 7px 0 0;
+  max-width: 66ch;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.meter {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--budget-bar-bg);
+}
+
+.track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--ring-a), var(--ring-b));
+}
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.cells i {
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cells i.on {
+  border-color: transparent;
+  background: linear-gradient(180deg, var(--ring-a), var(--ring-b));
+}
+
+.labels {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 14px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in oklab, var(--primary) 45%, transparent);
+  border-radius: 999px;
+  background: var(--primary-bg);
+  color: var(--primary-hover);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.primary:hover {
+  border-color: var(--primary);
+}
+
+.primary:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.primary:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.then {
+  margin: 12px 0 0;
+  text-wrap: pretty;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.then b {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fine {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.problem {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--danger-text, var(--danger));
+}
+
+/* Dashboard's card: the same, with a smaller title, and a way to all seven circles under it. It
+   sits where Getting started does, with its spacing. */
+.compact {
+  margin: 12px 0 16px;
+}
+
+.compact .title {
+  font-size: 19px;
+}
+
+.out {
+  margin: 12px 0 -8px;
+  border-top: 1px solid var(--border);
+}
+
+.out-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 4px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--primary-hover);
+  text-decoration: none;
+}
+
+.out-link:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}

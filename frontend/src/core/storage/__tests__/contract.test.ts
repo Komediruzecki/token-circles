@@ -191,6 +191,7 @@ async function stored(profile: number, owned: Owned = {}): Promise<Record<Stored
   counts['retirement settings'] = (await db.get('settings', `retirement_settings:${profile}`))
     ? 1
     : 0
+  counts['guidance answers'] = (await db.get('settings', `guidance:${profile}`)) ? 1 : 0
   const within = (rows: Row[], ids: readonly number[] = []) =>
     rows.filter((r) => ids.includes(Number(r.id)) && r.profile_id === profile)
   const lengthOf = (value: unknown) => (Array.isArray(value) ? value.length : 0)

@@ -148,7 +148,7 @@ describe('advice, with an entry in another currency', () => {
           tx('2026-09-03', { amount: 400, category_id: 2 }),
         ],
       })
-    ).find((c) => c.kind === 'unbudgeted-subscription')
+    ).find((c) => c.kind === 'unbudgeted-category')
     expect(card?.title).toContain('Transport')
     expect(card?.figure).toBe('400')
   })

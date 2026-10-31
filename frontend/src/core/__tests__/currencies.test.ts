@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { getLocalCurrency } from '../api'
+import { formatWholeCurrency, getLocalCurrency } from '../api'
 import { CURRENCY_OPTIONS, normalizeCurrencyCode } from '../currencies'
 
 beforeEach(() => {
@@ -27,5 +27,17 @@ describe('currency defaults', () => {
     expect(new Set(codes).size).toBe(codes.length)
     expect(codes).toContain('EUR')
     expect(codes).toContain('CHF')
+  })
+})
+
+describe('whole money, as the circles write it', () => {
+  it('never prints "-€0": what rounds to nothing is €0', () => {
+    expect(formatWholeCurrency(-0.4, 'EUR')).toBe('€0')
+    expect(formatWholeCurrency(-0, 'EUR')).toBe('€0')
+    expect(formatWholeCurrency(0.4, 'EUR')).toBe('€0')
+    // Half and more still rounds away from zero, sign and all.
+    expect(formatWholeCurrency(-0.5, 'EUR')).toBe('-€1')
+    expect(formatWholeCurrency(-1234.5, 'EUR')).toBe('-€1,235')
+    expect(formatWholeCurrency(1234.5, 'USD')).toBe('$1,235')
   })
 })

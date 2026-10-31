@@ -13,12 +13,15 @@
  * The link that moves an account to a new address (asked for in Settings) goes through the same
  * route, and its answer adds `&change=1`, so the message can talk about the change instead.
  *
- * Either link is spent only where its account is signed in. Opened anywhere else, the worker
- * leaves it unspent, answers `signin_required`, and gives this browser a marker that scripts
- * cannot read. Once the link's account signs in here, finishEmailLink asks the worker to spend
- * it. Until then a note says a link is waiting (linkWaiting): the sign-in screen says what
- * signing in will do, and the note outlasts the reload every sign-in ends in. A password sign-in
- * spends a confirm link itself, and says so (noteAddressConfirmed).
+ * Either link is spent where its account is signed in. A confirm link is also spent, and signs
+ * in, in the browser that signed up, for as long as that sign-up's marker lasts
+ * (shared/confirmLinkSignIn.ts): the answer adds `&signed_in=1`, and the session cookie comes
+ * with it. Opened anywhere else, the worker leaves the link unspent, answers `signin_required`,
+ * and gives this browser a marker that scripts cannot read. Once the link's account signs in
+ * here, finishEmailLink asks the worker to spend it. Until then a note says a link is waiting
+ * (linkWaiting): the sign-in screen asks for the password of a waiting sign-up (FinishSignUp), or
+ * says what signing in will do, and the note outlasts the reload every sign-in ends in. A
+ * password sign-in spends a confirm link itself, and says so (noteAddressConfirmed).
  */
 import { ApiError } from './apiError'
 import { apiFetch } from './apiFetch'
@@ -44,6 +47,8 @@ let pending: EmailVerifyResult | null = null
  * (App.handleLogin): data kept on the device is not touched, and choosing local-first again
  * (Settings, or the sign-in screen's way in without an account) brings it back. Being early is
  * what makes it cheap: the app reads the mode on the way in, so it comes up on the sign-in screen.
+ * A confirm link that signed this browser in (`signed_in=1`) moves it as well, so the app comes up
+ * in the account it signed in to.
  *
  * A change-of-address link that did not finish leaves the mode as it was. The sign-in screen has
  * no words for it, and the outcome would not outlast the reload a sign-in ends in, while in
@@ -65,10 +70,11 @@ export function consumeEmailVerifyRedirect(): void {
     params.get('everified') === '1'
       ? { ok: true, ...changed }
       : { ok: false, error: params.get('everified_error') ?? 'unknown', ...changed }
-  if (!pending.ok && !change) toAccountMode()
+  if (pending.ok ? params.get('signed_in') === '1' : !change) toAccountMode()
 }
 
-function toAccountMode(): void {
+/** Move the device to account mode; local data stays where it is. Also used by forgotPasswordLink. */
+export function toAccountMode(): void {
   if (getStorageMode() !== 'self-hosted') setStorageMode('self-hosted')
 }
 

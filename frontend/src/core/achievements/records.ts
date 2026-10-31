@@ -46,16 +46,33 @@ export function parseRecords(raw: unknown): UnlockRecord[] {
 export const serializeRecords = (records: UnlockRecord[], dismissedAdvice: string[] = []): string =>
   JSON.stringify({ v: 1, unlocks: records, dismissedAdvice })
 
+/** An advice kind's earlier name, and the name its card ids carry now (advice.ts). */
+const RENAMED_ADVICE: ReadonlyArray<[from: string, to: string]> = [
+  ['unbudgeted-subscription:', 'unbudgeted-category:'],
+]
+
+/** `id` under its kind's current name. */
+const currentAdviceId = (id: string): string => {
+  for (const [from, to] of RENAMED_ADVICE)
+    if (id.startsWith(from)) return to + id.slice(from.length)
+  return id
+}
+
 /**
  * Advice cards the user has waved away, in the same settings blob as the unlocks: one key, one
- * write, and an older blob without the field simply reads as none dismissed.
+ * write, and an older blob without the field simply reads as none dismissed. An id stored under
+ * a kind's earlier name reads as its current one, so the card stays hidden, and the next save
+ * stores it that way.
  */
 export function parseDismissed(raw: unknown): string[] {
   if (typeof raw !== 'string') return []
   try {
     const parsed = JSON.parse(raw) as { dismissedAdvice?: unknown } | null
     const list = Array.isArray(parsed?.dismissedAdvice) ? parsed.dismissedAdvice : []
-    return list.filter((v): v is string => typeof v === 'string').slice(0, 200)
+    return list
+      .filter((v): v is string => typeof v === 'string')
+      .slice(0, 200)
+      .map(currentAdviceId)
   } catch {
     return []
   }
