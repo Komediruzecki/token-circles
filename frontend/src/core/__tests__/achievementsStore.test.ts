@@ -715,6 +715,18 @@ describe('the badges a print comes with', () => {
     expect(actionOf('Badge unlocked: One month.').label).toBe('See badges')
   })
 
+  it('A year is announced last, so another badge earned with it does not hide the print', async () => {
+    stored('first-entry', 'named-everything', 'one-month', 'a-quarter')
+    // Money kept every month: A perfect year comes the same month as A year.
+    calls.transactions = Array.from({ length: 12 }, (_, i) => monthsAgo(11 - i)).flatMap((m) => [
+      { date: `${m}-01`, type: 'income', amount: 100, category_id: 1 },
+      ...month(m),
+    ])
+    const newly = await refreshAchievements()
+    expect(newly.map((u) => u.id)).toEqual(expect.arrayContaining(['a-year', 'perfect-year']))
+    expect(toasts.at(-1)).toBe('Badge unlocked: A year. Your first print is on Progress.')
+  })
+
   it('Two years says a new print is on Progress', async () => {
     stored('first-entry', 'named-everything', 'one-month', 'a-quarter', 'a-year')
     calls.transactions = run(24)

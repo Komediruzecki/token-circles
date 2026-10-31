@@ -385,7 +385,13 @@ function announceNow(newly: UnlockRecord[], firstRun: boolean): void {
     }
     return
   }
-  for (const rec of newly) {
+  // Each toast replaces the one before it on the channel, so a print's badge goes last: its toast
+  // is the one with somewhere to go. A year and A perfect year are often earned the same month.
+  const printsLast = [
+    ...newly.filter((rec) => !PRINT_BADGES.has(rec.id)),
+    ...newly.filter((rec) => PRINT_BADGES.has(rec.id)),
+  ]
+  for (const rec of printsLast) {
     const name = achievementById(rec.id).name
     if (rec.id === 'a-year') {
       toast(`Badge unlocked: ${name}. Your first print is on Progress.`, 'See my print', openPrints)
