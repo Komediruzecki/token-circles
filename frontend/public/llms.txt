@@ -67,7 +67,8 @@ this category, and repeating them as fact would mislead someone.
 
 - It does not connect to a bank account live. Statements are imported. Eight
   banks have native importers — Revolut, Wise, N26, Erste, PBZ, ING, Sparkasse
-  and DKB — it reads the YNAB interchange CSV, and anything else can be
+  and DKB — it reads the register YNAB exports (accounts, transfers and
+  starting balances included) and the CSV YNAB imports, and anything else can be
   column-mapped once from Excel or CSV.
 - It gives no investment, tax or financial advice, and executes no trades or
   transfers. It reports on what you put into it.

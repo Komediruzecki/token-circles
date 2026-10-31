@@ -588,7 +588,7 @@ export function renderEmailVerification(opts: {
 const WELCOME_STEPS = [
   {
     title: 'Bring your history',
-    text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are, and so do YNAB exports. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
+    text: 'Statements from Revolut, N26, Wise, Erste, PBZ, ING, DKB and Sparkasse import as they are. So does the Register file in a YNAB plan export, with its accounts, transfers and starting balances. Any other CSV or Excel file works once you match its columns. Rows you already have are skipped.',
     label: 'Open Import',
     hash: '#import',
   },
