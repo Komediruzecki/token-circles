@@ -178,6 +178,24 @@ describe('the words', () => {
       'January 2026 spent the most of these 3 months, and kept money.'
     )
   })
+
+  it('counts every month that spent more, tied months included, when it ranks a month', () => {
+    // Two months tie at 90 and two at 60: eight months spent more than September's 40, so it
+    // spent the ninth most, not the seventh. The two at 20 both spent the least.
+    const spent = [100, 90, 90, 80, 70, 60, 60, 50, 40, 30, 20, 20]
+    const slots: SealSlot[] = spent.map((s) => ({ spent: s, kept: 10 }))
+    const line = (i: number) => monthLine(slots, '2026-01', i, words)
+    expect(line(1)).toBe('February 2026 spent the second most of these 12 months, and kept money.')
+    expect(line(2)).toBe('March 2026 spent the second most of these 12 months, and kept money.')
+    expect(line(3)).toBe('April 2026 spent the fourth most of these 12 months, and kept money.')
+    expect(line(8)).toBe('September 2026 spent the ninth most of these 12 months, and kept money.')
+    expect(line(9)).toBe('October 2026 spent the tenth most of these 12 months, and kept money.')
+    expect(line(10)).toBe('November 2026 spent the least of these 12 months, and kept money.')
+    expect(line(11)).toBe('December 2026 spent the least of these 12 months, and kept money.')
+    expect(sealSummary(slots, '2026-01', words)).toContain(
+      'January 2026 spent the most, November 2026 and December 2026 the least.'
+    )
+  })
 })
 
 describe('shelfOf', () => {

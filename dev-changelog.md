@@ -2095,6 +2095,15 @@ check')` first, as the cushion and debt cases do.
   dark theme, and a focused pressed print's ring at 1.84:1. Outside, on the card, they measure
   6.22 and 8.15:1 (4.63 and 6.09:1 in the light theme). `prints-layout.spec.ts` fails with any of
   those changes taken out.
+- **A month's rank counts every month that spent more** (`shared/prints/describe.ts`). Months with
+  equal shares shared a rank, and the months below them counted only the distinct shares above.
+  On the example profile's Print 26, nine months spent more than December 2025, which read "spent
+  the eighth most of these 12 months". A month now ranks 1 plus the number of months with a
+  strictly larger share (competition ranking: 100, 90, 90, 80 rank 1, 2, 2, 4), so December
+  reads "the tenth most". Every month on the smallest share still reads "the least", and the
+  label names them all; one share across the seal still reads "Every month spent about the
+  same.". `printsSeal.test.ts` "counts every month that spent more" fails without the change, and
+  with `>=` for `>` or "least" taken as the last rank.
 
 ### Fixed
 

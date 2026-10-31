@@ -37,14 +37,23 @@ function list(items: string[]): string {
   return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
-/** Each filled slot's rank by spending, 1 for the most; months that spent the same share a rank. */
-function ranks(slots: readonly SealSlot[]): Map<number, { rank: number; of: number }> {
-  const values = [...new Set(slots.filter((s) => s !== null).map((s) => s!.spent))].sort(
-    (a, b) => b - a
-  );
-  const out = new Map<number, { rank: number; of: number }>();
+/**
+ * Each filled slot's rank by spending: 1 plus the number of months that spent strictly more, so
+ * months that tie share a rank and the months under them still count every month above them
+ * (100, 90, 90, 80 rank 1, 2, 2, 4). `least` marks the months that spent the least, and `alike`
+ * says every month spent the same.
+ */
+function ranks(
+  slots: readonly SealSlot[]
+): Map<number, { rank: number; least: boolean; alike: boolean }> {
+  const spent = slots.filter((s) => s !== null).map((s) => s!.spent);
+  const lowest = Math.min(...spent);
+  const alike = spent.every((v) => v === spent[0]);
+  const out = new Map<number, { rank: number; least: boolean; alike: boolean }>();
   slots.forEach((s, i) => {
-    if (s !== null) out.set(i, { rank: values.indexOf(s.spent) + 1, of: values.length });
+    if (s === null) return;
+    const rank = 1 + spent.filter((v) => v > s.spent).length;
+    out.set(i, { rank, least: s.spent === lowest, alike });
   });
   return out;
 }
@@ -69,15 +78,15 @@ export function monthLine(
       ? `${name} is the only month here so far. It spent more than came in.`
       : `${name} is the only month here so far, and it ${kept}.`;
   }
-  const { rank, of } = ranks(slots).get(i)!;
-  if (of === 1) {
+  const { rank, least, alike } = ranks(slots).get(i)!;
+  if (alike) {
     // One share for every month: none spent the most or the least. A share of 0 for all of them
     // means the heaviest month spent nothing, as any month that spent something is 100.
     const others = n === 2 ? 'the other month' : `the other ${n - 1} months`;
     const spent = slot.spent === 0 ? 'spent nothing' : `spent about the same as ${others}`;
     return `${name} ${spent}, and ${kept}.`;
   }
-  const most = rank === 1 ? 'the most' : rank === of ? 'the least' : `the ${ORDINALS[rank]} most`;
+  const most = rank === 1 ? 'the most' : least ? 'the least' : `the ${ORDINALS[rank]} most`;
   return `${name} spent ${most} of these ${n} months, and ${kept}.`;
 }
 
@@ -87,19 +96,20 @@ export function sealSummary(slots: readonly SealSlot[], from: string, words: Sea
   if (n === 0) return 'An empty seal with twelve places, one for each month you track.';
   const names = slots.map((s, i) => (s === null ? null : words.monthName(monthAt(from, i))));
   const r = ranks(slots);
-  const pick = (rank: number) => names.filter((_, i) => r.get(i)?.rank === rank) as string[];
+  const pick = (is: (rank: { rank: number; least: boolean }) => boolean) =>
+    names.filter((_, i) => r.has(i) && is(r.get(i)!)) as string[];
   const lastFilled = slots.reduce((last, s, i) => (s === null ? last : i), 0);
   const period = `${words.monthName(from)} to ${words.monthName(monthAt(from, n === 12 ? 11 : lastFilled))}`;
   const head =
     n === 12
       ? `A seal of twelve petals in a woven band, ${period}.`
       : `A seal with ${n} of its 12 petals so far, ${period}.`;
-  const least = Math.max(...[...r.values()].map((v) => v.rank));
+  const alike = [...r.values()][0].alike;
   const spread =
     n === 1
       ? ''
-      : least > 1
-        ? ` ${list(pick(1))} spent the most, ${list(pick(least))} the least.`
+      : !alike
+        ? ` ${list(pick((v) => v.rank === 1))} spent the most, ${list(pick((v) => v.least))} the least.`
         : slots.some((s) => s !== null && s.spent > 0)
           ? ' Every month spent about the same.'
           : ' None of these months spent anything.';
