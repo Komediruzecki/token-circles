@@ -148,20 +148,47 @@ function ownRows<T extends object>(rows: T[], profileId: number): T[] {
   })
 }
 
-let inFlight: { profileId: number; run: Promise<UnlockRecord[]> } | null = null
+/** The evaluation running, and the one more asked for while it runs, if any. */
+interface Running {
+  profileId: number
+  run: Promise<UnlockRecord[]>
+  again: Promise<UnlockRecord[]> | null
+}
+
+let inFlight: Running | null = null
 
 /**
- * Evaluate, persist what is new, toast. Concurrent calls for the same profile share one run; a
- * call after a profile switch starts its own, so the new profile is not handed the old one's.
+ * Evaluate, persist what is new, toast. A call after a profile switch starts its own run, so the
+ * new profile is not handed the old one's.
+ *
+ * A call for the profile whose run is going gets one more run, started when that one ends. The
+ * running one may have read its lists before the write that asked (a budget added while it reads),
+ * so its answer can be out of date. Every call made while it runs shares that one further run; a
+ * call made during the further run asks for one more after it, and nothing else starts another.
+ * If the profile has changed by the time the running one ends, the further run is dropped and
+ * answers no badges: the switch's own refresh evaluates the new profile.
  */
 export function refreshAchievements(): Promise<UnlockRecord[]> {
   const profileId = activeProfileId()
-  if (inFlight?.profileId === profileId) return inFlight.run
-  const current = run(profileId).finally(() => {
-    if (inFlight?.run === current) inFlight = null
+  const running = inFlight
+  if (running?.profileId === profileId) {
+    running.again ??= running.run.then(
+      () => evaluateAgain(profileId),
+      () => evaluateAgain(profileId)
+    )
+    return running.again
+  }
+  const entry: Running = { profileId, run: run(profileId), again: null }
+  entry.run = entry.run.finally(() => {
+    if (inFlight === entry) inFlight = null
   })
-  inFlight = { profileId, run: current }
-  return current
+  inFlight = entry
+  return entry.run
+}
+
+/** The further run `refreshAchievements` promised, unless another profile is active by now. */
+function evaluateAgain(profileId: number): Promise<UnlockRecord[]> {
+  return activeProfileId() === profileId ? refreshAchievements() : Promise.resolve([])
 }
 
 /**

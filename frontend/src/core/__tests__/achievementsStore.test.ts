@@ -47,7 +47,10 @@ import {
 import { api } from '../api'
 
 /** The mocked client's members as plain mocks, to hold, count and re-stub. */
-const apiMock = api as unknown as Record<'getSettings' | 'updateSettings' | 'getLoan', Mock>
+const apiMock = api as unknown as Record<
+  'getSettings' | 'updateSettings' | 'getLoan' | 'getBudgets',
+  Mock
+>
 
 const month = (m: string) =>
   [3, 4, 5].map((d) => ({ date: `${m}-0${d}`, type: 'expense', amount: 10, category_id: 1 }))
@@ -384,19 +387,23 @@ describe('badges are per profile', () => {
   })
 })
 
+/**
+ * Hold the next settings read until `release` is called: the evaluation's lists are read
+ * meanwhile, and a switch or a write can land mid-run.
+ */
+const holdSettings = () => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  apiMock.getSettings.mockImplementationOnce(async () => {
+    await gate
+    return { ...settingsStore }
+  })
+  return release
+}
+
 describe('a profile switch while an evaluation is running', () => {
-  /** Hold the next settings read until `release` is called, so the switch lands mid-run. */
-  const holdSettings = () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    apiMock.getSettings.mockImplementationOnce(async () => {
-      await gate
-      return { ...settingsStore }
-    })
-    return release
-  }
   const ownBudget = {
     profile_id: 2,
     category_id: 1,
@@ -479,5 +486,76 @@ describe('a profile switch while an evaluation is running', () => {
 
     expect(parseRecords(settingsStore['achievements:2']).map((r) => r.id)).toContain('first-budget')
     expect(toasts).toEqual([])
+  })
+})
+
+/**
+ * A write that lands while an evaluation runs, after the evaluation has read its lists. The ask
+ * it sets off (AchievementsHost, 1.2 s after the write) used to be handed the running evaluation,
+ * whose lists predate the write, and nothing evaluated again: a badge the write earned waited for
+ * the next write.
+ */
+describe('a refresh asked for while an evaluation is running', () => {
+  const firstBudget = {
+    profile_id: 1,
+    category_id: 1,
+    amount: 100,
+    period: 'monthly',
+    start_date: `${thisMonth}-01`,
+    end_date: null,
+    created_at: `${thisMonth}-02`,
+  }
+
+  it('evaluates once more when the running one ends, so the badge the write earned is there', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    const release = holdSettings()
+    const running = refreshAchievements()
+    expect(apiMock.getBudgets).toHaveBeenCalledTimes(1)
+
+    // POST /api/budgets lands after the running evaluation read the budgets.
+    calls.budgets = [firstBudget]
+    const asked = refreshAchievements()
+    release()
+    await Promise.all([running, asked])
+
+    expect(unlocks().map((u) => u.id)).toContain('first-budget')
+    expect(snapshot()!.budgets).toHaveLength(1)
+    expect(apiMock.getBudgets).toHaveBeenCalledTimes(2)
+  })
+
+  it('folds several asks into one more evaluation, and stops there', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    const release = holdSettings()
+    const running = refreshAchievements()
+    const asks = [refreshAchievements(), refreshAchievements(), refreshAchievements()]
+    expect(asks[1]).toBe(asks[0])
+    expect(asks[2]).toBe(asks[0])
+    release()
+    await Promise.all([running, ...asks])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(apiMock.getSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not evaluate the old profile again after a switch', async () => {
+    localStorage.setItem('currentProfileId', '2')
+    const release = holdSettings()
+    const running = refreshAchievements()
+    const asked = refreshAchievements()
+    localStorage.setItem('currentProfileId', '3')
+    release()
+    await Promise.all([running, asked])
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    // Profile 2's run only: the switch's own refresh evaluates profile 3.
+    expect(apiMock.getSettings).toHaveBeenCalledTimes(1)
+    expect(await asked).toEqual([])
+  })
+
+  it('starts no further evaluation when nothing asked during the run', async () => {
+    localStorage.setItem('currentProfileId', '1')
+    await refreshAchievements()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(apiMock.getSettings).toHaveBeenCalledTimes(1)
   })
 })
