@@ -13,6 +13,7 @@
 import { createRoot } from 'solid-js'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPage } from '../../../core/appStore'
+import croatian5173 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-croatian-v5.17.3.json'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { DEFAULT_CATEGORIES, getDB } from '../../../core/storage/idb'
 import type * as ApiFetchModule from '../../../core/apiFetch'
@@ -182,6 +183,25 @@ describe('a bank import into a profile made from the old rules', () => {
       'PETROL TEST STATION 0000': 'Car (Gas)',
       'PARKING TEST GARAGE 0000': 'Transport',
       'LJEKARNA TEST 0000': 'Health',
+      'KONZUM TEST STORE 0000': 'Groceries',
+    })
+  })
+})
+
+describe('a bank import into a profile that switched the mapping on 5.17.3', () => {
+  it('runs the rules as they are now, not the copy of the old ones the switch stored', async () => {
+    await addCategories(1, DEFAULT_NAMES)
+    localStorage.setItem('bankImportRuleGroup:1', 'croatian')
+    localStorage.setItem('bankImportCategoryRules:1', JSON.stringify(croatian5173))
+    const flow = await previewStatement()
+
+    expect(flow.newCategories()).toEqual(['Groceries'])
+    await flow.handleImport('all')
+
+    expect(await filedUnder()).toEqual({
+      'PETROL TEST STATION 0000': 'Transportation',
+      'PARKING TEST GARAGE 0000': 'Transportation',
+      'LJEKARNA TEST 0000': 'Healthcare',
       'KONZUM TEST STORE 0000': 'Groceries',
     })
   })

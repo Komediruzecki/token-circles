@@ -1152,8 +1152,8 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     transferRules: TransferRuleSet
   } => {
     // A rule keeps the names it gave before (CategoryRule.formerly) unless it is saved with
-    // another category than it was loaded with (savedFormerNames). Written in the built-in rules'
-    // key order, so rules saved unchanged still read as the defaults when the mapping is switched.
+    // another category than it was loaded with (savedFormerNames). Rules saved unchanged equal the
+    // built-in ones, and saveCategoryRules keeps no copy of those.
     const categoryRules = categoryRuleDraft
       .map((r) => {
         const formerly = savedFormerNames(r)

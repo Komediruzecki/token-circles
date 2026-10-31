@@ -17,7 +17,11 @@ import {
   loadCategoryRules,
   loadRuleGroup,
   loadTransferRules,
+  rulesForGroup,
 } from '../../../core/bankImport'
+import croatian671 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-croatian-671.json'
+import croatian5173 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-croatian-v5.17.3.json'
+import worldwide5173 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-worldwide-v5.17.3.json'
 import { BANK_RULE_MESSAGES as M } from '../../../core/bankImport/rulesCheck'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
@@ -361,6 +365,58 @@ describe('the names a built-in rule gave before', () => {
 
       expect(asked).not.toHaveBeenCalled()
       expect(loadRuleGroup()).toBe('worldwide')
+    } finally {
+      asked.mockRestore()
+    }
+  })
+})
+
+describe('rules stored as an earlier version of the built-in ones', () => {
+  // Until now a mapping switch stored a full copy of the group's built-in rules; the fixtures are
+  // those rules as git has them at each version (core/bankImport/__tests__/fixtures).
+  const mapping = () =>
+    host.querySelector('option[value="worldwide"]')!.parentElement as HTMLSelectElement
+  const storeRules = (rules: unknown, group: string) => {
+    localStorage.setItem('bankImportRuleGroup:1', group)
+    localStorage.setItem('bankImportCategoryRules:1', JSON.stringify(rules))
+  }
+
+  it.each([
+    ['Croatian, 5.17.3', croatian5173, 'croatian', 'worldwide'],
+    ['Croatian, main after #671', croatian671, 'croatian', 'worldwide'],
+    ['Worldwide, 5.17.3', worldwide5173, 'worldwide', 'croatian'],
+  ])(
+    'show as the rules now, and switching the mapping asks nothing: %s',
+    async (_version, copy, group, other) => {
+      storeRules(copy, group)
+      const flow = await openEditor()
+      expect(flow.categoryRuleDraft.map((rule) => rule.category)).toEqual(
+        rulesForGroup(group).map((rule) => rule.category)
+      )
+      const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      try {
+        choose(mapping(), other)
+
+        expect(asked).not.toHaveBeenCalled()
+        expect(loadRuleGroup()).toBe(other)
+      } finally {
+        asked.mockRestore()
+      }
+    }
+  )
+
+  it('still ask before a switch once they were edited', async () => {
+    const edited = structuredClone(croatian5173)
+    edited[0].keywords.push('test market')
+    storeRules(edited, 'croatian')
+    await openEditor()
+    const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      choose(mapping(), 'worldwide')
+
+      expect(asked).toHaveBeenCalledOnce()
+      expect(loadRuleGroup()).toBe('croatian')
+      expect(loadCategoryRules()).toEqual(edited)
     } finally {
       asked.mockRestore()
     }
