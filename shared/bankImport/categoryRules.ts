@@ -4,8 +4,13 @@
  * A TypeScript port of the Apps Script `mapCategoriesToTransactions`: match a
  * transaction's text (description / counterparty) against an ordered list of
  * keyword rules and assign the first hit. The default rule set below is a small,
- * sensible seed derived from the user's real statements; it is meant to be
+ * sensible seed derived from real Croatian statements; it is meant to be
  * edited/extended in-app (persistence lives in the rules store, not here).
+ *
+ * A rule's category is a name a newcomer's first import offers to create, so it is a default
+ * category or a general name, never someone's own label. Renaming one means adding the old name
+ * to RETIRED_RULE_CATEGORY_NAMES (categoryAliases.ts), so a space that already has a category
+ * under it keeps getting those rows there.
  */
 import type { CategoryRuleSet } from './types';
 
@@ -90,9 +95,10 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     ],
   },
   {
+    // Fuel stations. Transportation is the default category for the car.
     // NB: no bare "ina" — as a substring it false-matches Croatian words like
     // "član-ARINA" / "naknad-INA". Use the station forms instead.
-    category: 'Car (Gas)',
+    category: 'Transportation',
     keywords: ['ina bp', 'lukoil', 'petrol', 'crodux', 'tifon', 'shell', 'benzinska'],
   },
   {
@@ -108,7 +114,8 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Apartment (Bills)',
+    // Electricity, gas, water, waste, telecoms, the building reserve fund and insurance.
+    category: 'Utilities',
     keywords: [
       'pričuva',
       'pricuva',
@@ -124,7 +131,7 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Salary Eur',
+    category: 'Salary',
     keywords: [
       'isplata plaće',
       'isplata place',

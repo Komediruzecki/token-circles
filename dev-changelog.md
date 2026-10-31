@@ -11,6 +11,31 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
+  `shared/bankImport/categoryRules.ts` gave three personal labels that a newcomer's first import
+  offered under New categories: `Car (Gas)` is now `Transportation` (its keywords are fuel
+  stations), `Apartment (Bills)` is now `Utilities` (electricity, gas, water, waste, telecoms, the
+  building reserve fund and insurance) and `Salary Eur` is now `Salary` (pay, allowances,
+  payroll). All three are default categories. Keywords are unchanged.
+  - Aliases: `shared/bankImport/categoryAliases.ts` holds `RETIRED_RULE_CATEGORY_NAMES` (old name
+    to new) and `profileCategoryKey(name, has)`, which returns the folded name an import looks a
+    row's category up by. When the profile has a category under the old name, the old name wins,
+    even with the default of the new name beside it, so a space built from the old rules keeps
+    getting those rows and is never offered or given a second category. Otherwise the row's own
+    name is the key. One old name per new name, and an entry stays for good.
+  - Both runtimes match there and only there: local-first in `detectNewCategories` and the row
+    loop of `importExecute` (`frontend/src/core/storage/handlers/importFlow.ts`), the Worker in
+    `executeImport` (`worker/src/routes/imports.ts`, the new-category scan and the row loop), which
+    also serves the v1 API, MCP, email and sheet-sync imports. Account lookups keep the row's own
+    name. No migration and no stored category is renamed; a rule set saved in the rules editor
+    keeps the names it was saved with.
+  - Tests: `frontend/src/core/bankImport/__tests__/ruleCategoryNames.test.ts` fails when a rule
+    gives a name that is neither a default category nor on its list of general names, when a
+    retired name comes back, or when two old names share one new name.
+    `frontend/src/core/storage/__tests__/importFlow.ruleCategoryNames.test.ts` and
+    `worker/test/import-rule-category-names.test.ts` run fake rows categorized by the real rules
+    through a fresh space and through spaces holding the old names, with and without the defaults.
+
 - **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
   is 2.69:1 and on `--primary-hover` 2.06:1, under WCAG AA's 4.5:1 for text; the instrument deck's
   #58a6ff is 2.53:1. `--on-primary` (cherry-picked unchanged from 4bd7a060 on
