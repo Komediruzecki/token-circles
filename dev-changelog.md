@@ -2126,6 +2126,17 @@ check')` first, as the cushion and debt cases do.
   breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it too.
   `prints-layout.spec.ts` "the Prints heading sits clear of the menu button", at 390 and 700,
   fails without the rule, and at 700 with it at 640 px.
+- **The tour's Prints step points at the seal** (`PrintsShelf.tsx`). Its `data-tour` anchor was
+  the whole shelf, which at 390 by 844 with 26 prints is 1016 px tall, and 1550 px with Month by
+  month open. A spotlight taller than the screen put the tip over the shelf's words, and
+  Spotlight's scroll-into-view pulled back every scroll, as the target could never sit 80 px
+  clear of both edges. The anchor is now the seal's figure (`prints-figure`), which the empty
+  plate, a plate filling in and a print all draw. The spotlight is 350 by 350 px at 390, and 372
+  by 372 at 1280. Before the badges' snapshot arrives the shelf holds its place without a seal,
+  and the step waits for it as it waits for a lazy page (`waitForTarget`, 6 s).
+  `printsShelf.test.tsx` "points the tour at the seal" fails with the anchor back on the shelf,
+  for the empty plate, a plate, the first print and 26 prints. The tour walk passes at 1280 and
+  at 390.
 
 ### Fixed
 

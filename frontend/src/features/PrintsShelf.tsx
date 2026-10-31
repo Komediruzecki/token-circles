@@ -316,7 +316,6 @@ export default function PrintsShelf(): JSX.Element {
     <div
       class={styles.body}
       data-test-id="progress-prints"
-      data-tour="progress-prints"
       aria-busy={view() === null ? 'true' : undefined}
     >
       <Show when={featured()} fallback={<div class={styles.pending} />}>
@@ -343,7 +342,17 @@ export default function PrintsShelf(): JSX.Element {
               </Show>
             </div>
 
-            <div class={styles.figure} ref={figure} data-test-id="prints-figure">
+            {/* The Progress tour's Prints step points here, not at the whole shelf: with every
+                print and the month list open, the shelf is taller than a phone's screen (1550 px
+                at 390), and a spotlight that tall puts the tip over the words and pulls back
+                every scroll. Every state draws the seal: the empty plate, a plate filling in and
+                a print. Before the snapshot, the step waits for it (Spotlight's waitForTarget). */}
+            <div
+              class={styles.figure}
+              ref={figure}
+              data-test-id="prints-figure"
+              data-tour="progress-prints"
+            >
               <div
                 ref={sealEl}
                 class={styles.seal}

@@ -279,6 +279,50 @@ describe('Prints on Progress', () => {
       expect(html).not.toContain(String(Math.trunc(a)))
     }
   })
+
+  // The Progress tour's Prints step spotlights this anchor. The shelf with 26 prints and its
+  // month list open is taller than a phone's screen, and a spotlight taller than the screen
+  // leaves the tip over the words and pulls back every scroll. So the step points at the seal,
+  // which every state draws: an empty plate, a plate filling in, a print, many prints.
+  it.each([
+    ['an empty plate', () => snap(aMonth('2026-10', 2), '2026-10-05'), 'empty'],
+    [
+      'a plate filling in',
+      () =>
+        snap(
+          months('2026-04', 6).flatMap((m) => aMonth(m)),
+          '2026-10-05'
+        ),
+      'plate',
+    ],
+    [
+      'the first print',
+      () =>
+        snap(
+          months('2025-10', 12).flatMap((m) => aMonth(m)),
+          '2026-10-05'
+        ),
+      'print',
+    ],
+    [
+      '26 prints',
+      () =>
+        snap(
+          months('2000-01', 322).flatMap((m) => aMonth(m)),
+          '2026-10-15'
+        ),
+      'print',
+    ],
+  ])('points the tour at the seal for %s', (_, make, kind) => {
+    setSnapshot(make())
+    const c = mount(() => <PrintsShelf />)
+    const anchors = c.querySelectorAll('[data-tour="progress-prints"]')
+    expect(anchors).toHaveLength(1)
+    expect(anchors[0].getAttribute('data-test-id')).toBe('prints-figure')
+    expect(
+      anchors[0].querySelector('[data-test-id="prints-seal"]')?.getAttribute('data-kind')
+    ).toBe(kind)
+  })
 })
 
 describe('engraving the seal', () => {
