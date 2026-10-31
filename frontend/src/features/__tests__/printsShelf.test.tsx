@@ -427,6 +427,18 @@ describe('reading a month', () => {
     expect(readout.textContent).toBe(SEPTEMBER)
   })
 
+  it('lets go on a second click with the mouse still on the petal', () => {
+    setSnapshot(sixRising())
+    const c = mount(() => <PrintsShelf />)
+    const readout = q(c, 'prints-readout')!
+    point(wedge(c, 2), 'pointerenter')
+    tap(wedge(c, 2))
+    expect(readout.textContent).toBe(JUNE)
+    tap(wedge(c, 2))
+    expect(readout.textContent).toBe(HINT)
+    expect(faded(c)).toEqual([])
+  })
+
   it('lists every month in clock order under Month by month', () => {
     setSnapshot(sixRising())
     const c = mount(() => <PrintsShelf />)

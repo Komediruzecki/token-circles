@@ -1969,7 +1969,8 @@ check')` first, as the cushion and debt cases do.
   effect marks its `[data-slot]` groups after each draw. "Month by month" (`prints-months`), a
   `<details>` with a 48 px summary styled as the benchmark cards' one, lists every filled month's
   line in clock order, so nothing needs a pointer. Featuring another print clears the reading;
-  the empty plate has nothing to read.
+  the empty plate has nothing to read. A second click on the petal being read lets go of the
+  mouse's preview too, or with the pointer still on it the click seemed to do nothing.
 - **Prints stay off Progress's first task** (`PrintsShelf.tsx`, `core/prints/thumbs.ts`,
   `whenNearScreen` in `core/settledInView.ts`, `scripts/prints-perf.mjs`). The shelf is worked
   out and drawn a task after Progress first renders (the section holds its place, `aria-busy`,
@@ -2004,7 +2005,10 @@ check')` first, as the cushion and debt cases do.
   (`scrollAndHold`: checked every 100 ms, scrolled again when it moved, for 3 s from when it is
   found, given up after 10 s, ended at once by the person's wheel, touch, pointer or key). The
   release suite's `BADGE_TOAST` and s06's `SUMMARY` read both first-run wordings: the example
-  profiles' first run now says "... and 26 prints ...".
+  profiles' first run now says "... and 26 prints ...". Badges earned in the same evaluation are
+  announced with a print's badge last, since each toast on the channel replaces the one before:
+  A year and A perfect year (twelve saving months in a row) often come the same month, and in
+  evaluation order A perfect year hid the print's toast, as the E2E case found.
 - **Progress's tour stops at the prints** (`core/spotlightStore.ts`): a fourth step, "Prints",
   on `[data-tour="progress-prints"]`, the section's body, which is rendered in every state (empty
   plate, plate, prints, and the place it holds while the shelf draws). `spotlightStore.test.ts`

@@ -345,7 +345,14 @@ export default function PrintsShelf(): JSX.Element {
                         data-test-id="prints-wedge"
                         data-slot={m}
                         onClick={() => {
-                          setReading((r) => (r === m ? null : m))
+                          // Tapped again, it lets go, and so does a mouse's preview of it, or
+                          // the click would seem to do nothing until the pointer moved off.
+                          if (reading() === m) {
+                            setReading(null)
+                            setPreview(null)
+                          } else {
+                            setReading(m)
+                          }
                         }}
                         onPointerEnter={(e) => {
                           if (e.pointerType === 'mouse') setPreview(m)
