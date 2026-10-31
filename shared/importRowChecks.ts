@@ -18,6 +18,30 @@ export interface ImportRowWarning {
   label?: string;
 }
 
+/** A non-fatal note about the import as a whole, not about one row: it has no `index`. */
+export interface ImportNote {
+  reason: string;
+}
+
+/**
+ * What an import does with a starting balance it was given for an account that ALREADY exists
+ * (a YNAB register's "Starting Balance", offered in the mapping step). An account nobody has
+ * used yet (starting balance 0, no transactions) takes it; one in use keeps its own, and the
+ * import says so. The same amount as the account already has is nothing to apply or report.
+ */
+export function existingAccountStartingBalance(
+  account: { startingBalance: number | null; hasTransactions: boolean },
+  offered: number
+): 'apply' | 'keep' | 'same' {
+  const current = account.startingBalance ?? 0;
+  if (Math.abs(current - offered) < 0.005) return 'same';
+  return current === 0 && !account.hasTransactions ? 'apply' : 'keep';
+}
+
+export function startingBalanceKeptNote(name: string, amount: number): string {
+  return `${name} already has a starting balance or transactions, so the starting balance of ${amount.toFixed(2)} in this import was not applied to it.`;
+}
+
 export interface ImportRowNumbers {
   amount: number | null;
   amountLocal: number | null;

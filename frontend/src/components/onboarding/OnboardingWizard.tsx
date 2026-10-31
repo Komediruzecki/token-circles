@@ -734,10 +734,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         This is the app's full importer. Drop bank statements and we detect the bank, or use CSV /
         Google Sheets — everything lands as regular transactions you can refine later.
       </p>
+      <p class={styles.stepLead}>
+        Moving from YNAB? Drop the Register file from its Export Plan download here. Each row goes
+        to its own account, transfers stay transfers, and YNAB's starting balances go to accounts
+        that are new or still empty.
+      </p>
       <div class={styles.comingSoon}>
         <span class={styles.comingSoonBadge}>Coming soon</span>
-        Direct migration from Mint and other budgeting apps — YNAB CSV exports already import right
-        here.
+        Direct migration from Mint and other budgeting apps.
       </div>
 
       <Show when={importFlow.error()}>

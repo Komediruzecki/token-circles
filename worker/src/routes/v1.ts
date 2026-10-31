@@ -133,7 +133,29 @@ v1Routes.post('/api/v1/import', async (c) => {
       if (name) accountNames.add(name);
     }
   }
+  // A file that names its accounts (a YNAB register) says which values are accounts: every
+  // Account it lists, and the other end of every transfer, which a one-account selection may
+  // name without listing. The import preview in the app marks the same ones.
+  if (parsed.accounts) {
+    for (const name of parsed.accounts) accountNames.add(name);
+    const typeIdx = mapping.type;
+    if (typeIdx !== undefined) {
+      for (const row of table.rows) {
+        if (String(row[typeIdx] ?? '').toLowerCase() !== 'transfer') continue;
+        // Both ends: an incoming half has the other account as its source.
+        for (const idx of [mapping.category, mapping.means_of_payment]) {
+          const name = idx === undefined ? '' : String(row[idx] ?? '').trim();
+          if (name) accountNames.add(name);
+        }
+      }
+    }
+  }
   const categoryTypes = Object.fromEntries([...accountNames].map((n) => [n, 'account']));
+  // Its starting balances become the starting balances of the accounts this import creates, or
+  // of an existing account nobody has used yet (executeImport decides, and says when it doesn't).
+  const opening = Object.entries(parsed.startingBalances ?? {});
+  const accountBalances = Object.fromEntries(opening.map(([n, b]) => [n, b.amount.toFixed(2)]));
+  const accountBalanceDates = Object.fromEntries(opening.map(([n, b]) => [n, b.date]));
 
   const outcome = await executeImport(c.env.DB, cap.profileId, {
     rows: table.rows,
@@ -141,6 +163,7 @@ v1Routes.post('/api/v1/import', async (c) => {
     importId,
     dryRun: mode === 'preview',
     ...(accountNames.size ? { categoryTypes } : {}),
+    ...(opening.length ? { accountBalances, accountBalanceDates } : {}),
     // An empty approved list is not "no opinion" -- it is the gate that imports rows
     // uncategorized instead of minting a taxonomy out of a bank's memo column.
     ...(autoCreateCategories ? {} : { approvedCategories: [] }),
@@ -208,6 +231,10 @@ interface ParsedUpload {
   parsedBy: string;
   bank?: { id: BankId; label: string; confidence: number };
   targetAccount?: string;
+  /** Accounts the file itself names, one per row (a YNAB register). Each is an account. */
+  accounts?: string[];
+  /** Opening balances the file records as rows (YNAB's "Starting Balance"), by account. */
+  startingBalances?: Record<string, { amount: number; date: string }>;
   withinBatchDuplicates: number;
   warnings: string[];
 }
@@ -260,12 +287,19 @@ async function parseViaBank(
   const failed = result.perFile.find((f) => f.error);
   if (failed || result.rows.length === 0) return null;
 
+  // A file that names each row's account books nothing against a target account, so the
+  // adapter-label fallback must not become an empty account of its own.
+  const meta = result.perFile[0]?.meta ?? {};
+  const namesItsAccounts = (meta.accounts?.length ?? 0) > 0;
+
   return {
     headers: result.headers,
     rows: result.rows,
     parsedBy: `bank:${bankId}`,
     bank: { id: bankId, label, confidence },
-    targetAccount: result.perFile[0]?.targetAccount,
+    targetAccount: namesItsAccounts ? targetAccount : result.perFile[0]?.targetAccount,
+    ...(namesItsAccounts ? { accounts: meta.accounts } : {}),
+    ...(meta.startingBalances ? { startingBalances: meta.startingBalances } : {}),
     withinBatchDuplicates: result.duplicateIndices.length,
     warnings: result.warnings,
   };
