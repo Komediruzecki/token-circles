@@ -24,16 +24,21 @@ import {
   periodOf,
   plateLine,
   plateTitle,
+  PRINT_SAVED,
   printEyebrow,
   printWords,
   READOUT_IDLE,
   runningLine,
   SHAPE_LINE,
+  SHARE_FAILED,
+  SHARE_LABEL,
   thumbLabel,
 } from '../core/prints/copy'
+import { sharePrint } from '../core/prints/share'
 import { shelfView } from '../core/prints/shelf'
 import { inTurn, thumbSrc } from '../core/prints/thumbs'
 import { whenNearScreen, whenSettledInView } from '../core/settledInView'
+import { addToast } from '../core/toastStore'
 import styles from './PrintsShelf.module.css'
 import type { JSX } from 'solid-js'
 import type { SealSlot } from '../../../shared/prints/seal'
@@ -253,6 +258,27 @@ export default function PrintsShelf(): JSX.Element {
     })
   })
 
+  /**
+   * Share the featured print as an image: the share sheet where the platform takes files, a
+   * download otherwise. A share sheet closed without sharing is no failure, so it says nothing.
+   */
+  const [sharing, setSharing] = createSignal(false)
+  const share = async (): Promise<void> => {
+    const f = featured()
+    if (f?.kind !== 'print' || sharing()) return
+    setSharing(true)
+    try {
+      const how = await sharePrint(f.seal, f.k === 1)
+      if (how === 'downloaded') addToast(PRINT_SAVED, 'success', { channel: 'prints' })
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        addToast(SHARE_FAILED, 'error', { channel: 'prints' })
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
   const plateThumb = (plate: PrintView): string =>
     drawSeal(plate.slots, { palette: THEME, detail: 'thumb' })
 
@@ -351,6 +377,19 @@ export default function PrintsShelf(): JSX.Element {
                     <For each={filledSlots()}>{(m) => <li>{lineOf(f().seal, m)}</li>}</For>
                   </ol>
                 </details>
+              </Show>
+              <Show when={f().kind === 'print'}>
+                <button
+                  type="button"
+                  class={styles.share}
+                  data-test-id="prints-share"
+                  aria-busy={sharing() ? 'true' : undefined}
+                  onClick={() => {
+                    void share()
+                  }}
+                >
+                  {SHARE_LABEL}
+                </button>
               </Show>
               <Show when={f().kind === 'print' && view()!.plate}>
                 {(plate) => (

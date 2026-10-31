@@ -2009,6 +2009,17 @@ check')` first, as the cushion and debt cases do.
   on `[data-tour="progress-prints"]`, the section's body, which is rendered in every state (empty
   plate, plate, prints, and the place it holds while the shelf draws). `spotlightStore.test.ts`
   pins the four steps in order.
+- **Share a print as an image** (`core/prints/share.ts`, `core/achievements/shareCard.ts`). On a
+  finished print only, a 48 px "Share" (`prints-share`) draws the seal on paper at `print`
+  detail, with `width` and `height` of 1200 added to the root so an `<img>` sizes it, and
+  rasterises it through `toPng(svg, width, height)`, which now scales the drawing to the canvas.
+  `shareOrSave` (split out of `shareBadge`, which uses it unchanged) hands the PNG to the share
+  sheet where `navigator.canShare({ files })` says yes, and downloads it otherwise, as
+  `token-circles-print-{first month}-to-{last month}.png`, titled "My first print" for print 1
+  and "My print" after, with "Twelve months of my money, drawn as a seal by Token Circles." No
+  text in the image. A download says "Print saved as a PNG."; a failure "Could not draw the print
+  as an image."; a share sheet closed without sharing (`AbortError`) says nothing, unlike the
+  badges' Share, which still calls a closed sheet a failure.
 
 ### Fixed
 

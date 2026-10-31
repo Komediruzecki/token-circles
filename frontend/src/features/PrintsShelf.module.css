@@ -131,6 +131,31 @@
 .months li + li {
   margin-top: 4px;
 }
+/* As a badge's Share on the same page: a 48 px pill. */
+.share {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 6px;
+  padding: 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.share:hover {
+  border-color: var(--primary);
+}
+.share:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+.share[aria-busy='true'] {
+  cursor: progress;
+}
 .next {
   display: flex;
   align-items: flex-start;

@@ -8,8 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { trackedMonthsOf } from '../../../../shared/trackedMonths'
 import { addMonths } from '../../core/achievements/months'
 import * as store from '../../core/achievementsStore'
+import { sharePrint } from '../../core/prints/share'
+import { addToast } from '../../core/toastStore'
 import PrintsShelf, { engraveMs, resetEngravings } from '../PrintsShelf'
 import type { JSX } from 'solid-js'
+
+vi.mock('../../core/prints/share', () => ({ sharePrint: vi.fn() }))
+vi.mock('../../core/toastStore', () => ({ addToast: vi.fn() }))
 
 vi.mock('../../core/achievementsStore', async () => {
   const { createSignal } = await import('solid-js')
@@ -523,5 +528,76 @@ describe('every print as an image', () => {
     expect(before).toHaveLength(3)
     setSnapshot(snap([...entries], '2026-10-15'))
     expect([...images(c)]).toEqual(before)
+  })
+})
+
+describe('sharing a print', () => {
+  const share = vi.mocked(sharePrint)
+  const toast = vi.mocked(addToast)
+  beforeEach(() => {
+    share.mockReset()
+    toast.mockReset()
+  })
+  const aYearOf = () =>
+    snap(
+      months('2025-10', 12).flatMap((m) => aMonth(m)),
+      '2026-10-05'
+    )
+  const button = (c: HTMLElement) => q(c, 'prints-share') as HTMLButtonElement | null
+
+  it('is offered on a finished print only', () => {
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    expect(button(c)).toBeNull()
+    setSnapshot(aYearOf())
+    expect(button(c)?.textContent).toBe('Share')
+  })
+
+  it('shares the featured print, the first one as "my first print", and says when it saved one', async () => {
+    share.mockResolvedValue('downloaded')
+    setSnapshot(aYearOf())
+    const c = mount(() => <PrintsShelf />)
+    button(c)!.click()
+    await vi.waitFor(() => {
+      expect(toast).toHaveBeenCalledWith('Print saved as a PNG.', 'success', { channel: 'prints' })
+    })
+    expect(share).toHaveBeenCalledTimes(1)
+    const [print, first] = share.mock.calls[0]
+    expect(print.from).toBe('2025-10')
+    expect(first).toBe(true)
+  })
+
+  it('says nothing after the share sheet shared it, or was closed', async () => {
+    share.mockResolvedValueOnce('shared')
+    share.mockRejectedValueOnce(new DOMException('closed', 'AbortError'))
+    setSnapshot(aYearOf())
+    const c = mount(() => <PrintsShelf />)
+    button(c)!.click()
+    await vi.waitFor(() => {
+      expect(button(c)!.hasAttribute('aria-busy')).toBe(false)
+    })
+    button(c)!.click()
+    await vi.waitFor(() => {
+      expect(share).toHaveBeenCalledTimes(2)
+      expect(button(c)!.hasAttribute('aria-busy')).toBe(false)
+    })
+    expect(toast).not.toHaveBeenCalled()
+  })
+
+  it('says so when the image could not be drawn', async () => {
+    share.mockRejectedValue(new Error('share card did not render'))
+    setSnapshot(aYearOf())
+    const c = mount(() => <PrintsShelf />)
+    button(c)!.click()
+    await vi.waitFor(() => {
+      expect(toast).toHaveBeenCalledWith('Could not draw the print as an image.', 'error', {
+        channel: 'prints',
+      })
+    })
   })
 })
