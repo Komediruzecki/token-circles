@@ -1944,6 +1944,19 @@ check')` first, as the cushion and debt cases do.
   `clamp(260px, 28vw, 440px)` beside its words; at 640 and under one column, the seal up to
   340 px, and the prints in a strip that scrolls inside itself (`min-width: 0` on the grid items,
   or the strip pushes the page wider).
+- **The seal engraves once it settles in view** (`core/settledInView.ts`, `PrintsShelf.tsx`). The
+  figure waits until 70% of it has stayed on screen for 500 ms, or 3 s after any of it first shows,
+  checked on scroll (capture phase), resize, a 30 ms kickoff and a 900 ms heartbeat as
+  `OrbitalDivider` does, since IntersectionObserver and rAF stall in throttled tabs. Then the new
+  petals draw clockwise (450 ms each, 55 ms apart, `pathLength="1"` dashes), the band's months fade
+  in from 500 ms (300 ms each, 35 ms apart) and an empty plate's twelve hour marks come in turn.
+  `data-engraving` on the figure goes `armed` (new parts held back), `engraving`, then is removed
+  after `engraveMs`; it is set only while something waits to engrave, so a seal can never stay
+  hidden. Petals already engraved in this page load are marked `data-drawn` by
+  `drawSeal(..., { engraveFrom })` and stay still, so a plate that grows engraves only its new
+  month; a reload engraves once more. Reduced motion never sets the attribute, and the CSS sits
+  under `prefers-reduced-motion: no-preference`. The hour marks carry `class="seal-hours"` and
+  their `--i` only when `engraveFrom` is given, so the pinned hashes do not move.
 
 ### Fixed
 

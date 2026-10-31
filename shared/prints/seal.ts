@@ -138,8 +138,8 @@ export interface SealOptions {
   detail?: SealDetail;
   /**
    * Marks each petal and each month of the band with its slot (`data-slot`, `--i`) so CSS can
-   * engrave them in turn; the ones before this slot are marked as already drawn. Leave it out for
-   * an image.
+   * engrave them in turn; the ones before this slot are marked as already drawn. The hour marks
+   * get a class and their place too. Leave it out for an image.
    */
   engraveFrom?: number;
 }
@@ -213,11 +213,14 @@ export function drawSeal(input: readonly SealSlot[], options: SealOptions): stri
   }
   out += '</g>';
 
-  // Twelve hour marks on the inner rule, where each month starts.
-  out += `<g style="${paint('stroke', p.ink)}" stroke-width="${w(1.4)}">`;
+  // Twelve hour marks on the inner rule, where each month starts. Marked in turn when the seal is
+  // to be engraved, so an empty plate can engrave its marks.
+  const hours = engrave === undefined ? '' : ' class="seal-hours"';
+  out += `<g${hours} style="${paint('stroke', p.ink)}" stroke-width="${w(1.4)}">`;
   for (let m = 0; m < SEAL_SLOTS; m++) {
     const a = slotStart(m);
-    out += `<path d="M${xy(530, a)}L${xy(546, a)}"/>`;
+    const turn = engrave === undefined ? '' : ` style="--i:${m}"`;
+    out += `<path d="M${xy(530, a)}L${xy(546, a)}"${turn}/>`;
   }
   out += '</g>';
 

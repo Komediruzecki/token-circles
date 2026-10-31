@@ -7,7 +7,7 @@
  * Everything here is worked out from the badges' snapshot each time (core/prints/shelf.ts); the
  * view it reads carries seal shares only, so no amount reaches the page.
  */
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js'
 import { sealSummary } from '../../../shared/prints/describe'
 import { drawSeal, PAPER, SEAL_SLOTS, THEME } from '../../../shared/prints/seal'
 import { snapshot } from '../core/achievementsStore'
@@ -30,12 +30,40 @@ import {
   thumbLabel,
 } from '../core/prints/copy'
 import { shelfView } from '../core/prints/shelf'
+import { whenSettledInView } from '../core/settledInView'
 import styles from './PrintsShelf.module.css'
 import type { JSX } from 'solid-js'
 import type { PrintView, ShelfView } from '../core/prints/shelf'
 
 /** No month on it: the frame and the twelve hour marks. */
 const EMPTY: PrintView = { from: '', months: 0, slots: Array(SEAL_SLOTS).fill(null) }
+
+/**
+ * Petals engraved in this page load, by the first month of their print or plate (or 'empty' for
+ * the empty plate's hour marks): a seal shown again engraves only what is new on it. Nothing is
+ * kept past a reload, so each page load engraves once.
+ */
+const engraved = new Map<string, number>()
+
+/** Forget what has been engraved, so each seal engraves again when next shown. */
+export function resetEngravings(): void {
+  engraved.clear()
+}
+
+/**
+ * How long an engraving runs, to match PrintsShelf.module.css: petals draw in 450 ms, 55 ms apart;
+ * the band's months fade in 300 ms each, 35 ms apart, from 500 ms; an empty plate's twelve hour
+ * marks take 240 ms each, 55 ms apart. A little over, so the last frame has landed.
+ */
+export function engraveMs(count: number, empty: boolean): number {
+  if (empty) return 240 + 55 * 11 + 100
+  const n = Math.max(1, count)
+  return Math.max(450 + 55 * (n - 1), 800 + 35 * (n - 1)) + 100
+}
+
+const reducedMotion = (): boolean =>
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** What the big seal shows: the empty plate, the plate filling in, or a finished print. */
 type Featured =
@@ -72,13 +100,57 @@ export default function PrintsShelf(): JSX.Element {
     return { kind: 'print', seal: v.prints[at], k: at + 1 }
   })
 
+  /** What is still to engrave on the featured seal: from `from` up to `target`. */
+  const engraving = createMemo(
+    () => {
+      const f = featured()
+      if (!f) return null
+      const key = f.kind === 'empty' ? 'empty' : f.seal.from
+      const target = f.kind === 'empty' ? SEAL_SLOTS : f.seal.months
+      const from = reducedMotion() ? target : Math.min(engraved.get(key) ?? 0, target)
+      return { key, target, from }
+    },
+    null,
+    { equals: (a, b) => a?.key === b?.key && a?.target === b?.target && a?.from === b?.from }
+  )
+
   const svg = createMemo(() => {
     const f = featured()
     if (!f) return ''
     return drawSeal(f.seal.slots, {
       palette: f.kind === 'print' ? PAPER : THEME,
       detail: 'screen',
-      engraveFrom: f.seal.months,
+      engraveFrom: f.kind === 'empty' ? 0 : (engraving()?.from ?? f.seal.months),
+    })
+  })
+
+  /**
+   * Engrave once the seal has settled in view (70% for 500 ms, or 3 s after it first shows): the
+   * new petals draw clockwise, then the band's months fade in. Until then the new parts are held
+   * back, and only once this is waiting, so a seal is never hidden with nothing to show it.
+   */
+  let figure: HTMLDivElement | undefined
+  createEffect(() => {
+    const e = engraving()
+    const el = figure
+    if (!e || !el || e.from >= e.target) return
+    const { key, target, from } = e
+    el.dataset.engraving = 'armed'
+    let finish: ReturnType<typeof setTimeout> | undefined
+    const stop = whenSettledInView(el, () => {
+      el.dataset.engraving = 'engraving'
+      finish = setTimeout(
+        () => {
+          delete el.dataset.engraving
+          engraved.set(key, target)
+        },
+        engraveMs(target - from, key === 'empty')
+      )
+    })
+    onCleanup(() => {
+      stop()
+      clearTimeout(finish)
+      delete el.dataset.engraving
     })
   })
 
@@ -128,7 +200,7 @@ export default function PrintsShelf(): JSX.Element {
               </Show>
             </div>
 
-            <div class={styles.figure}>
+            <div class={styles.figure} ref={figure} data-test-id="prints-figure">
               <div
                 class={styles.seal}
                 classList={{ [styles.paper]: f().kind === 'print' }}

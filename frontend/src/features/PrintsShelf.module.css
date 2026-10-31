@@ -175,3 +175,46 @@
     outline-offset: -3px;
   }
 }
+
+/* Engraving (PrintsShelf's engraveMs keeps these timings): `armed` holds back what is about to be
+   drawn, `engraving` draws it. With neither the seal is finished, which is all reduced motion ever
+   shows. */
+@media (prefers-reduced-motion: no-preference) {
+  .figure[data-engraving='armed'] :global(.seal-petal):not([data-drawn]) path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+  }
+  .figure[data-engraving='armed'] :global(.seal-band):not([data-drawn]),
+  .shelf[data-state='empty'] .figure[data-engraving='armed'] :global(.seal-hours) path {
+    opacity: 0;
+  }
+  .figure[data-engraving='engraving'] :global(.seal-petal):not([data-drawn]) path {
+    stroke-dasharray: 1;
+    animation: seal-draw 450ms cubic-bezier(0.3, 0.7, 0.3, 1) calc(var(--i) * 55ms) both;
+  }
+  .figure[data-engraving='engraving'] :global(.seal-band):not([data-drawn]) {
+    animation: seal-weave 300ms ease-out calc(500ms + var(--i) * 35ms) both;
+  }
+  /* Only the empty plate engraves its hour marks; on any other seal the frame stays still. */
+  .shelf[data-state='empty'] .figure[data-engraving='engraving'] :global(.seal-hours) path {
+    animation: seal-weave 240ms ease-out calc(var(--i) * 55ms) both;
+  }
+}
+@keyframes seal-draw {
+  from {
+    stroke-dashoffset: 1;
+    fill-opacity: 0;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes seal-weave {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { trackedMonthsOf } from '../../../../shared/trackedMonths'
 import { addMonths } from '../../core/achievements/months'
 import * as store from '../../core/achievementsStore'
-import PrintsShelf from '../PrintsShelf'
+import PrintsShelf, { engraveMs, resetEngravings } from '../PrintsShelf'
 import type { JSX } from 'solid-js'
 
 vi.mock('../../core/achievementsStore', async () => {
@@ -47,9 +47,12 @@ function snap(transactions: Entry[], today: string) {
 
 let host: HTMLDivElement
 let dispose: (() => void) | undefined
+let reduce = false
 beforeEach(() => {
+  reduce = false
+  resetEngravings()
   vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: false,
+    matches: reduce && query.includes('reduce'),
     media: query,
     addEventListener: () => {},
     removeEventListener: () => {},
@@ -221,5 +224,123 @@ describe('Prints on Progress', () => {
       expect(html).not.toContain(a.toFixed(2))
       expect(html).not.toContain(String(Math.trunc(a)))
     }
+  })
+})
+
+describe('engraving the seal', () => {
+  /** Every box on screen: the seal is in view from the start. */
+  const inView = { top: 100, bottom: 500, left: 0, right: 400, width: 400, height: 400 }
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(inView as DOMRect)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+  const figure = (c: HTMLElement) => q(c, 'prints-figure') as HTMLElement
+
+  it('waits for the seal to settle in view, engraves it, then leaves it finished', () => {
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    expect(figure(c).dataset.engraving).toBe('armed')
+    vi.advanceTimersByTime(30 + 500)
+    expect(figure(c).dataset.engraving).toBe('engraving')
+    vi.advanceTimersByTime(engraveMs(6, false))
+    expect(figure(c).dataset.engraving).toBeUndefined()
+    // Petals go in turn from the first month: --i counts from 0.
+    const turns = [...c.querySelectorAll('.seal-petal')].map((g) =>
+      (g as SVGElement).style.getPropertyValue('--i')
+    )
+    expect(turns).toEqual(['0', '1', '2', '3', '4', '5'])
+  })
+
+  it('engraves only the new month when the plate grows in the same page load', () => {
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    vi.advanceTimersByTime(30 + 500 + engraveMs(6, false))
+    setSnapshot(
+      snap(
+        months('2026-04', 7).flatMap((m) => aMonth(m)),
+        '2026-11-05'
+      )
+    )
+    const seal = q(c, 'prints-seal')!
+    expect(seal.querySelectorAll('.seal-petal[data-drawn]')).toHaveLength(6)
+    expect(seal.querySelectorAll('.seal-petal:not([data-drawn])')).toHaveLength(1)
+    expect(figure(c).dataset.engraving).toBe('armed')
+    vi.advanceTimersByTime(30 + 500 + engraveMs(1, false))
+    expect(figure(c).dataset.engraving).toBeUndefined()
+  })
+
+  it('shows a seal seen before in this page load finished, with nothing held back', () => {
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const first = mount(() => <PrintsShelf />)
+    vi.advanceTimersByTime(30 + 500 + engraveMs(6, false))
+    dispose?.()
+    first.remove()
+    const c = mount(() => <PrintsShelf />)
+    expect(figure(c).dataset.engraving).toBeUndefined()
+    expect(q(c, 'prints-seal')!.querySelectorAll('.seal-petal:not([data-drawn])')).toHaveLength(0)
+  })
+
+  it('engraves the hour marks of an empty plate once', () => {
+    setSnapshot(snap([], '2026-10-05'))
+    const c = mount(() => <PrintsShelf />)
+    expect(figure(c).dataset.engraving).toBe('armed')
+    expect(c.querySelectorAll('.seal-hours path')).toHaveLength(12)
+    vi.advanceTimersByTime(30 + 500 + engraveMs(12, true))
+    expect(figure(c).dataset.engraving).toBeUndefined()
+  })
+
+  it('with reduced motion, shows the seal finished and never holds any of it back', () => {
+    reduce = true
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    expect(figure(c).dataset.engraving).toBeUndefined()
+    expect(q(c, 'prints-seal')!.querySelectorAll('.seal-petal:not([data-drawn])')).toHaveLength(0)
+    vi.advanceTimersByTime(10_000)
+    expect(figure(c).dataset.engraving).toBeUndefined()
+  })
+
+  it('never stays held back: half in view, it engraves 3 s after it first showed', () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      ...inView,
+      top: 568,
+      bottom: 968,
+    } as DOMRect)
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    vi.advanceTimersByTime(30 + 2999)
+    expect(figure(c).dataset.engraving).toBe('armed')
+    vi.advanceTimersByTime(1)
+    expect(figure(c).dataset.engraving).toBe('engraving')
+    vi.advanceTimersByTime(engraveMs(6, false))
+    expect(figure(c).dataset.engraving).toBeUndefined()
   })
 })
