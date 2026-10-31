@@ -50,11 +50,14 @@ const RETIRED: Record<string, Array<[old: string, now: string]>> = {
 
 const DEFAULT_NAMES = DEFAULT_CATEGORIES.map((c) => c.name)
 const ALLOWED = new Set([...DEFAULT_NAMES, ...GENERAL_RULE_CATEGORIES])
-const fold = (name: string) => name.trim().toLowerCase()
+/** A name however it is cased, spaced or punctuated: 'Health Care' and 'health-care' are one. */
+const fold = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
 
 /**
- * Two names for one thing: they differ only in case, or one is the other with a few letters more
- * at the end ('Transport' and 'Transportation', 'Health' and 'Healthcare', 'Gift' and 'Gifts').
+ * Two names for one thing: they differ only in case, spaces or punctuation, or one is the other
+ * with a few letters more at the end ('Transport' and 'Transportation', 'Health' and 'Healthcare',
+ * 'Gift' and 'Gifts'). A synonym ('Medical') shares no spelling: the list of general names above,
+ * which a new name has to join, is where that is caught.
  */
 function nearDuplicate(a: string, b: string): boolean {
   const [short, long] = [fold(a), fold(b)].sort((x, y) => x.length - y.length)
@@ -75,6 +78,14 @@ describe('bank-import rule category names', () => {
     // The check knows the names it has to keep out.
     expect(nearDuplicate('Transport', 'Transportation')).toBe(true)
     expect(nearDuplicate('Health', 'Healthcare')).toBe(true)
+    // However the name is spaced or punctuated.
+    expect(nearDuplicate('Health Care', 'Healthcare')).toBe(true)
+    expect(nearDuplicate('Health-care', 'Healthcare')).toBe(true)
+    expect(nearDuplicate('Sub Scriptions', 'Subscriptions')).toBe(true)
+    // And no more than that: these are names of their own.
+    expect(nearDuplicate('Transfers', 'Transportation')).toBe(false)
+    expect(nearDuplicate('Travel', 'Transportation')).toBe(false)
+    expect(nearDuplicate('Bank Fees', 'Food')).toBe(false)
     const pairs = GENERAL_RULE_CATEGORIES.flatMap((general) =>
       DEFAULT_NAMES.filter((name) => nearDuplicate(general, name)).map((name) => [general, name])
     )
