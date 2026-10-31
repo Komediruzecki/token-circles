@@ -2295,6 +2295,9 @@ check')` first, as the cushion and debt cases do.
     dated in the year.
   - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
     change, for the badges, the prints and the year in review each.
+  - Main carries the same fix in its own layout as #675 (in `evaluate.ts` and `review.ts`, with
+    `shared/trackedMonths.ts` left as it is), whose CHANGELOG.md line reaches this branch with
+    the next merge of main, so this entry has no line of its own there.
 
 ### Tests
 

@@ -43,7 +43,6 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **Something you add a second or so after another change now counts straight away.** A badge it earns shows up, and Getting started sees a second account, where before both waited for your next change.
-- **Entries dated ahead wait for their month.** A bill put in early for December no longer makes December count as a tracked month in October, so a badge like A year can't be earned before its last month begins.
 
 ## [5.17.3] — 2026-10-30
 
