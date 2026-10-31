@@ -156,7 +156,7 @@
 }
 .analytics-page .tab.active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 .analytics-page .analytics-chart {
   background: var(--card-bg);
@@ -439,16 +439,16 @@
 }
 .compare-btn:hover {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 .compare-btn.compare-active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .export-button:hover {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border-color: var(--primary);
 }
 
@@ -607,7 +607,7 @@
 
 .tab.active {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .chart-title {

@@ -128,7 +128,7 @@
 }
 
 .monthCurrent {
-  color: #06080f;
+  color: var(--on-primary);
   background: var(--primary);
   border-color: var(--primary);
   box-shadow: 0 0 16px color-mix(in oklab, var(--primary) 60%, transparent);
@@ -278,7 +278,7 @@
 
 .calEdge {
   background: var(--primary);
-  color: #06080f;
+  color: var(--on-primary);
   font-weight: 700;
   border-radius: 6px;
 }

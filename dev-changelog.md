@@ -1614,6 +1614,59 @@ check')` first, as the cushion and debt cases do.
   category on 90% of your spending.", with the gap after it while no step on the view says it.
 - **Tests:** `guidanceCircleView.test.ts`. Fails before the change (2 tests).
 
+### Fixed
+
+- **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
+  is 2.69:1 and on `--primary-hover` 2.06:1, under WCAG AA's 4.5:1 for text; the instrument deck's
+  #58a6ff is 2.53:1. `--on-primary` (cherry-picked unchanged from 4bd7a060 on
+  feat/onboarding-redesign, so the two branches merge cleanly) is the night ink in the dark themes
+  and white in dawn-light. 59 stylesheet declarations and 9 inline styles now read it:
+  - CSS modules: AccountSelect, AutoCategorizeModal (`.selectBtn.selected`, `.applyButton`, and
+    the `.spinner svg` inside it), Badge, BulkActionBar, CommandBar, ConfirmDialog, DashboardSettings,
+    FilterBar, GuidedOrbit, Layout (`.btn-primary`, `.pageError button`, `.fab`), LoginModal,
+    Onboarding (`.primaryBtn`), Pagination, PeriodOrbit, PeriodPills, ProfileModal, RecurringSection,
+    SavingsRateCard (`.goalButton`), SignedInDevices,
+    Spotlight, SubscriptionCatalogModal, SubscriptionScan, TourSelectionModal, AccountsPage,
+    AnalyticsPage, BillCalendar, BillsPage, BudgetsPage, CategoriesPage, Import, NotFound,
+    TransactionsPage, ConnectedSources and Loans.
+  - Inline styles: `App.tsx` (the numbered step circle), `SupportContact.tsx` (Done, Send message),
+    `BillingPlans.tsx` (interval toggle, plan badge's primary branch, `ctaStyle`), `Analytics.tsx`
+    (both Set budgets buttons) and `Transactions.tsx` (Create a "Cash" account).
+  - Three of these were not plain white: BillsPage's `.filterPillActive` read
+    `var(--primary-contrast, #fff)` (the token was never defined, so it was white); PeriodOrbit's
+    `.monthCurrent` and `.calEdge` hardcoded #06080f, which is 4.32:1 on dawn-light's #3b6fe0; and
+    ConnectedSources' icon-only `.sync` drew #eef4ff on a gradient from `--primary` to
+    `--primary-strong`.
+  - Loans already darkened its three primary fills in the dark theme with
+    `:global([data-theme='dark']) ... { color: var(--bg) }`; `--bg` is the same #0a0e1c, so those
+    overrides are gone and the base rules read `--on-primary`.
+  - Not changed: `::selection` in `styles/index.css` paints `--primary-strong` (#3b6fe0 in both
+    themes), where white is 4.63:1 and the night ink 4.15:1, so it keeps white.
+
+  | Pair                                    | orbit-dark      | dawn-light      | instrument-deck |
+  | --------------------------------------- | --------------- | --------------- | --------------- |
+  | `--on-primary` on `--primary`           | 7.14 (was 2.69) | 4.63 (same)     | 7.70 (was 2.53) |
+  | `--on-primary` on `--primary-hover`     | 9.35 (was 2.06) | 6.09 (same)     | 9.37 (was 2.08) |
+  | `--on-primary` on `--primary-strong` \* | 4.15            | 4.63            | 4.20            |
+  | `.sync` icon, top of its gradient       | 7.14 (was 2.44) | 4.63 (was 4.19) | 7.70 (was 2.29) |
+  | PeriodOrbit month and range ends        | 7.14 (was 7.43) | 4.63 (was 4.32) | 7.70 (was 7.92) |
+
+  \* Only `.sync`'s icon sits on `--primary-strong`, at the bottom of its gradient; an icon needs
+  3:1 (WCAG 1.4.11). Before, #eef4ff there measured 4.19 in both themes. A text label on that shade
+  in the dark theme would need white (4.63), not `--on-primary`.
+
+  - **Guards**: `frontend/src/__tests__/onPrimaryContrast.test.ts` reads the three theme files
+    (instrument-deck merged over orbit-dark) and fails when `--on-primary` is under 4.5:1 on
+    `--primary` or `--primary-hover`, or under 3:1 on `--primary-strong`, in any theme. With
+    orbit-dark's `--on-primary` set to #ffffff it fails with "#ffffff on --primary #6e9bff is
+    2.69:1" and "#ffffff on --primary-hover #93b4ff is 2.06:1".
+    `frontend/src/__tests__/primaryFillText.test.ts` fails when a stylesheet rule whose background
+    reads `--primary`, `--primary-hover` or `--primary-strong` gives `color`, `fill` or `stroke` a
+    colour literal (hex, `rgb()`, `hsl()`, a named colour, or a literal fallback of another var),
+    and when an inline style string or object literal in a `.ts`/`.tsx` file does the same. Its
+    two exceptions are named with their reasons, and a third case fails when an exception no longer
+    matches anything.
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens

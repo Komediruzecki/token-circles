@@ -1817,7 +1817,7 @@ export default function Transactions() {
                                   type="button"
                                   data-test-id="tx-create-cash-account"
                                   onClick={() => void createCashAccount()}
-                                  style="padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
+                                  style="padding: 6px 12px; background: var(--primary); color: var(--on-primary); border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500"
                                 >
                                   Create a "Cash" account
                                 </button>

@@ -344,7 +344,7 @@
 
 .bills-page .empty-state .btn {
   background: var(--primary);
-  color: white;
+  color: var(--on-primary);
   border: none;
   padding: 10px 20px;
   border-radius: 8px;
@@ -481,7 +481,7 @@
 }
 .tabBadge {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   font-size: 11px;
   font-weight: 600;
   padding: 1px 6px;
@@ -564,10 +564,10 @@
 .filterPillActive {
   background: var(--primary);
   border-color: var(--primary);
-  color: var(--primary-contrast, #fff);
+  color: var(--on-primary);
 }
 .filterPillActive:hover {
-  color: var(--primary-contrast, #fff);
+  color: var(--on-primary);
 }
 .filterPillCount {
   font-size: 11px;

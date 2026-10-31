@@ -1460,7 +1460,7 @@ export default function Analytics() {
                   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px;color:var(--text-secondary);text-align:center;">
                     <span>No transactions for {sankeyMonthLabel()}.</span>
                     <button
-                      style="padding:8px 16px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;"
+                      style="padding:8px 16px;background:var(--primary);color:var(--on-primary);border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;"
                       onClick={goToBudgets}
                     >
                       Set budgets
@@ -1476,7 +1476,7 @@ export default function Analytics() {
                           the budget.
                         </span>
                         <button
-                          style="padding:4px 10px;background:var(--primary);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;"
+                          style="padding:4px 10px;background:var(--primary);color:var(--on-primary);border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:500;"
                           onClick={goToBudgets}
                         >
                           Set budgets
