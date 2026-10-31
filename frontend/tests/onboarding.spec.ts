@@ -980,6 +980,12 @@ test.describe('onboarding wizard at phone width', () => {
           await page.getByTestId('onboarding-subs-skip').click()
           await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
           await check('done')
+          // Each next step on Done takes a finger: 44 px tall at least.
+          const heights = await page
+            .getByTestId('next-step-link')
+            .evaluateAll((links) => links.map((a) => a.getBoundingClientRect().height))
+          expect(heights.length).toBeGreaterThan(0)
+          expect(heights.filter((h) => h < 44)).toEqual([])
         })
       }
     }

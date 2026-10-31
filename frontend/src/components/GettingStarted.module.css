@@ -102,6 +102,15 @@
   color: var(--text-secondary);
 }
 
+/* A finger's 44 px, wherever a finger taps it: on a phone, where the title and its page stack and
+   their text alone was 41 px tall, and on any touch screen. A mouse keeps the line's own height. */
+@media (pointer: coarse) {
+  .link {
+    min-height: 44px;
+    align-items: center;
+  }
+}
+
 @media (max-width: 480px) {
   .card {
     padding: 14px;
@@ -109,6 +118,9 @@
 
   .link {
     flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
     gap: 2px;
+    min-height: 44px;
   }
 }
