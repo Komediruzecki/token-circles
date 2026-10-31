@@ -79,7 +79,9 @@ export function buildTxn(raw: RawTxn, ctx: TransformContext): CanonicalTxn {
 
 function incomeExpense(raw: RawTxn, ctx: TransformContext, notes?: string): CanonicalTxn {
   const type: CanonicalTxn['type'] = raw.amount < 0 ? 'Expense' : 'Income';
-  const category = categorize([raw.description, raw.counterparty], ctx.categoryRules);
+  const category = categorize([raw.description, raw.counterparty], ctx.categoryRules, {
+    categoryNames: ctx.categoryNames,
+  });
   return {
     date: raw.date,
     type,

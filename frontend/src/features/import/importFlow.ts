@@ -38,6 +38,7 @@ import {
   voidTransferDestinations,
 } from './previewFilter'
 import type { BankId, CategoryRuleSet, StatementMeta, TransferRuleSet } from '../../core/bankImport'
+import type { CategoryRuleDraft } from '../../core/bankImport/rulesCheck'
 import type { PreviewFilter, VoidTransferContext } from './previewFilter'
 
 /** Said when a sheet's link was read but the sheet has no header row to map. */
@@ -46,6 +47,9 @@ export const SHEET_EMPTY =
 /** Said when the sheet could not be read for a reason the answer did not name. */
 export const SHEET_UNREAD =
   "Couldn't read that sheet. Check it is shared so anyone with the link can view it, and try again."
+/** Said when a bank statement can't be filed because the profile's categories could not be read. */
+export const BANK_CATEGORIES_UNREAD =
+  "Couldn't read your categories, which the rules need to file each row. Try again."
 
 /** A within-batch potential duplicate: `index` is identical to the earlier row `matchIndex`. */
 export interface RowDuplicate {
@@ -308,9 +312,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // + .map() would replace the row object and make <For> recreate the DOM node,
   // dropping input focus on every keystroke.
   const [ruleGroup, setRuleGroup] = createSignal(loadRuleGroup())
-  const [categoryRuleDraft, setCategoryRuleDraft] = createStore<
-    { category: string; keywords: string }[]
-  >([])
+  const [categoryRuleDraft, setCategoryRuleDraft] = createStore<CategoryRuleDraft[]>([])
   const [transferKeywordDraft, setTransferKeywordDraft] = createSignal('')
   const [counterpartDraft, setCounterpartDraft] = createStore<
     { signature: string; account: string }[]
@@ -1004,6 +1006,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       return null
     }
     setShowBankFieldErrors(false)
+    const categoryNames = await importCategoryNames()
     const knownAccounts = bankAccounts().map((a) => a.name)
     const categoryRules = rulesOverride?.categoryRules ?? loadCategoryRules()
     const stored = rulesOverride?.transferRules ?? loadTransferRules()
@@ -1020,7 +1023,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         bankId: r.bankId!,
         targetAccount: r.targetAccount,
       })),
-      { categoryRules, transferRules, knownAccounts, xlsx: () => import('xlsx') }
+      { categoryRules, categoryNames, transferRules, knownAccounts, xlsx: () => import('xlsx') }
     )
     const filename =
       recognized.length === 1 ? recognized[0].file.name : `${recognized.length} statements`
@@ -1078,7 +1081,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     setRuleGroup(loadRuleGroup())
     setCategoryRuleDraft(
       reconcile(
-        loadCategoryRules().map((r) => ({ category: r.category, keywords: r.keywords.join(', ') }))
+        loadCategoryRules().map((r) => ({
+          category: r.category,
+          keywords: r.keywords.join(', '),
+          ...(Array.isArray(r.formerly) && r.formerly.length > 0
+            ? { formerly: [...r.formerly] }
+            : {}),
+        }))
       )
     )
     const t = loadTransferRules()
@@ -1094,6 +1103,29 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
   // profileVersion also moves on every quick-add, and a reload would discard unsaved edits.
   const reloadBankRulesIfProfileChanged = () => {
     if (rulesLoadedFor !== rulesScope()) loadBankRules()
+  }
+
+  /**
+   * The names of the categories this import files into: the active profile's. A built-in rule
+   * gives a name it gave before where the profile has a category under it
+   * (shared/bankImport/categoryRules.ts), so the rules need these before they run. Read fresh:
+   * the list the rules editor offers may still be loading. Narrowed by profile_id: in local-first
+   * the list answers for every profile in the household. Throws when the list can't be read, so
+   * no row is filed by a guess; no answer at all keeps apiFetch's own words (offline, out of reach).
+   */
+  const importCategoryNames = async (): Promise<string[]> => {
+    const headers = profileHeaders()
+    const profileId = Number(headers['X-Profile-Id'])
+    const res = await apiFetch('/api/categories', { headers })
+    const list: unknown = res.ok ? await res.json().catch(() => null) : null
+    if (!Array.isArray(list)) throw new Error(BANK_CATEGORIES_UNREAD)
+    return list
+      .filter(
+        (c: Record<string, unknown>) =>
+          c.profile_id === undefined || c.profile_id === null || Number(c.profile_id) === profileId
+      )
+      .map((c: Record<string, unknown>) => c.name)
+      .filter((name): name is string => typeof name === 'string')
   }
 
   const loadBankCategories = async () => {
@@ -1118,9 +1150,13 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     categoryRules: CategoryRuleSet
     transferRules: TransferRuleSet
   } => {
+    // A rule keeps the names it gave before (CategoryRule.formerly) unless it was given another
+    // category here. Written in the built-in rules' key order, so rules saved unchanged still read
+    // as the defaults when the mapping is switched.
     const categoryRules = categoryRuleDraft
       .map((r) => ({
         category: r.category.trim(),
+        ...(r.formerly && r.formerly.length > 0 ? { formerly: [...r.formerly] } : {}),
         keywords: r.keywords
           .split(',')
           .map((k) => k.trim())

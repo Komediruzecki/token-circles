@@ -13,6 +13,12 @@ import type { FieldErrors } from '../../../../shared/refusal'
 export interface CategoryRuleDraft {
   category: string
   keywords: string
+  /**
+   * The names the rule gave before its category (CategoryRule.formerly), not shown. Kept so that
+   * saving a built-in rule unchanged still files a space's rows where they went; dropped when the
+   * person gives the rule another category, because then they have said where its rows go.
+   */
+  formerly?: string[]
 }
 
 /** A transfer counterpart as the editor holds it: a signature and the account it stands for. */

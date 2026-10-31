@@ -12,7 +12,12 @@ import { createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPage } from '../../../core/appStore'
-import { loadCategoryRules, loadTransferRules } from '../../../core/bankImport'
+import {
+  DEFAULT_CATEGORY_RULES,
+  loadCategoryRules,
+  loadRuleGroup,
+  loadTransferRules,
+} from '../../../core/bankImport'
 import { BANK_RULE_MESSAGES as M } from '../../../core/bankImport/rulesCheck'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
@@ -276,5 +281,66 @@ describe('Recalculate preview', () => {
     expect(savedCategories()).toContain('Pets')
     // It recalculates instead of confirming a save.
     expect(confirmation()).toBeNull()
+  })
+})
+
+describe('the names a built-in rule gave before', () => {
+  /** The editor row of the rule that has `keyword`. */
+  const ruleRow = (keyword: string) =>
+    Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="bank-rule-row"]')).find((row) =>
+      labelled(row, 'Keywords').value.split(', ').includes(keyword)
+    )!
+  const savedRule = (keyword: string) =>
+    loadCategoryRules().find((rule) => rule.keywords.includes(keyword))
+  const saved = async () => {
+    save().click()
+    await vi.waitFor(() => {
+      expect(confirmation()).toContain('Rules saved.')
+    })
+  }
+
+  it('are saved with the rules, so saving them unchanged files every row where it went', async () => {
+    await openEditor()
+    await saved()
+
+    expect(savedRule('petrol')).toMatchObject({
+      category: 'Transportation',
+      formerly: ['Car (Gas)'],
+    })
+    expect(savedRule('parking')).toMatchObject({
+      category: 'Transportation',
+      formerly: ['Transport'],
+    })
+    expect(loadCategoryRules()).toEqual(DEFAULT_CATEGORY_RULES)
+  })
+
+  it('go when the rule is given another category', async () => {
+    const flow = await openEditor()
+    expect(flow.categoryRuleDraft.find((r) => r.keywords.includes('petrol'))?.formerly).toEqual([
+      'Car (Gas)',
+    ])
+    type(labelled(ruleRow('petrol'), 'Category'), 'Car')
+    await saved()
+
+    // The person named where these rows go: no space gets them under Car (Gas) now.
+    expect(savedRule('petrol')?.category).toBe('Car')
+    expect(savedRule('petrol')?.formerly).toBeUndefined()
+    expect(savedRule('parking')?.formerly).toEqual(['Transport'])
+  })
+
+  it('leave unchanged rules equal to the defaults, so switching the mapping asks nothing', async () => {
+    await openEditor()
+    await saved()
+    const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      const mapping = host.querySelector('option[value="worldwide"]')!
+        .parentElement as HTMLSelectElement
+      choose(mapping, 'worldwide')
+
+      expect(asked).not.toHaveBeenCalled()
+      expect(loadRuleGroup()).toBe('worldwide')
+    } finally {
+      asked.mockRestore()
+    }
   })
 })
