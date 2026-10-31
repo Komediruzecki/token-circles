@@ -199,15 +199,39 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 12px 28px 24px;
-  /* A control scrolled into view, by focus or a tap, stops above the 20 px that fade. */
+  /* A control scrolled into view, by focus or a tap, stops clear of the 20 px that fade. */
+  scroll-padding-top: 20px;
   scroll-padding-bottom: 20px;
 }
 
 /* The step goes on below: its last visible 20 px fade into the panel, whatever the theme, since a
-   mask takes the panel's own background rather than a colour of its own. Gone at the end. */
+   mask takes the panel's own background rather than a colour of its own. Gone at the end. Scrolled
+   down, its top 20 px fade the same way, so a heading on its way out is not cut at the edge. */
 .body[data-more-below] {
   -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
   mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+
+.body[data-more-above] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 20px);
+  mask-image: linear-gradient(to bottom, transparent, #000 20px);
+}
+
+.body[data-more-above][data-more-below] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 20px,
+    #000 calc(100% - 20px),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 20px,
+    #000 calc(100% - 20px),
+    transparent
+  );
 }
 
 /* ---- steps ---- */

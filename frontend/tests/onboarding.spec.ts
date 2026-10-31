@@ -633,27 +633,54 @@ test.describe('onboarding wizard at phone width', () => {
     await toAbout(page)
     const body = page.getByTestId('onboarding-body')
     // The cue: the middle's bottom fades out (a mask), and the footer draws nothing of its own.
+    // Scrolled down, its top fades as well. Which edges fade, read from the mask itself: a
+    // transparent stop first fades the top, a transparent stop last fades the bottom.
     const cue = () =>
       body.evaluate((el) => {
         const style = getComputedStyle(el)
+        const mask = style.maskImage || style.webkitMaskImage || 'none'
         return {
-          fades: (style.maskImage || style.webkitMaskImage || 'none') !== 'none',
+          top: mask.startsWith('linear-gradient(rgba(0, 0, 0, 0)'),
+          bottom: mask !== 'none' && mask.endsWith('rgba(0, 0, 0, 0))'),
           footerShadow: getComputedStyle(el.nextElementSibling!).boxShadow,
         }
       })
     await expect(body).toHaveAttribute('data-more-below', '')
-    expect(await cue()).toEqual({ fades: true, footerShadow: 'none' })
+    await expect(body).not.toHaveAttribute('data-more-above')
+    expect(await cue()).toEqual({ top: false, bottom: true, footerShadow: 'none' })
 
-    // At the end, nothing is left below and nothing fades; back up, the fade returns.
+    // As the step opens, its heading, its lead and the first question's legend are wholly above
+    // the footer: the step shows what it asks before anything is scrolled.
+    const footerTop = (await page.getByTestId('onboarding-panel').locator('footer').boundingBox())!
+      .y
+    for (const part of [
+      page.getByTestId('onboarding-step-about').locator('[data-step-heading]'),
+      page.getByTestId('onboarding-space-questions-lead'),
+      page.getByTestId('onboarding-space-region').locator('legend'),
+    ]) {
+      const box = (await part.boundingBox())!
+      expect(box.y + box.height).toBeLessThanOrEqual(footerTop)
+    }
+
+    // Part way down, both edges fade. At the end, nothing is left below: only the top fades, so a
+    // heading on its way out is not cut at the edge. Back at the top, only the bottom fades again.
+    await body.evaluate((el) => {
+      el.scrollTop = 40
+    })
+    await expect(body).toHaveAttribute('data-more-above', '')
+    await expect(body).toHaveAttribute('data-more-below', '')
+    expect(await cue()).toEqual({ top: true, bottom: true, footerShadow: 'none' })
     await body.evaluate((el) => {
       el.scrollTop = el.scrollHeight
     })
     await expect(body).not.toHaveAttribute('data-more-below')
-    expect(await cue()).toEqual({ fades: false, footerShadow: 'none' })
+    expect(await cue()).toEqual({ top: true, bottom: false, footerShadow: 'none' })
     await body.evaluate((el) => {
       el.scrollTop = 0
     })
     await expect(body).toHaveAttribute('data-more-below', '')
+    await expect(body).not.toHaveAttribute('data-more-above')
+    expect(await cue()).toEqual({ top: false, bottom: true, footerShadow: 'none' })
 
     // Held upright, a phone fits the screen whole, and so does a desktop: no fade.
     for (const size of [
@@ -663,11 +690,11 @@ test.describe('onboarding wizard at phone width', () => {
     ]) {
       await page.setViewportSize(size)
       await expect(body, `${size.width}x${size.height}`).not.toHaveAttribute('data-more-below')
-      expect(await cue()).toEqual({ fades: false, footerShadow: 'none' })
+      expect(await cue()).toEqual({ top: false, bottom: false, footerShadow: 'none' })
     }
   })
 
-  test('the fade is on only while the step goes on below, and a chip brought into view stops above it', async ({
+  test('the fade is on only while the step goes on below, and a chip brought into view stops clear of it', async ({
     page,
   }) => {
     await page.setViewportSize(SIDEWAYS)
@@ -710,6 +737,15 @@ test.describe('onboarding wizard at phone width', () => {
     const box = (await chip.boundingBox())!
     expect(await body.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
     expect(box.y + box.height).toBeLessThanOrEqual(bottom.y + bottom.height - 20 + 0.5)
+
+    // Brought back into view from the end, the first chip stops below the 20 px that fade at the
+    // top.
+    await scrollTo(max)
+    const first = page.locator('label[data-test-id^="onboarding-space-region-"]').first()
+    await first.evaluate((el) => el.scrollIntoView({ block: 'nearest' }))
+    const top = (await body.boundingBox())!
+    expect(await body.evaluate((el) => el.scrollTop)).toBeLessThan(max)
+    expect((await first.boundingBox())!.y).toBeGreaterThanOrEqual(top.y + 20 - 0.5)
   })
 
   for (const { width, height, phone } of [

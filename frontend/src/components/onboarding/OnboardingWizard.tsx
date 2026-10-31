@@ -549,13 +549,15 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   // Whether the step goes on below what shows: the middle's bottom then fades out. Read on scroll,
   // and whenever the middle or the step in it changes size. The step ends where the middle's bottom
   // padding starts: stopped inside that padding, nothing is left below, and a fade there would only
-  // dim the last row.
+  // dim the last row. Scrolled down at all, the top fades too.
   const [moreBelow, setMoreBelow] = createSignal(false)
+  const [moreAbove, setMoreAbove] = createSignal(false)
   const readMoreBelow = () => {
     if (!bodyEl) return
     const padding = parseFloat(window.getComputedStyle(bodyEl).paddingBottom) || 0
     const contentEnd = bodyEl.scrollHeight - padding
     setMoreBelow(bodyEl.scrollTop + bodyEl.clientHeight < contentEnd - 0.5)
+    setMoreAbove(bodyEl.scrollTop > 0.5)
   }
   if (typeof ResizeObserver !== 'undefined') {
     const sizes = new ResizeObserver(readMoreBelow)
@@ -1142,6 +1144,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             ref={bodyEl}
             data-test-id="onboarding-body"
             data-more-below={moreBelow() ? '' : undefined}
+            data-more-above={moreAbove() ? '' : undefined}
             onScroll={readMoreBelow}
           >
             <Show when={onboardingStep() === 'space' || onboardingStep() === 'welcome'}>
