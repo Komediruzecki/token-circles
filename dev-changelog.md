@@ -1851,7 +1851,7 @@ Changed:
     targets under 44 px; text went down to 10.5 px; and the core path took 12 taps from opening
     setup to an imported statement.
   - **After**: the footer is 70 px and one row at every cell, its buttons 48 px; the header 56 px,
-    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; one target under 44 px is left, Getting started's next-step link on Done (41 px tall, a shared component), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
+    its buttons 44x44; every input 16 px; two screens scroll on a 568 px tall phone, About this space by 10 px (22 px at 320 wide) and the subscriptions by 23 px at 320 to 390 wide, and every other screen fits at all 30 cells; every target is 44 px or more (Getting started's next-step link on Done was the last, at 41 px: below), and the smallest text is 12 px, in the subscription scan and in Getting started; 6 taps from opening
     setup to an imported statement (Continue, Continue, Add account, Choose a file, the file,
     Import 7) and 8 to the dashboard (Track 2 subscriptions, Go to my dashboard).
   - **Steps.** `ONBOARDING_STEPS` is unchanged. The wizard opens on `space`, whose first screen is
@@ -1870,17 +1870,55 @@ Changed:
   - **Header and footer.** The header has Back (the logo on the first screen), "Step N of 3" in an
     orbit ring (`onboarding-progress`), and Close (`aria-label="Leave setup"`). Close and Escape
     ask once, naming what is left on that step (`leaveSetupQuestion`), with Leave setup and Stay.
-    The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
+    On the subscriptions it says "Your import is saved" only after a statement went in on this
+    visit; setup reopened there from an earlier one asks "Leave setup? Bills can scan your
+    transactions for subscriptions any time, and Settings can run setup again." On Done, Escape
+    finishes as Go to my dashboard does, without asking (the record comparison, below). Getting
+    started's next-step link, on Done and on Dashboard's card, is at least 44 px tall on a phone
+    (480 px wide or less, where its title and page stack and their text alone was 41 px) and on
+    any touch screen; with a mouse it keeps its height. The footer is one row: a quiet Skip on the optional steps and the primary filling the rest. A
     step's Skip asks only when it would drop something: an account with a name or balance typed
     in, a statement ready to import. On a phone the panel is the screen, capped at `100dvh`
     (`100vh` first, for a browser without `dvh`): at 320x568 About this space had pushed the footer
-    22 px under the bottom edge.
+    22 px under the bottom edge. The middle's last 20 px fade while the step goes on below
+    (`data-more-below`), and once it is scrolled down its first 20 px fade too
+    (`data-more-above`): on a phone the header has no ground of its own, and a heading scrolled up
+    under it was cut hard at the edge. `scroll-padding-top` and `-bottom` stop a control brought
+    into view clear of both.
+  - **No orbit field behind the text on a phone.** At 620 px and narrower the panel is the screen
+    and has no ground, so the orbit field drew straight behind the step: its haze behind the middle
+    of every step, its tokens drifting across the leads and the headings. Measured on the painted
+    screen (Tests, below) before this change, at 390x844 in the light theme: the space step's lead
+    1.4:1 with a token behind it, the currency hint 3.75:1, the account's balance hint 3.57:1 and
+    the list of banks 4.04:1; in the dark theme each step's heading 2.81:1, under the 3:1 large
+    text needs, and each lead 1.47:1. The field is not drawn there now (`.backdrop`,
+    `display: none`): the sky's gradient stays, and the progress ring and Done keep their orbits.
+    Wider, it stays behind the glass panel; the only lines under AA there were the plan's, and
+    those from its own colour (next).
+  - **`--primary` as text.** The link buttons (Keep my data in this browser only, Bring in another
+    statement) and the subscription scan's plan (`.plan`, "Standard" beside Netflix) set
+    `--primary` as their text colour: in dawn-light 4.13:1 on the sky's middle, 3.72:1 at its top,
+    and 4.0:1 for the plan on its own tint. Both read
+    `color-mix(in oklab, var(--primary) 70%, var(--text))` now: `#2e53a7` in dawn-light (5.18:1
+    at the worst, the sky's top under the tint), and lighter, so stronger, on the dark themes
+    (`#92b5ff` in orbit-dark, `#85bcfd` in instrument-deck). The plan is on Bills' scan too.
+  - **A chosen chip's text** (`SpaceQuestions.module.css`) reads `--on-primary` instead of
+    `#ffffff` with a dark-theme rule for `var(--bg)`: the same colour in all three themes, from one
+    token, so PR #670's guard against a colour literal on a primary fill passes it.
   - **The statement** (`components/onboarding/FirstImport.tsx`, on `createImportFlow`). One file.
     A bank the adapters detect is processed, mapped and previewed (the dry run) in the background,
     with the defaults the Import page's tap-through took: the bank's own columns, every
     transaction that is not a duplicate, every new category, no budgets from spending. The account
-    comes preselected: the one the bank names, else the one setup just created, else a new one
-    named for the bank. The screen shows the file, the bank, the account, how many transactions are
+    comes preselected: the one the bank names, else the one setup just created on this visit, else
+    one the profile has (the newest in the statement's currency, else the newest), and a new one
+    named for the bank only when the profile has none. Setup reopens at the statement after a
+    reload (the person away at the bank's app, exporting the file) or when run again over a profile
+    with accounts; before, it offered "New account: Revolut EUR" there, and one tap on Import made a
+    second account beside the first and split the money between them (`loadBankAccounts` now
+    carries each account's currency). The card names the bank and the count on one line
+    ("Revolut · 7 new transactions") and the dates on the next (`onboarding-import-dates`), each
+    date held together with no-break spaces: on one line, the card wrapped inside a date at 390
+    wide ("14 Apr to 1" / "Jul") and left a "·" at a line's end at 320. The screen shows the file, the bank, the account, how many transactions are
     new and the categories it adds, and the footer says `Import N`. N is the ticked rows less the
     rows the dry run found stored, by index: `existingDuplicateIndices` in `importFlow.ts`, from
     the dry run's `duplicate_indices`. A statement's repeats of its own rows are unticked already
@@ -1907,16 +1945,31 @@ Changed:
     primary fills still set white: a follow-up.
   - The tour menu's entry reads "Run setup again (your space, an account, a statement)"; it read
     "Run the Setup Wizard (accounts, imports, subscriptions)".
-  - **Tests**: unit `onboardingFirstImport.test.tsx` (12), `firstImportCount.test.ts` (3),
-    `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
+  - **Tests**: unit `onboardingFirstImport.test.tsx` (16, two of them setup reopened at the
+    statement over accounts the profile has, two the leave question on the subscriptions),
+    `firstImportCount.test.ts` (3), `firstImportDates.test.ts` (3), Escape on Done in
+    `onboardingDoneStep.test.tsx`, `importOpensHandedFile.test.tsx` (3), three held-badge cases in `achievementsStore.test.ts`, two
     in `SubscriptionScan.test.tsx`, and the wizard's own suites rewritten
     (`onboardingForms.test.tsx`, `onboardingOnTheAccount.test.ts`, `onboardingStore.test.ts`,
     `onboardingSpaceAnswersFail.test.tsx`, `createdProfileIsSelected.test.tsx`,
     `importRulesFollowProfile.test.tsx`). E2E: `onboarding.spec.ts` rewritten, with three `@smoke`
     cases (the core path; a statement imported in one tap, through Track 2 subscriptions to the
-    summary; a file the defaults cannot read, opened in Import), contrast in both themes, and every
-    step on a touch screen at 390x844, 375x667 and 320x568 in both themes (header 56 px, its buttons
-    44x44, one footer row with 48 px buttons, 16 px fields, nothing under the screen's edge).
+    summary; a file the defaults cannot read, opened in Import), every line of text read on the
+    painted screen, and every step on a touch screen at 390x844, 375x667 and 320x568 in both themes
+    (header 56 px, its buttons 44x44, one footer row with 48 px buttons, 16 px fields, nothing
+    under the screen's edge, the statement card's two lines one line each, Done's next-step links
+    44 px). The painted screen is `tests/painted-contrast.ts`: each line of text made transparent,
+    the screen captured with the orbit field's animations stopped at six points of their orbits,
+    and the line's colour composited over every pixel of its box, the worst kept; WCAG AA, 4.5:1,
+    or 3:1 for large text. It reads every screen from the space to Done, wide and at 390x844 and
+    320x568, in both themes, and on a phone it also fails any line the field paints behind (a
+    capture with the field hidden, compared pixel by pixel). It replaces an estimate from computed
+    colours that left the field out. Held sideways, the step's heading, lead and first question show
+    above the footer as it opens, and the top fades once scrolled. Signed in
+    (`onboarding-server.spec.ts`): the space step with Keep my data in this browser only, read the
+    same way at three sizes, and an account added, the page reloaded, setup reopened at the
+    statement and the statement imported into that account: one account on the Worker, seven
+    transactions in it, and back on the account step the form blank for another.
     `onboarding-server.spec.ts`, `onboarding-form-errors.spec.ts`, `onboarding-page-behind.spec.ts`
     (its short-phone case now scrolls About this space: the name screen fits 320x568),
     `orientation.spec.ts`, `circles.spec.ts`, `dashboard-circles.spec.ts`, release `s04` 4.7 and
@@ -1926,8 +1979,8 @@ Changed:
     `onboarding-import-loading`, `onboarding-import-process-bank`, `onboarding-import-summary`,
     `onboarding-import-to-mapping`, `onboarding-import-to-preview`. New: `onboarding-step-about`,
     `onboarding-progress`, `onboarding-account-skip`, `onboarding-subs-skip`,
-    `onboarding-done-summary`, and on the statement `onboarding-import-` `choose`, `input`, `pick`,
-    `banks`, `file`, `meta`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
+    `onboarding-done-summary`, `onboarding-backdrop` (the orbit field), and on the statement
+    `onboarding-import-` `choose`, `input`, `pick`, `banks`, `file`, `meta`, `dates`, `remove`, `target`, `categories`, `nothing-new`, `problem`, `open`,
     `done` and `another`. Same id, new place: `onboarding-skip` (the header's Close, still asking),
     `onboarding-back` (the header's Back), `onboarding-account-create` (the footer's Add account),
     `onboarding-import-skip` (the footer's Skip), `onboarding-import-selected` (`Import N`),
@@ -1946,8 +1999,11 @@ Changed:
   | `subscriptions` | past the import step, imported or not | imported transactions on the statement step              |
   | `done`          | past the subscriptions step           | past subscriptions, or past the statement with no import |
 
-  `outcome: completed` came only from Done. It now also comes from Open in Import, at step
-  `import`. So the comparable counts are: old `welcome` and `space` together against new `space`
+  `outcome: completed` came only from Done's Finish. It now also comes from Open in Import, at
+  step `import`, and from Escape on Done: before this build Escape there asked "Leave setup?" and,
+  confirmed, recorded `skipped` at step `done`; now it finishes as Finish does, records
+  `completed` and asks nothing, since the person reached Done. An old `skipped` at `done` is
+  therefore a new `completed` at `done`: count them together. So the comparable counts are: old `welcome` and `space` together against new `space`
   (stopped before saving a space); `account` and `import` as they are; old `subscriptions` and
   `done` against new `subscriptions` and `done` (got past the import step). New records say who
   imported during setup only up to `subscriptions`: one at `done` may have come straight from the
