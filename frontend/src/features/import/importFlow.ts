@@ -30,6 +30,7 @@ import {
   toDetectInput,
 } from '../../core/bankImport'
 import { loadBankImportMemory, rememberBankImportChoice } from '../../core/bankImport/memory'
+import { savedFormerNames } from '../../core/bankImport/rulesCheck'
 import { classifyCategory } from '../../core/categoryClassifier'
 import { autoDetectMapping, resolveHeaderMapping } from '../../core/importMapping'
 import {
@@ -1085,7 +1086,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
           category: r.category,
           keywords: r.keywords.join(', '),
           ...(Array.isArray(r.formerly) && r.formerly.length > 0
-            ? { formerly: [...r.formerly] }
+            ? { formerly: [...r.formerly], loadedCategory: r.category }
             : {}),
         }))
       )
@@ -1150,18 +1151,21 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     categoryRules: CategoryRuleSet
     transferRules: TransferRuleSet
   } => {
-    // A rule keeps the names it gave before (CategoryRule.formerly) unless it was given another
-    // category here. Written in the built-in rules' key order, so rules saved unchanged still read
-    // as the defaults when the mapping is switched.
+    // A rule keeps the names it gave before (CategoryRule.formerly) unless it is saved with
+    // another category than it was loaded with (savedFormerNames). Written in the built-in rules'
+    // key order, so rules saved unchanged still read as the defaults when the mapping is switched.
     const categoryRules = categoryRuleDraft
-      .map((r) => ({
-        category: r.category.trim(),
-        ...(r.formerly && r.formerly.length > 0 ? { formerly: [...r.formerly] } : {}),
-        keywords: r.keywords
-          .split(',')
-          .map((k) => k.trim())
-          .filter(Boolean),
-      }))
+      .map((r) => {
+        const formerly = savedFormerNames(r)
+        return {
+          category: r.category.trim(),
+          ...(formerly ? { formerly } : {}),
+          keywords: r.keywords
+            .split(',')
+            .map((k) => k.trim())
+            .filter(Boolean),
+        }
+      })
       .filter((r) => r.category && r.keywords.length > 0)
     saveCategoryRules(categoryRules)
 

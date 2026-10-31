@@ -328,6 +328,28 @@ describe('the names a built-in rule gave before', () => {
     expect(savedRule('parking')?.formerly).toEqual(['Transport'])
   })
 
+  it('stay when the category is typed over and typed back before the save', async () => {
+    await openEditor()
+    type(labelled(ruleRow('petrol'), 'Category'), 'Transportationx')
+    type(labelled(ruleRow('petrol'), 'Category'), 'Transportation')
+    await saved()
+
+    // The category saved is the one the rule had: fuel still goes to a space's Car (Gas).
+    expect(savedRule('petrol')?.formerly).toEqual(['Car (Gas)'])
+    expect(loadCategoryRules()).toEqual(DEFAULT_CATEGORY_RULES)
+  })
+
+  it('stay when the category comes back in another case or with spaces around it', async () => {
+    await openEditor()
+    type(labelled(ruleRow('petrol'), 'Category'), ' transportation ')
+    await saved()
+
+    expect(savedRule('petrol')).toMatchObject({
+      category: 'transportation',
+      formerly: ['Car (Gas)'],
+    })
+  })
+
   it('leave unchanged rules equal to the defaults, so switching the mapping asks nothing', async () => {
     await openEditor()
     await saved()

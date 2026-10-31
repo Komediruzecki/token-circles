@@ -46,6 +46,7 @@ const copyRule = (rule: CategoryRuleDraft): CategoryRuleDraft => ({
   category: rule.category,
   keywords: rule.keywords,
   ...(rule.formerly ? { formerly: [...rule.formerly] } : {}),
+  ...(rule.loadedCategory !== undefined ? { loadedCategory: rule.loadedCategory } : {}),
 })
 
 export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () => void }) {
@@ -125,12 +126,11 @@ export function BankRulesEditor(props: { flow: ImportFlow; onRecalculate?: () =>
   }
   const setRule = (index: number, field: 'category' | 'keywords', text: string) => {
     setRules(
-      form.values.categoryRules.map((rule, i) => {
-        if (i !== index) return rule
-        if (field === 'keywords') return { ...copyRule(rule), keywords: text }
-        // Another category is where the person wants these rows: the names it gave before go.
-        return { category: text, keywords: rule.keywords }
-      })
+      // The names a rule gave before stay through any typing: the save decides whether its
+      // category is another one (savedFormerNames).
+      form.values.categoryRules.map((rule, i) =>
+        i === index ? { ...copyRule(rule), [field]: text } : rule
+      )
     )
   }
   const setCounterparts = (counterparts: CounterpartDraft[]) => {
