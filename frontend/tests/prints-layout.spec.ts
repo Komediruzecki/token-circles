@@ -139,6 +139,38 @@ test.describe('Prints as drawn', () => {
     }
   })
 
+  // Up to 768 px the menu button is fixed at the top left, and every "See my print" lands at
+  // #progress/prints with the Prints divider scrolled to the top: its heading must land clear of
+  // the button, and stay clear once the page has held it there. At 390, and at 700, where the
+  // button still shows.
+  for (const width of [PHONE.width, 700]) {
+    test(`landing at #progress/prints at ${width}, the Prints heading sits clear of the menu button`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: PHONE.height })
+      await examplePrints(page)
+      const heading = page.getByTestId('progress-divider-prints').getByRole('heading')
+      const menu = page.getByRole('button', { name: 'Toggle sidebar' })
+      await expect(menu).toBeVisible()
+      await expect
+        .poll(async () => (await heading.boundingBox())?.y, { timeout: 10_000 })
+        .toBeLessThan(120)
+      // Past the page's 3 s hold on the divider, so this is where it stays.
+      await page.waitForTimeout(3500)
+      const h = (await heading.boundingBox())!
+      const m = (await menu.boundingBox())!
+      const overlap = {
+        x: Math.min(h.x + h.width, m.x + m.width) - Math.max(h.x, m.x),
+        y: Math.min(h.y + h.height, m.y + m.height) - Math.max(h.y, m.y),
+      }
+      expect(h.y, 'the heading near the top of the screen').toBeLessThan(120)
+      expect(
+        overlap.x <= 0 || overlap.y <= 0,
+        `the heading ${JSON.stringify(h)} and the menu button ${JSON.stringify(m)}`
+      ).toBe(true)
+    })
+  }
+
   test('nothing past the screen at 320, 360 and 390 with 26 prints: the strip scrolls inside itself', async ({
     page,
   }) => {

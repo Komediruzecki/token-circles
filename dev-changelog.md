@@ -2114,6 +2114,18 @@ check')` first, as the cushion and debt cases do.
   guard the print slid out from under the pointer between press and release, and the click
   missed it. `prints-layout.spec.ts` "Tab to a print the strip cuts off" fails without the
   scroll, and with the guard taken out.
+- **The Prints heading lands clear of the menu button** (`components/Layout.module.css`). Up to
+  768 px the menu button is fixed at the top left (x and y 12 to 48). Every "See my print" lands at
+  `#progress/prints`, where `scrollAndHold` scrolls the Prints divider to the top with
+  `scrollIntoView({ block: 'start' })`. The divider's 18 px scroll margin put it at y 18 and the
+  word "Prints" at x 29 to 79, y 23 to 44, half under the button. `.main`'s 56 px top padding
+  clears the button only at the top of the page, and every divider and anything else scrolled
+  into view on a phone shared the problem: Tags' rules section, fragments, focus. The root now
+  has `scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 48px)` while the button shows,
+  and a divider's own margin adds to it, so the heading lands 18 px under the button. The
+  breakpoint is the button's, 768 px, not 640: at 700 the heading sat under it too.
+  `prints-layout.spec.ts` "the Prints heading sits clear of the menu button", at 390 and 700,
+  fails without the rule, and at 700 with it at 640 px.
 
 ### Fixed
 

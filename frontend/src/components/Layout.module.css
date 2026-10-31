@@ -409,6 +409,14 @@
   .mobile-toggle {
     display: flex;
   }
+
+  /* Whatever the page scrolls into view stops below the toggle, not under it: a section scrolled
+     to the top (Progress at #progress/prints, Tags' rules), a fragment, or an element taking
+     focus. `.main`'s top padding clears the toggle only at the top of the page. A section's own
+     scroll margin adds to this, so a divider's title lands 18 px under the button. */
+  :global(html) {
+    scroll-padding-top: calc(env(safe-area-inset-top, 0px) + 48px);
+  }
 }
 
 /* Sidebar open: park the toggle at the sidebar's top-right (as a back-chevron) so it
