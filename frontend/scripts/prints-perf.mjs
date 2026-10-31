@@ -15,9 +15,10 @@
 // Budget (phase 4 design, section 7): no task over 50 ms in the prints window at 4x.
 //
 // Run it by hand before a release, not in CI, where load invents timings. Against a production
-// build, on a port of your own:
-//   cd frontend && pnpm exec vite build --outDir <dir> && pnpm exec vite preview --outDir <dir> \
-//     --port 3995 --strictPort
+// build in dist/, on a port of your own. vite.config.ts writes the export pages and version.json to
+// dist/ whatever --outDir says, so a build elsewhere goes without them, or fails with ENOENT when
+// there is no dist/ yet.
+//   cd frontend && pnpm run build && pnpm exec vite preview --port 3995 --strictPort
 //   BASE_URL=http://127.0.0.1:3995 node scripts/prints-perf.mjs
 //
 // Env vars:
