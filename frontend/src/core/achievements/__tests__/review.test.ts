@@ -40,3 +40,17 @@ describe('buildYearReview', () => {
     expect(r.expenses).toBe(30)
   })
 })
+
+describe('buildYearReview, months that have not begun', () => {
+  it('leaves a month still to come out of the tracked count, but keeps its entries', () => {
+    const transactions = [...month('2026-09', 3), ...month('2026-12', 3)]
+    const r = buildYearReview({ transactions, today: '2026-10-15' })
+    expect(r.trackedMonths).toBe(1)
+    expect(r.entries).toBe(6)
+  })
+
+  it('still counts the current month, even for entries dated later in it than today', () => {
+    const r = buildYearReview({ transactions: month('2026-10', 3), today: '2026-10-01' })
+    expect(r.trackedMonths).toBe(1)
+  })
+})

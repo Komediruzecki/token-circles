@@ -515,3 +515,52 @@ describe('which budget a finished month is held against', () => {
     expect(newly.map((u) => u.id)).not.toContain('held-the-line')
   })
 })
+
+describe('a month that has not begun', () => {
+  // October 2026, with November's and December's bills put in early.
+  const today = '2026-10-15'
+  const thisYear = trackedRun('2026-12', 12)
+
+  it('is not tracked, however many entries are dated in it', () => {
+    const r = evaluateAchievements(input({ transactions: thisYear, today }))
+    expect(r.trackedMonths).not.toContain('2026-11')
+    expect(r.trackedMonths).not.toContain('2026-12')
+    expect(r.trackedMonths.at(-1)).toBe('2026-10')
+    expect(r.streak).toBe(10)
+  })
+
+  it('completes no run or year badge, and the months still to come do not date one', () => {
+    const r = evaluateAchievements(input({ transactions: thisYear, today }))
+    expect(ids(r)).not.toContain('a-year')
+    expect(ids(r)).not.toContain('every-month')
+    expect(on(r, 'half-a-year')).toBe('2026-06-01')
+    expect(r.earned.filter((e) => e.earnedOn > '2026-10-01')).toEqual([])
+    // A month ahead on its own earns One month only once that month has come.
+    const early = evaluateAchievements(input({ transactions: month('2026-12', 3), today }))
+    expect(ids(early)).not.toContain('one-month')
+    const due = evaluateAchievements(
+      input({ transactions: month('2026-12', 3), today: '2026-12-01' })
+    )
+    expect(on(due, 'one-month')).toBe('2026-12-01')
+  })
+
+  it('still counts the current month, even for entries dated later in it than today', () => {
+    // Dated the 3rd to the 5th, looked at on the 1st.
+    const r = evaluateAchievements(
+      input({ transactions: month('2026-10', 3), today: '2026-10-01' })
+    )
+    expect(r.trackedMonths).toEqual(['2026-10'])
+    expect(on(r, 'one-month')).toBe('2026-10-01')
+    expect(r.streak).toBe(1)
+  })
+
+  it('takes nothing back: a badge already earned through a month ahead stays earned', () => {
+    const r = evaluateAchievements(input({ transactions: thisYear, today }))
+    const stored = [
+      { id: 'a-year' as const, earnedOn: '2026-12-01', unlockedAt: '2026-10-10T09:00:00Z' },
+    ]
+    const { newly, merged } = diffUnlocks(stored, r.earned, '2026-10-15T09:00:00Z')
+    expect(merged).toContainEqual(stored[0])
+    expect(newly.map((u) => u.id)).not.toContain('a-year')
+  })
+})

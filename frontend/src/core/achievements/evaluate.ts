@@ -118,8 +118,10 @@ export function sumTypes(list: Tx[], types: string[]): number {
 export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const nowMonth = monthOf(input.today)
   const byMonth = bucketByMonth(input.transactions)
+  // No month after this one is tracked, whatever is dated in it: entries put in ahead, like
+  // December's bills in October, wait for their month to begin.
   const tracked = [...byMonth.entries()]
-    .filter(([, list]) => list.length >= TRACKED_MONTH_MIN_TRANSACTIONS)
+    .filter(([m, list]) => m <= nowMonth && list.length >= TRACKED_MONTH_MIN_TRANSACTIONS)
     .map(([m]) => m)
     .sort()
   const trackedSet = new Set(tracked)
