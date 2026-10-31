@@ -2199,6 +2199,29 @@ check')` first, as the cushion and debt cases do.
   as #672, whose case checks that a budget added mid-run earns `first-budget`; the merge keeps
   both cases here, and this entry stands for both.
 
+- **A month that has not begun is not tracked** (`shared/trackedMonths.ts`,
+  `core/achievements/evaluate.ts`, `core/achievements/review.ts`). `trackedMonthsOf(dates, today)`
+  leaves out every month after `today`'s, and the badges' evaluation passes its own today. So
+  `evaluation.trackedMonths`, and everything that reads it, holds no month still to come. Three
+  entries dated in December, put in early in October, had made December a tracked month. The
+  prints, which read that list, started a plate there ("1 of 12 months", "Eleven more tracked
+  months in a row finish it."), as the phase 4 review found.
+  - What changes for the badges: each counts months only up to this one. That covers One month,
+    A quarter, Half a year, A year and Two to Twenty years (months in a row); Saver x3, Saver x6
+    and A perfect year (saving months); Named everything, Reconciled and The full picture (their
+    first such month); The comeback (runs of months); Every month of a year; and the average
+    monthly spending that Rainy day measures a goal against. A badge reached through a month
+    still to come could be earned early and dated to that month; now it waits for the month.
+    Badges already earned stay earned, as the unlock records only add.
+  - Unchanged: the streak, which counts back from this month; Held the line, Clean sweep and Six
+    months under, which read finished months only; and First entry and the entry counts, which
+    count entries, not months. Getting started and the circles already stopped at this month
+    (`trackedMonthsInYearWindow`, `windowMonths`).
+  - The year in review counts its tracked months the same way; its totals still hold every entry
+    dated in the year.
+  - Guard: `core/__tests__/trackedMonths.test.ts` "a month that has not begun" fails without the
+    change, for the badges, the prints and the year in review each.
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens

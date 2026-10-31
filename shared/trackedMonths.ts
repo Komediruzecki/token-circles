@@ -16,8 +16,14 @@ export function isTrackedMonth(transactions: number): boolean {
 
 const MONTH_RE = /^\d{4}-\d{2}/;
 
-/** The tracked months among these transaction dates, as 'YYYY-MM', oldest first. */
-export function trackedMonthsOf(dates: Iterable<string>): string[] {
+/**
+ * The tracked months among these transaction dates, as 'YYYY-MM', oldest first. Given `today`
+ * ('YYYY-MM-DD'), none after its month: entries dated ahead, like a bill put in early, do not make
+ * a month tracked before it has begun. The badges pass it, and so everything that reads their
+ * months (the prints, the record on Progress) does too.
+ */
+export function trackedMonthsOf(dates: Iterable<string>, today?: string): string[] {
+  const last = today === undefined ? null : today.slice(0, 7);
   const perMonth = new Map<string, number>();
   for (const date of dates) {
     if (!MONTH_RE.test(date)) continue;
@@ -25,7 +31,7 @@ export function trackedMonthsOf(dates: Iterable<string>): string[] {
     perMonth.set(month, (perMonth.get(month) ?? 0) + 1);
   }
   return [...perMonth.entries()]
-    .filter(([, n]) => isTrackedMonth(n))
+    .filter(([month, n]) => isTrackedMonth(n) && (last === null || month <= last))
     .map(([month]) => month)
     .sort();
 }

@@ -120,8 +120,12 @@ export function sumTypes(list: Tx[], types: string[]): number {
 export function evaluateAchievements(input: EvaluateInput): Evaluation {
   const nowMonth = monthOf(input.today)
   const byMonth = bucketByMonth(input.transactions)
-  // A tracked month is defined once, in shared/trackedMonths.ts, for everything that counts them.
-  const tracked = trackedMonthsOf(input.transactions.map((t) => t.date))
+  // A tracked month is defined once, in shared/trackedMonths.ts, for everything that counts them,
+  // and none comes after this month: entries dated ahead wait for their month to begin.
+  const tracked = trackedMonthsOf(
+    input.transactions.map((t) => t.date),
+    input.today
+  )
   const trackedSet = new Set(tracked)
   const inMonth = (m: string): Tx[] => byMonth.get(m) ?? []
 

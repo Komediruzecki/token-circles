@@ -16,6 +16,7 @@ import { adviceInput, input, month, tx } from '../achievements/__tests__/fixture
 import { buildAdvice } from '../achievements/advice'
 import { evaluateAchievements } from '../achievements/evaluate'
 import { buildYearReview } from '../achievements/review'
+import { shelfView } from '../prints/shelf'
 
 /** `n` dates inside `m` ('YYYY-MM'). */
 const dates = (m: string, n: number): string[] =>
@@ -135,5 +136,44 @@ describe('every count reads the same rule', () => {
       2
     )
     expect(after.map((c) => c.kind)).not.toContain('streak-at-risk')
+  })
+})
+
+describe('a month that has not begun', () => {
+  // A year from October 2025 to September 2026, and December's bills put in early.
+  const today = '2026-10-31'
+  const year = monthsFrom('2025-10', '2026-09')
+  const transactions = [...year.flatMap((m) => month(m, 3)), ...month('2026-12', 3)]
+
+  it('is not tracked, however many entries are dated in it', () => {
+    expect(
+      trackedMonthsOf(
+        transactions.map((t) => t.date),
+        today
+      )
+    ).toEqual(year)
+    // Without a today, every month that holds three entries counts, as before.
+    expect(trackedMonthsOf(transactions.map((t) => t.date))).toEqual([...year, '2026-12'])
+  })
+
+  it('counts toward no badge, and the year in review leaves it out', () => {
+    const evaluation = evaluateAchievements(input({ transactions, today }))
+    expect(evaluation.trackedMonths).toEqual(year)
+    expect(buildYearReview({ transactions, today }).trackedMonths).toBe(9)
+    // On its own, December earns One month only once December has come.
+    const early = evaluateAchievements(input({ transactions: month('2026-12', 3), today }))
+    expect(early.earned.map((e) => e.id)).not.toContain('one-month')
+    const due = evaluateAchievements(
+      input({ transactions: month('2026-12', 3), today: '2026-12-04' })
+    )
+    expect(due.earned).toContainEqual({ id: 'one-month', earnedOn: '2026-12-01' })
+  })
+
+  it('leaves the prints alone: the year is a print, and the next plate starts in October', () => {
+    const { trackedMonths } = evaluateAchievements(input({ transactions, today }))
+    const view = shelfView({ transactions, trackedMonths, today })
+    expect(view.prints.map((p) => p.from)).toEqual(['2025-10'])
+    // Not a plate of one month from December, as the entries dated ahead made it.
+    expect(view.plate).toMatchObject({ from: '2026-10', months: 0 })
   })
 })

@@ -42,10 +42,16 @@ function aMonth(month: string, n = 4, pay = 31457.25, shop = 2468.75): Entry[] {
 const months = (from: string, n: number): string[] =>
   Array.from({ length: n }, (_, i) => addMonths(from, i))
 
+/** A snapshot as the badges' evaluation makes one. */
 function snap(transactions: Entry[], today: string) {
   return {
     transactions,
-    evaluation: { trackedMonths: trackedMonthsOf(transactions.map((t) => t.date)) },
+    evaluation: {
+      trackedMonths: trackedMonthsOf(
+        transactions.map((t) => t.date),
+        today
+      ),
+    },
     today,
   }
 }

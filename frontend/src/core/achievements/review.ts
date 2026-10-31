@@ -33,8 +33,10 @@ export function buildYearReview(input: {
 
   let bestMonth: YearReview['bestMonth'] = null
   let trackedMonths = 0
+  // Tracked as the badges count it: a month after this one is not, whatever is dated in it.
+  const thisMonth = input.today.slice(0, 7)
   for (const [month, list] of byMonth) {
-    if (isTrackedMonth(list.length)) trackedMonths++
+    if (month <= thisMonth && isTrackedMonth(list.length)) trackedMonths++
     const saved = savedOf(flowsOf(list, baseAmount))
     if (saved > 0 && (bestMonth === null || saved > bestMonth.saved)) bestMonth = { month, saved }
   }
