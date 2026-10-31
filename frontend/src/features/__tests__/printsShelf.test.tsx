@@ -49,6 +49,8 @@ let host: HTMLDivElement
 let dispose: (() => void) | undefined
 let reduce = false
 beforeEach(() => {
+  // The shelf renders a task after it mounts; mount() below runs that task.
+  vi.useFakeTimers()
   reduce = false
   resetEngravings()
   vi.stubGlobal('matchMedia', (query: string) => ({
@@ -66,16 +68,35 @@ afterEach(() => {
   dispose?.()
   host?.remove()
   setSnapshot(null)
+  vi.useRealTimers()
 })
 const mount = (el: () => JSX.Element): HTMLDivElement => {
   host = document.createElement('div')
   document.body.appendChild(host)
   dispose = render(el, host)
+  vi.advanceTimersByTime(0)
   return host
 }
 const q = (c: HTMLElement, id: string) => c.querySelector(`[data-test-id="${id}"]`)
 
 describe('Prints on Progress', () => {
+  it('holds its place for the task after Progress first renders, then shows', () => {
+    setSnapshot(
+      snap(
+        months('2026-04', 6).flatMap((m) => aMonth(m)),
+        '2026-10-05'
+      )
+    )
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    dispose = render(() => <PrintsShelf />, host)
+    expect(q(host, 'progress-prints')?.getAttribute('aria-busy')).toBe('true')
+    expect(q(host, 'prints-seal')).toBeNull()
+    vi.advanceTimersByTime(0)
+    expect(q(host, 'progress-prints')?.hasAttribute('aria-busy')).toBe(false)
+    expect(q(host, 'prints-seal')).not.toBeNull()
+  })
+
   it('waits for the snapshot without saying anything yet', () => {
     const c = mount(() => <PrintsShelf />)
     expect(q(c, 'progress-prints')?.getAttribute('aria-busy')).toBe('true')
@@ -434,5 +455,73 @@ describe('reading a month', () => {
     expect(q(c, 'prints-readout')).toBeNull()
     expect(q(c, 'prints-months')).toBeNull()
     expect(c.querySelector('[data-test-id="prints-wedge"]')).toBeNull()
+  })
+})
+
+describe('every print as an image', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+  /** Each box on screen, except the thumbnails of prints listed as far away. */
+  const place = (far: Set<string>) =>
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const from = this.closest('[data-from]')?.getAttribute('data-from') ?? ''
+      const top = far.has(from) ? 5000 : 100
+      return { top, bottom: top + 96, left: 0, right: 96, width: 96, height: 96 } as DOMRect
+    })
+  const images = (c: HTMLElement) => q(c, 'prints-every')!.querySelectorAll('img')
+
+  it('draws them two to a task once near the screen, as paper images', () => {
+    const far = new Set(['2000-01'])
+    place(far)
+    setSnapshot(
+      snap(
+        months('2000-01', 322).flatMap((m) => aMonth(m)),
+        '2026-10-15'
+      )
+    )
+    const c = mount(() => <PrintsShelf />)
+    expect(images(c)).toHaveLength(0)
+    vi.advanceTimersByTime(30)
+    expect(images(c)).toHaveLength(0)
+    vi.advanceTimersToNextTimer()
+    expect(images(c)).toHaveLength(2)
+    vi.advanceTimersToNextTimer()
+    expect(images(c)).toHaveLength(4)
+    for (let i = 0; i < 20; i++) vi.advanceTimersToNextTimer()
+    // 25 of 26: the oldest is still far down the strip.
+    expect(images(c)).toHaveLength(25)
+    const oldest = q(c, 'prints-every')!.querySelector('[data-from="2000-01"]')!
+    expect(oldest.querySelector('img')).toBeNull()
+    far.clear()
+    window.dispatchEvent(new Event('scroll'))
+    vi.advanceTimersToNextTimer()
+    expect(oldest.querySelector('img')).not.toBeNull()
+    const img = images(c)[0]
+    expect(img.getAttribute('alt')).toBe('')
+    expect(img.getAttribute('src')!.startsWith('data:image/svg+xml;utf8,')).toBe(true)
+    // The plate is drawn in the theme's colours, which an image cannot read: it stays inline.
+    expect(q(c, 'prints-next')!.querySelector('svg')).not.toBeNull()
+    expect(q(c, 'prints-next')!.querySelector('img')).toBeNull()
+  })
+
+  it('keeps each button and its image when the snapshot comes again', () => {
+    place(new Set())
+    const entries = months('2000-01', 40).flatMap((m) => aMonth(m))
+    setSnapshot(snap(entries, '2026-10-15'))
+    const c = mount(() => <PrintsShelf />)
+    vi.advanceTimersByTime(30)
+    vi.advanceTimersToNextTimer()
+    vi.advanceTimersToNextTimer()
+    const before = [...images(c)]
+    expect(before).toHaveLength(3)
+    setSnapshot(snap([...entries], '2026-10-15'))
+    expect([...images(c)]).toEqual(before)
   })
 })

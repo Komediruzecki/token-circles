@@ -7,7 +7,7 @@
  * Everything here is worked out from the badges' snapshot each time (core/prints/shelf.ts); the
  * view it reads carries seal shares only, so no amount reaches the page.
  */
-import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from 'solid-js'
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from 'solid-js'
 import { monthLine, sealSummary } from '../../../shared/prints/describe'
 import { drawSeal, PAPER, SEAL_SLOTS, sealSector, THEME } from '../../../shared/prints/seal'
 import { snapshot } from '../core/achievementsStore'
@@ -32,9 +32,11 @@ import {
   thumbLabel,
 } from '../core/prints/copy'
 import { shelfView } from '../core/prints/shelf'
-import { whenSettledInView } from '../core/settledInView'
+import { inTurn, thumbSrc } from '../core/prints/thumbs'
+import { whenNearScreen, whenSettledInView } from '../core/settledInView'
 import styles from './PrintsShelf.module.css'
 import type { JSX } from 'solid-js'
+import type { SealSlot } from '../../../shared/prints/seal'
 import type { PrintView, ShelfView } from '../core/prints/shelf'
 
 /** No month on it: the frame and the twelve hour marks. */
@@ -67,6 +69,33 @@ const reducedMotion = (): boolean =>
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+/**
+ * A finished print in Every print: its image on paper, drawn once it comes within a screen of
+ * the viewport, two to a task (core/prints/thumbs.ts). Until then the button holds its place.
+ */
+function PrintThumb(props: { slots: SealSlot[] }): JSX.Element {
+  const [due, setDue] = createSignal(false)
+  const src = createMemo(() => (due() ? thumbSrc(props.slots) : null))
+  let el: HTMLSpanElement | undefined
+  onMount(() => {
+    let cancel: (() => void) | undefined
+    const stop = whenNearScreen(el!, () => {
+      cancel = inTurn(() => setDue(true))
+    })
+    onCleanup(() => {
+      stop()
+      cancel?.()
+    })
+  })
+  return (
+    <span ref={el} class={styles.thumbSeal}>
+      <Show when={src()}>
+        {(s) => <img src={s()} alt="" width="96" height="96" decoding="async" />}
+      </Show>
+    </span>
+  )
+}
+
 /** What the big seal shows: the empty plate, the plate filling in, or a finished print. */
 type Featured =
   | { kind: 'empty'; seal: PrintView }
@@ -74,9 +103,24 @@ type Featured =
   | { kind: 'print'; seal: PrintView; k: number }
 
 export default function PrintsShelf(): JSX.Element {
+  /**
+   * Worked out and drawn a task after Progress's first render, so the shelf never lengthens that
+   * task. In the built app at 4x CPU, Progress's first task fell from about 120 ms with the shelf
+   * in it to about 80 ms, and the shelf's own task stayed under 50 ms (scripts/prints-perf.mjs).
+   * Until then the section holds its place.
+   */
+  const [started, setStarted] = createSignal(false)
+  onMount(() => {
+    const later = setTimeout(() => {
+      setStarted(true)
+    }, 0)
+    onCleanup(() => {
+      clearTimeout(later)
+    })
+  })
   const view = createMemo<ShelfView | null>(() => {
     const s = snapshot()
-    if (!s) return null
+    if (!s || !started()) return null
     return shelfView({
       transactions: s.transactions,
       trackedMonths: s.evaluation.trackedMonths,
@@ -212,11 +256,14 @@ export default function PrintsShelf(): JSX.Element {
   const plateThumb = (plate: PrintView): string =>
     drawSeal(plate.slots, { palette: THEME, detail: 'thumb' })
 
-  const printThumb = (print: PrintView): string =>
-    drawSeal(print.slots, { palette: PAPER, detail: 'thumb' })
-
-  /** Newest first, as people look for the latest. */
-  const newestFirst = createMemo(() => [...(view()?.prints ?? [])].reverse())
+  /**
+   * Every print, newest first, as people look for the latest. Listed by first month, not by the
+   * print object, so a fresh snapshot keeps each button and its image instead of building them
+   * all again.
+   */
+  const newestFirst = createMemo(() => (view()?.prints ?? []).map((print) => print.from).reverse())
+  const printFrom = (from: string): PrintView | undefined =>
+    view()?.prints.find((print) => print.from === from)
 
   return (
     <div
@@ -340,21 +387,21 @@ export default function PrintsShelf(): JSX.Element {
                 <h3 class={styles.everyHeading}>{EVERY_HEADING}</h3>
                 <ul class={styles.strip} data-test-id="prints-every">
                   <For each={newestFirst()}>
-                    {(print) => (
+                    {(from) => (
                       <li>
                         <button
                           type="button"
                           class={styles.thumb}
-                          aria-label={thumbLabel(print)}
+                          aria-label={thumbLabel({ from })}
                           aria-pressed={
-                            f().kind === 'print' && f().seal.from === print.from ? 'true' : 'false'
+                            f().kind === 'print' && f().seal.from === from ? 'true' : 'false'
                           }
-                          data-from={print.from}
+                          data-from={from}
                           onClick={() => {
-                            setPicked(print.from)
+                            setPicked(from)
                           }}
                         >
-                          <span class={styles.thumbSeal} innerHTML={printThumb(print)} />
+                          <PrintThumb slots={printFrom(from)?.slots ?? EMPTY.slots} />
                         </button>
                       </li>
                     )}

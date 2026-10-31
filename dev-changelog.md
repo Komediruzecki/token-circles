@@ -1970,6 +1970,24 @@ check')` first, as the cushion and debt cases do.
   `<details>` with a 48 px summary styled as the benchmark cards' one, lists every filled month's
   line in clock order, so nothing needs a pointer. Featuring another print clears the reading;
   the empty plate has nothing to read.
+- **Prints stay off Progress's first task** (`PrintsShelf.tsx`, `core/prints/thumbs.ts`,
+  `whenNearScreen` in `core/settledInView.ts`, `scripts/prints-perf.mjs`). The shelf is worked
+  out and drawn a task after Progress first renders (the section holds its place, `aria-busy`,
+  until then). Every print in the strip is an `<img>` of a `data:` SVG in `PAPER`'s literal
+  colours (`thumbSrc`, memoised by shares, 200 kept); the plate stays inline, as `THEME`'s CSS
+  variables do not resolve inside an image. An image is drawn only once its slot is within a
+  screen of the viewport (one shared watch for all slots: scroll in the capture phase, resize, a
+  30 ms kickoff, a 900 ms heartbeat, stopped when none wait), then queued by `inTurn`, which runs
+  at most `PER_TASK` (2) jobs a task. The strip is keyed by each print's first month, so a fresh
+  snapshot keeps every button and image. Month names come from one `Intl.DateTimeFormat`, each
+  month formatted once: `toLocaleDateString` built a formatter per call, about 30 ms of a
+  6x-throttled first render. `scripts/prints-perf.mjs` measures the built app on the example
+  profiles (26 prints) at 390x844, DPR 3, and judges no task over 50 ms at 4x from the Prints
+  divider until all 26 images are in. On 2026-10-31 (load average about 7, five runs a rate, the
+  log in the phase 4 scratch folder): none over 50 ms at 1x or 4x, and at 6x a median of none
+  (4 in 25 runs' worth, worst 99 ms). Progress's own first task, before the shelf, was 69 ms at
+  4x; with the shelf inside it, an earlier build measured about 120 ms against about 80 ms a task
+  later. Run it by hand before a release, not in CI.
 
 ### Fixed
 

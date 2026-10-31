@@ -3,7 +3,7 @@
  * 500 ms, or 3 s after any of it showed, so what waits on it never stays hidden.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { shareInView, whenSettledInView } from '../settledInView'
+import { nearScreen, shareInView, whenNearScreen, whenSettledInView } from '../settledInView'
 
 /** An element whose box is `top` px from the viewport's top, 400 px tall, 400 px wide. */
 function box(top: number): { el: HTMLDivElement; move: (to: number) => void } {
@@ -93,5 +93,47 @@ describe('whenSettledInView', () => {
     stop()
     vi.advanceTimersByTime(10_000)
     expect(ready).not.toHaveBeenCalled()
+  })
+})
+
+describe('whenNearScreen', () => {
+  it('counts a box within a screen of the viewport, on any side', () => {
+    expect(nearScreen(box(100).el)).toBe(true)
+    expect(nearScreen(box(1500).el)).toBe(true)
+    expect(nearScreen(box(-1100).el)).toBe(true)
+    expect(nearScreen(box(1700).el)).toBe(false)
+    expect(nearScreen(box(-1300).el)).toBe(false)
+    // A box with no size is not laid out, so it is nowhere.
+    const hidden = document.createElement('div')
+    expect(nearScreen(hidden)).toBe(false)
+  })
+
+  it('goes ahead for each box once it comes near, sharing one watch', () => {
+    const near = box(1000)
+    const far = box(5000)
+    const readyNear = vi.fn()
+    const readyFar = vi.fn()
+    const add = vi.spyOn(window, 'addEventListener')
+    whenNearScreen(near.el, readyNear)
+    whenNearScreen(far.el, readyFar)
+    expect(add.mock.calls.filter(([type]) => (type as string) === 'scroll')).toHaveLength(1)
+    vi.advanceTimersByTime(30)
+    expect(readyNear).toHaveBeenCalledTimes(1)
+    expect(readyFar).not.toHaveBeenCalled()
+    far.move(1200)
+    expect(readyFar).toHaveBeenCalledTimes(1)
+    // Nothing waits any more, so the watch has stopped.
+    vi.advanceTimersByTime(10_000)
+    expect(vi.getTimerCount()).toBe(0)
+    add.mockRestore()
+  })
+
+  it('never goes ahead once stopped', () => {
+    const ready = vi.fn()
+    const stop = whenNearScreen(box(100).el, ready)
+    stop()
+    vi.advanceTimersByTime(10_000)
+    expect(ready).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

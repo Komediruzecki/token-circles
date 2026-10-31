@@ -7,13 +7,27 @@ import { addMonths } from '../achievements/months'
 import type { SealWords } from '../../../../shared/prints/describe'
 import type { PrintView, ShelfView } from './shelf'
 
+/**
+ * One formatter, and each month named once: `toLocaleDateString` builds a formatter on every call,
+ * and a shelf of 26 prints names months hundreds of times (30 ms of a 6x-throttled phone's first
+ * render of Progress, measured in the built app).
+ */
+const MONTH_YEAR = new Intl.DateTimeFormat('en-GB', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+const named = new Map<string, string>()
+
 export const printWords: SealWords = {
-  monthName: (month) =>
-    new Date(`${month}-15T00:00:00Z`).toLocaleDateString('en-GB', {
-      month: 'long',
-      year: 'numeric',
-      timeZone: 'UTC',
-    }),
+  monthName: (month) => {
+    let name = named.get(month)
+    if (name === undefined) {
+      name = MONTH_YEAR.format(new Date(`${month}-15T00:00:00Z`))
+      named.set(month, name)
+    }
+    return name
+  },
 }
 
 const monthName = printWords.monthName
