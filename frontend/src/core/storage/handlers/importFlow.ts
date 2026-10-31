@@ -6,7 +6,6 @@ import {
   importedAccountTypeError,
   readAccountType,
 } from '../../../../../shared/accountSchema'
-import { profileCategoryKey } from '../../../../../shared/bankImport/categoryAliases'
 import { parseImportCsv } from '../../../../../shared/importCsv'
 import {
   checkImportRowNumbers,
@@ -131,8 +130,6 @@ const resolvedDedupKey = (
 
 /** Distinct category-column values in `rows` that do NOT match an existing category
  *  (case-insensitive) in the active profile — the categories an import would create.
- *  A name the bank-import rules used to give counts as the name they give now
- *  (profileCategoryKey), so a space holding 'Salary Eur' is not offered 'Salary'.
  *  Excludes values that already name an existing account or are flagged as 'account'
  *  type (those become accounts, not categories), mirroring the worker preview. Used to
  *  ask the user for confirmation before creating categories (audit B5). */
@@ -154,8 +151,7 @@ async function detectNewCategories(
     const raw = toStr(row.category).trim()
     if (!raw) continue
     const lower = raw.toLowerCase()
-    const catKey = profileCategoryKey(raw, (k) => existingCat.has(k))
-    if (existingCat.has(catKey) || existingAcct.has(lower) || seen.has(lower)) continue
+    if (existingCat.has(lower) || existingAcct.has(lower) || seen.has(lower)) continue
     if (catTypeLower[lower] === 'account') continue
     seen.add(lower)
     out.push(raw)
@@ -819,11 +815,7 @@ export async function importExecute(body: unknown): Promise<Response> {
       if (rawCat) {
         // Use lowered version only for matching; store original case in DB
         const catLower = rawCat.toLowerCase().trim()
-        // The category the row files under: its own name, or the old name a rule used to give
-        // when the space still has a category under it (shared/bankImport/categoryAliases.ts).
-        const nameOf = (c: { name: string }) => c.name.toLowerCase().trim()
-        const catKey = profileCategoryKey(rawCat, (k) => categories.some((c) => nameOf(c) === k))
-        let cat = categories.find((c) => nameOf(c) === catKey)
+        let cat = categories.find((c) => c.name.toLowerCase().trim() === catLower)
         // Auto-create category if not found. In dry-run we never mutate (preview only).
         // When category creation is gated (audit B5), only create approved names — an
         // unapproved category imports uncategorized (category_id null), not skipped.

@@ -11,30 +11,80 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
-- **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
-  `shared/bankImport/categoryRules.ts` gave three personal labels that a newcomer's first import
-  offered under New categories: `Car (Gas)` is now `Transportation` (its keywords are fuel
-  stations), `Apartment (Bills)` is now `Utilities` (electricity, gas, water, waste, telecoms, the
-  building reserve fund and insurance) and `Salary Eur` is now `Salary` (pay, allowances,
-  payroll). All three are default categories. Keywords are unchanged.
-  - Aliases: `shared/bankImport/categoryAliases.ts` holds `RETIRED_RULE_CATEGORY_NAMES` (old name
-    to new) and `profileCategoryKey(name, has)`, which returns the folded name an import looks a
-    row's category up by. When the profile has a category under the old name, the old name wins,
-    even with the default of the new name beside it, so a space built from the old rules keeps
-    getting those rows and is never offered or given a second category. Otherwise the row's own
-    name is the key. One old name per new name, and an entry stays for good.
-  - Both runtimes match there and only there: local-first in `detectNewCategories` and the row
-    loop of `importExecute` (`frontend/src/core/storage/handlers/importFlow.ts`), the Worker in
-    `executeImport` (`worker/src/routes/imports.ts`, the new-category scan and the row loop), which
-    also serves the v1 API, MCP, email and sheet-sync imports. Account lookups keep the row's own
-    name. No migration and no stored category is renamed; a rule set saved in the rules editor
-    keeps the names it was saved with.
-  - Tests: `frontend/src/core/bankImport/__tests__/ruleCategoryNames.test.ts` fails when a rule
-    gives a name that is neither a default category nor on its list of general names, when a
-    retired name comes back, or when two old names share one new name.
+- **The bank-import rules give default category names, and each rule remembers the names it gave
+  before.** A newcomer's first import offered every name the built-in rules give that the space did
+  not have yet, and some were personal labels or a second name beside a default. In
+  `shared/bankImport/categoryRules.ts`, Croatian fuel (`Car (Gas)`) and parking (`Transport`) and
+  Worldwide rides (`Transport`) and fuel (`Fuel`) now give `Transportation`; Croatian bills
+  (`Apartment (Bills)`: electricity, gas, water, waste, telecoms, the building reserve fund and
+  insurance) give `Utilities`; Croatian pay (`Salary Eur`) gives `Salary`; and both pharmacy rules
+  (`Health`) give `Healthcare`. All are defaults a fresh space already has. `badminton` is no
+  longer a Croatian transport keyword: it was one person's own rule, and those rows now fall to
+  `Other`. Worldwide `Income` stays: besides `salary`, `payroll` and `wages` it matches `refund`,
+  `reimbursement` and `direct deposit`, which are money in but not pay, so folding it into `Salary`
+  would misfile them. No migration, and no stored category is renamed.
+  - Mechanism: `CategoryRule.formerly` (`shared/bankImport/types.ts`) lists the names a rule gave
+    before, oldest first. `ruleCategory(rule, categoryNames)` gives the first of them the space has
+    a category under (case-blind and trimmed, spelled as the space spells it), and otherwise the
+    rule's category. `matchRule` returns the winning rule instead of its name; `matchCategory`
+    takes the space's names, and `categorize` takes `{ categoryNames, fallback }`. `buildTxn`
+    passes `TransformContext.categoryNames`, which `processFiles` takes as
+    `ProcessOptions.categoryNames`. Any number of rules can fold into one name this way; Restaurant
+    and Dining into Eating out can follow.
+  - Why not the name-level alias #671 first shipped: `shared/bankImport/categoryAliases.ts`
+    (`RETIRED_RULE_CATEGORY_NAMES`, `profileCategoryKey`) mapped a new name back to one old name
+    when execute looked a row's category up. Once the fuel and parking rules both give
+    `Transportation`, a row carries only that name, and nothing can tell whether it stands for
+    `Car (Gas)` or `Transport`. With the rules folded and the alias kept, a space holding both filed
+    parking under `Car (Gas)`, and a space holding only `Transport` was offered `Transportation`
+    (both seen failing in the tests below). The alias is deleted and its three names are in
+    `formerly`. Both execute paths (`frontend/src/core/storage/handlers/importFlow.ts`,
+    `worker/src/routes/imports.ts`) match a row's own name again, byte for byte as before #671, so a
+    sheet, CSV, email or MCP row that names `Salary` is filed under `Salary`, not under a
+    `Salary Eur` beside it.
+  - Callers that run the rules pass the space's category names. The Bank Imports tab and the
+    onboarding wizard (`frontend/src/features/import/importFlow.ts`, both storage modes) read
+    `GET /api/categories` before running the rules, keep the active profile's by `profile_id`
+    (local-first answers for every profile in the household), and stop with "Couldn't read your
+    categories" rather than file rows by a guess. The Worker's `/api/v1/import`, which MCP's import
+    tool also uses, reads the profile's names from D1 (`worker/src/routes/v1.ts`).
+  - Saved rule sets keep the names they were saved with, and each rule's `formerly` too. The rules
+    editor carries it through its drafts beside the category the rule was loaded with
+    (`CategoryRuleDraft.formerly` and `loadedCategory`). The save drops it only when the category
+    saved differs from that one, trimmed and case-blind (`savedFormerNames` in
+    `frontend/src/core/bankImport/rulesCheck.ts`), so a category typed over and typed back keeps it.
+  - Earlier built-in rules stored in the browser: a mapping switch stored a full copy of the
+    group's built-in rules, and so did a save with nothing changed. The copy read as an edit, so the
+    renames above would never have reached anyone who switched, and the next switch warned that
+    edits would be lost. `frontend/src/core/bankImport/earlierBuiltInRules.ts` keeps each group's
+    earlier built-in rules exactly as git has them (Croatian as 5.3.0 to 5.17.3 shipped it and as
+    main had it after #671, Worldwide as 5.3.5 to 5.17.3 shipped it), and `loadCategoryRules` reads
+    a stored set that deep-equals one of them as that group's rules now. `saveCategoryRules` keeps
+    no copy of a group's built-in rules any more, so that list holds only what earlier versions
+    stored, and the next change to the built-in rules reaches everyone who never edited theirs.
+  - Tests: `frontend/src/core/bankImport/__tests__/ruleFormerNames.test.ts` covers the engine, both
+    groups and badminton. `ruleCategoryNames.test.ts` fails when a rule gives a name that is neither
+    a default nor on its list of general names, gives a name any rule gave before, or forgets one,
+    and when a general name is a near-duplicate of a default however it is cased, spaced or
+    punctuated. `earlierBuiltInRules.test.ts` stores frozen copies of each earlier version
+    (`__tests__/fixtures`, written from `git show`): they load as the rules now and are the copies
+    the app keeps, and saving the built-in rules stores nothing.
+    `frontend/src/features/import/__tests__/bankImportRuleCategories.test.tsx` drives the real flow
+    in local-first: a fresh profile, one made from the old rules, one holding a 5.17.3 copy of the
+    rules, a household whose other profile holds the old names, and an unreadable category list.
     `frontend/src/core/storage/__tests__/importFlow.ruleCategoryNames.test.ts` and
-    `worker/test/import-rule-category-names.test.ts` run fake rows categorized by the real rules
-    through a fresh space and through spaces holding the old names, with and without the defaults.
+    `worker/test/import-rule-category-names.test.ts` run a fake Revolut statement through a fresh
+    space, one holding the old names with and without the defaults, one with only `Transport`, and
+    a row that names its own category; the Worker file also runs `/api/v1/import`.
+    `bankRulesForm.test.tsx` covers the editor: former names kept on an unchanged save and on a
+    category typed back, dropped on another category, and a mapping switch that asks nothing over
+    any version's built-in rules.
+
+- **The bank rules editor suggests the active profile's categories.** `loadBankCategories`
+  (`frontend/src/features/import/importFlow.ts`) listed every name `GET /api/categories` returned,
+  and in local-first that list answers for every profile the household view shows. It now takes
+  `importCategoryNames`, which keeps the active profile's by `profile_id`: the names the import
+  files rows by. Test: `bankImportRuleCategories.test.tsx`, a household of two profiles.
 
 - **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
   is 2.69:1 and on `--primary-hover` 2.06:1, under WCAG AA's 4.5:1 for text; the instrument deck's

@@ -12,7 +12,16 @@ import { createRoot } from 'solid-js'
 import { render } from 'solid-js/web'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setPage } from '../../../core/appStore'
-import { loadCategoryRules, loadTransferRules } from '../../../core/bankImport'
+import {
+  DEFAULT_CATEGORY_RULES,
+  loadCategoryRules,
+  loadRuleGroup,
+  loadTransferRules,
+  rulesForGroup,
+} from '../../../core/bankImport'
+import croatian671 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-croatian-671.json'
+import croatian5173 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-croatian-v5.17.3.json'
+import worldwide5173 from '../../../core/bankImport/__tests__/fixtures/built-in-rules-worldwide-v5.17.3.json'
 import { BANK_RULE_MESSAGES as M } from '../../../core/bankImport/rulesCheck'
 import { __resetDataVersionsForTest } from '../../../core/dataVersions'
 import { getDB } from '../../../core/storage/idb'
@@ -276,5 +285,140 @@ describe('Recalculate preview', () => {
     expect(savedCategories()).toContain('Pets')
     // It recalculates instead of confirming a save.
     expect(confirmation()).toBeNull()
+  })
+})
+
+describe('the names a built-in rule gave before', () => {
+  /** The editor row of the rule that has `keyword`. */
+  const ruleRow = (keyword: string) =>
+    Array.from(host.querySelectorAll<HTMLElement>('[data-test-id="bank-rule-row"]')).find((row) =>
+      labelled(row, 'Keywords').value.split(', ').includes(keyword)
+    )!
+  const savedRule = (keyword: string) =>
+    loadCategoryRules().find((rule) => rule.keywords.includes(keyword))
+  const saved = async () => {
+    save().click()
+    await vi.waitFor(() => {
+      expect(confirmation()).toContain('Rules saved.')
+    })
+  }
+
+  it('are saved with the rules, so saving them unchanged files every row where it went', async () => {
+    await openEditor()
+    await saved()
+
+    expect(savedRule('petrol')).toMatchObject({
+      category: 'Transportation',
+      formerly: ['Car (Gas)'],
+    })
+    expect(savedRule('parking')).toMatchObject({
+      category: 'Transportation',
+      formerly: ['Transport'],
+    })
+    expect(loadCategoryRules()).toEqual(DEFAULT_CATEGORY_RULES)
+  })
+
+  it('go when the rule is given another category', async () => {
+    const flow = await openEditor()
+    expect(flow.categoryRuleDraft.find((r) => r.keywords.includes('petrol'))?.formerly).toEqual([
+      'Car (Gas)',
+    ])
+    type(labelled(ruleRow('petrol'), 'Category'), 'Car')
+    await saved()
+
+    // The person named where these rows go: no space gets them under Car (Gas) now.
+    expect(savedRule('petrol')?.category).toBe('Car')
+    expect(savedRule('petrol')?.formerly).toBeUndefined()
+    expect(savedRule('parking')?.formerly).toEqual(['Transport'])
+  })
+
+  it('stay when the category is typed over and typed back before the save', async () => {
+    await openEditor()
+    type(labelled(ruleRow('petrol'), 'Category'), 'Transportationx')
+    type(labelled(ruleRow('petrol'), 'Category'), 'Transportation')
+    await saved()
+
+    // The category saved is the one the rule had: fuel still goes to a space's Car (Gas).
+    expect(savedRule('petrol')?.formerly).toEqual(['Car (Gas)'])
+    expect(loadCategoryRules()).toEqual(DEFAULT_CATEGORY_RULES)
+  })
+
+  it('stay when the category comes back in another case or with spaces around it', async () => {
+    await openEditor()
+    type(labelled(ruleRow('petrol'), 'Category'), ' transportation ')
+    await saved()
+
+    expect(savedRule('petrol')).toMatchObject({
+      category: 'transportation',
+      formerly: ['Car (Gas)'],
+    })
+  })
+
+  it('leave unchanged rules equal to the defaults, so switching the mapping asks nothing', async () => {
+    await openEditor()
+    await saved()
+    const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      const mapping = host.querySelector('option[value="worldwide"]')!
+        .parentElement as HTMLSelectElement
+      choose(mapping, 'worldwide')
+
+      expect(asked).not.toHaveBeenCalled()
+      expect(loadRuleGroup()).toBe('worldwide')
+    } finally {
+      asked.mockRestore()
+    }
+  })
+})
+
+describe('rules stored as an earlier version of the built-in ones', () => {
+  // Until now a mapping switch stored a full copy of the group's built-in rules; the fixtures are
+  // those rules as git has them at each version (core/bankImport/__tests__/fixtures).
+  const mapping = () =>
+    host.querySelector('option[value="worldwide"]')!.parentElement as HTMLSelectElement
+  const storeRules = (rules: unknown, group: string) => {
+    localStorage.setItem('bankImportRuleGroup:1', group)
+    localStorage.setItem('bankImportCategoryRules:1', JSON.stringify(rules))
+  }
+
+  it.each([
+    ['Croatian, 5.17.3', croatian5173, 'croatian', 'worldwide'],
+    ['Croatian, main after #671', croatian671, 'croatian', 'worldwide'],
+    ['Worldwide, 5.17.3', worldwide5173, 'worldwide', 'croatian'],
+  ])(
+    'show as the rules now, and switching the mapping asks nothing: %s',
+    async (_version, copy, group, other) => {
+      storeRules(copy, group)
+      const flow = await openEditor()
+      expect(flow.categoryRuleDraft.map((rule) => rule.category)).toEqual(
+        rulesForGroup(group).map((rule) => rule.category)
+      )
+      const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+      try {
+        choose(mapping(), other)
+
+        expect(asked).not.toHaveBeenCalled()
+        expect(loadRuleGroup()).toBe(other)
+      } finally {
+        asked.mockRestore()
+      }
+    }
+  )
+
+  it('still ask before a switch once they were edited', async () => {
+    const edited = structuredClone(croatian5173)
+    edited[0].keywords.push('test market')
+    storeRules(edited, 'croatian')
+    await openEditor()
+    const asked = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    try {
+      choose(mapping(), 'worldwide')
+
+      expect(asked).toHaveBeenCalledOnce()
+      expect(loadRuleGroup()).toBe('croatian')
+      expect(loadCategoryRules()).toEqual(edited)
+    } finally {
+      asked.mockRestore()
+    }
   })
 })

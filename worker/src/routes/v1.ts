@@ -245,6 +245,14 @@ async function parseViaBank(
     profileId
   );
   const knownAccounts = accounts.map((a) => a.name);
+  // A built-in rule gives a name it gave before where the profile has a category under it
+  // (shared/bankImport/categoryRules.ts), so the rules run against this profile's categories.
+  const categories = await db.all<{ name: string }>(
+    c.env.DB,
+    'SELECT name FROM categories WHERE profile_id = ?',
+    profileId
+  );
+  const categoryNames = categories.map((cat) => cat.name);
 
   // Without a target account the adapter falls back to its own label, which imports the rows
   // against an account named e.g. "Erste" instead of the caller's real one. Let the caller say.
@@ -254,7 +262,7 @@ async function parseViaBank(
     [{ filename, bytes, bankId, targetAccount }],
     // The Worker has no localStorage, so the user's edited rule sets aren't reachable here;
     // processFiles falls back to the same defaults the UI ships with.
-    { knownAccounts, xlsx: () => import('xlsx') }
+    { knownAccounts, categoryNames, xlsx: () => import('xlsx') }
   );
 
   const failed = result.perFile.find((f) => f.error);
