@@ -11,9 +11,11 @@ import {
   onboardingOpen,
   onboardingOwnerFor,
   onboardingStep,
+  openingStep,
   prevOnboardingStep,
   setOnboardingOwner,
   shouldOfferOnboarding,
+  SHOWN_ONBOARDING_STEPS,
   skipOnboarding,
   startOnboarding,
 } from '../onboardingStore'
@@ -83,15 +85,22 @@ describe('onboardingStore', () => {
   })
 
   describe('step machine', () => {
-    it('starts at welcome and opens', () => {
+    it('starts at the space step and opens', () => {
       startOnboarding()
       expect(onboardingOpen()).toBe(true)
-      expect(onboardingStep()).toBe('welcome')
+      expect(onboardingStep()).toBe('space')
     })
 
-    it('walks forward and backward through the fixed step order', () => {
+    it('walks forward and backward through the steps it shows, which leave out welcome', () => {
+      expect(SHOWN_ONBOARDING_STEPS).toEqual([
+        'space',
+        'account',
+        'import',
+        'subscriptions',
+        'done',
+      ])
       startOnboarding()
-      for (const expected of ONBOARDING_STEPS.slice(1)) {
+      for (const expected of SHOWN_ONBOARDING_STEPS.slice(1)) {
         nextOnboardingStep()
         expect(onboardingStep()).toBe(expected)
       }
@@ -102,12 +111,26 @@ describe('onboardingStore', () => {
       expect(onboardingStep()).toBe('subscriptions')
     })
 
-    it('clamps prev at the first step and supports direct jumps', () => {
+    it('clamps prev at the first step shown and supports direct jumps', () => {
       startOnboarding()
       prevOnboardingStep()
-      expect(onboardingStep()).toBe('welcome')
+      expect(onboardingStep()).toBe('space')
       goToOnboardingStep('import')
       expect(onboardingStep()).toBe('import')
+    })
+
+    it('opens a record that stopped at welcome, the old first screen, on the space step', () => {
+      startOnboarding('welcome')
+      expect(onboardingStep()).toBe('space')
+      goToOnboardingStep('welcome')
+      expect(onboardingStep()).toBe('space')
+      expect(openingStep('welcome')).toBe('space')
+      expect(openingStep(null)).toBe('space')
+      expect(openingStep('import')).toBe('import')
+      // Every stored step but welcome is shown; welcome stays readable for the records that hold it.
+      expect(ONBOARDING_STEPS.filter((s) => !SHOWN_ONBOARDING_STEPS.includes(s))).toEqual([
+        'welcome',
+      ])
     })
 
     it('can be relaunched at a specific step', () => {

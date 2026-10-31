@@ -56,7 +56,9 @@ afterEach(() => {
   host?.remove()
 })
 
-async function mountScan(): Promise<Exposed> {
+async function mountScan(
+  props: Partial<Parameters<typeof SubscriptionScanPanel>[0]> = {}
+): Promise<Exposed> {
   let exposed: Exposed | undefined
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -67,6 +69,7 @@ async function mountScan(): Promise<Exposed> {
         expose={(api) => {
           exposed = api
         }}
+        {...props}
       />
     ),
     host
@@ -373,5 +376,32 @@ describe('regular payments it has no name for', () => {
     )
     expect(facts.subscriptionsSpotted).toBe(2)
     expect(scan.chosenCount()).toBe(facts.subscriptionsSpotted)
+  })
+})
+
+describe('in the setup wizard', () => {
+  const rescan = () =>
+    [...host.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Rescan')
+
+  it('adds without a toast, and still tells the wizard how many went in', async () => {
+    apiMocks.apiPost.mockResolvedValue({ id: 1 })
+    const onAdded = vi.fn()
+    const scan = await mountScan({ quiet: true, hideRescan: true, onAdded })
+
+    expect(await scan.addSelected()).toBe(2)
+
+    expect(apiMocks.showToast).not.toHaveBeenCalled()
+    expect(onAdded).toHaveBeenCalledWith(2)
+    expect(rescan()).toBeUndefined()
+  })
+
+  it('keeps the toast and Rescan everywhere else', async () => {
+    apiMocks.apiPost.mockResolvedValue({ id: 1 })
+    const scan = await mountScan()
+
+    await scan.addSelected()
+
+    expect(apiMocks.showToast).toHaveBeenCalledWith('2 subscriptions added', 'success')
+    expect(rescan()).toBeDefined()
   })
 })

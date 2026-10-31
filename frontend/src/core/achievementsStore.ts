@@ -8,7 +8,7 @@
  * only that profile reads them. They used to be judged on the household view, so ticking another
  * profile into it in Settings earned the active profile that profile's badges, permanently.
  */
-import { createRoot, createSignal } from 'solid-js'
+import { createEffect, createRoot, createSignal, on } from 'solid-js'
 import { localToday } from '../utils/period'
 import { achievementById } from './achievements/definitions'
 import { evaluateAchievements } from './achievements/evaluate'
@@ -22,6 +22,7 @@ import {
 import { api } from './api'
 import { activeProfileId } from './apiProfileScope'
 import { setPage } from './appStore'
+import { onboardingOpen } from './onboardingStore'
 import { getStorageMode } from './storage/storageFactory'
 import { addToast } from './toastStore'
 import type { Account, Bill, Transaction } from '../types/models'
@@ -276,11 +277,44 @@ async function run(profileId: number): Promise<UnlockRecord[]> {
     ...(adopting ? { [SETTINGS_KEY]: '' } : {}),
   })
   // Saved for the profile that earned them either way; not announced on one that did not.
-  if (newly.length > 0 && activeProfileId() === profileId) announce(newly, stored.length === 0)
+  if (newly.length > 0 && activeProfileId() === profileId) {
+    announce(profileId, newly, stored.length === 0)
+  }
   return newly
 }
 
-function announce(newly: UnlockRecord[], firstRun: boolean): void {
+/**
+ * Badges earned while the setup wizard is open, announced when it closes. Setup's own writes earn
+ * them (a first account, a first import), and their toasts stacked over the wizard's header, Back
+ * and Close; their "See badges" changed the page behind it.
+ */
+let held: { profileId: number; newly: UnlockRecord[]; firstRun: boolean }[] = []
+
+createRoot(() => {
+  createEffect(
+    on(onboardingOpen, (open) => {
+      if (open || held.length === 0) return
+      // Only the profile still in use hears about its badges, as when they are announced at once.
+      const waiting = held.filter((batch) => batch.profileId === activeProfileId())
+      held = []
+      if (waiting.length === 0) return
+      announceNow(
+        waiting.flatMap((batch) => batch.newly),
+        waiting.some((batch) => batch.firstRun)
+      )
+    })
+  )
+})
+
+function announce(profileId: number, newly: UnlockRecord[], firstRun: boolean): void {
+  if (onboardingOpen()) {
+    held.push({ profileId, newly, firstRun })
+    return
+  }
+  announceNow(newly, firstRun)
+}
+
+function announceNow(newly: UnlockRecord[], firstRun: boolean): void {
   const opts = {
     channel: 'achievements',
     durationMs: 9000,

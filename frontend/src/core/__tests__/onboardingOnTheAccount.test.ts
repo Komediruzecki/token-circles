@@ -22,6 +22,7 @@ import {
 import {
   completeOnboarding,
   getOnboardingStatus,
+  goToOnboardingStep,
   maybeOfferOnboarding,
   nextOnboardingStep,
   onboardingMirrorSettled,
@@ -263,42 +264,74 @@ describe('an account whose record is finished', () => {
 })
 
 describe('an account with no finished record', () => {
-  it('is offered the wizard at welcome, and each step further on is kept on the account', async () => {
+  it('is offered the wizard at the space step, and each step further on is kept on the account', async () => {
     signIn(5)
 
     await maybeOfferOnboarding()
     expect(onboardingOpen()).toBe(true)
-    expect(onboardingStep()).toBe('welcome')
+    expect(onboardingStep()).toBe('space')
     await vi.waitFor(() => {
-      expect(worker.records.get(5)?.step).toBe('welcome')
+      expect(worker.records.get(5)?.step).toBe('space')
     })
     const startedAt = worker.records.get(5)!.started_at
     expect(startedAt).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)
 
     nextOnboardingStep()
     await vi.waitFor(() => {
-      expect(worker.records.get(5)?.step).toBe('space')
+      expect(worker.records.get(5)?.step).toBe('account')
     })
     nextOnboardingStep()
     await vi.waitFor(() => {
-      expect(worker.records.get(5)?.step).toBe('account')
+      expect(worker.records.get(5)?.step).toBe('import')
     })
     // Back, and forward to a step already reached: nothing new to keep.
     prevOnboardingStep()
     nextOnboardingStep()
     await settled()
 
+    // The old first screen, welcome, is never written: the wizard opens on space.
     expect(statePuts()).toEqual([
-      'PUT /api/account/state/onboarding {"step":"welcome"}',
       'PUT /api/account/state/onboarding {"step":"space"}',
       'PUT /api/account/state/onboarding {"step":"account"}',
+      'PUT /api/account/state/onboarding {"step":"import"}',
     ])
     expect(worker.records.get(5)).toEqual({
-      step: 'account',
+      step: 'import',
       started_at: startedAt,
       finished_at: null,
       outcome: null,
     })
+  })
+
+  it('reopens a record that stopped at welcome, the old first screen, on the space step', async () => {
+    worker.records.set(5, {
+      step: 'welcome',
+      started_at: '2026-10-11 09:00:00',
+      finished_at: null,
+      outcome: null,
+    })
+    signIn(5)
+
+    expect(await whereToOfferOnboarding()).toBe('space')
+    await maybeOfferOnboarding()
+    expect(onboardingStep()).toBe('space')
+    // The step it opens on is further than welcome, so the record moves on to it.
+    await vi.waitFor(() => {
+      expect(worker.records.get(5)?.step).toBe('space')
+    })
+    expect(worker.records.get(5)?.started_at).toBe('2026-10-11 09:00:00')
+  })
+
+  it('goes from import to done without subscriptions when setup imported nothing', async () => {
+    signIn(5)
+    await maybeOfferOnboarding()
+    nextOnboardingStep()
+    nextOnboardingStep()
+    goToOnboardingStep('done')
+    await vi.waitFor(() => {
+      expect(worker.records.get(5)?.step).toBe('done')
+    })
+    expect(statePuts()).not.toContain('PUT /api/account/state/onboarding {"step":"subscriptions"}')
   })
 
   it('reopens at the step it reached, on another device', async () => {
@@ -327,10 +360,10 @@ describe('an account with no finished record', () => {
     await settled()
 
     expect(onboardingOpen()).toBe(false)
-    expect(worker.records.get(5)).toMatchObject({ step: 'space', outcome: 'skipped' })
+    expect(worker.records.get(5)).toMatchObject({ step: 'account', outcome: 'skipped' })
     expect(worker.records.get(5)!.finished_at).not.toBeNull()
     expect(statePuts().at(-1)).toBe(
-      'PUT /api/account/state/onboarding {"step":"space","outcome":"skipped"}'
+      'PUT /api/account/state/onboarding {"step":"account","outcome":"skipped"}'
     )
     expect(settingsPuts()).toEqual([])
     expect(getOnboardingStatus()).toBeNull()
@@ -496,7 +529,7 @@ describe('the Getting started card', () => {
     worker.gettingStarted.set(5, unreadable as unknown as GettingStartedRecord)
     signIn(5)
 
-    expect(await whereToOfferOnboarding()).toBe('welcome')
+    expect(await whereToOfferOnboarding()).toBe('space')
     startOnboarding()
     completeOnboarding()
     await settled()
@@ -561,7 +594,7 @@ describe('whose record it is', () => {
 
     // A second account signs in on the same browser.
     signIn(2)
-    expect(await whereToOfferOnboarding()).toBe('welcome')
+    expect(await whereToOfferOnboarding()).toBe('space')
     startOnboarding()
     completeOnboarding()
     await settled()
@@ -576,7 +609,7 @@ describe('whose record it is', () => {
     localStorage.setItem('finance_onboarding', 'skipped')
     signIn(7)
 
-    expect(await whereToOfferOnboarding()).toBe('welcome')
+    expect(await whereToOfferOnboarding()).toBe('space')
 
     expect(statePuts()).toEqual([])
     // It stays for the local account, should this browser go local-first.

@@ -162,3 +162,42 @@
   font-size: 13px;
   color: var(--danger);
 }
+
+/* Setup's About this space (the `compact` prop): the six regions in two columns, so the question
+   takes three rows, not five; each count on one row with its label beside its chips. At 320 px wide
+   a row is 72 px of label and four 44 px chips. Every chip is a 44 px target here, whatever the
+   width, so a count's label lines up with its chips. */
+.compact .chip {
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.regionChips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.regionChips .chip {
+  padding-inline: 8px;
+  text-align: center;
+  white-space: normal;
+}
+
+.compact .counts {
+  display: grid;
+  gap: 8px;
+}
+
+.compact .countLegend {
+  float: left;
+  width: 72px;
+  margin: 0;
+  padding: 0;
+  font-size: 14px;
+  line-height: 44px;
+}
+
+.compact .count .chips {
+  flex-wrap: nowrap;
+}

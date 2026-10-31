@@ -91,6 +91,13 @@ export interface SubscriptionScanPanelProps {
   }) => void
   /** Hide the panel's own Add button (the host renders the action itself). */
   hideAddButton?: boolean
+  /** Hide Rescan: the setup wizard scans once, right after an import. */
+  hideRescan?: boolean
+  /**
+   * Say nothing in a toast when subscriptions are added: the host's next screen says it (the
+   * setup wizard's summary). A toast there sat over the wizard's header and its Back and Close.
+   */
+  quiet?: boolean
 }
 
 interface RowState {
@@ -246,7 +253,9 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
         }
       }
       if (lastAdded > 0) {
-        showToast(`${lastAdded} subscription${lastAdded === 1 ? '' : 's'} added`, 'success')
+        if (!props.quiet) {
+          showToast(`${lastAdded} subscription${lastAdded === 1 ? '' : 's'} added`, 'success')
+        }
         props.onAdded?.(lastAdded)
       }
       if (refused.length === 0) return
@@ -442,18 +451,20 @@ export function SubscriptionScanPanel(props: SubscriptionScanPanelProps) {
               </Show>
             </span>
             <span class={styles.footerActions}>
-              <button
-                class={styles.rescan}
-                type="button"
-                disabled={scanning()}
-                aria-disabled={form.submitting() ? 'true' : undefined}
-                onClick={() => {
-                  // A rescan resets the rows under an add still on its way.
-                  if (!form.submitting()) void scan()
-                }}
-              >
-                Rescan
-              </button>
+              <Show when={!props.hideRescan}>
+                <button
+                  class={styles.rescan}
+                  type="button"
+                  disabled={scanning()}
+                  aria-disabled={form.submitting() ? 'true' : undefined}
+                  onClick={() => {
+                    // A rescan resets the rows under an add still on its way.
+                    if (!form.submitting()) void scan()
+                  }}
+                >
+                  Rescan
+                </button>
+              </Show>
               <Show when={!props.hideAddButton}>
                 <SubmitButton
                   class={styles.add}

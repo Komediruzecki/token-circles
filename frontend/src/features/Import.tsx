@@ -37,18 +37,19 @@
  * The onboarding wizard embeds the same flow + components.
  */
 
-import { createEffect, createSignal, For, on, onMount, Show } from 'solid-js'
+import { createEffect, createSignal, For, on, onMount, Show, untrack } from 'solid-js'
 import { OrbitSpinner } from '../components/OrbitSpinner'
 import { SubscriptionScanModal } from '../components/SubscriptionScan'
 import { useAppState } from '../core/appStore'
 import { showConfirm } from '../core/confirmStore'
 import { entityVersion } from '../core/dataVersions'
-import { refetchOnActive } from '../core/pageVisibility'
+import { refetchOnActive, usePageActive } from '../core/pageVisibility'
 import { addToast } from '../core/toastStore'
 import styles from './Import.module.css'
 import { ConnectedSources } from './import/ConnectedSources'
 import { ImportDataEntry } from './import/ImportDataEntry'
 import { createImportFlow } from './import/importFlow'
+import { handedImportFile, takeHandedImportFile } from './import/importHandoff'
 import { ImportMappingStep } from './import/ImportMappingStep'
 import { ImportPreviewStep } from './import/ImportPreviewStep'
 
@@ -92,6 +93,22 @@ export default function Import() {
 
   onMount(() => {
     flow.loadBankRules()
+  })
+
+  // A statement the setup wizard could not import by itself opens here, on the tab that reads it
+  // (importHandoff.ts): a bank the app knows on Bank Imports, any other table on File Upload,
+  // which goes on to matching its columns.
+  const pageActive = usePageActive('import')
+  createEffect(() => {
+    if (!pageActive() || !handedImportFile()) return
+    untrack(() => {
+      const handed = takeHandedImportFile()
+      if (!handed) return
+      flow.resetForm()
+      flow.setActiveImportTab(handed.tab)
+      if (handed.tab === 'bank-imports') void flow.addBankFiles([handed.file])
+      else void flow.readFile(handed.file)
+    })
   })
 
   // The rule drafts are the active profile's, and the page outlives a profile switch. Checked on

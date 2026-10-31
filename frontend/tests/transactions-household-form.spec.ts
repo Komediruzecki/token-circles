@@ -161,7 +161,7 @@ test.describe('local-first', () => {
     // click until it is left: leave it each time it shows up.
     await page.addLocatorHandler(page.getByTestId('onboarding-wizard'), async () => {
       await page.getByTestId('onboarding-skip').click()
-      const confirm = page.getByRole('button', { name: 'Confirm' })
+      const confirm = page.getByTestId('confirm-accept')
       if (await confirm.isVisible({ timeout: 2_000 }).catch(() => false)) await confirm.click()
     })
     await page.goto(`${E2E_BASE}/robots.txt`)

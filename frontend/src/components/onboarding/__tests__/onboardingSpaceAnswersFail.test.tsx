@@ -1,11 +1,12 @@
 /**
- * The setup wizard's "Name your space" step saves the space, then the answers to its two
- * questions (core/guidanceAnswers.ts). A failure to save the answers once the space is saved does
- * not hold the step: it moves on and says the space is saved and where the answers can be given.
- * It used to say "Couldn't save your space. Try again." about a space that was saved.
+ * The setup wizard's space step saves the space on its name screen, then the answers to its two
+ * questions on About this space (core/guidanceAnswers.ts). A failure to save the answers once the
+ * space is saved does not hold the step: it moves on and says the space is saved and where the
+ * answers can be given. It used to say "Couldn't save your space. Try again." about a space that
+ * was saved.
  *
- * The production build asks neither question while the benchmarks are held back
- * (core/guidanceGate.ts), and saves no answer.
+ * The production build shows no About this space screen while the benchmarks are held back
+ * (core/guidanceGate.ts): the name screen goes straight on, and no answer is saved.
  *
  * Run against the real local-first router on fake-indexeddb, with the answers' save mocked.
  */
@@ -80,9 +81,15 @@ it('moves on with the space saved when its answers fail to save, and says where 
   host
     .querySelector<HTMLFormElement>('[data-test-id="onboarding-space-form"]')!
     .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await vi.waitFor(() => {
+    expect(host.querySelector('[data-test-id="onboarding-step-about"]')).not.toBeNull()
+  })
+  expect(saveAnswers).not.toHaveBeenCalled()
+
+  host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-next"]')!.click()
 
   await vi.waitFor(() => {
-    expect(onboardingStep()).not.toBe('space')
+    expect(onboardingStep()).toBe('account')
   })
   expect(saveAnswers).toHaveBeenCalledTimes(1)
   // The space is saved: the profile has its new name.
@@ -118,19 +125,27 @@ it('asks neither question in the production build, and saves no answer', async (
     .querySelector<HTMLFormElement>('[data-test-id="onboarding-space-form"]')!
     .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   await vi.waitFor(() => {
-    expect(onboardingStep()).not.toBe('space')
+    expect(onboardingStep()).toBe('account')
   })
+  expect(host.querySelector('[data-test-id="onboarding-step-about"]')).toBeNull()
   expect(await (await getDB()).get('profiles', 1)).toMatchObject({ name: 'Our flat' })
   // No `skipped` region either: the question was never asked.
   expect(saveAnswers).not.toHaveBeenCalled()
   expect(await (await getDB()).get('settings', 'guidance:1')).toBeUndefined()
 })
 
-it('asks both in every other build', async () => {
+it('asks both in every other build, on the screen after the name', async () => {
   vi.stubEnv('MODE', 'dev')
   startOnboarding('space')
   const { OnboardingWizard } = await import('../OnboardingWizard')
   dispose = render(() => <OnboardingWizard selectProfiles={() => {}} />, host)
+  const next = await vi.waitFor(() => {
+    const button = host.querySelector<HTMLButtonElement>('[data-test-id="onboarding-next"]')
+    expect(button).not.toBeNull()
+    return button!
+  })
+  expect(host.querySelector('[data-test-id="onboarding-space-region"]')).toBeNull()
+  next.click()
   await vi.waitFor(() => {
     expect(host.querySelector('[data-test-id="onboarding-space-region"]')).not.toBeNull()
   })
