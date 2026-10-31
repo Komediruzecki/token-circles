@@ -9,6 +9,8 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+## [5.17.4] — 2026-10-31
+
 ### Fixed
 
 - **A register exported from YNAB is read as one.** `ynabAdapter.detect()`

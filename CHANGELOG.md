@@ -8,6 +8,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [5.17.4] — 2026-10-31
+
 ### Fixed
 
 - **A file exported from YNAB imports with its accounts.** Drop the Register file from YNAB's Export Plan download on Bank Imports, with commas or tabs, and each row goes to its own account, each transfer arrives once, and starting balances go to accounts that are new or still empty.
