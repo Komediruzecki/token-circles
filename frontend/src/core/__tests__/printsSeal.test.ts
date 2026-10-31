@@ -128,6 +128,56 @@ describe('the words', () => {
       'A seal of twelve petals in a woven band, October 2025 to September 2026. August 2026 spent the most, October 2025 the least. The band turns copper for March 2026 and August 2026, which each spent more than came in.'
     )
   })
+
+  /** The first `n` slots filled, each with this spending share; the rest not on the seal. */
+  const alike = (n: number, spent: number, kept = (i: number) => 20 + i): SealSlot[] =>
+    Array.from({ length: 12 }, (_, i) => (i < n ? { spent, kept: kept(i) } : null))
+
+  it('says the months spent about the same when they share one value, never the most and the least', () => {
+    // Three months alike, or two months of 1,000 and 1,004, which both round to 100.
+    expect(sealSummary(alike(3, 100), '2026-01', words)).toBe(
+      'A seal with 3 of its 12 petals so far, January 2026 to March 2026. Every month spent about the same. Every month kept money or came out about even.'
+    )
+    expect(monthLine(alike(3, 100), '2026-01', 1, words)).toBe(
+      'February 2026 spent about the same as the other 2 months, and kept money.'
+    )
+    expect(monthLine(alike(2, 100), '2026-01', 0, words)).toBe(
+      'January 2026 spent about the same as the other month, and kept money.'
+    )
+    // A flat year: one sentence, not every month listed twice.
+    expect(sealSummary(alike(12, 100), '2026-01', words)).toBe(
+      'A seal of twelve petals in a woven band, January 2026 to December 2026. Every month spent about the same. Every month kept money or came out about even.'
+    )
+  })
+
+  it('says the months spent nothing when none of them spent anything', () => {
+    // Income and transfers only: the heaviest month is 0, so every share is 0.
+    const nothing = alike(3, 0, (i) => (i === 0 ? 0 : 50))
+    expect(sealSummary(nothing, '2026-01', words)).toBe(
+      'A seal with 3 of its 12 petals so far, January 2026 to March 2026. None of these months spent anything. Every month kept money or came out about even.'
+    )
+    expect(monthLine(nothing, '2026-01', 0, words)).toBe(
+      'January 2026 spent nothing, and came out about even.'
+    )
+    expect(monthLine(nothing, '2026-01', 2, words)).toBe(
+      'March 2026 spent nothing, and kept money.'
+    )
+  })
+
+  it('still names the most and the least when only some months tie', () => {
+    const slots: SealSlot[] = [
+      { spent: 100, kept: 10 },
+      { spent: 100, kept: 10 },
+      { spent: 40, kept: 10 },
+      ...Array<SealSlot>(9).fill(null),
+    ]
+    expect(sealSummary(slots, '2026-01', words)).toContain(
+      'January 2026 and February 2026 spent the most, March 2026 the least.'
+    )
+    expect(monthLine(slots, '2026-01', 0, words)).toBe(
+      'January 2026 spent the most of these 3 months, and kept money.'
+    )
+  })
 })
 
 describe('shelfOf', () => {

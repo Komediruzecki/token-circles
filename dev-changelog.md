@@ -2054,6 +2054,16 @@ check')` first, as the cushion and debt cases do.
   `#f0c8a8`, motion not reduced, the fallback starting out of view, the 640 px breakpoint, a 32 px
   Share, an 11 px month list, and the strip without both of its narrowing rules.
 
+- **The seal's words when months tie or spend nothing** (`shared/prints/describe.ts`). Months
+  with equal spending shares share a rank, and shares are whole percents of the heaviest month,
+  so 1,000 and 1,004 both read 100. A seal whose months all shared one share named the same
+  months as both the most and the least, and a flat year listed all twelve twice. With one share
+  across the seal, the label now says "Every month spent about the same." and a tapped month
+  "spent about the same as the other 2 months". When that share is 0, which happens only when the
+  heaviest month spent nothing, they say "None of these months spent anything." and "spent
+  nothing". When only some months tie, the words are unchanged. `printsSeal.test.ts` fails
+  without the change.
+
 ### Fixed
 
 - **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in

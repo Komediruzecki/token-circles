@@ -70,6 +70,13 @@ export function monthLine(
       : `${name} is the only month here so far, and it ${kept}.`;
   }
   const { rank, of } = ranks(slots).get(i)!;
+  if (of === 1) {
+    // One share for every month: none spent the most or the least. A share of 0 for all of them
+    // means the heaviest month spent nothing, as any month that spent something is 100.
+    const others = n === 2 ? 'the other month' : `the other ${n - 1} months`;
+    const spent = slot.spent === 0 ? 'spent nothing' : `spent about the same as ${others}`;
+    return `${name} ${spent}, and ${kept}.`;
+  }
   const most = rank === 1 ? 'the most' : rank === of ? 'the least' : `the ${ORDINALS[rank]} most`;
   return `${name} spent ${most} of these ${n} months, and ${kept}.`;
 }
@@ -87,10 +94,15 @@ export function sealSummary(slots: readonly SealSlot[], from: string, words: Sea
     n === 12
       ? `A seal of twelve petals in a woven band, ${period}.`
       : `A seal with ${n} of its 12 petals so far, ${period}.`;
+  const least = Math.max(...[...r.values()].map((v) => v.rank));
   const spread =
     n === 1
       ? ''
-      : ` ${list(pick(1))} spent the most, ${list(pick(Math.max(...[...r.values()].map((v) => v.rank))))} the least.`;
+      : least > 1
+        ? ` ${list(pick(1))} spent the most, ${list(pick(least))} the least.`
+        : slots.some((s) => s !== null && s.spent > 0)
+          ? ' Every month spent about the same.'
+          : ' None of these months spent anything.';
   const red = names.filter((_, i) => slots[i] !== null && slots[i]!.kept < 0) as string[];
   const band =
     red.length === 0
