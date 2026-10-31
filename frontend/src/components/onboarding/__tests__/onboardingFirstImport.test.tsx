@@ -250,6 +250,23 @@ describe('a statement from a bank the app reads', () => {
     ])
   })
 
+  it('reopened with accounts only in another currency, a statement goes into a new account', async () => {
+    const db = await getDB()
+    await db.add('accounts', {
+      name: 'Dollars',
+      type: 'giro',
+      currency: 'USD',
+      balance: 100,
+      profile_id: 1,
+    })
+    await openAt('import')
+    choose('revolut.csv', revolut())
+    await readUntil('ready')
+
+    // The statement is in euros; the only account keeps dollars.
+    expect(options().find((o) => o.selected)?.text).toMatch(/^New account: Revolut/)
+  })
+
   it('counts a row the statement repeats once, as the import does', async () => {
     await openAt('import')
     // The last row twice, to the second: the statement's own repeat, left out of the import.

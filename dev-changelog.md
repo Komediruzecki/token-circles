@@ -1910,8 +1910,9 @@ Changed:
     with the defaults the Import page's tap-through took: the bank's own columns, every
     transaction that is not a duplicate, every new category, no budgets from spending. The account
     comes preselected: the one the bank names, else the one setup just created on this visit, else
-    one the profile has (the newest in the statement's currency, else the newest), and a new one
-    named for the bank only when the profile has none. Setup reopens at the statement after a
+    one the profile has (the newest in the statement's currency, else the newest whose currency is
+    not known), and a new one named for the bank only when no account fits: a profile with none, or
+    only accounts kept in another currency. Setup reopens at the statement after a
     reload (the person away at the bank's app, exporting the file) or when run again over a profile
     with accounts; before, it offered "New account: Revolut EUR" there, and one tap on Import made a
     second account beside the first and split the money between them (`loadBankAccounts` now

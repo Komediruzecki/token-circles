@@ -142,17 +142,22 @@ export function createFirstImport(options: FirstImportOptions) {
   /**
    * Where a statement goes when its bank names no account the profile has: the account setup made
    * on this visit; else one the profile has already (setup reopened at this step, or run again),
-   * the newest in the statement's currency, else the newest; a new account only on a profile with
-   * none. A new one beside an account the person just added would split their money in two.
+   * the newest in the statement's currency, else the newest whose currency is not known. A new
+   * account only when no account fits: a new one beside an account the person just added would
+   * split their money in two, and a statement in one currency does not belong in an account kept
+   * in another.
    */
   const defaultTarget = (row: BankFileRow) => {
     const accounts = flow.bankAccounts()
     const preferred = options.preferredAccount()
     if (preferred && accounts.some((a) => a.name === preferred)) return preferred
-    if (accounts.length === 0) return suggestedName(row)
     const currency = row.meta.currency?.toUpperCase()
-    const same = accounts.filter((a) => currency && a.currency?.toUpperCase() === currency)
-    const pool = same.length > 0 ? same : accounts
+    const fits = accounts.filter(
+      (a) => !currency || !a.currency || a.currency.toUpperCase() === currency
+    )
+    if (fits.length === 0) return suggestedName(row)
+    const same = fits.filter((a) => currency && a.currency?.toUpperCase() === currency)
+    const pool = same.length > 0 ? same : fits
     return pool.reduce((newest, a) => (a.id > newest.id ? a : newest), pool[0]).name
   }
 
