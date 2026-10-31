@@ -136,13 +136,14 @@ describe('spotlight tours', () => {
     }
   })
 
-  it('Progress has a tour: the page, Your next step and the seven circles', () => {
+  it('Progress has a tour: the page, Your next step, the seven circles and the prints', () => {
     const tour = SPOTLIGHT_TOURS.find((t) => t.id === 'progress')
     expect(tour?.page).toBe('progress')
     expect(tour?.steps.map((s) => [keyOf(s.targetSelector), s.requiredPage, s.title])).toEqual([
       ['progress-header', 'progress', 'Progress'],
       ['progress-next-step', 'progress', 'Your next step'],
       ['progress-circles', 'progress', 'Your seven circles'],
+      ['progress-prints', 'progress', 'Prints'],
     ])
   })
 

@@ -2005,6 +2005,10 @@ check')` first, as the cushion and debt cases do.
   found, given up after 10 s, ended at once by the person's wheel, touch, pointer or key). The
   release suite's `BADGE_TOAST` and s06's `SUMMARY` read both first-run wordings: the example
   profiles' first run now says "... and 26 prints ...".
+- **Progress's tour stops at the prints** (`core/spotlightStore.ts`): a fourth step, "Prints",
+  on `[data-tour="progress-prints"]`, the section's body, which is rendered in every state (empty
+  plate, plate, prints, and the place it holds while the shelf draws). `spotlightStore.test.ts`
+  pins the four steps in order.
 
 ### Fixed
 

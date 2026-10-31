@@ -94,7 +94,8 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
     ],
   },
 
-  // ── Progress: the page, Your next step and the seven circles, each anchor shown in every state ──
+  // ── Progress: the page, Your next step, the seven circles and the prints, each anchor shown in
+  // every state ──
   {
     id: 'progress',
     label: 'Progress',
@@ -118,6 +119,12 @@ export const SPOTLIGHT_TOURS: SpotlightTour[] = [
         'Your seven circles',
         'From Clear picture to More than enough, each row shows your own figure. Open a circle to see what it checks.',
         'top'
+      ),
+      step(
+        'progress-prints',
+        'progress',
+        'Prints',
+        'Twelve tracked months in a row make a print: your year drawn as a seal, petal by petal.'
       ),
     ],
   },
