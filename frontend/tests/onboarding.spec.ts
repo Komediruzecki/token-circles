@@ -11,6 +11,8 @@
  * The signed-in wizard, whose record is on the account, is onboarding-server.spec.ts.
  */
 import { expect, test } from '@playwright/test'
+import { writeFileSync } from 'node:fs'
+import { paintedContrast } from './painted-contrast'
 import { gotoServerless, gotoServerlessZeroState } from './test-helpers'
 import type { Locator, Page } from '@playwright/test'
 
@@ -494,133 +496,133 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-step-space')).toBeVisible()
     await expect(back).toHaveCount(0)
   })
+})
 
+/**
+ * Every screen of setup, from the space to Done, read against what the screen paints behind each
+ * line (paintedContrast): a chosen chip on About this space, an account added, a file the step
+ * cannot import, a statement read, its subscriptions, the statement imported, and Done. A screen that scrolls is read at each place it stops
+ * on the way down. The worst of each line, as a list of what is wrong (empty when right): a line
+ * under what WCAG AA asks of it, and on a phone, any line the orbit field paints behind.
+ */
+async function readEveryScreen(page: Page): Promise<string[]> {
+  const phone = (page.viewportSize()?.width ?? 1280) <= 620
+  const worst = new Map<string, { ratio: number; need: number; field: number }>()
+  const read = async (screen: string) => {
+    const body = page.getByTestId('onboarding-body')
+    for (let more = true, top = 0; more;) {
+      ;({ more, top } = await body.evaluate(async (el, top) => {
+        el.scrollTop = top
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        return {
+          more: el.scrollTop + el.clientHeight < el.scrollHeight - 1,
+          top: el.scrollTop + Math.max(40, el.clientHeight - 96),
+        }
+      }, top))
+      for (const line of await paintedContrast(page)) {
+        const key = `${screen}: "${line.what}"`
+        const was = worst.get(key)
+        worst.set(key, {
+          ratio: Math.min(line.ratio, was?.ratio ?? Infinity),
+          need: line.need,
+          field: Math.max(line.field, was?.field ?? 0),
+        })
+      }
+    }
+  }
+
+  await read('space')
+  await toAbout(page)
+  const chip = page.getByTestId('onboarding-space-adults-2')
+  await chip.click()
+  await expect(chip.locator('input')).toBeChecked()
+  await read('about')
+  await page.getByTestId('onboarding-next').click()
+  await expect(page.getByTestId('onboarding-step-account')).toBeVisible()
+  await read('account')
+  await page.getByTestId('onboarding-account-name').fill('Main Checking')
+  await page.getByTestId('onboarding-account-create').click()
+  await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+  await read('statement')
+  await page.getByTestId('onboarding-import-input').setInputFiles(UNKNOWN_TABLE)
+  await fileIn(page, 'unreadable')
+  await read('statement, a file it cannot import')
+  await page.getByTestId('onboarding-import-remove').click()
+  await page
+    .getByTestId('onboarding-import-input')
+    .setInputFiles('tests/fixtures/revolut-sample.csv')
+  await fileIn(page, 'ready')
+  await read('statement, read')
+  await page.getByTestId('onboarding-import-selected').click()
+  const netflix = page.locator('[data-test-id="sub-scan-row"][data-name="Netflix"]')
+  await expect(netflix).toBeVisible({ timeout: 15000 })
+  await read('subscriptions')
+  // Back on the statement: what went in, and Bring in another statement.
+  await page.getByTestId('onboarding-back').click()
+  await fileIn(page, 'imported')
+  await read('statement, imported')
+  await page.getByTestId('onboarding-next').click()
+  await expect(netflix).toBeVisible({ timeout: 15000 })
+  await page.getByTestId('onboarding-subs-add-continue').click()
+  await expect(page.getByTestId('onboarding-step-done')).toBeVisible()
+  await read('done')
+
+  expect(worst.size).toBeGreaterThan(20)
+  // Every line's worst, kept in the test's output for a reader of the run.
+  const measured = test.info().outputPath('painted-contrast.json')
+  writeFileSync(measured, JSON.stringify(Object.fromEntries(worst), null, 2))
+  await test.info().attach('painted-contrast', { path: measured, contentType: 'application/json' })
+  return Array.from(worst.entries()).flatMap(([key, { ratio, need, field }]) => [
+    ...(ratio < need ? [`${key} reads at ${ratio}:1, under ${need}:1`] : []),
+    ...(phone && field > 2 ? [`${key} has the orbit field behind it (${field})`] : []),
+  ])
+}
+
+// Every line of setup, over the sky, the haze and the tokens as the screen paints them, the
+// orbits stopped at six points each. Behind the glass panel on a wide screen; on a phone, where
+// the step's text is the whole screen, nothing of the field.
+test.describe("the setup wizard's text over what is painted behind it", () => {
   for (const theme of ['light', 'dark']) {
-    test(`the wizard's hints, its primary button and a chosen chip read at 4.5:1 or better, ${theme}`, async ({
-      page,
-    }) => {
+    test(`every line reads at AA on a wide screen, ${theme}`, async ({ page }) => {
+      test.setTimeout(120000)
       await page.addInitScript((value) => {
         localStorage.setItem('finance-theme', value)
       }, theme)
       await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
-
-      // Each hint on the step: its colour at its opacity over the glass panel, and the panel over
-      // the overlay's ground at each stop of its gradient. The lowest ratio over the stops is an
-      // estimate of the worst place on screen: it leaves out the panel's backdrop blur and the
-      // orbit field behind it. Then the footer's primary: its text on its own fill. Computed
-      // colours, composited on a canvas the way the page composites them.
-      const contrasts = (step: string) =>
-        page.getByTestId(step).evaluate(async (stepEl) => {
-          const panel = stepEl.closest<HTMLElement>('[data-test-id="onboarding-panel"]')!
-          const overlay = panel.closest<HTMLElement>('[data-test-id="onboarding-wizard"]')!
-          await Promise.all(
-            panel
-              .getAnimations({ subtree: true })
-              .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
-              .map((a) => a.finished)
-          )
-          const ctx = document.createElement('canvas').getContext('2d', {
-            willReadFrequently: true,
-          })!
-          const paint = (color: string, alpha = 1) => {
-            ctx.fillStyle = '#010203'
-            ctx.fillStyle = color
-            if (ctx.fillStyle === '#010203') throw new Error(`the canvas cannot read ${color}`)
-            ctx.globalAlpha = alpha
-            ctx.fillRect(0, 0, 1, 1)
-            ctx.globalAlpha = 1
-          }
-          const luminance = () => {
-            const [r, g, b] = Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)).map((v) => {
-              const c = v / 255
-              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-            })
-            return 0.2126 * r + 0.7152 * g + 0.0722 * b
-          }
-          const ratio = (back: number, fore: number) =>
-            Math.round(((Math.max(back, fore) + 0.05) / (Math.min(back, fore) + 0.05)) * 100) / 100
-          const ground = getComputedStyle(overlay).backgroundImage.match(/rgba?\([^)]*\)/g) ?? []
-          const hints = Array.from(stepEl.querySelectorAll<HTMLElement>('[class*="_hint_"]'))
-          const onPanel = hints.map((hint) => {
-            let opacity = 1
-            for (let n: HTMLElement | null = hint; n && n !== panel; n = n.parentElement) {
-              opacity *= parseFloat(getComputedStyle(n).opacity)
-            }
-            const ratios = ground.map((stop) => {
-              paint(stop)
-              paint(getComputedStyle(panel).backgroundColor)
-              const back = luminance()
-              paint(getComputedStyle(hint).color, opacity)
-              return ratio(back, luminance())
-            })
-            return {
-              what: hint.textContent!.trim(),
-              stops: ratios.length,
-              lowest: Math.min(...ratios),
-            }
-          })
-          const buttons = panel.querySelectorAll<HTMLElement>('footer button')
-          const primary = buttons[buttons.length - 1]
-          paint(getComputedStyle(primary).backgroundColor)
-          const fill = luminance()
-          paint(getComputedStyle(primary).color)
-          return {
-            hints: onPanel,
-            primary: { what: primary.textContent!.trim(), ratio: ratio(fill, luminance()) },
-          }
-        })
-
-      const steps = [await contrasts('onboarding-step-space')]
-      await page.getByTestId('onboarding-next').click()
-      await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
-
-      // A chosen answer on About this space: its text on the chip's primary fill.
-      const chip = page.getByTestId('onboarding-space-adults-2')
-      await chip.click()
-      await expect(chip.locator('input')).toBeChecked()
-      const chosen = await chip.evaluate((el) => {
-        const ctx = document.createElement('canvas').getContext('2d', { willReadFrequently: true })!
-        const luminance = (color: string) => {
-          ctx.fillStyle = color
-          ctx.fillRect(0, 0, 1, 1)
-          const [r, g, b] = Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3)).map((v) => {
-            const c = v / 255
-            return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-          })
-          return 0.2126 * r + 0.7152 * g + 0.0722 * b
-        }
-        const back = luminance(getComputedStyle(el).backgroundColor)
-        const fore = luminance(getComputedStyle(el).color)
-        return (
-          Math.round(((Math.max(back, fore) + 0.05) / (Math.min(back, fore) + 0.05)) * 100) / 100
-        )
-      })
-      expect(chosen).toBeGreaterThanOrEqual(4.5)
-
-      await page.getByTestId('onboarding-next').click()
-      steps.push(await contrasts('onboarding-step-account'))
-      await page.getByTestId('onboarding-account-skip').click()
-      steps.push(await contrasts('onboarding-step-import'))
-      for (const { hints, primary } of steps) {
-        // A hint on each of the three steps, read over every stop of the ground.
-        expect(hints.length).toBeGreaterThan(0)
-        for (const hint of hints) {
-          expect(hint.stops, hint.what).toBeGreaterThan(1)
-          expect(hint.lowest, hint.what).toBeGreaterThanOrEqual(4.5)
-        }
-        // Its primary's label on the primary's fill: --on-primary, dark where white fails.
-        expect(primary.ratio, primary.what).toBeGreaterThanOrEqual(4.5)
-      }
+      expect(await readEveryScreen(page)).toEqual([])
     })
   }
+
+  test.describe('on a phone', () => {
+    test.use({ hasTouch: true, isMobile: true })
+    for (const size of [
+      { width: 390, height: 844 },
+      { width: 320, height: 568 },
+    ]) {
+      for (const theme of ['light', 'dark']) {
+        test(`every line reads at AA with no orbit behind it, ${size.width}x${size.height} ${theme}`, async ({
+          page,
+        }) => {
+          test.setTimeout(120000)
+          await page.setViewportSize(size)
+          await page.addInitScript((value) => {
+            localStorage.setItem('finance-theme', value)
+          }, theme)
+          await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+          expect(await readEveryScreen(page)).toEqual([])
+        })
+      }
+    }
+  })
 })
 
 test.describe('onboarding wizard at phone width', () => {
   /** A phone held sideways: the one size where every screen of setup is taller than its middle. */
   const SIDEWAYS = { width: 667, height: 375 }
 
-  test("the step's bottom fades while it goes on below, and not where it fits", async ({
+  test("the step's bottom fades while it goes on below, its top once scrolled, and not where it fits", async ({
     page,
   }) => {
     await page.setViewportSize(SIDEWAYS)

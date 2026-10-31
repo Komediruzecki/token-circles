@@ -76,12 +76,9 @@
 .chip:has(.radio:checked) {
   background: var(--primary);
   border-color: var(--primary);
-  color: #ffffff;
+  /* White in the light theme, the night ink in the dark ones: what it was, from the one token. */
+  color: var(--on-primary);
   font-weight: 600;
-}
-
-:global([data-theme='dark']) .chip:has(.radio:checked) {
-  color: var(--bg);
 }
 
 .chip:has(.radio:focus-visible) {

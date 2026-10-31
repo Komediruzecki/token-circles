@@ -11,6 +11,7 @@
  */
 import { expect, test } from '@playwright/test'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
+import { paintedContrast } from './painted-contrast'
 import { E2E_BASE } from './test-helpers'
 import type { BrowserContext, Page, Response } from '@playwright/test'
 
@@ -333,4 +334,50 @@ test.describe('the setup wizard on the account @smoke', () => {
       await deleteAccount(ctx, email)
     }
   })
+})
+
+// The space step signed in has one line local-first never shows: the way to keep the data in this
+// browser instead. Read over what the screen paints behind it, wide and on a phone.
+test.describe("the signed-in space step's text over what is painted behind it", () => {
+  for (const theme of ['light', 'dark']) {
+    test(`every line reads at AA, ${theme}`, async ({ page }) => {
+      test.setTimeout(120_000)
+      const ctx = page.context()
+      const { email } = await signUpAndIn(ctx)
+      try {
+        await bootSignedIn(ctx)
+        await ctx.addInitScript((value) => {
+          localStorage.setItem('finance-theme', value)
+        }, theme)
+        await page.goto(`${E2E_BASE}/#dashboard`, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        })
+        await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        await expect(page.getByTestId('onboarding-local-only')).toBeVisible()
+        const wrong: string[] = []
+        for (const size of [
+          { width: 1280, height: 720 },
+          { width: 390, height: 844 },
+          { width: 320, height: 568 },
+        ]) {
+          await page.setViewportSize(size)
+          const lines = await paintedContrast(page)
+          expect(lines.map((l) => l.what)).toContain('Keep my data in this browser only')
+          for (const { what, ratio, need, field } of lines) {
+            const where = `${String(size.width)}x${String(size.height)}: "${what}"`
+            if (ratio < need)
+              wrong.push(`${where} reads at ${String(ratio)}:1, under ${String(need)}:1`)
+            if (size.width <= 620 && field > 2) {
+              wrong.push(`${where} has the orbit field behind it (${String(field)})`)
+            }
+          }
+        }
+        expect(wrong).toEqual([])
+      } finally {
+        await deleteAccount(ctx, email)
+      }
+    })
+  }
 })

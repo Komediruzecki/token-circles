@@ -85,7 +85,12 @@ const CURRENCIES = ['EUR', 'USD', 'GBP', 'JPY', 'CAD']
 /** Decorative orbit field behind the panel: dotted rings + drifting tokens. */
 function OrbitBackdrop() {
   return (
-    <svg class={styles.backdrop} viewBox="0 0 1000 1000" aria-hidden="true">
+    <svg
+      class={styles.backdrop}
+      viewBox="0 0 1000 1000"
+      aria-hidden="true"
+      data-test-id="onboarding-backdrop"
+    >
       <defs>
         <radialGradient id="onb-core" cx="0.5" cy="0.5" r="0.5">
           <stop offset="0" stop-color="var(--primary)" stop-opacity="0.35" />
