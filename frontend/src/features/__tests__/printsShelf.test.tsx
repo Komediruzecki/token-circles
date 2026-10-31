@@ -42,9 +42,10 @@ function aMonth(month: string, n = 4, pay = 31457.25, shop = 2468.75): Entry[] {
 const months = (from: string, n: number): string[] =>
   Array.from({ length: n }, (_, i) => addMonths(from, i))
 
-/** A snapshot as the badges' evaluation makes one. */
-function snap(transactions: Entry[], today: string) {
+/** A snapshot as the badges' evaluation makes one, for the profile `profileId`. */
+function snap(transactions: Entry[], today: string, profileId = 1) {
   return {
+    profileId,
     transactions,
     evaluation: {
       trackedMonths: trackedMonthsOf(
@@ -227,6 +228,27 @@ describe('Prints on Progress', () => {
     expect(pick.getAttribute('aria-pressed')).toBe('true')
   })
 
+  it("drops a picked print when the snapshot is another profile's, prints of the same months or not", () => {
+    // Every example profile has prints from the same months: January 2000 on.
+    const history = months('2000-01', 322).flatMap((m) => aMonth(m))
+    const pressed = (c: HTMLElement) =>
+      [...q(c, 'prints-every')!.querySelectorAll('[aria-pressed="true"]')].map((b) =>
+        b.getAttribute('data-from')
+      )
+    setSnapshot(snap(history, '2026-10-15', 2))
+    const c = mount(() => <PrintsShelf />)
+    q(c, 'prints-every')!.querySelector<HTMLButtonElement>('[data-from="2020-01"]')!.click()
+    expect(q(c, 'prints-eyebrow')?.textContent).toBe('Print 21')
+    setSnapshot(snap(history, '2026-10-15', 1))
+    expect(q(c, 'prints-eyebrow')?.textContent).toBe('Print 26')
+    expect(q(c, 'prints-seal')?.getAttribute('data-from')).toBe('2025-01')
+    expect(pressed(c)).toEqual(['2025-01'])
+    // Back on the first profile, the pick is gone too: its newest print.
+    setSnapshot(snap(history, '2026-10-15', 2))
+    expect(q(c, 'prints-eyebrow')?.textContent).toBe('Print 26')
+    expect(pressed(c)).toEqual(['2025-01'])
+  })
+
   it('follows the snapshot to another profile', () => {
     setSnapshot(
       snap(
@@ -329,6 +351,22 @@ describe('engraving the seal', () => {
     const c = mount(() => <PrintsShelf />)
     expect(figure(c).dataset.engraving).toBeUndefined()
     expect(q(c, 'prints-seal')!.querySelectorAll('.seal-petal:not([data-drawn])')).toHaveLength(0)
+  })
+
+  it("engraves another profile's seal of the same months as a seal of its own", () => {
+    const six = months('2026-04', 6).flatMap((m) => aMonth(m))
+    setSnapshot(snap(six, '2026-10-05', 2))
+    const c = mount(() => <PrintsShelf />)
+    vi.advanceTimersByTime(30 + 500 + engraveMs(6, false))
+    expect(figure(c).dataset.engraving).toBeUndefined()
+    setSnapshot(snap(six, '2026-10-05', 1))
+    expect(figure(c).dataset.engraving).toBe('armed')
+    expect(q(c, 'prints-seal')!.querySelectorAll('.seal-petal[data-drawn]')).toHaveLength(0)
+    vi.advanceTimersByTime(30 + 500 + engraveMs(6, false))
+    expect(figure(c).dataset.engraving).toBeUndefined()
+    // The first profile's seal was engraved in this page load: it shows finished.
+    setSnapshot(snap(six, '2026-10-05', 2))
+    expect(figure(c).dataset.engraving).toBeUndefined()
   })
 
   it('engraves the hour marks of an empty plate once', () => {
@@ -468,6 +506,17 @@ describe('reading a month', () => {
     tap(wedge(c, 3))
     expect(q(c, 'prints-readout')!.textContent).not.toBe(HINT)
     q(c, 'prints-every')!.querySelector<HTMLButtonElement>('[data-from="2003-01"]')!.click()
+    expect(q(c, 'prints-readout')!.textContent).toBe(HINT)
+    expect(faded(c)).toEqual([])
+  })
+
+  it("clears when the snapshot is another profile's, even on a print of the same months", () => {
+    const history = months('2000-01', 322).flatMap((m) => aMonth(m))
+    setSnapshot(snap(history, '2026-10-15', 2))
+    const c = mount(() => <PrintsShelf />)
+    tap(wedge(c, 3))
+    expect(q(c, 'prints-readout')!.textContent).not.toBe(HINT)
+    setSnapshot(snap(history, '2026-10-15', 1))
     expect(q(c, 'prints-readout')!.textContent).toBe(HINT)
     expect(faded(c)).toEqual([])
   })

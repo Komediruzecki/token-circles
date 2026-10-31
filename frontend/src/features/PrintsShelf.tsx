@@ -48,9 +48,10 @@ import type { PrintView, ShelfView } from '../core/prints/shelf'
 const EMPTY: PrintView = { from: '', months: 0, slots: Array(SEAL_SLOTS).fill(null) }
 
 /**
- * Petals engraved in this page load, by the first month of their print or plate (or 'empty' for
- * the empty plate's hour marks): a seal shown again engraves only what is new on it. Nothing is
- * kept past a reload, so each page load engraves once.
+ * Petals engraved in this page load, by profile and the first month of their print or plate (or
+ * 'empty' for the empty plate's hour marks): a seal shown again engraves only what is new on it,
+ * and another profile's seal of the same months is a seal of its own. Nothing is kept past a
+ * reload, so each page load engraves once.
  */
 const engraved = new Map<string, number>()
 
@@ -133,8 +134,27 @@ export default function PrintsShelf(): JSX.Element {
     })
   })
 
-  /** The finished print picked from Every print; the newest when none is. */
+  /**
+   * The profile the snapshot is for. Every example profile has prints from the same months, so a
+   * pick is dropped when the profile changes, and what was engraved is kept by profile as well as
+   * by first month.
+   */
+  const profile = (): number | null => snapshot()?.profileId ?? null
+
+  /**
+   * The finished print picked from Every print; the newest when none is. A snapshot for another
+   * profile drops it, and coming back finds the newest print too.
+   */
   const [picked, setPicked] = createSignal<string | null>(null)
+  createEffect(
+    on(
+      profile,
+      () => {
+        setPicked(null)
+      },
+      { defer: true }
+    )
+  )
   createEffect(() => {
     const p = picked()
     if (p !== null && !view()?.prints.some((print) => print.from === p)) setPicked(null)
@@ -156,10 +176,11 @@ export default function PrintsShelf(): JSX.Element {
     () => {
       const f = featured()
       if (!f) return null
-      const key = f.kind === 'empty' ? 'empty' : f.seal.from
-      const target = f.kind === 'empty' ? SEAL_SLOTS : f.seal.months
+      const empty = f.kind === 'empty'
+      const key = `${String(profile())}:${empty ? 'empty' : f.seal.from}`
+      const target = empty ? SEAL_SLOTS : f.seal.months
       const from = reducedMotion() ? target : Math.min(engraved.get(key) ?? 0, target)
-      return { key, target, from }
+      return { key, target, from, empty }
     },
     null,
     { equals: (a, b) => a?.key === b?.key && a?.target === b?.target && a?.from === b?.from }
@@ -185,7 +206,7 @@ export default function PrintsShelf(): JSX.Element {
     const e = engraving()
     const el = figure
     if (!e || !el || e.from >= e.target) return
-    const { key, target, from } = e
+    const { key, target, from, empty } = e
     el.dataset.engraving = 'armed'
     let finish: ReturnType<typeof setTimeout> | undefined
     const stop = whenSettledInView(el, () => {
@@ -195,7 +216,7 @@ export default function PrintsShelf(): JSX.Element {
           delete el.dataset.engraving
           engraved.set(key, target)
         },
-        engraveMs(target - from, key === 'empty')
+        engraveMs(target - from, empty)
       )
     })
     onCleanup(() => {

@@ -2063,6 +2063,14 @@ check')` first, as the cushion and debt cases do.
   heaviest month spent nothing, they say "None of these months spent anything." and "spent
   nothing". When only some months tie, the words are unchanged. `printsSeal.test.ts` fails
   without the change.
+- **A profile switch drops a picked print** (`PrintsShelf.tsx`). Every example profile has prints
+  from the same months. So a print picked on one profile (Print 21, from January 2020) stayed
+  featured and pressed after a switch to another, which had a print from January 2020 too. The
+  pick now clears when the snapshot's `profileId` changes, and coming back shows the newest print.
+  What was engraved is kept by profile and first month (`{profileId}:{from}`, or
+  `{profileId}:empty`), so another profile's seal of the same months engraves as its own. A month
+  being read already cleared on every new snapshot. `printsShelf.test.tsx` fails with either
+  change taken out.
 
 ### Fixed
 
