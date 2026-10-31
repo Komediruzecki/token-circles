@@ -1986,6 +1986,26 @@ check')` first, as the cushion and debt cases do.
   retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
   be 3").
 
+- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
+  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
+  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
+  write, so a write that landed after the running evaluation had read its lists (a second
+  `POST /api/accounts`, say) got an answer from before it, and nothing evaluated again until the
+  next write. The snapshot that Getting started, the circles and Progress read kept the old
+  account list, and a badge the write earned waited for the next write. This was already in 5.17.3
+  for the badges. The setup wizard's done step (`OnboardingWizard.tsx` `loadNextSteps`) awaits
+  the same call to count what was just imported. Now such a call gets one further run, started
+  when the running one ends (settled or rejected). Every call made meanwhile shares it, and a call
+  during the further run queues one more after it, so asks fold and never loop. If another profile
+  is active when the running one ends, the further run is dropped and answers `[]`; the switch's
+  own refresh evaluates the new profile, as before. Guards in
+  `core/__tests__/achievementsStore.test.ts`, "a refresh asked for while an evaluation is
+  running": the running evaluation is held on its settings read, the accounts change, and a
+  refresh is asked for. Without the change the snapshot ends with `['Rainy day']` instead of
+  `['Rainy day', 'Holiday']`, and the fold case sees one settings read instead of two. Two more
+  cases pin that a switch drops the old profile's further run and that a run nobody asked again
+  during starts nothing. User-facing line in CHANGELOG.md under Fixed.
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens
