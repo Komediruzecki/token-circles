@@ -1973,6 +1973,19 @@ check')` first, as the cushion and debt cases do.
   holdings after a badge save, and read settings after a currency save). All six fail without the
   change.
 
+- **The circles follow a save of the retirement plan.** They work invested money out with the
+  plan's safe withdrawal rate, read from `retirement_settings` in `GET /api/settings`. The planner
+  saves the plan with `PUT /api/retirement/settings` (worker/src/routes/retirement-goals.ts, and
+  `/retirement/settings` in the local router), which bumps the `retirement` counter, while
+  `useGuidance` (`frontend/src/core/guidance.ts`) followed only `settings`, `portfolio` and the
+  profile. Dashboard and Progress kept the rate they first read until another settings or
+  portfolio write, or a profile switch. Badge saves had refreshed it by accident until the fix
+  above. `useGuidance` now follows `entityVersion('retirement')` too. It does not follow
+  `retirement-goals`: a goal holds no part of the plan. The planner is the only other reader of the
+  plan and applies its own save's answer. Guard: `core/__tests__/guidanceStore.test.ts` "follows a
+  retirement plan save, and not a retirement goal write" fails without the change ("expected 4 to
+  be 3").
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens

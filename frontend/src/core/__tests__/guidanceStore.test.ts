@@ -279,6 +279,31 @@ describe('what it follows', () => {
     })
   })
 
+  // The retirement plan is saved with PUT /api/retirement/settings, which bumps `retirement`, not
+  // `settings`: the circles kept the withdrawal rate they first read until some other write.
+  it('follows a retirement plan save, and not a retirement goal write', async () => {
+    setPage('dashboard')
+    mount('dashboard')
+    store.set!(snap(1))
+    await vi.waitFor(() => {
+      expect(view()).not.toBeNull()
+    })
+    expect(view()!.inputs.withdrawalRatePct).toBe(4)
+    const reads = net.settingsReads
+
+    // A goal holds no part of the plan: nothing to read again.
+    invalidateForRequest('/api/retirement-goals', 'POST', true, '{}')
+    await settled()
+    expect(net.settingsReads).toBe(reads)
+
+    net.settings = { retirement_settings: JSON.stringify({ safeWithdrawalRatePct: 3 }) }
+    invalidateForRequest('/api/retirement/settings', 'PUT', true, '{}')
+    await vi.waitFor(() => {
+      expect(view()!.inputs.withdrawalRatePct).toBe(3)
+    })
+    expect(net.settingsReads).toBe(reads + 1)
+  })
+
   it('keeps the answers it read when a later settings read fails', async () => {
     net.settings = { guidance: JSON.stringify({ carriesCardBalance: false }) }
     setPage('progress')

@@ -11,7 +11,8 @@
  * - **The profile's settings** (`GET /api/settings`): the answers record (core/guidanceAnswers.ts)
  *   and the retirement plan's withdrawal rate. Read here, not from the snapshot: a settings write
  *   starts no evaluation (core/dataChangedEvent.ts), so a copy in the snapshot would stay as it was
- *   before every answer. Read again after each settings write (`entityVersion('settings')`).
+ *   before every answer. Read again after each settings write (`entityVersion('settings')`) and
+ *   each save of the retirement plan (`entityVersion('retirement')`).
  * - **The profile's holdings** (`GET /api/portfolio/holdings`), at what was paid for them, as both
  *   runtimes value them; read again after each portfolio write.
  * - **The base currency** (`getLocalCurrency`), for the region and the answers given in a currency.
@@ -254,7 +255,13 @@ const current = (
 export function useGuidance(page: GuidancePage): () => GuidanceView | null {
   refetchOnActive(
     page,
-    () => [getProfileVersion(), entityVersion('settings'), entityVersion('portfolio')],
+    () => [
+      getProfileVersion(),
+      entityVersion('settings'),
+      // The plan's save, PUT /api/retirement/settings, is a `retirement` write.
+      entityVersion('retirement'),
+      entityVersion('portfolio'),
+    ],
     () => {
       void loadInputs(activeProfileId())
     }
