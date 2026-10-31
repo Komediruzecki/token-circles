@@ -736,8 +736,8 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
       </p>
       <p class={styles.stepLead}>
         Moving from YNAB? Drop the Register file from its Export Plan download here. Each row goes
-        to its own account, transfers stay transfers, and YNAB's starting balances become the new
-        accounts' starting balances.
+        to its own account, transfers stay transfers, and YNAB's starting balances go to accounts
+        that are new or still empty.
       </p>
       <div class={styles.comingSoon}>
         <span class={styles.comingSoonBadge}>Coming soon</span>

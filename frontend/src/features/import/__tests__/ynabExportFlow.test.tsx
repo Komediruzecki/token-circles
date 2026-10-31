@@ -249,3 +249,185 @@ describe('a YNAB register export on the Bank Imports tab', () => {
     expect(after).toEqual({ 'Test Checking': 3395.8, 'Test Savings': 3200 })
   })
 })
+
+// ---------------------------------------------------------------------------
+// Review findings, 2026-10-31. Each case failed on f09677e3.
+// ---------------------------------------------------------------------------
+
+const HEADER_ROW = REGISTER.split('\n')[0]!
+
+/** account, date, payee, outflow, inflow, and an optional group and category */
+const row = (a: string, d: string, p: string, o: string, i: string, group = '', cat = '') =>
+  q([a, '', d, p, group && cat ? `${group}: ${cat}` : '', group, cat, '', o, i, 'Cleared'])
+
+async function dropText(text: string, name = 'Register.csv'): Promise<void> {
+  const file = new File([text], name, { type: 'text/csv' })
+  flow.handleBankFileSelect({ target: { files: [file], value: '' } } as unknown as Event)
+  await waitUntil(() => flow.bankFiles().length > 0 && !flow.loading(), 'the file to be read')
+}
+
+async function importAll(): Promise<void> {
+  await flow.processBankFiles()
+  await waitUntil(() => !flow.loading(), 'the files to be read')
+  expect(flow.error()).toBeNull()
+  await flow.goToPreview()
+  await flow.handleImport('selected')
+  await waitUntil(() => !flow.loading(), 'the import')
+  expect(flow.error()).toBeNull()
+}
+
+async function stored() {
+  const db = await getDB()
+  const accounts = (await db.getAll('accounts')) as StoredAccount[]
+  const name = new Map(accounts.map((a) => [a.id, a.name]))
+  const txns = ((await db.getAll('transactions')) as StoredTxn[])
+    .map((t) => [
+      t.date,
+      t.type,
+      t.amount,
+      name.get(t.account_id) ?? null,
+      t.transfer_account_id ? (name.get(t.transfer_account_id) ?? null) : null,
+    ])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+  return { accounts: Object.fromEntries(accounts.map((a) => [a.name, a])), txns }
+}
+
+describe('review: a YNAB register export on the Bank Imports tab', () => {
+  it('imports two identical rows as two, and a second import of the file adds nothing', async () => {
+    const text = [
+      HEADER_ROW,
+      row('Test Checking', '01/21/2026', 'Cafe', '$3.00', '$0.00', 'Everyday', 'Eating'),
+      row('Test Checking', '01/21/2026', 'Cafe', '$3.00', '$0.00', 'Everyday', 'Eating'),
+      row('Test Checking', '01/20/2026', 'Transfer : Test Savings', '$100.00', '$0.00'),
+      row('Test Checking', '01/20/2026', 'Transfer : Test Savings', '$100.00', '$0.00'),
+      row('Test Savings', '01/20/2026', 'Transfer : Test Checking', '$0.00', '$100.00'),
+      row('Test Savings', '01/20/2026', 'Transfer : Test Checking', '$0.00', '$100.00'),
+    ].join('\n')
+    await dropText(text)
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the files to be read')
+    await flow.goToPreview()
+    expect(flow.duplicateIndices()).toEqual([])
+    expect(flow.selectedRows().size).toBe(4)
+    await flow.handleImport('selected')
+    await waitUntil(() => !flow.loading(), 'the import')
+    expect((await stored()).txns).toEqual([
+      ['2026-01-20', 'transfer', 100, 'Test Checking', 'Test Savings'],
+      ['2026-01-20', 'transfer', 100, 'Test Checking', 'Test Savings'],
+      ['2026-01-21', 'expense', 3, 'Test Checking', null],
+      ['2026-01-21', 'expense', 3, 'Test Checking', null],
+    ])
+
+    flow.resetForm()
+    await dropText(text)
+    await importAll()
+    expect((await stored()).txns).toHaveLength(4)
+  })
+
+  it('books spending in a category named like an account as spending, and says why', async () => {
+    await dropText(
+      [
+        HEADER_ROW,
+        row('Test Checking', '01/10/2026', 'Travel Agent', '$80.00', '$0.00', 'Goals', 'Vacation'),
+        row('Test Checking', '01/20/2026', 'Transfer : Vacation', '$100.00', '$0.00'),
+        row('Vacation', '01/20/2026', 'Transfer : Test Checking', '$0.00', '$100.00'),
+      ].join('\n')
+    )
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the files to be read')
+    await flow.goToPreview()
+    expect(flow.previewWarnings().map((w) => w.reason)).toContain(
+      'Register.csv: The category Vacation has the name of an account, so its rows were categorized by your rules instead.'
+    )
+    await flow.handleImport('selected')
+    await waitUntil(() => !flow.loading(), 'the import')
+    const { accounts, txns } = await stored()
+    expect(txns).toEqual([
+      ['2026-01-10', 'expense', 80, 'Test Checking', null],
+      ['2026-01-20', 'transfer', 100, 'Test Checking', 'Vacation'],
+    ])
+    expect(accounts['Vacation']!.balance).toBe(100)
+    expect(accounts['Test Checking']!.balance).toBe(-180)
+  })
+
+  it('gives an existing empty account its starting balance, and keeps one that is in use', async () => {
+    const db = await getDB()
+    const base = { type: 'giro', currency: 'EUR', balance: 0, starting_balance: 0, profile_id: 1 }
+    await db.add('accounts', { ...base, name: 'Test Checking' })
+    const savings = await db.add('accounts', { ...base, name: 'Test Savings', balance: 40 })
+    await db.add('transactions', {
+      date: '2025-12-30',
+      type: 'income',
+      amount: 40,
+      amount_local: 40,
+      description: 'Earlier',
+      account_id: savings,
+      profile_id: 1,
+    })
+    await flow.loadBankAccounts()
+    await dropText(REGISTER)
+    await flow.processBankFiles()
+    await waitUntil(() => !flow.loading(), 'the files to be read')
+    await flow.goToPreview()
+    expect(flow.previewWarnings().map((w) => w.reason)).toEqual([
+      'Test Savings already has a starting balance or transactions, so the starting balance of 3000.00 in this import was not applied to it.',
+    ])
+    await flow.handleImport('selected')
+    await waitUntil(() => !flow.loading(), 'the import')
+    const { accounts } = await stored()
+    expect(accounts['Test Checking']).toMatchObject({
+      starting_balance: 1250,
+      starting_date: '2026-01-02',
+      balance: 3395.8,
+    })
+    expect(accounts['Test Savings']).toMatchObject({ starting_balance: 0, balance: 240 })
+  })
+
+  it('lets the Bank Imports file picker choose a .tsv file', () => {
+    // YNAB writes TSV for currencies with a decimal comma. The File Upload tab's picker is left
+    // as it is: its reader splits on commas only.
+    const input = host.querySelector<HTMLInputElement>('input[type="file"][multiple]')!
+    expect(input.accept.split(',')).toEqual(
+      expect.arrayContaining(['.tsv', 'text/tab-separated-values'])
+    )
+  })
+})
+
+describe('review: a transfer to an account the profile does not have yet', () => {
+  it('is said to create that account, and does', async () => {
+    const db = await getDB()
+    await db.add('accounts', {
+      name: 'Revolut Main',
+      type: 'giro',
+      currency: 'EUR',
+      balance: 0,
+      starting_balance: 0,
+      profile_id: 1,
+    })
+    localStorage.setItem(
+      'bankImportTransferRules:1',
+      JSON.stringify({
+        ownAccounts: [],
+        keywords: ['top-up'],
+        counterparts: { 'pocket savings': 'Pocket Savings' },
+      })
+    )
+    await flow.loadBankAccounts()
+    await dropText(
+      [
+        'Type,Product,Started Date,Completed Date,Description,Amount,Fee,Currency,State,Balance',
+        'Topup,Current,2026-01-05 10:00:00,2026-01-05 10:00:01,Top-up from Pocket Savings,100.00,0.00,EUR,COMPLETED,100.00',
+      ].join('\n'),
+      'account-statement_2026-01.csv'
+    )
+    expect(flow.bankFiles()[0]).toMatchObject({ bankId: 'revolut', targetAccount: 'Revolut Main' })
+    await importAll()
+    // What happens: the mapping step lists Pocket Savings as an account, the import creates it,
+    // and the transfer has both ends.
+    const { txns } = await stored()
+    expect(txns).toEqual([['2026-01-05', 'transfer', 100, 'Pocket Savings', 'Revolut Main']])
+    expect(flow.bankWarnings()).toEqual([
+      'account-statement_2026-01.csv: transfers name accounts you do not have yet: Pocket Savings. The import creates them as new accounts, listed in the mapping step.',
+    ])
+  })
+})

@@ -548,7 +548,7 @@ describe('the mail itself', () => {
     // A register export imports with its accounts, transfers and starting balances; the plan file
     // beside it in the same download does not. The mail says which one to use.
     expect(welcome.text).toContain(
-      'So does the Register file in a YNAB plan export, with its accounts, transfers and starting balances.'
+      'So does the Register file in a YNAB plan export, with its accounts and transfers. Its starting balances go to accounts that are new or still empty.'
     );
   });
 

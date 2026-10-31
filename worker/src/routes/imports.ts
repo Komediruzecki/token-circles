@@ -27,10 +27,12 @@ import {
 } from '../../../shared/accountSchema';
 import {
   checkImportRowNumbers,
+  existingAccountStartingBalance,
   MISSING_DATE_WARNING,
+  startingBalanceKeptNote,
   unreadableNumbersReason,
 } from '../../../shared/importRowChecks';
-import type { ImportRowWarning } from '../../../shared/importRowChecks';
+import type { ImportNote, ImportRowWarning } from '../../../shared/importRowChecks';
 import { enforce } from '../ratelimit';
 import * as db from '../db';
 import { normalizeCurrencyCode } from '../currency';
@@ -444,7 +446,7 @@ export async function executeImport(
   const defaultCurrency = await resolveProfileBaseCurrency(DB, pid, requestedCurrency, !dryRun);
   const rowsArr = rows as Array<Record<string, any>>;
   const skippedItems: Array<{ index: number; reason: string; label?: string }> = [];
-  const warnings: ImportRowWarning[] = [];
+  const warnings: Array<ImportRowWarning | ImportNote> = [];
   const validatedRows: Array<{
     index: number;
     row: Record<string, any>;
@@ -562,6 +564,51 @@ export async function executeImport(
       },
     };
   }
+  // A starting balance given for an account that already exists: an unused one takes it, one in
+  // use keeps its own and the import says so (existingAccountStartingBalance). A value that does
+  // not read as a number is left alone here, as it always was for existing accounts.
+  const startingBalanceUpdates: Array<{ id: number; amount: number; date: string }> = [];
+  for (const [rawName, rawBalance] of Object.entries(
+    (accountBalances || {}) as Record<string, unknown>
+  )) {
+    const name = String(rawName).trim();
+    const id = accountIdMap.get(name.toLowerCase());
+    if (id === undefined || String(rawBalance ?? '').trim() === '') continue;
+    if (rowsArr.length > 0 && !validAccountNames.has(name.toLowerCase())) continue;
+    const amount = parseImportNumber(String(rawBalance).trim());
+    if (amount === null) continue;
+    const account = await db.first<{ starting_balance: number | null; n: number }>(
+      DB,
+      `SELECT starting_balance,
+              (SELECT COUNT(*) FROM transactions t
+                WHERE t.account_id = a.id OR t.transfer_account_id = a.id) AS n
+         FROM accounts a WHERE a.id = ?`,
+      id
+    );
+    if (!account) continue;
+    const outcome = existingAccountStartingBalance(
+      { startingBalance: account.starting_balance, hasTransactions: account.n > 0 },
+      amount
+    );
+    if (outcome === 'keep') warnings.push({ reason: startingBalanceKeptNote(name, amount) });
+    if (outcome === 'apply') {
+      const date = (accountBalanceDates && accountBalanceDates[rawName]) || today();
+      startingBalanceUpdates.push({ id, amount, date });
+    }
+  }
+  if (!dryRun && startingBalanceUpdates.length > 0) {
+    // The balance follows at the recompute below, which runs over every account of the profile.
+    await DB.batch(
+      startingBalanceUpdates.map((u) =>
+        DB.prepare('UPDATE accounts SET starting_balance = ?, starting_date = ? WHERE id = ?').bind(
+          u.amount,
+          u.date,
+          u.id
+        )
+      )
+    );
+  }
+
   if (!dryRun && toCreate.length > 0) {
     if (toCreate.length) {
       await DB.batch(

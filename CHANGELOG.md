@@ -10,7 +10,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- **A file exported from YNAB imports with its accounts.** Drop the Register file from YNAB's Export Plan download, or an Export Transactions file, on Bank Imports, whatever it's called and whether YNAB wrote it with commas or tabs. Each row goes to its own account, a transfer arrives once as a transfer, and each starting balance becomes the starting balance of the account it opens.
+- **A file exported from YNAB imports with its accounts.** Drop the Register file from YNAB's Export Plan download on Bank Imports, with commas or tabs, and each row goes to its own account, each transfer arrives once, and starting balances go to accounts that are new or still empty.
 - **A first import from a Croatian bank uses standard category names.** Fuel, utility bills and pay now go under Transportation, Utilities and Salary instead of Car (Gas), Apartment (Bills) and Salary Eur. If you already have those three, your imports keep filing there.
 - **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
 - **A badge you earn a second or so after another change shows up straight away.** Before, it waited for your next change.

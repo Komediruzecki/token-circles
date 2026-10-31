@@ -508,7 +508,7 @@ export function ImportDataEntry(props: { flow: ImportFlow; compact?: boolean }) 
             <input
               type="file"
               id={bankInputId}
-              accept=".csv,.xlsx,.xls,text/csv,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              accept=".csv,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,text/comma-separated-values,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               multiple
               class={styles.fileInput}
               data-test-id="bank-file-input"

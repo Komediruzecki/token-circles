@@ -68,6 +68,11 @@ export interface StatementMeta {
    * the starting balance of each account it creates.
    */
   startingBalances?: Record<string, { amount: number; date: string }>;
+  /**
+   * What the adapter skipped or changed while reading the file, in words for the person
+   * importing it. `processFiles` prefixes each with the file name.
+   */
+  warnings?: string[];
 }
 
 /** A parsed statement: the raw data rows plus sniffed metadata. */

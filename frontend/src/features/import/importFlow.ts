@@ -679,7 +679,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         ...(Array.isArray(data?.validation_errors) ? data.validation_errors : []),
       ]
       setPreviewValidationIssues(issues)
-      setPreviewWarnings(Array.isArray(data?.warnings) ? data.warnings : [])
+      // What the bank adapters skipped or changed while reading the files was said on the upload
+      // step, which is gone by now: the preview is where the rows are checked, so it says it too.
+      const bankNotes: ImportValidationIssue[] =
+        bankFiles().length > 0 ? bankWarnings().map((reason) => ({ reason })) : []
+      setPreviewWarnings([...bankNotes, ...(Array.isArray(data?.warnings) ? data.warnings : [])])
       const invalidIndices = new Set(
         issues
           .map((issue) => issue.index)

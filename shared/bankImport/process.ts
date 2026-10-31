@@ -79,6 +79,17 @@ function duplicatesFromKeys(keys: string[]): number[] {
   return dups;
 }
 
+/**
+ * A starting balance an adapter recorded for the file's own account (key '': a file that does
+ * not name its accounts) belongs to the account the file is imported into.
+ */
+function withTargetAccount(meta: StatementMeta, targetAccount: string): StatementMeta {
+  const own = meta.startingBalances?.[''];
+  if (!own) return meta;
+  const { '': _own, ...named } = meta.startingBalances!;
+  return { ...meta, startingBalances: { ...named, [targetAccount]: own } };
+}
+
 export async function processFiles(
   files: BankFileInput[],
   options: ProcessOptions = {}
@@ -124,11 +135,13 @@ export async function processFiles(
       }
       const ctx: TransformContext = { targetAccount, categoryRules, transferRules, knownAccounts };
       const txns = adapter.transform(parsed, ctx);
-      // Warn about transfer endpoints that aren't known accounts: the import links
-      // means_of_payment / category to EXISTING accounts only, so an unknown endpoint
-      // imports one-sided until the user creates that account. Only checked when a
-      // known-accounts list was supplied (otherwise we can't tell).
-      if (knownAccounts.length > 0) {
+      for (const note of parsed.meta.warnings ?? []) warnings.push(`${file.filename}: ${note}`);
+      // Transfer ends that are not accounts yet. The mapping step lists every Means of Payment
+      // and every transfer destination as an account, and the import creates the ones that do
+      // not exist, so both ends land. Said up front so a name the rules got wrong can be caught.
+      // A file that names its accounts (YNAB's register) creates them by design: nothing to say.
+      // Only checked when a known-accounts list was supplied (otherwise we can't tell).
+      if (knownAccounts.length > 0 && !parsed.meta.accounts?.length) {
         const known = new Set(knownAccounts.map((a) => a.toLowerCase()));
         const unknown = new Set<string>();
         for (const t of txns) {
@@ -139,7 +152,7 @@ export async function processFiles(
         }
         if (unknown.size > 0) {
           warnings.push(
-            `${file.filename}: transfer endpoint(s) not among your accounts — ${[...unknown].join(', ')}. These import one-sided until you create the account(s).`
+            `${file.filename}: transfers name accounts you do not have yet: ${[...unknown].join(', ')}. The import creates them as new accounts, listed in the mapping step.`
           );
         }
       }
@@ -156,7 +169,7 @@ export async function processFiles(
         confidence: detected?.confidence ?? 1,
         targetAccount,
         count: txns.length,
-        meta: parsed.meta,
+        meta: withTargetAccount(parsed.meta, targetAccount),
       });
     } catch (err) {
       perFile.push({

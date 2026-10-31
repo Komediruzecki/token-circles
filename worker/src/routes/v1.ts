@@ -139,17 +139,20 @@ v1Routes.post('/api/v1/import', async (c) => {
   if (parsed.accounts) {
     for (const name of parsed.accounts) accountNames.add(name);
     const typeIdx = mapping.type;
-    const catIdx = mapping.category;
-    if (typeIdx !== undefined && catIdx !== undefined) {
+    if (typeIdx !== undefined) {
       for (const row of table.rows) {
-        const other = String(row[catIdx] ?? '').trim();
-        if (String(row[typeIdx] ?? '').toLowerCase() === 'transfer' && other)
-          accountNames.add(other);
+        if (String(row[typeIdx] ?? '').toLowerCase() !== 'transfer') continue;
+        // Both ends: an incoming half has the other account as its source.
+        for (const idx of [mapping.category, mapping.means_of_payment]) {
+          const name = idx === undefined ? '' : String(row[idx] ?? '').trim();
+          if (name) accountNames.add(name);
+        }
       }
     }
   }
   const categoryTypes = Object.fromEntries([...accountNames].map((n) => [n, 'account']));
-  // Its starting balances become the starting balances of the accounts this import creates.
+  // Its starting balances become the starting balances of the accounts this import creates, or
+  // of an existing account nobody has used yet (executeImport decides, and says when it doesn't).
   const opening = Object.entries(parsed.startingBalances ?? {});
   const accountBalances = Object.fromEntries(opening.map(([n, b]) => [n, b.amount.toFixed(2)]));
   const accountBalanceDates = Object.fromEntries(opening.map(([n, b]) => [n, b.date]));
@@ -295,9 +298,8 @@ async function parseViaBank(
     parsedBy: `bank:${bankId}`,
     bank: { id: bankId, label, confidence },
     targetAccount: namesItsAccounts ? targetAccount : result.perFile[0]?.targetAccount,
-    ...(namesItsAccounts
-      ? { accounts: meta.accounts, startingBalances: meta.startingBalances }
-      : {}),
+    ...(namesItsAccounts ? { accounts: meta.accounts } : {}),
+    ...(meta.startingBalances ? { startingBalances: meta.startingBalances } : {}),
     withinBatchDuplicates: result.duplicateIndices.length,
     warnings: result.warnings,
   };

@@ -63,6 +63,58 @@ Balance` rows are not transactions: `parse()` puts them in the new
     `rowsMissingAccount.test.ts`, and in `worker/test/v1-import-bank.test.ts` and
     `email-verification.test.ts`.
 
+- **YNAB import, review fixes.** Found in review of the entry above, each with a test that failed
+  first (`ynabRegister.test.ts`, `ynabExportFlow.test.tsx`, `v1-import-bank.test.ts`).
+  - Identical rows: a register row's dedup key now ends in its occurrence number among identical
+    emitted rows (mirror halves not counted), so two same-day $3 rows or two equal transfers are
+    two rows the preview keeps selected, while a second copy of the file still matches one for
+    one. The import CSV path keeps its old key on purpose (documented there).
+  - A category named like an account the file names (an Account value or a `Transfer : X`
+    payee, case-blind) is not used: the canonical Category is also a transfer's destination, so
+    `Goals: Vacation` beside an account Vacation booked spending as income into Vacation. Keyword
+    rules categorise those rows, and the file warns, naming the categories.
+  - `StatementMeta.warnings`: what an adapter skipped or changed, prefixed with the file name by
+    `processFiles`, and now also shown in the preview (`fetchDryRunPreview`), since the upload
+    step that listed bank warnings is gone by then. YNAB uses it for rows skipped for an
+    unreadable date, rows wider than the header (an unquoted `$1,250.00`; empty extra cells are
+    a trailing separator unless the row is wider than most rows), and the category clash.
+  - Amounts: the number span keeps a separator just before the first digit (`.50`, `-.50` read
+    100 times too large after f09677e3, on the import CSV path too). The decimal separator is
+    decided once per file from every amount cell (`makeAmountReader`), like the date order: a
+    file with no cell that proves a decimal point (`¥1,234`, `1.234 kr.`) has none; cells that
+    prove both fall back to per-cell `parseFlexibleNumber`. Rerunning the reviewer's 22-spelling
+    comparison against 9be97465: the `.50` diffs are gone; the 7 left are amounts with a comma
+    that are not quoted in a comma file, which 9be97465 misread (`$1,250.00` as 1). Six are now
+    skipped with the warning above. The seventh, a one-row file whose spilled cell is empty
+    (`1.234,56,`), cannot be told from a trailing separator and is misread before and after.
+  - `normalizeDate` (`shared/bankImport/parse.ts`) reads `YYYY/MM/DD` and `YYYY.MM.DD`.
+  - A register without an Account column records its Starting Balance under key `''`, which
+    `processFiles` (`withTargetAccount`) moves to the account chosen for the file; the v1 route
+    passes starting balances whenever there are any.
+  - YNAB 4's register (Check Number, Master Category, Sub Category or Running Balance) is not
+    read: `detect()` returns 0 for it, whatever the file is called.
+  - Starting balance for an existing account: both executors (`executeImport` in
+    `worker/src/routes/imports.ts`, `importExecute` in
+    `frontend/src/core/storage/handlers/importFlow.ts`) apply an offered starting balance (and
+    its date) to an existing account whose starting balance is 0 and which has no transactions;
+    one in use keeps its own and the response's `warnings` carries a note without an `index`
+    (`existingAccountStartingBalance`, `startingBalanceKeptNote`, `ImportNote` in
+    `shared/importRowChecks.ts`). The same amount as the account has is neither applied nor
+    reported. A value that is not a number is ignored for existing accounts, as before.
+  - v1 (`worker/src/routes/v1.ts`): for a file that names its accounts, both ends of every
+    transfer row are marked as accounts, so a one-account selection's incoming transfer creates
+    its source account instead of being skipped.
+  - `processFiles`: the unknown-transfer-end warning is not raised for a file that names its
+    accounts, and is reworded. It said those transfers "import one-sided until you create the
+    account(s)"; on the Import page the mapping step lists both ends as accounts and the import
+    creates them, so the transfer has both ends (a Revolut top-up resolved to a new account by a
+    counterpart rule, `ynabExportFlow.test.tsx`). In the v1 API no non-YNAB adapter resolves a
+    counterpart (the Worker has no saved rules), so the warning only arises in the app.
+  - The Bank Imports file picker accepts `.tsv` / `text/tab-separated-values`. The File Upload
+    picker does not: its reader (`shared/importCsv.ts`) splits on commas only.
+  - Copy: the welcome mail, onboarding, `llms.txt` and CHANGELOG say starting balances go to
+    accounts that are new or still empty.
+
 - **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
   `shared/bankImport/categoryRules.ts` gave three personal labels that a newcomer's first import
   offered under New categories: `Car (Gas)` is now `Transportation` (its keywords are fuel

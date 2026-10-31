@@ -121,6 +121,14 @@ export function normalizeDate(value: unknown): string {
   // eslint-disable-next-line security/detect-unsafe-regex -- anchored, fixed-length \d{n}; the trailing .* is linear, no ambiguous backtracking (no ReDoS)
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T].*)?$/);
   if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  // Year first with slashes or dots ("2026/01/14", "2026.01.14"), as some exports write it.
+  const ymd = s.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
+  if (ymd) {
+    const d = parseInt(ymd[3], 10);
+    const m = parseInt(ymd[2], 10);
+    if (!plausibleDayMonth(d, m)) return '';
+    return `${ymd[1]}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
   // Compact ISO with no separators (ING NL: "20241228"). Range-checked so an
   // 8-digit reference number in a date position stays invalid.
   const compact = s.match(/^(\d{4})(\d{2})(\d{2})$/);
