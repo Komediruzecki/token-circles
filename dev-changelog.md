@@ -62,6 +62,24 @@ All notable changes to Token Circles are documented here. The format is based on
     two exceptions are named with their reasons, and a third case fails when an exception no longer
     matches anything.
 
+- **A badge refresh asked for while an evaluation runs gets one more evaluation.**
+  `refreshAchievements` (`frontend/src/core/achievementsStore.ts`) handed a call for the profile
+  whose evaluation was running that same running evaluation. AchievementsHost asks 1.2 s after a
+  write, so a write that landed after the running evaluation had read its lists (a budget saved a
+  second or so after another change, say) got an answer from before it, and nothing evaluated
+  again until the next write: the badge it earned, and the snapshot Progress reads, waited for
+  that write. Now such a call gets one further run, started when the running one ends (settled or
+  rejected). Every call made meanwhile shares it, and a call during the further run queues one
+  more after it, so asks fold and never loop. If another profile is active when the running one
+  ends, the further run is dropped and answers `[]`; the switch's own refresh evaluates the new
+  profile, as before. Guards in `frontend/src/core/__tests__/achievementsStore.test.ts`, "a
+  refresh asked for while an evaluation is running": the running evaluation is held on its
+  settings read, a first budget is added, and a refresh is asked for. Against the old store it
+  fails with "expected [] to include 'first-budget'", and the fold case sees one settings read
+  instead of two. Two more cases pin that a switch drops the old profile's further run and that a
+  run nobody asked again during starts nothing. feat/first-week carries the same change as
+  d3a1f32f, where the test checks the account list Getting started reads instead of a badge.
+
 ### Tests
 
 - **Sign-in specs mark the setup wizard decided for the account they sign in to.** The wizard opens
