@@ -11,6 +11,58 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ### Fixed
 
+- **A register exported from YNAB is read as one.** `ynabAdapter.detect()`
+  (`shared/bankImport/adapters/ynab.ts`) knew only the CSV YNAB _imports_
+  (`Date,Payee,[Category,]Memo,Outflow,Inflow`, `Date,Payee,Memo,Amount`) or "ynab" in the file
+  name, and `sniffDelimiter` only ',' or ';' (its header normaliser also deleted tabs). A file
+  YNAB _exports_ fell to manual mapping, though the welcome mail and the onboarding step said
+  YNAB exports import as they are; with "ynab" in its name it imported every row into the one
+  account picked, each transfer twice (spending plus income) and each starting balance as income.
+  - Detection: the header's delimiter is sniffed (tab, ';' or ',', most frequent in line 1), and a
+    header with `Date`, `Payee`, `Outflow`, `Inflow` plus one of `Account`, `Flag`, `Cleared`,
+    `Category Group/Category` is the register (0.97). The three import shapes keep their scores.
+  - Rows: `transformRegister` books each row through `buildTxn` with the row's `Account` as the
+    target account (keyword transfer rules off: YNAB has already said what is a transfer). A
+    `Transfer : <account>` payee becomes one transfer via the new exported
+    `transferTxn` (`shared/bankImport/classify.ts`, extracted from `buildTxn`); its mirror half
+    (same date, accounts swapped, sign flipped) is dropped, counted per key so two equal transfers
+    on a day stay two, and a half without its mirror still imports as a transfer. `Starting
+Balance` rows are not transactions: `parse()` puts them in the new
+    `StatementMeta.startingBalances` (by account, amount and date) with the new
+    `StatementMeta.accounts`. `Inflow: Ready to Assign` is dropped as a category so keyword rules
+    categorise income; `Split (n/m) ` memo markers are stripped; zero rows are skipped. Amounts
+    read only the span from first to last digit, so `1.234,56 kr.` is not read with `.` as the
+    decimal point.
+  - Import page (`frontend/src/features/import/importFlow.ts`, `ImportDataEntry.tsx`): a file with
+    `meta.accounts` needs no target account (`rowsMissingAccount`, new `namesItsAccounts`) and
+    shows "Accounts from the file: ..." instead of the picker; `processFiles` no longer warns that
+    no target account was chosen for it. `offerStartingBalances` pre-fills the mapping step's
+    starting balance and date for those accounts, editable, only where empty.
+  - API (`worker/src/routes/v1.ts`): such a file marks its accounts and its transfer destinations
+    as accounts, passes the starting balances to `executeImport`, and no longer creates an empty
+    account named after the adapter. Without this, its rows landed with `account_id` NULL.
+  - Copy: the welcome mail (`worker/src/emailTemplates.ts`), the onboarding import step and
+    `frontend/public/llms.txt` now name the Register file and what comes with it. The onboarding
+    sentence moved out of the Coming soon box, where it was not coming soon.
+  - Sources (read 2026-10-31): YNAB "How to Export Plan Data" (updated 2026-08-18; CSV, or TSV for
+    comma-decimal currencies; file names), "Transfer Transactions" (updated 2026-09-24; a transfer
+    shows in both registers), "The Starting Balance" (updated 2026-07-28; the payee name);
+    parse-ynab-export 1.0.6 on npm (2022; the header, a TSV sample with `kr 30,00`, `€144,36`,
+    `Transfer : ` payees, `Split (1/2) ` memos); csv_to_ynab_json.py, gist StephenBrown2
+    (2026-04-03; `Inflow` / `Ready to Assign`, `- Register.csv` in the zip, transfer pairing);
+    de_ynab 0.6.1 on hex.pm (2024-10-08; transfers as two rows, `Starting Balance`); the
+    beancount.io YNAB preset page (TSV, `84,23€`, both columns written as `$0.00`). Not confirmed,
+    so not handled: a `Payment : ` payee for credit-card payments, and YNAB 4's thirteen-column
+    register.
+  - Tests: `frontend/src/core/bankImport/__tests__/ynabRegister.test.ts` (detection by header with
+    each delimiter and a BOM, rows by account, transfer pairing, starting balances, Ready to
+    Assign, splits, comma decimals, `kr.`, zero rows, `processFiles` warnings),
+    `frontend/src/features/import/__tests__/ynabExportFlow.test.tsx` (the Bank Imports flow on
+    local-first from drop to stored accounts, transfer and balances, and the row showing the
+    file's accounts),
+    `rowsMissingAccount.test.ts`, and in `worker/test/v1-import-bank.test.ts` and
+    `email-verification.test.ts`.
+
 - **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
   `shared/bankImport/categoryRules.ts` gave three personal labels that a newcomer's first import
   offered under New categories: `Car (Gas)` is now `Transportation` (its keywords are fuel

@@ -118,7 +118,8 @@ export async function processFiles(
       // Without a target account we can't set means_of_payment; fall back to the
       // bank label and warn so the row still imports (the user can remap it).
       const targetAccount = file.targetAccount || adapter.label;
-      if (!file.targetAccount) {
+      // A file that names each row's account (YNAB's register) needs no target account.
+      if (!file.targetAccount && !parsed.meta.accounts?.length) {
         warnings.push(`${file.filename}: no target account chosen — using "${adapter.label}"`);
       }
       const ctx: TransformContext = { targetAccount, categoryRules, transferRules, knownAccounts };

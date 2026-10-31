@@ -162,12 +162,22 @@ export interface ImportSummary {
  * account on them is not required and demanding one would be a red field the user cannot clear.
  */
 export function rowsMissingAccount(
-  rows: readonly Pick<BankFileRow, 'bankId' | 'targetAccount'>[]
+  rows: readonly (Pick<BankFileRow, 'bankId' | 'targetAccount'> & {
+    meta?: Pick<StatementMeta, 'accounts'>
+  })[]
 ): number[] {
   return rows
     .map((row, index) => ({ row, index }))
-    .filter(({ row }) => row.bankId !== null && !row.targetAccount)
+    .filter(({ row }) => row.bankId !== null && !row.targetAccount && !namesItsAccounts(row))
     .map(({ index }) => index)
+}
+
+/**
+ * A file that names the account of every row (YNAB's register) imports each row into its own
+ * account, so it has no target account to choose.
+ */
+export function namesItsAccounts(row: { meta?: Pick<StatementMeta, 'accounts'> }): boolean {
+  return (row.meta?.accounts?.length ?? 0) > 0
 }
 
 export function sourceRowNumber(index: number): number {
@@ -1042,6 +1052,25 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
     duplicateIndices: result.duplicateIndices,
   })
 
+  /**
+   * A starting balance the file records (YNAB's "Starting Balance" row) is not income: it is
+   * offered as the starting balance and date of that account, in the mapping step's account
+   * row, where it stays editable. Only fields the person has not filled in are touched, and it
+   * only reaches an account this import creates; an existing account keeps its own.
+   */
+  const offerStartingBalances = (metas: StatementMeta[]) => {
+    const balances = { ...accountBalances() }
+    const dates = { ...accountBalanceDates() }
+    for (const meta of metas) {
+      for (const [name, opening] of Object.entries(meta.startingBalances ?? {})) {
+        if (!balances[name]?.trim()) balances[name] = opening.amount.toFixed(2)
+        if (!dates[name]) dates[name] = opening.date
+      }
+    }
+    setAccountBalances(balances)
+    setAccountBalanceDates(dates)
+  }
+
   const processBankFiles = async () => {
     setLoading(true)
     setError(null)
@@ -1059,6 +1088,7 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
         setError('No transactions were found in the selected files')
         return
       }
+      offerStartingBalances(result.perFile.map((f) => f.meta))
       setUploadResult(bankUploadResult(result, filename))
       setSheetResult(null)
       setHeaders(result.headers)
