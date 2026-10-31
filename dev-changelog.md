@@ -86,6 +86,12 @@ All notable changes to Token Circles are documented here. The format is based on
     defaults, one with only `Transport`, and a row that names its own category; the Worker file
     also runs `/api/v1/import`. `bankRulesForm.test.tsx` covers the editor.
 
+- **The bank rules editor suggests the active profile's categories.** `loadBankCategories`
+  (`frontend/src/features/import/importFlow.ts`) listed every name `GET /api/categories` returned,
+  and in local-first that list answers for every profile the household view shows. It now takes
+  `importCategoryNames`, which keeps the active profile's by `profile_id`: the names the import
+  files rows by. Test: `bankImportRuleCategories.test.tsx`, a household of two profiles.
+
 - **Text on a primary fill reads `--on-primary`.** White on the dark theme's `--primary` (#6e9bff)
   is 2.69:1 and on `--primary-hover` 2.06:1, under WCAG AA's 4.5:1 for text; the instrument deck's
   #58a6ff is 2.53:1. `--on-primary` (cherry-picked unchanged from 4bd7a060 on

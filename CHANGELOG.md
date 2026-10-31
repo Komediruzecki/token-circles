@@ -12,6 +12,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **A first import from a Croatian bank uses standard category names.** Fuel, utility bills and pay now go under Transportation, Utilities and Salary instead of Car (Gas), Apartment (Bills) and Salary Eur. If you already have those three, your imports keep filing there.
 - **A first bank import puts parking, fares and fuel under Transportation, and pharmacies and clinics under Healthcare**, instead of offering new Transport, Fuel and Health categories beside them. If you already have those, or Car (Gas), each of those rows keeps going where it went before.
+- **The bank import rules suggest only your profile's categories.** In local-first household view the Category field also listed the other profiles' categories.
 - **Buttons in the dark theme are easier to read.** Their labels are now dark on the blue fill instead of white, and so are the active filters, tabs, page numbers and badges that share that blue.
 - **A badge you earn a second or so after another change shows up straight away.** Before, it waited for your next change.
 

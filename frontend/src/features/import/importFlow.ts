@@ -1129,17 +1129,11 @@ export function createImportFlow(opts: ImportFlowOptions = {}) {
       .filter((name): name is string => typeof name === 'string')
   }
 
+  // The names the rules editor suggests: the active profile's, the ones the import files into.
   const loadBankCategories = async () => {
     try {
-      const res = await apiFetch('/api/categories', { headers: profileHeaders() })
-      if (!res.ok) return
-      const list = await res.json()
-      if (Array.isArray(list)) {
-        const names = list
-          .map((c: Record<string, unknown>) => (typeof c.name === 'string' ? c.name : ''))
-          .filter(Boolean)
-        setBankCategories([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)))
-      }
+      const names = (await importCategoryNames()).filter(Boolean)
+      setBankCategories([...new Set<string>(names)].sort((a, b) => a.localeCompare(b)))
     } catch {
       // Combobox simply offers no suggestions
     }

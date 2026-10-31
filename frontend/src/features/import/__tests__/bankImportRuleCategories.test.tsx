@@ -240,3 +240,21 @@ describe('a bank import when the categories cannot be read', () => {
     expect(flow.currentRows()).toEqual([])
   })
 })
+
+describe('the categories the rules editor suggests', () => {
+  it('are the profile the import files into, not the other profile the household shows', async () => {
+    localStorage.setItem('selectedProfileIds', '[1,2]')
+    await addCategories(1, ['Test Home Category'])
+    await addCategories(2, ['Test Other Category'])
+    setPage('import')
+    const { createImportFlow } = await import('../importFlow')
+    let flow!: ImportFlow
+    dispose = createRoot((disposeRoot) => {
+      flow = createImportFlow({ initialTab: 'bank-imports' })
+      return disposeRoot
+    })
+
+    await flow.loadBankCategories()
+    expect(flow.bankCategories()).toEqual(['Test Home Category'])
+  })
+})
