@@ -452,7 +452,23 @@ export default function PrintsShelf(): JSX.Element {
             <Show when={newestFirst().length > 1}>
               <div class={styles.every}>
                 <h3 class={styles.everyHeading}>{EVERY_HEADING}</h3>
-                <ul class={styles.strip} data-test-id="prints-every">
+                {/* On a phone the strip scrolls sideways, and Chromium scrolls a focused print
+                    into view only when none of it shows: Tab to one the strip shows a sliver of
+                    left it cut off. A print focused from the keyboard comes wholly into view,
+                    within the strip's scroll padding, so its ring shows too. At once, as the
+                    browser's own focus scroll is, so reduced motion needs nothing more. A print
+                    tapped or clicked stays where it was aimed: sliding the strip under a finger
+                    as the featured seal changes above would be a jump. */}
+                <ul
+                  class={styles.strip}
+                  data-test-id="prints-every"
+                  onFocusIn={(e) => {
+                    const thumb = e.target as HTMLElement
+                    if (thumb.matches(':focus-visible')) {
+                      thumb.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                    }
+                  }}
+                >
                   <For each={newestFirst()}>
                     {(from) => (
                       <li>

@@ -2104,6 +2104,16 @@ check')` first, as the cushion and debt cases do.
   label names them all; one share across the seal still reads "Every month spent about the
   same.". `printsSeal.test.ts` "counts every month that spent more" fails without the change, and
   with `>=` for `>` or "least" taken as the last rank.
+- **Tab brings a cut-off print wholly into the strip** (`PrintsShelf.tsx`). At 640 px and under,
+  Chromium scrolls a focused element into view only when none of it shows. At 390, Tab from the
+  third print to the fourth, of which 17 of 96 px showed, left the strip at `scrollLeft` 0. The
+  strip now calls `scrollIntoView({ block: 'nearest', inline: 'nearest' })` on a print that takes
+  focus from the keyboard (`:focus-visible`), which honours the strip's 5 px scroll padding, so
+  the ring shows too. The scroll is instant, as the browser's own focus scroll is, so reduced
+  motion needs nothing more. A print tapped or clicked is left where it was aimed: without that
+  guard the print slid out from under the pointer between press and release, and the click
+  missed it. `prints-layout.spec.ts` "Tab to a print the strip cuts off" fails without the
+  scroll, and with the guard taken out.
 
 ### Fixed
 

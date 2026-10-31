@@ -236,6 +236,65 @@ test.describe('Prints as drawn', () => {
     fits(last, 'the last print')
   })
 
+  // Chromium scrolls a focused element into view only when none of it shows, so Tab to a print
+  // the strip shows a sliver of left it cut off. The strip brings a print focused from the
+  // keyboard wholly into view, ring and all; a print tapped or clicked stays where it was aimed.
+  test('Tab to a print the strip cuts off at 390 brings it wholly into view; a click leaves the strip be', async ({
+    page,
+  }) => {
+    await page.setViewportSize(PHONE)
+    await examplePrints(page)
+    const strip = page.getByTestId('prints-every')
+    const thumbs = strip.getByRole('button')
+    // The page holds the Prints divider at the top for 3 s after landing, and would scroll the
+    // strip back under the aim below; a person's own scroll ends that hold, so scroll first.
+    await page.mouse.wheel(0, 1)
+    await strip.scrollIntoViewIfNeeded()
+    /** How far the fourth print's ring reaches past the strip's left and right clipping edges
+     * (more than 0 is cut off), how much of the print shows, and the strip's scroll. */
+    const fourth = () =>
+      thumbs.nth(3).evaluate((thumb) => {
+        const box = thumb.closest('[data-test-id="prints-every"]')!
+        const style = getComputedStyle(thumb)
+        const out = parseFloat(style.outlineOffset) + parseFloat(style.outlineWidth)
+        const t = thumb.getBoundingClientRect()
+        const s = box.getBoundingClientRect()
+        const left = s.left + box.clientLeft
+        const right = left + box.clientWidth
+        const shows = Math.max(0, Math.min(t.right, right) - Math.max(t.left, left))
+        return {
+          past: { left: left - (t.left - out), right: t.right + out - right },
+          shows,
+          scrollLeft: box.scrollLeft,
+          // The middle of what shows of it, for a click there.
+          aim: { x: Math.max(t.left, left) + shows / 2, y: t.top + t.height / 2 },
+        }
+      })
+
+    const before = await fourth()
+    expect(before.scrollLeft, 'the strip at its start').toBe(0)
+    expect(before.shows, 'a sliver of the fourth print shows').toBeGreaterThan(0)
+    expect(before.past.right, 'the rest of it is cut off').toBeGreaterThan(0)
+
+    // A click on the sliver features that print and leaves the strip where it was. A mouse
+    // click at the sliver, as a locator's click would scroll the print into view first.
+    await page.mouse.click(before.aim.x, before.aim.y)
+    await expect(thumbs.nth(3)).toHaveAttribute('aria-pressed', 'true')
+    expect((await fourth()).scrollLeft, 'the strip after a click').toBe(0)
+
+    // From the third print, Tab.
+    await page.keyboard.press('Shift+Tab')
+    await expect(thumbs.nth(2)).toBeFocused()
+    await page.keyboard.press('Tab')
+    await expect(thumbs.nth(3)).toBeFocused()
+    await expect
+      .poll(async () => {
+        const { past } = await fourth()
+        return past.left <= 0 && past.right <= 0
+      }, 'the fourth print, ring and all, inside the strip')
+      .toBe(true)
+  })
+
   test("the seal's marks hold 3:1 on their ground in both themes", async ({ page }) => {
     await page.setViewportSize(PHONE)
     await aSpaceOnly(page)
