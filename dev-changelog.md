@@ -1922,6 +1922,14 @@ check')` first, as the cushion and debt cases do.
   badges do, and hands on only `sealShares` output, with `live` (the newest run ends this month or
   last), `gap` (the month after a run that is not live, with its entry count) and `running` (this
   month, once tracked). Nothing is stored: a print is worked out from the snapshot each time.
+- **Seal colours for both themes** (`orbit-dark.css`, `dawn-light.css`): `--seal-ink`,
+  `--seal-band` (`--primary`), `--seal-rule`, `--seal-copper`, `--seal-hub` (`--card-bg`) for the
+  plate drawn on the card, and `--seal-sheet-edge` for a finished print's paper (transparent in the
+  dark theme; `#d8d1c2` in the light one, where cream on white is 1.12:1). On `--card-bg` ink,
+  band and copper measure 11.61, 6.22 and 8.36:1 (dark) and 12.17, 4.63 and 3.86:1 (light); the
+  light copper is `#c46a2c`, not `--accent-warm` (`#d97f2e`, 2.99:1 on white).
+  `src/__tests__/sealContrast.test.ts` reads both theme files and holds each mark at 3:1 on the
+  card, and PAPER's marks on its sheet; it fails with `--accent-warm` as the light copper.
 
 ### Fixed
 

@@ -104,6 +104,18 @@
   --accent-warm: #d97f2e;
   --glow-primary: 0 6px 18px rgba(59, 111, 224, 0.25);
 
+  /* The seal on Progress (shared/prints/seal.ts THEME): the plate still filling in is drawn in these,
+     on the card. A finished print is paper in both themes (PAPER, its own colours), edged here
+     because cream on white is 1.12:1. Ink, band and copper hold 3:1 on --card-bg
+     (sealContrast.test.ts); copper is not --accent-warm, which is 2.99:1 on white. --seal-rule draws
+     hairlines only. */
+  --seal-ink: #1d3170;
+  --seal-band: var(--primary);
+  --seal-rule: #8d9bc4;
+  --seal-copper: #c46a2c;
+  --seal-hub: var(--card-bg);
+  --seal-sheet-edge: #d8d1c2;
+
   /* The seven circles: a reached ring runs from --ring-a to --ring-b, a ring not reached is a dotted
      --ring-track, and the circle being worked on carries a dot in --circle-now. The bands are the
      official ranges on the benchmark cards. */
