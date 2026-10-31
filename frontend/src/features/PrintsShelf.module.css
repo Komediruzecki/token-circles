@@ -21,8 +21,10 @@
   gap: 10px 28px;
   align-items: start;
 }
-/* A grid item that holds a sideways scroller must be allowed to be narrower than its content, or
-   the strip of prints pushes the page wider than the screen. */
+/* A grid item that holds a sideways scroller must be allowed to be narrower than its content. This
+   and the phone column's minmax(0, 1fr) each allow it. With neither, the strip grows as wide as all
+   its prints (about 2,800 px for 26), and the page's overflow-x: clip cuts off the ones past the
+   screen's edge, where nobody can scroll to them (prints-layout.spec.ts). */
 .shelf > * {
   min-width: 0;
 }

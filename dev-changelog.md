@@ -1942,8 +1942,10 @@ check')` first, as the cushion and debt cases do.
   amount; `printsShelf.test.tsx` scans the rendered page for any (class names aside, which CSS
   modules hash). Copy lives in `core/prints/copy.ts`. Above 640 px the seal is
   `clamp(260px, 28vw, 440px)` beside its words; at 640 and under one column, the seal up to
-  340 px, and the prints in a strip that scrolls inside itself (`min-width: 0` on the grid items,
-  or the strip pushes the page wider).
+  340 px, and the prints in a strip that scrolls inside itself. The phone column's
+  `minmax(0, 1fr)` and the grid items' `min-width: 0` each let the strip be narrower than its
+  prints. With neither, it grows to about 2,800 px for 26, and the page, which clips sideways
+  overflow, cuts off the prints past the screen's edge where nobody can scroll to them.
 - **The seal engraves once it settles in view** (`core/settledInView.ts`, `PrintsShelf.tsx`). The
   figure waits until 70% of it has stayed on screen for 500 ms, or 3 s after any of it first shows,
   checked on scroll (capture phase), resize, a 30 ms kickoff and a 900 ms heartbeat as
