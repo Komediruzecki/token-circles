@@ -9,6 +9,34 @@ All notable changes to Token Circles are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **A month that has not begun is not tracked** (`frontend/src/core/achievements/evaluate.ts`,
+  `frontend/src/core/achievements/review.ts`). `evaluateAchievements` built `tracked` from every
+  month holding `TRACKED_MONTH_MIN_TRANSACTIONS` entries, with no upper bound, so three bills dated
+  in December and put in during October made December a tracked month. Its filter now also needs
+  `m <= nowMonth`; `buildYearReview` counts its `trackedMonths` only for `month <= today`'s month.
+  The current month still counts, including entries dated later in it than today.
+  - Badges that change: everything derived from `tracked` counts months only up to this one. That
+    is One month to Twenty years (months in a row), Saver x3, Saver x6 and A perfect year (saving
+    months), Named everything, Reconciled and The full picture (first such month), The comeback
+    (runs), Every month of a year, and the average monthly spending Rainy day measures a goal
+    against. Before, a run or a calendar year completed by a month still to come was earned early
+    and dated to that month (twelve tracked months of 2026 seen on 2026-10-15 earned `a-year` and
+    `every-month`, both dated 2026-12-01).
+  - Unchanged: the streak and Progress's record strip, which count back from this month
+    (`currentStreak`, `streakStrip`) and so never reached a later month; Held the line, Clean
+    sweep and Six months under, which already read finished months only (`m >= nowMonth`);
+    First entry and the entry counts, which count entries, not months; the Year in review's
+    totals, which still hold every entry dated in the year.
+  - Badges already earned stay earned: `diffUnlocks` (`records.ts`) only adds to the stored
+    `achievements` setting, so an unlock recorded with a future `earnedOn` keeps it.
+  - Tests: `evaluate.test.ts` "a month that has not begun" (not tracked; completes no run or year
+    badge; the current month still counts; nothing is taken back) and `review.test.ts`
+    "buildYearReview, months that have not begun". The not-tracked, no-badge and review
+    month-to-come cases fail without the change; the current-month cases fail if the bound is
+    made strict (`<`).
+
 ## [5.17.4] — 2026-10-31
 
 ### Fixed
