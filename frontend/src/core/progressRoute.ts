@@ -38,10 +38,25 @@ export function sectionFromHash(hash: string): 'prints' | null {
  * fires no hashchange.
  */
 export function openPrints(): void {
+  asked = true
   if (sectionFromHash(window.location.hash) === 'prints') {
     const here = window.location.href
     window.dispatchEvent(new HashChangeEvent('hashchange', { oldURL: here, newURL: here }))
     return
   }
   window.location.hash = PRINTS_HASH
+}
+
+/** Set by openPrints until Progress reads it. */
+let asked = false
+
+/**
+ * Whether openPrints asked for the prints since this was last read; reading clears it. A
+ * hashchange from a circle's view to `#progress/prints` is either Back to the list the person
+ * left there, or See my print from inside the view, and only this tells them apart.
+ */
+export function printsAsked(): boolean {
+  const was = asked
+  asked = false
+  return was
 }

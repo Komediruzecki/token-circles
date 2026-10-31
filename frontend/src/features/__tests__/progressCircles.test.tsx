@@ -57,6 +57,7 @@ import { CircleAnswers } from '../../components/guidance/CircleAnswers'
 import { refreshAchievements } from '../../core/achievementsStore'
 import { apiPut } from '../../core/api'
 import { takeAnswers } from '../../core/guidance'
+import { openPrints } from '../../core/progressRoute'
 import { settingsTab } from '../../core/settingsStore'
 import { endSpotlight, startTour } from '../../core/spotlightStore'
 import Progress from '../Progress'
@@ -397,6 +398,69 @@ describe("a circle's own view", () => {
     expect(q(c, '[data-test-id="progress-list"]').hidden).toBe(false)
     expect(focus).not.toHaveBeenCalled()
     expect(document.activeElement).not.toBe(row)
+  })
+
+  describe('opened from the prints', () => {
+    /** jsdom has no scrollIntoView: each call is recorded by the id of what it scrolled to. */
+    let scrolled: string[] = []
+    beforeEach(() => {
+      scrolled = []
+      Element.prototype.scrollIntoView = function (this: Element) {
+        scrolled.push(this.id)
+      }
+    })
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).scrollIntoView
+    })
+
+    // At #progress/prints, open circle 3, then Back: the address names the prints again, but the
+    // person is coming back to the list they left, as from #progress.
+    it("comes back to that circle's row, not to the prints", async () => {
+      history.replaceState(null, '', '#progress/prints')
+      guidance.set!(viewOf(facts()))
+      const c = mount(() => <Progress />)
+      expect(scrolled).toEqual(['progress-sec-prints'])
+      go('#progress/3')
+      expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('3')
+      go('#progress/prints')
+      await tick()
+      expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
+      expect(document.activeElement).toBe(q(c, '[data-circle-row="3"] a'))
+      expect(scrolled).toEqual(['progress-sec-prints'])
+    })
+
+    it("still goes to the prints when See my print asks for them from a circle's view", async () => {
+      guidance.set!(viewOf(facts()))
+      const c = mount(() => <Progress />)
+      go('#progress/3')
+      openPrints()
+      // The address's own hashchange fires a task later.
+      await tick()
+      expect(window.location.hash).toBe('#progress/prints')
+      expect(c.querySelector('[data-test-id="circle-view"]')).toBeNull()
+      expect(scrolled).toEqual(['progress-sec-prints'])
+      expect(document.activeElement).not.toBe(q(c, '[data-circle-row="3"] a'))
+    })
+
+    // See my print on another page: the app puts Progress up inside the hashchange it causes, too
+    // late for the page to hear it. That ask is forgotten when the page mounts, so it cannot turn a
+    // later Back from a circle into a scroll to the prints.
+    it('forgets a See my print it was not there to hear', async () => {
+      history.replaceState(null, '', '#dashboard')
+      const heard = new Promise((resolve) => {
+        window.addEventListener('hashchange', resolve, { once: true })
+      })
+      openPrints()
+      await heard
+      history.replaceState(null, '', '#progress/3')
+      guidance.set!(viewOf(facts()))
+      const c = mount(() => <Progress />)
+      expect(q(c, '[data-test-id="circle-view"]').getAttribute('data-circle')).toBe('3')
+      go('#progress/prints')
+      await tick()
+      expect(document.activeElement).toBe(q(c, '[data-circle-row="3"] a'))
+      expect(scrolled).not.toContain('progress-sec-prints')
+    })
   })
 })
 

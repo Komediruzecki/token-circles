@@ -32,7 +32,13 @@ import { formatCurrency } from '../core/api'
 import { setPage } from '../core/appStore'
 import { useGuidance } from '../core/guidance'
 import { DIVIDER_META as PRINTS_META } from '../core/prints/copy'
-import { circleFromHash, circleHash, isProgressHash, sectionFromHash } from '../core/progressRoute'
+import {
+  circleFromHash,
+  circleHash,
+  isProgressHash,
+  printsAsked,
+  sectionFromHash,
+} from '../core/progressRoute'
 import { scrollAndHold } from '../core/scrollAndHold'
 import { spotlightActive, spotlightStep, tourSteps } from '../core/spotlightStore'
 import { addToast } from '../core/toastStore'
@@ -87,6 +93,8 @@ export default function Progress(): JSX.Element {
   }
   onCleanup(() => release?.())
   onMount(() => {
+    // Mounting opens the page at the prints whenever the address names them, asked or not.
+    printsAsked()
     if (sectionFromHash(window.location.hash) === 'prints') toPrints()
     const onHashChange = (event: HashChangeEvent) => {
       // Another page's address closes the circle: the address decides what opens when Progress is
@@ -97,21 +105,24 @@ export default function Progress(): JSX.Element {
       }
       const next = circleFromHash(window.location.hash)
       setOpened(next)
-      // Back on the list from a circle's own view: focus that circle's row. Only from the view, so
-      // coming back from another page moves nothing, and not under a tour, where the row's link
+      const asked = printsAsked()
+      // Back on the list from a circle's own view: focus that circle's row, and no scroll to the
+      // prints even where the list's address names them, as the person is back where they were.
+      // Only from the view, so coming back from another page moves nothing; not when See my print
+      // asked for the prints from inside the view; and no focus under a tour, where the row's link
       // would take Enter from the tour and open the circle again.
-      if (sectionFromHash(window.location.hash) === 'prints') {
-        toPrints()
-        return
-      }
       const was = circleFromHash(hashOf(event.oldURL))
-      if (was !== null && next === null && !spotlightActive()) {
+      if (was !== null && next === null && !asked) {
+        release?.()
+        if (spotlightActive()) return
         queueMicrotask(() => {
           root
             ?.querySelector<HTMLAnchorElement>(`[data-circle-row="${was}"] a`)
             ?.focus({ preventScroll: false })
         })
+        return
       }
+      if (sectionFromHash(window.location.hash) === 'prints') toPrints()
     }
     window.addEventListener('hashchange', onHashChange)
     onCleanup(() => {

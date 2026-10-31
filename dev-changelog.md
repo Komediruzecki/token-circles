@@ -2071,6 +2071,15 @@ check')` first, as the cushion and debt cases do.
   `{profileId}:empty`), so another profile's seal of the same months engraves as its own. A month
   being read already cleared on every new snapshot. `printsShelf.test.tsx` fails with either
   change taken out.
+- **Back from a circle reaches its row from `#progress/prints` too** (`features/Progress.tsx`,
+  `core/progressRoute.ts`). A circle opened from the page at `#progress/prints` went Back to that
+  address, and the page took it as a request for the prints: it scrolled the Prints divider to the
+  top and left focus on the page's body. From `#progress`, the same steps focused the circle's
+  row. Coming back from a circle's view now focuses its row and stops any hold on the prints. A
+  hashchange from a circle's view to `#progress/prints` is either Back or See my print, and only
+  `openPrints` knows which: it sets a marker the page reads once (`printsAsked`), and mounting
+  clears one the page was not there to hear. `progressCircles.test.tsx` fails with the row put
+  after the prints, without the marker, or without the clear on mount.
 
 ### Fixed
 
