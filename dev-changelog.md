@@ -1898,6 +1898,31 @@ check')` first, as the cushion and debt cases do.
   `SpaceQuestions.module.css`): white with a dark-theme override to `--bg` before, the same
   colours, now from the token main's contrast fix added; `primaryFillText.test.ts` flagged both.
 
+### Prints
+
+- **The seal is drawn once, for the browser and the Worker** (`shared/prints/seal.ts`,
+  `shares.ts`, `describe.ts`). `drawSeal(slots, { palette, detail, engraveFrom })` returns an SVG
+  string from twelve slots of whole-number shares (`spent` 0 to 100 of the heaviest month in the
+  set, `kept` -100 to 100 of the month furthest from even; null for a month not on the seal).
+  `checkSlots` throws a `RangeError` for anything else, so an amount wired in fails instead of being
+  drawn. Three levels of detail: `print` (900 px and up, the saved image and the mail), `screen`
+  (the shelf) and `thumb` (under 160 px). Colours sit in `style` attributes: `PAPER` is literal for
+  images, `THEME` reads `var(--seal-*)`. No `<text>`, `<title>`, `<desc>` or `<foreignObject>`, and
+  well-formed XML, so it rasterises through an `<img>` and a canvas. `sealShares` is the one place
+  amounts become shares; `sealSummary` and `monthLine` give the seal's words from the same shares.
+  `shared/fixtures/sealSample.ts` pins the SHA-256 of each detail for an invented year, checked by
+  `frontend/src/core/__tests__/printsSeal.test.ts` and `worker/test/seal-drawing.test.ts`, so both
+  runtimes draw the same text. Bump `SEAL_VERSION` when a change would draw a stored print
+  differently.
+- **Which months make a print** (`frontend/src/core/prints/shelf.ts`). `shelfOf` cuts each run of
+  tracked months (the badges' set, `evaluation.trackedMonths`) into twelves from its first month:
+  every whole twelve is a print, and the newest run's months after its last twelve are the plate.
+  The first print is therefore the "A year" badge's window (`monthReaching(tracked, 12)`), checked
+  over 400 generated records. `shelfView` sums each month with `flowsOf` and `baseAmount`, as the
+  badges do, and hands on only `sealShares` output, with `live` (the newest run ends this month or
+  last), `gap` (the month after a run that is not live, with its entry count) and `running` (this
+  month, once tracked). Nothing is stored: a print is worked out from the snapshot each time.
+
 ### Fixed
 
 - **The Croatian bank-import rules give default category names.** `DEFAULT_CATEGORY_RULES` in
