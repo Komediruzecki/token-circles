@@ -490,3 +490,53 @@ describe('review round 2: notes from reading the files, in the preview', () => {
     }
   })
 })
+
+describe('review round 3: the import log', () => {
+  it('counts rows imported with a warning, not notes about the import as a whole', async () => {
+    const db = await getDB()
+    const checking = await db.add('accounts', {
+      name: 'Test Checking',
+      type: 'giro',
+      currency: 'EUR',
+      balance: 40,
+      starting_balance: 0,
+      profile_id: 1,
+    })
+    await db.add('transactions', {
+      date: '2025-12-30',
+      type: 'income',
+      amount: 40,
+      amount_local: 40,
+      description: 'Earlier',
+      account_id: checking,
+      profile_id: 1,
+    })
+    await flow.loadBankAccounts()
+    await dropText(
+      [
+        HEADER_ROW,
+        row(
+          'Test Checking',
+          '01/02/2026',
+          'Starting Balance',
+          '$0.00',
+          '$500.00',
+          'Inflow',
+          'Ready to Assign'
+        ),
+        row('Test Checking', '01/13/2026', 'Shop', '$5.00', '$0.00', 'Everyday', 'Groceries'),
+      ].join('\n')
+    )
+    await importAll()
+    // The kept starting balance is a note in the response's warnings, without a row index.
+    expect(flow.previewWarnings().map((w) => w.reason)).toEqual([
+      'Test Checking already has a starting balance or transactions, so the starting balance of 500.00 in this import was not applied to it.',
+    ])
+    let logs: { details?: string }[] = []
+    await waitUntil(() => {
+      void db.getAll('import_logs').then((all) => (logs = all as { details?: string }[]))
+      return logs.length > 0
+    }, 'the import log')
+    expect(JSON.parse(logs[0]!.details!)).toMatchObject({ rows_with_warnings: 0 })
+  })
+})

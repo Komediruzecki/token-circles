@@ -117,6 +117,10 @@ Balance` rows are not transactions: `parse()` puts them in the new
   - The starting-balance rule applies to every import that sends account balances, the app's
     CSV and Sheets mapping step too: an unused existing account takes the typed balance; a used
     one keeps its own and the preview says so.
+  - The import log's `rows_with_warnings` (`frontend/src/features/import/importFlow.ts`, both
+    storage modes) counts warnings with a row index only, so a kept starting balance no longer
+    shows in Recent Imports as a row imported with a warning. The daily Sheets sync
+    (`worker/src/import-sync.ts`) sends no account balances, so its count has no notes in it.
   - v1 (`worker/src/routes/v1.ts`): for a file that names its accounts, both ends of every
     transfer row are marked as accounts, so a one-account selection's incoming transfer creates
     its source account instead of being skipped.
