@@ -2026,6 +2026,33 @@ check')` first, as the cushion and debt cases do.
   text in the image. A download says "Print saved as a PNG."; a failure "Could not draw the print
   as an image."; a share sheet closed without sharing (`AbortError`) says nothing, unlike the
   badges' Share, which still calls a closed sheet a failure.
+- **Prints in the browser, in both storage modes** (`frontend/tests/prints.spec.ts`,
+  `prints-layout.spec.ts`, `prints-fixture.ts`). `prints.spec.ts` has ten cases, local-first on the
+  example profiles or a new space, and signed in on a new profile of the fixture account:
+  - the example profiles' newest print, every earlier one and the next plate (`@smoke`);
+  - a year of entries whose twelfth month brings the "A year" toast, with "See my print" going
+    to the first print (`@smoke`);
+  - an empty plate;
+  - a plate at 6 of 12 with the missing month named;
+  - a tapped petal read out as the month list says it, then let go by a second tap;
+  - an earlier print taking the newest one's place;
+  - no amount on the page with five-digit entries;
+  - `#progress/prints` through a reload;
+  - deleting a month's entries takes the print away while "A year" stays earned;
+  - Share downloading a 1200 by 1200 PNG where the share sheet takes no files.
+
+  `prints-layout.spec.ts` checks the drawing in six cases:
+  - one column at 390 and the seal beside its words at 1280, in both themes;
+  - nothing past the screen's edge at 320, 360 and 390 with 26 prints. The app clips sideways
+    overflow, so the case measures every part's right edge rather than the page's width;
+  - text at 12 px and controls at 48 px, with the month list open;
+  - ink, band and copper at 3:1 on the card, measured in the page;
+  - reduced motion showing a finished print;
+  - an engraving that waits out of view past the 3 s fallback, then finishes.
+
+  Each layout case failed with what it guards broken: the strip's desktop grid, a light copper of
+  `#f0c8a8`, motion not reduced, the fallback starting out of view, the 640 px breakpoint, a 32 px
+  Share, an 11 px month list, and the strip without both of its narrowing rules.
 
 ### Fixed
 
