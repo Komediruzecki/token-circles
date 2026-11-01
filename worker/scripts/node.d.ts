@@ -14,9 +14,19 @@ declare module 'node:path' {
 
 declare module 'node:url' {
   export function pathToFileURL(path: string): URL;
+  export function fileURLToPath(url: URL | string): string;
 }
 
 /** Node sets it on every ES module. */
 interface ImportMeta {
   readonly url: string;
+}
+
+declare module 'node:child_process' {
+  export function execFile(
+    file: string,
+    args: string[],
+    options: { cwd?: string; maxBuffer?: number },
+    callback: (error: Error | null, stdout: string, stderr: string) => void
+  ): unknown;
 }

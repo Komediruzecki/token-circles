@@ -2207,6 +2207,37 @@ check')` first, as the cushion and debt cases do.
   `progressCircles.test.tsx` (the circle view), `advice.test.ts` and `week-one-mails.test.ts`
   (the second button, read from the mail the cron sends). Each fails without the change.
 
+### Measuring the first week
+
+- **`pnpm -C worker run first-week-counts -- --env <dev|prod|local>`** prints the first-week
+  counts of the accounts that signed up in a window (`--from`/`--to`, UTC days, both included;
+  default the last 28 days): sign-ups (with a password, with Google), confirmed the address within
+  a day, imported within a day and within a week, each next step taken within a week, and how many
+  are still inside their first day or week. Counts and shares of sign-ups only, never an address,
+  a name or an id. Prints pressed reads "not recorded": nothing stores a print, and this adds no
+  table or column. Only cloud accounts are counted, and the output says so.
+- **Read from tables the Worker already has** (`worker/scripts/first-week.ts`, whose header holds
+  the step-to-table map). Day 0 is `users.created_at`; within a day is 0 to 86,400 s after it and
+  within a week 0 to 604,800 s, both ends included, compared with `unixepoch()`. Confirmed reads
+  the Welcome claim, `reminder_dedup (user_id, 'welcome').sent_at`, the day 0 the week-one mails
+  count from; an account older than migration 0033 reads as confirmed when 0033 ran. Imports read
+  `import_logs.created_at`; the steps read `bills`, `budgets` and `budgets_zero_based`,
+  `savings_goals` and `accounts` (`created_at`, an account an import made left out by its name in
+  the log's `created_accounts`), and `transactions.updated_at` for an entry with a category edited
+  after it was entered. A month in the red, the loan comparison and the questions leave no dated
+  row and read "not recorded".
+- **One SELECT through wrangler, read-only by construction** (`worker/scripts/first-week-counts.ts`).
+  dev and prod run `wrangler d1 execute <db> --remote --env <env> --json --command`; local runs
+  `--local`, with `--persist-to` for a D1 apart from the dev server's. Before wrangler is called,
+  `readOnlyRefusal` refuses anything that is not one SELECT or WITH statement: a write keyword
+  anywhere, a comment, a second statement, or any other first word.
+- **Tests:** `worker/test/first-week-counts.test.ts` seeds accounts in 2001 and asserts every
+  count, with sign-ups on the window's first and last second and one second either side, events at
+  exactly 24 h and 7 days and one second past each, a row dated before the sign-up, a second
+  profile, and import-made accounts; the guard against an UPDATE, DELETE, INSERT, DROP, two
+  statements, comments hiding a write, a CTE that deletes, a PRAGMA and an ATTACH; and the command's
+  arguments and wrangler calls with a stub runner. Each fails without the change.
+
 ### Fixed
 
 - **Saving the badge record no longer makes Dashboard, Progress and About this space read their
