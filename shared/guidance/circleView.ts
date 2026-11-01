@@ -20,6 +20,7 @@ import { debtName, gapOf, rateText, shareOf } from './ledger';
 import { freeMoneyQuestion } from './questions';
 import type { FreeMoneyAnswer } from './answers';
 import type { Check, CheckId, CircleNumber, CirclePlace } from './circles';
+import { EXPENSIVE_DEBT_NOTE } from './facts';
 import type { GuidanceFacts } from './facts';
 import type { LedgerWords } from './ledger';
 import type { NextStep } from './nextStep';
@@ -49,6 +50,8 @@ export interface CheckRow {
    * step on the same view is about the check: the step links it there.
    */
   article?: ArticleId;
+  /** Small print under it: where the check's line comes from. */
+  note?: string;
 }
 
 export const WAITING_ON_ANSWER = 'Waiting on your answer';
@@ -224,6 +227,8 @@ function rowFor(
         ...base,
         title: 'No debt at 10% or more',
         detail: debtDetail(facts, check, here),
+        // A debt step beside it says the same; the card's question does not.
+        ...(here && check.met === false ? {} : { note: EXPENSIVE_DEBT_NOTE }),
       };
     case 'yearly-bills': {
       const bills = facts.yearlyBills;

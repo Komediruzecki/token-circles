@@ -73,6 +73,12 @@ export const LOW_POINT_DAYS = 30;
 export const EXPENSIVE_DEBT_RATE = 10;
 
 /**
+ * Where the line comes from, said wherever a debt is held to it: under a debt step, and under the
+ * debt check in Solid ground's view. The same words as the benchmark card's note on rate edges.
+ */
+export const EXPENSIVE_DEBT_NOTE = `${EXPENSIVE_DEBT_RATE}% is a rule of thumb from personal-finance guides, not an official line.`;
+
+/**
  * The full months a card's payment is averaged over: the transfers into it. A card whose payment
  * covers what it owes is cleared each month, and carries no balance (`cardCarried`).
  */

@@ -1939,6 +1939,19 @@ check')` first, as the cushion and debt cases do.
   `SpaceQuestions.module.css`): white with a dark-theme override to `--bg` before, the same
   colours, now from the token main's contrast fix added; `primaryFillText.test.ts` flagged both.
 
+- **Where the 10% debt line comes from, said wherever the person's own debt is held to it**
+  (`shared/guidance/facts.ts` `EXPENSIVE_DEBT_NOTE`, `nextStep.ts`, `circleView.ts`,
+  `components/guidance/CircleView.tsx`). "10% is a rule of thumb from personal-finance guides, not an
+  official line." The benchmark card's note said so, but that card is behind the benchmarks switch,
+  while Solid ground's check and the debt steps state the 10% line without it. The sentence is now
+  the `fine` print under all three debt steps (a loan to compare, a card or overdraft with no rate,
+  one with a rate) and a new optional `note` under Solid ground's debt check, set as small print
+  after "Needed to reach". The check leaves it out only while a debt step on the same view carries
+  it; the card's balance question there does not, so the note stays. The overview's circle line and
+  gap line still state 10% without it, one tap from the circle view that carries it.
+- **Tests:** `guidanceNextStep.test.ts`, `guidanceCircleView.test.ts`. Fail before the change (2
+  tests).
+
 ### Prints
 
 - **The seal is drawn once, for the browser and the Worker** (`shared/prints/seal.ts`,

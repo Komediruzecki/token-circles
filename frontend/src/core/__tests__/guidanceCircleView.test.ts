@@ -11,6 +11,7 @@ import {
   circleNumbers,
   circleQuestions,
 } from '../../../../shared/guidance/circleView'
+import { EXPENSIVE_DEBT_NOTE } from '../../../../shared/guidance/facts'
 import { facts, words } from './guidanceFixtures'
 import type { CheckId, CircleNumber } from '../../../../shared/guidance/circles'
 import type { Debt, GuidanceFacts, WindowCategory } from '../../../../shared/guidance/facts'
@@ -236,6 +237,21 @@ describe('what a circle checks', () => {
     // Your next step on the view names the debt, or asks the question, with the same words.
     expect(stepRow(facts({ debts: [loan] }), 4, 'no-expensive-debt')?.detail).toBeNull()
     expect(stepRow(facts({ debts: [card] }), 4, 'no-expensive-debt')?.detail).toBeNull()
+  })
+
+  it('says under the debt check that 10% is a rule of thumb, unless the step beside it says so', () => {
+    for (const debts of [[], [loan], [card]]) {
+      expect(row(facts({ debts }), 4, 'no-expensive-debt')?.note).toBe(EXPENSIVE_DEBT_NOTE)
+    }
+    // A debt step on the view carries the same sentence; the card's question does not.
+    expect(stepRow(facts({ debts: [loan] }), 4, 'no-expensive-debt')?.note).toBeUndefined()
+    expect(stepRow(facts({ debts: [card] }), 4, 'no-expensive-debt')?.note).toBe(
+      EXPENSIVE_DEBT_NOTE
+    )
+    // No other check carries a note.
+    expect(rows(facts({ debts: [loan] }), 4).filter((one) => one.note !== undefined)).toHaveLength(
+      1
+    )
   })
 
   it('says when a check waits on the accounts, not on the person', () => {

@@ -198,7 +198,8 @@
 
 .check-detail,
 .check-waiting,
-.check-needed {
+.check-needed,
+.check-note {
   margin: 0 0 0 30px;
   text-wrap: pretty;
   font-size: 13px;
@@ -214,7 +215,8 @@
   font-style: italic;
 }
 
-.check-needed {
+.check-needed,
+.check-note {
   font-size: 12px;
 }
 
@@ -283,6 +285,7 @@
   .check-detail,
   .check-waiting,
   .check-needed,
+  .check-note,
   .check > fieldset {
     margin-left: 0;
   }

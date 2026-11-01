@@ -29,6 +29,7 @@ import {
 import { DAYS_IN_A_MONTH, monthName } from '../orientation';
 import { TRACKED_MONTH_MIN_TRANSACTIONS, YEAR_WINDOW_MONTHS } from '../trackedMonths';
 import type { Check, CircleNumber, Placement } from './circles';
+import { EXPENSIVE_DEBT_NOTE } from './facts';
 import type { Debt, GuidanceFacts } from './facts';
 import type { LedgerWords } from './ledger';
 import type { QuestionId } from './questions';
@@ -69,7 +70,10 @@ export interface NextStep {
   meter: StepMeter | null;
   /** "Then: set a budget for Groceries, and build a one-month cushion." */
   then: string | null;
-  /** Under a question: that it is asked once, and where to change it. */
+  /**
+   * Small print under the step. Under a question: that it is asked once, and where to change it.
+   * Under a debt step: that 10% is a rule of thumb.
+   */
   fine: string | null;
   /** The article on about.tokencircles.com that answers the step's why (shared/articles.ts). */
   article?: ArticleId;
@@ -197,7 +201,7 @@ function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): Ste
       whyHere: null,
       action: open(debt.id === null ? '#loans' : `#loans/${debt.id}/compare`, 'Loans'),
       meter: null,
-      fine: null,
+      fine: EXPENSIVE_DEBT_NOTE,
     };
   }
   const owed = words.money(Math.round(debt.owed));
@@ -208,7 +212,7 @@ function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): Ste
       why: 'With no rate set, it counts as debt at 10% or more. Add its rate in Accounts.',
       action: open('#accounts', 'Accounts'),
       meter: null,
-      fine: null,
+      fine: EXPENSIVE_DEBT_NOTE,
     };
   }
   return {
@@ -219,7 +223,7 @@ function debtStep(facts: GuidanceFacts, check: Check, words: NextStepWords): Ste
     whyHere: null,
     action: open('#accounts', 'Accounts'),
     meter: null,
-    fine: null,
+    fine: EXPENSIVE_DEBT_NOTE,
   };
 }
 

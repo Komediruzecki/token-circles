@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest'
 import { regionName } from '../../../../shared/guidance/cards'
 import { placeCircle } from '../../../../shared/guidance/circles'
+import { EXPENSIVE_DEBT_NOTE } from '../../../../shared/guidance/facts'
 import { nextStepOf, stepCircleName, thenLine } from '../../../../shared/guidance/nextStep'
 import { ASKED_ONCE } from '../../../../shared/guidance/questions'
 import { REGIONS } from '../../../../shared/guidance/region'
@@ -285,6 +286,17 @@ describe('once a year is on file', () => {
         why: 'With no rate set, it counts as debt at 10% or more. Add its rate in Accounts.',
         whyHere: 'With no rate set, it counts as debt at 10% or more. Add its rate in Accounts.',
       })
+    })
+
+    it('says under every debt step that 10% is a rule of thumb', () => {
+      expect(EXPENSIVE_DEBT_NOTE).toBe(
+        '10% is a rule of thumb from personal-finance guides, not an official line.'
+      )
+      const loan = debt({ kind: 'loan', id: 2, name: 'Car loan', owed: 9000, rate: 11.5 })
+      const noRate = debt({ kind: 'overdraft', name: null, owed: 90.4, rate: null })
+      for (const one of [loan, debt({}), noRate]) {
+        expect(step(facts({ debts: [one] }))?.fine).toBe(EXPENSIVE_DEBT_NOTE)
+      }
     })
   })
 

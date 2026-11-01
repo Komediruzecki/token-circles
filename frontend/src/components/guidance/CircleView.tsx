@@ -329,6 +329,11 @@ export default function CircleView(props: CircleViewProps): JSX.Element {
                           <Show when={check().needed}>
                             <p class={styles.checkNeeded}>{check().needed}</p>
                           </Show>
+                          <Show when={check().note}>
+                            <p class={styles.checkNote} data-test-id="circle-check-note">
+                              {check().note}
+                            </p>
+                          </Show>
                           <Show when={check().article}>
                             {(article) => (
                               <ArticleLink article={article()} class={styles.checkArticle} />
