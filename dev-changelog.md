@@ -277,6 +277,55 @@ All notable changes to Token Circles are documented here. The format is based on
   not the body, whose `scrollTop` was 0 every time. `tests/onboarding.spec.ts` ("a new step opens at
   its top") checks by mouse, by Enter, through a confirm and going back.
 
+### Local-only setup over the demo's example profiles
+
+- **The switch to local-only knows what it lands on.** `chooseLocalOnly` (OnboardingWizard.tsx)
+  reads the local database before its confirm with `readLocalWorkspace` (new
+  `components/onboarding/localOnly.ts`): only when `indexedDB.databases()` lists `finance-manager`,
+  opened with no version (no upgrade runs), the `profiles` store read and the connection closed; an
+  `upgradeneeded` (the database went between the listing and the open) aborts the creation, so the
+  read never makes a database, seeds the examples or writes anything. `classifyLocalProfiles` sorts
+  the result into `none`, `examples` (every profile an example name), `own` (their names, oldest
+  first) or `unknown` (no `databases()`, or a failed read), and `localOnlyQuestion` words the
+  confirm for each. It used to say "This browser already has a local workspace (from the demo,
+  say). You carry on with that one" whenever the database existed.
+- **A one-shot marker opens setup after the switch.** `chooseLocalOnly` sets
+  `finance_local_setup_pending` (`LOCAL_SETUP_PENDING_KEY`, `markLocalSetupPending` in
+  onboardingStore.ts). `whereToOfferOnboarding`, for the local owner with the marker, reads
+  `/api/profiles`: no profile of the person's own (`isExampleProfileName` false for none) answers
+  `space`, past the pristine check and any decision in the workspace's settings; one of their own
+  clears the marker and the pristine check runs as before; a failed read opens nothing and keeps
+  the marker. `decide()` (finish, skip, Close, Escape) and the space step's save clear it. Signed
+  in, the marker is never read.
+- **The space step never renames an example.** In local-first, with the current profile an example
+  (`overExample`), the form checks the name as a new profile's, offers "Personal Profile" instead of
+  the example's name, and `save` creates the profile and selects it through `props.selectProfiles`,
+  as the empty-workspace path does; "Run setup again" in the demo renamed Example Low Income before.
+  Under the currency, a fieldset (`onboarding-examples-choice`, SpaceQuestions.module.css's chips)
+  offers Remove them (default) or Keep them, with a note naming what goes. Remove runs after the
+  new profile is selected: `api.deleteProfile` for each example, the Danger Zone's path
+  (`DELETE /api/profiles/:id`, `profilesDelete`, `clearProfileData` with `deleteProfiles`), then
+  the app's profile list drops them and `bumpProfileVersion`. One that fails stays, and a warning
+  toast (`EXAMPLES_NOT_REMOVED`) names Settings, Exports, the Danger Zone; setup goes on. Accounts
+  are unchanged: `overExample` and the choice need `getStorageMode() === 'serverless'`.
+- **Deleting a local profile takes the seed's emergency fund plan with it.** `clearProfileData`
+  with `deleteProfiles` removed the profile's rows in every store with a `profile_id`, its
+  accounts' `balanceHistory` and its `PROFILE_SETTING_KEYS` settings, but not
+  `emergency_fund_config_<id>`, which `seedDemoProfiles` writes for each example and nothing reads:
+  it stayed in every settings read and backup. It goes now (`emergencyFundConfigKey`, idb.ts). The
+  delete leaves nothing on profile 0, so `fileUnfiledRows` ("Recovered entries") finds nothing.
+- **Tests.** `exampleProfilesRemoved.test.ts`: the real seed, then each example deleted through the
+  router, leaves no row, balance history or setting naming them (failed on the
+  `emergency_fund_config_` keys before). `onboardingAfterLocalOnly.test.ts`: the marker opens
+  `space` over examples, also where the settings say `completed`, clears over an own profile, and
+  goes on skip and finish. `localOnly.test.ts`: the read for each case, an older database left at
+  its version, no database made, and each confirm text. `onboardingOverExamples.test.tsx`: create
+  and select over an example, remove, keep, a failed removal, an own profile renamed as before,
+  accounts unchanged, and the confirm before the switch. `tests/onboarding-server.spec.ts` ("keeping
+  the data in this browser, over the demo"): the demo, then a new account's setup, local-only, the
+  space over the examples (checked at 375 px wide), Remove, and only "Our flat" left, in IndexedDB
+  and the header, with no setup on reload.
+
 ### Setup wizard
 
 - **The setup wizard on a phone: three counted steps, one footer row, a statement in one tap.**

@@ -457,9 +457,52 @@ test.describe('onboarding wizard', () => {
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible()
   })
 
-  test('recognizes existing accounts when relaunched over real data', async ({ page }) => {
-    // Demo workspace: accounts already exist. Relaunch the wizard manually.
+  test('relaunched over the demo, makes a space of its own and renames no example', async ({
+    page,
+  }) => {
     await gotoServerless(page, 'dashboard', 'dashboard-header')
+    await page.getByTestId('whats-new-btn').click()
+    await page.getByTestId('tour-open-onboarding').click()
+    await expect(page.getByTestId('onboarding-wizard')).toBeVisible()
+
+    // The example's name is not offered, and the examples go unless kept.
+    await expect(page.getByTestId('onboarding-profile-name')).toHaveValue('Personal Profile')
+    await expect(page.getByTestId('onboarding-examples-remove').locator('input')).toBeChecked()
+    await page.getByTestId('onboarding-examples-keep').click()
+    await expect(page.getByTestId('onboarding-examples-note')).toHaveText(
+      'They stay in the profile switcher, beside your new space.'
+    )
+    await page.getByTestId('onboarding-profile-name').fill('Our flat')
+    await page.getByTestId('onboarding-next').click()
+    await expect(page.getByTestId('onboarding-step-about')).toBeVisible()
+    await page.getByTestId('onboarding-next').click()
+
+    // A new space with nothing in it yet, beside the three examples, which kept their names.
+    const step = page.getByTestId('onboarding-step-account')
+    await expect(step.getByRole('heading', { name: 'Add your main account' })).toBeVisible()
+    await page.getByTestId('onboarding-skip').click()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+    await expect(page.getByTestId('profile-dropdown-btn')).toContainText('Our flat')
+    await page.getByTestId('profile-dropdown-btn').click()
+    for (const name of ['Example Low Income', 'Example Mid Income', 'Example High Income']) {
+      await expect(page.getByText(name, { exact: true }).first()).toBeVisible()
+    }
+  })
+
+  test('recognizes existing accounts when relaunched over real data', async ({ page }) => {
+    // A space of the person's own with an account in it, then setup left. (The demo's example
+    // profiles are no space to relaunch over: setup makes a new one there, below.)
+    await gotoServerlessZeroState(page, 'dashboard', 'onboarding-wizard')
+    await toAccount(page)
+    await page.getByTestId('onboarding-account-name').fill('Main Checking')
+    await page.getByTestId('onboarding-account-create').click()
+    await expect(page.getByTestId('onboarding-step-import')).toBeVisible()
+    await page.getByTestId('onboarding-skip').click()
+    await page.getByTestId('confirm-accept').click()
+    await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+
+    // Relaunch the wizard manually.
     await page.getByTestId('whats-new-btn').click()
     await page.getByTestId('tour-open-onboarding').click()
     await expect(page.getByTestId('onboarding-wizard')).toBeVisible()
@@ -470,7 +513,7 @@ test.describe('onboarding wizard', () => {
     // The step names the accounts instead of pitching "your main account".
     const step = page.getByTestId('onboarding-step-account')
     await expect(step.getByRole('heading', { name: 'Your accounts' })).toBeVisible()
-    await expect(step).toContainText(/You have \d+ accounts\. Add another here, or skip\./)
+    await expect(step).toContainText('You have 1 account. Add another here, or skip.')
     await expect(page.getByTestId('onboarding-account-chip').first()).toBeVisible()
 
     // Skip goes straight through, with nothing typed: no confirmation.

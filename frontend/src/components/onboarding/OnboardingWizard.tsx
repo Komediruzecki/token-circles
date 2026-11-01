@@ -20,7 +20,12 @@
  * Every step can wait. Close asks once, naming what is left; a step's Skip asks only when it would
  * drop something typed or chosen. Auto-opens via `maybeOfferOnboarding()`: signed in, for an
  * account whose setup record is not finished, at the step it reached; local-first, for a pristine
- * workspace (core/onboardingStore.ts). Settings and the tour menu run it again.
+ * workspace, or for one with only the demo's example profiles right after a signed-in account chose
+ * to keep its data in this browser (core/onboardingStore.ts). Settings and the tour menu run it
+ * again.
+ *
+ * An example profile is never renamed into the person's space. Over one, the space step makes a
+ * new profile and selects it, and asks whether the example profiles stay (localOnly.ts).
  */
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show, untrack } from 'solid-js'
 import { refreshAchievements } from '../../core/achievementsStore'
@@ -33,12 +38,15 @@ import {
   useAppState,
 } from '../../core/appStore'
 import { showConfirm } from '../../core/confirmStore'
+import { isExampleProfileName } from '../../core/demoMode'
 import { loadAnswers, saveAnswers } from '../../core/guidanceAnswers'
 import { benchmarksShown } from '../../core/guidanceGate'
 import {
+  clearLocalSetupPending,
   completeOnboarding,
   forgetOnboardingStatus,
   goToOnboardingStep,
+  markLocalSetupPending,
   nextOnboardingStep,
   onboardingOpen,
   onboardingStep,
@@ -51,9 +59,17 @@ import { Field, FormNotice } from '../form'
 import { currentNextSteps, NextSteps } from '../GettingStarted'
 import { SPACE_QUESTIONS_LEAD } from '../guidance/regionWords'
 import { SpaceQuestions } from '../guidance/SpaceQuestions'
+import choiceStyles from '../guidance/SpaceQuestions.module.css'
 import { LogoMark } from '../Logo'
 import { SubscriptionScanPanel } from '../SubscriptionScan'
 import { counted, createFirstImport, FirstImportPanel, listed } from './FirstImport'
+import {
+  EXAMPLES_CHOICE_LEGEND,
+  EXAMPLES_NOT_REMOVED,
+  examplesChoiceNote,
+  localOnlyQuestion,
+  readLocalWorkspace,
+} from './localOnly'
 import styles from './Onboarding.module.css'
 import {
   blankAccount,
@@ -65,6 +81,7 @@ import type { AnswerChanges, Answers } from '../../../../shared/guidance/answers
 import type { OrientationStep } from '../../../../shared/orientation'
 import type { ImportSummary } from '../../features/import/importFlow'
 import type { AccountType } from '../../types/models'
+import type { LocalWorkspace } from './localOnly'
 
 /** The counted steps: Space, Account, Statement. Done is not one of them. */
 const COUNTED_STEPS = 3
@@ -236,13 +253,49 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const [chosenAnswers, setChosenAnswers] = createSignal<AnswerChanges>({})
   const [savingAnswers, setSavingAnswers] = createSignal(false)
   const spaceAnswers = (): Answers => ({ ...storedAnswers(), ...chosenAnswers() }) as Answers
+
+  // A local workspace may hold the demo's example profiles. Setup over one of them makes the
+  // person's space as a new profile, never by renaming the example, and asks whether they stay:
+  // removed by default, so the dashboard setup ends on is the person's own and nothing else.
+  // Accounts never hold example profiles.
+  const exampleProfiles = () =>
+    getStorageMode() === 'serverless'
+      ? state.profiles.filter((p) => isExampleProfileName(p.name))
+      : []
+  const overExample = () =>
+    getStorageMode() === 'serverless' && isExampleProfileName(state.currentProfile?.name)
+  const [examplesChoice, setExamplesChoice] = createSignal<'remove' | 'keep'>('remove')
+
+  /**
+   * Remove the example profiles, each with everything in it, through the path the Danger Zone
+   * uses. The space is made and selected by now: one that will not go stays, and the toast says
+   * where to remove it, while setup goes on.
+   */
+  const removeExamples = async (examples: readonly { id: number; name: string }[]) => {
+    const removed = new Set<number>()
+    for (const example of examples) {
+      try {
+        await api.deleteProfile(example.id)
+        removed.add(example.id)
+      } catch {
+        // Said once, below, for every one that stayed.
+      }
+    }
+    if (removed.size > 0) {
+      setProfiles(getProfiles().filter((p) => !removed.has(p.id)))
+      bumpProfileVersion()
+    }
+    if (removed.size < examples.length) showToast(EXAMPLES_NOT_REMOVED, 'warning')
+  }
+
   // What it checks and says is onboardingForms.ts; a refused name is said under the name.
   const spaceForm = createSpaceForm({
-    current: () => state.currentProfile,
+    // Over an example, the name is checked as a new profile's: the example keeps its own.
+    current: () => (overExample() ? null : state.currentProfile),
     save: async ({ name, currency }) => {
       localStorage.setItem('localCurrency', currency)
       const current = state.currentProfile
-      if (current) {
+      if (current && !overExample()) {
         if (current.name !== name) {
           await api.updateProfile(current.id, name)
           setCurrentProfile({ ...current, name })
@@ -250,14 +303,22 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           bumpProfileVersion()
         }
       } else {
-        // Truly empty workspace (no profile at all): create and select one, through App's one
-        // way of choosing profiles, as a profile created from the sidebar is. This used to write
-        // the two storage keys itself and leave App's copy of the selection on the old one, which
-        // the next close of the sidebar dropdown wrote back.
+        // Truly empty workspace (no profile at all), or one whose profile is an example: create
+        // and select one, through App's one way of choosing profiles, as a profile created from
+        // the sidebar is. This used to write the two storage keys itself and leave App's copy of
+        // the selection on the old one, which the next close of the sidebar dropdown wrote back.
+        // Over the examples, they go only once the space is made and selected.
+        const leaving =
+          current && examplesChoice() === 'remove'
+            ? exampleProfiles().map((p) => ({ id: p.id, name: p.name }))
+            : []
         const created = await api.createProfile(name)
         setProfiles([...getProfiles(), created])
         props.selectProfiles([created.id])
+        if (leaving.length > 0) await removeExamples(leaving)
       }
+      // The space is saved: a switch to local-only that asked for it has it.
+      clearLocalSetupPending()
     },
     onSaved: () => {
       if (benchmarksShown()) setSpaceScreen('about')
@@ -427,8 +488,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     // name typed in reset the currency chosen.
     if (step === 'space') {
       untrack(() => {
+        // An example's name is not offered for the person's space.
+        const named = overExample() ? undefined : state.currentProfile?.name
         spaceForm.reset({
-          name: spaceForm.values.name || (state.currentProfile?.name ?? 'Personal Profile'),
+          name: spaceForm.values.name || (named ?? 'Personal Profile'),
           currency: getLocalCurrency(),
         })
         setChosenAnswers({})
@@ -593,38 +656,34 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   )
 
   // Local-only, offered to a signed-in account on the first screen, before anything is saved to
-  // it: the switch reloads into a fresh local workspace, so later it would leave the space and the
-  // account behind in the cloud. A fresh browser mirrors the pristine serverless state the E2E
-  // zero-state helper uses (suppress the example-data seed, flip the mode, reload: the pristine
-  // local workspace reopens this wizard). But this browser may already hold a local IndexedDB (the
-  // demo, or earlier local use); then the switch continues with THAT workspace and the confirm
-  // must say so instead of promising a clean start.
+  // it: the switch reloads into this browser's local workspace, so later it would leave the space
+  // and the account behind in the cloud. What that workspace holds decides what the confirm says,
+  // so it is read first, without changing anything in it (localOnly.ts): nothing (a fresh local
+  // workspace, which opens this wizard as the E2E zero-state helper's does), only the demo's
+  // example profiles (setup opens on the space over them, and asks whether they stay), or
+  // profiles of the person's own (carried on with).
   const chooseLocalOnly = async () => {
-    let hasLocalData = false
-    try {
-      const dbs = await window.indexedDB.databases()
-      hasLocalData = dbs.some((d) => d.name === 'finance-manager')
-    } catch {
-      // indexedDB.databases() unsupported/blocked: keep the generic wording.
-    }
-    const sure = await showConfirm(
-      hasLocalData
-        ? 'Keep your data in this browser only? This browser already has a local workspace (from the demo, say). You carry on with that one, and nothing syncs to the cloud. Settings can switch back.'
-        : 'Keep your data in this browser only? It never leaves this device and no account is needed. Settings can switch back.',
-      { confirmText: 'Keep it here', cancelText: 'Cancel' }
-    )
+    const found = await readLocalWorkspace().catch((): LocalWorkspace => ({ kind: 'unknown' }))
+    const sure = await showConfirm(localOnlyQuestion(found), {
+      confirmText: 'Keep it here',
+      cancelText: 'Cancel',
+    })
     if (!sure) return
     try {
+      // The example seed never runs into a workspace the person chose: an empty one stays empty.
       localStorage.setItem('finance_had_profiles', '1')
       // A relaunched wizard may carry a completed/skipped flag; a fresh local workspace should
-      // offer setup again. (Harmless when local data exists: a non-pristine profile never
-      // auto-opens the wizard.)
+      // offer setup again. (Harmless when local data exists: a workspace of the person's own that
+      // is not pristine never auto-opens the wizard.)
       forgetOnboardingStatus('local')
       // Server-mode profile selection is meaningless against the local DB; stale ids would make
       // the profile picker read empty or heal onto the wrong profile (mirrors handleLogout's
       // cleanup).
       localStorage.removeItem('currentProfileId')
       localStorage.removeItem('selectedProfileIds')
+      // Setup opens on the space after the reload unless the workspace has a profile of the
+      // person's own (onboardingStore.ts, whereToOfferOnboarding).
+      markLocalSetupPending()
     } catch {
       // Non-fatal: worst case the first init seeds the demo profiles.
     }
@@ -696,6 +755,37 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             </select>
           )}
         </Field>
+        <Show when={overExample() && exampleProfiles().length > 0}>
+          <fieldset class={choiceStyles.question} data-test-id="onboarding-examples-choice">
+            <legend class={choiceStyles.legend}>{EXAMPLES_CHOICE_LEGEND}</legend>
+            <div class={choiceStyles.chips}>
+              <For each={['remove', 'keep'] as const}>
+                {(choice) => (
+                  <label class={choiceStyles.chip} data-test-id={`onboarding-examples-${choice}`}>
+                    <input
+                      type="radio"
+                      class={choiceStyles.radio}
+                      name="onboarding-examples"
+                      value={choice}
+                      checked={examplesChoice() === choice}
+                      disabled={spaceForm.submitting()}
+                      onChange={() => setExamplesChoice(choice)}
+                    />
+                    <span>
+                      {`${choice === 'remove' ? 'Remove' : 'Keep'} ${exampleProfiles().length === 1 ? 'it' : 'them'}`}
+                    </span>
+                  </label>
+                )}
+              </For>
+            </div>
+            <p class={choiceStyles.note} data-test-id="onboarding-examples-note">
+              {examplesChoiceNote(
+                examplesChoice(),
+                exampleProfiles().map((p) => p.name)
+              )}
+            </p>
+          </fieldset>
+        </Show>
         <Show when={getStorageMode() === 'self-hosted'}>
           <button
             type="button"

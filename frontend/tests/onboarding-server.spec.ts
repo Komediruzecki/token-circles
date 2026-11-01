@@ -7,7 +7,9 @@
  * The fixture account every other spec uses has a finished record (global.setup.ts), as every
  * account in use before the record existed does (migration 0035).
  *
- * The local-first wizard, which keeps its decision in localStorage, is onboarding.spec.ts.
+ * The local-first wizard, which keeps its decision in localStorage, is onboarding.spec.ts. The
+ * switch from an account to local-only, over a browser that ran the demo, is here: it starts on
+ * the account's setup.
  */
 import { expect, test } from '@playwright/test'
 import { bootSignedIn, deleteAccount, signIn, signUpAndIn } from './own-account'
@@ -502,6 +504,156 @@ test.describe('the setup wizard on the account @smoke', () => {
       })
       await page.reload({ waitUntil: 'domcontentloaded' })
       await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+    } finally {
+      await deleteAccount(ctx, email)
+    }
+  })
+})
+
+/** The demo's example profiles, as the seed names them (core/demoMode.ts). */
+const EXAMPLES = ['Example Low Income', 'Example Mid Income', 'Example High Income']
+
+/**
+ * This browser's local database: its profiles by id, and every row still filed on one of `gone`,
+ * by store. Read straight from IndexedDB, as no page shows rows of a deleted profile.
+ */
+async function localWorkspace(
+  page: Page,
+  gone: number[] = []
+): Promise<{ profiles: { id: number; name: string }[]; left: string[] }> {
+  return page.evaluate(async (goneIds) => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('finance-manager')
+      open.onsuccess = () => {
+        resolve(open.result)
+      }
+      open.onerror = () => {
+        reject(open.error ?? new Error('open failed'))
+      }
+    })
+    const all = (store: string) =>
+      new Promise<Record<string, unknown>[]>((resolve, reject) => {
+        const read = db.transaction(store).objectStore(store).getAll()
+        read.onsuccess = () => {
+          resolve(read.result as Record<string, unknown>[])
+        }
+        read.onerror = () => {
+          reject(read.error ?? new Error('read failed'))
+        }
+      })
+    const profiles = (await all('profiles')).map((p) => ({
+      id: p.id as number,
+      name: p.name as string,
+    }))
+    const left: string[] = []
+    for (const store of Array.from(db.objectStoreNames)) {
+      for (const row of await all(store)) {
+        if (goneIds.includes(row.profile_id as number)) left.push(store)
+        if (
+          store === 'settings' &&
+          goneIds.some((id) => String(row.key).endsWith(`_${String(id)}`))
+        ) {
+          left.push(`settings ${String(row.key)}`)
+        }
+      }
+    }
+    db.close()
+    return { profiles, left }
+  }, gone)
+}
+
+test.describe('keeping the data in this browser, over the demo @smoke', () => {
+  test('setup opens on a space of your own over the examples, and the dashboard is that space alone', async ({
+    page,
+  }) => {
+    test.setTimeout(180_000)
+    const ctx = page.context()
+    const { email } = await signUpAndIn(ctx)
+    try {
+      // The demo first, in this browser: its three example profiles in the local database.
+      await page.goto(`${E2E_BASE}/?demo=low#dashboard`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30_000,
+      })
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 60_000 })
+      await expect
+        .poll(async () => (await localWorkspace(page)).profiles.map((p) => p.name), {
+          timeout: 30_000,
+        })
+        .toEqual(EXAMPLES)
+      const examples = (await localWorkspace(page)).profiles.map((p) => p.id)
+
+      // Then the account, signed in on this browser: it meets setup.
+      await page.evaluate(() => {
+        localStorage.setItem('finance_storage_mode', 'self-hosted')
+        localStorage.removeItem('currentProfileId')
+        localStorage.removeItem('selectedProfileIds')
+      })
+      // A reload: the demo link left the address at /#dashboard, where a goto only moves the hash.
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('onboarding-step-space')).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByTestId('onboarding-examples-choice')).toHaveCount(0)
+
+      await page.getByTestId('onboarding-local-only').click()
+      await expect(page.getByRole('alertdialog')).toContainText(
+        'This browser has the example profiles from the demo.'
+      )
+      await page.getByTestId('confirm-accept').click()
+
+      // The reload lands on the local workspace, and setup opens on its space over the examples.
+      await expect(page.getByTestId('onboarding-examples-choice')).toBeVisible({ timeout: 60_000 })
+      expect(await page.evaluate(() => localStorage.getItem('finance_storage_mode'))).toBe(
+        'serverless'
+      )
+      await expect(page.getByTestId('onboarding-examples-remove').locator('input')).toBeChecked()
+      await expect(page.getByTestId('onboarding-profile-name')).toHaveValue('Personal Profile')
+
+      // On a phone: nothing runs off the side, and the choice is whole.
+      await page.setViewportSize({ width: 375, height: 812 })
+      await page.getByTestId('onboarding-examples-choice').scrollIntoViewIfNeeded()
+      const fit = await page.evaluate(() => {
+        const body = document.querySelector('[data-test-id="onboarding-body"]')!
+        const choice = document.querySelector('[data-test-id="onboarding-examples-choice"]')!
+        const parts = Array.from(choice.querySelectorAll('legend, label, p'))
+        return {
+          page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+          body: body.scrollWidth - body.clientWidth,
+          outside: parts
+            .map((el) => ({ text: el.textContent ?? '', box: el.getBoundingClientRect() }))
+            .filter(({ box }) => box.left < 0 || box.right > window.innerWidth)
+            .map(({ text }) => text),
+          clipped: parts
+            .filter((el) => el.scrollWidth > el.clientWidth + 1)
+            .map((el) => el.textContent ?? ''),
+        }
+      })
+      expect(fit).toEqual({ page: 0, body: 0, outside: [], clipped: [] })
+
+      await page.getByTestId('onboarding-profile-name').fill('Our flat')
+      await page.getByTestId('onboarding-next').click()
+      await expect(
+        page.getByTestId('onboarding-step-about').or(page.getByTestId('onboarding-step-account'))
+      ).toBeVisible({ timeout: 60_000 })
+
+      // The examples are gone, every row of them, and the new space is all there is.
+      const after = await localWorkspace(page, examples)
+      expect(after.profiles.map((p) => p.name)).toEqual(['Our flat'])
+      expect(after.left).toEqual([])
+
+      await page.getByTestId('onboarding-skip').click()
+      await page.getByTestId('confirm-accept').click()
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+      // The initial's badge, then the name.
+      await expect(page.getByTestId('profile-dropdown-btn')).toHaveText('OOur flat')
+
+      // Setup asked once: a reload opens the dashboard, not setup.
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await expect(page.getByTestId('dashboard-header')).toBeVisible({ timeout: 30_000 })
+      // The initial's badge, then the name.
+      await expect(page.getByTestId('profile-dropdown-btn')).toHaveText('OOur flat')
+      await page.waitForTimeout(1200)
+      await expect(page.getByTestId('onboarding-wizard')).toHaveCount(0)
     } finally {
       await deleteAccount(ctx, email)
     }

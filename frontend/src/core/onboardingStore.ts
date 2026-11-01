@@ -14,7 +14,11 @@
  *
  * Local-first, the wizard opens once for a pristine workspace (no accounts, no transactions, no
  * bills). Finishing or skipping stamps the local account's localStorage flag (onboardingFlag.ts)
- * and mirrors it into the profile's settings.
+ * and mirrors it into the profile's settings. A signed-in account that chose "Keep my data in this
+ * browser only" leaves a one-shot marker (LOCAL_SETUP_PENDING_KEY): the local workspace it reloads
+ * into opens the wizard on its space step when it holds no profile of the person's own, only the
+ * demo's example profiles, though they are far from pristine. The marker goes once the space is
+ * saved or setup is left, and at once when the workspace has a profile of the person's own.
  *
  * It can always be relaunched from Settings → About or the tour-selection modal.
  */
@@ -29,6 +33,7 @@ import {
   writeAccountState,
 } from './accountState'
 import { apiGet, apiPut } from './api'
+import { isExampleProfileName } from './demoMode'
 import { beginGettingStarted } from './gettingStarted'
 import {
   accountOnboardingOwner,
@@ -111,6 +116,39 @@ export function forgetOnboardingStatus(of: string): void {
     localStorage.removeItem(keyOf(of))
   } catch {
     // Non-fatal: a pristine workspace may go without the offer.
+  }
+}
+
+/**
+ * Set by the wizard's "Keep my data in this browser only" just before it reloads into the local
+ * workspace, so that workspace offers setup for a space of the person's own (whereToOfferOnboarding).
+ */
+export const LOCAL_SETUP_PENDING_KEY = 'finance_local_setup_pending'
+
+/** Ask the local workspace the next load opens to offer setup (chooseLocalOnly). */
+export function markLocalSetupPending(): void {
+  try {
+    localStorage.setItem(LOCAL_SETUP_PENDING_KEY, '1')
+  } catch {
+    // Non-fatal: the workspace opens as it would have before.
+  }
+}
+
+/** The space is saved, or setup was left: the marker has done its job. */
+export function clearLocalSetupPending(): void {
+  try {
+    localStorage.removeItem(LOCAL_SETUP_PENDING_KEY)
+  } catch {
+    // Non-fatal: the next load finds the space saved, or a decision kept, and asks again at most.
+  }
+}
+
+/** Whether a switch to local-only is still waiting for its space. */
+export function localSetupPending(): boolean {
+  try {
+    return localStorage.getItem(LOCAL_SETUP_PENDING_KEY) !== null
+  } catch {
+    return false
   }
 }
 
@@ -246,6 +284,8 @@ export function prevOnboardingStep() {
 function decide(outcome: OnboardingDecision): void {
   const of = owner
   store.setOnboardingOpen(false)
+  // Left or finished: a local-only switch's setup never opens again by itself.
+  clearLocalSetupPending()
   if (isServerAccount(of)) {
     // Relaunched over a finished record: the first decision stands, so there is nothing to send.
     // Over one this build cannot read, the decision may stand there too, so the same.
@@ -299,7 +339,29 @@ export async function whereToOfferOnboarding(): Promise<OnboardingStep | null> {
   const asking = owner
   if (asking === null) return null
   if (isServerAccount(asking)) return whereToOfferOnTheAccount(asking)
+  if (localSetupPending()) {
+    const own = await holdsOwnProfile()
+    if (owner !== asking || own === null) return null
+    // Only the examples, or nothing: setup opens on the space, however much the examples hold.
+    if (!own) return 'space'
+    // A workspace of the person's own: carried on with as before.
+    clearLocalSetupPending()
+  }
   return (await shouldOfferLocally(asking)) ? 'space' : null
+}
+
+/**
+ * Whether the local workspace holds a profile of the person's own: one that is not an example
+ * profile. Null when the profiles could not be read.
+ */
+async function holdsOwnProfile(): Promise<boolean | null> {
+  try {
+    const profiles = await apiGet<Array<{ name?: unknown }>>('/api/profiles')
+    if (!Array.isArray(profiles)) return null
+    return profiles.some((p) => typeof p.name === 'string' && !isExampleProfileName(p.name))
+  } catch {
+    return null
+  }
 }
 
 /**
