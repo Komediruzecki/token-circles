@@ -197,7 +197,8 @@ export const DEFAULT_CATEGORY_RULES: CategoryRuleSet = [
     keywords: ['ljekarn', 'ljekarne', 'pharmacy', 'poliklinik', 'dom zdravlja'],
   },
   {
-    category: 'Restaurant',
+    category: 'Eating out',
+    formerly: ['Restaurant'],
     keywords: ['restaurant', 'restoran', 'rougemarin', 'pizzeria', 'caffe', 'bistro'],
   },
   {
@@ -238,7 +239,8 @@ export const DEFAULT_CATEGORY_RULES_WORLDWIDE: CategoryRuleSet = [
     ],
   },
   {
-    category: 'Dining',
+    category: 'Eating out',
+    formerly: ['Dining'],
     keywords: [
       'mcdonald',
       'burger king',

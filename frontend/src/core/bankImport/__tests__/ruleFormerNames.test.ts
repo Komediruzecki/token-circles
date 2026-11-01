@@ -85,6 +85,23 @@ describe('the Worldwide rules', () => {
   })
 })
 
+describe('restaurants and takeaways', () => {
+  it('go under the default Eating out, from either group', () => {
+    expect(fileUnder('RESTORAN TEST 0000', CROATIAN, DEFAULTS)).toBe('Eating out')
+    expect(fileUnder('PIZZA TEST 0000', WORLDWIDE, DEFAULTS)).toBe('Eating out')
+    expect(fileUnder('TEST COFFEE 0000', WORLDWIDE, DEFAULTS)).toBe('Eating out')
+  })
+
+  it('keep going to Restaurant or Dining in a space that has it', () => {
+    const space = [...DEFAULTS, 'Restaurant', 'Dining']
+    expect(fileUnder('RESTORAN TEST 0000', CROATIAN, space)).toBe('Restaurant')
+    expect(fileUnder('PIZZA TEST 0000', WORLDWIDE, space)).toBe('Dining')
+    // Each rule keeps to the name it gave: the Croatian rule never gave Dining.
+    expect(fileUnder('RESTORAN TEST 0000', CROATIAN, ['Dining'])).toBe('Eating out')
+    expect(fileUnder('PIZZA TEST 0000', WORLDWIDE, ['Restaurant'])).toBe('Eating out')
+  })
+})
+
 describe('a rule with former names', () => {
   it('gives the oldest one the space has, else its name now', () => {
     // A rule renamed twice: Car (Gas), then Transportation, then Car.
@@ -97,7 +114,7 @@ describe('a rule with former names', () => {
   })
 
   it('folds with another rule into one name and still files each apart', () => {
-    // How Restaurant (Croatian) and Dining (Worldwide) can fold into Eating out later.
+    // As Restaurant (Croatian) and Dining (Worldwide) fold into Eating out.
     const rules = [
       { category: 'Eating out', formerly: ['Restaurant'], keywords: ['restoran'] },
       { category: 'Eating out', formerly: ['Dining'], keywords: ['pizza'] },

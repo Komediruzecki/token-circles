@@ -36,6 +36,9 @@ const PARKING_LINES: Array<[string, number]> = [
   ['ZET TEST TICKET 0000', -2],
 ]
 
+/** A line only the restaurant rule matches. */
+const RESTAURANT_LINES: Array<[string, number]> = [['RESTORAN TEST 0000', -24]]
+
 function statement(lines: Array<[string, number]>): Uint8Array {
   const rows = lines.map(([description, amount], i) => {
     const day = `2026-01-${String(i + 1).padStart(2, '0')}`
@@ -233,5 +236,28 @@ describe('local-first import: a category the file names itself', () => {
     await run(rows, false)
 
     expect(await filedUnder()).toEqual({ 'TEST EMPLOYER PAY': 'Salary' })
+  })
+})
+
+describe('local-first import: a restaurant', () => {
+  it('goes under the default Eating out, and no Restaurant is offered', async () => {
+    await seedDefaultCategories(1)
+    const rows = await ruleRows(RESTAURANT_LINES)
+
+    expect((await run(rows, true)).new_categories).toEqual([])
+    await run(rows, false)
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' })
+  })
+
+  it('keeps going to Restaurant in a space made from the old rules', async () => {
+    await seedDefaultCategories(1)
+    await addCategory('Restaurant', 'expense')
+    const rows = await ruleRows(RESTAURANT_LINES)
+
+    expect((await run(rows, true)).new_categories).toEqual([])
+    await run(rows, false)
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' })
   })
 })

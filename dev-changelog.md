@@ -2226,6 +2226,34 @@ check')` first, as the cushion and debt cases do.
     `review.test.ts` pass on it. Its CHANGELOG.md line is the one under 5.17.5, so this entry has
     no line of its own there.
 
+- **The restaurant and dining rules give the default Eating out.** In
+  `shared/bankImport/categoryRules.ts` the Croatian `Restaurant` rule and the Worldwide `Dining`
+  rule now give `Eating out`, the default this branch puts in place of Food, with
+  `formerly: ['Restaurant']` and `formerly: ['Dining']`. A newcomer's first import offered either
+  name as a new category beside the default; it now files those rows under Eating out. A space that
+  has a category under the old name keeps getting the rule's rows there, through
+  `ruleCategory(rule, categoryNames)` as #673 set up, and each rule keeps to its own old name: the
+  Croatian rule never files under a space's Dining, nor the Worldwide one under its Restaurant.
+  Keywords are unchanged, so the Worldwide rule's `cafe`, `coffee` and `starbucks` rows go to
+  Eating out as they went to Dining. No migration, and no stored category is renamed.
+  - Stored copies: `frontend/src/core/bankImport/earlierBuiltInRules.ts` gains `CROATIAN_5_17_5`
+    and `WORLDWIDE_5_17_5`, each group's built-in rules as 5.17.4 and 5.17.5 shipped them (git
+    show `v5.17.5`, unchanged since `v5.17.4`). `loadCategoryRules` reads a stored set equal to
+    either as the group's rules now, so a copy of them runs the fold and the mapping prompt sees no
+    edit.
+  - Tests: `ruleFormerNames.test.ts` "restaurants and takeaways" (Eating out in a default space,
+    the old name in a space that has it, never the other rule's old name);
+    `ruleCategoryNames.test.ts` drops `Restaurant` and `Dining` from the general names and lists
+    them as retired, so a rule that gives either again fails; `earlierBuiltInRules.test.ts` loads
+    the two 5.17.5 fixtures (`__tests__/fixtures/built-in-rules-*-v5.17.5.json`, written from
+    `git show v5.17.5`) as the rules now and files a restaurant and a pizza under Eating out
+    through them; `importFlow.ruleCategoryNames.test.ts` (local-first) and
+    `worker/test/import-rule-category-names.test.ts` (the Bank Imports tab on the Worker and
+    `POST /api/v1/import`) file a made-up restaurant line under Eating out with no new category,
+    and under Restaurant in a space that has it. Without the change every Eating out case fails;
+    the two import cases for a space that has Restaurant pass before and after, as the guard that
+    the fold keeps it. `categoryGroups.test.ts` expects Eating out for `UBER EATS`.
+
 ### Lines for CHANGELOG.md when the benchmarks gate opens
 
 The production build holds back the benchmarks and the questions that choose their figures

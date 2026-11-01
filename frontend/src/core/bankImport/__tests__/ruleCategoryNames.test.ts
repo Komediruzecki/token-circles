@@ -5,7 +5,8 @@
  * must be a name anyone would pick for their own books, and not a second name for a default:
  * a default category, or a general name on the list below. The Croatian rules once shipped
  * 'Salary Eur', 'Apartment (Bills)' and 'Car (Gas)', one person's own labels, and both rule sets
- * gave 'Transport', 'Fuel' and 'Health' beside the defaults Transportation and Healthcare.
+ * gave 'Transport', 'Fuel' and 'Health' beside the defaults Transportation and Healthcare, and
+ * 'Restaurant' and 'Dining' beside the default Eating out.
  *
  * A rule that gives a new name lists the old one in `formerly`, so a space that has a category
  * under the old name keeps getting the rule's rows there (ruleFormerNames.test.ts). An old name is
@@ -18,18 +19,8 @@ import { describe, expect, it } from 'vitest'
 import { RULE_GROUPS } from '../../../../../shared/bankImport/categoryRules'
 import { DEFAULT_CATEGORIES } from '../../storage/idb'
 
-/**
- * General names a rule may give besides the default categories. Restaurant and Dining sit beside
- * the default Eating out until the rules give it themselves.
- */
-const GENERAL_RULE_CATEGORIES = [
-  'Bank Fees',
-  'Dining',
-  'Income',
-  'Restaurant',
-  'Transfers',
-  'Travel',
-]
+/** General names a rule may give besides the default categories. */
+const GENERAL_RULE_CATEGORIES = ['Bank Fees', 'Income', 'Transfers', 'Travel']
 
 /** Names the rules gave before, by rule group, and the name each rule gives instead. */
 const RETIRED: Record<string, Array<[old: string, now: string]>> = {
@@ -39,11 +30,13 @@ const RETIRED: Record<string, Array<[old: string, now: string]>> = {
     ['Salary Eur', 'Salary'],
     ['Transport', 'Transportation'],
     ['Health', 'Healthcare'],
+    ['Restaurant', 'Eating out'],
   ],
   worldwide: [
     ['Transport', 'Transportation'],
     ['Fuel', 'Transportation'],
     ['Health', 'Healthcare'],
+    ['Dining', 'Eating out'],
   ],
 }
 
@@ -96,7 +89,8 @@ describe('bank-import rule category names', () => {
       ...Object.values(RETIRED).flatMap((pairs) => pairs.map(([old]) => fold(old))),
       ...RULE_GROUPS.flatMap((g) => g.rules.flatMap((r) => (r.formerly ?? []).map(fold))),
     ])
-    for (const name of ['Transport', 'Fuel', 'Health']) expect(retired.has(fold(name))).toBe(true)
+    for (const name of ['Transport', 'Fuel', 'Health', 'Restaurant', 'Dining'])
+      expect(retired.has(fold(name))).toBe(true)
     const given = RULE_GROUPS.flatMap((g) => g.rules.map((r) => r.category))
     expect(given.filter((name) => retired.has(fold(name)))).toEqual([])
   })

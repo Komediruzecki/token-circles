@@ -48,6 +48,9 @@ const PARKING_LINES: Array<[string, number]> = [
   ['ZET TEST TICKET 0000', -2],
 ];
 
+/** A line only the restaurant rule matches. */
+const RESTAURANT_LINES: Array<[string, number]> = [['RESTORAN TEST 0000', -24]];
+
 function statement(lines: Array<[string, number]>): string {
   const rows = lines.map(([description, amount], i) => {
     const day = `2026-01-${String(i + 1).padStart(2, '0')}`;
@@ -366,5 +369,39 @@ describe('worker statement import (POST /api/v1/import)', () => {
     await apiImport(LINES, 'commit');
 
     expect(await filedUnder()).toEqual(FRESH);
+  });
+});
+
+describe('worker import: a restaurant', () => {
+  it('goes under the default Eating out from the Bank Imports tab, and no Restaurant is offered', async () => {
+    await seedDefaults();
+
+    expect((await appImport(RESTAURANT_LINES, true)).new_categories).toEqual([]);
+    await appImport(RESTAURANT_LINES, false);
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' });
+  });
+
+  it('goes under the default Eating out from POST /api/v1/import', async () => {
+    await seedDefaults();
+
+    expect((await apiImport(RESTAURANT_LINES, 'preview')).newCategories).toEqual([]);
+    await apiImport(RESTAURANT_LINES, 'commit');
+
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Eating out' });
+  });
+
+  it('keeps going to Restaurant in a profile made from the old rules, on both paths', async () => {
+    await seedDefaults();
+    await addCategory('Restaurant', 'expense');
+
+    expect((await appImport(RESTAURANT_LINES, true)).new_categories).toEqual([]);
+    await appImport(RESTAURANT_LINES, false);
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' });
+
+    await env.DB.prepare('DELETE FROM transactions').run();
+    expect((await apiImport(RESTAURANT_LINES, 'preview')).newCategories).toEqual([]);
+    await apiImport(RESTAURANT_LINES, 'commit');
+    expect(await filedUnder()).toEqual({ 'RESTORAN TEST 0000': 'Restaurant' });
   });
 });

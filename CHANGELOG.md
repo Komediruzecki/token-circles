@@ -41,6 +41,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **The subscription scan keeps up with a long history.** With a few thousand entries, Scan transactions on Bills and the setup wizard's subscriptions step held the page for over a second. They now find the same subscriptions in a small part of that time.
 - **The plan name on a subscription the scan finds is easier to read.** In the light theme, "Standard" beside Netflix was blue on a pale blue tint at 4.0:1. It's a darker blue now, on Bills and in setup.
 - **Getting started sees an account you add a second or so after another change straight away.** Before, it waited for your next change, as badges did until 5.17.4.
+- **A first bank import files restaurants, cafes and takeaways under Eating out**, instead of a new Restaurant or Dining category. If you already have one of those, its rows keep going there.
 
 ## [5.17.5] — 2026-11-01
 

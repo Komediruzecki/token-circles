@@ -3,7 +3,9 @@
  * edited. A mapping switch stored a full copy of the group's built-in rules (so did a save with
  * nothing changed), and that copy read as an edit: it kept giving that version's names after the
  * built-in rules moved on, so Transport, Fuel and Health came back for everyone who ever switched,
- * and switching the mapping warned that edits would be lost.
+ * and switching the mapping warned that edits would be lost. 5.17.4 stopped storing such copies,
+ * but a copy of its rules can still sit beside a mapping it is not, so a copy of the rules 5.17.4
+ * and 5.17.5 shipped, which still give Restaurant and Dining, loads as the rules now too.
  *
  * The fixtures are the built-in rules as git has them at each version (DEFAULT_CATEGORY_RULES and
  * DEFAULT_CATEGORY_RULES_WORLDWIDE in shared/bankImport/categoryRules.ts), stored the way the app
@@ -19,7 +21,9 @@ import {
 import { loadCategoryRules, saveCategoryRules, saveRuleGroup } from '../rulesStore'
 import croatian671 from './fixtures/built-in-rules-croatian-671.json'
 import croatian5173 from './fixtures/built-in-rules-croatian-v5.17.3.json'
+import croatian5175 from './fixtures/built-in-rules-croatian-v5.17.5.json'
 import worldwide5173 from './fixtures/built-in-rules-worldwide-v5.17.3.json'
+import worldwide5175 from './fixtures/built-in-rules-worldwide-v5.17.5.json'
 import type { CategoryRuleSet } from '../../../../../shared/bankImport/types'
 
 const RULES_KEY = 'bankImportCategoryRules:1'
@@ -46,6 +50,13 @@ describe('a stored copy of an earlier version of the built-in rules', () => {
       'worldwide',
       DEFAULT_CATEGORY_RULES_WORLDWIDE,
     ],
+    ['Croatian, as 5.17.4 and 5.17.5 shipped it', croatian5175, 'croatian', DEFAULT_CATEGORY_RULES],
+    [
+      'Worldwide, as 5.17.4 and 5.17.5 shipped it',
+      worldwide5175,
+      'worldwide',
+      DEFAULT_CATEGORY_RULES_WORLDWIDE,
+    ],
   ])('loads as the rules its group has now: %s', (_version, copy, group, now) => {
     stored(copy, group)
     expect(loadCategoryRules()).toBe(now)
@@ -56,6 +67,13 @@ describe('a stored copy of an earlier version of the built-in rules', () => {
     expect(matchCategory('PARKING TEST GARAGE 0000', loadCategoryRules())).toBe('Transportation')
     stored(worldwide5173, 'worldwide')
     expect(matchCategory('PHARMACY TEST 0000', loadCategoryRules())).toBe('Healthcare')
+  })
+
+  it('files restaurants and takeaways under Eating out', () => {
+    stored(croatian5175, 'croatian')
+    expect(matchCategory('RESTORAN TEST 0000', loadCategoryRules())).toBe('Eating out')
+    stored(worldwide5175, 'worldwide')
+    expect(matchCategory('PIZZA TEST 0000', loadCategoryRules())).toBe('Eating out')
   })
 
   it('loads as the Croatian rules now when it was saved before any mapping was chosen', () => {
@@ -107,8 +125,8 @@ describe('the earlier versions the app keeps', () => {
   it('are, for each group, the built-in rules as git has them', async () => {
     const { EARLIER_BUILT_IN_RULES } = await import('../earlierBuiltInRules')
     expect(EARLIER_BUILT_IN_RULES).toEqual({
-      croatian: [croatian5173, croatian671],
-      worldwide: [worldwide5173],
+      croatian: [croatian5173, croatian671, croatian5175],
+      worldwide: [worldwide5173, worldwide5175],
     })
   })
 })
