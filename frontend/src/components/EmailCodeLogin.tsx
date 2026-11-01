@@ -1,4 +1,5 @@
 import { createEffect, createSignal, Show } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { addressProblems, SIGN_IN_MESSAGES } from '../../../shared/signInSchema'
 import { markAccessCleared } from '../core/accessCleared'
 import { api } from '../core/api'
@@ -100,7 +101,11 @@ export default function EmailCodeLogin(props: {
                 />
               )}
             </Field>
-            <CaptchaCheck gate={captcha} hintClass={styles.hint} />
+            <CaptchaCheck
+              gate={captcha}
+              action={CAPTCHA_ACTIONS.emailCode}
+              hintClass={styles.hint}
+            />
             <SubmitButton
               data-test-id="emailcode-send"
               busy={request.submitting()}

@@ -115,7 +115,10 @@ describe('Turnstile widget', () => {
   it('renders nothing at all without a site key', async () => {
     const mod = await loadModule('')
     const seen: string[] = []
-    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    dispose = render(
+      () => <mod.default action="sign-in" onToken={() => {}} onStatus={(s) => seen.push(s)} />,
+      host
+    )
     expect(mod.turnstileEnabled).toBe(false)
     expect(host.textContent).toBe('')
     expect(turnstileScripts()).toHaveLength(0)
@@ -127,7 +130,13 @@ describe('Turnstile widget', () => {
     const seen: string[] = []
     const tokens: string[] = []
     dispose = render(
-      () => <mod.default onToken={(t) => tokens.push(t)} onStatus={(s) => seen.push(s)} />,
+      () => (
+        <mod.default
+          action="sign-in"
+          onToken={(t) => tokens.push(t)}
+          onStatus={(s) => seen.push(s)}
+        />
+      ),
       host
     )
     const script = turnstileScripts()[0]
@@ -151,7 +160,10 @@ describe('Turnstile widget', () => {
     vi.useFakeTimers()
     const mod = await loadModule()
     const seen: string[] = []
-    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    dispose = render(
+      () => <mod.default action="sign-in" onToken={() => {}} onStatus={(s) => seen.push(s)} />,
+      host
+    )
     expect(turnstileScripts()).toHaveLength(1)
     // No onload, no onerror — the shape a null-routed or silently-dropped host takes.
     expect(seen.at(-1)).toBe('loading')
@@ -164,7 +176,7 @@ describe('Turnstile widget', () => {
 
   it('Retry is a real second attempt, not a replay of the first failure', async () => {
     const mod = await loadModule()
-    dispose = render(() => <mod.default onToken={() => {}} />, host)
+    dispose = render(() => <mod.default action="sign-in" onToken={() => {}} />, host)
     turnstileScripts()[0].onerror?.(new Event('error'))
     await vi.waitFor(() => {
       expect(host.querySelector('[data-test-id="captcha-retry"]')).toBeTruthy()
@@ -191,14 +203,14 @@ describe('Turnstile widget', () => {
     // asking for the script, so a user whose first load was blocked could never recover
     // without a full page reload.
     const mod = await loadModule()
-    const first = render(() => <mod.default onToken={() => {}} />, host)
+    const first = render(() => <mod.default action="sign-in" onToken={() => {}} />, host)
     turnstileScripts()[0].onerror?.(new Event('error'))
     await vi.waitFor(() => {
       expect(host.querySelector('[data-test-id="captcha-blocked"]')).toBeTruthy()
     })
     first()
 
-    dispose = render(() => <mod.default onToken={() => {}} />, host)
+    dispose = render(() => <mod.default action="sign-in" onToken={() => {}} />, host)
     await vi.waitFor(() => {
       expect(turnstileScripts()).toHaveLength(2)
     })
@@ -209,7 +221,13 @@ describe('Turnstile widget', () => {
     const seen: string[] = []
     const tokens: string[] = []
     dispose = render(
-      () => <mod.default onToken={(t) => tokens.push(t)} onStatus={(s) => seen.push(s)} />,
+      () => (
+        <mod.default
+          action="sign-in"
+          onToken={(t) => tokens.push(t)}
+          onStatus={(s) => seen.push(s)}
+        />
+      ),
       host
     )
     const rendered = installTurnstileApi()
@@ -227,7 +245,10 @@ describe('Turnstile widget', () => {
   it('shows the panel when the widget itself errors after loading', async () => {
     const mod = await loadModule()
     const seen: string[] = []
-    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    dispose = render(
+      () => <mod.default action="sign-in" onToken={() => {}} onStatus={(s) => seen.push(s)} />,
+      host
+    )
     const rendered = installTurnstileApi()
     turnstileScripts()[0].onload?.(new Event('load'))
     await vi.waitFor(() => {
@@ -244,7 +265,10 @@ describe('Turnstile widget', () => {
   it('an expired token is not treated as blocked', async () => {
     const mod = await loadModule()
     const seen: string[] = []
-    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    dispose = render(
+      () => <mod.default action="sign-in" onToken={() => {}} onStatus={(s) => seen.push(s)} />,
+      host
+    )
     const rendered = installTurnstileApi()
     turnstileScripts()[0].onload?.(new Event('load'))
     await vi.waitFor(() => {
@@ -261,7 +285,10 @@ describe('Turnstile widget', () => {
   it('keeps a token that came before the word that the tick is done', async () => {
     const mod = await loadModule()
     const seen: string[] = []
-    dispose = render(() => <mod.default onToken={() => {}} onStatus={(s) => seen.push(s)} />, host)
+    dispose = render(
+      () => <mod.default action="sign-in" onToken={() => {}} onStatus={(s) => seen.push(s)} />,
+      host
+    )
     const rendered = installTurnstileApi()
     turnstileScripts()[0].onload?.(new Event('load'))
     await vi.waitFor(() => {
@@ -280,7 +307,11 @@ describe('Turnstile widget', () => {
     const tokens: string[] = []
     dispose = render(
       () => (
-        <mod.default onToken={(t) => tokens.push(t)} onWidget={(reset) => widgets.push(reset)} />
+        <mod.default
+          action="sign-in"
+          onToken={(t) => tokens.push(t)}
+          onWidget={(reset) => widgets.push(reset)}
+        />
       ),
       host
     )
@@ -308,7 +339,13 @@ describe('Turnstile widget', () => {
     const seen: string[] = []
     const tokens: string[] = []
     const first = render(
-      () => <mod.default onToken={(t) => tokens.push(t)} onStatus={(s) => seen.push(s)} />,
+      () => (
+        <mod.default
+          action="sign-in"
+          onToken={(t) => tokens.push(t)}
+          onStatus={(s) => seen.push(s)}
+        />
+      ),
       host
     )
     first()

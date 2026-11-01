@@ -1,4 +1,5 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js'
+import { CAPTCHA_ACTIONS } from '../../../shared/captchaActions'
 import { api } from '../core/api'
 import { afterHistoryStep, createHistoryStep } from '../core/historyStep'
 import { markPasskeyNudgeAfterLogin, passkeysSupported, signInWithPasskey } from '../core/webauthn'
@@ -243,7 +244,11 @@ export default function LoginModal(props: LoginModalProps) {
                 )}
               </Field>
             </Show>
-            <CaptchaCheck gate={captcha} hintClass={stepStyles.hint} />
+            <CaptchaCheck
+              gate={captcha}
+              action={CAPTCHA_ACTIONS.signIn}
+              hintClass={stepStyles.hint}
+            />
             <SubmitButton
               busy={form.submitting()}
               blocked={captcha.asking()}

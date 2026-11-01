@@ -1,6 +1,7 @@
 import { onCleanup, onMount, Show } from 'solid-js'
 import Turnstile, { captchaStatusMessage, turnstileEnabled } from './Turnstile'
 import type { JSX } from 'solid-js'
+import type { CaptchaAction } from '../../../shared/captchaActions'
 import type { CaptchaGate } from './captchaGate'
 
 /** Out of sight and out of the layout, but still in the accessibility tree. */
@@ -21,7 +22,7 @@ const VISUALLY_HIDDEN: JSX.CSSProperties = {
  * waits for that click, the line that says so. Every form behind the captcha uses it the same way,
  * with its submit button, and gives its form `blocked: captcha.asking`:
  *
- *   <CaptchaCheck gate={captcha} hintClass={...} />
+ *   <CaptchaCheck gate={captcha} action={CAPTCHA_ACTIONS.signIn} hintClass={...} />
  *   <SubmitButton
  *     busy={form.submitting()}
  *     busyLabel={captcha.busyLabel('Signing in…')}
@@ -36,7 +37,16 @@ const VISUALLY_HIDDEN: JSX.CSSProperties = {
  * Focus coming back into the form starts the next check when the last token has gone out with a
  * send that worked (captchaGate.ts), once that send is over.
  */
-export default function CaptchaCheck(props: { gate: CaptchaGate; hintClass?: string }) {
+export default function CaptchaCheck(props: {
+  gate: CaptchaGate
+  /**
+   * The form the widget is for, by the name the Worker routes it posts to take
+   * (shared/captchaActions.ts). One per widget: a form with modes passes the same one in every mode,
+   * so its widget is drawn once and a solved check is not asked for again on a mode switch.
+   */
+  action: CaptchaAction
+  hintClass?: string
+}) {
   let anchor: HTMLSpanElement | undefined
   onMount(() => {
     const form = anchor?.closest('form')
@@ -56,6 +66,7 @@ export default function CaptchaCheck(props: { gate: CaptchaGate; hintClass?: str
     <>
       <span ref={anchor} hidden />
       <Turnstile
+        action={props.action}
         appearance="interaction-only"
         onToken={props.gate.onToken}
         onStatus={props.gate.onStatus}
