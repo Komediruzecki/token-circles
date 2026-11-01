@@ -5,6 +5,7 @@ import bundleAnalyzer from 'vite-bundle-analyzer'
 import { VitePWA } from 'vite-plugin-pwa'
 import { pwaManifest } from './src/pwaManifest'
 import { crawlerPolicyPlugin } from './src/crawlerPolicy'
+import { standaloneFilesPlugin, versionJsonPlugin } from './src/buildOutputFiles'
 import solidPlugin from 'vite-plugin-solid'
 import { devtoolsPlugin as devtools } from 'solid-devtools/vite'
 import fs from 'fs'
@@ -111,33 +112,10 @@ export default defineConfig(({ command, mode }) => {
           )
         },
       },
-      {
-        name: 'copy-export-html',
-        writeBundle() {
-          const exportFiles = ['export.html', 'export-monthly.html', 'chart.umd.min.js']
-          for (const file of exportFiles) {
-            const src = resolve(__dirname, file)
-            const dest = resolve(__dirname, 'dist', file)
-            if (fs.existsSync(src)) {
-              fs.copyFileSync(src, dest)
-            }
-          }
-        },
-      },
-      {
-        // Emit a tiny, never-cached version.json (served no-cache via _headers). The app polls
-        // it to detect a new deployment and reload at a safe moment — see core/appVersion.ts.
-        name: 'emit-version-json',
-        apply: 'build',
-        writeBundle() {
-          const payload = JSON.stringify({
-            version: APP_VERSION,
-            gitSha: GIT_SHA,
-            builtAt: new Date().toISOString(),
-          })
-          fs.writeFileSync(resolve(__dirname, 'dist', 'version.json'), payload)
-        },
-      },
+      // The export documents and version.json, written into the build's resolved outDir (so
+      // `vite build --outDir X` gets them too). See src/buildOutputFiles.ts.
+      standaloneFilesPlugin(__dirname),
+      versionJsonPlugin({ version: APP_VERSION, gitSha: GIT_SHA }),
       ...(shipsServiceWorker
         ? [
             VitePWA({
